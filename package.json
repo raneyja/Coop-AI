@@ -1,0 +1,668 @@
+{
+  "name": "coop-ai",
+  "displayName": "Coop AI",
+  "description": "Zero-clone code intelligence sidebar for VS Code",
+  "version": "0.0.1",
+  "publisher": "coop-ai",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "coopAI",
+          "title": "Coop AI",
+          "icon": "media/coop-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "coopAI": [
+        {
+          "type": "webview",
+          "id": "coopAI.sidebar",
+          "name": "Coop AI"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "coopAI.openSidebar",
+        "title": "Coop AI: Open Sidebar"
+      },
+      {
+        "command": "coopAI.traceDecisionFromContext",
+        "title": "Coop AI: Trace Decision for Selection"
+      },
+      {
+        "command": "coopAI.findOwnerFromContext",
+        "title": "Coop AI: Find Owner for Selection"
+      },
+      {
+        "command": "coopAI.blastRadiusFromContext",
+        "title": "Coop AI: Blast Radius for Selection"
+      },
+      {
+        "command": "coopAI.understandRepoFromContext",
+        "title": "Coop AI: Understand Repo from Context"
+      },
+      {
+        "command": "coopAI.knowledgeGapsFromContext",
+        "title": "Coop AI: Knowledge Gaps for Selection"
+      },
+      {
+        "command": "coopAI.runSavedPrompt",
+        "title": "Coop AI: Run Saved Prompt…"
+      },
+      {
+        "command": "coopAI.newChat",
+        "title": "New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "command": "coopAI.newChatEditor",
+        "title": "New Chat Editor"
+      },
+      {
+        "command": "coopAI.newChatWindow",
+        "title": "New Chat Window"
+      },
+      {
+        "command": "coopAI.openSettings",
+        "title": "Coop AI Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "coopAI.clearChat",
+        "title": "Clear Chat"
+      },
+      {
+        "command": "coopAI.exportChat",
+        "title": "Export Chat…"
+      },
+      {
+        "command": "coopAI.triggerAutocomplete",
+        "title": "Coop AI: Trigger Inline Autocomplete"
+      },
+      {
+        "command": "coopAI.showAutocompleteHelp",
+        "title": "Coop AI: Show Autocomplete Help"
+      },
+      {
+        "command": "coopAI.toggleAutocomplete",
+        "title": "Coop AI: Toggle Autocomplete"
+      },
+      {
+        "command": "coopAI.autocompleteNext",
+        "title": "Coop AI: Next Autocomplete Suggestion"
+      },
+      {
+        "command": "coopAI.autocompletePrev",
+        "title": "Coop AI: Previous Autocomplete Suggestion"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "coopAI.triggerAutocomplete",
+        "key": "cmd+shift+\\",
+        "mac": "cmd+shift+\\",
+        "win": "ctrl+shift+\\",
+        "linux": "ctrl+shift+\\",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "coopAI.autocompleteNext",
+        "key": "alt+]",
+        "when": "editorTextFocus && coopAI.autocomplete.enabled"
+      },
+      {
+        "command": "coopAI.autocompletePrev",
+        "key": "alt+[",
+        "when": "editorTextFocus && coopAI.autocomplete.enabled"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "coopAI.newChatMenu",
+        "label": "New Chat",
+        "icon": "$(add)"
+      },
+      {
+        "id": "coopAI.moreActionsMenu",
+        "label": "More Actions",
+        "icon": "$(ellipsis)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "submenu": "coopAI.newChatMenu",
+          "group": "navigation@1",
+          "when": "view == coopAI.sidebar"
+        },
+        {
+          "command": "coopAI.openSettings",
+          "group": "navigation@2",
+          "when": "view == coopAI.sidebar"
+        },
+        {
+          "submenu": "coopAI.moreActionsMenu",
+          "group": "navigation@3",
+          "when": "view == coopAI.sidebar"
+        }
+      ],
+      "coopAI.newChatMenu": [
+        {
+          "command": "coopAI.newChat",
+          "group": "1_new@1"
+        },
+        {
+          "command": "coopAI.newChatEditor",
+          "group": "1_new@2"
+        },
+        {
+          "command": "coopAI.newChatWindow",
+          "group": "1_new@3"
+        }
+      ],
+      "coopAI.moreActionsMenu": [
+        {
+          "command": "workbench.action.moveFocusedView",
+          "when": "view == coopAI.sidebar"
+        },
+        {
+          "command": "workbench.action.moveEditorToNewWindow",
+          "when": "activeWebviewPanelId == coopAI.chatEditor",
+          "group": "layout@1"
+        },
+        {
+          "command": "coopAI.openSettings",
+          "group": "settings@1"
+        },
+        {
+          "command": "workbench.action.openSettings",
+          "args": "@ext:coop-ai.coop-ai",
+          "group": "settings@2"
+        },
+        {
+          "command": "workbench.action.openGlobalKeybindings",
+          "group": "settings@3"
+        },
+        {
+          "command": "coopAI.exportChat",
+          "group": "chat@1"
+        },
+        {
+          "command": "coopAI.clearChat",
+          "group": "chat@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "submenu": "coopAI.newChatMenu",
+          "group": "navigation@1",
+          "when": "activeWebviewPanelId == coopAI.chatEditor"
+        },
+        {
+          "command": "coopAI.openSettings",
+          "group": "navigation@2",
+          "when": "activeWebviewPanelId == coopAI.chatEditor"
+        },
+        {
+          "submenu": "coopAI.moreActionsMenu",
+          "group": "navigation@3",
+          "when": "activeWebviewPanelId == coopAI.chatEditor"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "coopAI.traceDecisionFromContext",
+          "group": "coopAI@1"
+        },
+        {
+          "command": "coopAI.findOwnerFromContext",
+          "group": "coopAI@2"
+        },
+        {
+          "command": "coopAI.blastRadiusFromContext",
+          "group": "coopAI@3"
+        },
+        {
+          "command": "coopAI.understandRepoFromContext",
+          "group": "coopAI@4"
+        },
+        {
+          "command": "coopAI.knowledgeGapsFromContext",
+          "group": "coopAI@5"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "coopAI.newChat",
+          "when": "false"
+        },
+        {
+          "command": "coopAI.newChatEditor",
+          "when": "false"
+        },
+        {
+          "command": "coopAI.newChatWindow",
+          "when": "false"
+        },
+        {
+          "command": "coopAI.openSettings",
+          "when": "false"
+        },
+        {
+          "command": "coopAI.clearChat",
+          "when": "false"
+        },
+        {
+          "command": "coopAI.exportChat",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Coop AI",
+      "properties": {
+        "coopAI.defaultModel": {
+          "type": "string",
+          "default": "claude-3-5-sonnet-20241022",
+          "description": "Default model for Coop AI chat requests."
+        },
+        "coopAI.llmProvider": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "gemini", "deepseek"],
+          "default": "anthropic",
+          "description": "LLM provider routed by the Coop API server."
+        },
+        "coopAI.temperature": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature for chat requests."
+        },
+        "coopAI.maxTokens": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 256,
+          "maximum": 8192,
+          "description": "Maximum tokens for chat completions."
+        },
+        "coopAI.llm.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable live LLM chat via the Coop API (/v1/chat)."
+        },
+        "coopAI.autocomplete.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable inline ghost-text autocomplete in the editor."
+        },
+        "coopAI.autocomplete.trigger": {
+          "type": "string",
+          "enum": ["auto", "manual", "off"],
+          "default": "auto",
+          "description": "When to request inline completions: automatic debounce, manual hotkey only, or off."
+        },
+        "coopAI.autocomplete.maxSuggestionLength": {
+          "type": "number",
+          "default": 200,
+          "minimum": 8,
+          "maximum": 500,
+          "description": "Maximum characters in a single inline suggestion."
+        },
+        "coopAI.autocomplete.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Pause after typing before auto-triggering a completion request."
+        },
+        "coopAI.autocomplete.model": {
+          "type": "string",
+          "enum": ["haiku", "gpt35", "custom"],
+          "default": "haiku",
+          "description": "Fast model preset for autocomplete (lower latency over quality)."
+        },
+        "coopAI.autocomplete.customModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model id when coopAI.autocomplete.model is custom."
+        },
+        "coopAI.autocomplete.acceptKey": {
+          "type": "string",
+          "enum": ["Tab", "Enter", "Both"],
+          "default": "Tab",
+          "description": "Preferred accept key (VS Code inline suggest uses Tab by default)."
+        },
+        "coopAI.autocomplete.showMultipleSuggestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Request and cycle multiple ranked suggestions (Alt+[ / Alt+])."
+        },
+        "coopAI.autocomplete.requestTimeoutMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 100,
+          "maximum": 2000,
+          "description": "Drop slow completion requests after this many milliseconds."
+        },
+        "coopAI.autocomplete.projectImports": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra import paths to bias project-style completions."
+        },
+        "coopAI.useCachedResponses": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reuse identical chat responses for 5 minutes."
+        },
+        "coopAI.includeSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the current editor selection in chat context."
+        },
+        "coopAI.includeActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the active file path in chat context."
+        },
+        "coopAI.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.coopai.dev",
+          "description": "Base URL for the Coop AI cloud API (HTTPS only)."
+        },
+        "coopAI.jobsBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Deprecated. Use coopAI.apiBaseUrl for chat, graph, and jobs on one host."
+        },
+        "coopAI.defaultOwner": {
+          "type": "string",
+          "default": "",
+          "description": "Default repository owner when no file context is available."
+        },
+        "coopAI.defaultRepo": {
+          "type": "string",
+          "default": "",
+          "description": "Default repository name when no file context is available."
+        },
+        "coopAI.defaultBranch": {
+          "type": "string",
+          "default": "",
+          "description": "Default branch when no file context is available."
+        },
+        "coopAI.defaultCodeHost": {
+          "type": "string",
+          "enum": ["github", "gitlab", "bitbucket"],
+          "default": "github",
+          "description": "Default code host for remote explorer and context."
+        },
+        "coopAI.gitlab.baseUrl": {
+          "type": "string",
+          "default": "https://gitlab.com/api/v4",
+          "description": "GitLab API base URL (supports self-hosted instances)."
+        },
+        "coopAI.jira.baseUrl": {
+          "type": "string",
+          "default": "https://your-domain.atlassian.net",
+          "description": "Jira Cloud or self-hosted site URL for decision archaeology."
+        },
+        "coopAI.repositories": {
+          "type": "array",
+          "default": [],
+          "description": "Pinned remote repositories for the explorer.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": ["github", "gitlab", "bitbucket"]
+              },
+              "owner": { "type": "string" },
+              "repo": { "type": "string" },
+              "branch": { "type": "string" }
+            }
+          }
+        },
+        "coopAI.intent.debounce.fileSwitch": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "description": "Debounce delay in milliseconds before updating context after switching files."
+        },
+        "coopAI.intent.debounce.selectionChange": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "description": "Debounce delay in milliseconds before fetching light context for a stable selection."
+        },
+        "coopAI.intent.debounce.editorOpen": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 0,
+          "description": "Debounce delay in milliseconds before updating context for newly opened editors."
+        },
+        "coopAI.intent.batching.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Batch compatible context requests triggered close together."
+        },
+        "coopAI.intent.batching.window": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "description": "Batching window in milliseconds for compatible context requests."
+        },
+        "coopAI.intent.batching.maxRequests": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Maximum context requests to collect before executing a batch immediately."
+        },
+        "coopAI.intent.rateLimit.expensiveThreshold": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum quota fraction required for non-critical expensive context fetches."
+        },
+        "coopAI.intent.rateLimit.cheapThreshold": {
+          "type": "number",
+          "default": 0.1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum quota fraction required for cheap context fetches."
+        },
+        "coopAI.intent.rateLimit.fallbackToCache": {
+          "type": "boolean",
+          "default": true,
+          "description": "Return cached context when rate limits prevent live fetching."
+        },
+        "coopAI.intent.prioritization.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prioritize context fetches by user intent and request cost."
+        },
+        "coopAI.intent.prioritization.useQueueSystem": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use priority queues for context fetch scheduling."
+        },
+        "coopAI.degradation.enableGracefulFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show best-effort context when integrations are degraded or offline."
+        },
+        "coopAI.degradation.healthCheckInterval": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 5000,
+          "description": "Interval in milliseconds between integration health checks."
+        },
+        "coopAI.degradation.cacheRetention.fresh": {
+          "type": "number",
+          "default": 0.08,
+          "minimum": 0,
+          "description": "Fresh cache retention in decimal days."
+        },
+        "coopAI.degradation.cacheRetention.warm": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "description": "Warm cache retention in days."
+        },
+        "coopAI.degradation.cacheRetention.stale": {
+          "type": "number",
+          "default": 7,
+          "minimum": 0,
+          "description": "Stale cache retention in days."
+        },
+        "coopAI.degradation.timeouts.critical": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 500,
+          "description": "Timeout in milliseconds for critical integration calls."
+        },
+        "coopAI.degradation.timeouts.normal": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 500,
+          "description": "Timeout in milliseconds for normal integration calls."
+        },
+        "coopAI.degradation.timeouts.background": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 500,
+          "description": "Timeout in milliseconds for background integration health checks."
+        },
+        "coopAI.degradation.notifyUser": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show webview notifications for degraded integrations and cached results."
+        },
+        "coopAI.degradation.userNotificationLevel": {
+          "type": "string",
+          "enum": [
+            "all",
+            "warnings",
+            "critical"
+          ],
+          "default": "warnings",
+          "description": "Minimum severity for graceful degradation notifications."
+        },
+        "coopAI.conflicts.detectAndSurface": {
+          "type": "boolean",
+          "default": true,
+          "description": "Detect source conflicts and surface them in the Coop AI chat UI."
+        },
+        "coopAI.conflicts.autoResolve": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically compute authoritative values for detected source conflicts."
+        },
+        "coopAI.conflicts.severityThreshold": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "default": "medium",
+          "description": "Minimum conflict severity to show in the UI."
+        },
+        "coopAI.conflicts.trustOrder.ownership": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "github_commit_history",
+            "slack_active_contributors",
+            "jira_assignee"
+          ],
+          "description": "Preferred source order for ownership conflicts."
+        },
+        "coopAI.conflicts.trustOrder.decision": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "slack_recent_thread",
+            "pr_comments",
+            "actual_code"
+          ],
+          "description": "Preferred source order for decision conflicts."
+        },
+        "coopAI.conflicts.trustOrder.implementation": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "actual_code",
+            "pr_comments",
+            "slack_thread"
+          ],
+          "description": "Preferred source order for implementation conflicts."
+        },
+        "coopAI.conflicts.auditTrail": {
+          "type": "boolean",
+          "default": true,
+          "description": "Record detected conflicts and user actions in an in-memory audit trail."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:extension && npm run build:webview && npm run build:backend",
+    "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js",
+    "build:backend": "esbuild src/webhooks/webhookServer.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/webhookServer.js",
+    "build:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify",
+    "build:webview": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js && npm run build:webview:css",
+    "start:webhooks": "node dist/webhookServer.js",
+    "watch": "npm-run-all -p watch:extension watch:webview",
+    "watch:extension": "npm run build:extension -- --watch",
+    "watch:webview": "npm-run-all -p watch:webview:css watch:webview:js",
+    "watch:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --watch",
+    "watch:webview:js": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --watch",
+    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.15.2",
+    "@types/react": "^19.1.7",
+    "@types/react-dom": "^19.1.6",
+    "@types/vscode": "~1.92.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.5",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.5.4",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "lucide-react": "^1.16.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.16.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

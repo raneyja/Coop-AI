@@ -1,0 +1,111 @@
+import React, { useMemo } from "react";
+import { DegradationFeatureStatusPayload, QuickActionId, RepoContext } from "../types";
+
+type ActionConfig = {
+  id: QuickActionId;
+  label: string;
+  description: string;
+  prompt: (ctx: RepoContext) => string;
+};
+
+type QuickActionGridProps = {
+  context: RepoContext;
+  disabled?: boolean;
+  featureStatuses?: Record<string, DegradationFeatureStatusPayload>;
+  onAction: (actionId: QuickActionId, prompt: string) => void;
+};
+
+const ACTIONS: ActionConfig[] = [
+  {
+    id: "understand-repo",
+    label: "Understand Repo",
+    description: "Architecture, ownership & key files",
+    prompt: (ctx) =>
+      `Understand this repository quickly.\nContext:\n- file: ${ctx.file || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- language: ${ctx.languageId || "unknown"}\nFocus on architecture, key systems, and likely risks.`
+  },
+  {
+    id: "trace-decision",
+    label: "Trace Decision",
+    description: "Why this code exists",
+    prompt: (ctx) => {
+      const lineHint = ctx.selectedLines ? `${ctx.selectedLines[0]}-${ctx.selectedLines[1]}` : "none";
+      return `Trace the likely engineering decision behind this code.\nContext:\n- file: ${ctx.file || "unknown"}\n- selected lines: ${lineHint}\nProvide likely rationale, tradeoffs, and alternatives.`;
+    }
+  },
+  {
+    id: "find-owner",
+    label: "Find Owner",
+    description: "Who owns this & escalation path",
+    prompt: (ctx) =>
+      `Find likely owner(s) for this area.\nContext:\n- file: ${ctx.file || "unknown"}\n- repo: ${ctx.owner || "unknown"}/${ctx.repo || "unknown"}\nInclude confidence and fallback contacts.`
+  },
+  {
+    id: "blast-radius",
+    label: "Blast Radius",
+    description: "Impact of changing this code",
+    prompt: (ctx) =>
+      `Estimate blast radius for modifying this area.\nContext:\n- file: ${ctx.file || "unknown"}\n- language: ${ctx.languageId || "unknown"}\nInclude integration, API, and operational risks.`
+  },
+  {
+    id: "knowledge-gaps",
+    label: "Knowledge Gaps",
+    description: "Missing context & blind spots",
+    prompt: (ctx) =>
+      `List key unknowns in this code area.\nContext:\n- file: ${ctx.file || "unknown"}\n- branch: ${ctx.branch || "unknown"}\nReturn open questions and what evidence is needed.`
+  }
+];
+
+function isDimmed(action: ActionConfig, context: RepoContext): boolean {
+  if (!context.file) {
+    return action.id !== "understand-repo";
+  }
+  if (action.id === "trace-decision") {
+    return !context.selectedLines;
+  }
+  if (action.id === "find-owner") {
+    return !/\.(ts|tsx|js|jsx|go|py|rb|java|kt|cs|rs)$/i.test(context.file);
+  }
+  return false;
+}
+
+export function QuickActionGrid({
+  context,
+  disabled,
+  featureStatuses = {},
+  onAction
+}: QuickActionGridProps): React.ReactElement {
+  const actions = useMemo(() => ACTIONS.map((a) => ({ ...a, dimmed: isDimmed(a, context) })), [context]);
+
+  return (
+    <div className="w-full min-w-0" role="toolbar" aria-label="Quick actions">
+      <div className="flex w-full min-w-0 flex-col items-center gap-1">
+        {actions.map((action) => (
+          (() => {
+            const status = featureStatuses[action.id];
+            const unavailable = status?.level === "unavailable";
+            return (
+          <button
+            key={action.id}
+            type="button"
+            disabled={disabled || unavailable}
+            title={
+              status?.message || (action.dimmed ? `${action.description} (open a file for full context)` : action.description)
+            }
+            aria-label={`${action.label}: ${status?.label || action.description}`}
+            onClick={() => onAction(action.id, action.prompt(context))}
+            className="coop-quick-action-pill"
+          >
+            <span>{action.label}</span>
+            {status ? (
+              <span className="ml-2 rounded-full border border-[var(--vscode-widget-border)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]">
+                {status.label}
+              </span>
+            ) : null}
+          </button>
+            );
+          })()
+        ))}
+      </div>
+    </div>
+  );
+}

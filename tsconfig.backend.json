@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/api/**/*.ts",
+    "src/cache/**/*.ts",
+    "src/compliance/**/*.ts",
+    "src/conflicts/**/*.ts",
+    "src/config/**/*.ts",
+    "src/jobs/**/*.ts",
+    "src/webhooks/**/*.ts"
+  ]
+}

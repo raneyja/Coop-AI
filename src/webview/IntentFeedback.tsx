@@ -1,0 +1,235 @@
+import React from "react";
+import type { IntentFeedbackState } from "./types";
+
+type IntentFeedbackProps = {
+  state?: IntentFeedbackState;
+  onDismiss?: () => void;
+};
+
+type FeedbackTone = {
+  border: string;
+  background: string;
+  foreground: string;
+  accent: string;
+};
+
+const TONES: Record<IntentFeedbackState["status"], FeedbackTone> = {
+  idle: {
+    border: "var(--vscode-widget-border)",
+    background: "var(--vscode-editorWidget-background)",
+    foreground: "var(--vscode-descriptionForeground)",
+    accent: "var(--vscode-descriptionForeground)"
+  },
+  loading: {
+    border: "var(--vscode-focusBorder)",
+    background: "var(--vscode-editorWidget-background)",
+    foreground: "var(--coop-panel-foreground)",
+    accent: "var(--vscode-progressBar-background)"
+  },
+  warning: {
+    border: "var(--vscode-inputValidation-warningBorder)",
+    background: "var(--vscode-inputValidation-warningBackground)",
+    foreground: "var(--vscode-inputValidation-warningForeground, var(--coop-panel-foreground))",
+    accent: "var(--vscode-inputValidation-warningBorder)"
+  },
+  "rate-limited": {
+    border: "var(--vscode-inputValidation-infoBorder)",
+    background: "var(--vscode-inputValidation-infoBackground)",
+    foreground: "var(--vscode-inputValidation-infoForeground, var(--coop-panel-foreground))",
+    accent: "var(--vscode-inputValidation-infoBorder)"
+  },
+  complete: {
+    border: "var(--vscode-widget-border)",
+    background: "var(--vscode-editorWidget-background)",
+    foreground: "var(--vscode-descriptionForeground)",
+    accent: "var(--vscode-testing-iconPassed)"
+  },
+  error: {
+    border: "var(--vscode-inputValidation-errorBorder)",
+    background: "var(--vscode-inputValidation-errorBackground)",
+    foreground: "var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground))",
+    accent: "var(--vscode-inputValidation-errorBorder)"
+  }
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  "understand-repo": "Understand Repo",
+  "trace-decision": "Trace Decision",
+  "find-owner": "Find Owner",
+  "blast-radius": "Blast Radius",
+  "knowledge-gaps": "Knowledge Gaps"
+};
+
+export function IntentFeedback({ state, onDismiss }: IntentFeedbackProps): React.ReactElement | null {
+  if (!state || state.status === "idle") {
+    return null;
+  }
+
+  const tone = TONES[state.status];
+  const progress = normalizeProgress(state.progress, state.status);
+  const details = buildDetails(state);
+  const canDismiss = state.status !== "loading" && Boolean(onDismiss);
+
+  return (
+    <section
+      className="mx-3 mb-2 rounded-md border px-3 py-2 text-xs shadow-sm"
+      style={{
+        borderColor: tone.border,
+        background: tone.background,
+        color: tone.foreground
+      }}
+      role={state.status === "error" ? "alert" : "status"}
+      aria-live={state.status === "loading" ? "polite" : "assertive"}
+    >
+      <div className="flex items-start gap-2">
+        <StatusGlyph status={state.status} accent={tone.accent} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-medium">{state.title}</p>
+              {details.subtitle ? (
+                <p className="mt-0.5 text-[11px] opacity-80">{details.subtitle}</p>
+              ) : null}
+            </div>
+            {canDismiss ? (
+              <button
+                type="button"
+                className="shrink-0 text-[11px] opacity-75 hover:opacity-100"
+                onClick={onDismiss}
+              >
+                Dismiss
+              </button>
+            ) : null}
+          </div>
+
+          {state.message ? (
+            <p className="mt-1 leading-relaxed opacity-90">{state.message}</p>
+          ) : null}
+
+          {state.status === "loading" || state.status === "warning" ? (
+            <ProgressBar progress={progress} accent={tone.accent} indeterminate={state.progress === undefined} />
+          ) : null}
+
+          {details.footer ? (
+            <p className="mt-1 text-[10px] uppercase tracking-wide opacity-70">{details.footer}</p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatusGlyph({
+  status,
+  accent
+}: {
+  status: IntentFeedbackState["status"];
+  accent: string;
+}): React.ReactElement {
+  if (status === "loading") {
+    return (
+      <span
+        className="mt-0.5 inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+        style={{ color: accent }}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const symbol = symbolForStatus(status);
+  return (
+    <span
+      className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+      style={{ color: accent }}
+      aria-hidden="true"
+    >
+      {symbol}
+    </span>
+  );
+}
+
+function ProgressBar({
+  progress,
+  accent,
+  indeterminate
+}: {
+  progress: number;
+  accent: string;
+  indeterminate: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--vscode-progressBar-background)]/20"
+      aria-label="Context fetch progress"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={indeterminate ? undefined : progress}
+    >
+      <div
+        className={`h-full rounded-full transition-all duration-300 ${indeterminate ? "w-1/2 animate-pulse" : ""}`}
+        style={{
+          width: indeterminate ? undefined : `${progress}%`,
+          background: accent
+        }}
+      />
+    </div>
+  );
+}
+
+function buildDetails(state: IntentFeedbackState): { subtitle?: string; footer?: string } {
+  const actionLabel = state.actionId ? ACTION_LABELS[state.actionId] ?? state.actionId : undefined;
+  const subtitle = actionLabel ? `${actionLabel} context fetch` : humanizeIntent(state.intent);
+  if (state.status === "rate-limited") {
+    return {
+      subtitle,
+      footer: state.stale ? "Showing stale cached context" : "No cached context available"
+    };
+  }
+  if (state.status === "warning") {
+    return {
+      subtitle,
+      footer: "Expensive operation"
+    };
+  }
+  if (state.status === "complete") {
+    return {
+      subtitle,
+      footer: "Ready"
+    };
+  }
+  return { subtitle };
+}
+
+function normalizeProgress(progress: number | undefined, status: IntentFeedbackState["status"]): number {
+  if (progress === undefined) {
+    return status === "warning" ? 15 : 45;
+  }
+  return Math.max(0, Math.min(100, Math.round(progress)));
+}
+
+function symbolForStatus(status: IntentFeedbackState["status"]): string {
+  switch (status) {
+    case "warning":
+      return "!";
+    case "rate-limited":
+      return "i";
+    case "complete":
+      return "ok";
+    case "error":
+      return "x";
+    default:
+      return "";
+  }
+}
+
+function humanizeIntent(intent: string | undefined): string | undefined {
+  if (!intent) {
+    return undefined;
+  }
+  return intent
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}

@@ -1,0 +1,85 @@
+export type LineRange = { start: number; end: number };
+
+export type DecisionCommit = {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+  htmlUrl?: string;
+};
+
+export type DecisionReview = {
+  id: string;
+  author: string;
+  body: string;
+  path?: string;
+  line?: number;
+  createdAt: string;
+  kind: "review" | "conversation";
+};
+
+export type DecisionAlternative = {
+  option: string;
+  reason_rejected: string;
+  proposed_by: string;
+  source: string;
+};
+
+export type DecisionSlackThread = {
+  channelId: string;
+  channelName?: string;
+  threadTs: string;
+  permalink?: string;
+  messages: Array<{ user: string; text: string; ts: string }>;
+  participants: string[];
+};
+
+export type DecisionTeamsThread = {
+  teamId: string;
+  channelId: string;
+  rootMessageId: string;
+  messages: Array<{ user: string; text: string; date: string }>;
+  participants: string[];
+};
+
+export type DecisionJiraTicket = {
+  key: string;
+  epic?: string;
+  summary: string;
+  description: string;
+  acceptanceCriteria: string[];
+  technicalDebt: boolean;
+  htmlUrl: string;
+};
+
+export type ChronologyEvent = {
+  date: string;
+  actor: string;
+  event: string;
+  evidence: string;
+};
+
+export type DecisionTimeline = {
+  file: string;
+  lineRange?: LineRange;
+  codeSnippet?: string;
+  originalCommit?: DecisionCommit;
+  linkedPR?: {
+    number: number;
+    title: string;
+    description: string;
+    state: string;
+    labels: string[];
+    htmlUrl?: string;
+    reviews: DecisionReview[];
+    approvers: string[];
+  };
+  alternatives: DecisionAlternative[];
+  slackThread?: DecisionSlackThread;
+  teamsThread?: DecisionTeamsThread;
+  jiraTicket?: DecisionJiraTicket;
+  chronology: ChronologyEvent[];
+  warnings: string[];
+  fallbackMessage?: string;
+  completeness: "full" | "partial" | "minimal";
+};

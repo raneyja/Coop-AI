@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "prompts": [
+    {
+      "id": "team-trace-decision",
+      "title": "Trace decision (team)",
+      "actionId": "trace-decision",
+      "template": "Trace the engineering decision behind this code.\n\nContext:\n- file: {{file}}\n- lines: {{lines}}\n- repo: {{owner}}/{{repo}}\n- branch: {{branch}}\n\nInclude rationale, tradeoffs, and what evidence is still missing."
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createRequestId, ModelRouter } from "./ModelRouter";
+import type { LlmServerConfig } from "./llmServerConfig";
+import { loadLlmServerConfig } from "./llmServerConfig";
+import type { LlmProvider } from "./zeroRetentionConfig";
+import { handleInlineCompletionRequest } from "./inlineCompletionApi";
+import type { UseCase, V1ChatRequestBody } from "./types";
+
+export type ChatApiDeps = {
+  router?: ModelRouter;
+  config?: LlmServerConfig;
+};
+
+type ParsedChatRequest = {
+  method: string;
+  pathname: string;
+  headers: Record<string, string | undefined>;
+  body: unknown;
+};
+
+export function createChatRouter(deps: ChatApiDeps = {}): ModelRouter {
+  return deps.router ?? new ModelRouter({ config: deps.config ?? loadLlmServerConfig() });
+}
+
+export async function handleChatApiRequest(
+  parsed: ParsedChatRequest,
+  response: ServerResponse,
+  deps: ChatApiDeps = {},
+  rawRequest?: IncomingMessage
+): Promise<boolean> {
+  const config = deps.config ?? loadLlmServerConfig();
+
+  if (parsed.pathname === "/v1/completions/inline" && parsed.method === "POST") {
+    if (!authorize(parsed.headers, config.apiToken)) {
+      writeJson(response, 401, { error: "unauthorized" });
+      return true;
+    }
+    const router = createChatRouter(deps);
+    await handleInlineCompletionRequest(parsed.body, response, router, config);
+    return true;
+  }
+
+  if (parsed.pathname !== "/v1/chat" || parsed.method !== "POST") {
+    return false;
+  }
+
+  if (!authorize(parsed.headers, config.apiToken)) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+
+  const body = asRecord(parsed.body) as V1ChatRequestBody;
+  if (!body.message || typeof body.message !== "string") {
+    writeJson(response, 400, { error: "invalid_request", message: "message is required" });
+    return true;
+  }
+
+  const router = createChatRouter(deps);
+  const provider = readProvider(body.provider, config.defaultProvider);
+  const model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
+  const requestId = createRequestId();
+
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive"
+  });
+
+  const abortController = new AbortController();
+  bindAbort(rawRequest, abortController);
+
+  try {
+    for await (const chunk of router.stream(
+      {
+        requestId,
+        message: body.message,
+        history: Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [],
+        context: body.context,
+        useCase: readUseCase(body.useCase),
+        allowUnapprovedProvider: config.allowUnapprovedProvider,
+        modelConfig: {
+          provider,
+          model,
+          temperature: typeof body.temperature === "number" ? body.temperature : 0.5,
+          maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : 2000
+        }
+      },
+      abortController.signal
+    )) {
+      writeSse(response, chunk);
+      if (chunk.type === "error") {
+        break;
+      }
+    }
+  } catch (error) {
+    writeSse(response, {
+      type: "error",
+      message: error instanceof Error ? error.message : "Chat stream failed."
+    });
+  }
+
+  response.end();
+  return true;
+}
+
+export function llmHealthPayload(router: ModelRouter): Record<string, unknown> {
+  return {
+    mockMode: router.isMockMode(),
+    configuredProviders: router.getConfiguredProviders()
+  };
+}
+
+function authorize(headers: Record<string, string | undefined>, token?: string): boolean {
+  if (!token) {
+    return true;
+  }
+  const header = headers.authorization ?? "";
+  return header === `Bearer ${token}`;
+}
+
+function writeSse(response: ServerResponse, payload: unknown): void {
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
+  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body));
+}
+
+function bindAbort(request: IncomingMessage | undefined, controller: AbortController): void {
+  request?.on("close", () => controller.abort());
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function isHistoryMessage(value: unknown): value is { role: "user" | "assistant"; content: string } {
+  if (typeof value !== "object" || !value) {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (entry.role === "user" || entry.role === "assistant") && typeof entry.content === "string";
+}
+
+function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
+  if (value === "openai" || value === "anthropic" || value === "deepseek" || value === "gemini") {
+    return value;
+  }
+  return fallback;
+}
+
+function readUseCase(value: unknown): UseCase {
+  const allowed: UseCase[] = [
+    "comprehension",
+    "decision_archaeology",
+    "ownership",
+    "blast_radius",
+    "knowledge_gaps",
+    "chat",
+    "inline_completion"
+  ];
+  if (typeof value === "string" && (allowed as string[]).includes(value)) {
+    return value as UseCase;
+  }
+  return "chat";
+}
+
+function defaultModelFor(provider: LlmProvider): string {
+  switch (provider) {
+    case "openai":
+      return "gpt-4o-mini";
+    case "anthropic":
+      return "claude-3-5-sonnet-20241022";
+    case "deepseek":
+      return "deepseek-chat";
+    case "gemini":
+      return "gemini-1.5-flash";
+  }
+}
