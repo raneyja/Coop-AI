@@ -8,7 +8,7 @@ import {
 import { readAutocompleteSettings } from "./autocompleteConfig";
 
 const AUTOCOMPLETE_HELP = [
-  "Coop AI inline autocomplete",
+  "CoopAI inline autocomplete",
   "",
   "Tab — accept full suggestion",
   "Escape — reject suggestion",
@@ -27,7 +27,7 @@ export function registerAutocompleteCommands(
       const settings = readAutocompleteSettings();
       if (!settings.enabled) {
         void vscode.window.showInformationMessage(
-          "Enable Coop AI autocomplete in settings (coopAI.autocomplete.enabled)."
+          "Enable CoopAI autocomplete in settings (coopAI.autocomplete.enabled)."
         );
         return;
       }
@@ -52,7 +52,7 @@ export function registerAutocompleteCommands(
         message: !enabled ? "Autocomplete enabled" : "Autocomplete disabled"
       });
       void vscode.window.showInformationMessage(
-        !enabled ? "Coop AI autocomplete enabled." : "Coop AI autocomplete disabled."
+        !enabled ? "CoopAI autocomplete enabled." : "CoopAI autocomplete disabled."
       );
     })
   );

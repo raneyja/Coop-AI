@@ -20,7 +20,7 @@ export function renderWebviewHtml(
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="${styleUri}" rel="stylesheet" />
-    <title>Coop AI</title>
+    <title>CoopAI</title>
   </head>
   <body>
     <div id="root"></div>

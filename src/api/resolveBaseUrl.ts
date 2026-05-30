@@ -9,7 +9,7 @@ export type ResolvedBaseUrl = {
 };
 
 /**
- * Canonical Coop service URL (chat, graph, jobs on one host).
+ * Canonical CoopAI service URL (chat, graph, jobs on one host).
  * `coopAI.jobsBaseUrl` is deprecated: if it differs from apiBaseUrl, warn once and still prefer apiBaseUrl.
  */
 export function resolveCoopBaseUrl(
@@ -42,5 +42,5 @@ export function assertCoopEndpoint(baseUrl: string): void {
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(baseUrl)) {
     return;
   }
-  throw new Error("Coop API must use HTTPS, or http://localhost for local development.");
+  throw new Error("CoopAI API must use HTTPS, or http://localhost for local development.");
 }

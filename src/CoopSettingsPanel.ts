@@ -19,7 +19,7 @@ export class CoopSettingsPanel {
 
     const panel = vscode.window.createWebviewPanel(
       CoopSettingsPanel.viewType,
-      "Coop AI Settings",
+      "CoopAI Settings",
       vscode.ViewColumn.Active,
       {
         ...getWebviewOptions(extensionUri),

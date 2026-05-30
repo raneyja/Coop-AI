@@ -16,11 +16,11 @@ const enterpriseFeatures = [
   },
   {
     title: "Bring Your Own Key (BYOK)",
-    body: "Route inference through your organization's provider accounts. Coop stores only encrypted key material and a hash — decrypted keys exist only for the duration of the outbound request."
+    body: "Route inference through your organization's provider accounts. CoopAI stores only encrypted key material and a hash — decrypted keys exist only for the duration of the outbound request."
   },
   {
     title: "Server-side key management",
-    body: "LLM provider API keys never leave your Coop server. Developers authenticate with a Coop API token; provider secrets are not stored in VS Code settings or on laptops."
+    body: "LLM provider API keys never leave your CoopAI server. Developers authenticate with a CoopAI API token; provider secrets are not stored in VS Code settings or on laptops."
   },
   {
     title: "Multi-provider router",
@@ -68,14 +68,14 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h2 className="text-2xl font-semibold text-white">For engineering leaders</h2>
           <p className="mt-4 text-coop-muted">
-            Reduce the tax of tribal knowledge. Coop helps teams onboard faster, answer questions
+            Reduce the tax of tribal knowledge. CoopAI helps teams onboard faster, answer questions
             without interrupting senior engineers, and surface ownership and blast radius before
             changes ship — with controls your security team can review.
           </p>
           <ul className="mt-8 space-y-3 text-left text-sm text-coop-muted">
             <li className="flex gap-3">
               <span className="text-coop-accent">✓</span>
-              Deploy Coop on infrastructure you control
+              Deploy CoopAI on infrastructure you control
             </li>
             <li className="flex gap-3">
               <span className="text-coop-accent">✓</span>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { RefreshButton } from "./components/RefreshButton";
 import type {
   DegradationFeatureStatusPayload,
   DegradationNotificationPayload,
@@ -9,6 +10,7 @@ type DegradationNotificationProps = {
   health: IntegrationHealthPayload[];
   featureStatuses: Record<string, DegradationFeatureStatusPayload>;
   notification?: DegradationNotificationPayload;
+  compact?: boolean;
   onDismiss: () => void;
   onRetry: (provider?: string, feature?: string) => void;
   onRefresh: (feature?: string) => void;
@@ -39,6 +41,7 @@ export function DegradationNotification({
   health,
   featureStatuses,
   notification,
+  compact = false,
   onDismiss,
   onRetry,
   onRefresh,
@@ -65,13 +68,17 @@ export function DegradationNotification({
     return null;
   }
 
+  if (compact && !notification) {
+    return null;
+  }
+
   return (
-    <section className="mx-3 mb-2 space-y-1 text-xs" aria-live="polite">
+    <section className={`text-xs ${compact ? "px-3 pb-1" : "mx-3 mb-2 space-y-2"}`} aria-live="polite">
       {notification ? (
         <div
-          className="rounded-md border px-3 py-2"
+          className="rounded-lg px-3 py-2.5"
           style={{
-            borderColor: TONES[notification.severity].border,
+            border: `1px solid ${TONES[notification.severity].border}`,
             background: TONES[notification.severity].background,
             color: TONES[notification.severity].foreground
           }}
@@ -79,79 +86,90 @@ export function DegradationNotification({
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-medium">{notification.title}</p>
-              <p className="mt-0.5 break-words opacity-90">{notification.message}</p>
+              <p className="text-[12px] font-medium">{notification.title}</p>
+              <p className="coop-settings-card-desc mt-0.5 break-words opacity-90">{notification.message}</p>
             </div>
-            <button type="button" className="shrink-0 opacity-75 hover:opacity-100" onClick={onDismiss}>
+            <button type="button" className="coop-settings-action-btn shrink-0" onClick={onDismiss}>
               Dismiss
             </button>
           </div>
-          <div className="mt-2 flex gap-2">
+          <div className="coop-settings-actions mt-2">
             <button
               type="button"
-              className="coop-text-btn"
+              className="coop-settings-action-btn"
               onClick={() => onRetry(notification.provider, notification.feature)}
             >
               Retry Now
             </button>
-            <button type="button" className="coop-text-btn" onClick={() => onRefresh(notification.feature)}>
-              Refresh
-            </button>
+            <RefreshButton onClick={() => onRefresh(notification.feature)} />
           </div>
         </div>
       ) : null}
 
-      <div className="rounded-md border border-[var(--vscode-widget-border)] bg-[var(--vscode-editorWidget-background)] px-3 py-2">
+      <div className="coop-health-bar relative">
+        {dashboardOpen ? (
+          <div className="coop-health-panel coop-health-panel--overlay absolute left-0 right-0 top-full z-30 mt-2">
+            <div className="coop-health-panel-scroll no-scrollbar">
+              <section>
+                <h3 className="coop-settings-section-label">Integrations</h3>
+                <div className="coop-health-integration-grid">
+                  {health.map((entry) => (
+                    <IntegrationCard key={entry.provider} entry={entry} onOpenSettings={onOpenSettings} />
+                  ))}
+                </div>
+              </section>
+
+              {Object.values(featureStatuses).length > 0 ? (
+                <section>
+                  <h3 className="coop-settings-section-label">Features</h3>
+                  <div className="coop-settings-card !space-y-0 !p-0">
+                    {Object.values(featureStatuses).map((status) => (
+                      <div key={status.feature} className="coop-health-feature-row px-3">
+                        <span className="coop-health-feature-name">{humanize(status.feature)}</span>
+                        <span className="coop-health-feature-label">{status.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
+            <p className="coop-settings-card-desc">Click the header or Close to collapse. Press Esc.</p>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+            className="coop-health-bar-toggle"
             onClick={() => setDashboardOpen((open) => !open)}
             aria-expanded={dashboardOpen}
           >
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-3 shrink-0 text-[10px] opacity-70" aria-hidden="true">
+            <span className="coop-health-bar-title">
+              <span className="w-3 shrink-0 text-[10px] opacity-60" aria-hidden="true">
                 {dashboardOpen ? "▾" : "▸"}
               </span>
               Integration health
             </span>
-            <span className="shrink-0 text-[11px] text-[var(--vscode-descriptionForeground)]">{summary}</span>
+            <span className="coop-health-bar-summary">{summary}</span>
           </button>
           {dashboardOpen ? (
-            <button
-              type="button"
-              className="coop-text-btn shrink-0"
-              onClick={() => setDashboardOpen(false)}
-              aria-label="Close integration health"
-            >
-              Close
-            </button>
+            <div className="coop-settings-actions shrink-0">
+              <RefreshButton
+                onClick={() => onRefresh()}
+                ariaLabel="Refresh integrations and clear cached context"
+              />
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={() => setDashboardOpen(false)}
+                aria-label="Close integration health"
+              >
+                Close
+              </button>
+            </div>
           ) : null}
         </div>
-        {dashboardOpen ? (
-          <div className="mt-2 max-h-40 space-y-2 overflow-y-auto">
-            <p className="text-[10px] text-[var(--vscode-descriptionForeground)]">
-              Click <span className="font-medium">Close</span> or the header again to collapse. Press Esc.
-            </p>
-            <div className="grid grid-cols-2 gap-1">
-              {health.map((entry) => (
-                <IntegrationCard
-                  key={entry.provider}
-                  entry={entry}
-                  onOpenSettings={onOpenSettings}
-                />
-              ))}
-            </div>
-            <div className="space-y-1">
-              {Object.values(featureStatuses).map((status) => (
-                <div key={status.feature} className="flex items-center justify-between gap-2">
-                  <span className="truncate">{humanize(status.feature)}</span>
-                  <span className="text-[11px] text-[var(--vscode-descriptionForeground)]">{status.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   );
@@ -168,16 +186,14 @@ function IntegrationCard({
   const showConfigure = isCodeHost && entry.status !== "healthy" && onOpenSettings;
 
   return (
-    <div className="rounded border border-[var(--vscode-widget-border)] px-2 py-1">
-      <div className="flex items-center justify-between gap-1">
-        <span className="truncate">{humanize(entry.provider)}</span>
+    <div className="coop-health-integration">
+      <div className="flex items-center justify-between gap-2">
+        <span className="coop-health-integration-name">{humanize(entry.provider)}</span>
         <StatusPill status={entry.status} />
       </div>
-      <p className="mt-0.5 break-words text-[10px] text-[var(--vscode-descriptionForeground)]">
-        {entry.error || latencyText(entry.latency)}
-      </p>
+      <p className="coop-health-integration-meta">{entry.error || latencyText(entry.latency)}</p>
       {showConfigure ? (
-        <button type="button" className="coop-text-btn mt-1 text-[10px]" onClick={onOpenSettings}>
+        <button type="button" className="coop-settings-action-btn mt-2" onClick={onOpenSettings}>
           Add token in settings
         </button>
       ) : null}
@@ -186,17 +202,7 @@ function IntegrationCard({
 }
 
 function StatusPill({ status }: { status: IntegrationHealthPayload["status"] }): React.ReactElement {
-  const color =
-    status === "healthy"
-      ? "var(--vscode-testing-iconPassed)"
-      : status === "degraded"
-        ? "var(--vscode-inputValidation-warningBorder)"
-        : "var(--vscode-inputValidation-errorBorder)";
-  return (
-    <span className="rounded-full px-1.5 py-0.5 text-[10px]" style={{ color }}>
-      {status}
-    </span>
-  );
+  return <span className={`coop-health-status coop-health-status--${status}`}>{status}</span>;
 }
 
 function summarizeHealth(health: IntegrationHealthPayload[]): string {

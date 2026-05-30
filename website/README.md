@@ -223,7 +223,7 @@ Visitor on coop-ai.dev
 ### Part 1 — Create your Tawk account and property
 
 1. Go to [https://tawk.to](https://tawk.to) and sign up (free tier is fine).
-2. Create a **property** for your site (name it e.g. `Coop AI` or `coop-ai.dev`).
+2. Create a **property** for your site (name it e.g. `CoopAI` or `coop-ai.dev`).
 3. Under **Administration → Properties**, open the property and confirm the site URL includes **`coop-ai.dev`** (and `www.coop-ai.dev` if you use www).
 4. Invite teammates under **Administration → Users** if others should answer chats.
 
@@ -299,7 +299,7 @@ In Tawk’s dashboard:
 
 | Area | What to set |
 |------|-------------|
-| **Chat Widget → Appearance** | Colors to match Coop (dark theme); position bottom-right |
+| **Chat Widget → Appearance** | Colors to match CoopAI (dark theme); position bottom-right |
 | **Chat Widget → Behavior** | Offline message, business hours if you use them |
 | **Triggers / Knowledge Base** | Optional; skip until you need them |
 | **Notifications** | Email/mobile when a visitor messages |
@@ -368,7 +368,7 @@ No. Anyone can see them in the browser. Env vars keep config out of git and let 
 **Does this replace demo/waitlist forms?**  
 No. Forms still go to Google Sheets via `/api/submit`. Chat is for live questions; forms are for structured leads.
 
-**Coop production IDs (reference)** — if this doc matches your live Tawk embed:
+**CoopAI production IDs (reference)** — if this doc matches your live Tawk embed:
 
 - Property: `6a19e3c6a95f821c31805465`
 - Widget: `1jpqi3g9b`
@@ -393,7 +393,7 @@ NEXT_PUBLIC_VSCODE_MARKETPLACE_URL=https://marketplace.visualstudio.com/items?it
 
 | File | Source |
 |------|--------|
-| `public/coop-logo.png` | Coop mascot (header/footer) |
+| `public/coop-logo.png` | CoopAI mascot (header/footer) |
 | `public/logo.png` | CoopAI wordmark (legacy, unused in nav) |
 | `public/coop-icon.svg` | Extension icon |
 | `public/screenshots/product-dark.png` | VS Code screenshot (dark) |

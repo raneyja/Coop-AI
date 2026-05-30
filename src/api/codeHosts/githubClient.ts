@@ -57,6 +57,25 @@ export class GitHubClient implements CodeHostClient {
     }
   }
 
+  public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
+    const repos = await paginatedCodeHostFetch<GitHubRepoListItem>({
+      firstUrl: `${GITHUB_API}/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member`,
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker,
+      maxPages: Math.max(1, Math.ceil(limit / 100)),
+      mapPage: (payload) => (Array.isArray(payload) ? payload : [])
+    });
+    return repos.slice(0, limit).map((entry) => ({
+      owner: entry.owner.login,
+      name: entry.name,
+      defaultBranch: entry.default_branch,
+      isPrivate: entry.private,
+      provider: this.provider,
+      htmlUrl: entry.html_url
+    }));
+  }
+
   public async getRepository(coords: RepoCoordinates): Promise<RemoteRepository> {
     const data = await codeHostRequestJson<GitHubRepo>(this.repoUrl(coords), {
       headers: this.headers,
@@ -176,6 +195,7 @@ export class GitHubClient implements CodeHostClient {
           }
         }
       }`;
+    const blameRef = blameExpressionForRef(branch);
     const response = await codeHostRequestJson<{
       data?: {
         repository?: {
@@ -187,8 +207,8 @@ export class GitHubClient implements CodeHostClient {
                 commit: { oid: string; committedDate: string; author: { user?: { login?: string }; name?: string } };
               }>;
             };
-          };
-        };
+          } | null;
+        } | null;
       };
       errors?: Array<{ message: string }>;
     }>(GITHUB_GRAPHQL, {
@@ -196,7 +216,7 @@ export class GitHubClient implements CodeHostClient {
       headers: { ...this.headers, "Content-Type": "application/json" },
       body: JSON.stringify({
         query,
-        variables: { owner, repo, path: normalizePath(filePath), ref: branch }
+        variables: { owner, repo, path: normalizePath(filePath), ref: blameRef }
       }),
       provider: this.provider,
       rateLimitTracker: this.options.rateLimitTracker
@@ -204,7 +224,15 @@ export class GitHubClient implements CodeHostClient {
     if (response.errors?.length) {
       throw new CodeHostError(response.errors[0].message, "network", undefined, this.provider);
     }
-    const ranges = response.data?.repository?.object?.blame?.ranges ?? [];
+    if (!response.data?.repository?.object) {
+      throw new CodeHostError(
+        `Could not load blame for ${owner}/${repo}@${branch}. Check owner, repo name (e.g. CoopAI), and branch.`,
+        "not_found",
+        404,
+        this.provider
+      );
+    }
+    const ranges = response.data.repository.object.blame?.ranges ?? [];
     const lines: BlameData["lines"] = [];
     for (const range of ranges) {
       for (let line = range.startingLine; line <= range.endingLine; line += 1) {
@@ -333,6 +361,14 @@ type GitHubRepo = {
   owner: { login: string };
 };
 
+type GitHubRepoListItem = {
+  name: string;
+  private: boolean;
+  default_branch: string;
+  html_url?: string;
+  owner: { login: string };
+};
+
 type GitHubContent = {
   type: string;
   name: string;
@@ -411,6 +447,18 @@ function mapGitHubPull(pull: GitHubPull): PullRequestSummary {
 
 function normalizePath(value: string): string {
   return value.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+/** GitHub GraphQL object(expression) expects refs/heads/branch or a commit SHA. */
+function blameExpressionForRef(branch: string): string {
+  const trimmed = branch.trim();
+  if (!trimmed) {
+    return "HEAD";
+  }
+  if (trimmed.startsWith("refs/") || /^[0-9a-f]{40}$/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `refs/heads/${trimmed}`;
 }
 
 function pathSegments(path: string): string {

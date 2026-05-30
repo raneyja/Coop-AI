@@ -1,3 +1,4 @@
+import { toRepositoryRelativePath } from "../../context/repoFilePath";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { DecisionTimeline } from "../../types/decisionTimeline";
 import { getDecisionArchaeologyEngine } from "../../engines/decisionArchaeologyRegistry";
@@ -33,7 +34,17 @@ export async function traceDecision(context: FeatureExecutionContext) {
 
   const engine = getDecisionArchaeologyEngine();
   const ownerRepo = resolveOwnerRepo(params);
-  const file = params.file;
+  const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
+  const fileSource = params.fileSource as string | undefined;
+
+  if (fileSource === "external" || (!file && params.file)) {
+    return contextResult(
+      context,
+      placeholderDecisionData(params, context.status.level, "Active file is not in the workspace or a git repo."),
+      "Open the project with File → Open Folder (the repo root), or use the remote file tree in chat.",
+      false
+    );
+  }
 
   if (engine && ownerRepo && file) {
     try {
@@ -65,19 +76,14 @@ export async function traceDecision(context: FeatureExecutionContext) {
       };
 
       await context.cache.set(key, data, { provider: "github", feature: "trace_why" });
-      return contextResult(
-        context,
-        data,
-        timelineSummaryMessage(timeline),
-        timeline.completeness !== "full"
-      );
+      return contextResult(context, data, timelineSummaryMessage(timeline), false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Decision trace failed.";
       return contextResult(
         context,
         placeholderDecisionData(params, context.status.level, message),
         message,
-        true
+        false
       );
     }
   }
@@ -99,7 +105,7 @@ export async function traceDecision(context: FeatureExecutionContext) {
     .filter(Boolean)
     .join(". ");
 
-  return contextResult(context, data, skipped || context.status.message, context.status.level !== "full");
+  return contextResult(context, data, skipped || context.status.message, false);
 }
 
 function resolveOwnerRepo(params: {

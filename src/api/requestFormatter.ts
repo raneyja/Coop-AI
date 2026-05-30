@@ -7,12 +7,14 @@ import {
   ZeroRetentionHeaders
 } from "./zeroRetentionConfig";
 import { sanitizeLlmRequestPayload, SanitizationReport } from "./dataSanitization";
+import type { ChatImageAttachment } from "./types";
 
 export type ChatRole = "system" | "user" | "assistant";
 
 export type ChatRequestMessage = {
   role: ChatRole;
   content: string;
+  attachments?: ChatImageAttachment[];
   name?: string;
 };
 
@@ -38,7 +40,7 @@ export type FormattedLlmRequest = {
 };
 
 export const ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT = `[SYSTEM]
-This request comes from a code intelligence tool (Coop AI).
+This request comes from a code intelligence tool (CoopAI).
 The code context provided is from a private enterprise codebase.
 NO PART of this conversation should be:
 - Stored for future training
@@ -121,7 +123,10 @@ function providerBody(
     case "deepseek":
       return {
         ...commonBody,
-        messages,
+        messages: messages.map((message) => ({
+          role: message.role,
+          content: formatOpenAiContent(message)
+        })),
         store: false
       };
     case "anthropic":
@@ -129,6 +134,59 @@ function providerBody(
     case "gemini":
       return geminiBody(commonBody, messages);
   }
+}
+
+function formatOpenAiContent(message: ChatRequestMessage): string | Array<Record<string, unknown>> {
+  if (!message.attachments?.length) {
+    return message.content;
+  }
+  const parts: Array<Record<string, unknown>> = [
+    { type: "text", text: message.content.trim() || "See attached image(s)." }
+  ];
+  for (const attachment of message.attachments) {
+    parts.push({
+      type: "image_url",
+      image_url: { url: attachment.dataUrl }
+    });
+  }
+  return parts;
+}
+
+function formatAnthropicContent(message: ChatRequestMessage): string | Array<Record<string, unknown>> {
+  if (!message.attachments?.length) {
+    return message.content;
+  }
+  const parts: Array<Record<string, unknown>> = [];
+  for (const attachment of message.attachments) {
+    parts.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: attachment.mimeType,
+        data: base64FromDataUrl(attachment.dataUrl)
+      }
+    });
+  }
+  parts.push({ type: "text", text: message.content.trim() || "See attached image(s)." });
+  return parts;
+}
+
+function formatGeminiParts(message: ChatRequestMessage): Array<Record<string, unknown>> {
+  const parts: Array<Record<string, unknown>> = [{ text: message.content.trim() || "See attached image(s)." }];
+  for (const attachment of message.attachments ?? []) {
+    parts.push({
+      inlineData: {
+        mimeType: attachment.mimeType,
+        data: base64FromDataUrl(attachment.dataUrl)
+      }
+    });
+  }
+  return parts;
+}
+
+function base64FromDataUrl(dataUrl: string): string {
+  const comma = dataUrl.indexOf(",");
+  return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 }
 
 function anthropicBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
@@ -139,7 +197,7 @@ function anthropicBody(commonBody: Record<string, unknown>, messages: ChatReques
     system: systemMessages.join("\n\n"),
     messages: nonSystemMessages.map((message) => ({
       role: message.role,
-      content: message.content
+      content: formatAnthropicContent(message)
     }))
   };
 }
@@ -162,7 +220,7 @@ function geminiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
     tools: [],
     contents: nonSystemMessages.map((message) => ({
       role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }]
+      parts: formatGeminiParts(message)
     })),
     labels: commonBody.metadata,
     disable_web_search: true

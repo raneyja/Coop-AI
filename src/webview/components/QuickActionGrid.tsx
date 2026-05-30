@@ -77,35 +77,26 @@ export function QuickActionGrid({
   const actions = useMemo(() => ACTIONS.map((a) => ({ ...a, dimmed: isDimmed(a, context) })), [context]);
 
   return (
-    <div className="w-full min-w-0" role="toolbar" aria-label="Quick actions">
-      <div className="flex w-full min-w-0 flex-col items-center gap-1">
-        {actions.map((action) => (
-          (() => {
-            const status = featureStatuses[action.id];
-            const unavailable = status?.level === "unavailable";
-            return (
-          <button
-            key={action.id}
-            type="button"
-            disabled={disabled || unavailable}
-            title={
-              status?.message || (action.dimmed ? `${action.description} (open a file for full context)` : action.description)
-            }
-            aria-label={`${action.label}: ${status?.label || action.description}`}
-            onClick={() => onAction(action.id, action.prompt(context))}
-            className="coop-quick-action-pill"
-          >
-            <span>{action.label}</span>
-            {status ? (
-              <span className="ml-2 rounded-full border border-[var(--vscode-widget-border)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]">
-                {status.label}
-              </span>
-            ) : null}
-          </button>
-            );
-          })()
-        ))}
-      </div>
-    </div>
+    <ul className="w-full min-w-0 list-none p-0 m-0" aria-label="Quick actions">
+      {actions.map((action) => {
+        const status = featureStatuses[action.id];
+        const unavailable = status?.level === "unavailable";
+        const hint = action.dimmed ? "Open a file for full context." : action.description;
+        return (
+          <li key={action.id}>
+            <button
+              type="button"
+              disabled={disabled || unavailable}
+              title={status?.message || hint}
+              aria-label={`${action.label}: ${status?.label || hint}`}
+              onClick={() => onAction(action.id, action.prompt(context))}
+              className="coop-quick-action-row"
+            >
+              {action.label}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

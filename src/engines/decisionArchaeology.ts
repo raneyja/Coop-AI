@@ -1,3 +1,4 @@
+import { toRepositoryRelativePath } from "../context/repoFilePath";
 import { getDecisionArchaeologyEngine } from "./decisionArchaeologyRegistry";
 import { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
@@ -62,7 +63,8 @@ export class DecisionArchaeologyEngine {
   public constructor(private readonly options: TraceDecisionOptions) {}
 
   public async traceDecision(params: TraceDecisionParams): Promise<DecisionTimeline> {
-    const { owner, repo, file, lineRange, branch, codeSnippet } = params;
+    const { owner, repo, lineRange, branch, codeSnippet } = params;
+    const file = toRepositoryRelativePath(params.file);
     const coords: RepoCoordinates = { provider: "github", owner, repo, branch };
 
     const timeline: DecisionTimeline = {
@@ -89,12 +91,22 @@ export class DecisionArchaeologyEngine {
       timeline.fallbackMessage = "Could not load git blame. Showing commit search only.";
     }
 
+    if (blameLines.length === 0 && !timeline.fallbackMessage) {
+      timeline.warnings.push(
+        `GitHub returned no blame lines for ${file}. Confirm the file exists at github.com/${owner}/${repo} on branch ${branch ?? "main"}.`
+      );
+    }
+
     const introduction = await this.findOriginalIntroduction(owner, repo, file, blameLines, branch);
     if (!introduction) {
-      const recent = await this.tryRecentFileHistory(owner, repo, file, branch);
+      let recent: CommitInfo | undefined;
+      try {
+        recent = await this.tryRecentFileHistory(owner, repo, file, branch);
+      } catch (error) {
+        timeline.warnings.push(`File history lookup failed: ${errorMessage(error)}`);
+      }
       if (!recent) {
-        timeline.fallbackMessage =
-          "This file was created recently or has no traceable history in the default branch.";
+        timeline.fallbackMessage = `Could not load commit history for ${file} on GitHub (${owner}/${repo}${branch ? `@${branch}` : ""}). Check settings and that the file exists on the remote repo.`;
         return timeline;
       }
       timeline.originalCommit = mapCommit(recent);
@@ -246,9 +258,12 @@ export class DecisionArchaeologyEngine {
     file: string,
     branch?: string
   ): Promise<CommitInfo | undefined> {
-    const history = await this.options.codeHostRouter
-      .getFileHistory(file, 1, { provider: "github", owner, repo, branch })
-      .catch(() => []);
+    const history = await this.options.codeHostRouter.getFileHistory(file, 5, {
+      provider: "github",
+      owner,
+      repo,
+      branch
+    });
     return history[0];
   }
 

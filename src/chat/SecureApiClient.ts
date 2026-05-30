@@ -13,7 +13,7 @@ import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import type { ChatMessage, RemoteTreeNode, RepoContext, UserPreferences, LlmProviderPreference } from "./types";
+import type { ChatMessage, RemoteTreeNode, RepoContext, UserPreferences, LlmProviderPreference, ChatImageAttachment } from "./types";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -24,6 +24,7 @@ export type StreamChatParams = {
   message: string;
   context: RepoContext & { contextBundle?: unknown };
   history: ChatMessage[];
+  attachments?: ChatImageAttachment[];
   model: string;
   provider: LlmProviderPreference;
   useCase: UseCase;
@@ -99,7 +100,11 @@ export class SecureApiClient {
       .filter((entry): entry is ChatMessage & { role: "user" | "assistant" } =>
         entry.role === "user" || entry.role === "assistant"
       )
-      .map((entry) => ({ role: entry.role, content: entry.content }));
+      .map((entry) => ({
+        role: entry.role,
+        content: entry.content,
+        attachments: entry.attachments
+      }));
 
     const result = await this.backend.streamChat(
       baseUrl,
@@ -115,6 +120,7 @@ export class SecureApiClient {
           languageId: body.context.languageId,
           contextBundle: body.context.contextBundle
         },
+        attachments: body.attachments,
         model: body.model,
         provider: body.provider as LlmProvider,
         useCase: body.useCase,
@@ -197,7 +203,7 @@ export class SecureApiClient {
   private async ensureToken(): Promise<void> {
     const token = await this.getToken();
     if (!token) {
-      throw new Error("Coop AI API key is missing. Configure it in the sidebar settings.");
+      throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
     }
   }
 

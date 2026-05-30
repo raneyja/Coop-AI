@@ -1,6 +1,6 @@
 # Job Queue & Batch Processing
 
-Coop AI runs expensive operations (knowledge gap scans, dependency graph builds, repository indexing) through an async job queue on the webhook backend.
+CoopAI runs expensive operations (knowledge gap scans, dependency graph builds, repository indexing) through an async job queue on the webhook backend.
 
 ## Runtime
 

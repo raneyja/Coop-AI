@@ -1,6 +1,6 @@
 {
   "name": "coop-ai",
-  "displayName": "Coop AI",
+  "displayName": "CoopAI",
   "description": "Zero-clone code intelligence sidebar for VS Code",
   "version": "0.0.1",
   "publisher": "coop-ai",
@@ -14,13 +14,16 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "extensionRecommendations": [
+    "GitHub.remotehub"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
           "id": "coopAI",
-          "title": "Coop AI",
+          "title": "CoopAI",
           "icon": "media/coop-icon.svg"
         }
       ]
@@ -30,38 +33,38 @@
         {
           "type": "webview",
           "id": "coopAI.sidebar",
-          "name": "Coop AI"
+          "name": "CoopAI"
         }
       ]
     },
     "commands": [
       {
         "command": "coopAI.openSidebar",
-        "title": "Coop AI: Open Sidebar"
+        "title": "CoopAI: Open Sidebar"
       },
       {
         "command": "coopAI.traceDecisionFromContext",
-        "title": "Coop AI: Trace Decision for Selection"
+        "title": "CoopAI: Trace Decision for Selection"
       },
       {
         "command": "coopAI.findOwnerFromContext",
-        "title": "Coop AI: Find Owner for Selection"
+        "title": "CoopAI: Find Owner for Selection"
       },
       {
         "command": "coopAI.blastRadiusFromContext",
-        "title": "Coop AI: Blast Radius for Selection"
+        "title": "CoopAI: Blast Radius for Selection"
       },
       {
         "command": "coopAI.understandRepoFromContext",
-        "title": "Coop AI: Understand Repo from Context"
+        "title": "CoopAI: Understand Repo from Context"
       },
       {
         "command": "coopAI.knowledgeGapsFromContext",
-        "title": "Coop AI: Knowledge Gaps for Selection"
+        "title": "CoopAI: Knowledge Gaps for Selection"
       },
       {
         "command": "coopAI.runSavedPrompt",
-        "title": "Coop AI: Run Saved Prompt…"
+        "title": "CoopAI: Run Saved Prompt…"
       },
       {
         "command": "coopAI.newChat",
@@ -78,36 +81,48 @@
       },
       {
         "command": "coopAI.openSettings",
-        "title": "Coop AI Settings",
+        "title": "CoopAI Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "coopAI.openExtensionSettings",
+        "title": "CoopAI Extension Settings"
+      },
+      {
+        "command": "coopAI.openKeybindings",
+        "title": "Keyboard Shortcuts"
+      },
+      {
+        "command": "coopAI.moveFocusedView",
+        "title": "Move View"
+      },
+      {
+        "command": "coopAI.moveEditorToNewWindow",
+        "title": "Move Chat to New Window"
       },
       {
         "command": "coopAI.clearChat",
         "title": "Clear Chat"
       },
       {
-        "command": "coopAI.exportChat",
-        "title": "Export Chat…"
-      },
-      {
         "command": "coopAI.triggerAutocomplete",
-        "title": "Coop AI: Trigger Inline Autocomplete"
+        "title": "CoopAI: Trigger Inline Autocomplete"
       },
       {
         "command": "coopAI.showAutocompleteHelp",
-        "title": "Coop AI: Show Autocomplete Help"
+        "title": "CoopAI: Show Autocomplete Help"
       },
       {
         "command": "coopAI.toggleAutocomplete",
-        "title": "Coop AI: Toggle Autocomplete"
+        "title": "CoopAI: Toggle Autocomplete"
       },
       {
         "command": "coopAI.autocompleteNext",
-        "title": "Coop AI: Next Autocomplete Suggestion"
+        "title": "CoopAI: Next Autocomplete Suggestion"
       },
       {
         "command": "coopAI.autocompletePrev",
-        "title": "Coop AI: Previous Autocomplete Suggestion"
+        "title": "CoopAI: Previous Autocomplete Suggestion"
       }
     ],
     "keybindings": [
@@ -132,11 +147,6 @@
     ],
     "submenus": [
       {
-        "id": "coopAI.newChatMenu",
-        "label": "New Chat",
-        "icon": "$(add)"
-      },
-      {
         "id": "coopAI.moreActionsMenu",
         "label": "More Actions",
         "icon": "$(ellipsis)"
@@ -145,7 +155,7 @@
     "menus": {
       "view/title": [
         {
-          "submenu": "coopAI.newChatMenu",
+          "command": "coopAI.newChat",
           "group": "navigation@1",
           "when": "view == coopAI.sidebar"
         },
@@ -160,27 +170,13 @@
           "when": "view == coopAI.sidebar"
         }
       ],
-      "coopAI.newChatMenu": [
-        {
-          "command": "coopAI.newChat",
-          "group": "1_new@1"
-        },
-        {
-          "command": "coopAI.newChatEditor",
-          "group": "1_new@2"
-        },
-        {
-          "command": "coopAI.newChatWindow",
-          "group": "1_new@3"
-        }
-      ],
       "coopAI.moreActionsMenu": [
         {
-          "command": "workbench.action.moveFocusedView",
+          "command": "coopAI.moveFocusedView",
           "when": "view == coopAI.sidebar"
         },
         {
-          "command": "workbench.action.moveEditorToNewWindow",
+          "command": "coopAI.moveEditorToNewWindow",
           "when": "activeWebviewPanelId == coopAI.chatEditor",
           "group": "layout@1"
         },
@@ -189,26 +185,37 @@
           "group": "settings@1"
         },
         {
-          "command": "workbench.action.openSettings",
-          "args": "@ext:coop-ai.coop-ai",
+          "command": "coopAI.openExtensionSettings",
           "group": "settings@2"
         },
         {
-          "command": "workbench.action.openGlobalKeybindings",
+          "command": "coopAI.openKeybindings",
           "group": "settings@3"
         },
         {
-          "command": "coopAI.exportChat",
+          "command": "coopAI.newChatWindow",
           "group": "chat@1"
         },
         {
           "command": "coopAI.clearChat",
-          "group": "chat@2"
+          "group": "chat@2",
+          "when": "view == coopAI.sidebar",
+          "args": {
+            "target": "sidebar"
+          }
+        },
+        {
+          "command": "coopAI.clearChat",
+          "group": "chat@2",
+          "when": "activeWebviewPanelId == coopAI.chatEditor",
+          "args": {
+            "target": "editor"
+          }
         }
       ],
       "editor/title": [
         {
-          "submenu": "coopAI.newChatMenu",
+          "command": "coopAI.newChat",
           "group": "navigation@1",
           "when": "activeWebviewPanelId == coopAI.chatEditor"
         },
@@ -265,26 +272,22 @@
         {
           "command": "coopAI.clearChat",
           "when": "false"
-        },
-        {
-          "command": "coopAI.exportChat",
-          "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "Coop AI",
+      "title": "CoopAI",
       "properties": {
         "coopAI.defaultModel": {
           "type": "string",
           "default": "claude-3-5-sonnet-20241022",
-          "description": "Default model for Coop AI chat requests."
+          "description": "Default model for CoopAI chat requests."
         },
         "coopAI.llmProvider": {
           "type": "string",
           "enum": ["anthropic", "openai", "gemini", "deepseek"],
           "default": "anthropic",
-          "description": "LLM provider routed by the Coop API server."
+          "description": "LLM provider routed by the CoopAI API server."
         },
         "coopAI.temperature": {
           "type": "number",
@@ -303,7 +306,7 @@
         "coopAI.llm.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable live LLM chat via the Coop API (/v1/chat)."
+          "description": "Enable live LLM chat via the CoopAI API (/v1/chat)."
         },
         "coopAI.autocomplete.enabled": {
           "type": "boolean",
@@ -383,7 +386,7 @@
         "coopAI.apiBaseUrl": {
           "type": "string",
           "default": "https://api.coopai.dev",
-          "description": "Base URL for the Coop AI cloud API (HTTPS only)."
+          "description": "Base URL for the CoopAI cloud API (HTTPS only)."
         },
         "coopAI.jobsBaseUrl": {
           "type": "string",
@@ -410,6 +413,17 @@
           "enum": ["github", "gitlab", "bitbucket"],
           "default": "github",
           "description": "Default code host for remote explorer and context."
+        },
+        "coopAI.openRepoInEditor": {
+          "type": "string",
+          "enum": ["preferLocal", "remote", "ask", "off"],
+          "default": "preferLocal",
+          "description": "When you pick a repository in CoopAI, open it in VS Code: prefer a local clone, fall back to GitHub Repositories (GitHub only), ask each time, or never."
+        },
+        "coopAI.openRepoInNewWindow": {
+          "type": "boolean",
+          "default": false,
+          "description": "When false (recommended), open the repo in this window so files appear in the center editor while CoopAI stays in the sidebar. When true, open the repo in a separate window."
         },
         "coopAI.gitlab.baseUrl": {
           "type": "string",
@@ -567,7 +581,7 @@
         "coopAI.conflicts.detectAndSurface": {
           "type": "boolean",
           "default": true,
-          "description": "Detect source conflicts and surface them in the Coop AI chat UI."
+          "description": "Detect source conflicts and surface them in the CoopAI chat UI."
         },
         "coopAI.conflicts.autoResolve": {
           "type": "boolean",

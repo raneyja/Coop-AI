@@ -19,7 +19,7 @@ const tiers = [
       "Chat with repo context",
       "Quick actions",
       "Workspace prompt library",
-      "Connect to self-hosted or Coop cloud server"
+      "Connect to self-hosted or CoopAI cloud server"
     ],
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",

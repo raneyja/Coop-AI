@@ -1,12 +1,12 @@
 # Zero-Retention LLM Configuration
 
-Coop AI routes code-intelligence requests through a zero-retention configuration layer before any LLM provider receives enterprise code context.
+CoopAI routes code-intelligence requests through a zero-retention configuration layer before any LLM provider receives enterprise code context.
 
 ## Request Controls
 
 Every request is formatted through `src/api/requestFormatter.ts` and receives:
 
-- A system instruction declaring Coop AI code context enterprise-confidential.
+- A system instruction declaring CoopAI code context enterprise-confidential.
 - Standard headers: `x-data-retention-policy`, `x-use-case`, `x-enterprise-mode`, `x-no-training`, and `x-no-logging`.
 - Body annotations under `retention_policy` with `store_conversation`, `use_for_training`, `use_for_fine_tuning`, and `allow_logging` set to `false`.
 - Provider-specific no-retention metadata where supported.
@@ -22,7 +22,7 @@ All request bodies should pass through `sanitizeLlmRequestPayload` before transm
 
 ## BYOK
 
-`src/api/byokHandler.ts` routes customer-owned keys through the customer's provider account. Coop AI stores only an API key hash and encrypted key material. Decrypted keys must exist only for the duration of the outbound request and must never be logged.
+`src/api/byokHandler.ts` routes customer-owned keys through the customer's provider account. CoopAI stores only an API key hash and encrypted key material. Decrypted keys must exist only for the duration of the outbound request and must never be logged.
 
 BYOK audit logs include customer ID, provider, model, timestamp, request ID, status, and status code. They must not include API keys, prompts, responses, or raw code context. Audit retention is 90 days.
 

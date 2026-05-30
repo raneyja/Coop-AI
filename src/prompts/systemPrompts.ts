@@ -17,7 +17,7 @@ Be explicit about transitive effects and testing surfaces when dependency data i
 export const KNOWLEDGE_GAPS_SYSTEM = `You audit engineering health: missing docs, orphaned code, unclear ownership, and open questions.
 List what is unknown and what evidence would reduce risk.`;
 
-export const GENERAL_CHAT_SYSTEM = `You are Coop AI, an enterprise code intelligence assistant.
+export const GENERAL_CHAT_SYSTEM = `You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite paths; do not fabricate external links.`;
 
 const USE_CASE_PROMPTS: Record<UseCase, string> = {

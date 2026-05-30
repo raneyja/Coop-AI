@@ -208,7 +208,7 @@ const PROVIDER_CONFIGS: Record<LlmProvider, ZeroRetentionProviderConfig> = {
       notes: [
         "Use paid Gemini API or Vertex AI terms for no-training commitments.",
         "Do not enable grounding with Google Search, context caching, Interactions API storage, or Live API session resumption for zero-retention workloads.",
-        "Set store=false where supported and disable web search in Coop request construction."
+        "Set store=false where supported and disable web search in CoopAI request construction."
       ]
     }
   }

@@ -218,7 +218,7 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
 export function startWebhookServer(options: WebhookServerOptions = {}): WebhookServerRuntime {
   const runtime = createWebhookServer(options);
   runtime.server.listen(runtime.config.port, () => {
-    console.log(`Coop AI webhook server listening on port ${runtime.config.port}`);
+    console.log(`CoopAI webhook server listening on port ${runtime.config.port}`);
   });
   return runtime;
 }

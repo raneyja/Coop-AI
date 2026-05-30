@@ -56,7 +56,7 @@ export default function HomePage() {
               Zero-clone intelligence
             </h2>
             <p className="mt-4 text-lg text-coop-muted">
-              Your code stays on your infrastructure. Coop builds a remote knowledge graph from
+              Your code stays on your infrastructure. CoopAI builds a remote knowledge graph from
               webhooks and index jobs — developers get context without cloning entire monorepos.
             </p>
           </div>

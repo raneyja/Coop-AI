@@ -20,7 +20,7 @@ export const siteConfig = {
     { label: "Security", href: "/security" }
   ] as const,
   quote: {
-    text: "By just using the beta version of Coop I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
+    text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
     author: "Senior Engineer",
     company: "Row Labs"
   },

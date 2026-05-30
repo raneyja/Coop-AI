@@ -50,8 +50,10 @@ export async function handleChatApiRequest(
   }
 
   const body = asRecord(parsed.body) as V1ChatRequestBody;
-  if (!body.message || typeof body.message !== "string") {
-    writeJson(response, 400, { error: "invalid_request", message: "message is required" });
+  const message = typeof body.message === "string" ? body.message : "";
+  const attachments = Array.isArray(body.attachments) ? body.attachments.filter(isImageAttachment) : [];
+  if (!message.trim() && attachments.length === 0) {
+    writeJson(response, 400, { error: "invalid_request", message: "message or attachments required" });
     return true;
   }
 
@@ -76,6 +78,7 @@ export async function handleChatApiRequest(
         message: body.message,
         history: Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [],
         context: body.context,
+        attachments: attachments.length ? attachments : undefined,
         useCase: readUseCase(body.useCase),
         allowUnapprovedProvider: config.allowUnapprovedProvider,
         modelConfig: {
@@ -135,12 +138,34 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-function isHistoryMessage(value: unknown): value is { role: "user" | "assistant"; content: string } {
+function isHistoryMessage(
+  value: unknown
+): value is { role: "user" | "assistant"; content: string; attachments?: Array<{ id: string; name: string; mimeType: string; dataUrl: string }> } {
   if (typeof value !== "object" || !value) {
     return false;
   }
   const entry = value as Record<string, unknown>;
-  return (entry.role === "user" || entry.role === "assistant") && typeof entry.content === "string";
+  if ((entry.role !== "user" && entry.role !== "assistant") || typeof entry.content !== "string") {
+    return false;
+  }
+  if (entry.attachments === undefined) {
+    return true;
+  }
+  return Array.isArray(entry.attachments) && entry.attachments.every(isImageAttachment);
+}
+
+function isImageAttachment(value: unknown): value is { id: string; name: string; mimeType: string; dataUrl: string } {
+  if (typeof value !== "object" || !value) {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.name === "string" &&
+    typeof entry.mimeType === "string" &&
+    typeof entry.dataUrl === "string" &&
+    entry.dataUrl.startsWith("data:image/")
+  );
 }
 
 function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {

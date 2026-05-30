@@ -11,7 +11,7 @@ const config: Config = {
           dark: "#0D1117",
           surface: "#161B22",
           border: "#30363D",
-          muted: "#8B949E"
+          muted: "#9CA4AD"
         }
       },
       fontFamily: {

@@ -1,18 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatStream, ChatMessage } from "./components/ChatStream";
 import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
-import { JobProgress } from "./JobProgress";
 import { applyThemeMode } from "./theme";
 import { QuickActionId } from "./types";
-import { SavedPromptsMenu, type SavedPromptItem } from "./components/SavedPromptsMenu";
-import { RemoteExplorer } from "./RemoteExplorer";
+import { PromptLibraryModal } from "./components/PromptLibraryModal";
+import { PromptLibraryPill } from "./components/PromptLibraryPill";
+import type { PromptLibraryItem } from "./components/promptLibraryTypes";
+import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
 import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./AutocompleteStatus";
-import { InlineCompletion, type InlineCompletionUiState } from "./InlineCompletion";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
+import type { ChatImageAttachment } from "../chat/types";
+import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
   ConflictActionId,
   ConflictResolutionState,
@@ -33,7 +36,7 @@ type VsCodeApi = {
 type RemoteTreeNode = {
   path: string;
   name: string;
-  type: "file" | "dir";
+  type: "file" | "dir" | "repo";
   size?: number;
   updatedAt?: string;
 };
@@ -50,6 +53,7 @@ type InboundMessage =
       payload: {
         path: string;
         items: RemoteTreeNode[];
+        scope?: "repos" | "files";
         error?: string;
         stale?: boolean;
         provider?: "github" | "gitlab" | "bitbucket";
@@ -75,7 +79,14 @@ type InboundMessage =
         sessionCostUsd: number;
       };
     }
-  | { type: "prompts:list"; payload: { prompts: SavedPromptItem[] } }
+  | {
+      type: "prompts:list";
+      payload: {
+        prompts: PromptLibraryItem[];
+        pinnedIds: string[];
+        hasWorkspace: boolean;
+      };
+    }
   | {
       type: "autocomplete:status";
       payload: {
@@ -109,10 +120,22 @@ function renderMessageBody(content: string): React.ReactElement[] {
   return blocks.map((part, index) => {
     const isCode = index % 2 === 1;
     if (!isCode) {
+      const paragraphs = part.split(/\n{2,}/).filter((segment) => segment.length > 0);
+      if (paragraphs.length === 0) {
+        return (
+          <p key={`text-${index}`} className="whitespace-pre-wrap break-words">
+            {part}
+          </p>
+        );
+      }
       return (
-        <p key={`text-${index}`} className="whitespace-pre-wrap break-words">
-          {part}
-        </p>
+        <React.Fragment key={`text-${index}`}>
+          {paragraphs.map((segment, paragraphIndex) => (
+            <p key={`text-${index}-${paragraphIndex}`} className="whitespace-pre-wrap break-words">
+              {segment}
+            </p>
+          ))}
+        </React.Fragment>
       );
     }
     const [firstLine, ...rest] = part.split("\n");
@@ -144,11 +167,54 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
   );
 }
 
+function ChatFooter({
+  error,
+  onDismissError,
+  intentFeedback,
+  onDismissIntent,
+  jobProgress,
+  onDismissJob,
+  onCancelJob,
+  onViewJobResults,
+  conflictCount,
+  children
+}: {
+  error: string;
+  onDismissError: () => void;
+  intentFeedback?: IntentFeedbackState;
+  onDismissIntent: () => void;
+  jobProgress?: JobProgressState;
+  onDismissJob: () => void;
+  onCancelJob?: (jobId: string) => void;
+  onViewJobResults?: (jobId: string) => void;
+  conflictCount: number;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <footer className="chat-footer">
+      <ChatActivityStrip
+        error={error || undefined}
+        onDismissError={onDismissError}
+        intentFeedback={intentFeedback}
+        onDismissIntent={onDismissIntent}
+        jobProgress={jobProgress}
+        onDismissJob={onDismissJob}
+        onCancelJob={onCancelJob}
+        onViewJobResults={onViewJobResults}
+        conflictCount={conflictCount}
+      />
+      <div className="chat-footer-inner">{children}</div>
+    </footer>
+  );
+}
+
 export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const cached = (vscode.getState() as PersistedWebviewState | null) || null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [context, setContext] = useState<RepoContext>({});
   const [input, setInput] = useState(cached?.draftInput || "");
+  const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
   const [error, setError] = useState("");
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -156,11 +222,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [treeState, setTreeState] = useState<{
     path: string;
     items: RemoteTreeNode[];
+    scope?: "repos" | "files";
     error?: string;
     stale?: boolean;
     provider?: "github" | "gitlab" | "bitbucket";
     loading?: boolean;
-  }>({ path: "", items: [] });
+  }>({ path: "", items: [], scope: "files" });
   const [intentFeedback, setIntentFeedback] = useState<IntentFeedbackState | undefined>();
   const [jobProgress, setJobProgress] = useState<JobProgressState | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
@@ -168,12 +235,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [featureStatuses, setFeatureStatuses] = useState<Record<string, DegradationFeatureStatusPayload>>({});
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
-  const [savedPrompts, setSavedPrompts] = useState<SavedPromptItem[]>([]);
+  const [promptLibrary, setPromptLibrary] = useState<{
+    prompts: PromptLibraryItem[];
+    pinnedIds: string[];
+    hasWorkspace: boolean;
+  }>({ prompts: [], pinnedIds: [], hasWorkspace: false });
+  const [promptMenuOpen, setPromptMenuOpen] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
   const [autocompleteMessage, setAutocompleteMessage] = useState<string | undefined>();
-  const [inlineCompletionUi, setInlineCompletionUi] = useState<InlineCompletionUiState>({
-    visible: false
-  });
   const [decisionTimeline, setDecisionTimeline] = useState<DecisionTimelinePayload | undefined>();
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -194,11 +264,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
 
   const requestTree = useCallback((path = "") => {
-    post({ type: "repo:list", payload: { path } });
+    post({ type: "repo:list", payload: { path, scope: "files" } });
+  }, [post]);
+
+  const requestRepos = useCallback(() => {
+    post({ type: "repo:list", payload: { scope: "repos" } });
   }, [post]);
 
   useEffect(() => {
-    post({ type: "webview-ready" });
     const listener = (event: MessageEvent<InboundMessage>) => {
       const message = event.data;
       switch (message.type) {
@@ -212,6 +285,17 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setMessages(message.payload);
           setStreamingBuffer("");
           setIsStreaming(false);
+          if (message.payload.length === 0) {
+            setInput("");
+            setAttachments([]);
+            setAttachmentError("");
+            setError("");
+            setDecisionTimeline(undefined);
+            setUsageLabel(undefined);
+            setIntentFeedback(undefined);
+            setJobProgress(undefined);
+            vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
+          }
           break;
         case "chat:delta":
           setIsStreaming(true);
@@ -236,6 +320,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setTreeState({
             path: message.payload.path,
             items: message.payload.items,
+            scope: message.payload.scope ?? "files",
             error: message.payload.error,
             stale: message.payload.stale,
             provider: message.payload.provider,
@@ -280,25 +365,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           );
           break;
         case "prompts:list":
-          setSavedPrompts(message.payload.prompts);
+          setPromptLibrary(message.payload);
           break;
         case "autocomplete:status":
           setAutocompleteStatus(message.payload.status);
           setAutocompleteMessage(message.payload.message);
-          setInlineCompletionUi({
-            visible: message.payload.status !== "disabled",
-            previewText: message.payload.previewText,
-            suggestionIndex: message.payload.suggestionIndex,
-            suggestionCount: message.payload.suggestionCount,
-            latencyMs: message.payload.latencyMs,
-            sourceLabel: "Coop AI"
-          });
           break;
         default:
           break;
       }
     };
     window.addEventListener("message", listener);
+    post({ type: "webview-ready" });
     return () => window.removeEventListener("message", listener);
   }, [post]);
 
@@ -313,9 +391,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [input, vscode]);
 
   const submitPrompt = useCallback(
-    (prompt: string, quickAction?: QuickActionId) => {
+    (prompt: string, quickAction?: QuickActionId, pendingAttachments: ChatImageAttachment[] = attachments) => {
       const message = prompt.trim();
-      if (!message) {
+      if (!message && pendingAttachments.length === 0) {
         return;
       }
       if (message.length > INPUT_MAX) {
@@ -323,15 +401,48 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         return;
       }
       setError("");
+      setAttachmentError("");
       setIsStreaming(true);
       setStreamingBuffer("");
-      post({ type: "chat:send", payload: { message, quickAction } });
+      post({
+        type: "chat:send",
+        payload: {
+          message,
+          quickAction,
+          attachments: pendingAttachments.length ? pendingAttachments : undefined
+        }
+      });
       setInput("");
+      setAttachments([]);
     },
-    [post]
+    [attachments, post]
   );
 
   const handleSend = useCallback(() => submitPrompt(input), [input, submitPrompt]);
+
+  const handlePanelDrop = useCallback(
+    async (event: React.DragEvent<HTMLDivElement>) => {
+      if (isStreaming) {
+        return;
+      }
+      const target = event.target as HTMLElement;
+      if (target.closest(".coop-composer")) {
+        return;
+      }
+      event.preventDefault();
+      try {
+        const incoming = await attachmentsFromDataTransfer(event.dataTransfer);
+        if (!incoming.length) {
+          return;
+        }
+        setAttachmentError("");
+        setAttachments((current) => mergeAttachments(current, incoming, setAttachmentError));
+      } catch (error) {
+        setAttachmentError(error instanceof Error ? error.message : "Could not attach image.");
+      }
+    },
+    [isStreaming]
+  );
 
   const handleQuickAction = useCallback(
     (actionId: QuickActionId, prompt: string) => {
@@ -340,13 +451,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [submitPrompt]
   );
 
-  const handleNewChat = useCallback(() => {
-    setError("");
-    setStreamingBuffer("");
-    setIsStreaming(false);
-    setDecisionTimeline(undefined);
-    post({ type: "chat:new" });
-  }, [post]);
+  const dismissJobProgress = useCallback(() => setJobProgress(undefined), []);
+  const cancelJob = useCallback((jobId: string) => post({ type: "job:cancel", payload: { jobId } }), [post]);
+  const viewJobResults = useCallback(
+    (jobId: string) => post({ type: "job:view-results", payload: { jobId } }),
+    [post]
+  );
 
   const handleStopStreaming = useCallback(() => {
     post({ type: "chat:stream-cancel" });
@@ -358,11 +468,42 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setIsExplorerOpen((prev) => {
       const next = !prev;
       if (next) {
-        requestTree(treeState.path || "");
+        if (isActiveChat) {
+          requestRepos();
+        } else if (context.owner && context.repo) {
+          requestTree(treeState.path || "");
+        } else {
+          requestRepos();
+        }
       }
       return next;
     });
-  }, [treeState.path, requestTree]);
+  }, [context.owner, context.repo, isActiveChat, requestRepos, requestTree, treeState.path]);
+
+  const handleSelectRepo = useCallback(
+    (repoPath: string) => {
+      const parsed = parseRepoNodePath(repoPath);
+      if (!parsed) {
+        return;
+      }
+      const payload = {
+        provider: parsed.provider,
+        owner: parsed.owner,
+        repo: parsed.repo
+      };
+      const switchingRepo =
+        parsed.owner !== context.owner ||
+        parsed.repo !== context.repo ||
+        parsed.provider !== (context.provider ?? treeState.provider);
+      if (isActiveChat && switchingRepo) {
+        post({ type: "repo:open-repo", payload });
+        setIsExplorerOpen(false);
+        return;
+      }
+      post({ type: "repo:select", payload });
+    },
+    [context.owner, context.repo, context.provider, isActiveChat, post, treeState.provider]
+  );
 
   const handleConflictAction = useCallback(
     (conflictId: string, action: ConflictActionId) => {
@@ -381,95 +522,206 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [post]
   );
 
+  const conflictCount = conflictState?.conflicts.length ?? 0;
+  const openPromptLibrary = useCallback(() => {
+    setPromptMenuOpen(false);
+    setPromptModalOpen(true);
+  }, []);
+
+  const composerInner = (
+    <div className="relative">
+      {isExplorerOpen ? (
+        <RemoteExplorer
+          open
+          className="coop-explorer-shell--overlay absolute bottom-full left-0 right-0 z-30 mb-2 w-full"
+          context={context}
+          treeState={treeState}
+          onClose={() => setIsExplorerOpen(false)}
+          onRefresh={(path) => requestTree(path)}
+          onRefreshRepos={requestRepos}
+          onBrowseRepos={requestRepos}
+          onExpand={(path) => requestTree(path)}
+          onSelectFile={(path) => post({ type: "repo:open-file", payload: { path } })}
+          onSelectRepo={handleSelectRepo}
+          onOpenSettings={() => post({ type: "ui:open-settings" })}
+        />
+      ) : null}
+      <ChatComposer
+        value={input}
+        maxLength={INPUT_MAX}
+        isStreaming={isStreaming}
+        variant={isActiveChat ? "chat" : "landing"}
+        contextFile={context.file}
+        contextWarning={context.contextWarning}
+        usageLabel={usageLabel}
+        attachments={attachments}
+        attachmentError={attachmentError}
+        onChange={setInput}
+        onAttachmentsChange={setAttachments}
+        onAttachmentError={setAttachmentError}
+        onSend={handleSend}
+        onStop={handleStopStreaming}
+        onToggleExplorer={toggleExplorer}
+      />
+    </div>
+  );
+
+  const composerStack = (
+    <>
+      <div className="relative mb-1">
+        <PromptLibraryPill
+          prompts={promptLibrary.prompts}
+          pinnedIds={promptLibrary.pinnedIds}
+          hasWorkspace={promptLibrary.hasWorkspace}
+          disabled={isStreaming}
+          open={promptMenuOpen}
+          onOpenChange={setPromptMenuOpen}
+          onRun={(id) => post({ type: "prompts:run", payload: { id } })}
+          onSeeAll={openPromptLibrary}
+        />
+      </div>
+      {composerInner}
+    </>
+  );
+
   return (
-    <div className="coop-panel coop-canvas-bg flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-[var(--coop-panel-foreground)]">
-      {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
-      <div className="flex shrink-0 items-center gap-2 px-3 pt-2">
+    <div
+      className="coop-panel coop-canvas-bg flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden text-[var(--coop-panel-foreground)]"
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        void handlePanelDrop(event);
+      }}
+    >
+      <div className="flex shrink-0 justify-end px-3 pb-1 pt-2">
         <AutocompleteStatus
           status={autocompleteStatus}
           message={autocompleteMessage}
           onToggle={() => post({ type: "autocomplete:toggle" })}
         />
       </div>
-      <InlineCompletion state={inlineCompletionUi} />
-      <DegradationNotification
-        health={health}
-        featureStatuses={featureStatuses}
-        notification={degradationNotification}
-        onDismiss={() => setDegradationNotification(undefined)}
-        onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
-        onRefresh={(feature) => post({ type: "degradation:refresh", payload: { feature } })}
-        onOpenSettings={() => post({ type: "ui:open-settings" })}
-      />
-      <JobProgress
-        state={jobProgress}
-        onCancel={(jobId) => post({ type: "job:cancel", payload: { jobId } })}
-        onViewResults={(jobId) => post({ type: "job:view-results", payload: { jobId } })}
-        onDismiss={() => setJobProgress(undefined)}
-      />
-      <IntentFeedback state={intentFeedback} onDismiss={() => setIntentFeedback(undefined)} />
-      {decisionTimeline ? (
-        <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
-      ) : null}
-      <ConflictResolution
-        state={conflictState}
-        onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
-        onAction={handleConflictAction}
-      />
-
       {isActiveChat ? (
-        <ChatStream
-          messages={messages}
-          streamingMessage={streamMessage}
-          endRef={messageEndRef}
-          renderBody={renderMessageBody}
-        />
+        <>
+          <ChatStream
+            messages={messages}
+            streamingMessage={streamMessage}
+            endRef={messageEndRef}
+            renderBody={renderMessageBody}
+          />
+          <DegradationNotification
+            compact
+            health={health}
+            featureStatuses={featureStatuses}
+            notification={degradationNotification}
+            onDismiss={() => setDegradationNotification(undefined)}
+            onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
+            onRefresh={(feature) => {
+              setDecisionTimeline(undefined);
+              post({ type: "degradation:refresh", payload: { feature, retrace: true } });
+            }}
+            onOpenSettings={() => post({ type: "ui:open-settings" })}
+          />
+          {decisionTimeline ? (
+            <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)]">
+              <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
+            </div>
+          ) : null}
+          {conflictState?.conflicts.length ? (
+            <div className="max-h-[35%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)] px-3 py-2">
+              <ConflictResolution
+                state={conflictState}
+                onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
+                onAction={handleConflictAction}
+              />
+            </div>
+          ) : null}
+          <ChatFooter
+            error={error}
+            onDismissError={() => setError("")}
+            intentFeedback={intentFeedback}
+            onDismissIntent={() => setIntentFeedback(undefined)}
+            jobProgress={jobProgress}
+            onDismissJob={dismissJobProgress}
+            onCancelJob={cancelJob}
+            onViewJobResults={viewJobResults}
+            conflictCount={conflictCount}
+          >
+            {composerStack}
+          </ChatFooter>
+        </>
       ) : (
-        <EmptyState
-          context={context}
-          disabled={isStreaming}
-          featureStatuses={featureStatuses}
-          onAction={handleQuickAction}
-        />
+        <>
+          {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
+          <DegradationNotification
+            health={health}
+            featureStatuses={featureStatuses}
+            notification={degradationNotification}
+            onDismiss={() => setDegradationNotification(undefined)}
+            onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
+            onRefresh={(feature) => {
+              setDecisionTimeline(undefined);
+              post({ type: "degradation:refresh", payload: { feature, retrace: true } });
+            }}
+            onOpenSettings={() => post({ type: "ui:open-settings" })}
+          />
+          <IntentFeedback
+            state={intentFeedback}
+            onDismiss={() => setIntentFeedback(undefined)}
+            onRefreshContext={() => {
+              setDecisionTimeline(undefined);
+              setIntentFeedback({
+                status: "loading",
+                actionId: "trace-decision",
+                title: "Refreshing trace",
+                message: "Clearing cache and re-fetching from GitHub…",
+                progress: 20
+              });
+              post({ type: "degradation:refresh", payload: { retrace: true } });
+            }}
+          />
+          {decisionTimeline ? (
+            <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
+          ) : null}
+          <ConflictResolution
+            state={conflictState}
+            onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
+            onAction={handleConflictAction}
+          />
+          <EmptyState
+            context={context}
+            disabled={isStreaming}
+            featureStatuses={featureStatuses}
+            onAction={handleQuickAction}
+          />
+          <div className="relative z-20 shrink-0 pb-2">
+            <ChatActivityStrip
+              jobProgress={jobProgress}
+              onDismissJob={dismissJobProgress}
+              onCancelJob={cancelJob}
+              onViewJobResults={viewJobResults}
+              intentFeedback={intentFeedback}
+              onDismissIntent={() => setIntentFeedback(undefined)}
+            />
+            <div className="px-3">{composerStack}</div>
+          </div>
+        </>
       )}
-
-      <RemoteExplorer
-        open={isExplorerOpen}
-        context={context}
-        treeState={treeState}
-        onClose={() => setIsExplorerOpen(false)}
-        onRefresh={(path) => requestTree(path)}
-        onExpand={(path) => requestTree(path)}
-        onSelectFile={(path) => post({ type: "repo:open-file", payload: { path } })}
-        onOpenSettings={() => post({ type: "ui:open-settings" })}
-      />
-
-      <SavedPromptsMenu
-        prompts={savedPrompts}
-        disabled={isStreaming}
-        onRun={(id) => post({ type: "prompts:run", payload: { id } })}
-        onSaveCurrent={() => {
-          const title = window.prompt("Prompt title");
-          if (!title?.trim()) {
-            return;
-          }
-          post({
-            type: "prompts:save",
-            payload: { title: title.trim(), template: input.trim() || "Describe {{file}} in {{owner}}/{{repo}}." }
-          });
+      <PromptLibraryModal
+        open={promptModalOpen}
+        prompts={promptLibrary.prompts}
+        pinnedIds={promptLibrary.pinnedIds}
+        hasWorkspace={promptLibrary.hasWorkspace}
+        currentInput={input}
+        onClose={() => setPromptModalOpen(false)}
+        onRun={(id) => {
+          setPromptModalOpen(false);
+          post({ type: "prompts:run", payload: { id } });
         }}
-      />
-
-      <ChatComposer
-        value={input}
-        maxLength={INPUT_MAX}
-        isStreaming={isStreaming}
-        contextFile={context.file}
-        usageLabel={usageLabel}
-        onChange={setInput}
-        onSend={handleSend}
-        onStop={handleStopStreaming}
-        onToggleExplorer={toggleExplorer}
+        onSave={(payload) => post({ type: "prompts:save", payload })}
+        onUpdate={(payload) => post({ type: "prompts:update", payload })}
+        onDelete={(id) => post({ type: "prompts:delete", payload: { id } })}
+        onUpdatePinned={(pinnedIds) => post({ type: "prompts:update-pinned", payload: { pinnedIds } })}
       />
     </div>
   );

@@ -35,7 +35,7 @@ export class AutocompletePerformanceMonitor {
     this.emit({ kind: "request", latencyMs: breakdown.totalMs, languageId });
     if (breakdown.totalMs > LATENCY_ALERT_MS) {
       console.warn(
-        `[Coop autocomplete] Latency ${breakdown.totalMs}ms exceeded ${LATENCY_ALERT_MS}ms (assembly=${breakdown.assemblyMs}, network=${breakdown.networkMs}, parse=${breakdown.parseMs})`
+        `[CoopAI autocomplete] Latency ${breakdown.totalMs}ms exceeded ${LATENCY_ALERT_MS}ms (assembly=${breakdown.assemblyMs}, network=${breakdown.networkMs}, parse=${breakdown.parseMs})`
       );
     }
   }

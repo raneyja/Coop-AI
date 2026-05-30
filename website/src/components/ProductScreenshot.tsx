@@ -29,8 +29,8 @@ export function ProductScreenshot({ size = "compact" }: ProductScreenshotProps) 
           <Image
             src="/screenshots/product-dark.png"
             alt="CoopAI sidebar in VS Code showing quick actions and chat"
-            width={1920}
-            height={1080}
+            width={1024}
+            height={767}
             className="w-full"
             priority
           />

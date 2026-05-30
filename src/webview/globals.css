@@ -4,10 +4,11 @@
 
 @layer base {
   :root {
+    /* Cursor-like chat: editor depth, not sidebar gray */
     --coop-panel-canvas: color-mix(
       in srgb,
-      var(--vscode-sideBar-background) 92%,
-      var(--vscode-foreground) 8%
+      var(--vscode-editor-background, var(--vscode-sideBar-background)) 90%,
+      black 10%
     );
     --coop-panel-foreground: var(--vscode-sideBar-foreground, var(--vscode-foreground));
     --coop-panel-muted: var(--vscode-descriptionForeground);
@@ -17,9 +18,13 @@
     --coop-composer-shadow: none;
     --coop-composer-placeholder: var(--vscode-input-placeholderForeground);
     --coop-composer-text: var(--vscode-input-foreground);
+    --chat-user-bg: var(--vscode-input-background, var(--coop-composer-surface));
+    --chat-user-border: var(--vscode-widget-border, var(--coop-composer-border));
+    --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     --coop-pill-text: var(--coop-panel-foreground);
+    --coop-prompt-panel-width: 480px;
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, black 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-border) 85%, black 15%);
+    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
   }
 
   [data-theme="light"] {
@@ -32,39 +37,48 @@
     --coop-composer-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
     --coop-composer-placeholder: #9e9e9e;
     --coop-composer-text: #000000;
+    --chat-user-bg: #ffffff;
+    --chat-user-border: #d4d4d4;
+    --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     --coop-pill-text: color-mix(in srgb, #000000 90%, #6b7280 10%);
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, black 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-border) 85%, black 15%);
+    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
   }
 
   [data-theme="dark"] {
-    --coop-panel-canvas: #252526;
-    --coop-panel-foreground: #e5e5e5;
-    --coop-panel-muted: #9d9d9d;
-    --coop-composer-surface: #2d2d2d;
-    --coop-composer-border: #3c3c3c;
-    --coop-composer-border-focus: #4a4a4a;
+    --coop-panel-canvas: #1e1e1e;
+    --coop-panel-foreground: color-mix(in srgb, #e5e5e5 85%, white 15%);
+    --coop-panel-muted: color-mix(in srgb, #9d9d9d 85%, white 15%);
+    --coop-composer-surface: #252526;
+    --coop-composer-border: #323232;
+    --coop-composer-border-focus: #424242;
     --coop-composer-shadow: none;
-    --coop-composer-placeholder: #9d9d9d;
-    --coop-composer-text: #e5e5e5;
-    --coop-pill-text: #e5e5e5;
+    --coop-composer-placeholder: color-mix(in srgb, #9d9d9d 85%, white 15%);
+    --coop-composer-text: color-mix(in srgb, #e5e5e5 85%, white 15%);
+    --chat-user-bg: #2a2a2a;
+    --chat-user-border: #3a3a3a;
+    --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+    --coop-pill-text: color-mix(in srgb, #e5e5e5 85%, white 15%);
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, white 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-border) 85%, white 15%);
+    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
   }
 
   :root:not([data-theme="light"]):not([data-theme="high-contrast"]) {
-    --coop-panel-canvas: #252526;
-    --coop-panel-foreground: #e5e5e5;
-    --coop-panel-muted: #9d9d9d;
-    --coop-composer-surface: #2d2d2d;
-    --coop-composer-border: #3c3c3c;
-    --coop-composer-border-focus: #4a4a4a;
+    --coop-panel-canvas: #1e1e1e;
+    --coop-panel-foreground: color-mix(in srgb, #e5e5e5 85%, white 15%);
+    --coop-panel-muted: color-mix(in srgb, #9d9d9d 85%, white 15%);
+    --coop-composer-surface: #252526;
+    --coop-composer-border: #323232;
+    --coop-composer-border-focus: #424242;
     --coop-composer-shadow: none;
-    --coop-composer-placeholder: #9d9d9d;
-    --coop-composer-text: #e5e5e5;
-    --coop-pill-text: #e5e5e5;
+    --coop-composer-placeholder: color-mix(in srgb, #9d9d9d 85%, white 15%);
+    --coop-composer-text: color-mix(in srgb, #e5e5e5 85%, white 15%);
+    --chat-user-bg: #2a2a2a;
+    --chat-user-border: #3a3a3a;
+    --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+    --coop-pill-text: color-mix(in srgb, #e5e5e5 85%, white 15%);
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, white 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-border) 85%, white 15%);
+    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
   }
 
   [data-theme="high-contrast"] {
@@ -77,9 +91,12 @@
     --coop-composer-shadow: none;
     --coop-composer-placeholder: var(--vscode-input-placeholderForeground);
     --coop-composer-text: var(--vscode-input-foreground);
+    --chat-user-bg: var(--vscode-input-background);
+    --chat-user-border: var(--vscode-contrastBorder, var(--vscode-widget-border));
+    --chat-user-shadow: none;
     --coop-pill-text: var(--coop-panel-foreground);
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, white 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-border) 85%, white 15%);
+    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
   }
 
   html,
@@ -105,8 +122,21 @@
   }
 
   html {
-    --coop-pill-surface: color-mix(in srgb, var(--coop-panel-canvas) 85%, var(--coop-composer-surface) 15%);
-    --coop-pill-border: var(--coop-composer-border);
+    --coop-pill-surface: color-mix(in srgb, var(--coop-panel-canvas) 50%, var(--coop-composer-surface) 50%);
+    --coop-pill-border: color-mix(in srgb, var(--coop-pill-surface) 94%, var(--coop-panel-foreground) 6%);
+    --coop-settings-card: color-mix(in srgb, var(--coop-panel-canvas) 65%, var(--coop-composer-surface) 35%);
+    --coop-settings-field: var(--coop-composer-surface);
+    --coop-settings-field-border: color-mix(in srgb, var(--coop-settings-field) 92%, var(--coop-panel-foreground) 8%);
+    --coop-settings-field-border-focus: color-mix(in srgb, var(--coop-settings-field) 82%, var(--coop-panel-foreground) 18%);
+    --coop-settings-divider: color-mix(in srgb, var(--coop-panel-canvas) 55%, var(--coop-panel-foreground) 8%);
+    /* Soft elevation: 80% card / 20% canvas; outline blends further toward canvas */
+    --chat-user-surface: color-mix(in srgb, var(--chat-user-bg) 80%, var(--coop-panel-canvas) 20%);
+    --chat-user-outline: color-mix(in srgb, var(--chat-user-border) 55%, var(--coop-panel-canvas) 45%);
+  }
+
+  [data-theme="high-contrast"] {
+    --chat-user-surface: var(--chat-user-bg);
+    --chat-user-outline: var(--chat-user-border);
   }
 }
 
@@ -141,6 +171,33 @@
     background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
   }
 
+  .coop-autocomplete-control {
+    @apply flex items-center gap-1.5;
+  }
+
+  .coop-autocomplete-label {
+    @apply cursor-default text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-autocomplete-label:hover {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-autocomplete-toggle {
+    @apply inline-flex h-[18px] min-w-[30px] shrink-0 cursor-pointer items-center justify-center rounded-full border px-1.5 text-[9px] font-medium uppercase tracking-wide transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+    background: var(--vscode-input-background, var(--vscode-editor-background));
+    border-color: var(--vscode-input-border, var(--vscode-widget-border));
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-autocomplete-toggle--on {
+    background: var(--vscode-foreground);
+    border-color: var(--vscode-foreground);
+    color: var(--vscode-editor-background, var(--vscode-sideBar-background));
+  }
+
   .coop-text-btn {
     @apply rounded px-2 py-0.5 text-[11px] transition-colors duration-150;
     color: var(--vscode-textLink-foreground);
@@ -150,12 +207,31 @@
     background: var(--vscode-list-hoverBackground);
   }
 
+  .coop-quick-action-row {
+    @apply flex w-full cursor-pointer items-center justify-center rounded px-2 py-2 text-center text-[13px] leading-tight transition-colors duration-150;
+    color: var(--coop-panel-muted);
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+  }
+
+  .coop-quick-action-row:hover:not(:disabled) {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-quick-action-row:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
   .coop-quick-action-pill {
-    @apply inline-flex h-[21px] w-auto min-w-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full border px-[10px] text-center text-[11.9px] font-light transition-colors duration-200 ease-out;
+    @apply inline-flex h-[22px] w-auto min-w-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-center text-[11.9px] font-light transition-colors duration-200 ease-out;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--coop-panel-canvas)];
     background-color: var(--coop-pill-surface);
     border-color: var(--coop-pill-border);
     color: var(--coop-pill-text);
+  }
+
+  .coop-quick-action-status-dot {
+    @apply inline-block h-[5px] w-[5px] shrink-0 rounded-full;
+    opacity: 0.85;
   }
 
   .coop-quick-action-pill:hover:not(:disabled) {
@@ -171,6 +247,180 @@
     border-color: var(--vscode-contrastBorder, var(--vscode-widget-border));
   }
 
+  .coop-composer-pill {
+    @apply inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-composer-surface)];
+    background-color: color-mix(in srgb, var(--coop-pill-surface) 70%, var(--coop-composer-surface) 30%);
+    border-color: var(--coop-pill-border);
+    color: var(--coop-pill-text);
+  }
+
+  .coop-composer-pill:hover:not(:disabled) {
+    background-color: var(--coop-pill-surface-hover);
+    border-color: var(--coop-pill-border-hover);
+  }
+
+  .coop-composer-pill:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .coop-prompt-menu-panel {
+    @apply overflow-hidden rounded-lg border shadow-lg;
+    border-color: var(--vscode-widget-border, var(--coop-composer-border));
+    background: var(--vscode-editorWidget-background, var(--coop-composer-surface));
+    box-shadow: var(--coop-composer-shadow);
+  }
+
+  .coop-prompt-menu-list {
+    @apply m-0 list-none p-1;
+  }
+
+  .coop-prompt-menu-row {
+    @apply flex w-full cursor-pointer items-center rounded px-2.5 py-1.5 text-left text-[12px] transition-colors;
+    color: var(--coop-composer-text);
+  }
+
+  .coop-prompt-menu-row:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .coop-prompt-menu-empty,
+  .coop-prompt-menu-footer {
+    @apply block w-full px-3 py-2 text-[11px];
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .coop-prompt-menu-footer {
+    @apply cursor-pointer border-t text-left transition-colors;
+    border-color: var(--vscode-widget-border, var(--coop-composer-border));
+  }
+
+  .coop-prompt-menu-footer:hover {
+    background: var(--vscode-list-hoverBackground);
+    color: var(--coop-composer-text);
+  }
+
+  .coop-prompt-modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background: color-mix(in srgb, var(--vscode-editor-background) 20%, transparent);
+    backdrop-filter: blur(1px);
+  }
+
+  .coop-prompt-modal-stack {
+    @apply fixed inset-0 z-[60] flex items-center justify-center p-4;
+    background: color-mix(in srgb, var(--vscode-editor-background) 45%, transparent);
+    backdrop-filter: blur(2px);
+  }
+
+  .coop-prompt-editor-modal {
+    @apply gap-3;
+  }
+
+  .coop-prompt-editor-field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .coop-prompt-editor-textarea {
+    @apply min-h-[140px];
+  }
+
+  .coop-prompt-modal {
+    @apply flex max-h-[70vh] w-full flex-col gap-3 rounded-lg border p-4 shadow-xl;
+    max-width: var(--coop-prompt-panel-width, 480px);
+    border-color: var(--vscode-widget-border, var(--coop-composer-border));
+    background: var(--vscode-editorWidget-background, var(--coop-panel-canvas));
+  }
+
+  .coop-prompt-modal-header {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .coop-prompt-modal-title {
+    @apply m-0 text-[14px] font-semibold;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-prompt-modal-search,
+  .coop-prompt-modal-textarea {
+    @apply w-full rounded-md border px-2.5 py-1.5 text-[12px];
+    border-color: var(--coop-settings-field-border, var(--coop-composer-border));
+    background: var(--coop-settings-field-bg, var(--coop-composer-surface));
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-prompt-modal-textarea {
+    @apply min-h-[88px] resize-y;
+  }
+
+  .coop-prompt-modal-section {
+    @apply space-y-1.5;
+  }
+
+  .coop-prompt-modal-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto;
+  }
+
+  .coop-prompt-modal-section-title {
+    @apply m-0 text-[10px] uppercase tracking-wide;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .coop-prompt-modal-muted,
+  .coop-prompt-modal-empty,
+  .coop-prompt-modal-note,
+  .coop-prompt-modal-slot {
+    @apply m-0 text-[11px];
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .coop-prompt-modal-note {
+    color: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground));
+  }
+
+  .coop-prompt-modal-top-list,
+  .coop-prompt-modal-all-list {
+    @apply m-0 list-none space-y-1 p-0;
+  }
+
+  .coop-prompt-modal-top-row,
+  .coop-prompt-modal-all-row {
+    @apply flex items-center gap-2 rounded px-2 py-1 text-[12px];
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-prompt-modal-all-row:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .coop-prompt-modal-top-index {
+    @apply w-4 shrink-0 text-[11px];
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .coop-prompt-modal-icon-btn {
+    @apply inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded px-1 text-[10px] transition-colors;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .coop-prompt-modal-icon-btn:hover:not(:disabled) {
+    background: var(--vscode-toolbar-hoverBackground);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-prompt-modal-icon-btn:disabled {
+    @apply cursor-not-allowed opacity-30;
+  }
+
+  .coop-prompt-modal-actions,
+  .coop-prompt-modal-footer {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .coop-prompt-modal-footer {
+    @apply border-t pt-3;
+    border-color: var(--vscode-widget-border, var(--coop-composer-border));
+  }
+
   .coop-composer {
     border: 1px solid var(--coop-composer-border);
     border-radius: 8px;
@@ -178,8 +428,178 @@
     box-shadow: var(--coop-composer-shadow);
   }
 
+  .chat-composer--active .coop-composer {
+    border-radius: 10px;
+    background: var(--chat-user-surface);
+    border-color: var(--chat-user-outline);
+    box-shadow: var(--chat-user-shadow);
+  }
+
   .coop-composer:focus-within {
     border-color: var(--coop-composer-border-focus);
+  }
+
+  .chat-thread {
+    @apply min-h-0 flex-1 overflow-y-auto overflow-x-hidden;
+  }
+
+  .chat-thread-messages {
+    @apply mx-auto flex w-full max-w-full flex-col gap-5 px-3 py-4;
+  }
+
+  .chat-thread-anchor {
+    @apply h-px shrink-0;
+  }
+
+  .chat-message {
+    @apply w-full min-w-0;
+  }
+
+  .chat-message-inner {
+    @apply min-w-0;
+  }
+
+  .chat-message--user .chat-message-inner {
+    border-radius: 10px;
+    padding: 11px 13px;
+    background: var(--chat-user-surface);
+    border: 1px solid var(--chat-user-outline);
+    box-shadow: var(--chat-user-shadow);
+  }
+
+  .chat-message--assistant .chat-message-inner {
+    padding: 4px 2px 4px 12px;
+    border-left: 2px solid color-mix(in srgb, var(--coop-panel-muted) 16%, transparent);
+  }
+
+  .chat-message-meta {
+    @apply mb-2 flex items-center gap-2;
+  }
+
+  .chat-message-label {
+    @apply text-[11px] font-medium;
+    color: var(--coop-panel-muted);
+  }
+
+  .chat-message-time {
+    @apply ml-auto text-[10px] tabular-nums opacity-0 transition-opacity duration-150;
+    color: var(--coop-panel-muted);
+  }
+
+  .chat-message:hover .chat-message-time,
+  .chat-message--streaming .chat-message-time {
+    opacity: 1;
+  }
+
+  .chat-message-time--solo {
+    @apply mb-1.5 block opacity-0;
+  }
+
+  .chat-message:hover .chat-message-time--solo {
+    opacity: 1;
+  }
+
+  .chat-action-tag {
+    @apply inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+  }
+
+  .chat-message-body {
+    @apply text-[13px] leading-[1.55] break-words;
+    color: var(--coop-panel-foreground);
+  }
+
+  .chat-message-body p {
+    @apply m-0;
+  }
+
+  .chat-message-body p + p {
+    @apply mt-3;
+  }
+
+  .chat-message-attachments {
+    @apply mb-2 flex flex-wrap gap-2;
+  }
+
+  .chat-message-attachments img {
+    @apply max-h-40 max-w-full rounded-md border object-contain;
+    border-color: var(--vscode-widget-border);
+  }
+
+  .chat-message-links {
+    @apply mt-2 flex flex-wrap gap-2;
+  }
+
+  .chat-message-links a {
+    @apply text-xs underline;
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .chat-streaming-indicator {
+    @apply ml-1 inline-flex items-center gap-0.5;
+  }
+
+  .chat-streaming-dot {
+    @apply h-1 w-1 rounded-full opacity-60;
+    background: var(--vscode-progressBar-background, var(--coop-panel-muted));
+    animation: chat-streaming-pulse 1.2s ease-in-out infinite;
+  }
+
+  .chat-streaming-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .chat-streaming-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes chat-streaming-pulse {
+    0%,
+    80%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.85);
+    }
+    40% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .chat-footer {
+    @apply shrink-0 border-t;
+    border-color: color-mix(in srgb, var(--coop-composer-border) 65%, transparent);
+    background: var(--coop-panel-canvas);
+  }
+
+  .chat-footer-inner {
+    @apply px-3 pb-3 pt-2;
+  }
+
+  .chat-activity-strip {
+    @apply space-y-1 px-3 pt-2;
+  }
+
+  .chat-activity-strip-row {
+    @apply flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px];
+    background: color-mix(in srgb, var(--coop-composer-surface) 70%, var(--coop-panel-canvas) 30%);
+    color: var(--coop-panel-foreground);
+  }
+
+  .chat-activity-strip-row--error {
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    background: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
+  }
+
+  .chat-activity-strip-spinner {
+    @apply inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent;
+    color: var(--vscode-progressBar-background);
+  }
+
+  .chat-activity-strip-action {
+    @apply ml-auto shrink-0 rounded px-1.5 py-0.5 opacity-80 transition-opacity hover:opacity-100;
   }
 
   .chat-code-block {
@@ -192,5 +612,298 @@
   .chat-code-block code {
     @apply block whitespace-pre-wrap break-words;
     color: var(--vscode-editor-foreground);
+  }
+
+  .coop-settings-shell {
+    @apply min-h-0;
+    background: var(--coop-panel-canvas);
+  }
+
+  .coop-settings-dialog {
+    @apply flex h-full min-h-0 w-full max-w-[720px] flex-col overflow-hidden;
+    background: var(--coop-panel-canvas);
+  }
+
+  .coop-settings-header {
+    @apply flex shrink-0 items-center justify-between gap-3 px-4 py-3;
+    border-bottom: 1px solid var(--coop-settings-divider);
+  }
+
+  .coop-settings-body {
+    @apply min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4;
+  }
+
+  .coop-settings-section-label {
+    @apply mb-2 text-[11px] font-medium;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-settings-card {
+    @apply space-y-3 rounded-lg p-3.5;
+    background: var(--coop-settings-card);
+  }
+
+  .coop-settings-card-title {
+    @apply text-[13px] font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-settings-card-desc {
+    @apply text-[11px] leading-relaxed;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-settings-label {
+    @apply text-[11px] font-normal;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-settings-field {
+    @apply w-full min-w-0 rounded-md px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-150;
+    background: var(--coop-settings-field);
+    border: 1px solid var(--coop-settings-field-border);
+    color: var(--coop-composer-text);
+  }
+
+  .coop-settings-field:focus {
+    border-color: var(--coop-settings-field-border-focus);
+  }
+
+  .coop-settings-field::placeholder {
+    color: var(--coop-composer-placeholder);
+  }
+
+  .coop-settings-field:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .coop-settings-field-row {
+    @apply flex min-w-0 flex-col gap-1.5;
+  }
+
+  .coop-settings-actions {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .coop-settings-action-btn {
+    @apply inline-flex cursor-pointer items-center rounded-md border px-2.5 py-1 text-[11px] transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    background: var(--coop-pill-surface);
+    border-color: var(--coop-pill-border);
+    color: var(--coop-pill-text);
+  }
+
+  .coop-settings-action-btn:hover:not(:disabled) {
+    background: var(--coop-pill-surface-hover);
+    border-color: var(--coop-pill-border-hover);
+  }
+
+  .coop-settings-action-btn:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .coop-settings-checkbox-row {
+    @apply flex cursor-pointer items-start justify-between gap-4 py-2;
+  }
+
+  .coop-settings-checkbox-row + .coop-settings-checkbox-row {
+    border-top: 1px solid var(--coop-settings-divider);
+  }
+
+  .coop-settings-row-title {
+    @apply text-[13px] font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-settings-row-desc {
+    @apply mt-0.5 text-[11px] leading-relaxed;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-settings-footer {
+    @apply flex flex-wrap gap-1.5 pt-1;
+    border-top: 1px solid var(--coop-settings-divider);
+  }
+
+  [data-theme="high-contrast"] .coop-settings-field,
+  [data-theme="high-contrast"] .coop-settings-action-btn,
+  [data-theme="high-contrast"] .coop-health-integration,
+  [data-theme="high-contrast"] .coop-health-status {
+    border-color: var(--vscode-contrastBorder, var(--vscode-widget-border));
+  }
+
+  .coop-health-bar {
+    @apply rounded-lg px-3 py-2.5;
+    background: var(--coop-settings-card);
+  }
+
+  .coop-health-bar-toggle {
+    @apply flex min-w-0 flex-1 items-center justify-between gap-2 text-left transition-opacity duration-150;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-health-bar-toggle:hover {
+    opacity: 0.9;
+  }
+
+  .coop-health-bar-title {
+    @apply flex items-center gap-1.5 text-[12px] font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-health-bar-summary {
+    @apply shrink-0 text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-health-panel {
+    @apply space-y-3 rounded-lg border p-3;
+    background: var(--coop-panel-canvas);
+    border-color: var(--coop-settings-divider);
+  }
+
+  .coop-health-panel--overlay {
+    box-shadow:
+      0 8px 24px color-mix(in srgb, var(--coop-panel-foreground) 6%, transparent),
+      0 2px 8px color-mix(in srgb, var(--coop-panel-foreground) 4%, transparent);
+  }
+
+  .coop-health-panel-scroll {
+    @apply max-h-52 space-y-4 overflow-y-auto;
+  }
+
+  .coop-health-integration-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+
+  .coop-health-integration {
+    @apply rounded-md p-2.5;
+    background: var(--coop-settings-field);
+    border: 1px solid var(--coop-settings-field-border);
+  }
+
+  .coop-health-integration-name {
+    @apply truncate text-[12px] font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-health-integration-meta {
+    @apply mt-1 break-words text-[10px] leading-relaxed;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-health-status {
+    @apply inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize;
+    background: var(--coop-pill-surface);
+    border-color: var(--coop-pill-border);
+  }
+
+  .coop-health-status--healthy {
+    color: var(--vscode-testing-iconPassed, #22c55e);
+  }
+
+  .coop-health-status--degraded {
+    color: var(--vscode-inputValidation-warningBorder, #d19a66);
+  }
+
+  .coop-health-status--offline {
+    color: var(--vscode-inputValidation-errorBorder, #f87171);
+  }
+
+  .coop-health-feature-row {
+    @apply flex items-center justify-between gap-3 py-2;
+  }
+
+  .coop-health-feature-row + .coop-health-feature-row {
+    border-top: 1px solid var(--coop-settings-divider);
+  }
+
+  .coop-health-feature-name {
+    @apply truncate text-[12px];
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-health-feature-label {
+    @apply shrink-0 text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-test-btn--success {
+    border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #22c55e) 55%, var(--coop-pill-border) 45%);
+    color: var(--vscode-testing-iconPassed, #22c55e);
+  }
+
+  .coop-test-btn--error {
+    border-color: color-mix(
+      in srgb,
+      var(--vscode-inputValidation-errorBorder, #f87171) 55%,
+      var(--coop-pill-border) 45%
+    );
+    color: var(--vscode-inputValidation-errorBorder, #f87171);
+  }
+
+  .coop-settings-test-message--ok {
+    color: var(--vscode-testing-iconPassed, #22c55e);
+  }
+
+  .coop-settings-test-message--error {
+    color: var(--vscode-inputValidation-errorBorder, #f87171);
+  }
+
+  .coop-explorer-shell {
+    @apply flex min-h-0 shrink-0 flex-col overflow-hidden rounded-lg;
+    background: var(--coop-panel-canvas);
+    border: 1px solid var(--coop-settings-divider);
+  }
+
+  .coop-explorer-shell--overlay {
+    box-shadow:
+      0 8px 24px color-mix(in srgb, var(--coop-panel-foreground) 6%, transparent),
+      0 2px 8px color-mix(in srgb, var(--coop-panel-foreground) 4%, transparent);
+  }
+
+  .coop-explorer-body {
+    @apply min-h-0 flex-1 px-3 pb-3 pt-0.5;
+  }
+
+  .coop-explorer-list {
+    @apply m-0 max-h-52 list-none overflow-y-auto p-0;
+  }
+
+  .coop-explorer-row {
+    @apply flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-explorer-row:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .coop-explorer-row--selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground, var(--coop-panel-foreground));
+  }
+
+  .coop-explorer-row-chevron {
+    @apply inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center opacity-60;
+  }
+
+  .coop-explorer-row-icon {
+    @apply inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center opacity-80;
+  }
+
+  .coop-explorer-row-name {
+    @apply min-w-0 flex-1 truncate font-medium;
+  }
+
+  .coop-explorer-row-meta {
+    @apply shrink-0 text-[10px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-explorer-empty {
+    @apply px-3 py-4 text-center text-[11px] leading-relaxed;
+    color: var(--coop-panel-muted);
   }
 }

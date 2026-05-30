@@ -8,49 +8,48 @@ export type AutocompleteStatusProps = {
   onToggle?: () => void;
 };
 
-const STATUS_COLORS: Record<AutocompleteBadgeStatus, string> = {
-  ready: "var(--vscode-testing-iconPassed, #3fb950)",
-  processing: "var(--vscode-editorWarning-foreground, #d29922)",
-  error: "var(--vscode-errorForeground, #f85149)",
-  disabled: "var(--vscode-disabledForeground, #8b949e)"
-};
+const AUTOCOMPLETE_DESCRIPTION =
+  "Ghost-text suggestions at the cursor while you type. Tab to accept · Escape to dismiss · Alt+] / Alt+[ cycle alternatives · Cmd+Shift+\\ manual trigger";
 
-const STATUS_LABELS: Record<AutocompleteBadgeStatus, string> = {
-  ready: "Coop · ready",
-  processing: "Coop · thinking",
-  error: "Coop · error",
-  disabled: "Coop · off"
-};
+function tooltipFor(status: AutocompleteBadgeStatus, message?: string): string {
+  if (status === "disabled") {
+    return `Enable inline code completions in the editor.\n\n${AUTOCOMPLETE_DESCRIPTION}`;
+  }
+  if (status === "processing") {
+    return `Fetching suggestion…\n\n${AUTOCOMPLETE_DESCRIPTION}`;
+  }
+  if (status === "error" && message) {
+    return `${message}\n\n${AUTOCOMPLETE_DESCRIPTION}`;
+  }
+  return AUTOCOMPLETE_DESCRIPTION;
+}
 
 /**
- * Compact status badge for the Coop sidebar (autocomplete on/off and request state).
+ * Compact top-bar control: label + theme-aware on/off toggle.
  */
 export function AutocompleteStatus({
   status,
   message,
   onToggle
 }: AutocompleteStatusProps): React.ReactElement {
-  const title = message ? `${STATUS_LABELS[status]} — ${message}` : STATUS_LABELS[status];
+  const enabled = status !== "disabled";
+  const tooltip = tooltipFor(status, message);
 
   return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-90"
-      style={{
-        borderColor: "var(--vscode-widget-border)",
-        background: "var(--vscode-badge-background)",
-        color: "var(--vscode-badge-foreground)"
-      }}
-      title={title}
-      onClick={onToggle}
-      aria-label={title}
-    >
-      <span
-        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ background: STATUS_COLORS[status] }}
-        aria-hidden
-      />
-      <span>{STATUS_LABELS[status]}</span>
-    </button>
+    <div className="coop-autocomplete-control" aria-live="polite">
+      <span className="coop-autocomplete-label" title={tooltip}>
+        Autocomplete
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={enabled ? "Turn autocomplete off" : "Turn autocomplete on"}
+        className={`coop-autocomplete-toggle${enabled ? " coop-autocomplete-toggle--on" : ""}`}
+        onClick={() => onToggle?.()}
+      >
+        {enabled ? "On" : "Off"}
+      </button>
+    </div>
   );
 }

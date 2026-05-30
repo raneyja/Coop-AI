@@ -34,9 +34,12 @@ import {
   IntentEvent,
   UserIntent,
   intentContextToRepoContext,
+  repoContextToIntentContext,
   requestTypesForIntent,
   repoContextFromEditor
 } from "../context/intentDetector";
+import { toRepositoryRelativePath } from "../context/repoFilePath";
+import { openRemoteFileInEditor, openRepoInEditor } from "../workspace/repoEditorOpener";
 import { IntentDebouncer } from "../context/intentDebouncer";
 import {
   ContextFetchRequest,
@@ -49,6 +52,7 @@ import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExe
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import type {
   CachedValue,
+  ChatImageAttachment,
   ChatMessage,
   ConflictResolutionState,
   ConflictSummary,
@@ -74,14 +78,33 @@ import { quickActionPrompt } from "../prompts/quickActionPrompts";
 import type { QuickActionId } from "../webview/types";
 import {
   applyPromptTemplate,
+  deleteWorkspacePrompt,
+  hasWorkspaceFolder,
   loadWorkspacePrompts,
   promptVariablesFromContext,
   saveWorkspacePrompt,
+  updateWorkspacePrompt,
   watchWorkspacePrompts
 } from "../prompts/workspacePromptLibrary";
+import {
+  loadPinnedPromptIds,
+  prunePinnedPromptIds,
+  savePinnedPromptIds,
+  updatePinnedPromptIds
+} from "../prompts/pinnedPrompts";
+
+function titleFromMessage(content: string): string {
+  const normalized = content.replace(/^\[[^\]]+\]\s*/, "").trim();
+  if (!normalized) {
+    return "New Chat";
+  }
+  const singleLine = normalized.split("\n")[0]?.trim() ?? normalized;
+  return singleLine.length <= 48 ? singleLine : `${singleLine.slice(0, 45)}…`;
+}
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
+  extensionContext: vscode.ExtensionContext;
   api: SecureApiClient;
   healthMonitor: HealthMonitor;
   degradationCache: DegradationCache;
@@ -89,6 +112,7 @@ export type CoopChatSessionOptions = {
   codeHostSecrets: import("../api/codeHosts/codeHostSecrets").CodeHostSecrets;
   integrationSecrets: import("../api/integrations/integrationSecrets").IntegrationSecrets;
   onDescriptionChange?: (description: string) => void;
+  onTitleChange?: (title: string) => void;
 };
 
 export class CoopChatSession {
@@ -119,6 +143,7 @@ export class CoopChatSession {
   private latestHealth: IntegrationHealth[] = [];
   private readonly jobClient: JobApiClient;
   private activeJobId?: string;
+  private jobRunToken = 0;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
   private sessionCostUsd = 0;
@@ -216,8 +241,7 @@ export class CoopChatSession {
     );
     this.applyDefaultRepoToContext();
     this.postTheme();
-    this.postHealth(this.latestHealth);
-    this.postFeatureStatuses(this.latestHealth);
+    await this.pushDegradationState();
     await this.pushSettingsState();
     this.post({ type: "chat:history", payload: this.chatHistory });
   }
@@ -270,8 +294,40 @@ export class CoopChatSession {
 
   public newChat(): void {
     this.streamToken++;
+    this.streamAbortController?.abort();
+    this.abortActiveJob();
     this.chatHistory.length = 0;
+    this.sessionCostUsd = 0;
+    this.options.onTitleChange?.("New Chat");
     this.post({ type: "chat:history", payload: [] });
+  }
+
+  private abortActiveJob(): void {
+    this.jobRunToken++;
+    const jobId = this.activeJobId;
+    this.activeJobId = undefined;
+    if (jobId) {
+      void this.jobClient.cancelJob(jobId).catch(() => undefined);
+    }
+  }
+
+  public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
+    this.currentContext = {
+      ...this.currentContext,
+      provider: context.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost,
+      owner: context.owner,
+      repo: context.repo,
+      branch: context.branch ?? this.currentContext.branch,
+      file: undefined,
+      fileSource: undefined,
+      contextWarning: undefined,
+      selectedLines: undefined
+    };
+    this.postContext();
+  }
+
+  public clearChat(): void {
+    this.newChat();
   }
 
   public openSettings(): void {
@@ -283,31 +339,6 @@ export class CoopChatSession {
 
   public getChatHistory(): ChatMessage[] {
     return [...this.chatHistory];
-  }
-
-  public async exportChat(): Promise<void> {
-    if (this.chatHistory.length === 0) {
-      void vscode.window.showInformationMessage("No chat messages to export.");
-      return;
-    }
-
-    const uri = await vscode.window.showSaveDialog({
-      filters: { Markdown: ["md"], JSON: ["json"] },
-      defaultUri: vscode.Uri.file("coop-ai-chat.md")
-    });
-    if (!uri) {
-      return;
-    }
-
-    const isJson = uri.fsPath.endsWith(".json");
-    const body = isJson
-      ? JSON.stringify({ exportedAt: new Date().toISOString(), messages: this.chatHistory }, null, 2)
-      : this.chatHistory
-          .map((m) => `## ${m.role} (${new Date(m.timestamp).toISOString()})\n\n${m.content}\n`)
-          .join("\n---\n\n");
-
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(body, "utf8"));
-    void vscode.window.showInformationMessage(`Chat exported to ${uri.fsPath}`);
   }
 
   public async sendUserMessage(message: string, quickAction?: string): Promise<void> {
@@ -355,6 +386,7 @@ export class CoopChatSession {
         this.postTheme();
         if (source === "chat") {
           this.postContext();
+          await this.pushDegradationState();
           await this.pushSettingsState();
           this.postToChat({ type: "chat:history", payload: this.chatHistory });
           void this.pushWorkspacePrompts();
@@ -362,6 +394,7 @@ export class CoopChatSession {
           this.workspacePromptWatcher = watchWorkspacePrompts(() => void this.pushWorkspacePrompts());
         } else {
           await this.pushSettingsState();
+          void this.pushWorkspacePrompts();
         }
         return;
       case "ui:close-settings":
@@ -374,7 +407,7 @@ export class CoopChatSession {
         await vscode.commands.executeCommand("coopAI.toggleAutocomplete");
         return;
       case "chat:send":
-        await this.handleChatSend(message.payload.message, message.payload.quickAction);
+        await this.handleChatSend(message.payload.message, message.payload.quickAction, message.payload.attachments);
         return;
       case "chat:stream-cancel":
         this.streamToken++;
@@ -400,17 +433,63 @@ export class CoopChatSession {
           template: message.payload.template,
           actionId: message.payload.actionId
         });
-        await this.pushWorkspacePrompts();
-        void vscode.window.showInformationMessage("Saved prompt to .coop/prompts.json");
+        await this.broadcastPromptLibrary();
+        void vscode.window.showInformationMessage("Saved prompt to your prompt library.");
         return;
+      case "prompts:update":
+        await updateWorkspacePrompt({
+          id: message.payload.id,
+          title: message.payload.title,
+          template: message.payload.template,
+          actionId: message.payload.actionId
+        });
+        await this.broadcastPromptLibrary();
+        return;
+      case "prompts:delete": {
+        await deleteWorkspacePrompt(message.payload.id);
+        const prompts = await loadWorkspacePrompts();
+        const validIds = new Set(prompts.map((entry) => entry.id));
+        const pinned = await loadPinnedPromptIds(this.options.extensionContext);
+        await updatePinnedPromptIds(this.options.extensionContext, pinned, validIds);
+        await this.broadcastPromptLibrary();
+        return;
+      }
+      case "prompts:update-pinned": {
+        const prompts = await loadWorkspacePrompts();
+        const validIds = new Set(prompts.map((entry) => entry.id));
+        await updatePinnedPromptIds(
+          this.options.extensionContext,
+          message.payload.pinnedIds,
+          validIds
+        );
+        await this.broadcastPromptLibrary();
+        return;
+      }
       case "chat:new":
         this.newChat();
         return;
-      case "chat:export":
-        await this.exportChat();
+      case "chat:clear":
+        this.clearChat();
         return;
       case "repo:list":
-        await this.handleRepoList(message.payload.path || "");
+        if (message.payload.scope === "repos") {
+          await this.handleRepoListRepos();
+        } else {
+          await this.handleRepoList(message.payload.path || "");
+        }
+        return;
+      case "repo:select":
+        await this.handleRepoSelect(message.payload);
+        return;
+      case "repo:open-repo":
+        await openRepoInEditor({
+          owner: message.payload.owner,
+          repo: message.payload.repo,
+          provider:
+            message.payload.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost,
+          branch: message.payload.branch ?? this.currentContext.branch
+        });
+        await vscode.commands.executeCommand("coopAI.openChatForRepo", message.payload);
         return;
       case "repo:open-file":
         void this.handleRemoteFileIntent(message.payload.path);
@@ -435,30 +514,43 @@ export class CoopChatSession {
         return;
       case "settings:update-github-token":
         await this.options.codeHostSecrets.setGitHubToken(message.payload.token);
+        this.options.codeHostRouter.clearClientCache("github");
+        await this.options.degradationCache.clear();
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("github");
         return;
       case "settings:clear-github-token":
         await this.options.codeHostSecrets.clearGitHubToken();
+        this.options.codeHostRouter.clearClientCache("github");
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("github");
         return;
       case "settings:update-gitlab-token":
         await this.options.codeHostSecrets.setGitLabToken(message.payload.token);
+        this.options.codeHostRouter.clearClientCache("gitlab");
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("gitlab");
         return;
       case "settings:clear-gitlab-token":
         await this.options.codeHostSecrets.clearGitLabToken();
+        this.options.codeHostRouter.clearClientCache("gitlab");
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("gitlab");
         return;
       case "settings:update-bitbucket-credentials":
         await this.options.codeHostSecrets.setBitbucketCredentials(
           message.payload.username,
           message.payload.appPassword
         );
+        this.options.codeHostRouter.clearClientCache("bitbucket");
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("bitbucket");
         return;
       case "settings:clear-bitbucket-credentials":
         await this.options.codeHostSecrets.clearBitbucketCredentials();
+        this.options.codeHostRouter.clearClientCache("bitbucket");
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("bitbucket");
         return;
       case "settings:test-code-host":
         await this.handleTestCodeHost(message.payload.provider, source);
@@ -466,10 +558,12 @@ export class CoopChatSession {
       case "settings:update-slack-token":
         await this.options.integrationSecrets.setSlackToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("slack");
         return;
       case "settings:clear-slack-token":
         await this.options.integrationSecrets.clearSlackToken();
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("slack");
         return;
       case "settings:update-jira-credentials":
         await this.options.integrationSecrets.setJiraCredentials(
@@ -481,18 +575,22 @@ export class CoopChatSession {
           await updateConfiguration({ jiraBaseUrl: message.payload.baseUrl.trim().replace(/\/+$/, "") });
         }
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("jira");
         return;
       case "settings:clear-jira-credentials":
         await this.options.integrationSecrets.clearJiraCredentials();
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("jira");
         return;
       case "settings:update-teams-token":
         await this.options.integrationSecrets.setTeamsToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("teams");
         return;
       case "settings:clear-teams-token":
         await this.options.integrationSecrets.clearTeamsToken();
         await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("teams");
         return;
       case "settings:test-integration":
         await this.handleTestIntegration(message.payload.provider, source);
@@ -501,15 +599,7 @@ export class CoopChatSession {
         await this.options.healthMonitor.force(message.payload?.provider as IntegrationProvider | undefined);
         return;
       case "degradation:refresh":
-        await this.options.healthMonitor.force();
-        this.postDegradationNotification({
-          id: `refresh-${Date.now()}`,
-          severity: "info",
-          title: "Health refreshed",
-          message: "Integration health checks have been refreshed.",
-          feature: message.payload?.feature,
-          action: "refresh"
-        });
+        await this.handleDegradationRefresh(message.payload);
         return;
       case "conflict:action":
         this.handleConflictAction(message.payload.conflictId, message.payload.action);
@@ -578,9 +668,24 @@ export class CoopChatSession {
   }
 
   private async handleRemoteFileIntent(path: string): Promise<void> {
-    const event = this.intentDetector.create(UserIntent.FILE_SWITCHED, {
+    this.currentContext = {
       ...this.currentContext,
       file: path,
+      fileSource: "remote",
+      contextWarning: undefined
+    };
+    this.postContext();
+    if (this.currentContext.owner && this.currentContext.repo) {
+      await openRemoteFileInEditor({
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        filePath: path,
+        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+        branch: this.currentContext.branch
+      });
+    }
+    const event = this.intentDetector.create(UserIntent.FILE_SWITCHED, {
+      ...intentContextToRepoContext(repoContextToIntentContext(this.currentContext)),
       source: "webview"
     });
     const result = await this.intentDebouncer.debounce(event, (debounced) => this.handleEditorIntent(debounced));
@@ -631,13 +736,32 @@ export class CoopChatSession {
           message: error.error
         });
       } else {
-        this.postIntentFeedback({
-          status: "complete",
-          intent: event.intent,
-          actionId: event.context.buttonClicked,
-          title: "Context ready",
-          message: completionMessageFor(event)
-        });
+        const partialTrace = results.find(
+          (result) =>
+            result.type === "decision_history" &&
+            (result.data as { timeline?: { completeness?: string; warnings?: string[] } } | undefined)?.timeline
+              ?.completeness !== "full"
+        );
+        const timeline = (
+          partialTrace?.data as { timeline?: { completeness?: string; warnings?: string[] } } | undefined
+        )?.timeline;
+        if (timeline) {
+          this.postIntentFeedback({
+            status: "warning",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: timeline.completeness === "minimal" ? "Minimal trace" : "Partial trace",
+            message: partialTrace?.message ?? "GitHub returned limited history for this file."
+          });
+        } else {
+          this.postIntentFeedback({
+            status: "complete",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: "Context ready",
+            message: completionMessageFor(event)
+          });
+        }
       }
     }
 
@@ -885,28 +1009,48 @@ export class CoopChatSession {
     };
   }
 
+  private testFailureMessage(error: unknown): string {
+    return error instanceof Error ? error.message : "Connection test failed.";
+  }
+
   private async handleTestConnection(source: "chat" | "settings"): Promise<void> {
-    const result = await this.options.api.testConnection(this.preferences.apiBaseUrl);
-    this.publishTestResult(result, source);
+    try {
+      const result = await this.options.api.testConnection(this.preferences.apiBaseUrl);
+      this.publishTestResult(result, source);
+    } catch (error) {
+      this.publishTestResult({ ok: false, message: this.testFailureMessage(error) }, source);
+    }
   }
 
   private async handleTestCodeHost(
     provider: import("./types").CodeHostProviderPreference,
     source: "chat" | "settings"
   ): Promise<void> {
-    const result = await this.options.codeHostRouter.testProvider(provider);
-    this.publishTestResult(result, source);
+    try {
+      this.options.codeHostRouter.clearClientCache(provider);
+      const result = await this.options.codeHostRouter.testProvider(provider);
+      this.publishTestResult(result, source);
+      if (result.ok) {
+        await this.options.healthMonitor.force(provider);
+      }
+    } catch (error) {
+      this.publishTestResult({ ok: false, message: this.testFailureMessage(error) }, source);
+    }
   }
 
   private async handleTestIntegration(
     provider: import("./types").DecisionIntegrationProvider,
     source: "chat" | "settings"
   ): Promise<void> {
-    const { testDecisionIntegration } = await import("../api/integrations/integrationTest");
-    const result = await testDecisionIntegration(provider, this.options.integrationSecrets);
-    this.publishTestResult(result, source);
-    if (result.ok) {
-      void this.options.healthMonitor.force(provider);
+    try {
+      const { testDecisionIntegration } = await import("../api/integrations/integrationTest");
+      const result = await testDecisionIntegration(provider, this.options.integrationSecrets);
+      this.publishTestResult(result, source);
+      if (result.ok) {
+        await this.options.healthMonitor.force(provider);
+      }
+    } catch (error) {
+      this.publishTestResult({ ok: false, message: this.testFailureMessage(error) }, source);
     }
   }
 
@@ -926,10 +1070,22 @@ export class CoopChatSession {
     }
   }
 
-  private async handleChatSend(message: string, quickAction?: string): Promise<void> {
+  private async handleChatSend(
+    message: string,
+    quickAction?: string,
+    attachments?: ChatImageAttachment[]
+  ): Promise<void> {
     const content = quickAction ? `[${quickAction}] ${message}` : message;
-    const userMessage: ChatMessage = { role: "user", content, timestamp: Date.now() };
+    const userMessage: ChatMessage = {
+      role: "user",
+      content,
+      timestamp: Date.now(),
+      attachments: attachments?.length ? attachments : undefined
+    };
     this.chatHistory.push(userMessage);
+    if (this.chatHistory.length === 1) {
+      this.options.onTitleChange?.(titleFromMessage(content || attachments?.[0]?.name || "Image attachment"));
+    }
     this.post({ type: "chat:history", payload: this.chatHistory });
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
@@ -937,7 +1093,7 @@ export class CoopChatSession {
       if (ranAsync) {
         const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext);
         await this.runIntentFetch(intentEvent, { quiet: true });
-        await this.continueChatAfterContext(content);
+        await this.continueChatAfterContext(content, undefined, attachments);
         return;
       }
     }
@@ -949,7 +1105,7 @@ export class CoopChatSession {
     if (quickAction === "trace-decision") {
       this.postDecisionTimelineFromBundle();
     }
-    await this.continueChatAfterContext(content, quickAction);
+    await this.continueChatAfterContext(content, quickAction, attachments);
   }
 
   private postDecisionTimelineFromBundle(): void {
@@ -992,9 +1148,14 @@ export class CoopChatSession {
     return (entry?.data as { timeline?: DecisionTimeline } | undefined)?.timeline;
   }
 
-  private async continueChatAfterContext(content: string, quickAction?: string): Promise<void> {
+  private async continueChatAfterContext(
+    content: string,
+    quickAction?: string,
+    attachments?: ChatImageAttachment[]
+  ): Promise<void> {
     const cacheKey = JSON.stringify({
       content,
+      attachments,
       context: this.currentContext,
       model: this.preferences.model,
       provider: this.preferences.llmProvider
@@ -1041,6 +1202,7 @@ export class CoopChatSession {
             }))
           },
           history: this.chatHistory,
+          attachments: attachments?.length ? attachments : undefined,
           model: this.preferences.model,
           provider: this.preferences.llmProvider,
           useCase: useCaseFromQuickAction(quickAction),
@@ -1094,6 +1256,7 @@ export class CoopChatSession {
     }
 
     const repoId = buildRepoId(this.preferences, this.currentContext);
+    const jobToken = ++this.jobRunToken;
     this.jobClient.setBaseUrl(resolveCoopBaseUrl().baseUrl);
     this.postJobProgress({
       jobId: "pending",
@@ -1128,6 +1291,9 @@ export class CoopChatSession {
       });
 
       const resultPayload = await this.jobClient.pollUntilComplete(submit.jobId, (event) => {
+        if (jobToken !== this.jobRunToken) {
+          throw new Error("Job aborted");
+        }
         this.postJobProgress({
           jobId: event.jobId,
           status: event.status === "partial" ? "partial" : event.status,
@@ -1155,6 +1321,9 @@ export class CoopChatSession {
       });
       return true;
     } catch (error) {
+      if (jobToken !== this.jobRunToken) {
+        return false;
+      }
       const message = error instanceof Error ? error.message : "Background job failed";
       this.postJobProgress({
         jobId: this.activeJobId ?? "unknown",
@@ -1202,11 +1371,58 @@ export class CoopChatSession {
     this.post({ type: "job:progress", payload });
   }
 
+  private async handleRepoListRepos(): Promise<void> {
+    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    this.post({
+      type: "repo:tree",
+      payload: { path: "", items: [], loading: true, provider, scope: "repos" }
+    });
+    try {
+      const repos = await this.options.codeHostRouter.listExplorerRepositories({
+        provider: this.currentContext.provider,
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        branch: this.currentContext.branch
+      });
+      const items = repos.map((entry) => ({
+        path: `${entry.provider ?? provider}:${entry.owner}/${entry.repo}`,
+        name: `${entry.owner}/${entry.repo}`,
+        type: "repo" as const
+      }));
+      this.post({
+        type: "repo:tree",
+        payload: { path: "", items, provider, scope: "repos" }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load repositories.";
+      this.post({
+        type: "repo:tree",
+        payload: { path: "", items: [], error: message, provider, scope: "repos" }
+      });
+    }
+  }
+
+  private async handleRepoSelect(payload: {
+    provider: RepoContext["provider"];
+    owner: string;
+    repo: string;
+    branch?: string;
+  }): Promise<void> {
+    this.setRepoContext(payload);
+    await openRepoInEditor({
+      owner: payload.owner,
+      repo: payload.repo,
+      provider: payload.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost,
+      branch: payload.branch ?? this.currentContext.branch
+    });
+    await this.handleRepoList("");
+  }
+
   private async handleRepoList(path: string): Promise<void> {
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
     this.post({
       type: "repo:tree",
-      payload: { path, items: [], loading: true, provider }
+      payload: { path, items: [], loading: true, provider, scope: "files" }
     });
     try {
       const tree = await this.options.codeHostRouter.getRepositoryTree(path, {
@@ -1224,13 +1440,13 @@ export class CoopChatSession {
       }));
       this.post({
         type: "repo:tree",
-        payload: { path: tree.path, items, provider }
+        payload: { path: tree.path, items, provider, scope: "files" }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load remote tree.";
       this.post({
         type: "repo:tree",
-        payload: { path, items: [], error: message, provider }
+        payload: { path, items: [], error: message, provider, scope: "files" }
       });
     }
   }
@@ -1266,10 +1482,66 @@ export class CoopChatSession {
     });
   }
 
+  private async pushDegradationState(): Promise<void> {
+    const health = await this.options.healthMonitor.getAll();
+    this.latestHealth = health;
+    this.postHealth(health);
+    this.postFeatureStatuses(health);
+  }
+
   private postFeatureStatuses(health: IntegrationHealth[]): void {
     this.post({
       type: "degradation:feature-status",
       payload: featureStatuses(health)
+    });
+  }
+
+  private async handleDegradationRefresh(payload?: { feature?: string; retrace?: boolean }): Promise<void> {
+    this.contextFetchCache.clear();
+    await this.options.degradationCache.clear();
+    this.options.codeHostRouter.clearClientCache();
+
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const next = repoContextFromEditor(editor, this.preferences, this.currentContext);
+      this.currentContext = {
+        ...this.currentContext,
+        ...next,
+        file: next.file ? toRepositoryRelativePath(next.file) : next.file
+      };
+      this.postContext();
+    } else if (this.currentContext.file) {
+      this.currentContext = {
+        ...this.currentContext,
+        file: toRepositoryRelativePath(this.currentContext.file)
+      };
+      this.postContext();
+    }
+
+    await this.options.healthMonitor.force();
+
+    if (payload?.retrace && this.currentContext.file) {
+      this.postIntentFeedback({
+        status: "loading",
+        intent: UserIntent.QUICK_ACTION_CLICKED,
+        actionId: "trace-decision",
+        title: "Refreshing trace",
+        message: "Fetching fresh GitHub history…",
+        progress: 35
+      });
+      const event = this.intentDetector.fromQuickAction("trace-decision", this.currentContext);
+      await this.runIntentFetch(event);
+      this.postDecisionTimelineFromBundle();
+      return;
+    }
+
+    this.postDegradationNotification({
+      id: `refresh-${Date.now()}`,
+      severity: "info",
+      title: "Cache cleared",
+      message: "Stale context cache cleared. Run Trace Decision again for a fresh trace.",
+      feature: payload?.feature,
+      action: "refresh"
     });
   }
 
@@ -1344,18 +1616,35 @@ export class CoopChatSession {
     return entry.value;
   }
 
-  private async pushWorkspacePrompts(): Promise<void> {
+  public async pushWorkspacePrompts(): Promise<void> {
     const prompts = await loadWorkspacePrompts();
-    this.post({
-      type: "prompts:list",
-      payload: {
-        prompts: prompts.map((entry) => ({
-          id: entry.id,
-          title: entry.title,
-          actionId: entry.actionId
-        }))
-      }
-    });
+    const validIds = new Set(prompts.map((entry) => entry.id));
+    let pinnedIds = await loadPinnedPromptIds(this.options.extensionContext);
+    const pruned = prunePinnedPromptIds(pinnedIds, validIds);
+    if (pruned.length !== pinnedIds.length) {
+      pinnedIds = await savePinnedPromptIds(this.options.extensionContext, pruned);
+    } else {
+      pinnedIds = pruned;
+    }
+    const payload = {
+      prompts: prompts.map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        template: entry.template,
+        actionId: entry.actionId
+      })),
+      pinnedIds,
+      hasWorkspace: hasWorkspaceFolder()
+    };
+    const message: WebviewOutbound = { type: "prompts:list", payload };
+    this.postToChat(message);
+    this.postToSettings(message);
+  }
+
+  public async broadcastPromptLibrary(): Promise<void> {
+    for (const session of coopSessionRegistry.getAll()) {
+      await session.pushWorkspacePrompts();
+    }
   }
 }
 

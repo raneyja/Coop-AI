@@ -1,4 +1,4 @@
-# Coop AI Zero-Retention DPA Addendum Template
+# CoopAI Zero-Retention DPA Addendum Template
 
 This template is a starting point for legal review. It is not legal advice.
 
@@ -6,7 +6,7 @@ This template is a starting point for legal review. It is not legal advice.
 
 - Customer: `[CUSTOMER LEGAL NAME]`
 - Processor/Subprocessor: `[LLM PROVIDER LEGAL NAME]`
-- Service: Coop AI code-intelligence inference requests through `[PROVIDER]`
+- Service: CoopAI code-intelligence inference requests through `[PROVIDER]`
 
 ## Data Scope
 
@@ -14,7 +14,7 @@ Customer data may include private source code excerpts, repository metadata, iss
 
 ## Processing Purpose
 
-Provider may process customer data only to perform inference for the specific request submitted by Coop AI or the customer's BYOK account. Provider must not use customer data for model training, model improvement, fine-tuning, evaluation datasets, benchmarking, marketing, or product analytics.
+Provider may process customer data only to perform inference for the specific request submitted by CoopAI or the customer's BYOK account. Provider must not use customer data for model training, model improvement, fine-tuning, evaluation datasets, benchmarking, marketing, or product analytics.
 
 ## Retention
 
@@ -42,7 +42,7 @@ Provider must delete customer data upon request and certify deletion when legall
 
 ## BYOK
 
-When Customer uses BYOK, Provider acknowledges all inference calls are routed through Customer's provider account and governed by Customer's provider terms. Coop AI must not receive plaintext API keys except transiently inside the approved request path.
+When Customer uses BYOK, Provider acknowledges all inference calls are routed through Customer's provider account and governed by Customer's provider terms. CoopAI must not receive plaintext API keys except transiently inside the approved request path.
 
 ## Audit Evidence
 

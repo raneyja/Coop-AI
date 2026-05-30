@@ -5,11 +5,18 @@ export type QuickActionId =
   | "blast-radius"
   | "knowledge-gaps";
 
+export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
+
+export type CodeHostProviderPreference = "github" | "gitlab" | "bitbucket";
+
 export type RepoContext = {
+  provider?: CodeHostProviderPreference;
   owner?: string;
   repo?: string;
   branch?: string;
   file?: string;
+  fileSource?: RepoContextFileSource;
+  contextWarning?: string;
   selectedLines?: [number, number];
   languageId?: string;
 };

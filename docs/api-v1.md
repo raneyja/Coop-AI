@@ -1,4 +1,4 @@
-# Coop AI API v1
+# CoopAI API v1
 
 All routes are served from the same host as graph, jobs, and webhooks (`coopAI.apiBaseUrl`).
 

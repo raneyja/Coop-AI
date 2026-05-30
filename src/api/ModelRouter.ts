@@ -41,9 +41,10 @@ export class ModelRouter {
       },
       ...request.history.map((entry) => ({
         role: entry.role,
-        content: entry.content
+        content: entry.content,
+        attachments: entry.attachments
       })),
-      { role: "user", content: userContent }
+      { role: "user", content: userContent, attachments: request.attachments }
     ];
 
     if (this.isMockMode()) {
@@ -203,7 +204,7 @@ export class ModelRouter {
     provider: LlmProvider,
     signal?: AbortSignal
   ): AsyncGenerator<StreamChunk> {
-    const intro = `[Coop mock ${provider}/${request.modelConfig.model}] `;
+    const intro = `[CoopAI mock ${provider}/${request.modelConfig.model}] `;
     const body = `Received: ${request.message.slice(0, 120)}${request.message.length > 120 ? "…" : ""}`;
     const full = intro + body;
     for (const word of full.split(/\s+/)) {

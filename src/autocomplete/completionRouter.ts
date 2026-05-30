@@ -137,7 +137,7 @@ export class CompletionRouter {
       if (controller.signal.aborted) {
         return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
       }
-      console.warn("[Coop autocomplete]", error instanceof Error ? error.message : error);
+      console.warn("[CoopAI autocomplete]", error instanceof Error ? error.message : error);
       return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
     } finally {
       this.inFlight.delete(context.contextHash);

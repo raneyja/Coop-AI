@@ -1,9 +1,11 @@
 import React from "react";
+import { RefreshButton } from "./components/RefreshButton";
 import type { IntentFeedbackState } from "./types";
 
 type IntentFeedbackProps = {
   state?: IntentFeedbackState;
   onDismiss?: () => void;
+  onRefreshContext?: () => void;
 };
 
 type FeedbackTone = {
@@ -60,7 +62,7 @@ const ACTION_LABELS: Record<string, string> = {
   "knowledge-gaps": "Knowledge Gaps"
 };
 
-export function IntentFeedback({ state, onDismiss }: IntentFeedbackProps): React.ReactElement | null {
+export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFeedbackProps): React.ReactElement | null {
   if (!state || state.status === "idle") {
     return null;
   }
@@ -69,6 +71,9 @@ export function IntentFeedback({ state, onDismiss }: IntentFeedbackProps): React
   const progress = normalizeProgress(state.progress, state.status);
   const details = buildDetails(state);
   const canDismiss = state.status !== "loading" && Boolean(onDismiss);
+  const canRefresh =
+    Boolean(onRefreshContext) &&
+    (state.status === "rate-limited" || state.status === "warning" || state.status === "error");
 
   return (
     <section
@@ -91,15 +96,23 @@ export function IntentFeedback({ state, onDismiss }: IntentFeedbackProps): React
                 <p className="mt-0.5 text-[11px] opacity-80">{details.subtitle}</p>
               ) : null}
             </div>
-            {canDismiss ? (
-              <button
-                type="button"
-                className="shrink-0 text-[11px] opacity-75 hover:opacity-100"
-                onClick={onDismiss}
-              >
-                Dismiss
-              </button>
-            ) : null}
+            <div className="flex shrink-0 gap-2">
+              {canRefresh ? (
+                <RefreshButton
+                  className="coop-text-btn text-[11px]"
+                  onClick={() => onRefreshContext?.()}
+                />
+              ) : null}
+              {canDismiss ? (
+                <button
+                  type="button"
+                  className="text-[11px] opacity-75 hover:opacity-100"
+                  onClick={onDismiss}
+                >
+                  Dismiss
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {state.message ? (

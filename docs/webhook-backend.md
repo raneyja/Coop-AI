@@ -1,6 +1,6 @@
 # Webhook Backend
 
-Coop AI's webhook backend ingests provider events, verifies signatures, normalizes payloads, and updates a remote repository graph without cloning repositories locally.
+CoopAI's webhook backend ingests provider events, verifies signatures, normalizes payloads, and updates a remote repository graph without cloning repositories locally.
 
 ## Runtime
 

@@ -36,7 +36,7 @@ export default function PrivacyPage() {
       </ul>
 
       <h3>Extension and server users</h3>
-      <p>When you use the CoopAI VS Code extension with a Coop server, we process:</p>
+      <p>When you use the CoopAI VS Code extension with a CoopAI server, we process:</p>
       <ul>
         <li>
           <strong>Repository metadata</strong> — file paths, ownership, dependency graphs, commit
@@ -44,14 +44,14 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Code excerpts</strong> — selected file content and line ranges you include in chat
-          prompts or quick actions, transmitted to your Coop server for context assembly
+          prompts or quick actions, transmitted to your CoopAI server for context assembly
         </li>
         <li>
           <strong>Prompts and completions</strong> — chat messages and AI responses, routed through
-          your Coop server to LLM providers for inference
+          your CoopAI server to LLM providers for inference
         </li>
         <li>
-          <strong>Authentication credentials</strong> — Coop API tokens stored in VS Code SecretStorage;
+          <strong>Authentication credentials</strong> — CoopAI API tokens stored in VS Code SecretStorage;
           LLM provider keys stored on the server (not in the extension)
         </li>
         <li>
@@ -81,9 +81,9 @@ export default function PrivacyPage() {
 
       <h2>3. LLM provider processing</h2>
       <p>
-        When you use chat or quick actions, code context and prompts are transmitted from your Coop
+        When you use chat or quick actions, code context and prompts are transmitted from your CoopAI
         server to third-party LLM providers (such as Anthropic, OpenAI, or Google) for inference.
-        These providers process data under their respective API terms. Coop applies zero-retention
+        These providers process data under their respective API terms. CoopAI applies zero-retention
         configuration flags to requests where supported. See our{" "}
         <a href="/security">Security page</a> for details.
       </p>
@@ -103,7 +103,7 @@ export default function PrivacyPage() {
           subscription or deployment, unless you request deletion
         </li>
         <li>
-          <strong>LLM inference data</strong> is processed transiently; Coop configures requests to
+          <strong>LLM inference data</strong> is processed transiently; CoopAI configures requests to
           disable conversation storage and training use. Provider-side retention varies by provider
           and contract
         </li>
@@ -125,7 +125,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Infrastructure providers</strong> — Vercel (website hosting), and your chosen
-          deployment environment for the Coop server
+          deployment environment for the CoopAI server
         </li>
         <li>
           <strong>Code host platforms</strong> — GitHub, GitLab, Bitbucket for webhook and API
@@ -139,10 +139,10 @@ export default function PrivacyPage() {
 
       <h2>6. Self-hosted deployments</h2>
       <p>
-        Enterprise customers may deploy the Coop server on infrastructure they control. In
+        Enterprise customers may deploy the CoopAI server on infrastructure they control. In
         self-hosted deployments, repository data, graph indexes, and inference traffic remain within
         your environment. This Privacy Policy still applies to data you submit through our website
-        and any Coop-operated services.
+        and any CoopAI-operated services.
       </p>
 
       <h2>7. Your rights</h2>

@@ -34,7 +34,7 @@ export default function SecurityPage() {
         <h2>Architecture</h2>
         <p>
           CoopAI uses a <strong>zero-clone</strong> architecture. Repository metadata, ownership
-          graphs, and change history are indexed on the Coop server via webhooks and background jobs.
+          graphs, and change history are indexed on the CoopAI server via webhooks and background jobs.
           Developers query this remote graph through the VS Code extension without cloning entire
           codebases locally for intelligence features.
         </p>
@@ -98,7 +98,7 @@ export default function SecurityPage() {
           mode:
         </p>
         <ul>
-          <li>Coop stores only an API key hash and encrypted key material</li>
+          <li>CoopAI stores only an API key hash and encrypted key material</li>
           <li>Decrypted keys exist only for the duration of the outbound request</li>
           <li>API keys are never written to logs, error reports, or audit payloads</li>
           <li>
@@ -112,12 +112,12 @@ export default function SecurityPage() {
 
         <h2>Authentication</h2>
         <p>
-          API access to the Coop server uses bearer token authentication (
+          API access to the CoopAI server uses bearer token authentication (
           <code>Authorization: Bearer &lt;COOP_API_TOKEN&gt;</code>). In production, a token must
           be configured; development mode may skip auth when no token is set.
         </p>
         <p>
-          The VS Code extension stores the Coop API token using VS Code&apos;s SecretStorage API,
+          The VS Code extension stores the CoopAI API token using VS Code&apos;s SecretStorage API,
           which leverages the operating system keychain.
         </p>
 

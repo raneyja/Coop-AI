@@ -22,11 +22,13 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
+    private readonly extensionContext: vscode.ExtensionContext,
     api: SecureApiClient,
     services: CoopRuntimeServices
   ) {
     this.session = new CoopChatSession({
       extensionUri,
+      extensionContext,
       api,
       ...services,
       onDescriptionChange: (description) => {
@@ -59,16 +61,12 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
     this.session.handleThemeChange();
   }
 
-  public newChat(): void {
-    this.session.newChat();
+  public clearChat(): void {
+    this.session.clearChat();
   }
 
   public openSettings(): void {
     this.session.openSettings();
-  }
-
-  public exportChat(): Promise<void> {
-    return this.session.exportChat();
   }
 
   public traceDecisionFromSelection(editor: vscode.TextEditor | undefined): Promise<void> {

@@ -12,11 +12,11 @@ export const metadata: Metadata = {
 const capabilities = [
   {
     title: "Remote knowledge graph",
-    body: "Coop indexes repositories via webhooks and background jobs. The extension queries ownership, dependents, and decision signals without requiring a full local clone."
+    body: "CoopAI indexes repositories via webhooks and background jobs. The extension queries ownership, dependents, and decision signals without requiring a full local clone."
   },
   {
     title: "Multi-model chat",
-    body: "Stream responses from Anthropic, OpenAI, Gemini, and more. Provider keys live on your Coop server — never in the IDE or on developer laptops."
+    body: "Stream responses from Anthropic, OpenAI, Gemini, and more. Provider keys live on your CoopAI server — never in the IDE or on developer laptops."
   },
   {
     title: "Workspace prompt library",
@@ -28,11 +28,11 @@ const capabilities = [
   },
   {
     title: "Slack & ticket context",
-    body: "Coop connects organizational context — Slack threads, tickets, and PR history — so answers reflect how decisions were actually made."
+    body: "CoopAI connects organizational context — Slack threads, tickets, and PR history — so answers reflect how decisions were actually made."
   },
   {
     title: "Graceful degradation",
-    body: "When graph data is unavailable, Coop falls back transparently and tells you what context is missing instead of hallucinating."
+    body: "When graph data is unavailable, CoopAI falls back transparently and tells you what context is missing instead of hallucinating."
   }
 ];
 
@@ -77,12 +77,12 @@ export default function ProductPage() {
               {
                 step: "01",
                 title: "Connect your repos",
-                body: "Install webhooks from GitHub, GitLab, or Bitbucket. Coop builds a remote graph of ownership, dependencies, and change history."
+                body: "Install webhooks from GitHub, GitLab, or Bitbucket. CoopAI builds a remote graph of ownership, dependencies, and change history."
               },
               {
                 step: "02",
                 title: "Install the extension",
-                body: "Developers open VS Code, point at your Coop server, and start asking questions with full repo context — no clone required."
+                body: "Developers open VS Code, point at your CoopAI server, and start asking questions with full repo context — no clone required."
               },
               {
                 step: "03",

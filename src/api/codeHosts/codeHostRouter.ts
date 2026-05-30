@@ -1,3 +1,4 @@
+import { toRepositoryRelativePath } from "../../context/repoFilePath";
 import { CacheManager } from "../../cache/CacheManager";
 import { readCodeHostConfiguration } from "../../config/codeHostConfig";
 import { readConfiguration } from "../../chat/SecureApiClient";
@@ -11,6 +12,7 @@ import type {
   BlameData,
   CodeHostClient,
   CodeHostProvider,
+  CodeHostRepositoryConfig,
   CommitInfo,
   DependencyGraph,
   FileChangelog,
@@ -85,6 +87,73 @@ export class CodeHostRouter {
     );
   }
 
+  /** Repositories shown in the remote explorer picker (pinned config, settings, and live host list). */
+  public async listExplorerRepositories(
+    context?: Partial<Pick<RepoCoordinates, "provider" | "owner" | "repo" | "branch">>
+  ): Promise<CodeHostRepositoryConfig[]> {
+    const hostConfig = readCodeHostConfiguration();
+    const prefs = readConfiguration();
+    const defaultProvider = hostConfig.defaultCodeHost;
+    const seen = new Set<string>();
+    const entries: CodeHostRepositoryConfig[] = [];
+
+    const push = (entry: CodeHostRepositoryConfig): void => {
+      if (!entry.owner || !entry.repo) {
+        return;
+      }
+      const provider = entry.provider ?? defaultProvider;
+      const key = `${provider}:${entry.owner}/${entry.repo}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      entries.push({ ...entry, provider });
+    };
+
+    for (const repo of hostConfig.repositories) {
+      push(repo);
+    }
+    if (prefs.owner && prefs.repo) {
+      push({
+        provider: defaultProvider,
+        owner: prefs.owner,
+        repo: prefs.repo,
+        branch: prefs.branch || undefined
+      });
+    }
+    if (context?.owner && context?.repo) {
+      push({
+        provider: context.provider ?? defaultProvider,
+        owner: context.owner,
+        repo: context.repo,
+        branch: context.branch
+      });
+    }
+
+    const listProvider = context?.provider ?? defaultProvider;
+    const creds = await this.options.secrets.getCredentials();
+    if (listProvider === "github" && creds.githubToken) {
+      try {
+        const client = await this.getClient("github");
+        if ("listUserRepositories" in client && typeof client.listUserRepositories === "function") {
+          const remote = await client.listUserRepositories(100);
+          for (const repo of remote) {
+            push({
+              provider: "github",
+              owner: repo.owner,
+              repo: repo.name,
+              branch: repo.defaultBranch
+            });
+          }
+        }
+      } catch {
+        // Pinned/settings repos remain available when live listing fails.
+      }
+    }
+
+    return entries.sort((a, b) => `${a.owner}/${a.repo}`.localeCompare(`${b.owner}/${b.repo}`));
+  }
+
   public async getFileContent(filePath: string, coords?: Partial<RepoCoordinates>): Promise<RemoteFileContent> {
     const resolved = await this.resolveCoordinates(coords);
     const path = filePath.replace(/^\/+/, "");
@@ -108,7 +177,7 @@ export class CodeHostRouter {
 
   public async getFileHistory(filePath: string, limit = 20, coords?: Partial<RepoCoordinates>): Promise<CommitInfo[]> {
     const resolved = await this.resolveCoordinates(coords);
-    const path = filePath.replace(/^\/+/, "");
+    const path = toRepositoryRelativePath(filePath);
     return this.cached(this.key("fileHistory", resolved, path, limit), "commitHistory", async () =>
       (await this.getClient(resolved.provider)).getFileHistory(resolved, path, limit)
     );
@@ -116,7 +185,7 @@ export class CodeHostRouter {
 
   public async getBlameData(filePath: string, coords?: Partial<RepoCoordinates>): Promise<BlameData> {
     const resolved = await this.resolveCoordinates(coords);
-    const path = filePath.replace(/^\/+/, "");
+    const path = toRepositoryRelativePath(filePath);
     return this.cached(this.key("blame", resolved, path), "blame", async () =>
       (await this.getClient(resolved.provider)).getBlameData(resolved, path)
     );
@@ -211,6 +280,15 @@ export class CodeHostRouter {
     return tree.entries;
   }
 
+  /** Drop cached API clients so the next request picks up new tokens from SecretStorage. */
+  public clearClientCache(provider?: CodeHostProvider): void {
+    if (provider) {
+      this.clients.delete(provider);
+      return;
+    }
+    this.clients.clear();
+  }
+
   private async getClient(provider: CodeHostProvider): Promise<CodeHostClient> {
     const existing = this.clients.get(provider);
     if (existing) {
@@ -222,14 +300,14 @@ export class CodeHostRouter {
     switch (provider) {
       case "github": {
         if (!creds.githubToken) {
-          throw new CodeHostError("GitHub token is missing. Add it in Coop settings.", "auth", 401, provider);
+          throw new CodeHostError("GitHub token is missing. Add it in CoopAI settings.", "auth", 401, provider);
         }
         client = new GitHubClient({ token: creds.githubToken, rateLimitTracker: this.rateLimitTracker });
         break;
       }
       case "gitlab": {
         if (!creds.gitlabToken) {
-          throw new CodeHostError("GitLab token is missing. Add it in Coop settings.", "auth", 401, provider);
+          throw new CodeHostError("GitLab token is missing. Add it in CoopAI settings.", "auth", 401, provider);
         }
         client = new GitLabClient({
           token: creds.gitlabToken,
@@ -240,7 +318,7 @@ export class CodeHostRouter {
       }
       case "bitbucket": {
         if (!creds.bitbucketUsername || !creds.bitbucketAppPassword) {
-          throw new CodeHostError("Bitbucket credentials are missing. Add them in Coop settings.", "auth", 401, provider);
+          throw new CodeHostError("Bitbucket credentials are missing. Add them in CoopAI settings.", "auth", 401, provider);
         }
         client = new BitbucketClient({
           username: creds.bitbucketUsername,

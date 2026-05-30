@@ -25,6 +25,21 @@ function resolveSession(fallback: CoopChatSession): CoopChatSession {
   return coopSessionRegistry.getActive() ?? fallback;
 }
 
+type ClearChatTarget = "sidebar" | "editor";
+
+function resolveClearChatSession(
+  sidebarSession: CoopChatSession,
+  target?: ClearChatTarget
+): CoopChatSession {
+  if (target === "sidebar") {
+    return sidebarSession;
+  }
+  if (target === "editor") {
+    return CoopChatPanel.getActive()?.getSession() ?? resolveSession(sidebarSession);
+  }
+  return resolveSession(sidebarSession);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const api = new SecureApiClient(context.secrets);
   const codeHostSecrets = new CodeHostSecrets(context.secrets);
@@ -48,7 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const degradationCache = new LayeredDegradationCache({ config: degradationConfig });
   healthMonitor.start();
   const services = { healthMonitor, degradationCache, codeHostRouter, codeHostSecrets, integrationSecrets };
-  const provider = new CoopSidebarProvider(context.extensionUri, api, services);
+  const provider = new CoopSidebarProvider(context.extensionUri, context, api, services);
 
   const refreshAllSessions = async () => {
     for (const session of coopSessionRegistry.getAll()) {
@@ -86,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const { repoContextFromEditor } = await import("./context/intentDetector");
       const prompts = await loadWorkspacePrompts();
       if (prompts.length === 0) {
-        void vscode.window.showInformationMessage("Add prompts in .coop/prompts.json to use saved prompts.");
+        void vscode.window.showInformationMessage("Add prompts in your prompt library to use saved prompts.");
         return;
       }
       const pick = await vscode.window.showQuickPick(
@@ -109,25 +124,59 @@ export function activate(context: vscode.ExtensionContext): void {
       await session.sendUserMessage(text, pick.entry.actionId);
     }),
     vscode.commands.registerCommand("coopAI.newChat", () => {
-      resolveSession(provider.session).newChat();
+      CoopChatPanel.create(context.extensionUri, context, api, services);
     }),
-    vscode.commands.registerCommand("coopAI.clearChat", () => {
-      resolveSession(provider.session).newChat();
+    vscode.commands.registerCommand("coopAI.clearChat", (args?: { target?: ClearChatTarget }) => {
+      resolveClearChatSession(provider.session, args?.target).clearChat();
     }),
     vscode.commands.registerCommand("coopAI.openSettings", () => {
       resolveSession(provider.session).openSettings();
     }),
-    vscode.commands.registerCommand("coopAI.exportChat", () => {
-      return resolveSession(provider.session).exportChat();
+    vscode.commands.registerCommand("coopAI.openExtensionSettings", () => {
+      void vscode.commands.executeCommand("workbench.action.openSettings", "@ext:coop-ai.coop-ai");
+    }),
+    vscode.commands.registerCommand("coopAI.openKeybindings", () => {
+      void vscode.commands.executeCommand("workbench.action.openGlobalKeybindings");
+    }),
+    vscode.commands.registerCommand("coopAI.moveFocusedView", () => {
+      void vscode.commands.executeCommand("workbench.action.moveFocusedView");
+    }),
+    vscode.commands.registerCommand("coopAI.moveEditorToNewWindow", () => {
+      void vscode.commands.executeCommand("workbench.action.moveEditorToNewWindow");
     }),
     vscode.commands.registerCommand("coopAI.newChatEditor", () => {
-      CoopChatPanel.create(context.extensionUri, api, services);
+      void vscode.commands.executeCommand("coopAI.newChat");
     }),
     vscode.commands.registerCommand("coopAI.newChatWindow", () => {
-      CoopChatPanel.create(context.extensionUri, api, services, {
+      CoopChatPanel.create(context.extensionUri, context, api, services, {
         moveToNewWindow: true
       });
     }),
+    vscode.commands.registerCommand(
+      "coopAI.openChatForRepo",
+      async (payload: {
+        provider?: CodeHostProvider;
+        owner: string;
+        repo: string;
+        branch?: string;
+      }) => {
+        if (!payload?.owner || !payload?.repo) {
+          return;
+        }
+        const preferences = readConfiguration();
+        const panel = CoopChatPanel.create(context.extensionUri, context, api, services, {
+          moveToNewWindow: true
+        });
+        const provider = payload.provider ?? preferences.defaultCodeHost;
+        panel.getSession().setRepoContext({
+          provider,
+          owner: payload.owner,
+          repo: payload.repo,
+          branch: payload.branch
+        });
+        panel.panel.title = `${payload.owner}/${payload.repo}`;
+      }
+    ),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       for (const session of coopSessionRegistry.getAll()) {
         session.refreshEditorContext(editor);
@@ -178,6 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
           CoopChatPanel.revive(
             webviewPanel,
             context.extensionUri,
+            context,
             api,
             services,
             (state as { sessionId?: string }) || {}

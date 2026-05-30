@@ -1,4 +1,4 @@
-# Coop AI Roadmap
+# CoopAI Roadmap
 
 This document tracks what shipped in the Prompt 2 + pre-work pass, what is intentionally deferred, and the recommended order to build next. For API contracts, see [api-v1.md](./api-v1.md).
 
@@ -25,6 +25,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Usage footer | Per-request + session cost estimate |
 | Stream cancel | `AbortController` |
 | Editor context menu | Trace, Find Owner, Blast Radius, Understand Repo, Knowledge Gaps |
+| Open repo in editor (hybrid) | On remote explorer repo pick: local clone via `openFolder`, else GitHub Repositories (`coopAI.openRepoInEditor`) |
 | Workspace prompt library | `.coop/prompts.json` + sidebar chips + Save / Run |
 | API key UX | **Save API key** button (any length for local dev) |
 
@@ -94,7 +95,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 **Goal:** Route inference through customer-owned keys via existing `byokHandler.ts`.
 
-**Trigger to start:** Enterprise pilot needs customer keys without Coop holding provider secrets.
+**Trigger to start:** Enterprise pilot needs customer keys without CoopAI holding provider secrets.
 
 **Build list:**
 
@@ -112,7 +113,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 - [ ] Set `ANTHROPIC_API_KEY` (and others) on server; **do not** set `COOP_LLM_MOCK`
 - [ ] Confirm `/health` → `"mockMode": false`
-- [ ] `COOP_API_TOKEN` in prod; extension uses real Coop key (not placeholder)
+- [ ] `COOP_API_TOKEN` in prod; extension uses real CoopAI key (not placeholder)
 - [ ] DeepSeek only with `COOP_LLM_ALLOW_UNAPPROVED=true` + legal sign-off
 
 ---

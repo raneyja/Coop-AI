@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { resolveEditorFile } from "./editorFileContext";
+import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
 
 export enum UserIntent {
@@ -21,6 +23,8 @@ export type IntentLineRange = {
 
 export type IntentEventContext = {
   file?: string;
+  fileSource?: RepoContext["fileSource"];
+  contextWarning?: string;
   lines?: IntentLineRange;
   repoId?: string;
   owner?: string;
@@ -177,7 +181,14 @@ export function repoContextFromEditor(
   };
 
   if (preferences.includeActiveFile) {
-    next.file = vscode.workspace.asRelativePath(editor.document.uri);
+    const resolved = resolveEditorFile(editor);
+    next.file = resolved.file;
+    next.fileSource = resolved.fileSource;
+    next.contextWarning = resolved.warning;
+    if (resolved.owner && resolved.repo) {
+      next.owner = resolved.owner;
+      next.repo = resolved.repo;
+    }
   }
 
   if (preferences.includeSelection && !selection.isEmpty) {
@@ -190,6 +201,8 @@ export function repoContextFromEditor(
 export function repoContextToIntentContext(context: RepoContext): IntentEventContext {
   return normalizeContext({
     file: context.file,
+    fileSource: context.fileSource,
+    contextWarning: context.contextWarning,
     lines: context.selectedLines
       ? {
           start: context.selectedLines[0],
@@ -210,6 +223,8 @@ export function intentContextToRepoContext(context: IntentEventContext): RepoCon
     repo: context.repo,
     branch: context.branch,
     file: context.file,
+    fileSource: context.fileSource,
+    contextWarning: context.contextWarning,
     selectedLines: context.lines ? [context.lines.start, context.lines.end] : undefined,
     languageId: context.languageId
   };
@@ -301,7 +316,7 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
   const repo = emptyToUndefined(context.repo);
   return {
     ...context,
-    file: emptyToUndefined(file),
+    file: file ? toRepositoryRelativePath(file) : undefined,
     owner,
     repo,
     branch: emptyToUndefined(context.branch),

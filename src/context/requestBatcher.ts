@@ -1,5 +1,6 @@
 import { DEFAULT_INTENT_CONFIG, IntentBatchingConfig } from "../config/intentConfig";
 import { ContextRequestType, IntentCost, IntentEvent } from "./intentDetector";
+import { toRepositoryRelativePath } from "./repoFilePath";
 
 export type ContextRequestParams = {
   file?: string;
@@ -13,6 +14,7 @@ export type ContextRequestParams = {
     end: number;
   };
   quickAction?: string;
+  fileSource?: string;
   [key: string]: unknown;
 };
 
@@ -186,18 +188,20 @@ export class RequestBatcher {
 }
 
 export function buildContextRequests(event: IntentEvent, types: ContextRequestType[]): ContextFetchRequest[] {
+  const file = event.context.file ? toRepositoryRelativePath(event.context.file) : undefined;
   return types.map((type, index) => ({
     id: `${event.id}:${type}:${index}`,
     type,
     params: {
-      file: event.context.file,
+      file,
       repoId: event.context.repoId,
       owner: event.context.owner,
       repo: event.context.repo,
       branch: event.context.branch,
       languageId: event.context.languageId,
       lines: event.context.lines,
-      quickAction: event.context.buttonClicked
+      quickAction: event.context.buttonClicked,
+      fileSource: event.context.fileSource
     },
     intent: event,
     cost: event.costEstimate,

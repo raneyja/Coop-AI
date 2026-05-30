@@ -1,13 +1,14 @@
 import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
-import type { ChatHistoryMessage, ChatContextPayload, StreamChunk, UseCase } from "./types";
+import type { ChatHistoryMessage, ChatContextPayload, StreamChunk, UseCase, ChatImageAttachment } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
 export type StreamChatBody = {
   message: string;
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
+  attachments?: ChatImageAttachment[];
   model: string;
   provider: LlmProvider;
   useCase: UseCase;
@@ -100,7 +101,7 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const token = await this.options.getToken();
     if (!token) {
-      throw new Error("Coop AI API key is missing. Configure it in the sidebar settings.");
+      throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
     }
 
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat`, {
@@ -114,6 +115,7 @@ export class CoopBackendClient {
         message: body.message,
         history: body.history,
         context: body.context,
+        attachments: body.attachments,
         model: body.model,
         provider: body.provider,
         useCase: body.useCase,
@@ -177,7 +179,7 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const token = await this.options.getToken();
     if (!token) {
-      throw new Error("Coop AI API key is missing. Configure it in the sidebar settings.");
+      throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
     }
 
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/completions/inline`, {

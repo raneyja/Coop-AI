@@ -76,7 +76,7 @@ export class RetentionReportBuilder {
     signer?: ReportSigner
   ): Promise<Uint8Array> {
     const attestation = await this.generateComplianceAttestation(report, signer);
-    return renderer.render("Coop AI Data Retention Compliance Report", renderHtml(attestation));
+    return renderer.render("CoopAI Data Retention Compliance Report", renderHtml(attestation));
   }
 
   private recentConfigChanges(customerId: string): ConfigAuditEvent[] {
@@ -143,7 +143,7 @@ function buildStatements(summary: RequestAuditSummary): string[] {
   const sanitizedPercent = percent(summary.sanitizedRequests, summary.totalRequests);
   return [
     `${zeroRetentionPercent}% of requests were sent with zero-retention flags.`,
-    "0 API calls are intentionally stored for model training by Coop AI.",
+    "0 API calls are intentionally stored for model training by CoopAI.",
     `${sanitizedPercent}% of requests were sanitized before transmission.`,
     "Audit trail covers the last 90 days of request and configuration activity."
   ];
@@ -161,7 +161,7 @@ function renderMarkdownAttestation(report: ComplianceReport): string {
     .map((event) => `- ${event.timestamp.toISOString()} ${event.actor} ${event.action} ${event.target}`)
     .join("\n") || "- No configuration changes in the reporting window.";
 
-  return `# Coop AI Data Retention Compliance Report
+  return `# CoopAI Data Retention Compliance Report
 
 Customer: ${report.customerId}
 Generated: ${report.generatedAt.toISOString()}

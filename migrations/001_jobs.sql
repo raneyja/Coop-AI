@@ -1,4 +1,4 @@
--- Coop AI job queue schema (PostgreSQL)
+-- CoopAI job queue schema (PostgreSQL)
 
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,

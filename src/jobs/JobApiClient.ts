@@ -139,8 +139,6 @@ export function jobTypeForQuickAction(actionId: string): JobType | undefined {
       return JobType.SCAN_KNOWLEDGE_GAPS;
     case "blast-radius":
       return JobType.BUILD_DEPENDENCY_GRAPH;
-    case "understand-repo":
-      return JobType.GENERATE_REPO_SUMMARY;
     default:
       return undefined;
   }

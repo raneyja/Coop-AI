@@ -32,7 +32,7 @@ export default function TermsPage() {
 
       <h2>2. Account and access</h2>
       <p>
-        Access to the Coop server requires a valid API token. You are responsible for maintaining
+        Access to the CoopAI server requires a valid API token. You are responsible for maintaining
         the confidentiality of your credentials and for all activity under your account. Notify us
         immediately at <a href="mailto:security@coop-ai.dev">security@coop-ai.dev</a> if you suspect
         unauthorized access.

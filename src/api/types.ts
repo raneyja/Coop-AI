@@ -1,5 +1,8 @@
+import type { ChatImageAttachment } from "../chat/types";
 import type { ChatRequestMessage } from "./requestFormatter";
 import type { LlmProvider } from "./zeroRetentionConfig";
+
+export type { ChatImageAttachment };
 
 export type { LlmProvider };
 
@@ -30,6 +33,7 @@ export type ModelRuntimeConfig = {
 export type ChatHistoryMessage = {
   role: "user" | "assistant";
   content: string;
+  attachments?: ChatImageAttachment[];
 };
 
 export type ChatContextPayload = {
@@ -47,6 +51,7 @@ export type CompletionRequest = {
   message: string;
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
+  attachments?: ChatImageAttachment[];
   useCase: UseCase;
   modelConfig: ModelRuntimeConfig;
   allowUnapprovedProvider?: boolean;
@@ -69,6 +74,7 @@ export type V1ChatRequestBody = {
   message: string;
   history?: ChatHistoryMessage[];
   context?: ChatContextPayload;
+  attachments?: ChatImageAttachment[];
   mentions?: Array<{ path: string; lines?: [number, number] }>;
   model?: string;
   provider?: LlmProvider;
