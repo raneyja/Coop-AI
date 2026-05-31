@@ -128,7 +128,7 @@ export class DecisionArchaeologyEngine {
     }
 
     const refs = parseReferences(commit.message);
-    let prNumber = refs.prNumbers[0];
+    let prNumber: number | undefined = refs.prNumbers[0];
     if (!prNumber) {
       prNumber = await this.findPrForCommit(owner, repo, commit.sha);
     }

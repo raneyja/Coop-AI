@@ -50,6 +50,7 @@ import {
 import { RequestPrioritizer } from "../context/requestPrioritizer";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { renderWebviewHtml } from "./renderWebviewHtml";
+import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
   CachedValue,
   ChatImageAttachment,
@@ -71,8 +72,11 @@ import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/
 import { formatWaitTime } from "../jobs/types";
 import type { JobProgressPayload } from "./types";
 import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";
+import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { DecisionTimeline } from "../types/decisionTimeline";
+import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
+import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";
 import { useCaseFromQuickAction } from "../prompts/systemPrompts";
 import { quickActionPrompt } from "../prompts/quickActionPrompts";
 import type { QuickActionId } from "../webview/types";
@@ -92,15 +96,8 @@ import {
   savePinnedPromptIds,
   updatePinnedPromptIds
 } from "../prompts/pinnedPrompts";
-
-function titleFromMessage(content: string): string {
-  const normalized = content.replace(/^\[[^\]]+\]\s*/, "").trim();
-  if (!normalized) {
-    return "New Chat";
-  }
-  const singleLine = normalized.split("\n")[0]?.trim() ?? normalized;
-  return singleLine.length <= 48 ? singleLine : `${singleLine.slice(0, 45)}…`;
-}
+import { ChatThreadStore } from "./chatThreadStore";
+import { summarizeThreadTitle } from "./threadTitle";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -113,6 +110,9 @@ export type CoopChatSessionOptions = {
   integrationSecrets: import("../api/integrations/integrationSecrets").IntegrationSecrets;
   onDescriptionChange?: (description: string) => void;
   onTitleChange?: (title: string) => void;
+  enforceSidebarMinWidth?: boolean;
+  /** When set, enables persisted multi-thread history for this session (sidebar). */
+  threadScopeKey?: string;
 };
 
 export class CoopChatSession {
@@ -149,10 +149,14 @@ export class CoopChatSession {
   private sessionCostUsd = 0;
   private streamAbortController?: AbortController;
   private workspacePromptWatcher?: vscode.Disposable;
+  private readonly threadStore?: ChatThreadStore;
 
   public constructor(
     private readonly options: CoopChatSessionOptions
   ) {
+    if (options.threadScopeKey) {
+      this.threadStore = new ChatThreadStore(options.extensionContext, options.threadScopeKey);
+    }
     this.intentConfig = readIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
@@ -206,7 +210,10 @@ export class CoopChatSession {
 
   public attachWebview(webview: vscode.Webview): void {
     this.webview = webview;
-    webview.html = renderWebviewHtml(webview, this.options.extensionUri, { view: "chat" });
+    webview.html = renderWebviewHtml(webview, this.options.extensionUri, {
+      view: "chat",
+      enforceMinWidth: this.options.enforceSidebarMinWidth
+    });
     this.wireWebview(webview, "chat");
     coopSessionRegistry.setActive(this);
   }
@@ -243,7 +250,14 @@ export class CoopChatSession {
     this.postTheme();
     await this.pushDegradationState();
     await this.pushSettingsState();
+    if (this.threadStore) {
+      const active = this.threadStore.getActiveThread();
+      this.chatHistory.push(...active.messages);
+      this.sessionCostUsd = active.sessionCostUsd;
+      this.setThreadTitle(active.title);
+    }
     this.post({ type: "chat:history", payload: this.chatHistory });
+    this.pushThreadsList();
   }
 
   public async refreshPreferences(): Promise<void> {
@@ -264,6 +278,8 @@ export class CoopChatSession {
     const nextContext = repoContextFromEditor(editor, this.preferences, this.currentContext);
     const event = this.intentDetector.create(intent, {
       file: nextContext.file,
+      fileSource: nextContext.fileSource,
+      contextWarning: nextContext.contextWarning,
       lines: nextContext.selectedLines
         ? { start: nextContext.selectedLines[0], end: nextContext.selectedLines[1] }
         : undefined,
@@ -293,12 +309,13 @@ export class CoopChatSession {
   }
 
   public newChat(): void {
-    this.streamToken++;
-    this.streamAbortController?.abort();
-    this.abortActiveJob();
-    this.chatHistory.length = 0;
-    this.sessionCostUsd = 0;
-    this.options.onTitleChange?.("New Chat");
+    if (this.threadStore) {
+      this.persistActiveThread();
+      const thread = this.threadStore.startNewThread();
+      this.activateThread(thread);
+      return;
+    }
+    this.resetChatState();
     this.post({ type: "chat:history", payload: [] });
   }
 
@@ -309,6 +326,71 @@ export class CoopChatSession {
     if (jobId) {
       void this.jobClient.cancelJob(jobId).catch(() => undefined);
     }
+  }
+
+  private resetChatState(): void {
+    this.streamToken++;
+    this.streamAbortController?.abort();
+    this.abortActiveJob();
+    this.chatHistory.length = 0;
+    this.sessionCostUsd = 0;
+    this.setThreadTitle("New Chat");
+  }
+
+  private setThreadTitle(title: string): void {
+    this.options.onTitleChange?.(title);
+    this.threadStore?.updateActiveTitle(title);
+    this.pushThreadsList();
+  }
+
+  private persistActiveThread(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    const active = this.threadStore.getActiveThread();
+    this.threadStore.setActiveThread(this.chatHistory, this.sessionCostUsd, active.title);
+  }
+
+  private pushThreadsList(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    const active = this.threadStore.getActiveThread();
+    this.post({
+      type: "threads:list",
+      payload: {
+        activeId: active.id,
+        activeTitle: active.title,
+        threads: this.threadStore.listSummaries()
+      }
+    });
+  }
+
+  private activateThread(thread: ReturnType<ChatThreadStore["getActiveThread"]>): void {
+    this.streamToken++;
+    this.streamAbortController?.abort();
+    this.abortActiveJob();
+    this.chatHistory.length = 0;
+    this.chatHistory.push(...thread.messages);
+    this.sessionCostUsd = thread.sessionCostUsd;
+    this.setThreadTitle(thread.title);
+    this.post({
+      type: "chat:thread-changed",
+      payload: { threadId: thread.id, title: thread.title }
+    });
+    this.post({ type: "chat:history", payload: this.chatHistory });
+  }
+
+  private async switchThread(threadId: string): Promise<void> {
+    if (!this.threadStore) {
+      return;
+    }
+    this.persistActiveThread();
+    const thread = this.threadStore.switchTo(threadId);
+    if (!thread) {
+      return;
+    }
+    this.activateThread(thread);
   }
 
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
@@ -327,6 +409,12 @@ export class CoopChatSession {
   }
 
   public clearChat(): void {
+    if (this.threadStore) {
+      this.persistActiveThread();
+      const thread = this.threadStore.clearActiveThread();
+      this.activateThread(thread);
+      return;
+    }
     this.newChat();
   }
 
@@ -372,7 +460,7 @@ export class CoopChatSession {
       try {
         await this.handleMessage(raw, source);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unexpected extension error.";
+        const message = formatUserFacingNetworkError(error, "Unexpected extension error.");
         if (source === "chat") {
           this.postToChat({ type: "chat:error", payload: { message } });
         }
@@ -402,6 +490,11 @@ export class CoopChatSession {
         return;
       case "ui:open-settings":
         this.openSettings();
+        return;
+      case "ui:ensure-min-width":
+        if (this.options.enforceSidebarMinWidth) {
+          await ensureSidebarMinWidth(message.payload.width, message.payload.minWidth);
+        }
         return;
       case "autocomplete:toggle":
         await vscode.commands.executeCommand("coopAI.toggleAutocomplete");
@@ -466,10 +559,14 @@ export class CoopChatSession {
         return;
       }
       case "chat:new":
+      case "threads:new":
         this.newChat();
         return;
       case "chat:clear":
         this.clearChat();
+        return;
+      case "threads:switch":
+        void this.switchThread(message.payload.threadId);
         return;
       case "repo:list":
         if (message.payload.scope === "repos") {
@@ -603,6 +700,10 @@ export class CoopChatSession {
         return;
       case "conflict:action":
         this.handleConflictAction(message.payload.conflictId, message.payload.action);
+        return;
+      case "ownership:copy-draft":
+        await vscode.env.clipboard.writeText(message.payload.text);
+        void vscode.window.showInformationMessage("Ownership message draft copied to clipboard.");
         return;
       case "job:cancel":
         await this.handleJobCancel(message.payload.jobId);
@@ -884,8 +985,8 @@ export class CoopChatSession {
               file,
               github: {
                 owner: stringValue(ownership.githubOwner) ?? stringValue(ownership.owner) ?? stringValue(ownership.likelyOwner),
-                ownershipScore: numberValue(ownership.confidence),
-                recentCommits: numberValue(ownership.recentCommits)
+                ownershipScore: numberValue(ownership.confidence) ?? scoreFromReport(ownership.report),
+                recentCommits: numberValue(ownership.recentCommits) ?? commitsFromReport(ownership.report)
               },
               jira: {
                 assignee: stringValue(ownership.jiraAssignee),
@@ -1075,6 +1176,17 @@ export class CoopChatSession {
     quickAction?: string,
     attachments?: ChatImageAttachment[]
   ): Promise<void> {
+    if (quickAction === "find-owner" && !this.currentContext.file?.trim()) {
+      this.post({
+        type: "chat:error",
+        payload: {
+          message:
+            "Find Owner needs an open file. Open a local project file or pick one from the CoopAI remote tree."
+        }
+      });
+      return;
+    }
+
     const content = quickAction ? `[${quickAction}] ${message}` : message;
     const userMessage: ChatMessage = {
       role: "user",
@@ -1084,9 +1196,16 @@ export class CoopChatSession {
     };
     this.chatHistory.push(userMessage);
     if (this.chatHistory.length === 1) {
-      this.options.onTitleChange?.(titleFromMessage(content || attachments?.[0]?.name || "Image attachment"));
+      this.setThreadTitle(
+        summarizeThreadTitle({
+          content: content || attachments?.[0]?.name || "Image attachment",
+          quickAction,
+          context: this.currentContext
+        })
+      );
     }
     this.post({ type: "chat:history", payload: this.chatHistory });
+    this.persistActiveThread();
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
       const ranAsync = await this.runAsyncQuickAction(quickAction, message);
@@ -1105,7 +1224,26 @@ export class CoopChatSession {
     if (quickAction === "trace-decision") {
       this.postDecisionTimelineFromBundle();
     }
+    if (quickAction === "find-owner") {
+      this.postOwnershipCardFromBundle();
+    }
     await this.continueChatAfterContext(content, quickAction, attachments);
+  }
+
+  private postOwnershipCardFromBundle(): void {
+    const report = this.ownershipReportFromBundle();
+    if (!report) {
+      return;
+    }
+    this.post({
+      type: "ownership:card",
+      payload: { report }
+    });
+  }
+
+  private ownershipReportFromBundle(): OwnershipReport | undefined {
+    const entry = this.lastContextBundle.find((result) => result.type === "ownership");
+    return (entry?.data as { report?: OwnershipReport } | undefined)?.report;
   }
 
   private postDecisionTimelineFromBundle(): void {
@@ -1118,7 +1256,7 @@ export class CoopChatSession {
 
     const enriched: DecisionTimeline = {
       ...timeline,
-      lineRange: timeline.lineRange ?? lineRangeFromContext(this.currentContext),
+      lineRange: timeline.lineRange ?? this.lineRangeFromContext(this.currentContext),
       codeSnippet: timeline.codeSnippet ?? this.selectedCodeSnippet()
     };
 
@@ -1178,6 +1316,7 @@ export class CoopChatSession {
 
     try {
       const decisionTimeline = this.decisionTimelineFromBundle();
+      const ownershipReport = this.ownershipReportFromBundle();
       const llmMessage =
         quickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
@@ -1187,7 +1326,13 @@ export class CoopChatSession {
               codeSnippet: decisionTimeline.codeSnippet,
               userQuestion: content
             })
-          : content;
+          : quickAction === "find-owner" && ownershipReport
+            ? buildOwnershipSynthesisUserPrompt({
+                report: ownershipReport,
+                file: this.currentContext.file ?? ownershipReport.path,
+                userQuestion: content
+              })
+            : content;
 
       const result = await this.options.api.streamChat(
         {
@@ -1228,6 +1373,7 @@ export class CoopChatSession {
       this.chatHistory.push(finalMessage);
       this.post({ type: "chat:complete", payload: { message: finalMessage } });
       this.post({ type: "chat:history", payload: this.chatHistory });
+      this.persistActiveThread();
       this.writeCache(cacheKey, finalMessage);
 
       if (result.usage) {
@@ -1239,12 +1385,13 @@ export class CoopChatSession {
             sessionCostUsd: this.sessionCostUsd
           }
         });
+        this.persistActiveThread();
       }
     } catch (error) {
       if (token !== this.streamToken) {
         return;
       }
-      const message = error instanceof Error ? error.message : "Chat request failed.";
+      const message = formatUserFacingNetworkError(error);
       this.post({ type: "chat:error", payload: { message } });
     }
   }
@@ -1780,6 +1927,17 @@ function stringValue(value: unknown): string | undefined {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function scoreFromReport(value: unknown): number | undefined {
+  const report = (asRecord(value).report ?? value) as { scores?: Array<{ score?: number }> } | undefined;
+  const primary = report?.scores?.[0];
+  return primary?.score !== undefined ? primary.score / 100 : undefined;
+}
+
+function commitsFromReport(value: unknown): number | undefined {
+  const report = (asRecord(value).report ?? value) as { scores?: Array<{ commitCount?: number }> } | undefined;
+  return report?.scores?.[0]?.commitCount;
 }
 
 function dateValue(value: unknown): Date | undefined {

@@ -36,6 +36,13 @@ export async function runQuickActionFromEditor(
     ? repoContextFromEditor(editor, preferences, {})
     : { owner: preferences.owner, repo: preferences.repo, branch: preferences.branch };
 
+  if (actionId === "find-owner" && !repoContext.file?.trim()) {
+    void vscode.window.showWarningMessage(
+      "Find Owner needs an open file. Open a local project file or pick one from the CoopAI remote tree."
+    );
+    return;
+  }
+
   await vscode.commands.executeCommand("workbench.view.extension.coopAI");
   await session.submitQuickAction(actionId, repoContext);
 }

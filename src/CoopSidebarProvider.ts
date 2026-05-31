@@ -7,6 +7,7 @@ import type { HealthMonitor } from "./integrations/healthMonitor";
 import type { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
 import type { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "./api/integrations/integrationSecrets";
+import { resolveThreadScopeKey } from "./chat/chatThreadStore";
 
 export type CoopRuntimeServices = {
   healthMonitor: HealthMonitor;
@@ -31,6 +32,8 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
       extensionContext,
       api,
       ...services,
+      enforceSidebarMinWidth: true,
+      threadScopeKey: resolveThreadScopeKey(),
       onDescriptionChange: (description) => {
         if (this.view) {
           this.view.description = description;

@@ -9,11 +9,14 @@ import { IntentFeedback } from "./IntentFeedback";
 import { applyThemeMode } from "./theme";
 import { QuickActionId } from "./types";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
+import { PanelWidthEnforcer } from "./components/PanelWidthEnforcer";
+import { ThreadHeaderSwitcher, type ThreadListItem } from "./components/ThreadHeaderSwitcher";
 import { PromptLibraryPill } from "./components/PromptLibraryPill";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
 import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./AutocompleteStatus";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
+import { OwnershipCard, type OwnershipCardPayload } from "./OwnershipCard";
 import type { ChatImageAttachment } from "../chat/types";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
@@ -98,7 +101,13 @@ type InboundMessage =
         previewText?: string;
       };
     }
-  | { type: "decision:timeline"; payload: { timeline: DecisionTimelinePayload } };
+  | { type: "decision:timeline"; payload: { timeline: DecisionTimelinePayload } }
+  | { type: "ownership:card"; payload: { report: OwnershipCardPayload } }
+  | {
+      type: "threads:list";
+      payload: { activeId: string; activeTitle: string; threads: ThreadListItem[] };
+    }
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } };
 
 type ChatPanelProps = {
   vscode: VsCodeApi;
@@ -170,6 +179,7 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
 function ChatFooter({
   error,
   onDismissError,
+  contextWarning,
   intentFeedback,
   onDismissIntent,
   jobProgress,
@@ -181,6 +191,7 @@ function ChatFooter({
 }: {
   error: string;
   onDismissError: () => void;
+  contextWarning?: string;
   intentFeedback?: IntentFeedbackState;
   onDismissIntent: () => void;
   jobProgress?: JobProgressState;
@@ -195,6 +206,7 @@ function ChatFooter({
       <ChatActivityStrip
         error={error || undefined}
         onDismissError={onDismissError}
+        contextWarning={contextWarning}
         intentFeedback={intentFeedback}
         onDismissIntent={onDismissIntent}
         jobProgress={jobProgress}
@@ -245,7 +257,25 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
   const [autocompleteMessage, setAutocompleteMessage] = useState<string | undefined>();
   const [decisionTimeline, setDecisionTimeline] = useState<DecisionTimelinePayload | undefined>();
+  const [ownershipCard, setOwnershipCard] = useState<OwnershipCardPayload | undefined>();
+  const [threadsState, setThreadsState] = useState<{
+    activeId: string;
+    activeTitle: string;
+    threads: ThreadListItem[];
+  } | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+
+  const resetEphemeralChatState = useCallback(() => {
+    setStreamingBuffer("");
+    setIsStreaming(false);
+    setError("");
+    setDecisionTimeline(undefined);
+    setOwnershipCard(undefined);
+    setUsageLabel(undefined);
+    setIntentFeedback(undefined);
+    setJobProgress(undefined);
+    setAttachmentError("");
+  }, []);
 
   const streamMessage = useMemo<ChatMessage | null>(() => {
     if (!streamingBuffer) {
@@ -288,14 +318,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.length === 0) {
             setInput("");
             setAttachments([]);
-            setAttachmentError("");
-            setError("");
-            setDecisionTimeline(undefined);
-            setUsageLabel(undefined);
-            setIntentFeedback(undefined);
-            setJobProgress(undefined);
+            resetEphemeralChatState();
             vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           }
+          break;
+        case "threads:list":
+          setThreadsState(message.payload);
+          break;
+        case "chat:thread-changed":
+          resetEphemeralChatState();
+          setInput("");
+          setAttachments([]);
+          vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
         case "chat:delta":
           setIsStreaming(true);
@@ -305,6 +339,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setMessages((prev) => [...prev, message.payload.message]);
           if (message.payload.message.role === "assistant") {
             setDecisionTimeline((current) =>
+              current ? { ...current, narrative: message.payload.message.content } : current
+            );
+            setOwnershipCard((current) =>
               current ? { ...current, narrative: message.payload.message.content } : current
             );
           }
@@ -352,6 +389,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "decision:timeline":
           setDecisionTimeline(message.payload.timeline);
+          break;
+        case "ownership:card":
+          setOwnershipCard(message.payload.report);
           break;
         case "job:progress":
           setJobProgress(message.payload);
@@ -505,6 +545,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [context.owner, context.repo, context.provider, isActiveChat, post, treeState.provider]
   );
 
+  const handleCopyOwnershipDraft = useCallback(
+    (text: string) => {
+      post({ type: "ownership:copy-draft", payload: { text } });
+    },
+    [post]
+  );
+
   const handleConflictAction = useCallback(
     (conflictId: string, action: ConflictActionId) => {
       post({ type: "conflict:action", payload: { conflictId, action } });
@@ -552,7 +599,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         isStreaming={isStreaming}
         variant={isActiveChat ? "chat" : "landing"}
         contextFile={context.file}
-        contextWarning={context.contextWarning}
         usageLabel={usageLabel}
         attachments={attachments}
         attachmentError={attachmentError}
@@ -594,13 +640,28 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         void handlePanelDrop(event);
       }}
     >
-      <div className="flex shrink-0 justify-end px-3 pb-1 pt-2">
-        <AutocompleteStatus
-          status={autocompleteStatus}
-          message={autocompleteMessage}
-          onToggle={() => post({ type: "autocomplete:toggle" })}
-        />
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
+        {threadsState ? (
+          <ThreadHeaderSwitcher
+            activeId={threadsState.activeId}
+            activeTitle={threadsState.activeTitle}
+            threads={threadsState.threads}
+            disabled={isStreaming}
+            onSelect={(threadId) => post({ type: "threads:switch", payload: { threadId } })}
+            onNewThread={() => post({ type: "threads:new" })}
+          />
+        ) : null}
+        <div className={threadsState ? "shrink-0" : "ml-auto flex w-full justify-end"}>
+          <AutocompleteStatus
+            status={autocompleteStatus}
+            message={autocompleteMessage}
+            onToggle={() => post({ type: "autocomplete:toggle" })}
+          />
+        </div>
       </div>
+      <p className="coop-panel-narrow-notice" role="status">
+        Widen the sidebar for the best experience.
+      </p>
       {isActiveChat ? (
         <>
           <ChatStream
@@ -618,6 +679,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
               setDecisionTimeline(undefined);
+              setOwnershipCard(undefined);
               post({ type: "degradation:refresh", payload: { feature, retrace: true } });
             }}
             onOpenSettings={() => post({ type: "ui:open-settings" })}
@@ -625,6 +687,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           {decisionTimeline ? (
             <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)]">
               <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
+            </div>
+          ) : null}
+          {ownershipCard ? (
+            <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)]">
+              <OwnershipCard
+                report={ownershipCard}
+                onDismiss={() => setOwnershipCard(undefined)}
+                onCopyDraft={handleCopyOwnershipDraft}
+              />
             </div>
           ) : null}
           {conflictState?.conflicts.length ? (
@@ -639,6 +710,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <ChatFooter
             error={error}
             onDismissError={() => setError("")}
+            contextWarning={context.contextWarning}
             intentFeedback={intentFeedback}
             onDismissIntent={() => setIntentFeedback(undefined)}
             jobProgress={jobProgress}
@@ -661,6 +733,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
               setDecisionTimeline(undefined);
+              setOwnershipCard(undefined);
               post({ type: "degradation:refresh", payload: { feature, retrace: true } });
             }}
             onOpenSettings={() => post({ type: "ui:open-settings" })}
@@ -683,6 +756,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           {decisionTimeline ? (
             <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
           ) : null}
+          {ownershipCard ? (
+            <OwnershipCard
+              report={ownershipCard}
+              onDismiss={() => setOwnershipCard(undefined)}
+              onCopyDraft={handleCopyOwnershipDraft}
+            />
+          ) : null}
           <ConflictResolution
             state={conflictState}
             onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
@@ -696,6 +776,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           />
           <div className="relative z-20 shrink-0 pb-2">
             <ChatActivityStrip
+              contextWarning={context.contextWarning}
               jobProgress={jobProgress}
               onDismissJob={dismissJobProgress}
               onCancelJob={cancelJob}
@@ -723,6 +804,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         onDelete={(id) => post({ type: "prompts:delete", payload: { id } })}
         onUpdatePinned={(pinnedIds) => post({ type: "prompts:update-pinned", payload: { pinnedIds } })}
       />
+      <PanelWidthEnforcer vscode={vscode} />
     </div>
   );
 }

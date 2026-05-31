@@ -90,10 +90,6 @@ function PromptEditorOverlay({
           />
         </label>
 
-        <p className="coop-prompt-modal-muted">
-          Optional: use {"{{file}}"}, {"{{owner}}"}, {"{{repo}}"}, {"{{branch}}"}, or {"{{lines}}"} for context.
-        </p>
-
         <div className="coop-prompt-modal-actions">
           <button type="button" className="coop-settings-action-btn" onClick={onCancel}>
             Cancel

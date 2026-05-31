@@ -214,8 +214,12 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   };
 
   return (
-    <div className="coop-settings-shell coop-canvas-bg flex h-full min-h-0 w-full justify-center p-6">
-      <SettingsPanel
+    <div className="coop-settings-shell coop-canvas-bg flex h-full min-h-0 w-full flex-col">
+      <p className="coop-panel-narrow-notice" role="status">
+        Widen the sidebar for the best experience.
+      </p>
+      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-6">
+        <SettingsPanel
         prefs={prefs}
         promptLibrary={promptLibrary}
         onUpdatePinnedPrompts={(pinnedIds) =>
@@ -368,6 +372,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onTestIntegration={testIntegration}
         onClearChat={() => post({ type: "chat:clear" })}
       />
+      </div>
       <PromptLibraryModal
         open={promptModalOpen}
         prompts={promptLibrary.prompts}

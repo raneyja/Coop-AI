@@ -4,6 +4,7 @@ import type { IntentFeedbackState, JobProgressState } from "../types";
 type ChatActivityStripProps = {
   error?: string;
   onDismissError?: () => void;
+  contextWarning?: string;
   jobProgress?: JobProgressState;
   onDismissJob?: () => void;
   onCancelJob?: (jobId: string) => void;
@@ -19,6 +20,7 @@ type ChatActivityStripProps = {
 export function ChatActivityStrip({
   error,
   onDismissError,
+  contextWarning,
   jobProgress,
   onDismissJob,
   onCancelJob,
@@ -49,7 +51,7 @@ export function ChatActivityStrip({
 
   const line = error || intentLine || jobLine;
 
-  if (!line && conflictCount === 0) {
+  if (!line && conflictCount === 0 && !contextWarning) {
     return null;
   }
 
@@ -117,6 +119,11 @@ export function ChatActivityStrip({
               </button>
             ) : null}
           </div>
+        </div>
+      ) : null}
+      {contextWarning ? (
+        <div className="chat-activity-strip-row chat-activity-strip-row--warning">
+          <span className="min-w-0">{contextWarning}</span>
         </div>
       ) : null}
       {conflictCount > 0 ? (

@@ -113,11 +113,22 @@ export type PullRequestComment = {
   resolved?: boolean;
 };
 
+export type PullRequestReview = {
+  id: string;
+  author: string;
+  state: string;
+  submittedAt: string;
+  body?: string;
+};
+
 export type IssueSummary = {
   number: number;
   title: string;
   state: string;
   author?: string;
+  assignee?: string;
+  closedBy?: string;
+  body?: string;
   createdAt: string;
   updatedAt: string;
   htmlUrl?: string;
@@ -190,6 +201,8 @@ export interface CodeHostClient {
   getBlameData(coords: RepoCoordinates, path: string): Promise<BlameData>;
   listPullRequests(coords: RepoCoordinates, options?: { state?: string; limit?: number }): Promise<PullRequestSummary[]>;
   getPullRequestComments(coords: RepoCoordinates, prNumber: number): Promise<PullRequestComment[]>;
+  getPullRequestReviews(coords: RepoCoordinates, prNumber: number): Promise<PullRequestReview[]>;
+  getPullRequestFiles?(coords: RepoCoordinates, prNumber: number): Promise<string[]>;
   listIssues(coords: RepoCoordinates, options?: { state?: string; limit?: number }): Promise<IssueSummary[]>;
   searchCode?(coords: RepoCoordinates, query: string, limit?: number): Promise<Array<{ path: string }>>;
 }

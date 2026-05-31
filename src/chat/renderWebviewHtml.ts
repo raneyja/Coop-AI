@@ -6,9 +6,10 @@ export type WebviewViewMode = "chat" | "settings";
 export function renderWebviewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
-  options?: { view?: WebviewViewMode }
+  options?: { view?: WebviewViewMode; enforceMinWidth?: boolean }
 ): string {
   const view = options?.view ?? "chat";
+  const enforceMinWidth = options?.enforceMinWidth ?? false;
   const themeMode = activeThemeMode();
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.js"));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.css"));
@@ -26,6 +27,7 @@ export function renderWebviewHtml(
     <div id="root"></div>
     <script nonce="${nonce}">
       window.__COOP_VIEW__ = "${view}";
+      window.__COOP_ENFORCE_MIN_WIDTH__ = ${enforceMinWidth ? "true" : "false"};
     </script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>

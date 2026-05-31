@@ -38,6 +38,8 @@ export type SlackUserInfo = {
   realName?: string;
   avatarUrl?: string;
   statusText?: string;
+  timezone?: string;
+  email?: string;
 };
 
 export type SlackSearchHit = {
@@ -205,7 +207,8 @@ export class SlackClient {
         id: string;
         name: string;
         real_name?: string;
-        profile?: { image_48?: string; status_text?: string };
+        tz?: string;
+        profile?: { image_48?: string; status_text?: string; email?: string };
       };
       error?: string;
     }>("users.info", { method: "GET", query: { user: userId } });
@@ -219,8 +222,62 @@ export class SlackClient {
       name: result.user.name,
       realName: result.user.real_name,
       avatarUrl: result.user.profile?.image_48,
-      statusText: result.user.profile?.status_text
+      statusText: result.user.profile?.status_text,
+      timezone: result.user.tz,
+      email: result.user.profile?.email
     };
+  }
+
+  public async getUserPresence(userId: string): Promise<{ presence: string; autoAway?: boolean }> {
+    const result = await this.api<{
+      ok: boolean;
+      presence?: string;
+      auto_away?: boolean;
+      error?: string;
+    }>("users.getPresence", { method: "GET", query: { user: userId } });
+
+    if (!result.ok) {
+      throw new SlackApiError(result.error ?? "users.getPresence failed", result.error);
+    }
+
+    return {
+      presence: result.presence ?? "away",
+      autoAway: result.auto_away
+    };
+  }
+
+  public async findUserByEmail(email: string): Promise<string | undefined> {
+    const result = await this.api<{
+      ok: boolean;
+      user?: { id: string };
+      error?: string;
+    }>("users.lookupByEmail", { method: "GET", query: { email } });
+
+    if (!result.ok || !result.user) {
+      return undefined;
+    }
+    return result.user.id;
+  }
+
+  public async findUserByName(name: string): Promise<string | undefined> {
+    const normalized = name.toLowerCase();
+    const result = await this.api<{
+      ok: boolean;
+      members?: Array<{ id: string; name?: string; real_name?: string; profile?: { display_name?: string } }>;
+      error?: string;
+    }>("users.list", { method: "GET", query: { limit: "200" } });
+
+    if (!result.ok || !result.members) {
+      return undefined;
+    }
+
+    const match = result.members.find((member) => {
+      const candidates = [member.name, member.real_name, member.profile?.display_name]
+        .filter(Boolean)
+        .map((v) => v!.toLowerCase());
+      return candidates.some((c) => c === normalized || c.includes(normalized));
+    });
+    return match?.id;
   }
 
   public async getChannelInfo(channelId: string): Promise<SlackChannelInfo> {

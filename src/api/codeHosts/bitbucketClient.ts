@@ -6,6 +6,7 @@ import type {
   CommitInfo,
   IssueSummary,
   PullRequestComment,
+  PullRequestReview,
   PullRequestSummary,
   RemoteFileContent,
   RemoteRepository,
@@ -209,6 +210,10 @@ export class BitbucketClient implements CodeHostClient {
       createdAt: comment.created_on,
       resolved: false
     }));
+  }
+
+  public async getPullRequestReviews(_coords: RepoCoordinates, _prNumber: number): Promise<PullRequestReview[]> {
+    return [];
   }
 
   public async listIssues(

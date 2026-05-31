@@ -13,6 +13,7 @@ import type {
   CommitInfo,
   IssueSummary,
   PullRequestComment,
+  PullRequestReview,
   PullRequestSummary,
   RemoteFileContent,
   RemoteRepository,
@@ -299,6 +300,36 @@ export class GitHubClient implements CodeHostClient {
     ];
   }
 
+  public async getPullRequestReviews(coords: RepoCoordinates, prNumber: number): Promise<PullRequestReview[]> {
+    const reviews = await codeHostRequestJson<GitHubPullReview[]>(
+      `${this.repoUrl(coords)}/pulls/${prNumber}/reviews`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return reviews.map((review) => ({
+      id: String(review.id),
+      author: review.user?.login ?? "unknown",
+      state: review.state,
+      submittedAt: review.submitted_at,
+      body: review.body
+    }));
+  }
+
+  public async getPullRequestFiles(coords: RepoCoordinates, prNumber: number): Promise<string[]> {
+    const files = await codeHostRequestJson<Array<{ filename: string }>>(
+      `${this.repoUrl(coords)}/pulls/${prNumber}/files?per_page=100`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return files.map((file) => file.filename);
+  }
+
   public async listIssues(
     coords: RepoCoordinates,
     options?: { state?: string; limit?: number }
@@ -321,6 +352,9 @@ export class GitHubClient implements CodeHostClient {
         title: issue.title,
         state: issue.state,
         author: issue.user?.login,
+        assignee: issue.assignee?.login,
+        closedBy: issue.closed_by?.login,
+        body: issue.body,
         createdAt: issue.created_at,
         updatedAt: issue.updated_at,
         htmlUrl: issue.html_url
@@ -413,11 +447,22 @@ type GitHubIssue = {
   number: number;
   title: string;
   state: string;
+  body?: string;
   created_at: string;
   updated_at: string;
   html_url?: string;
   pull_request?: unknown;
   user?: { login?: string };
+  assignee?: { login?: string } | null;
+  closed_by?: { login?: string };
+};
+
+type GitHubPullReview = {
+  id: number;
+  user?: { login?: string };
+  state: string;
+  submitted_at: string;
+  body?: string;
 };
 
 function mapGitHubCommit(commit: GitHubCommit): CommitInfo {

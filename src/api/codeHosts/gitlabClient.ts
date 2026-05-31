@@ -12,6 +12,7 @@ import type {
   CommitInfo,
   IssueSummary,
   PullRequestComment,
+  PullRequestReview,
   PullRequestSummary,
   RemoteFileContent,
   RemoteRepository,
@@ -222,6 +223,10 @@ export class GitLabClient implements CodeHostClient {
     }));
   }
 
+  public async getPullRequestReviews(_coords: RepoCoordinates, _prNumber: number): Promise<PullRequestReview[]> {
+    return [];
+  }
+
   public async listIssues(
     coords: RepoCoordinates,
     options?: { state?: string; limit?: number }
@@ -240,6 +245,8 @@ export class GitLabClient implements CodeHostClient {
       title: issue.title,
       state: issue.state,
       author: issue.author?.username,
+      assignee: issue.assignee?.username,
+      body: issue.description,
       createdAt: issue.created_at,
       updatedAt: issue.updated_at,
       htmlUrl: issue.web_url
@@ -320,10 +327,12 @@ type GitLabIssue = {
   iid: number;
   title: string;
   state: string;
+  description?: string;
   created_at: string;
   updated_at: string;
   web_url?: string;
   author?: { username?: string };
+  assignee?: { username?: string } | null;
 };
 
 function mapGitLabCommit(commit: GitLabCommit): CommitInfo {

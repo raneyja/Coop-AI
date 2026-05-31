@@ -13,7 +13,6 @@ type ChatComposerProps = {
   isStreaming: boolean;
   variant?: "landing" | "chat";
   contextFile?: string;
-  contextWarning?: string;
   usageLabel?: string;
   attachments: ChatImageAttachment[];
   attachmentError?: string;
@@ -75,7 +74,6 @@ export function ChatComposer({
   isStreaming,
   variant = "landing",
   contextFile,
-  contextWarning,
   usageLabel,
   attachments,
   attachmentError,
@@ -177,31 +175,21 @@ export function ChatComposer({
         }}
         onDrop={handleDrop}
       >
-        {!isChat && (contextFile || contextWarning) ? (
+        {!isChat && contextFile ? (
           <div
             className="space-y-1 border-b px-3 py-1.5"
             style={{ borderColor: "var(--coop-composer-border)" }}
           >
-            {contextFile ? (
-              <span
-                className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[11px]
-                  bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]"
-                title={contextFile}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 opacity-80">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-                <span className="truncate">{truncateFile(contextFile)}</span>
-              </span>
-            ) : null}
-            {contextWarning ? (
-              <p
-                className="text-[10px] leading-snug text-[var(--vscode-inputValidation-warningForeground,var(--vscode-editorWarning-foreground))]"
-                role="status"
-              >
-                {contextWarning}
-              </p>
-            ) : null}
+            <span
+              className="inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[11px]
+                bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]"
+              title={contextFile}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 opacity-80">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+              <span className="truncate">{truncateFile(contextFile)}</span>
+            </span>
           </div>
         ) : null}
 
@@ -252,7 +240,7 @@ export function ChatComposer({
           "
         />
 
-        <div className="flex items-center justify-between gap-2 px-2 pb-2">
+        <div className="coop-composer-toolbar flex items-center justify-between gap-2 px-2 pb-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {isChat && contextFile ? (
               <span
@@ -264,15 +252,6 @@ export function ChatComposer({
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
                 <span className="truncate">{truncateFile(contextFile)}</span>
-              </span>
-            ) : null}
-            {isChat && contextWarning ? (
-              <span
-                className="truncate text-[10px] text-[var(--vscode-inputValidation-warningForeground,var(--vscode-editorWarning-foreground))]"
-                role="status"
-                title={contextWarning}
-              >
-                {contextWarning}
               </span>
             ) : null}
             {!isChat && usageLabel ? (
@@ -319,7 +298,7 @@ export function ChatComposer({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="coop-composer-toolbar-actions flex items-center gap-1">
             {isStreaming ? (
               <button type="button" onClick={onStop} title="Stop" aria-label="Stop" className="coop-icon-btn">
                 <StopIcon />

@@ -19,6 +19,8 @@ import type { CodeHostProvider } from "./api/codeHosts/types";
 import { IntegrationSecrets } from "./api/integrations/integrationSecrets";
 import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
+import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
+import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
 import { HealthMonitor, type IntegrationProvider } from "./integrations/healthMonitor";
 
 function resolveSession(fallback: CoopChatSession): CoopChatSession {
@@ -49,6 +51,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const integrationSecrets = new IntegrationSecrets(context.secrets);
   registerDecisionArchaeologyEngine(
     createDecisionArchaeologyEngine({
+      codeHostRouter,
+      codeHostSecrets,
+      integrationSecrets
+    })
+  );
+  registerOwnershipGraphEngine(
+    createOwnershipGraphEngine({
       codeHostRouter,
       codeHostSecrets,
       integrationSecrets

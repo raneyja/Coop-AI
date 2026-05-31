@@ -5,11 +5,11 @@ Summarize architecture, key systems, boundaries, and risks. Prefer evidence from
 Cite file paths when referencing code. If context is stale or partial, say so explicitly.`;
 
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
+import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
 
 export const DECISION_ARCHAEOLOGY_SYSTEM = DECISION_HISTORIAN_SYSTEM;
 
-export const OWNERSHIP_SYSTEM = `You identify technical owners and escalation paths for code areas.
-Return likely owners, confidence levels, and fallback contacts. Distinguish GitHub activity from chat mentions.`;
+export const OWNERSHIP_SYSTEM = OWNERSHIP_INTELLIGENCE_SYSTEM;
 
 export const BLAST_RADIUS_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be explicit about transitive effects and testing surfaces when dependency data is available.`;

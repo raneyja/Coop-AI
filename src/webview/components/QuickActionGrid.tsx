@@ -55,9 +55,20 @@ const ACTIONS: ActionConfig[] = [
   }
 ];
 
+function requiresOpenFile(action: ActionConfig): boolean {
+  return action.id !== "understand-repo";
+}
+
+function isDisabled(action: ActionConfig, context: RepoContext): boolean {
+  if (!context.file && requiresOpenFile(action)) {
+    return true;
+  }
+  return false;
+}
+
 function isDimmed(action: ActionConfig, context: RepoContext): boolean {
   if (!context.file) {
-    return action.id !== "understand-repo";
+    return requiresOpenFile(action);
   }
   if (action.id === "trace-decision") {
     return !context.selectedLines;
@@ -68,25 +79,43 @@ function isDimmed(action: ActionConfig, context: RepoContext): boolean {
   return false;
 }
 
+function actionHint(action: ActionConfig, context: RepoContext, dimmed: boolean): string {
+  if (!context.file && requiresOpenFile(action)) {
+    return "Open a file in the editor first.";
+  }
+  if (dimmed) {
+    return "Open a file for full context.";
+  }
+  return action.description;
+}
+
 export function QuickActionGrid({
   context,
   disabled,
   featureStatuses = {},
   onAction
 }: QuickActionGridProps): React.ReactElement {
-  const actions = useMemo(() => ACTIONS.map((a) => ({ ...a, dimmed: isDimmed(a, context) })), [context]);
+  const actions = useMemo(
+    () =>
+      ACTIONS.map((a) => ({
+        ...a,
+        dimmed: isDimmed(a, context),
+        blocked: isDisabled(a, context)
+      })),
+    [context]
+  );
 
   return (
     <ul className="w-full min-w-0 list-none p-0 m-0" aria-label="Quick actions">
       {actions.map((action) => {
         const status = featureStatuses[action.id];
         const unavailable = status?.level === "unavailable";
-        const hint = action.dimmed ? "Open a file for full context." : action.description;
+        const hint = actionHint(action, context, action.dimmed);
         return (
           <li key={action.id}>
             <button
               type="button"
-              disabled={disabled || unavailable}
+              disabled={disabled || unavailable || action.blocked}
               title={status?.message || hint}
               aria-label={`${action.label}: ${status?.label || hint}`}
               onClick={() => onAction(action.id, action.prompt(context))}

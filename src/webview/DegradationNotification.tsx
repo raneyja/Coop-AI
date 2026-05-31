@@ -138,7 +138,7 @@ export function DegradationNotification({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="coop-health-bar-row">
           <button
             type="button"
             className="coop-health-bar-toggle"

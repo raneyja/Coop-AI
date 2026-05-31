@@ -41,6 +41,19 @@ export type ChatMessage = {
   attachments?: ChatImageAttachment[];
 };
 
+export type ChatThreadListItem = {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messageCount: number;
+};
+
+export type ChatThreadsListPayload = {
+  activeId: string;
+  activeTitle: string;
+  threads: ChatThreadListItem[];
+};
+
 export type LlmProviderPreference = "openai" | "anthropic" | "deepseek" | "gemini";
 
 export type UserPreferences = {
@@ -203,6 +216,8 @@ export type WebviewInbound =
   | { type: "chat:stream-cancel" }
   | { type: "chat:new" }
   | { type: "chat:clear" }
+  | { type: "threads:switch"; payload: { threadId: string } }
+  | { type: "threads:new" }
   | { type: "repo:list"; payload: { path?: string; scope?: "repos" | "files" } }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
@@ -234,14 +249,18 @@ export type WebviewInbound =
   | { type: "degradation:retry"; payload?: { provider?: string; feature?: string } }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
+  | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "ui:close-settings" }
   | { type: "ui:open-settings" }
+  | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
   | { type: "autocomplete:toggle" };
 
 export type WebviewOutbound =
   | { type: "theme:update"; payload: ThemePayload }
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatMessage[] }
+  | { type: "threads:list"; payload: ChatThreadsListPayload }
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "chat:delta"; payload: { chunk: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage } }
   | { type: "chat:error"; payload: { message: string } }
@@ -268,6 +287,7 @@ export type WebviewOutbound =
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | { type: "decision:timeline"; payload: { timeline: unknown; dismissed?: boolean } }
+  | { type: "ownership:card"; payload: { report: unknown; dismissed?: boolean } }
   | { type: "job:progress"; payload: JobProgressPayload }
   | { type: "job:complete"; payload: JobProgressPayload & { result?: unknown } }
   | {

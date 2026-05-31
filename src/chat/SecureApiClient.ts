@@ -11,6 +11,7 @@ import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { CoopBackendClient } from "../api/CoopBackendClient";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
+import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import type { ChatMessage, RemoteTreeNode, RepoContext, UserPreferences, LlmProviderPreference, ChatImageAttachment } from "./types";
@@ -77,8 +78,7 @@ export class SecureApiClient {
       const mock = health.llm?.mockMode ? " (mock)" : "";
       return { ok: true, message: `Connected. LLM providers: ${providers}${mock}.` };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Connection failed.";
-      return { ok: false, message };
+      return { ok: false, message: formatUserFacingNetworkError(error, "Connection failed.") };
     }
   }
 

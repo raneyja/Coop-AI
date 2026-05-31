@@ -19,6 +19,7 @@ import type {
   FileImportsResult,
   CrossRepoReference,
   PullRequestComment,
+  PullRequestReview,
   PullRequestSummary,
   IssueSummary,
   RemoteFileContent,
@@ -253,7 +254,18 @@ export class CodeHostRouter {
     const prs = await this.cached(this.key("prIssue", resolved, "prs", path), "prIssue", async () =>
       (await this.getClient(resolved.provider)).listPullRequests(resolved, { state: "all", limit: 50 })
     );
-    return prs.filter((pr) => !pr.files || pr.files.includes(path)).slice(0, limit);
+    const enriched = await this.enrichPullRequestsWithFiles(prs.slice(0, 20), resolved);
+    return enriched.filter((pr) => !pr.files || pr.files.includes(path) || pr.files.some((f) => path.startsWith(f))).slice(0, limit);
+  }
+
+  public async getPullRequestReviews(
+    prNumber: number,
+    coords?: Partial<RepoCoordinates>
+  ): Promise<PullRequestReview[]> {
+    const resolved = await this.resolveCoordinates(coords);
+    return this.cached(this.key("prIssue", resolved, "reviews", prNumber), "prIssue", async () =>
+      (await this.getClient(resolved.provider)).getPullRequestReviews(resolved, prNumber)
+    );
   }
 
   public async getPRComments(
@@ -272,8 +284,35 @@ export class CodeHostRouter {
     );
     const needle = path.toLowerCase();
     return issues.filter(
-      (issue) => issue.title.toLowerCase().includes(needle) || issue.htmlUrl?.toLowerCase().includes(needle)
+      (issue) =>
+        issue.title.toLowerCase().includes(needle) ||
+        issue.htmlUrl?.toLowerCase().includes(needle) ||
+        issue.body?.toLowerCase().includes(needle)
     );
+  }
+
+  private async enrichPullRequestsWithFiles(
+    prs: PullRequestSummary[],
+    coords: RepoCoordinates
+  ): Promise<PullRequestSummary[]> {
+    const client = await this.getClient(coords.provider);
+    if (!client.getPullRequestFiles) {
+      return prs;
+    }
+    const results = await Promise.all(
+      prs.map(async (pr) => {
+        if (pr.files?.length) {
+          return pr;
+        }
+        try {
+          const files = await client.getPullRequestFiles!(coords, pr.number);
+          return { ...pr, files };
+        } catch {
+          return pr;
+        }
+      })
+    );
+    return results;
   }
 
   public toRemoteTreeNodes(tree: RemoteTree): RemoteTreeEntry[] {
