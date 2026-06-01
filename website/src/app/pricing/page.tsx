@@ -5,7 +5,8 @@ import { Button } from "@/components/Button";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "CoopAI pricing — free extension for developers, enterprise plans for teams."
+  description:
+    "CoopAI pricing — free Developer plan with Zero-Clone context; Pro at $20/user/month adds Lightning Mode."
 };
 
 const tiers = [
@@ -13,29 +14,33 @@ const tiers = [
     name: "Developer",
     price: "Free",
     period: "during beta",
-    description: "For individual engineers exploring CoopAI on their repos.",
+    description:
+      "Zero-Clone remote graph for individual engineers. Great on a single repo — no Lightning Mode (local graph index).",
     features: [
-      "VS Code extension",
-      "Chat with repo context",
-      "Quick actions",
+      "Zero-Clone: remote code graph from GitHub, GitLab, or Bitbucket",
+      "Optional: Slack, Jira, Teams, Notion, Confluence, Google Docs",
+      "Chat & quick actions — no full local clone required",
       "Workspace prompt library",
-      "Connect to self-hosted or CoopAI cloud server"
+      "CoopAI cloud or self-hosted server"
     ],
+    gap: "Lightning Mode — upgrade to Pro for faster cross-repo search on large codebases",
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",
     highlighted: false
   },
   {
-    name: "Team",
-    price: "TBD",
-    period: "coming soon",
-    description: "For engineering teams that need shared context and admin controls.",
+    name: "Pro",
+    price: "$20",
+    period: "per user / month",
+    description:
+      "Everything in Developer, plus Lightning Mode — local graph index for faster answers on large and cross-repo codebases.",
     features: [
-      "Everything in Developer",
+      "Lightning Mode — local code graph for cross-repo search",
+      "Faster on large repos (dependencies, symbols, ownership)",
+      "Uses your clone or synced repo; the product is the indexed graph",
       "Shared prompt libraries",
-      "Team usage visibility",
-      "Priority support",
-      "Slack & ticket integrations"
+      "Usage visibility",
+      "Priority support"
     ],
     cta: "Book a demo",
     href: "/demo",
@@ -47,7 +52,7 @@ const tiers = [
     period: "",
     description: "For organizations with security, compliance, and deployment requirements.",
     features: [
-      "Everything in Team",
+      "Everything in Pro",
       "Zero-retention LLM routing",
       "BYOK (Bring Your Own Key)",
       "Self-hosted deployment",
@@ -58,15 +63,15 @@ const tiers = [
     href: "/demo",
     highlighted: false
   }
-];
+] as const;
 
 export default function PricingPage() {
   return (
     <>
       <PageHeader
         eyebrow="Pricing"
-        title="Simple plans for engineers and teams"
-        description="CoopAI is in active development. Join the beta for free, or talk to us about enterprise deployment."
+        title="Start free with Zero-Clone. Go Pro for Lightning."
+        description="Every plan includes a remote code graph from GitHub, GitLab, or Bitbucket, plus Slack, Jira, Notion, and more when connected. Pro adds Lightning Mode — a local graph index for faster cross-repo search."
       />
 
       <section className="pb-20">
@@ -94,6 +99,12 @@ export default function PricingPage() {
                       {feature}
                     </li>
                   ))}
+                  {"gap" in tier && tier.gap ? (
+                    <li className="flex gap-2 text-sm text-coop-muted/90">
+                      <span className="text-coop-muted">—</span>
+                      {tier.gap}
+                    </li>
+                  ) : null}
                 </ul>
                 <div className="mt-8">
                   <Button
@@ -109,8 +120,8 @@ export default function PricingPage() {
           </div>
 
           <p className="mt-12 text-center text-sm text-coop-muted">
-            Pricing will be finalized before general availability. Beta participants will receive
-            advance notice of any changes.
+            Pro is $20/user/month. Beta participants will receive advance notice of any pricing
+            changes before general availability.
           </p>
         </div>
       </section>
