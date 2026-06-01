@@ -51,6 +51,36 @@ export const siteConfig = {
       description: "Missing context and blind spots before you ship."
     }
   ],
+  contextIntelligence: {
+    title: "Lightning Intelligence",
+    tagline: "Understand any codebase instantly — without cloning monorepos.",
+    description:
+      "Your code stays on your infrastructure. CoopAI builds a secure, real-time cross-repository knowledge graph so developers get rich AI context across your entire organization — whether it's a single repo or a massive monorepo.",
+    footnote:
+      "Every plan includes Zero-Clone remote indexing from GitHub, GitLab, or Bitbucket. Team plans add Lightning Mode for local graph indexes and the fastest cross-repo search.",
+    features: [
+      {
+        label: "Cross-repo context",
+        description:
+          "Ask questions that span services, libraries, and teams. Reason across repos from one VS Code sidebar instead of hunting through dozens of clones."
+      },
+      {
+        label: "Cross-tool context",
+        description:
+          "Slack threads, Jira issues, and tickets sit alongside your code graph — so ownership, incidents, and decisions aren’t trapped in tribal knowledge."
+      },
+      {
+        label: "Secure by design",
+        description:
+          "Your source stays on your infrastructure. Context is built from webhooks and index jobs — not full monorepo copies on every laptop."
+      },
+      {
+        label: "Lightning-fast when you need it",
+        description:
+          "Lightning Mode adds local Zoekt and SCIP graph indexing on the repos you choose — faster retrieval for the code paths you touch every day."
+      }
+    ]
+  },
   trustBadges: [
     { label: "No model training", description: "Your code is never used to train models." },
     { label: "Zero-retention routing", description: "Enterprise-confidential context with retention flags disabled." },

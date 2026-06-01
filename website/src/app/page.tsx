@@ -1,7 +1,7 @@
 import { Hero } from "@/components/Hero";
 import { Testimonial } from "@/components/Testimonial";
-import { TrustBadges } from "@/components/TrustBadges";
 import { CTASection } from "@/components/CTASection";
+import { FeatureCardGrid } from "@/components/FeatureCardGrid";
 import { siteConfig } from "@/lib/site.config";
 import Link from "next/link";
 
@@ -53,16 +53,21 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-white">
-              Zero-clone intelligence
+              {siteConfig.contextIntelligence.title}
             </h2>
-            <p className="mt-4 text-lg text-coop-muted">
-              Your code stays on your infrastructure. CoopAI builds a remote knowledge graph from
-              webhooks and index jobs — developers get context without cloning entire monorepos.
+            <p className="mt-4 text-lg font-medium text-white/90">
+              {siteConfig.contextIntelligence.tagline}
+            </p>
+            <p className="mt-4 text-lg leading-relaxed text-coop-muted">
+              {siteConfig.contextIntelligence.description}
             </p>
           </div>
           <div className="mt-12">
-            <TrustBadges />
+            <FeatureCardGrid items={siteConfig.contextIntelligence.features} />
           </div>
+          <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-coop-muted">
+            {siteConfig.contextIntelligence.footnote}
+          </p>
         </div>
       </section>
 
