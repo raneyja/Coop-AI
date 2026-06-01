@@ -79,8 +79,15 @@ export default function PricingPage() {
     <>
       <PageHeader
         eyebrow="Pricing"
-        title="Start free with Zero-Clone. Go Pro for Lightning."
-        description="Every plan includes a remote code graph from GitHub, GitLab, or Bitbucket, plus Slack, Jira, Notion, and more. Pro adds Lightning Mode — a local graph index for dramatically faster cross-repo search."
+        titleClassName="font-medium"
+        title={
+          <>
+            Start for free with Zero-Clone.
+            <br />
+            Go Pro for <span className="font-semibold text-coop-accent">Lightning Mode</span>.
+          </>
+        }
+        description="Every plan comes with a remote code graph from GitHub, GitLab, or Bitbucket, along with Slack, Jira, Notion, and other key tools. Pro unlocks Lightning Mode — a blazing-fast local graph index for dramatically quicker cross-repo search."
       />
 
       <section className="pb-20">
