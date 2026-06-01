@@ -6,24 +6,36 @@ import { Button } from "@/components/Button";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "CoopAI pricing — free Developer plan with Zero-Clone context; Pro at $20/user/month adds Lightning Mode."
+    "CoopAI pricing — free Developer plan with Zero-Clone; Pro at $20/user/month adds Lightning Mode for faster cross-repo search."
 };
 
-const tiers = [
+type PricingTier = {
+  name: string;
+  price: string;
+  period?: string;
+  audience?: string;
+  features: string[];
+  note?: string;
+  recommended?: boolean;
+  cta: string;
+  href: string;
+  highlighted: boolean;
+};
+
+const tiers: PricingTier[] = [
   {
     name: "Developer",
     price: "Free",
     period: "during beta",
-    description:
-      "Zero-Clone remote graph for individual engineers. Great on a single repo — no Lightning Mode (local graph index).",
+    audience: "Individual engineers on a single repo",
     features: [
-      "Zero-Clone: remote code graph from GitHub, GitLab, or Bitbucket",
-      "Optional: Slack, Jira, Teams, Notion, Confluence, Google Docs",
-      "Chat & quick actions — no full local clone required",
+      "Zero-Clone remote code graph",
+      "Optional integrations (Slack, Jira, Notion, and more)",
+      "Chat & quick actions — no full clone needed",
       "Workspace prompt library",
-      "CoopAI cloud or self-hosted server"
+      "Cloud-hosted"
     ],
-    gap: "Lightning Mode — upgrade to Pro for faster cross-repo search on large codebases",
+    note: "Lightning Mode available in Pro",
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",
     highlighted: false
@@ -32,16 +44,15 @@ const tiers = [
     name: "Pro",
     price: "$20",
     period: "per user / month",
-    description:
-      "Everything in Developer, plus Lightning Mode — local graph index for faster answers on large and cross-repo codebases.",
     features: [
-      "Lightning Mode — local code graph for cross-repo search",
-      "Faster on large repos (dependencies, symbols, ownership)",
-      "Uses your clone or synced repo; the product is the indexed graph",
+      "Everything in Developer + Lightning Mode (local graph index for fast cross-repo search)",
+      "Much faster on large repos (dependencies, symbols, ownership)",
+      "Indexes your local clone or synced repo",
       "Shared prompt libraries",
-      "Usage visibility",
+      "Usage visibility & analytics",
       "Priority support"
     ],
+    recommended: true,
     cta: "Book a demo",
     href: "/demo",
     highlighted: true
@@ -49,12 +60,10 @@ const tiers = [
   {
     name: "Enterprise",
     price: "Custom",
-    period: "",
-    description: "For organizations with security, compliance, and deployment requirements.",
     features: [
       "Everything in Pro",
       "Zero-retention LLM routing",
-      "BYOK (Bring Your Own Key)",
+      "Bring Your Own Key (BYOK)",
       "Self-hosted deployment",
       "Compliance attestation & DPA support",
       "Dedicated onboarding"
@@ -63,7 +72,7 @@ const tiers = [
     href: "/demo",
     highlighted: false
   }
-] as const;
+];
 
 export default function PricingPage() {
   return (
@@ -71,7 +80,7 @@ export default function PricingPage() {
       <PageHeader
         eyebrow="Pricing"
         title="Start free with Zero-Clone. Go Pro for Lightning."
-        description="Every plan includes a remote code graph from GitHub, GitLab, or Bitbucket, plus Slack, Jira, Notion, and more when connected. Pro adds Lightning Mode — a local graph index for faster cross-repo search."
+        description="Every plan includes a remote code graph from GitHub, GitLab, or Bitbucket, plus Slack, Jira, Notion, and more. Pro adds Lightning Mode — a local graph index for dramatically faster cross-repo search."
       />
 
       <section className="pb-20">
@@ -80,33 +89,50 @@ export default function PricingPage() {
             {tiers.map((tier) => (
               <div
                 key={tier.name}
-                className={`flex flex-col rounded-2xl border p-8 ${
+                className={`relative flex flex-col rounded-2xl border p-8 ${
                   tier.highlighted
                     ? "border-coop-blue/50 bg-coop-surface/50 shadow-lg shadow-coop-blue/10"
                     : "border-white/10 bg-white/[0.02]"
                 }`}
               >
-                <h2 className="text-lg font-semibold text-white">{tier.name}</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-white">{tier.name}</h2>
+                  {tier.recommended ? (
+                    <span className="shrink-0 rounded-full border border-coop-blue/40 bg-coop-blue/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-coop-accent">
+                      Recommended
+                    </span>
+                  ) : null}
+                </div>
+
                 <div className="mt-4 flex items-baseline gap-2">
                   <span className="text-4xl font-semibold text-white">{tier.price}</span>
-                  {tier.period && <span className="text-sm text-coop-muted">{tier.period}</span>}
+                  {tier.period ? <span className="text-sm text-coop-muted">{tier.period}</span> : null}
                 </div>
-                <p className="mt-4 text-sm text-coop-muted">{tier.description}</p>
-                <ul className="mt-8 flex-1 space-y-3">
+
+                <p className="mt-3 min-h-[2.5rem] text-sm leading-snug text-coop-muted">
+                  {tier.audience ?? "\u00a0"}
+                </p>
+
+                <ul className="mt-6 flex-1 space-y-2.5">
                   {tier.features.map((feature) => (
-                    <li key={feature} className="flex gap-2 text-sm text-coop-muted">
-                      <span className="text-coop-accent">✓</span>
-                      {feature}
+                    <li key={feature} className="flex gap-2 text-sm leading-snug text-coop-muted">
+                      <span className="mt-0.5 shrink-0 text-coop-accent" aria-hidden>
+                        ✓
+                      </span>
+                      <span>{feature}</span>
                     </li>
                   ))}
-                  {"gap" in tier && tier.gap ? (
-                    <li className="flex gap-2 text-sm text-coop-muted/90">
-                      <span className="text-coop-muted">—</span>
-                      {tier.gap}
-                    </li>
-                  ) : null}
                 </ul>
-                <div className="mt-8">
+
+                {tier.note ? (
+                  <p className="mt-5 border-t border-white/10 pt-4 text-sm text-coop-muted">
+                    {tier.note}
+                  </p>
+                ) : (
+                  <div className="mt-5 border-t border-transparent pt-4" aria-hidden />
+                )}
+
+                <div className="mt-6">
                   <Button
                     href={tier.href}
                     variant={tier.highlighted ? "primary" : "secondary"}
@@ -120,8 +146,8 @@ export default function PricingPage() {
           </div>
 
           <p className="mt-12 text-center text-sm text-coop-muted">
-            Pro is $20/user/month. Beta participants will receive advance notice of any pricing
-            changes before general availability.
+            Beta participants receive advance notice before any pricing changes at general
+            availability.
           </p>
         </div>
       </section>
