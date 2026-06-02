@@ -23,6 +23,10 @@ export type RepoContext = {
   fileSource?: RepoContextFileSource;
   contextWarning?: string;
   selectedLines?: [number, number];
+  /** Symbol at cursor/selection when available (for manifest scoring). */
+  selectedSymbol?: string;
+  /** Repo-relative paths for open editor tabs. */
+  openEditors?: string[];
   languageId?: string;
 };
 
@@ -211,6 +215,13 @@ export type WebviewInbound =
   | { type: "prompts:update"; payload: { id: string; title: string; template: string; actionId?: string } }
   | { type: "prompts:delete"; payload: { id: string } }
   | { type: "prompts:update-pinned"; payload: { pinnedIds: string[] } }
+  | {
+      type: "prompts:commit";
+      payload: {
+        prompts: { id: string; title: string; template: string; actionId?: string }[];
+        pinnedIds: string[];
+      };
+    }
   | { type: "job:cancel"; payload: { jobId: string } }
   | { type: "job:view-results"; payload: { jobId: string } }
   | { type: "chat:stream-cancel" }
@@ -251,9 +262,16 @@ export type WebviewInbound =
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "ui:close-settings" }
-  | { type: "ui:open-settings" }
+  | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
-  | { type: "autocomplete:toggle" };
+  | { type: "autocomplete:toggle" }
+  | { type: "lightning:ready" }
+  | { type: "lightning:enable-global" }
+  | { type: "lightning:disable-global" }
+  | { type: "lightning:enable-repo"; payload: { repoId: string } }
+  | { type: "lightning:disable-repo"; payload: { repoId: string } }
+  | { type: "lightning:refresh-repo"; payload: { repoId: string } }
+  | { type: "lightning:upgrade" };
 
 export type WebviewOutbound =
   | { type: "theme:update"; payload: ThemePayload }
@@ -281,6 +299,7 @@ export type WebviewOutbound =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "settings:state"; payload: UserPreferences }
+  | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "degradation:health"; payload: IntegrationHealthPayload[] }
   | { type: "degradation:feature-status"; payload: Record<string, DegradationFeatureStatusPayload> }
@@ -299,6 +318,35 @@ export type WebviewOutbound =
         suggestionCount?: number;
         latencyMs?: number;
         previewText?: string;
+      };
+    }
+  | { type: "lightning:open" }
+  | {
+      type: "lightning:state";
+      payload: {
+        plan: "free" | "team" | "enterprise";
+        canUseLightning: boolean;
+        globalEnabled: boolean;
+        maxDiskGb: number;
+        totalDiskBytes: number;
+        enabledRepos: number;
+        readyRepos: number;
+        indexingRepos: number;
+        repos: Array<{
+          repoId: string;
+          owner: string;
+          repo: string;
+          enabled: boolean;
+          status: "idle" | "cloning" | "indexing" | "ready" | "error" | "disabled";
+          localPath?: string;
+          lastIndexedAt?: string;
+          diskUsageBytes?: number;
+          zoektAvailable?: boolean;
+          scipAvailable?: boolean;
+          error?: string;
+        }>;
+        currentRepoId?: string;
+        backend?: "local" | "cloud";
       };
     };
 

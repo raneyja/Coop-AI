@@ -46,6 +46,14 @@ export type HealthResponse = {
   };
 };
 
+export type MeResponse = {
+  orgId: string;
+  orgName: string;
+  plan: "free" | "team" | "enterprise";
+  canUseLightning: boolean;
+  lightningBackend?: string;
+};
+
 export type CoopBackendClientOptions = {
   getToken: () => Promise<string | undefined>;
 };
@@ -90,6 +98,116 @@ export class CoopBackendClient {
         })
     });
     return response.data;
+  }
+
+  public async graphDependents(baseUrl: string, repoId: string, file: string): Promise<unknown> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 15_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/graph/${encodedRepo}/dependents`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { file },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchMe(baseUrl: string): Promise<MeResponse> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<MeResponse>("/v1/me", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    return response.data;
+  }
+
+  public async storeGithubCredential(baseUrl: string, token: string): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    await this.http.post(
+      "/v1/orgs/credentials/github",
+      { token },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders()
+      }
+    );
+  }
+
+  public async listOrgRepos(baseUrl: string): Promise<{ repos: unknown[] }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{ repos: unknown[] }>("/v1/orgs/repos", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    return response.data ?? { repos: [] };
+  }
+
+  /** Structure manifest only (paths + symbols). Never includes file bodies. */
+  public async fetchRepoManifest(
+    baseUrl: string,
+    repoId: string
+  ): Promise<{
+    repoId: string;
+    files: Array<{ path: string; symbols: Array<{ name: string; kind: string }> }>;
+    fileCount: number;
+    lastCrawledAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encoded = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encoded}/manifest`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async enableLightningRepo(
+    baseUrl: string,
+    repoId: string
+  ): Promise<{ jobId?: string; status?: string }> {
+    assertCoopEndpoint(baseUrl);
+    const encoded = encodeURIComponent(repoId);
+    const response = await this.http.post<{ jobId?: string; status?: string }>(
+      `/v1/orgs/repos/${encoded}/lightning/enable`,
+      {},
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders()
+      }
+    );
+    return response.data ?? {};
+  }
+
+  public async disableLightningRepo(baseUrl: string, repoId: string): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    const encoded = encodeURIComponent(repoId);
+    await this.http.post(
+      `/v1/orgs/repos/${encoded}/lightning/disable`,
+      {},
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders()
+      }
+    );
+  }
+
+  public async getLightningStatus(baseUrl: string, repoId: string): Promise<{ repo?: unknown }> {
+    assertCoopEndpoint(baseUrl);
+    const encoded = encodeURIComponent(repoId);
+    const response = await this.http.get<{ repo?: unknown }>(`/v1/orgs/repos/${encoded}/lightning/status`, {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    return response.data ?? {};
   }
 
   public async streamChat(

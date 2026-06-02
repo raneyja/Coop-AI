@@ -66,6 +66,18 @@ export class SecureApiClient {
     return Boolean(await this.getToken());
   }
 
+  public getBackendClient(): CoopBackendClient {
+    return this.backend;
+  }
+
+  public async fetchRepoManifest(baseUrl: string, repoId: string) {
+    return this.backend.fetchRepoManifest(baseUrl, repoId);
+  }
+
+  public async syncGithubCredentialToCloud(baseUrl: string, token: string): Promise<void> {
+    await this.backend.storeGithubCredential(baseUrl, token);
+  }
+
   public async testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
     try {
       assertCoopEndpoint(baseUrl);

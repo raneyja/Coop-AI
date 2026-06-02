@@ -1,6 +1,7 @@
 export enum JobType {
   SCAN_KNOWLEDGE_GAPS = "scan_knowledge_gaps",
   BUILD_DEPENDENCY_GRAPH = "build_dependency_graph",
+  BUILD_STRUCTURE_MANIFEST = "build_structure_manifest",
   INDEX_REPOSITORY = "index_repository",
   ANALYZE_OWNERSHIP = "analyze_ownership",
   GENERATE_REPO_SUMMARY = "generate_repo_summary"
@@ -71,6 +72,7 @@ export const PRIORITY_WEIGHT: Record<JobPriority, number> = {
 export const DEFAULT_ESTIMATED_DURATION_MS: Record<JobType, number> = {
   [JobType.SCAN_KNOWLEDGE_GAPS]: 180_000,
   [JobType.BUILD_DEPENDENCY_GRAPH]: 120_000,
+  [JobType.BUILD_STRUCTURE_MANIFEST]: 180_000,
   [JobType.INDEX_REPOSITORY]: 300_000,
   [JobType.ANALYZE_OWNERSHIP]: 90_000,
   [JobType.GENERATE_REPO_SUMMARY]: 60_000

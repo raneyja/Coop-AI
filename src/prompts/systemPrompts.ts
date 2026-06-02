@@ -62,6 +62,8 @@ export function useCaseFromQuickAction(quickAction: string | undefined): UseCase
   }
 }
 
+type ManifestSnippet = { path: string; content: string };
+
 export function buildUserMessageWithContext(
   message: string,
   context?: {
@@ -74,29 +76,85 @@ export function buildUserMessageWithContext(
     contextBundle?: unknown;
   }
 ): string {
-  if (!context?.file && !context?.contextBundle) {
+  const manifestSnippets = extractZeroCloneFileSnippets(context?.contextBundle);
+  if (!context?.file && context?.contextBundle === undefined && manifestSnippets.length === 0) {
     return message;
   }
 
   const lines: string[] = ["<attached_context>"];
-  if (context.owner && context.repo) {
+  if (context?.owner && context.repo) {
     lines.push(`repo: ${context.owner}/${context.repo}`);
   }
-  if (context.branch) {
+  if (context?.branch) {
     lines.push(`branch: ${context.branch}`);
   }
-  if (context.file) {
+  if (context?.file) {
     const range =
       context.selectedLines && context.selectedLines.length === 2
         ? ` lines="${context.selectedLines[0]}-${context.selectedLines[1]}"`
         : "";
     lines.push(`<file path="${context.file}"${range} />`);
   }
-  if (context.contextBundle !== undefined) {
+  if (manifestSnippets.length > 0) {
+    lines.push("<manifest_files>");
+    for (const file of manifestSnippets) {
+      lines.push(`<file_content path="${file.path}">`);
+      lines.push(file.content);
+      lines.push("</file_content>");
+    }
+    lines.push("</manifest_files>");
+  }
+  if (context?.contextBundle !== undefined) {
     lines.push("<graph_context>");
-    lines.push(JSON.stringify(context.contextBundle, null, 2));
+    lines.push(JSON.stringify(sanitizeContextBundleForLlm(context.contextBundle), null, 2));
     lines.push("</graph_context>");
   }
   lines.push("</attached_context>", "", message.trim());
   return lines.join("\n");
+}
+
+function extractZeroCloneFileSnippets(bundle: unknown): ManifestSnippet[] {
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as { data?: { zeroClone?: { files?: ManifestSnippet[] } } }).data;
+    const files = data?.zeroClone?.files;
+    if (files?.length) {
+      return files.filter((file) => file.path && file.content);
+    }
+  }
+  return [];
+}
+
+function sanitizeContextBundleForLlm(bundle: unknown): unknown {
+  if (!Array.isArray(bundle)) {
+    return bundle;
+  }
+  return bundle.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return entry;
+    }
+    const record = entry as { data?: { zeroClone?: { files?: Array<{ path: string; content: string }> } } };
+    const zeroClone = record.data?.zeroClone;
+    if (!zeroClone?.files?.length) {
+      return entry;
+    }
+    return {
+      ...entry,
+      data: {
+        ...record.data,
+        zeroClone: {
+          ...zeroClone,
+          files: zeroClone.files.map((file) => ({
+            path: file.path,
+            byteLength: file.content.length
+          }))
+        }
+      }
+    };
+  });
 }

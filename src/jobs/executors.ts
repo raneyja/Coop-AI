@@ -1,11 +1,15 @@
 import type { GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
+import type { OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
 import { buildPartialFailure } from "./errorHandling";
+import { buildStructureManifest } from "./buildStructureManifest";
+import { cloneRepository, parseRepoId } from "../server/gitCloneService";
 
 export type JobExecutionContext = {
   cache: GraphCache;
   consistency?: GraphConsistencyManager;
+  orgStore?: OrgStore;
 };
 
 export type ProgressReporter = (progress: number, message?: string) => Promise<void>;
@@ -24,6 +28,8 @@ export async function executeJob(
       return executeKnowledgeGapScan(job, ctx, report, signal);
     case JobType.BUILD_DEPENDENCY_GRAPH:
       return buildDependencyGraph(job, ctx, report, signal);
+    case JobType.BUILD_STRUCTURE_MANIFEST:
+      return buildStructureManifest(job, ctx, report, signal);
     case JobType.INDEX_REPOSITORY:
       return indexRepository(job, ctx, report, signal);
     case JobType.ANALYZE_OWNERSHIP:
@@ -153,20 +159,89 @@ async function indexRepository(
   _signal: AbortSignal
 ): Promise<unknown> {
   const repoId = String(job.params.repoId ?? "");
-  await report(30, "Refreshing repository index");
-  const graph = ctx.cache.getGraph(repoId);
-  if (!graph) {
-    throw new Error(`404: Repository graph not found for ${repoId}`);
+  const orgId = job.params.orgId ? String(job.params.orgId) : undefined;
+  if (!repoId) {
+    throw new Error("Invalid parameters: repoId is required");
   }
-  graph.metadata.lastIndexedAt = new Date();
-  graph.metadata.indexVersion += 1;
-  ctx.cache.setGraph(graph);
-  return {
-    repoId,
-    fileCount: graph.fileTree.length,
-    indexVersion: graph.metadata.indexVersion,
-    lastIndexedAt: graph.metadata.lastIndexedAt.toISOString()
-  };
+
+  if (orgId && ctx.orgStore) {
+    await ctx.orgStore.upsertOrgRepo(orgId, repoId, { indexStatus: "indexing", error: undefined });
+  }
+
+  await report(20, "Preparing repository clone");
+  let graph = ctx.cache.getGraph(repoId);
+  if (!graph) {
+    const target = parseRepoId(repoId);
+    graph = ctx.cache.upsertRepository({
+      repoId,
+      owner: target.owner,
+      repo: target.repo,
+      provider: target.provider === "bitbucket" ? "github" : target.provider
+    });
+  }
+
+  try {
+    const token =
+      orgId && ctx.orgStore
+        ? await ctx.orgStore.getCredential(orgId, providerForRepo(repoId))
+        : undefined;
+    await report(45, "Cloning repository");
+    const target = parseRepoId(repoId);
+    const clone = await cloneRepository(target, token);
+    await report(70, "Building file index");
+
+    const now = new Date();
+    graph.fileTree = clone.files.map((file) => ({
+      path: file.path,
+      size: file.size,
+      lastModified: now,
+      lastAuthor: "cloud-index",
+      sha: clone.headCommit ?? "local"
+    }));
+    graph.metadata.lastIndexedAt = now;
+    graph.metadata.indexVersion += 1;
+    graph.lastUpdated = now;
+    ctx.cache.setGraph(graph);
+
+    if (orgId && ctx.orgStore) {
+      await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
+        lightningEnabled: true,
+        indexStatus: "ready",
+        lastIndexedAt: now,
+        lastJobId: job.id,
+        error: undefined
+      });
+    }
+
+    await report(95, "Index ready");
+    return {
+      repoId,
+      fileCount: graph.fileTree.length,
+      indexVersion: graph.metadata.indexVersion,
+      lastIndexedAt: graph.metadata.lastIndexedAt.toISOString(),
+      headCommit: clone.headCommit
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "index failed";
+    if (orgId && ctx.orgStore) {
+      await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
+        indexStatus: "error",
+        lastJobId: job.id,
+        error: message
+      });
+    }
+    throw error;
+  }
+}
+
+function providerForRepo(repoId: string): string {
+  if (repoId.startsWith("gitlab:")) {
+    return "gitlab";
+  }
+  if (repoId.startsWith("bitbucket:")) {
+    return "bitbucket";
+  }
+  return "github";
 }
 
 async function analyzeOwnership(

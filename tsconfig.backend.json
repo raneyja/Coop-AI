@@ -12,6 +12,7 @@
     "src/conflicts/**/*.ts",
     "src/config/**/*.ts",
     "src/jobs/**/*.ts",
+    "src/server/**/*.ts",
     "src/webhooks/**/*.ts"
   ]
 }

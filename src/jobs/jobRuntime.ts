@@ -15,10 +15,13 @@ export type JobRuntime = {
   scheduler: JobScheduler;
 };
 
+import type { OrgStore } from "../server/orgStore";
+
 export function createJobRuntime(options: {
   config?: JobQueueConfig;
   cache: GraphCache;
   consistency?: GraphConsistencyManager;
+  orgStore?: OrgStore;
 }): JobRuntime {
   const config = options.config ?? loadJobQueueConfig();
   const queue = new JobQueue(config);
@@ -29,7 +32,7 @@ export function createJobRuntime(options: {
   const workers = new WorkerPool(
     queue,
     workerPoolConfigFromJobConfig(config),
-    { cache: options.cache, consistency: options.consistency },
+    { cache: options.cache, consistency: options.consistency, orgStore: options.orgStore },
     monitor
   );
   const scheduler = new JobScheduler(queue, config, {

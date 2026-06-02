@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { enrichRepoContextWithEditorState } from "./editorManifestContext";
 import { resolveEditorFile } from "./editorFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
@@ -31,6 +32,10 @@ export type IntentEventContext = {
   repo?: string;
   branch?: string;
   languageId?: string;
+  openEditors?: string[];
+  selectedSymbol?: string;
+  /** User message text for manifest scoring at query time. */
+  queryText?: string;
   buttonClicked?: string;
   source?: "editor" | "webview" | "command" | "test";
 };
@@ -118,11 +123,17 @@ export class IntentDetector {
     return UserIntent.SELECTION_CHANGE;
   }
 
-  public fromQuickAction(actionId: string, context: RepoContext, options: IntentDetectionOptions = {}): IntentEvent {
+  public fromQuickAction(
+    actionId: string,
+    context: RepoContext,
+    queryText?: string,
+    options: IntentDetectionOptions = {}
+  ): IntentEvent {
     return this.create(
       UserIntent.QUICK_ACTION_CLICKED,
       {
         ...repoContextToIntentContext(context),
+        queryText: emptyToUndefined(queryText),
         buttonClicked: actionId,
         source: options.source ?? "webview"
       },
@@ -130,11 +141,16 @@ export class IntentDetector {
     );
   }
 
-  public fromManualChatSubmit(context: RepoContext, options: IntentDetectionOptions = {}): IntentEvent {
+  public fromManualChatSubmit(
+    context: RepoContext,
+    queryText?: string,
+    options: IntentDetectionOptions = {}
+  ): IntentEvent {
     return this.create(
       UserIntent.MANUAL_CHAT_SUBMIT,
       {
         ...repoContextToIntentContext(context),
+        queryText: emptyToUndefined(queryText),
         source: options.source ?? "webview"
       },
       options
@@ -195,7 +211,7 @@ export function repoContextFromEditor(
     next.selectedLines = [selection.start.line + 1, selection.end.line + 1];
   }
 
-  return next;
+  return enrichRepoContextWithEditorState(next, editor);
 }
 
 export function repoContextToIntentContext(context: RepoContext): IntentEventContext {
@@ -213,7 +229,9 @@ export function repoContextToIntentContext(context: RepoContext): IntentEventCon
     repo: context.repo,
     branch: context.branch,
     repoId: repoIdFromContext(context),
-    languageId: context.languageId
+    languageId: context.languageId,
+    openEditors: context.openEditors,
+    selectedSymbol: context.selectedSymbol
   });
 }
 
@@ -226,7 +244,9 @@ export function intentContextToRepoContext(context: IntentEventContext): RepoCon
     fileSource: context.fileSource,
     contextWarning: context.contextWarning,
     selectedLines: context.lines ? [context.lines.start, context.lines.end] : undefined,
-    languageId: context.languageId
+    languageId: context.languageId,
+    openEditors: context.openEditors,
+    selectedSymbol: context.selectedSymbol
   };
 }
 
@@ -322,6 +342,9 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
     branch: emptyToUndefined(context.branch),
     languageId: emptyToUndefined(context.languageId),
     repoId: context.repoId || (owner && repo ? `${owner}/${repo}` : undefined),
+    openEditors: context.openEditors?.map((path) => toRepositoryRelativePath(path)),
+    selectedSymbol: emptyToUndefined(context.selectedSymbol),
+    queryText: emptyToUndefined(context.queryText),
     lines
   };
 }

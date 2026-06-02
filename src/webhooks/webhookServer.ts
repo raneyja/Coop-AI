@@ -4,6 +4,7 @@ import { GraphQueryApi, GraphQueryName } from "../api/graphQuery";
 import { RateLimitTracker } from "../api/rateLimitTracker";
 import { TokenPool } from "../api/tokenPool";
 import { GraphCache } from "../cache/graphCache";
+import { createGraphCache } from "../cache/graphCachePostgres";
 import { GraphConsistencyManager } from "../cache/graphConsistency";
 import { loadWebhookConfig, WebhookConfig } from "../config/webhookConfig";
 import { GitHubWebhookHandler } from "./handlers/githubWebhookHandler";
@@ -12,9 +13,15 @@ import { SlackWebhookHandler } from "./handlers/slackWebhookHandler";
 import type { NormalizedWebhookEvent } from "./types";
 import { PlaceholderWebhookClient, WebhookRegistry } from "./webhookRegistry";
 import { WebhookMonitor } from "./webhookMonitor";
+import { maybeEnqueueStructureManifest } from "./manifestOnboardingTrigger";
 import { handleJobsApiRequest } from "../jobs/jobsApi";
 import { createJobRuntime, startJobRuntime, type JobRuntime } from "../jobs/jobRuntime";
 import { createChatRouter, handleChatApiRequest, llmHealthPayload } from "../api/chatApi";
+import { getDbPool } from "../server/db";
+import { OrgStore } from "../server/orgStore";
+import { handleOrgApiRequest } from "../server/orgApi";
+import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
+import { requireAuth, resolveAuthContext } from "../server/authMiddleware";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -22,6 +29,8 @@ export type WebhookServerOptions = {
   monitor?: WebhookMonitor;
   consistency?: GraphConsistencyManager;
   jobs?: JobRuntime;
+  orgStore?: OrgStore;
+  serverConfig?: ServerConfig;
 };
 
 export type WebhookServerRuntime = {
@@ -34,6 +43,8 @@ export type WebhookServerRuntime = {
   rateLimits: RateLimitTracker;
   tokenPool: TokenPool;
   jobs: JobRuntime;
+  orgStore?: OrgStore;
+  serverConfig: ServerConfig;
 };
 
 type ParsedRequest = {
@@ -47,12 +58,27 @@ type ParsedRequest = {
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
-export function createWebhookServer(options: WebhookServerOptions = {}): WebhookServerRuntime {
+export async function createWebhookServer(options: WebhookServerOptions = {}): Promise<WebhookServerRuntime> {
   const config = options.config ?? loadWebhookConfig();
-  const cache = options.cache ?? new GraphCache({
-    ttlMs: config.cache.ttl * 1000,
-    maxRepos: config.cache.maxRepos
-  });
+  const serverConfig = options.serverConfig ?? loadServerConfig();
+  const pool = await getDbPool(config.cache.connectionString);
+  const orgStore =
+    options.orgStore ??
+    (pool && serverConfig.credentialsEncryptionKey
+      ? new OrgStore(pool, serverConfig.credentialsEncryptionKey)
+      : pool
+        ? new OrgStore(pool)
+        : undefined);
+
+  const cache =
+    options.cache ??
+    (await createGraphCache(config.cache.backend, {
+      ttlMs: config.cache.ttl * 1000,
+      maxRepos: config.cache.maxRepos,
+      pool,
+      connectionString: config.cache.connectionString
+    }));
+
   const consistency = options.consistency ?? new GraphConsistencyManager(cache);
   const monitor = options.monitor ?? new WebhookMonitor();
   const rateLimits = new RateLimitTracker({ warnThreshold: config.rateLimit.warnThreshold });
@@ -64,9 +90,21 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
     monitor
   });
 
+  const jobs =
+    options.jobs ??
+    createJobRuntime({
+      cache,
+      consistency,
+      orgStore
+    });
+  if (serverConfig.jobsWorkersEnabled) {
+    startJobRuntime(jobs);
+  }
+
   const queue = {
     enqueue: async (event: NormalizedWebhookEvent) => {
       await consistency.enqueue(event);
+      await maybeEnqueueStructureManifest(jobs.queue, orgStore, event);
     }
   };
 
@@ -85,9 +123,6 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
     monitor,
     queue
   });
-
-  const jobs = options.jobs ?? createJobRuntime({ cache, consistency });
-  startJobRuntime(jobs);
   const chatRouter = createChatRouter();
 
   const server = createServer(async (request, response) => {
@@ -103,8 +138,28 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
           },
           webhooks: monitor.getAllHealth(),
           jobs: jobStats,
-          llm: llmHealthPayload(chatRouter)
+          llm: llmHealthPayload(chatRouter),
+          orgDb: Boolean(orgStore)
         });
+        return;
+      }
+
+      if (
+        await handleOrgApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          {
+            orgStore,
+            jobQueue: jobs.queue,
+            serverConfig
+          }
+        )
+      ) {
         return;
       }
 
@@ -124,21 +179,25 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
         return;
       }
 
-      if (await handleJobsApiRequest(
-        {
-          method: parsed.method,
-          pathname: parsed.pathname,
-          headers: parsed.headers,
-          body: parsed.body
-        },
-        response,
-        {
-          queue: jobs.queue,
-          monitor: jobs.monitor,
-          workers: jobs.workers,
-          config: jobs.config
-        }
-      )) {
+      if (
+        await handleJobsApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          {
+            queue: jobs.queue,
+            monitor: jobs.monitor,
+            workers: jobs.workers,
+            config: jobs.config,
+            orgStore,
+            serverConfig
+          }
+        )
+      ) {
         return;
       }
 
@@ -175,6 +234,11 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
       }
 
       if (parsed.method === "GET" && parsed.pathname.startsWith("/graph/")) {
+        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
         const [repoId, query] = parseGraphPath(parsed.pathname);
         const result = await graphQuery.queryGraph({
           repoId,
@@ -191,6 +255,11 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/rate-limits") {
+        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
         writeJson(response, 200, {
           states: rateLimits.getAll(),
           predictions: ["github", "gitlab", "slack"].map((provider) =>
@@ -201,6 +270,11 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/token-pools") {
+        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
         writeJson(response, 200, { tokens: tokenPool.list() });
         return;
       }
@@ -212,11 +286,11 @@ export function createWebhookServer(options: WebhookServerOptions = {}): Webhook
     }
   });
 
-  return { server, config, cache, consistency, monitor, registry, rateLimits, tokenPool, jobs };
+  return { server, config, cache, consistency, monitor, registry, rateLimits, tokenPool, jobs, orgStore, serverConfig };
 }
 
-export function startWebhookServer(options: WebhookServerOptions = {}): WebhookServerRuntime {
-  const runtime = createWebhookServer(options);
+export async function startWebhookServer(options: WebhookServerOptions = {}): Promise<WebhookServerRuntime> {
+  const runtime = await createWebhookServer(options);
   runtime.server.listen(runtime.config.port, () => {
     console.log(`CoopAI webhook server listening on port ${runtime.config.port}`);
   });
@@ -283,7 +357,7 @@ function dateReplacer(_key: string, value: unknown): unknown {
 }
 
 function slackChallenge(body: unknown): string | undefined {
-  const record = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
+  const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
   return record.type === "url_verification" && typeof record.challenge === "string"
     ? record.challenge
     : undefined;
@@ -318,5 +392,5 @@ function numberParam(value: string | null): number | undefined {
 }
 
 if (require.main === module) {
-  startWebhookServer();
+  void startWebhookServer();
 }
