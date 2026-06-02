@@ -9,12 +9,15 @@ export const metadata: Metadata = {
 };
 
 type DemoPageProps = {
-  searchParams: Promise<{ intent?: string }>;
+  searchParams: Promise<{ intent?: string; prompt?: string }>;
 };
 
 export default async function DemoPage({ searchParams }: DemoPageProps) {
   const params = await searchParams;
   const waitlistFirst = params.intent === "waitlist";
+  const demoMessage = params.prompt?.trim()
+    ? `I'd like to explore: "${params.prompt.trim()}"`
+    : undefined;
 
   return (
     <>
@@ -38,6 +41,7 @@ export default async function DemoPage({ searchParams }: DemoPageProps) {
               title="Request a demo"
               description="Tell us about your team and we'll follow up within one business day."
               submitLabel="Book a demo"
+              defaultMessage={demoMessage}
             />
           )}
           <ContactForm

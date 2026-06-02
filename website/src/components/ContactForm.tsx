@@ -9,9 +9,17 @@ type ContactFormProps = {
   title: string;
   description: string;
   submitLabel: string;
+  /** Prefill demo message (e.g. from hero example ?prompt=) */
+  defaultMessage?: string;
 };
 
-export function ContactForm({ type, title, description, submitLabel }: ContactFormProps) {
+export function ContactForm({
+  type,
+  title,
+  description,
+  submitLabel,
+  defaultMessage
+}: ContactFormProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -87,6 +95,8 @@ export function ContactForm({ type, title, description, submitLabel }: ContactFo
               id="message"
               name="message"
               rows={3}
+              defaultValue={defaultMessage}
+              key={defaultMessage ?? "message-empty"}
               className="mt-1.5 w-full rounded-lg border border-white/10 bg-coop-dark px-3 py-2 text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-blue focus:outline-none focus:ring-1 focus:ring-coop-blue"
               placeholder="Team size, repos, security requirements..."
             />

@@ -5,17 +5,22 @@ type FeatureCard = {
 
 export function FeatureCardGrid({
   items,
-  compact = false
+  compact = false,
+  small = false
 }: {
   items: readonly FeatureCard[];
   compact?: boolean;
+  /** ~50% scale — padding, type, and grid width */
+  small?: boolean;
 }) {
   return (
     <div
       className={
         compact
           ? "flex flex-wrap justify-center gap-3"
-          : "grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          : small
+            ? "mx-auto grid w-full max-w-xl gap-2 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
       }
     >
       {items.map((item) => (
@@ -24,14 +29,32 @@ export function FeatureCardGrid({
           className={
             compact
               ? "rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-coop-muted"
-              : "rounded-xl border border-white/10 bg-white/[0.03] p-5"
+              : small
+                ? "rounded-lg border border-white/10 bg-white/[0.03] p-2.5"
+                : "rounded-xl border border-white/10 bg-white/[0.03] p-5"
           }
         >
-          <p className={compact ? "font-medium text-white/90" : "text-sm font-semibold text-white"}>
+          <p
+            className={
+              compact
+                ? "font-medium text-white/90"
+                : small
+                  ? "text-[11px] font-semibold leading-tight text-white"
+                  : "text-sm font-semibold text-white"
+            }
+          >
             {item.label}
           </p>
           {!compact && (
-            <p className="mt-2 text-sm leading-relaxed text-coop-muted">{item.description}</p>
+            <p
+              className={
+                small
+                  ? "mt-1 text-[10px] leading-snug text-coop-muted"
+                  : "mt-2 text-sm leading-relaxed text-coop-muted"
+              }
+            >
+              {item.description}
+            </p>
           )}
         </div>
       ))}

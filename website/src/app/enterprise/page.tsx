@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
+import { EnterpriseIntegrationGraph } from "@/components/EnterpriseIntegrationGraph";
 import { TrustBadges } from "@/components/TrustBadges";
 
 export const metadata: Metadata = {
@@ -47,7 +48,13 @@ export default function EnterprisePage() {
 
       <section className="pb-8">
         <div className="mx-auto max-w-6xl px-6">
-          <TrustBadges />
+          <TrustBadges small />
+        </div>
+      </section>
+
+      <section className="pb-12 md:pb-16">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <EnterpriseIntegrationGraph />
         </div>
       </section>
 

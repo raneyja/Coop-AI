@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
-import { ProductScreenshot } from "@/components/ProductScreenshot";
+import { HeroExampleCarousel } from "@/components/HeroExampleCarousel";
+import { ProductShowcaseCarousel } from "@/components/ProductShowcaseCarousel";
 import { siteConfig } from "@/lib/site.config";
 
 export const metadata: Metadata = {
@@ -45,9 +46,9 @@ export default function ProductPage() {
         description="CoopAI connects code history, Slack, tickets, and your code graph to answer questions directly inside VS Code."
       />
 
-      <section className="pb-12">
+      <section className="border-b border-white/5 pb-16 pt-4 md:pb-20">
         <div className="mx-auto max-w-6xl px-6">
-          <ProductScreenshot />
+          <ProductShowcaseCarousel />
         </div>
       </section>
 
@@ -65,6 +66,10 @@ export default function ProductPage() {
                 <p className="mt-2 text-sm text-coop-muted">{f.description}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mx-auto mt-14 max-w-3xl md:mt-16">
+            <HeroExampleCarousel compact />
           </div>
         </div>
       </section>
