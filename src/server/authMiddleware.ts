@@ -1,3 +1,4 @@
+import type { ServerResponse } from "node:http";
 import type { OrgPlan } from "./orgStore";
 import { canUseLightningPlan, type AuthContext, type OrgStore } from "./orgStore";
 
@@ -17,7 +18,8 @@ export function extractBearerToken(headers: Record<string, string | undefined>):
 export async function resolveAuthContext(
   headers: Record<string, string | undefined>,
   orgStore: OrgStore | undefined,
-  legacyApiToken?: string
+  legacyApiToken?: string,
+  requireApiAuth = false
 ): Promise<AuthContext | undefined> {
   const token = extractBearerToken(headers);
   if (!token) {
@@ -31,11 +33,11 @@ export async function resolveAuthContext(
     }
   }
 
-  if (legacyApiToken && token === legacyApiToken) {
+  if (!requireApiAuth && legacyApiToken && token === legacyApiToken) {
     return {
       orgId: "legacy",
       orgName: "Legacy",
-      plan: "team",
+      plan: "pro",
       apiKeyId: "legacy"
     };
   }
@@ -53,13 +55,60 @@ export function requireAuth(
   return !requireInProduction;
 }
 
-export function requirePlan(auth: AuthContext, minimum: OrgPlan): boolean {
-  const order: Record<OrgPlan, number> = { free: 0, team: 1, enterprise: 2 };
-  return order[auth.plan] >= order[minimum];
+/** Reads the org plan from the database (never from the client). */
+export async function resolveOrgPlanFromDb(
+  orgStore: OrgStore | undefined,
+  auth: AuthContext
+): Promise<OrgPlan | undefined> {
+  if (auth.orgId === "legacy") {
+    return auth.plan;
+  }
+  if (!orgStore) {
+    return undefined;
+  }
+  const org = await orgStore.getOrganization(auth.orgId);
+  return org?.plan;
 }
 
-export function lightningAllowed(auth: AuthContext): boolean {
-  return canUseLightningPlan(auth.plan);
+export function isPlanAllowed(plan: OrgPlan, allowedPlans: readonly OrgPlan[]): boolean {
+  return allowedPlans.includes(plan);
+}
+
+/**
+ * Allow-list plan gate. Re-loads plan from the database on every call.
+ * Writes 403 and returns false when the plan is not allowed.
+ */
+export async function requireOrgPlan(
+  orgStore: OrgStore | undefined,
+  auth: AuthContext,
+  response: ServerResponse,
+  ...allowedPlans: OrgPlan[]
+): Promise<boolean> {
+  const plan = await resolveOrgPlanFromDb(orgStore, auth);
+  if (!plan || !isPlanAllowed(plan, allowedPlans)) {
+    writePlanForbidden(response, allowedPlans);
+    return false;
+  }
+  return true;
+}
+
+export function writePlanForbidden(response: ServerResponse, requiredPlans: readonly OrgPlan[]): void {
+  response.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+  response.end(
+    JSON.stringify({
+      error: "plan_required",
+      message: `This endpoint requires one of: ${requiredPlans.join(", ")}`,
+      requiredPlans
+    })
+  );
+}
+
+export async function lightningAllowed(
+  orgStore: OrgStore | undefined,
+  auth: AuthContext
+): Promise<boolean> {
+  const plan = await resolveOrgPlanFromDb(orgStore, auth);
+  return plan !== undefined && canUseLightningPlan(plan);
 }
 
 export function authUserId(auth: AuthContext): string {

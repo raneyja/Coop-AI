@@ -19,9 +19,10 @@ import { createJobRuntime, startJobRuntime, type JobRuntime } from "../jobs/jobR
 import { createChatRouter, handleChatApiRequest, llmHealthPayload } from "../api/chatApi";
 import { getDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
+import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
 import { handleOrgApiRequest } from "../server/orgApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
-import { requireAuth, resolveAuthContext } from "../server/authMiddleware";
+import { requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -164,6 +165,20 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (
+        await handleEnterpriseApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers
+          },
+          response,
+          { orgStore, serverConfig }
+        )
+      ) {
+        return;
+      }
+
+      if (
         await handleChatApiRequest(
           {
             method: parsed.method,
@@ -234,9 +249,21 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (parsed.method === "GET" && parsed.pathname.startsWith("/graph/")) {
-        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        const auth = await resolveAuthContext(
+          parsed.headers,
+          orgStore,
+          serverConfig.legacyApiToken,
+          serverConfig.requireApiAuth
+        );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
+        if (!orgStore || auth!.orgId === "legacy") {
+          writeJson(response, 503, { error: "organization database not configured" });
+          return;
+        }
+        if (!(await requireOrgPlan(orgStore, auth!, response, "pro", "enterprise"))) {
           return;
         }
         const [repoId, query] = parseGraphPath(parsed.pathname);
@@ -255,7 +282,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/rate-limits") {
-        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        const auth = await resolveAuthContext(
+          parsed.headers,
+          orgStore,
+          serverConfig.legacyApiToken,
+          serverConfig.requireApiAuth
+        );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });
           return;
@@ -270,7 +302,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/token-pools") {
-        const auth = await resolveAuthContext(parsed.headers, orgStore, serverConfig.legacyApiToken);
+        const auth = await resolveAuthContext(
+          parsed.headers,
+          orgStore,
+          serverConfig.legacyApiToken,
+          serverConfig.requireApiAuth
+        );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });
           return;

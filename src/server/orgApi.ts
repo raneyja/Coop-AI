@@ -6,12 +6,12 @@ import { JobType } from "../jobs/types";
 import {
   authUserId,
   extractBearerToken,
-  lightningAllowed,
   requireAuth,
-  requirePlan,
-  resolveAuthContext
+  requireOrgPlan,
+  resolveAuthContext,
+  resolveOrgPlanFromDb
 } from "./authMiddleware";
-import type { OrgStore } from "./orgStore";
+import { canUseLightningPlan, type OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 
 export type OrgApiDeps = {
@@ -36,18 +36,24 @@ export async function handleOrgApiRequest(
     return false;
   }
 
-  const auth = await resolveAuthContext(parsed.headers, deps.orgStore, deps.serverConfig.legacyApiToken);
+  const auth = await resolveAuthContext(
+    parsed.headers,
+    deps.orgStore,
+    deps.serverConfig.legacyApiToken,
+    deps.serverConfig.requireApiAuth
+  );
   if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) {
     writeJson(response, 401, { error: "unauthorized" });
     return true;
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/me") {
+    const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     writeJson(response, 200, {
       orgId: auth!.orgId,
       orgName: auth!.orgName,
-      plan: auth!.plan,
-      canUseLightning: lightningAllowed(auth!),
+      plan,
+      canUseLightning: canUseLightningPlan(plan),
       lightningBackend: "cloud"
     });
     return true;
@@ -71,6 +77,9 @@ export async function handleOrgApiRequest(
 
   const enableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/enable$/);
   if (parsed.method === "POST" && enableMatch) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+      return true;
+    }
     const repoId = decodeURIComponent(enableMatch[1]);
     await handleEnableLightning(repoId, parsed, response, deps, auth!);
     return true;
@@ -78,6 +87,9 @@ export async function handleOrgApiRequest(
 
   const disableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/disable$/);
   if (parsed.method === "POST" && disableMatch) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+      return true;
+    }
     const repoId = decodeURIComponent(disableMatch[1]);
     const record = await deps.orgStore.upsertOrgRepo(auth!.orgId, repoId, {
       lightningEnabled: false,
@@ -89,6 +101,9 @@ export async function handleOrgApiRequest(
 
   const statusMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/status$/);
   if (parsed.method === "GET" && statusMatch) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+      return true;
+    }
     const repoId = decodeURIComponent(statusMatch[1]);
     const record = await deps.orgStore.getOrgRepo(auth!.orgId, repoId);
     writeJson(response, 200, {
@@ -141,11 +156,6 @@ async function handleEnableLightning(
   deps: OrgApiDeps,
   auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
 ): Promise<void> {
-  if (!requirePlan(auth, "team")) {
-    writeJson(response, 403, { error: "Lightning Mode requires a Pro (team) plan or higher" });
-    return;
-  }
-
   if (!deps.jobQueue) {
     writeJson(response, 503, { error: "job queue not available" });
     return;

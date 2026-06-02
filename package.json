@@ -89,6 +89,10 @@
         "title": "CoopAI Extension Settings"
       },
       {
+        "command": "coopAI.openLightningMode",
+        "title": "CoopAI: Lightning Mode"
+      },
+      {
         "command": "coopAI.openKeybindings",
         "title": "Keyboard Shortcuts"
       },
@@ -285,7 +289,12 @@
         },
         "coopAI.llmProvider": {
           "type": "string",
-          "enum": ["anthropic", "openai", "gemini", "deepseek"],
+          "enum": [
+            "anthropic",
+            "openai",
+            "gemini",
+            "deepseek"
+          ],
           "default": "anthropic",
           "description": "LLM provider routed by the CoopAI API server."
         },
@@ -315,7 +324,11 @@
         },
         "coopAI.autocomplete.trigger": {
           "type": "string",
-          "enum": ["auto", "manual", "off"],
+          "enum": [
+            "auto",
+            "manual",
+            "off"
+          ],
           "default": "auto",
           "description": "When to request inline completions: automatic debounce, manual hotkey only, or off."
         },
@@ -335,7 +348,11 @@
         },
         "coopAI.autocomplete.model": {
           "type": "string",
-          "enum": ["haiku", "gpt35", "custom"],
+          "enum": [
+            "haiku",
+            "gpt35",
+            "custom"
+          ],
           "default": "haiku",
           "description": "Fast model preset for autocomplete (lower latency over quality)."
         },
@@ -346,7 +363,11 @@
         },
         "coopAI.autocomplete.acceptKey": {
           "type": "string",
-          "enum": ["Tab", "Enter", "Both"],
+          "enum": [
+            "Tab",
+            "Enter",
+            "Both"
+          ],
           "default": "Tab",
           "description": "Preferred accept key (VS Code inline suggest uses Tab by default)."
         },
@@ -364,7 +385,9 @@
         },
         "coopAI.autocomplete.projectImports": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Extra import paths to bias project-style completions."
         },
@@ -410,13 +433,22 @@
         },
         "coopAI.defaultCodeHost": {
           "type": "string",
-          "enum": ["github", "gitlab", "bitbucket"],
+          "enum": [
+            "github",
+            "gitlab",
+            "bitbucket"
+          ],
           "default": "github",
           "description": "Default code host for remote explorer and context."
         },
         "coopAI.openRepoInEditor": {
           "type": "string",
-          "enum": ["preferLocal", "remote", "ask", "off"],
+          "enum": [
+            "preferLocal",
+            "remote",
+            "ask",
+            "off"
+          ],
           "default": "preferLocal",
           "description": "When you pick a repository in CoopAI, open it in VS Code: prefer a local clone, fall back to GitHub Repositories (GitHub only), ask each time, or never."
         },
@@ -444,11 +476,21 @@
             "properties": {
               "provider": {
                 "type": "string",
-                "enum": ["github", "gitlab", "bitbucket"]
+                "enum": [
+                  "github",
+                  "gitlab",
+                  "bitbucket"
+                ]
               },
-              "owner": { "type": "string" },
-              "repo": { "type": "string" },
-              "branch": { "type": "string" }
+              "owner": {
+                "type": "string"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
             }
           }
         },
@@ -647,9 +689,13 @@
         },
         "coopAI.license.plan": {
           "type": "string",
-          "enum": ["free", "team", "enterprise"],
+          "enum": [
+            "free",
+            "pro",
+            "enterprise"
+          ],
           "default": "free",
-          "description": "Subscription plan. Lightning Mode requires team or enterprise."
+          "description": "Subscription plan (devMode only). Lightning Mode requires Pro or Enterprise from the API in production."
         },
         "coopAI.lightning.enabled": {
           "type": "boolean",
@@ -663,7 +709,10 @@
         },
         "coopAI.lightning.backend": {
           "type": "string",
-          "enum": ["local", "cloud"],
+          "enum": [
+            "local",
+            "cloud"
+          ],
           "default": "cloud",
           "description": "Lightning index backend (Pro). Defaults to Coop cloud. Local machine indexing is only available when coopAI.devMode is true."
         },
@@ -680,9 +729,15 @@
           "items": {
             "type": "object",
             "properties": {
-              "repoId": { "type": "string" },
-              "enabled": { "type": "boolean" },
-              "localPath": { "type": "string" }
+              "repoId": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "localPath": {
+                "type": "string"
+              }
             }
           }
         }
@@ -690,12 +745,16 @@
     }
   },
   "scripts": {
-    "build": "npm run build:extension && npm run build:webview && npm run build:backend",
+    "build": "npm run build:extension && npm run build:webview && npm run build:backend && npm run build:workers && npm run build:admin",
     "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js",
     "build:backend": "esbuild src/webhooks/webhookServer.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/webhookServer.js",
+    "build:workers": "esbuild src/jobs/workerEntry.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/workerEntry.js",
+    "build:admin": "esbuild scripts/admin-org.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/admin-org.js",
     "build:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify",
     "build:webview": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js && npm run build:webview:css",
     "start:webhooks": "node dist/webhookServer.js",
+    "start:workers": "node dist/workerEntry.js",
+    "admin:org": "node dist/admin-org.js",
     "watch": "npm-run-all -p watch:extension watch:webview",
     "watch:extension": "npm run build:extension -- --watch",
     "watch:webview": "npm-run-all -p watch:webview:css watch:webview:js",
@@ -723,6 +782,8 @@
     "node-cron": "^3.0.3",
     "pg": "^8.16.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.7"
   }
 }

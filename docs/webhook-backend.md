@@ -8,28 +8,67 @@ Build and start the backend:
 
 ```sh
 npm run build:backend
+npm run build:workers
 npm run start:webhooks
+```
+
+Run job workers separately (recommended in production):
+
+```sh
+JOBS_WORKERS=0 npm run start:webhooks   # API only
+npm run start:workers                   # workers only
+```
+
+Or use Docker Compose:
+
+```sh
+docker compose up --build
+```
+
+Apply migrations on Postgres:
+
+```sh
+psql "$DATABASE_URL" -f migrations/001_jobs.sql
+psql "$DATABASE_URL" -f migrations/002_orgs.sql
+psql "$DATABASE_URL" -f migrations/003_graph_cache.sql
 ```
 
 The server listens on `PORT` or `8787` by default.
 
+## Authentication
+
+In production (`COOP_REQUIRE_API_AUTH=true`), protected routes require `Authorization: Bearer <api-key>`.
+
+Org API keys are created with:
+
+```sh
+npm run build:admin
+npm run admin:org -- create-org "Acme Corp" pro
+npm run admin:org -- create-api-key <orgId> primary
+```
+
+Legacy single-token auth via `COOP_API_TOKEN` remains supported during migration.
+
 ## Endpoints
 
 - `GET /health` returns server, cache, webhook, job, and LLM provider health.
+- `GET /v1/me` returns org id, plan, and Lightning entitlement (requires auth).
+- `POST /v1/orgs/credentials/github` stores encrypted GitHub PAT for cloud indexing.
+- `GET /v1/orgs/repos` lists org repos and Lightning index status.
+- `POST /v1/orgs/repos/:repoId/lightning/enable` enqueues cloud index job (Pro or Enterprise; 403 otherwise).
+- `POST /v1/orgs/repos/:repoId/lightning/disable` disables Lightning for a repo (Pro+).
+- `GET /v1/orgs/repos/:repoId/lightning/status` returns index status for a repo (Pro+).
+- `GET /v1/orgs/repos/:repoId/manifest` returns Zero-Clone structure manifest (all plans).
 - `POST /v1/chat` streams chat completions (see [api-v1.md](./api-v1.md)).
 - `POST /v1/completions/inline` returns `501` until autocomplete is implemented.
 - `GET /webhooks/health` returns webhook delivery and registration health.
 - `POST /webhooks/github` accepts GitHub webhook deliveries.
 - `POST /webhooks/gitlab` accepts GitLab webhook deliveries.
 - `POST /webhooks/slack` accepts Slack Events API deliveries.
-- `GET /graph/:repoId/tree` returns cached file structure.
-- `GET /graph/:repoId/ownership?file=src/index.ts` returns ownership metadata.
-- `GET /graph/:repoId/dependents?file=src/index.ts` returns direct dependents.
-- `GET /graph/:repoId/transitive-dependents?file=src/index.ts` returns blast-radius dependents.
-- `GET /graph/:repoId/changes?days=7` returns recent commits.
-- `GET /graph/:repoId/search?pattern=handler` searches cached file paths.
-- `GET /rate-limits` returns provider quota state and burn-rate predictions.
-- `GET /token-pools` returns safe token metadata without token values.
+- `GET /graph/:repoId/*` graph queries (Pro+; requires auth in production).
+- `/v1/sso/*` and `/v1/self-host/*` reserved for Enterprise (501 until implemented).
+- `GET /rate-limits` provider quota state (requires auth in production).
+- `GET /token-pools` token pool metadata (requires auth in production).
 - Job queue API under `/api/jobs` (see [job-queue.md](./job-queue.md)).
 
 `repoId` uses the normalized form `github:owner/repo` or `gitlab:owner/repo` and must be URL encoded when it appears in a path.
@@ -40,17 +79,24 @@ The backend reads environment variables through `src/config/webhookConfig.ts`.
 
 ```sh
 PORT=8787
+NODE_ENV=production
+COOP_REQUIRE_API_AUTH=true
+DATABASE_URL=postgres://coop:coop@localhost:5432/coopai
+JOBS_BACKEND=postgres
+GRAPH_CACHE_BACKEND=postgres
+JOBS_WORKERS=0
+CREDENTIALS_ENCRYPTION_KEY=
 WEBHOOK_DOMAIN=https://coop-api.example.com
 GITHUB_WEBHOOK_SECRET=whsec_...
 GITLAB_WEBHOOK_TOKEN=...
 SLACK_SIGNING_SECRET=...
-GRAPH_CACHE_BACKEND=memory
 GRAPH_CACHE_TTL_SECONDS=86400
 GRAPH_CACHE_MAX_REPOS=100
 RATE_LIMIT_WARN_THRESHOLD=0.2
-GITHUB_TOKEN_POOL=ghp_token_one,ghp_token_two
-GITHUB_TOKEN_POOL_STRATEGY=round-robin
+COOP_API_TOKEN=
 ```
+
+See [`.env.backend.example`](../.env.backend.example) for a full template.
 
 For self-hosted deployments, set `WEBHOOK_DOMAIN` to the public HTTPS domain that providers can reach. Local development usually needs a tunnel such as Cloudflare Tunnel or ngrok, then the tunnel URL becomes `WEBHOOK_DOMAIN`.
 
@@ -64,7 +110,7 @@ The memory cache stores repository metadata only:
 - Ownership scores.
 - PR, issue, review, branch, and Slack decision metadata.
 
-The cache must not store raw source code, Slack message bodies, wholesale provider API responses, or credentials. The initial implementation is memory-first with TTL and LRU eviction. Redis/PostgreSQL adapters can be added behind the cache boundary later for durability.
+The cache must not store raw source code, Slack message bodies, wholesale provider API responses, or credentials. Use `GRAPH_CACHE_BACKEND=postgres` with `DATABASE_URL` for durable graph metadata across restarts.
 
 ## Provider Setup
 

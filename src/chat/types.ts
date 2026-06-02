@@ -324,7 +324,7 @@ export type WebviewOutbound =
   | {
       type: "lightning:state";
       payload: {
-        plan: "free" | "team" | "enterprise";
+        plan: "free" | "pro" | "enterprise";
         canUseLightning: boolean;
         globalEnabled: boolean;
         maxDiskGb: number;

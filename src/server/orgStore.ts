@@ -6,7 +6,7 @@ import {
   hashApiKey
 } from "./credentialCrypto";
 
-export type OrgPlan = "free" | "team" | "enterprise";
+export type OrgPlan = "free" | "pro" | "enterprise";
 export type IndexStatus = "idle" | "queued" | "indexing" | "ready" | "error" | "disabled";
 
 export type Organization = {
@@ -231,5 +231,5 @@ function rowToOrgRepo(row: Record<string, unknown>): OrgRepoRecord {
 }
 
 export function canUseLightningPlan(plan: OrgPlan): boolean {
-  return plan === "team" || plan === "enterprise";
+  return plan === "pro" || plan === "enterprise";
 }

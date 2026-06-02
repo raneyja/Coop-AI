@@ -99,11 +99,17 @@ Batch completion for editor ghost text (`useCase: inline_completion`). Same auth
 }
 ```
 
-## Graph (existing)
+## Graph (Pro and Enterprise)
 
 - `GET /graph/:repoId/search?pattern=handler`
 - `GET /graph/:repoId/ownership?file=...`
+- Returns `403` with `plan_required` on Free plans.
 - See [webhook-backend.md](./webhook-backend.md)
+
+## Zero-Clone (all plans)
+
+- `GET /v1/orgs/repos/:repoId/manifest` — structure-only manifest (paths and symbols).
+- `POST /v1/chat` — chat with client-supplied context (no full-repo graph required).
 
 ## Server environment
 

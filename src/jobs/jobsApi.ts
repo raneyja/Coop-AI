@@ -6,11 +6,17 @@ import { JobRateLimitError } from "./jobQueue";
 import { JobType, formatWaitTime, serializeJob } from "./types";
 import type { WorkerPool } from "./workerPool";
 
+import type { OrgStore } from "../server/orgStore";
+import type { ServerConfig } from "../server/serverConfig";
+import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+
 export type JobsApiDeps = {
   queue: JobQueue;
   monitor: JobMonitor;
   workers: WorkerPool;
   config: JobQueueConfig;
+  orgStore?: OrgStore;
+  serverConfig?: ServerConfig;
 };
 
 type ParsedJobsRequest = {
@@ -31,7 +37,7 @@ export async function handleJobsApiRequest(
     return false;
   }
 
-  if (!authorize(parsed.headers, deps.config.apiToken)) {
+  if (!(await authorize(parsed.headers, deps))) {
     writeJson(response, 401, { error: "unauthorized" });
     return true;
   }
@@ -100,11 +106,26 @@ async function handleCreateJob(
   }
 
   try {
+    const auth = await resolveAuthContext(
+      parsed.headers,
+      deps.orgStore,
+      deps.serverConfig?.legacyApiToken,
+      deps.serverConfig?.requireApiAuth ?? false
+    );
+    if (type === JobType.INDEX_REPOSITORY) {
+      if (!auth) {
+        writeJson(response, 403, { error: "plan_required", message: "INDEX_REPOSITORY requires organization API key auth" });
+        return;
+      }
+      if (!(await requireOrgPlan(deps.orgStore, auth, response, "pro", "enterprise"))) {
+        return;
+      }
+    }
     const submit = await deps.queue.createJob({
       type: type as JobType,
       priority: readPriority(body.priority),
       params: asRecord(body.params),
-      userId: body.userId ? String(body.userId) : undefined,
+      userId: auth ? authUserId(auth) : body.userId ? String(body.userId) : undefined,
       estimatedDurationMs: body.estimatedDurationMs ? Number(body.estimatedDurationMs) : undefined,
       scheduled: Boolean(body.scheduled)
     });
@@ -242,13 +263,21 @@ async function handleJobStream(
   request.req?.on("close", cleanup);
 }
 
-function authorize(headers: Record<string, string | undefined>, token?: string): boolean {
-  if (!token) {
+async function authorize(headers: Record<string, string | undefined>, deps: JobsApiDeps): Promise<boolean> {
+  const auth = await resolveAuthContext(
+    headers,
+    deps.orgStore,
+    deps.serverConfig?.legacyApiToken,
+    deps.serverConfig?.requireApiAuth ?? false
+  );
+  if (requireAuth(auth, deps.serverConfig?.requireApiAuth ?? false)) {
     return true;
   }
+  if (!deps.config.apiToken) {
+    return !(deps.serverConfig?.requireApiAuth ?? false);
+  }
   const header = headers.authorization ?? "";
-  const expected = `Bearer ${token}`;
-  return header === expected;
+  return header === `Bearer ${deps.config.apiToken}`;
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

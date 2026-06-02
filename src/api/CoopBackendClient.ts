@@ -49,7 +49,7 @@ export type HealthResponse = {
 export type MeResponse = {
   orgId: string;
   orgName: string;
-  plan: "free" | "team" | "enterprise";
+  plan: "free" | "pro" | "enterprise";
   canUseLightning: boolean;
   lightningBackend?: string;
 };
