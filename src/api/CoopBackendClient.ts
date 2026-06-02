@@ -137,6 +137,67 @@ export class CoopBackendClient {
     );
   }
 
+  public async getGithubAppInstallUrl(baseUrl: string): Promise<string> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{ url: string }>("/v1/github/app/install-url", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    const url = response.data?.url?.trim();
+    if (!url) {
+      throw new Error("Install URL was not returned by the server.");
+    }
+    return url;
+  }
+
+  public async getGithubInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      installed: boolean;
+      installationId?: number;
+      tokenExpiresAt?: string;
+    }>("/v1/orgs/github/installation", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status === 401 || response.status === 503) {
+      return { installed: false };
+    }
+    return response.data ?? { installed: false };
+  }
+
+  /** Fetches file content via server-side GitHub App token (Zero-Clone cloud path). */
+  public async fetchRepoFile(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    path: string;
+    content: string;
+    encoding?: string;
+    branch: string;
+    truncated?: boolean;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/files`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { path, branch },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
   public async listOrgRepos(baseUrl: string): Promise<{ repos: unknown[] }> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{ repos: unknown[] }>("/v1/orgs/repos", {

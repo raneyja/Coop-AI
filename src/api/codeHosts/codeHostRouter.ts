@@ -30,10 +30,20 @@ import type {
 } from "./types";
 import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates } from "./types";
 
+export type CloudGithubFileFetcher = (options: {
+  repoId: string;
+  path: string;
+  coords: RepoCoordinates;
+}) => Promise<RemoteFileContent>;
+
 export type CodeHostRouterOptions = {
   secrets: CodeHostSecrets;
   cache: CacheManager;
   rateLimitTracker?: RateLimitTracker;
+  /** When true, GitHub file reads use the backend proxy (no local PAT). */
+  useCloudGithubProxy?: () => boolean;
+  cloudGithubFileFetcher?: CloudGithubFileFetcher;
+  cloudGithubHealthCheck?: () => Promise<{ ok: boolean; message: string }>;
 };
 
 export class CodeHostRouter {
@@ -67,6 +77,13 @@ export class CodeHostRouter {
   }
 
   public async testProvider(provider: CodeHostProvider): Promise<{ ok: boolean; message: string }> {
+    if (
+      provider === "github" &&
+      this.options.useCloudGithubProxy?.() &&
+      this.options.cloudGithubHealthCheck
+    ) {
+      return this.options.cloudGithubHealthCheck();
+    }
     const client = await this.getClient(provider);
     return client.testConnection();
   }
@@ -158,6 +175,16 @@ export class CodeHostRouter {
   public async getFileContent(filePath: string, coords?: Partial<RepoCoordinates>): Promise<RemoteFileContent> {
     const resolved = await this.resolveCoordinates(coords);
     const path = filePath.replace(/^\/+/, "");
+    if (
+      resolved.provider === "github" &&
+      this.options.useCloudGithubProxy?.() &&
+      this.options.cloudGithubFileFetcher
+    ) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("fileContent", resolved, path, "cloud"), "fileContent", async () =>
+        this.options.cloudGithubFileFetcher!({ repoId, path, coords: resolved })
+      );
+    }
     return this.cached(this.key("fileContent", resolved, path), "fileContent", async () =>
       (await this.getClient(resolved.provider)).getFileContent(resolved, path)
     );
@@ -338,6 +365,14 @@ export class CodeHostRouter {
     let client: CodeHostClient;
     switch (provider) {
       case "github": {
+        if (this.options.useCloudGithubProxy?.()) {
+          throw new CodeHostError(
+            "GitHub file access uses the CoopAI cloud backend. Install the GitHub App in settings.",
+            "auth",
+            401,
+            provider
+          );
+        }
         if (!creds.githubToken) {
           throw new CodeHostError("GitHub token is missing. Add it in CoopAI settings.", "auth", 401, provider);
         }

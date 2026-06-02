@@ -4,6 +4,7 @@ export type ServerConfig = {
   legacyApiToken?: string;
   credentialsEncryptionKey?: string;
   jobsWorkersEnabled: boolean;
+  devMode: boolean;
 };
 
 export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -14,7 +15,8 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     requireApiAuth: readBoolean(env.COOP_REQUIRE_API_AUTH, nodeEnv === "production"),
     legacyApiToken,
     credentialsEncryptionKey: env.CREDENTIALS_ENCRYPTION_KEY,
-    jobsWorkersEnabled: readBoolean(env.JOBS_WORKERS, env.JOBS_WORKERS !== "0")
+    jobsWorkersEnabled: readBoolean(env.JOBS_WORKERS, env.JOBS_WORKERS !== "0"),
+    devMode: readBoolean(env.COOP_DEV_MODE, false)
   };
 }
 

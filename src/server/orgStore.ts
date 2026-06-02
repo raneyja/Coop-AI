@@ -34,6 +34,14 @@ export type OrgRepoRecord = {
   updatedAt: Date;
 };
 
+export type CodeHostInstallationRecord = {
+  orgId: string;
+  provider: string;
+  installationId: number;
+  tokenExpiresAt: Date;
+  createdAt: Date;
+};
+
 export type AuthContext = {
   orgId: string;
   orgName: string;
@@ -140,6 +148,75 @@ export class OrgStore {
     return decryptCredential(String(row.encrypted_token), this.credentialsEncryptionKey);
   }
 
+  public async upsertCodeHostInstallation(
+    orgId: string,
+    provider: string,
+    installationId: number,
+    token: string,
+    tokenExpiresAt: Date
+  ): Promise<void> {
+    if (!this.credentialsEncryptionKey) {
+      throw new Error("CREDENTIALS_ENCRYPTION_KEY is not configured");
+    }
+    const encrypted = encryptCredential(token.trim(), this.credentialsEncryptionKey);
+    await this.pool.query(
+      `INSERT INTO code_host_installations (org_id, provider, installation_id, encrypted_token, token_expires_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (org_id, provider) DO UPDATE SET
+         installation_id = EXCLUDED.installation_id,
+         encrypted_token = EXCLUDED.encrypted_token,
+         token_expires_at = EXCLUDED.token_expires_at`,
+      [orgId, provider, installationId, encrypted, tokenExpiresAt]
+    );
+  }
+
+  public async getCodeHostInstallation(
+    orgId: string,
+    provider: string
+  ): Promise<CodeHostInstallationRecord | undefined> {
+    const result = await this.pool.query(
+      `SELECT org_id, provider, installation_id, token_expires_at, created_at
+       FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
+      [orgId, provider]
+    );
+    const row = result.rows[0];
+    return row ? rowToInstallation(row) : undefined;
+  }
+
+  public async getInstallationToken(orgId: string, provider: string): Promise<string | undefined> {
+    if (!this.credentialsEncryptionKey) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT encrypted_token FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
+      [orgId, provider]
+    );
+    const row = result.rows[0];
+    if (!row?.encrypted_token) {
+      return undefined;
+    }
+    return decryptCredential(String(row.encrypted_token), this.credentialsEncryptionKey);
+  }
+
+  public async findOrgIdByInstallation(
+    installationId: number,
+    provider: string
+  ): Promise<string | undefined> {
+    const result = await this.pool.query(
+      `SELECT org_id FROM code_host_installations WHERE installation_id = $1 AND provider = $2`,
+      [installationId, provider]
+    );
+    const row = result.rows[0];
+    return row ? String(row.org_id) : undefined;
+  }
+
+  public async deleteCodeHostInstallation(orgId: string, provider: string): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
+      [orgId, provider]
+    );
+  }
+
   public async upsertOrgRepo(
     orgId: string,
     repoId: string,
@@ -213,6 +290,16 @@ function rowToApiKey(row: Record<string, unknown>): ApiKeyRecord {
     id: String(row.id),
     orgId: String(row.org_id),
     label: String(row.label),
+    createdAt: new Date(String(row.created_at))
+  };
+}
+
+function rowToInstallation(row: Record<string, unknown>): CodeHostInstallationRecord {
+  return {
+    orgId: String(row.org_id),
+    provider: String(row.provider),
+    installationId: Number(row.installation_id),
+    tokenExpiresAt: new Date(String(row.token_expires_at)),
     createdAt: new Date(String(row.created_at))
   };
 }

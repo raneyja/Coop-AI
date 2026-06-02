@@ -5,6 +5,7 @@ import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ManifestSymbol } from "../manifest/types";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
+import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getDbPool, requireDbPool } from "../server/db";
 import type { Job } from "./types";
 import type { JobExecutionContext, ProgressReporter } from "./executors";
@@ -86,9 +87,15 @@ export async function buildStructureManifest(
     );
   }
 
-  const token = await ctx.orgStore.getCredential(orgId, target.provider);
+  const token = await resolveGithubTokenForOrg(orgId, {
+    orgStore: ctx.orgStore,
+    githubApp: ctx.githubApp,
+    allowPatFallback: ctx.allowPatFallback ?? false
+  });
   if (!token) {
-    throw new Error(`Missing ${target.provider} credential for organization`);
+    throw new Error(
+      `Missing GitHub App installation for organization (install the CoopAI GitHub App)`
+    );
   }
 
   const pool = requireDbPool(await getDbPool());

@@ -1,5 +1,7 @@
 import type { GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
+import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
+import type { GitHubAppService } from "../server/githubAppService";
 import type { OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
 import { buildPartialFailure } from "./errorHandling";
@@ -10,6 +12,8 @@ export type JobExecutionContext = {
   cache: GraphCache;
   consistency?: GraphConsistencyManager;
   orgStore?: OrgStore;
+  githubApp?: GitHubAppService;
+  allowPatFallback?: boolean;
 };
 
 export type ProgressReporter = (progress: number, message?: string) => Promise<void>;
@@ -183,7 +187,13 @@ async function indexRepository(
   try {
     const token =
       orgId && ctx.orgStore
-        ? await ctx.orgStore.getCredential(orgId, providerForRepo(repoId))
+        ? providerForRepo(repoId) === "github"
+          ? await resolveGithubTokenForOrg(orgId, {
+              orgStore: ctx.orgStore,
+              githubApp: ctx.githubApp,
+              allowPatFallback: ctx.allowPatFallback ?? false
+            })
+          : await ctx.orgStore.getCredential(orgId, providerForRepo(repoId))
         : undefined;
     await report(45, "Cloning repository");
     const target = parseRepoId(repoId);

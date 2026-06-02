@@ -78,6 +78,8 @@ export type UserPreferences = {
   defaultCodeHost: CodeHostProviderPreference;
   gitlabBaseUrl: string;
   hasGitHubToken: boolean;
+  hasGitHubAppInstalled: boolean;
+  devMode: boolean;
   hasGitLabToken: boolean;
   hasBitbucketCredentials: boolean;
   hasSlackToken: boolean;
@@ -239,6 +241,8 @@ export type WebviewInbound =
   | { type: "settings:test-connection" }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
+  | { type: "settings:install-github-app" }
+  | { type: "settings:refresh-github-installation" }
   | { type: "settings:update-gitlab-token"; payload: { token: string } }
   | { type: "settings:clear-gitlab-token" }
   | {

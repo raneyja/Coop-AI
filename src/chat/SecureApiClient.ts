@@ -15,6 +15,7 @@ import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import type { ChatMessage, RemoteTreeNode, RepoContext, UserPreferences, LlmProviderPreference, ChatImageAttachment } from "./types";
+import { isCoopDevMode } from "../config/lightningConfig";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -76,6 +77,29 @@ export class SecureApiClient {
 
   public async syncGithubCredentialToCloud(baseUrl: string, token: string): Promise<void> {
     await this.backend.storeGithubCredential(baseUrl, token);
+  }
+
+  public async getGithubAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getGithubAppInstallUrl(baseUrl);
+  }
+
+  public async getGithubInstallationStatus(baseUrl: string): Promise<{ installed: boolean }> {
+    return this.backend.getGithubInstallationStatus(baseUrl);
+  }
+
+  public async fetchRepoFileViaCloud(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<{
+    path: string;
+    content: string;
+    encoding?: string;
+    branch: string;
+    truncated?: boolean;
+  }> {
+    return this.backend.fetchRepoFile(baseUrl, repoId, path, branch);
   }
 
   public async testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
@@ -353,10 +377,22 @@ export async function readPreferences(
   const base = readConfiguration();
   const codeHostCreds = codeHostSecrets ? await codeHostSecrets.getCredentials() : {};
   const integrationCreds = integrationSecrets ? await integrationSecrets.getCredentials() : {};
+  const devMode = isCoopDevMode();
+  let hasGitHubAppInstalled = false;
+  if (await api.hasToken()) {
+    try {
+      const status = await api.getGithubInstallationStatus(base.apiBaseUrl);
+      hasGitHubAppInstalled = status.installed;
+    } catch {
+      hasGitHubAppInstalled = false;
+    }
+  }
   return {
     ...base,
     hasApiKey: await api.hasToken(),
     hasGitHubToken: Boolean(codeHostCreds.githubToken),
+    hasGitHubAppInstalled,
+    devMode,
     hasGitLabToken: Boolean(codeHostCreds.gitlabToken),
     hasBitbucketCredentials: Boolean(
       codeHostCreds.bitbucketUsername && codeHostCreds.bitbucketAppPassword

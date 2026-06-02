@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { GitHubAppService } from "../../server/githubAppService";
+import type { OrgStore } from "../../server/orgStore";
 import { WebhookMonitor } from "../webhookMonitor";
 import type {
   ChangedFile,
@@ -23,6 +25,8 @@ export type GitHubWebhookHandlerOptions = {
   secret?: string;
   monitor: WebhookMonitor;
   queue: WebhookUpdateQueue;
+  orgStore?: OrgStore;
+  githubApp?: GitHubAppService;
 };
 
 export class GitHubWebhookHandler {
@@ -50,6 +54,14 @@ export class GitHubWebhookHandler {
       return this.finish(deliveryId, eventName, "duplicate", 202, "duplicate delivery ignored", true);
     }
 
+    if (eventName === "installation") {
+      return this.handleInstallation(deliveryId, request.body);
+    }
+
+    if (eventName === "installation_repositories") {
+      return this.handleInstallationRepositories(deliveryId, request.body);
+    }
+
     const event = normalizeGitHubEvent(eventName, deliveryId, request.body);
     if (!event) {
       return this.finish(deliveryId, eventName, "accepted", 202, `ignored unsupported github event: ${eventName}`);
@@ -57,6 +69,130 @@ export class GitHubWebhookHandler {
 
     await this.options.queue.enqueue(event);
     return this.finish(deliveryId, eventName, "accepted", 202, "github webhook accepted", false, event);
+  }
+
+  private async handleInstallation(
+    deliveryId: string,
+    payload: unknown
+  ): Promise<WebhookHandlerResult> {
+    const body = asRecord(payload);
+    const action = stringValue(body.action);
+    const installation = asRecord(body.installation);
+    const installationId = numberValue(installation.id);
+
+    if (!installationId) {
+      return this.finish(deliveryId, "installation", "accepted", 202, "ignored installation without id");
+    }
+
+    if (action === "deleted") {
+      const orgId = await this.options.orgStore?.findOrgIdByInstallation(installationId, "github");
+      if (orgId) {
+        await this.options.orgStore?.deleteCodeHostInstallation(orgId, "github");
+      }
+      return this.finish(
+        deliveryId,
+        "installation",
+        "accepted",
+        202,
+        `installation deleted: ${installationId}`
+      );
+    }
+
+    if (action === "created" || action === "new_permissions_accepted") {
+      await this.persistInstallationToken(installationId, body);
+      return this.finish(
+        deliveryId,
+        "installation",
+        "accepted",
+        202,
+        `installation ${action}: ${installationId}`
+      );
+    }
+
+    return this.finish(
+      deliveryId,
+      "installation",
+      "accepted",
+      202,
+      `ignored installation action: ${action ?? "unknown"}`
+    );
+  }
+
+  private async persistInstallationToken(
+    installationId: number,
+    body: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.options.orgStore || !this.options.githubApp) {
+      return;
+    }
+    const orgId = await this.options.orgStore.findOrgIdByInstallation(installationId, "github");
+    if (!orgId) {
+      return;
+    }
+    try {
+      const token = await this.options.githubApp.createInstallationAccessToken(installationId);
+      await this.options.orgStore.upsertCodeHostInstallation(
+        orgId,
+        "github",
+        installationId,
+        token.token,
+        token.expiresAt
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[github] failed to refresh installation token for ${installationId}: ${message}`);
+    }
+  }
+
+  private async handleInstallationRepositories(
+    deliveryId: string,
+    payload: unknown
+  ): Promise<WebhookHandlerResult> {
+    const body = asRecord(payload);
+    const action = stringValue(body.action);
+    const installation = asRecord(body.installation);
+    const installationId = numberValue(installation.id);
+    if (installationId) {
+      await this.persistInstallationToken(installationId, body);
+    }
+
+    if (action !== "added") {
+      return this.finish(
+        deliveryId,
+        "installation_repositories",
+        "accepted",
+        202,
+        `installation_repositories action: ${action ?? "unknown"}`
+      );
+    }
+
+    const receivedAt = new Date();
+    const repos = arrayValue(body.repositories_added);
+    let enqueued = 0;
+    for (const repoRaw of repos) {
+      const repository = githubRepo(repoRaw);
+      if (!repository) {
+        continue;
+      }
+      const event: NormalizedWebhookEvent = {
+        provider: "github",
+        deliveryId,
+        receivedAt,
+        eventType: "repository",
+        repository,
+        repositoryAction: "created"
+      };
+      await this.options.queue.enqueue(event);
+      enqueued += 1;
+    }
+
+    return this.finish(
+      deliveryId,
+      "installation_repositories",
+      "accepted",
+      202,
+      `installation_repositories: enqueued ${enqueued} repository onboarding event(s)`
+    );
   }
 
   private finish(

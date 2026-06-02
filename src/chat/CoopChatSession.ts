@@ -106,7 +106,7 @@ import type { ManifestFileEntry } from "../manifest/types";
 import { fetchZeroCloneManifestContext } from "../zeroClone/fetchManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
-import { updateLightningConfiguration } from "../config/lightningConfig";
+import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LightningStatusBar } from "../extension/lightningStatusBar";
 
@@ -201,6 +201,8 @@ export class CoopChatSession {
       defaultCodeHost: "github",
       gitlabBaseUrl: "https://gitlab.com/api/v4",
       hasGitHubToken: false,
+      hasGitHubAppInstalled: false,
+      devMode: false,
       hasGitLabToken: false,
       hasBitbucketCredentials: false,
       hasSlackToken: false,
@@ -671,7 +673,17 @@ export class CoopChatSession {
       case "settings:test-connection":
         await this.handleTestConnection(source);
         return;
+      case "settings:install-github-app":
+        await this.handleInstallGithubApp();
+        return;
+      case "settings:refresh-github-installation":
+        await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("github");
+        return;
       case "settings:update-github-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.codeHostSecrets.setGitHubToken(message.payload.token);
         await this.syncGithubCredentialToCloud(message.payload.token);
         this.options.codeHostRouter.clearClientCache("github");
@@ -1804,8 +1816,7 @@ export class CoopChatSession {
   }
 
   private async syncGithubCredentialToCloud(token: string): Promise<void> {
-    const { readLightningBackend } = await import("../config/lightningConfig");
-    if (readLightningBackend() !== "cloud") {
+    if (readLightningBackend() !== "cloud" || !isCoopDevMode()) {
       return;
     }
     if (!(await this.options.api.hasToken())) {
@@ -1815,6 +1826,23 @@ export class CoopChatSession {
       await this.options.api.syncGithubCredentialToCloud(this.preferences.apiBaseUrl, token);
     } catch {
       // Non-fatal — local token still saved.
+    }
+  }
+
+  private async handleInstallGithubApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Add your Coop API key before installing the GitHub App.");
+      return;
+    }
+    try {
+      const url = await this.options.api.getGithubAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete GitHub App installation in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open GitHub App install URL.";
+      void vscode.window.showErrorMessage(message);
     }
   }
 

@@ -1,0 +1,106 @@
+import type { Preferences } from "./types";
+
+const CODE_HOST_LABELS: Record<Preferences["defaultCodeHost"], string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+  bitbucket: "Bitbucket"
+};
+
+function formatModelLabel(model: string): string {
+  return model.replace(/-\d{8}$/, "").replace(/-/g, " ");
+}
+
+function countConfigured(flags: boolean[]): string {
+  const configured = flags.filter(Boolean).length;
+  return `${configured}/${flags.length} configured`;
+}
+
+function integrationNames(prefs: Preferences): string {
+  const names: string[] = [];
+  if (prefs.hasSlackToken) {
+    names.push("Slack");
+  }
+  if (prefs.hasJiraCredentials) {
+    names.push("Jira");
+  }
+  if (prefs.hasTeamsToken) {
+    names.push("Teams");
+  }
+  return names.length > 0 ? names.join(" · ") : "None configured";
+}
+
+export function modelHubSubtitle(prefs: Preferences): string {
+  const model = formatModelLabel(prefs.model);
+  const chat = prefs.llmEnabled ? "Chat on" : "Chat off";
+  return `${model} · ${chat}`;
+}
+
+export function apiHubSubtitle(prefs: Preferences): string {
+  if (!prefs.hasApiKey) {
+    return "No API key";
+  }
+  try {
+    const host = new URL(prefs.apiBaseUrl).host;
+    return `Connected · ${host}`;
+  } catch {
+    return "Connected";
+  }
+}
+
+export function codeHostsHubSubtitle(prefs: Preferences): string {
+  const defaultHost = CODE_HOST_LABELS[prefs.defaultCodeHost];
+  const configured = countConfigured([
+    githubIsConfigured(prefs),
+    prefs.hasGitLabToken,
+    prefs.hasBitbucketCredentials
+  ]);
+  return `${defaultHost} default · ${configured}`;
+}
+
+export function integrationsHubSubtitle(prefs: Preferences): string {
+  return integrationNames(prefs);
+}
+
+export function workspaceHubSubtitle(prefs: Preferences): string {
+  const repo =
+    prefs.owner && prefs.repo ? `${prefs.owner}/${prefs.repo}` : "No repo set";
+  const branch = prefs.branch || "main";
+  return `${repo} · ${branch}`;
+}
+
+export function promptsHubSubtitle(pinnedCount: number): string {
+  if (pinnedCount === 0) {
+    return "No quick prompts pinned";
+  }
+  return pinnedCount === 1 ? "1 quick prompt pinned" : `${pinnedCount} quick prompts pinned`;
+}
+
+export function githubIsConfigured(prefs: Preferences): boolean {
+  if (prefs.devMode) {
+    return prefs.hasGitHubAppInstalled || prefs.hasGitHubToken;
+  }
+  return prefs.hasGitHubAppInstalled;
+}
+
+export function codeHostConfigured(prefs: Preferences, provider: Preferences["defaultCodeHost"] | "github" | "gitlab" | "bitbucket"): boolean {
+  if (provider === "github") {
+    return githubIsConfigured(prefs);
+  }
+  if (provider === "gitlab") {
+    return prefs.hasGitLabToken;
+  }
+  return prefs.hasBitbucketCredentials;
+}
+
+export function integrationConfigured(
+  prefs: Preferences,
+  provider: "slack" | "jira" | "teams"
+): boolean {
+  if (provider === "slack") {
+    return prefs.hasSlackToken;
+  }
+  if (provider === "jira") {
+    return prefs.hasJiraCredentials;
+  }
+  return prefs.hasTeamsToken;
+}

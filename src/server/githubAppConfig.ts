@@ -1,0 +1,44 @@
+export type GitHubAppConfig = {
+  appId: string;
+  privateKeyPem: string;
+  slug: string;
+  webhookSecret?: string;
+  /** Public HTTPS base for install callback (e.g. https://api.coopai.dev). */
+  publicBaseUrl: string;
+};
+
+export function loadGitHubAppConfig(env: NodeJS.ProcessEnv = process.env): GitHubAppConfig | undefined {
+  const appId = env.GITHUB_APP_ID?.trim();
+  const privateKeyPem = readPrivateKey(env.GITHUB_APP_PRIVATE_KEY);
+  const slug = env.GITHUB_APP_SLUG?.trim() || "coop-ai";
+  if (!appId || !privateKeyPem) {
+    return undefined;
+  }
+  const publicBaseUrl =
+    env.WEBHOOK_DOMAIN?.trim() ||
+    env.COOP_PUBLIC_API_URL?.trim() ||
+    `http://localhost:${env.PORT ?? "8787"}`;
+  return {
+    appId,
+    privateKeyPem,
+    slug,
+    webhookSecret: env.GITHUB_WEBHOOK_SECRET?.trim(),
+    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+  };
+}
+
+export function isCoopDevModeServer(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.COOP_DEV_MODE?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function readPrivateKey(raw: string | undefined): string | undefined {
+  if (!raw?.trim()) {
+    return undefined;
+  }
+  let key = raw.trim();
+  if (!key.includes("BEGIN")) {
+    key = Buffer.from(key, "base64").toString("utf8");
+  }
+  return key.includes("BEGIN PRIVATE KEY") ? key : undefined;
+}

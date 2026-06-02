@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SettingsPanel, Preferences } from "./components/SettingsPanel";
+import type { SettingsScreen } from "./components/settings/types";
+import { isSettingsScreen, settingsScreenParent } from "./components/settings/types";
+import type { SettingsSaveKey } from "./components/SaveFlashLabel";
 import type { SettingsTestKey } from "./components/TestButton";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
 import type { CodeHostProviderPreference, DecisionIntegrationProvider } from "../chat/types";
+
+type PersistedSettingsState = {
+  screen?: SettingsScreen;
+};
 
 type VsCodeApi = {
   postMessage: (message: unknown) => void;
@@ -15,6 +22,7 @@ type VsCodeApi = {
 type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
   | { type: "settings:state"; payload: Preferences }
+  | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | {
       type: "prompts:list";
@@ -43,6 +51,8 @@ const DEFAULT_PREFS: Preferences = {
   defaultCodeHost: "github",
   gitlabBaseUrl: "https://gitlab.com/api/v4",
   hasGitHubToken: false,
+  hasGitHubAppInstalled: false,
+  devMode: false,
   hasGitLabToken: false,
   hasBitbucketCredentials: false,
   hasSlackToken: false,
@@ -52,13 +62,18 @@ const DEFAULT_PREFS: Preferences = {
 };
 
 const TEST_RESULT_FLASH_MS = 1500;
+const SAVE_FLASH_MS = 2000;
 const TEST_TIMEOUT_MS = 12000;
+/** Poll GitHub App install status while settings is open (catches uninstall without manual refresh). */
+const GITHUB_INSTALL_POLL_MS = 30_000;
 
 type SettingsViewProps = {
   vscode: VsCodeApi;
 };
 
 export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement {
+  const persisted = (vscode.getState() as PersistedSettingsState | null) ?? null;
+  const [screen, setScreen] = useState<SettingsScreen>(persisted?.screen ?? "hub");
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [githubTokenDraft, setGithubTokenDraft] = useState("");
@@ -71,6 +86,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const [teamsTokenDraft, setTeamsTokenDraft] = useState("");
   const [connectionTestMessage, setConnectionTestMessage] = useState<string | undefined>();
   const [connectionTestOk, setConnectionTestOk] = useState<boolean | undefined>();
+  const [savedFlashKey, setSavedFlashKey] = useState<SettingsSaveKey | null>(null);
   const [pendingTest, setPendingTest] = useState<SettingsTestKey | null>(null);
   const [testResult, setTestResult] = useState<{ key: SettingsTestKey; ok: boolean } | null>(null);
   const [promptLibrary, setPromptLibrary] = useState<{
@@ -82,8 +98,25 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const activeTestRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
   const testTimeoutRef = useRef<number | null>(null);
+  const savedFlashTimerRef = useRef<number | null>(null);
+  const githubInstalledRef = useRef(false);
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+
+  const pollGithubInstallation = useCallback(() => {
+    post({ type: "settings:refresh-github-installation" });
+  }, [post]);
+
+  const flashSaved = useCallback((key: SettingsSaveKey) => {
+    if (savedFlashTimerRef.current !== null) {
+      window.clearTimeout(savedFlashTimerRef.current);
+    }
+    setSavedFlashKey(key);
+    savedFlashTimerRef.current = window.setTimeout(() => {
+      setSavedFlashKey(null);
+      savedFlashTimerRef.current = null;
+    }, SAVE_FLASH_MS);
+  }, []);
 
   const clearTestFlash = useCallback(() => {
     if (testResultTimerRef.current !== null) {
@@ -151,6 +184,18 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     post({ type: "ui:close-settings" });
   }, [post]);
 
+  const navigate = useCallback(
+    (next: SettingsScreen) => {
+      setScreen(next);
+      vscode.setState({ screen: next } satisfies PersistedSettingsState);
+    },
+    [vscode]
+  );
+
+  const handleBack = useCallback(() => {
+    navigate(settingsScreenParent(screen));
+  }, [navigate, screen]);
+
   useEffect(() => {
     post({ type: "webview-ready" });
     const listener = (event: MessageEvent<InboundMessage>) => {
@@ -160,8 +205,23 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           applyThemeMode(message.payload.mode);
           break;
         case "settings:state":
+          if (githubInstalledRef.current && !message.payload.hasGitHubAppInstalled) {
+            setConnectionTestMessage(
+              "GitHub App installation was removed. Install it again to access repositories."
+            );
+            setConnectionTestOk(false);
+          }
+          githubInstalledRef.current = message.payload.hasGitHubAppInstalled;
           setPrefs(message.payload);
           break;
+        case "settings:navigate": {
+          const next = message.payload.screen;
+          if (isSettingsScreen(next)) {
+            setScreen(next);
+            vscode.setState({ screen: next } satisfies PersistedSettingsState);
+          }
+          break;
+        }
         case "settings:test-result":
           completeTest(message.payload);
           break;
@@ -177,11 +237,34 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   }, [completeTest, post]);
 
   useEffect(() => {
+    pollGithubInstallation();
+    const onFocus = () => pollGithubInstallation();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        pollGithubInstallation();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = window.setInterval(pollGithubInstallation, GITHUB_INSTALL_POLL_MS);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(interval);
+    };
+  }, [pollGithubInstallation]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (promptModalOpen) {
           event.preventDefault();
           setPromptModalOpen(false);
+          return;
+        }
+        if (screen !== "hub") {
+          event.preventDefault();
+          handleBack();
           return;
         }
         event.preventDefault();
@@ -190,7 +273,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleClose, promptModalOpen]);
+  }, [handleBack, handleClose, promptModalOpen, screen]);
 
   useEffect(() => {
     return () => {
@@ -199,6 +282,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
       }
       if (testTimeoutRef.current !== null) {
         window.clearTimeout(testTimeoutRef.current);
+      }
+      if (savedFlashTimerRef.current !== null) {
+        window.clearTimeout(savedFlashTimerRef.current);
       }
     };
   }, []);
@@ -218,8 +304,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
       <p className="coop-panel-narrow-notice" role="status">
         Widen the sidebar for the best experience.
       </p>
-      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-6">
+      <div className="flex min-h-0 flex-1 overflow-y-auto px-3 py-4">
         <SettingsPanel
+        screen={screen}
+        onNavigate={navigate}
         prefs={prefs}
         promptLibrary={promptLibrary}
         onUpdatePinnedPrompts={(pinnedIds) =>
@@ -228,6 +316,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onManagePromptLibrary={() => setPromptModalOpen(true)}
         connectionTestMessage={connectionTestMessage}
         connectionTestOk={connectionTestOk}
+        savedFlashKey={savedFlashKey}
         pendingTest={pendingTest}
         testResult={testResult}
         onClose={handleClose}
@@ -242,10 +331,12 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             return;
           }
           post({ type: "settings:update-api-key", payload: { apiKey: trimmed } });
-          setConnectionTestMessage("API key saved. Click Test connection.");
+          setApiKeyDraft("");
+          flashSaved("apiKey");
         }}
         onClearApiKey={() => {
           post({ type: "settings:clear-api-key" });
+          setApiKeyDraft("");
           setConnectionTestMessage(undefined);
           setConnectionTestOk(undefined);
         }}
@@ -264,12 +355,14 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
           post({ type: "settings:update-github-token", payload: { token: trimmed } });
           setGithubTokenDraft("");
-          setConnectionTestMessage("GitHub token saved.");
+          flashSaved("github");
         }}
         onClearGithubToken={() => {
           post({ type: "settings:clear-github-token" });
           setGithubTokenDraft("");
         }}
+        onInstallGithubApp={() => post({ type: "settings:install-github-app" })}
+        onRefreshGithubInstallation={() => post({ type: "settings:refresh-github-installation" })}
         gitlabTokenDraft={gitlabTokenDraft}
         onGitlabTokenDraftChange={setGitlabTokenDraft}
         onSaveGitlabToken={() => {
@@ -280,7 +373,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
           post({ type: "settings:update-gitlab-token", payload: { token: trimmed } });
           setGitlabTokenDraft("");
-          setConnectionTestMessage("GitLab token saved.");
+          flashSaved("gitlab");
         }}
         onClearGitlabToken={() => {
           post({ type: "settings:clear-gitlab-token" });
@@ -303,7 +396,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             }
           });
           setBitbucketPasswordDraft("");
-          setConnectionTestMessage("Bitbucket credentials saved.");
+          flashSaved("bitbucket");
         }}
         onClearBitbucketCredentials={() => {
           post({ type: "settings:clear-bitbucket-credentials" });
@@ -320,7 +413,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
           post({ type: "settings:update-slack-token", payload: { token: trimmed } });
           setSlackTokenDraft("");
-          setConnectionTestMessage("Slack token saved.");
+          flashSaved("slack");
         }}
         onClearSlackToken={() => {
           post({ type: "settings:clear-slack-token" });
@@ -346,7 +439,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             }
           });
           setJiraTokenDraft("");
-          setConnectionTestMessage("Jira credentials saved.");
+          flashSaved("jira");
         }}
         onClearJiraCredentials={() => {
           post({ type: "settings:clear-jira-credentials" });
@@ -363,7 +456,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
           post({ type: "settings:update-teams-token", payload: { token: trimmed } });
           setTeamsTokenDraft("");
-          setConnectionTestMessage("Teams token saved.");
+          flashSaved("teams");
         }}
         onClearTeamsToken={() => {
           post({ type: "settings:clear-teams-token" });
@@ -379,10 +472,20 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         pinnedIds={promptLibrary.pinnedIds}
         hasWorkspace={promptLibrary.hasWorkspace}
         onClose={() => setPromptModalOpen(false)}
-        onSave={(payload) => post({ type: "prompts:save", payload })}
-        onUpdate={(payload) => post({ type: "prompts:update", payload })}
-        onDelete={(id) => post({ type: "prompts:delete", payload: { id } })}
-        onUpdatePinned={(pinnedIds) => post({ type: "prompts:update-pinned", payload: { pinnedIds } })}
+        onCommit={(payload) =>
+          post({
+            type: "prompts:commit",
+            payload: {
+              prompts: payload.prompts.map((prompt) => ({
+                id: prompt.id,
+                title: prompt.title,
+                template: prompt.template ?? "",
+                actionId: prompt.actionId
+              })),
+              pinnedIds: payload.pinnedIds
+            }
+          })
+        }
       />
     </div>
   );

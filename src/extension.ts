@@ -15,13 +15,18 @@ import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
 import { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
+import { linesFromText } from "./api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "./api/codeHosts/types";
+import { isCoopDevMode, readLightningBackend } from "./config/lightningConfig";
 import { IntegrationSecrets } from "./api/integrations/integrationSecrets";
 import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
 import { HealthMonitor, type IntegrationProvider } from "./integrations/healthMonitor";
+import { getIndexManager } from "./indexing/indexManager";
+import { createIndexBackend } from "./indexing/createIndexBackend";
+import { LightningStatusBar } from "./extension/lightningStatusBar";
 
 function resolveSession(fallback: CoopChatSession): CoopChatSession {
   return coopSessionRegistry.getActive() ?? fallback;
@@ -47,7 +52,33 @@ export function activate(context: vscode.ExtensionContext): void {
   const codeHostSecrets = new CodeHostSecrets(context.secrets);
   const codeHostCache = new CacheManager({ storageUri: context.globalStorageUri });
   void codeHostCache.initialize();
-  const codeHostRouter = new CodeHostRouter({ secrets: codeHostSecrets, cache: codeHostCache });
+  const getApiBaseUrl = () => readConfiguration().apiBaseUrl;
+  const codeHostRouter = new CodeHostRouter({
+    secrets: codeHostSecrets,
+    cache: codeHostCache,
+    useCloudGithubProxy: () => readLightningBackend() === "cloud" && !isCoopDevMode(),
+    cloudGithubFileFetcher: async ({ repoId, path, coords }) => {
+      const file = await api.fetchRepoFileViaCloud(getApiBaseUrl(), repoId, path, coords.branch);
+      return {
+        path: file.path,
+        content: file.content,
+        encoding: (file.encoding as "utf-8" | undefined) ?? "utf-8",
+        branch: file.branch,
+        truncated: file.truncated,
+        size: file.content.length,
+        lines: linesFromText(file.content)
+      };
+    },
+    cloudGithubHealthCheck: async () => {
+      if (!(await api.hasToken())) {
+        return { ok: false, message: "Add your Coop API key first." };
+      }
+      const status = await api.getGithubInstallationStatus(getApiBaseUrl());
+      return status.installed
+        ? { ok: true, message: "GitHub App is installed for your organization." }
+        : { ok: false, message: "Install the CoopAI GitHub App from settings." };
+    }
+  });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
   registerDecisionArchaeologyEngine(
     createDecisionArchaeologyEngine({
@@ -71,7 +102,24 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const degradationCache = new LayeredDegradationCache({ config: degradationConfig });
   healthMonitor.start();
-  const services = { healthMonitor, degradationCache, codeHostRouter, codeHostSecrets, integrationSecrets };
+  const indexManager = getIndexManager({ secrets: context.secrets });
+  const indexBackend = createIndexBackend({
+    indexManager,
+    client: api.getBackendClient(),
+    getBaseUrl: getApiBaseUrl,
+    secrets: context.secrets
+  });
+  const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);
+  const services = {
+    healthMonitor,
+    degradationCache,
+    codeHostRouter,
+    codeHostSecrets,
+    integrationSecrets,
+    indexManager,
+    indexBackend,
+    lightningStatusBar
+  };
   const provider = new CoopSidebarProvider(context.extensionUri, context, api, services);
 
   const refreshAllSessions = async () => {
@@ -82,6 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     { dispose: () => healthMonitor.stop() },
+    lightningStatusBar,
     vscode.window.registerWebviewViewProvider("coopAI.sidebar", provider, {
       webviewOptions: {
         retainContextWhenHidden: true
@@ -143,6 +192,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("coopAI.openExtensionSettings", () => {
       void vscode.commands.executeCommand("workbench.action.openSettings", "@ext:coop-ai.coop-ai");
+    }),
+    vscode.commands.registerCommand("coopAI.openLightningMode", () => {
+      resolveSession(provider.session).openLightningPanel();
     }),
     vscode.commands.registerCommand("coopAI.openKeybindings", () => {
       void vscode.commands.executeCommand("workbench.action.openGlobalKeybindings");
@@ -206,6 +258,9 @@ export function activate(context: vscode.ExtensionContext): void {
         if (event.affectsConfiguration("coopAI.degradation")) {
           degradationConfig = readDegradationConfiguration();
           healthMonitor.updateConfig(degradationConfig);
+        }
+        if (event.affectsConfiguration("coopAI.lightning") || event.affectsConfiguration("coopAI.license")) {
+          void lightningStatusBar.refresh();
         }
         void refreshAllSessions();
       }

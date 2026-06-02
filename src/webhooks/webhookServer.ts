@@ -23,6 +23,10 @@ import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
 import { handleOrgApiRequest } from "../server/orgApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 import { requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import { loadGitHubAppConfig } from "../server/githubAppConfig";
+import { createGithubAppService } from "../server/codeHostCredentialResolver";
+import type { GitHubAppService } from "../server/githubAppService";
+import { handleGitHubAppApiRequest } from "../server/githubAppApi";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -46,6 +50,8 @@ export type WebhookServerRuntime = {
   jobs: JobRuntime;
   orgStore?: OrgStore;
   serverConfig: ServerConfig;
+  githubApp?: GitHubAppService;
+  githubAppConfig?: ReturnType<typeof loadGitHubAppConfig>;
 };
 
 type ParsedRequest = {
@@ -70,6 +76,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       : pool
         ? new OrgStore(pool)
         : undefined);
+
+  const githubAppConfig = loadGitHubAppConfig();
+  const githubApp =
+    githubAppConfig && serverConfig.credentialsEncryptionKey
+      ? createGithubAppService(githubAppConfig, serverConfig.credentialsEncryptionKey)
+      : undefined;
 
   const cache =
     options.cache ??
@@ -96,7 +108,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     createJobRuntime({
       cache,
       consistency,
-      orgStore
+      orgStore,
+      githubApp,
+      allowPatFallback: serverConfig.devMode
     });
   if (serverConfig.jobsWorkersEnabled) {
     startJobRuntime(jobs);
@@ -110,9 +124,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   };
 
   const github = new GitHubWebhookHandler({
-    secret: config.webhooks.github.secret,
+    secret: config.webhooks.github.secret ?? githubAppConfig?.webhookSecret,
     monitor,
-    queue
+    queue,
+    orgStore,
+    githubApp
   });
   const gitlab = new GitLabWebhookHandler({
     token: config.webhooks.gitlab.secret,
@@ -145,22 +161,37 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      const orgParsed = {
+        method: parsed.method,
+        pathname: parsed.pathname,
+        query: parsed.query,
+        headers: parsed.headers,
+        body: parsed.body
+      };
+
+      const auth = await resolveAuthContext(
+        parsed.headers,
+        orgStore,
+        serverConfig.legacyApiToken,
+        serverConfig.requireApiAuth
+      );
+
       if (
-        await handleOrgApiRequest(
-          {
-            method: parsed.method,
-            pathname: parsed.pathname,
-            headers: parsed.headers,
-            body: parsed.body
-          },
-          response,
-          {
-            orgStore,
-            jobQueue: jobs.queue,
-            serverConfig
-          }
-        )
+        await handleGitHubAppApiRequest(orgParsed, response, {
+          orgStore,
+          githubApp,
+          githubAppConfig
+        }, auth)
       ) {
+        return;
+      }
+
+      if (await handleOrgApiRequest(orgParsed, response, {
+        orgStore,
+        jobQueue: jobs.queue,
+        serverConfig,
+        githubApp
+      })) {
         return;
       }
 
@@ -323,7 +354,21 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     }
   });
 
-  return { server, config, cache, consistency, monitor, registry, rateLimits, tokenPool, jobs, orgStore, serverConfig };
+  return {
+    server,
+    config,
+    cache,
+    consistency,
+    monitor,
+    registry,
+    rateLimits,
+    tokenPool,
+    jobs,
+    orgStore,
+    serverConfig,
+    githubApp,
+    githubAppConfig
+  };
 }
 
 export async function startWebhookServer(options: WebhookServerOptions = {}): Promise<WebhookServerRuntime> {

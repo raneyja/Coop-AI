@@ -1,5 +1,8 @@
 import type { ServerResponse } from "node:http";
 import type { JobQueue } from "../jobs/jobQueue";
+import { GitHubClient } from "../api/codeHosts/githubClient";
+import { CodeHostError } from "../api/codeHosts/types";
+import { parseRepoId } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { requireDbPool, getDbPool } from "./db";
 import { JobType } from "../jobs/types";
@@ -11,6 +14,8 @@ import {
   resolveAuthContext,
   resolveOrgPlanFromDb
 } from "./authMiddleware";
+import { resolveGithubTokenForOrg } from "./codeHostCredentialResolver";
+import type { GitHubAppService } from "./githubAppService";
 import { canUseLightningPlan, type OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 
@@ -18,11 +23,13 @@ export type OrgApiDeps = {
   orgStore?: OrgStore;
   jobQueue?: JobQueue;
   serverConfig: ServerConfig;
+  githubApp?: GitHubAppService;
 };
 
 type ParsedRequest = {
   method: string;
   pathname: string;
+  query?: URLSearchParams;
   headers: Record<string, string | undefined>;
   body: unknown;
 };
@@ -124,6 +131,13 @@ export async function handleOrgApiRequest(
     return true;
   }
 
+  const fileMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/files$/);
+  if (parsed.method === "GET" && fileMatch) {
+    const repoId = decodeURIComponent(fileMatch[1]);
+    await handleGetRepoFile(repoId, parsed, response, deps, auth!);
+    return true;
+  }
+
   writeJson(response, 404, { error: "not found" });
   return true;
 }
@@ -134,6 +148,12 @@ async function handleStoreGithubCredential(
   deps: OrgApiDeps,
   auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
 ): Promise<void> {
+  if (!deps.serverConfig.devMode) {
+    writeJson(response, 403, {
+      error: "PAT storage is disabled. Install the CoopAI GitHub App instead."
+    });
+    return;
+  }
   const body = asRecord(parsed.body);
   const token = String(body.token ?? "").trim();
   if (!token) {
@@ -146,6 +166,62 @@ async function handleStoreGithubCredential(
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to store credential";
     writeJson(response, 500, { error: message });
+  }
+}
+
+async function handleGetRepoFile(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const filePath = parsed.query?.get("path")?.trim();
+  if (!filePath) {
+    writeJson(response, 400, { error: "path query parameter is required" });
+    return;
+  }
+
+  const target = parseRepoId(repoId);
+  if (target.provider !== "github") {
+    writeJson(response, 400, { error: "Only GitHub repositories are supported for cloud file fetch" });
+    return;
+  }
+
+  const token = await resolveGithubTokenForOrg(auth.orgId, {
+    orgStore: deps.orgStore!,
+    githubApp: deps.githubApp,
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: "GitHub App is not installed for this organization. Install it from CoopAI settings."
+    });
+    return;
+  }
+
+  const branch = parsed.query?.get("branch")?.trim() || undefined;
+  const client = new GitHubClient({ token });
+  try {
+    const file = await client.getFileContent(
+      { provider: "github", owner: target.owner, repo: target.repo, branch },
+      filePath
+    );
+    writeJson(response, 200, {
+      repoId,
+      path: file.path,
+      content: file.content,
+      encoding: file.encoding,
+      branch: file.branch,
+      truncated: file.truncated ?? false
+    });
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to fetch file";
+    writeJson(response, 502, { error: message });
   }
 }
 
