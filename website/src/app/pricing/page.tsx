@@ -45,9 +45,9 @@ const tiers: PricingTier[] = [
     price: "$20",
     period: "per user / month",
     features: [
-      "Everything in Developer + Lightning Mode (local graph index for fast cross-repo search)",
+      "Everything in Developer + Lightning Mode (managed cloud code graph for fast cross-repo search)",
       "Much faster on large repos (dependencies, symbols, ownership)",
-      "Indexes your local clone or synced repo",
+      "Backend-managed indexing on Coop cloud — no local indexer install",
       "Shared prompt libraries",
       "Usage visibility & analytics",
       "Priority support"
@@ -87,7 +87,7 @@ export default function PricingPage() {
             Go Pro for <span className="font-semibold text-coop-accent">Lightning Mode</span>.
           </>
         }
-        description="Every plan comes with a remote code graph from GitHub, GitLab, or Bitbucket, along with Slack, Jira, Notion, and other key tools. Pro unlocks Lightning Mode — a blazing-fast local graph index for dramatically quicker cross-repo search."
+        description="Every plan comes with a remote code graph from GitHub, GitLab, or Bitbucket, along with Slack, Jira, Notion, and other key tools. Pro unlocks Lightning Mode — managed cloud code graph indexing for dramatically quicker cross-repo search."
       />
 
       <section className="pb-20">
