@@ -639,6 +639,52 @@
           "type": "boolean",
           "default": true,
           "description": "Record detected conflicts and user actions in an in-memory audit trail."
+        },
+        "coopAI.devMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Internal development only. When true, exposes Lightning local indexing backend and related UI for testing. Leave false for production."
+        },
+        "coopAI.license.plan": {
+          "type": "string",
+          "enum": ["free", "team", "enterprise"],
+          "default": "free",
+          "description": "Subscription plan. Lightning Mode requires team or enterprise."
+        },
+        "coopAI.lightning.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Lightning Mode (Pro plan). When false, CoopAI uses Zero-Clone remote APIs only."
+        },
+        "coopAI.lightning.autoIndexOnEnable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically build indexes when Lightning Mode is enabled for a repository."
+        },
+        "coopAI.lightning.backend": {
+          "type": "string",
+          "enum": ["local", "cloud"],
+          "default": "cloud",
+          "description": "Lightning index backend (Pro). Defaults to Coop cloud. Local machine indexing is only available when coopAI.devMode is true."
+        },
+        "coopAI.lightning.maxDiskGb": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Soft disk usage limit (GB) for Lightning Mode local indexing (coopAI.devMode only)."
+        },
+        "coopAI.lightning.repos": {
+          "type": "array",
+          "default": [],
+          "description": "Per-repository Lightning Mode settings.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repoId": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "localPath": { "type": "string" }
+            }
+          }
         }
       }
     }
