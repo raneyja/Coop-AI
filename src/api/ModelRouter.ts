@@ -251,6 +251,8 @@ export class ModelRouter {
   ): void {
     const event: LlmAuditEvent = {
       requestId: request.requestId,
+      orgId: request.orgId,
+      plan: request.plan,
       provider,
       model: request.modelConfig.model,
       useCase: request.useCase,

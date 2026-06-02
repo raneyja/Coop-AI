@@ -46,8 +46,12 @@ export type ChatContextPayload = {
   contextBundle?: unknown;
 };
 
+export type ChatOrgPlan = "free" | "pro" | "enterprise";
+
 export type CompletionRequest = {
   requestId: string;
+  orgId: string;
+  plan: ChatOrgPlan;
   message: string;
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
@@ -95,6 +99,8 @@ export type ProviderStreamOptions = {
 
 export type LlmAuditEvent = {
   requestId: string;
+  orgId: string;
+  plan: ChatOrgPlan;
   provider: LlmProvider;
   model: string;
   useCase: UseCase;

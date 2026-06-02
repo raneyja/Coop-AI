@@ -59,8 +59,8 @@ Legacy single-token auth via `COOP_API_TOKEN` remains supported during migration
 - `POST /v1/orgs/repos/:repoId/lightning/disable` disables Lightning for a repo (Pro+).
 - `GET /v1/orgs/repos/:repoId/lightning/status` returns index status for a repo (Pro+).
 - `GET /v1/orgs/repos/:repoId/manifest` returns Zero-Clone structure manifest (all plans).
-- `POST /v1/chat` streams chat completions (see [api-v1.md](./api-v1.md)).
-- `POST /v1/completions/inline` returns `501` until autocomplete is implemented.
+- `POST /v1/chat` streams chat completions (org API key; all plans — see [api-v1.md](./api-v1.md)).
+- `POST /v1/completions/inline` inline editor completions (same auth as chat).
 - `GET /webhooks/health` returns webhook delivery and registration health.
 - `POST /webhooks/github` accepts GitHub webhook deliveries.
 - `POST /webhooks/gitlab` accepts GitLab webhook deliveries.

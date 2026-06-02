@@ -4,7 +4,6 @@ export type LlmServerConfig = {
   defaultProvider: LlmProvider;
   mockMode: boolean;
   allowUnapprovedProvider: boolean;
-  apiToken?: string;
   apiKeys: Partial<Record<LlmProvider, string>>;
 };
 
@@ -14,7 +13,6 @@ export function loadLlmServerConfig(env: NodeJS.ProcessEnv = process.env): LlmSe
     defaultProvider,
     mockMode: readBoolean(env.COOP_LLM_MOCK, false),
     allowUnapprovedProvider: readBoolean(env.COOP_LLM_ALLOW_UNAPPROVED, false),
-    apiToken: env.COOP_JOBS_API_TOKEN ?? env.COOP_API_TOKEN,
     apiKeys: {
       openai: env.OPENAI_API_KEY,
       anthropic: env.ANTHROPIC_API_KEY,

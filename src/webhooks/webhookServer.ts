@@ -187,7 +187,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter },
+          { router: chatRouter, orgStore, serverConfig },
           request
         )
       ) {

@@ -4,11 +4,21 @@ import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import { handleInlineCompletionRequest } from "./inlineCompletionApi";
-import type { UseCase, V1ChatRequestBody } from "./types";
+import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
+import {
+  requireAuth,
+  requireOrgPlan,
+  resolveAuthContext,
+  resolveOrgPlanFromDb
+} from "../server/authMiddleware";
+import type { OrgStore } from "../server/orgStore";
+import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 
 export type ChatApiDeps = {
   router?: ModelRouter;
   config?: LlmServerConfig;
+  orgStore?: OrgStore;
+  serverConfig?: ServerConfig;
 };
 
 type ParsedChatRequest = {
@@ -16,6 +26,11 @@ type ParsedChatRequest = {
   pathname: string;
   headers: Record<string, string | undefined>;
   body: unknown;
+};
+
+type ChatOrgContext = {
+  orgId: string;
+  plan: ChatOrgPlan;
 };
 
 export function createChatRouter(deps: ChatApiDeps = {}): ModelRouter {
@@ -29,14 +44,15 @@ export async function handleChatApiRequest(
   rawRequest?: IncomingMessage
 ): Promise<boolean> {
   const config = deps.config ?? loadLlmServerConfig();
+  const serverConfig = deps.serverConfig ?? loadServerConfig();
 
   if (parsed.pathname === "/v1/completions/inline" && parsed.method === "POST") {
-    if (!authorize(parsed.headers, config.apiToken)) {
-      writeJson(response, 401, { error: "unauthorized" });
+    const org = await resolveChatOrg(parsed.headers, deps, serverConfig, response);
+    if (!org) {
       return true;
     }
     const router = createChatRouter(deps);
-    await handleInlineCompletionRequest(parsed.body, response, router, config);
+    await handleInlineCompletionRequest(parsed.body, response, router, config, org);
     return true;
   }
 
@@ -44,8 +60,8 @@ export async function handleChatApiRequest(
     return false;
   }
 
-  if (!authorize(parsed.headers, config.apiToken)) {
-    writeJson(response, 401, { error: "unauthorized" });
+  const org = await resolveChatOrg(parsed.headers, deps, serverConfig, response);
+  if (!org) {
     return true;
   }
 
@@ -75,6 +91,8 @@ export async function handleChatApiRequest(
     for await (const chunk of router.stream(
       {
         requestId,
+        orgId: org.orgId,
+        plan: org.plan,
         message: body.message,
         history: Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [],
         context: body.context,
@@ -113,12 +131,34 @@ export function llmHealthPayload(router: ModelRouter): Record<string, unknown> {
   };
 }
 
-function authorize(headers: Record<string, string | undefined>, token?: string): boolean {
-  if (!token) {
-    return true;
+async function resolveChatOrg(
+  headers: Record<string, string | undefined>,
+  deps: ChatApiDeps,
+  serverConfig: ServerConfig,
+  response: ServerResponse
+): Promise<ChatOrgContext | undefined> {
+  const auth = await resolveAuthContext(
+    headers,
+    deps.orgStore,
+    serverConfig.legacyApiToken,
+    serverConfig.requireApiAuth
+  );
+
+  if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return undefined;
   }
-  const header = headers.authorization ?? "";
-  return header === `Bearer ${token}`;
+
+  if (!auth) {
+    return { orgId: "dev", plan: "free" };
+  }
+
+  if (!(await requireOrgPlan(deps.orgStore, auth, response, "free", "pro", "enterprise"))) {
+    return undefined;
+  }
+
+  const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
+  return { orgId: auth.orgId, plan };
 }
 
 function writeSse(response: ServerResponse, payload: unknown): void {

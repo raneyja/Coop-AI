@@ -3,6 +3,7 @@ import { createRequestId, ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
+import type { ChatOrgPlan } from "./types";
 import { systemPromptForUseCase } from "../prompts/systemPrompts";
 
 export type V1InlineCompletionBody = {
@@ -30,7 +31,8 @@ export async function handleInlineCompletionRequest(
   body: unknown,
   response: ServerResponse,
   router: ModelRouter,
-  config: LlmServerConfig = loadLlmServerConfig()
+  config: LlmServerConfig = loadLlmServerConfig(),
+  org: { orgId: string; plan: ChatOrgPlan }
 ): Promise<void> {
   const record = asRecord(body);
   const message = typeof record.message === "string" ? record.message : "";
@@ -53,6 +55,8 @@ export async function handleInlineCompletionRequest(
     const result = await router.completeInline(
       {
         requestId,
+        orgId: org.orgId,
+        plan: org.plan,
         message,
         history: [],
         context: {

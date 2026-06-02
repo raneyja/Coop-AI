@@ -5,10 +5,14 @@ All routes are served from the same host as graph, jobs, and webhooks (`coopAI.a
 ## Authentication
 
 ```http
-Authorization: Bearer <COOP_API_TOKEN>
+Authorization: Bearer <org-api-key>
 ```
 
-The token matches `COOP_JOBS_API_TOKEN` / `COOP_API_TOKEN` on the server. If no token is configured on the server, auth is skipped (development only).
+Create org API keys with `npm run admin:org -- create-api-key <orgId> <label>`. Chat and inline completion require a valid org key when `COOP_REQUIRE_API_AUTH=true` (production default).
+
+In local development with `COOP_REQUIRE_API_AUTH=false` and no Bearer token, the server accepts requests and audits them as `orgId: dev`, `plan: free`.
+
+Legacy `COOP_JOBS_API_TOKEN` / `COOP_API_TOKEN` still work for `/api/jobs` and as a migration fallback for other authenticated routes; they do **not** gate `/v1/chat`.
 
 ## Health
 
@@ -115,7 +119,8 @@ Batch completion for editor ghost text (`useCase: inline_completion`). Same auth
 
 | Variable | Purpose |
 |----------|---------|
-| `COOP_API_TOKEN` / `COOP_JOBS_API_TOKEN` | Bearer auth for `/v1/*` and `/api/jobs` |
+| `COOP_API_TOKEN` / `COOP_JOBS_API_TOKEN` | Legacy Bearer auth for `/api/jobs` (and migration fallback on other routes) |
+| Org API keys (database) | Bearer auth for `/v1/chat`, `/v1/completions/inline`, `/v1/me`, graph, etc. |
 | `COOP_LLM_DEFAULT_PROVIDER` | Default provider (`anthropic`) |
 | `COOP_LLM_MOCK` | `true` = mock stream without provider keys |
 | `COOP_LLM_ALLOW_UNAPPROVED` | `true` = allow DeepSeek for enterprise |
