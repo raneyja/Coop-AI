@@ -26,6 +26,7 @@ export type JobQueueConfig = {
 
 const DEFAULT_SCHEDULES: JobScheduleConfig[] = [
   {
+    // TODO: filter by org plan before enqueuing — currently runs for all orgs regardless of plan (tracked for Session 8 collection model work).
     name: "Index All Repos Nightly",
     trigger: "0 2 * * *",
     jobType: JobType.INDEX_REPOSITORY,

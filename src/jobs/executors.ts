@@ -1,12 +1,15 @@
 import type { GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
+import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
 import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
+import { getDbPool } from "../server/db";
 import type { GitHubAppService } from "../server/githubAppService";
+import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
 import type { OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
 import { buildPartialFailure } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
-import { cloneRepository, parseRepoId } from "../server/gitCloneService";
+import { runScipIndexer } from "./runScipIndexer";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -113,6 +116,7 @@ export async function buildDependencyGraph(
   signal: AbortSignal
 ): Promise<unknown> {
   const repoId = String(job.params.repoId ?? "");
+  const orgId = job.params.orgId ? String(job.params.orgId) : undefined;
   if (!repoId) {
     throw new Error("Invalid parameters: repoId is required");
   }
@@ -136,9 +140,8 @@ export async function buildDependencyGraph(
 
   await report(50, "Rebuilding dependency edges");
   const filePaths = new Set(graph.fileTree.map((f) => f.path));
-  const edges = graph.dependencies.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to));
-  const inferred = inferDependenciesFromPaths(graph.fileTree.map((f) => f.path));
-  const merged = dedupeEdges([...edges, ...inferred]);
+  const preserved = graph.dependencies.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to));
+  const merged = await resolveDependencyEdges(orgId, repoId, graph.fileTree.map((f) => f.path), preserved);
   const updated = ctx.cache.setDependencies(repoId, merged);
   graph = updated ?? graph;
 
@@ -184,6 +187,7 @@ async function indexRepository(
     });
   }
 
+  let cloneLocalPath: string | undefined;
   try {
     const token =
       orgId && ctx.orgStore
@@ -198,6 +202,17 @@ async function indexRepository(
     await report(45, "Cloning repository");
     const target = parseRepoId(repoId);
     const clone = await cloneRepository(target, token);
+    cloneLocalPath = clone.localPath;
+
+    let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
+    if (orgId) {
+      const pool = await getDbPool();
+      if (pool) {
+        await report(60, "Running SCIP symbol indexing");
+        scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool);
+      }
+    }
+
     await report(70, "Building file index");
 
     const now = new Date();
@@ -212,6 +227,22 @@ async function indexRepository(
     graph.metadata.indexVersion += 1;
     graph.lastUpdated = now;
     ctx.cache.setGraph(graph);
+
+    if (orgId) {
+      const pool = await getDbPool();
+      if (pool) {
+        const store = new RepoSymbolIndexStore(pool);
+        const symbolCount = await store.countSymbols(orgId, repoId);
+        if (symbolCount > 0) {
+          const filePaths = new Set(graph.fileTree.map((file) => file.path));
+          const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
+          ctx.cache.setDependencies(
+            repoId,
+            dedupeEdges(symbolEdges.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to)))
+          );
+        }
+      }
+    }
 
     if (orgId && ctx.orgStore) {
       await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
@@ -229,7 +260,10 @@ async function indexRepository(
       fileCount: graph.fileTree.length,
       indexVersion: graph.metadata.indexVersion,
       lastIndexedAt: graph.metadata.lastIndexedAt.toISOString(),
-      headCommit: clone.headCommit
+      headCommit: clone.headCommit,
+      scipAvailable: scipResult?.scipAvailable ?? false,
+      symbolCount: scipResult?.symbolCount ?? 0,
+      indexSource: scipResult?.source ?? "none"
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "index failed";
@@ -241,6 +275,10 @@ async function indexRepository(
       });
     }
     throw error;
+  } finally {
+    if (cloneLocalPath) {
+      removeRepositoryClone(cloneLocalPath);
+    }
   }
 }
 
@@ -404,6 +442,32 @@ function normalizeRepoIds(params: Record<string, unknown>): string[] {
     return [String(params.repoId)];
   }
   return [];
+}
+
+async function resolveDependencyEdges(
+  orgId: string | undefined,
+  repoId: string,
+  filePaths: string[],
+  preserved: Array<{ from: string; to: string; type: "import" | "reference" }>
+): Promise<Array<{ from: string; to: string; type: "import" | "reference" }>> {
+  const pathSet = new Set(filePaths);
+  if (orgId) {
+    const pool = await getDbPool();
+    if (pool) {
+      const store = new RepoSymbolIndexStore(pool);
+      const symbolCount = await store.countSymbols(orgId, repoId);
+      if (symbolCount > 0) {
+        const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
+        return dedupeEdges([
+          ...preserved,
+          ...symbolEdges.filter((edge) => pathSet.has(edge.from) && pathSet.has(edge.to))
+        ]);
+      }
+    }
+  }
+
+  const inferred = inferDependenciesFromPaths(filePaths);
+  return dedupeEdges([...preserved, ...inferred]);
 }
 
 function inferDependenciesFromPaths(paths: string[]): Array<{ from: string; to: string; type: "import" }> {

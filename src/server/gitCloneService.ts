@@ -46,6 +46,12 @@ export async function cloneRepository(
   return { localPath, headCommit, files };
 }
 
+export function removeRepositoryClone(localPath: string): void {
+  if (fs.existsSync(localPath)) {
+    fs.rmSync(localPath, { recursive: true, force: true });
+  }
+}
+
 function buildCloneUrl(target: CloneTarget, token?: string): string {
   const host =
     target.provider === "gitlab"
