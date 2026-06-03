@@ -98,14 +98,26 @@ export function findCrossRepoReferences(
   path: string,
   searchHits: Array<{ repoId: string; path: string; snippet?: string }>
 ): CrossRepoReference[] {
-  const moduleName = path.replace(/\.[^.]+$/, "");
-  return searchHits
-    .filter((hit) => hit.repoId !== repoIdFromCoordinates(coords))
-    .map((hit) => ({
+  const sourceRepoId = repoIdFromCoordinates(coords);
+  const moduleStem = path.replace(/\.[^.]+$/, "").split("/").pop() ?? path;
+  const seen = new Set<string>();
+  const references: CrossRepoReference[] = [];
+  for (const hit of searchHits) {
+    if (hit.repoId === sourceRepoId) {
+      continue;
+    }
+    const key = `${hit.repoId}:${hit.path}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    references.push({
       repoId: hit.repoId,
       path: hit.path,
-      specifier: hit.snippet ?? moduleName
-    }));
+      specifier: hit.snippet ?? moduleStem
+    });
+  }
+  return references;
 }
 
 function classifySpecifier(specifier: string): FileImportRef["kind"] {

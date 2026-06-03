@@ -16,6 +16,7 @@ import {
 } from "./authMiddleware";
 import { resolveGithubTokenForOrg } from "./codeHostCredentialResolver";
 import type { GitHubAppService } from "./githubAppService";
+import { CollectionStore } from "./collectionStore";
 import { canUseLightningPlan, type OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 
@@ -121,6 +122,31 @@ export async function handleOrgApiRequest(
         indexStatus: "idle"
       }
     });
+    return true;
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/collections") {
+    await handleCreateCollection(parsed, response, auth!.orgId);
+    return true;
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/collections") {
+    await handleListCollections(response, auth!.orgId);
+    return true;
+  }
+
+  const addRepoMatch = parsed.pathname.match(/^\/v1\/collections\/([^/]+)\/repos$/);
+  if (parsed.method === "POST" && addRepoMatch) {
+    const collectionId = decodeURIComponent(addRepoMatch[1]);
+    await handleAddCollectionRepo(collectionId, parsed, response, auth!.orgId);
+    return true;
+  }
+
+  const removeRepoMatch = parsed.pathname.match(/^\/v1\/collections\/([^/]+)\/repos\/([^/]+)$/);
+  if (parsed.method === "DELETE" && removeRepoMatch) {
+    const collectionId = decodeURIComponent(removeRepoMatch[1]);
+    const repoId = decodeURIComponent(removeRepoMatch[2]);
+    await handleRemoveCollectionRepo(collectionId, repoId, response, auth!.orgId);
     return true;
   }
 
@@ -265,6 +291,83 @@ async function handleEnableLightning(
     status: "queued",
     estimatedWaitTime: submit.estimatedWaitTime
   });
+}
+
+async function handleCreateCollection(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  orgId: string
+): Promise<void> {
+  const pool = requireDbPool(await getDbPool());
+  const body = asRecord(parsed.body);
+  const name = String(body.name ?? "").trim();
+  const description = body.description ? String(body.description) : undefined;
+  if (!name) {
+    writeJson(response, 400, { error: "name is required" });
+    return;
+  }
+  try {
+    const store = new CollectionStore(pool);
+    const collection = await store.createCollection(orgId, name, description);
+    writeJson(response, 201, { collection });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "failed to create collection";
+    const status = message.includes("unique") ? 409 : 500;
+    writeJson(response, status, { error: message });
+  }
+}
+
+async function handleListCollections(response: ServerResponse, orgId: string): Promise<void> {
+  const pool = requireDbPool(await getDbPool());
+  const store = new CollectionStore(pool);
+  const collections = await store.listCollections(orgId);
+  const enriched = await Promise.all(
+    collections.map(async (collection) => ({
+      ...collection,
+      repos: await store.listCollectionRepos(orgId, collection.id)
+    }))
+  );
+  writeJson(response, 200, { collections: enriched });
+}
+
+async function handleAddCollectionRepo(
+  collectionId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  orgId: string
+): Promise<void> {
+  const pool = requireDbPool(await getDbPool());
+  const body = asRecord(parsed.body);
+  const repoId = String(body.repoId ?? "").trim();
+  if (!repoId) {
+    writeJson(response, 400, { error: "repoId is required" });
+    return;
+  }
+  try {
+    const store = new CollectionStore(pool);
+    const repo = await store.addRepoToCollection(orgId, collectionId, repoId);
+    writeJson(response, 200, { repo });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "failed to add repo";
+    const status = message === "Collection not found" ? 404 : message.includes("not registered") ? 400 : 500;
+    writeJson(response, status, { error: message });
+  }
+}
+
+async function handleRemoveCollectionRepo(
+  collectionId: string,
+  repoId: string,
+  response: ServerResponse,
+  orgId: string
+): Promise<void> {
+  const pool = requireDbPool(await getDbPool());
+  const store = new CollectionStore(pool);
+  const removed = await store.removeRepoFromCollection(orgId, collectionId, repoId);
+  if (!removed) {
+    writeJson(response, 404, { error: "collection or repo membership not found" });
+    return;
+  }
+  writeJson(response, 200, { ok: true, collectionId, repoId });
 }
 
 async function handleGetRepoManifest(

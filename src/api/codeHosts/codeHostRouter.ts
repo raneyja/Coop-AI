@@ -28,7 +28,7 @@ import type {
   RemoteTreeEntry,
   RepoCoordinates
 } from "./types";
-import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates } from "./types";
+import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates, coordinatesFromRepoId } from "./types";
 
 export type CloudGithubFileFetcher = (options: {
   repoId: string;
@@ -244,7 +244,8 @@ export class CodeHostRouter {
 
   public async getCrossRepoReferences(
     filePath: string,
-    coords?: Partial<RepoCoordinates>
+    coords?: Partial<RepoCoordinates>,
+    options?: { collectionRepoIds?: string[] }
   ): Promise<CrossRepoReference[]> {
     const resolved = await this.resolveCoordinates(coords);
     const client = await this.getClient(resolved.provider);
@@ -252,12 +253,20 @@ export class CodeHostRouter {
       return [];
     }
     const moduleStem = filePath.replace(/\.[^.]+$/, "").split("/").pop() ?? filePath;
-    const hits = await client.searchCode(resolved, moduleStem, 20).catch(() => []);
-    return findCrossRepoReferences(
-      resolved,
-      filePath,
-      hits.map((hit) => ({ repoId: repoIdFromCoordinates(resolved), path: hit.path }))
-    );
+    const searchRepos = buildCrossRepoSearchTargets(resolved, options?.collectionRepoIds);
+    const githubClient = client as GitHubClient;
+    const hits =
+      searchRepos.length > 1 && typeof githubClient.searchCodeAcrossRepos === "function"
+        ? await githubClient.searchCodeAcrossRepos(searchRepos, moduleStem, 20).catch(() => [])
+        : (
+            await client.searchCode(resolved, moduleStem, 20).catch(() => [])
+          ).map((hit) => ({
+            repoId: repoIdFromCoordinates(resolved),
+            path: hit.path,
+            snippet: moduleStem
+          }));
+
+    return findCrossRepoReferences(resolved, filePath, hits);
   }
 
   public async getDependencyGraph(
@@ -439,4 +448,32 @@ export class CodeHostRouter {
       throw error;
     }
   }
+}
+
+function buildCrossRepoSearchTargets(
+  source: RepoCoordinates,
+  collectionRepoIds?: string[]
+): RepoCoordinates[] {
+  if (!collectionRepoIds?.length) {
+    return [source];
+  }
+  const targets: RepoCoordinates[] = [];
+  const seen = new Set<string>();
+  for (const repoId of collectionRepoIds) {
+    const coords = coordinatesFromRepoId(repoId, source.branch) ?? {
+      ...source,
+      owner: repoId.includes("/") ? repoId.split("/")[0] : source.owner,
+      repo: repoId.includes("/") ? repoId.split("/").slice(1).join("/") : repoId
+    };
+    if (coords.provider !== source.provider) {
+      continue;
+    }
+    const key = repoIdFromCoordinates(coords);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    targets.push(coords);
+  }
+  return targets.length > 0 ? targets : [source];
 }

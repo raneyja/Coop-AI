@@ -10,6 +10,7 @@ export type EmbeddingInsertRow = {
 };
 
 export type SimilarChunkHit = {
+  repoId: string;
   filePath: string;
   chunkIndex: number;
   chunkText: string;
@@ -20,11 +21,18 @@ export class RepoEmbeddingsStore {
   public constructor(private readonly pool: Pool) {}
 
   public async countChunks(orgId: string, repoId: string): Promise<number> {
+    return this.countChunksForRepos(orgId, [repoId]);
+  }
+
+  public async countChunksForRepos(orgId: string, repoIds: string[]): Promise<number> {
+    if (repoIds.length === 0) {
+      return 0;
+    }
     const result = await this.pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
        FROM repo_embeddings
-       WHERE org_id = $1 AND repo_id = $2`,
-      [orgId, repoId]
+       WHERE org_id = $1 AND repo_id = ANY($2::varchar[])`,
+      [orgId, repoIds]
     );
     return Number(result.rows[0]?.count ?? 0);
   }
@@ -78,24 +86,39 @@ export class RepoEmbeddingsStore {
     queryEmbedding: number[],
     limit = 20
   ): Promise<SimilarChunkHit[]> {
+    return this.searchSimilarAcrossRepos(orgId, [repoId], queryEmbedding, limit);
+  }
+
+  public async searchSimilarAcrossRepos(
+    orgId: string,
+    repoIds: string[],
+    queryEmbedding: number[],
+    limit = 20
+  ): Promise<SimilarChunkHit[]> {
+    if (repoIds.length === 0) {
+      return [];
+    }
     const result = await this.pool.query<{
+      repo_id: string;
       file_path: string;
       chunk_index: number;
       chunk_text: string;
       score: number;
     }>(
       `SELECT
+         repo_id,
          file_path,
          chunk_index,
          chunk_text,
          1 - (embedding <=> $3::vector) AS score
        FROM repo_embeddings
-       WHERE org_id = $1 AND repo_id = $2
+       WHERE org_id = $1 AND repo_id = ANY($2::varchar[])
        ORDER BY embedding <=> $3::vector
        LIMIT $4`,
-      [orgId, repoId, formatVector(queryEmbedding), limit]
+      [orgId, repoIds, formatVector(queryEmbedding), limit]
     );
     return result.rows.map((row) => ({
+      repoId: String(row.repo_id),
       filePath: String(row.file_path),
       chunkIndex: Number(row.chunk_index),
       chunkText: String(row.chunk_text),

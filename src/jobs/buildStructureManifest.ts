@@ -6,7 +6,9 @@ import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ManifestSymbol } from "../manifest/types";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
+import { CollectionStore } from "../server/collectionStore";
 import { getDbPool, requireDbPool } from "../server/db";
+import { buildPartialFailure } from "./errorHandling";
 import type { Job } from "./types";
 import type { JobExecutionContext, ProgressReporter } from "./executors";
 
@@ -71,15 +73,96 @@ export async function buildStructureManifest(
   report: ProgressReporter,
   signal: AbortSignal
 ): Promise<unknown> {
-  const repoId = String(job.params.repoId ?? "");
   const orgId = String(job.params.orgId ?? "");
-  if (!repoId || !orgId) {
-    throw new Error("Invalid parameters: repoId and orgId are required");
+  const collectionId = job.params.collectionId ? String(job.params.collectionId) : undefined;
+  const repoId = job.params.repoId ? String(job.params.repoId) : undefined;
+  if (!orgId) {
+    throw new Error("Invalid parameters: orgId is required");
+  }
+  if (!collectionId && !repoId) {
+    throw new Error("Invalid parameters: repoId or collectionId is required");
   }
   if (!ctx.orgStore) {
     throw new Error("Organization store is not configured");
   }
 
+  const pool = requireDbPool(await getDbPool());
+  const repoIds = collectionId
+    ? await new CollectionStore(pool).listCollectionRepoIds(orgId, collectionId)
+    : [repoId!];
+  if (repoIds.length === 0) {
+    throw new Error(collectionId ? "Collection has no repos" : "repoId is required");
+  }
+
+  if (repoIds.length === 1) {
+    return crawlStructureManifestForRepo(orgId, repoIds[0], ctx, report, signal);
+  }
+
+  const completedRepos: string[] = [];
+  const failedRepos: string[] = [];
+  const results: Record<string, unknown> = {};
+
+  for (let i = 0; i < repoIds.length; i += 1) {
+    if (signal.aborted) {
+      throw new Error("Job cancelled");
+    }
+    const currentRepoId = repoIds[i];
+    const progress = 5 + Math.round((i / repoIds.length) * 90);
+    await report(progress, `Crawling manifest for ${currentRepoId}`);
+    try {
+      results[currentRepoId] = await crawlStructureManifestForRepo(
+        orgId,
+        currentRepoId,
+        ctx,
+        async () => undefined,
+        signal
+      );
+      completedRepos.push(currentRepoId);
+    } catch (error) {
+      failedRepos.push(currentRepoId);
+    }
+  }
+
+  await report(100, "Collection manifest crawl complete");
+  if (failedRepos.length > 0 && completedRepos.length > 0) {
+    return buildPartialFailure(
+      completedRepos,
+      failedRepos,
+      {
+        collectionId,
+        orgId,
+        results,
+        fileCount: completedRepos.reduce(
+          (sum, id) => sum + Number((results[id] as { fileCount?: number }).fileCount ?? 0),
+          0
+        )
+      },
+      `Crawled ${completedRepos.length}/${repoIds.length} repos. ${failedRepos.join(", ")} failed.`
+    );
+  }
+  if (failedRepos.length > 0) {
+    throw new Error(`Manifest crawl failed for all repos in collection ${collectionId}`);
+  }
+
+  return {
+    collectionId,
+    orgId,
+    repoIds: completedRepos,
+    results,
+    fileCount: completedRepos.reduce(
+      (sum, id) => sum + Number((results[id] as { fileCount?: number }).fileCount ?? 0),
+      0
+    )
+  };
+}
+
+async function crawlStructureManifestForRepo(
+  orgId: string,
+  repoId: string,
+  ctx: JobExecutionContext,
+  report: ProgressReporter,
+  signal: AbortSignal
+): Promise<unknown> {
   const target = parseRepoId(repoId);
   if (target.provider !== "github") {
     throw new Error(

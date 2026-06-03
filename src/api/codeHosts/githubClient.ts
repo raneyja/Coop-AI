@@ -21,7 +21,7 @@ import type {
   RemoteTreeEntry,
   RepoCoordinates
 } from "./types";
-import { CodeHostError } from "./types";
+import { CodeHostError, repoIdFromCoordinates } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_GRAPHQL = "https://api.github.com/graphql";
@@ -362,16 +362,41 @@ export class GitHubClient implements CodeHostClient {
   }
 
   public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {
-    const q = encodeURIComponent(`${query} repo:${coords.owner}/${coords.repo}`);
-    const result = await codeHostRequestJson<{ items?: Array<{ path: string }> }>(
-      `${GITHUB_API}/search/code?q=${q}&per_page=${limit}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-    return (result.items ?? []).map((item) => ({ path: item.path }));
+    const hits = await this.searchCodeAcrossRepos([coords], query, limit);
+    return hits.map((hit) => ({ path: hit.path }));
+  }
+
+  public async searchCodeAcrossRepos(
+    repos: RepoCoordinates[],
+    query: string,
+    limit = 20
+  ): Promise<Array<{ repoId: string; path: string; snippet?: string }>> {
+    if (repos.length === 0) {
+      return [];
+    }
+    const repoClauses = repos
+      .map((coords) => `repo:${coords.owner}/${coords.repo}`)
+      .join(" OR ");
+    const q = encodeURIComponent(`${query} (${repoClauses})`);
+    const result = await codeHostRequestJson<{
+      items?: Array<{ path: string; repository?: { full_name?: string } }>;
+    }>(`${GITHUB_API}/search/code?q=${q}&per_page=${limit}`, {
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker
+    });
+    return (result.items ?? []).map((item) => {
+      const fullName = item.repository?.full_name;
+      const matched = fullName
+        ? repos.find((coords) => `${coords.owner}/${coords.repo}` === fullName)
+        : repos[0];
+      const coords = matched ?? repos[0];
+      return {
+        repoId: repoIdFromCoordinates(coords),
+        path: item.path,
+        snippet: query
+      };
+    });
   }
 
   private repoUrl(coords: RepoCoordinates): string {

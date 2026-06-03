@@ -302,6 +302,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         const filters = {
           file: parsed.query.get("file") ?? undefined,
           pattern: parsed.query.get("pattern") ?? undefined,
+          collectionId: parsed.query.get("collectionId") ?? undefined,
           days: numberParam(parsed.query.get("days")),
           forceRefresh: parsed.query.get("forceRefresh") === "true"
         };
@@ -309,9 +310,18 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         if (query === "searchFiles" && filters.pattern) {
           const pool = await getDbPool();
           if (pool) {
-            const lightning = await lightningSearch(pool, auth!.orgId, repoId, filters.pattern);
+            const lightning = filters.collectionId
+              ? await lightningSearch(pool, auth!.orgId, {
+                  collectionId: filters.collectionId,
+                  pattern: filters.pattern
+                })
+              : await lightningSearch(pool, auth!.orgId, repoId, filters.pattern);
             if (lightning.hits.length > 0 || lightning.symbols.length > 0) {
-              result = formatLightningSearchResult(repoId, lightning);
+              result = formatLightningSearchResult(
+                filters.collectionId ? undefined : repoId,
+                lightning,
+                filters.collectionId
+              );
             }
           }
         }
@@ -487,17 +497,25 @@ function numberParam(value: string | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function formatLightningSearchResult(repoId: string, search: LightningSearchResult): unknown {
+function formatLightningSearchResult(
+  repoId: string | undefined,
+  search: LightningSearchResult,
+  collectionId?: string
+): unknown {
   return {
     repoId,
+    collectionId,
     data: search.hits.map((hit) => ({
+      repoId: hit.repoId,
       path: hit.path,
       size: hit.content.length,
       lastModified: new Date(),
       lastAuthor: "lightning-index",
-      sha: String(hit.lineNumber)
+      sha: String(hit.lineNumber),
+      score: hit.score
     })),
     symbols: search.symbols.map((symbol) => ({
+      repoId: symbol.repoId,
       symbol: symbol.symbol,
       kind: symbol.kind,
       file: symbol.file,
