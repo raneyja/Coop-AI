@@ -1,6 +1,7 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from "node:http";
 import { URL } from "node:url";
 import { GraphQueryApi, GraphQueryName } from "../api/graphQuery";
+import { lightningSearch, type LightningSearchResult } from "../indexing/lightningSearch";
 import { RateLimitTracker } from "../api/rateLimitTracker";
 import { TokenPool } from "../api/tokenPool";
 import { GraphCache } from "../cache/graphCache";
@@ -298,16 +299,29 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           return;
         }
         const [repoId, query] = parseGraphPath(parsed.pathname);
-        const result = await graphQuery.queryGraph({
-          repoId,
-          query,
-          filters: {
-            file: parsed.query.get("file") ?? undefined,
-            pattern: parsed.query.get("pattern") ?? undefined,
-            days: numberParam(parsed.query.get("days")),
-            forceRefresh: parsed.query.get("forceRefresh") === "true"
+        const filters = {
+          file: parsed.query.get("file") ?? undefined,
+          pattern: parsed.query.get("pattern") ?? undefined,
+          days: numberParam(parsed.query.get("days")),
+          forceRefresh: parsed.query.get("forceRefresh") === "true"
+        };
+        let result: unknown;
+        if (query === "searchFiles" && filters.pattern) {
+          const pool = await getDbPool();
+          if (pool) {
+            const lightning = await lightningSearch(pool, auth!.orgId, repoId, filters.pattern);
+            if (lightning.hits.length > 0 || lightning.symbols.length > 0) {
+              result = formatLightningSearchResult(repoId, lightning);
+            }
           }
-        });
+        }
+        if (!result) {
+          result = await graphQuery.queryGraph({
+            repoId,
+            query,
+            filters
+          });
+        }
         writeJson(response, result ? 200 : 404, result ?? { error: "graph not found" });
         return;
       }
@@ -471,6 +485,30 @@ function numberParam(value: string | null): number | undefined {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatLightningSearchResult(repoId: string, search: LightningSearchResult): unknown {
+  return {
+    repoId,
+    data: search.hits.map((hit) => ({
+      path: hit.path,
+      size: hit.content.length,
+      lastModified: new Date(),
+      lastAuthor: "lightning-index",
+      sha: String(hit.lineNumber)
+    })),
+    symbols: search.symbols.map((symbol) => ({
+      symbol: symbol.symbol,
+      kind: symbol.kind,
+      file: symbol.file,
+      line: symbol.line,
+      character: 0,
+      displayName: symbol.displayName
+    })),
+    freshness: search.source,
+    lastUpdated: new Date(),
+    stale: false
+  };
 }
 
 if (require.main === module) {

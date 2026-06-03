@@ -1,0 +1,46 @@
+services:
+  postgres:
+    # pgvector/pgvector:pg16 required for vector similarity search (Session 7).
+    # Existing local volumes need: docker compose down -v && docker compose up -d
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: coop
+      POSTGRES_PASSWORD: coop
+      POSTGRES_DB: coopai
+    ports:
+      - "5432:5432"
+    volumes:
+      - coop_pg_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+
+  api:
+    build: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env.backend.example
+    environment:
+      DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
+      JOBS_BACKEND: postgres
+      GRAPH_CACHE_BACKEND: postgres
+      JOBS_WORKERS: "0"
+      NODE_ENV: production
+      COOP_REQUIRE_API_AUTH: "true"
+    depends_on:
+      - postgres
+
+  worker:
+    build: .
+    command: ["node", "dist/workerEntry.js"]
+    env_file:
+      - .env.backend.example
+    environment:
+      DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
+      JOBS_BACKEND: postgres
+      GRAPH_CACHE_BACKEND: postgres
+      NODE_ENV: production
+    depends_on:
+      - postgres
+
+volumes:
+  coop_pg_data:

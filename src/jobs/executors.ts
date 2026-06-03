@@ -1,11 +1,12 @@
 import type { GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
+import { chunkAndEmbed } from "../indexing/chunkAndEmbed";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
 import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getDbPool } from "../server/db";
 import type { GitHubAppService } from "../server/githubAppService";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
-import type { OrgStore } from "../server/orgStore";
+import { canUseLightningPlan, type OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
 import { buildPartialFailure } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
@@ -205,15 +206,26 @@ async function indexRepository(
     cloneLocalPath = clone.localPath;
 
     let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
+    let embedResult: Awaited<ReturnType<typeof chunkAndEmbed>> | undefined;
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
         await report(60, "Running SCIP symbol indexing");
         scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool);
+
+        let shouldEmbed = false;
+        if (ctx.orgStore) {
+          const org = await ctx.orgStore.getOrganization(orgId);
+          shouldEmbed = Boolean(org && canUseLightningPlan(org.plan));
+        }
+        if (shouldEmbed) {
+          await report(75, "Embedding files without symbol coverage");
+          embedResult = await chunkAndEmbed(repoId, orgId, clone.localPath, pool);
+        }
       }
     }
 
-    await report(70, "Building file index");
+    await report(80, "Building file index");
 
     const now = new Date();
     graph.fileTree = clone.files.map((file) => ({
@@ -263,7 +275,9 @@ async function indexRepository(
       headCommit: clone.headCommit,
       scipAvailable: scipResult?.scipAvailable ?? false,
       symbolCount: scipResult?.symbolCount ?? 0,
-      indexSource: scipResult?.source ?? "none"
+      indexSource: scipResult?.source ?? "none",
+      embeddingCount: embedResult?.chunkCount ?? 0,
+      embeddedFiles: embedResult?.embeddedFiles ?? 0
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "index failed";

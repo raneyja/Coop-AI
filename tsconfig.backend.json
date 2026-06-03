@@ -11,6 +11,7 @@
     "src/compliance/**/*.ts",
     "src/conflicts/**/*.ts",
     "src/config/**/*.ts",
+    "src/indexing/**/*.ts",
     "src/jobs/**/*.ts",
     "src/server/**/*.ts",
     "src/webhooks/**/*.ts"
