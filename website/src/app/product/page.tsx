@@ -70,7 +70,7 @@ export default function ProductPage() {
             ))}
           </div>
 
-          <div className="mx-auto mt-14 max-w-3xl md:mt-16">
+          <div className="mx-auto mt-14 max-w-4xl md:mt-16">
             <HeroExampleCarousel compact />
           </div>
         </div>

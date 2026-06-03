@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 export type HeroExample = {
   id: string;
@@ -12,33 +12,39 @@ export type HeroExample = {
 export const HERO_EXAMPLES: HeroExample[] = [
   {
     id: "ownership",
-    question: "Who owns this code?",
-    highlights: ["Code ownership", "Recent contributors"]
+    question:
+      "Who owns `services/billing/invoice_handler.go`? I need to change idempotency keys — CODEOWNERS says @platform-payments but git blame shows @marcus. Does `pkg/ledger/posting.go` share the same on-call rotation?",
+    highlights: ["CODEOWNERS + blame", "cross-package owners"]
   },
   {
     id: "blast-radius",
-    question: "What's the blast radius of this change?",
-    highlights: ["Impact analysis", "Dependent files"]
+    question:
+      "If I refactor `TokenValidator.validate()` in `internal/auth/token_validator.ts`, what breaks downstream? List dependents in `api-gateway`, `workers/webhook-processor`, and any shared libs that import this symbol.",
+    highlights: ["symbol graph dependents", "cross-service impact"]
   },
   {
     id: "reviewers",
-    question: "Who should review this PR?",
-    highlights: ["Smart reviewer suggestions", "Blame-aware routing"]
+    question:
+      "Who should review my PR touching `migrations/008_session_index.sql`, `auth_middleware.go`, and `session/store.go`? Want reviewers with context on incident #inc-auth-992 and recent changes to the OAuth refresh path.",
+    highlights: ["blame-aware reviewers", "incident + PR context"]
   },
   {
     id: "understand-repo",
-    question: "Help me understand this repo",
-    highlights: ["Deep repository understanding", "Architecture map"]
+    question:
+      "I'm onboarding to `coop-backend` — where does webhook ingestion start, and how do events flow into the job queue vs `GraphCache`? What are the 5 files I should read first to trace a GitHub `push` end-to-end?",
+    highlights: ["entrypoints + data flow", "read order by layer"]
   },
   {
     id: "knowledge-gaps",
-    question: "What are the knowledge gaps in this area?",
-    highlights: ["Missing context", "Tribal knowledge risks"]
+    question:
+      "Before I ship changes to `GraphConsistencyManager.applyEvent()`, what am I missing? Any Slack threads or Jira tickets on webhook dedupe, and who last modified the Slack normalization path in `handlers/slackWebhookHandler.ts`?",
+    highlights: ["undocumented decisions", "Slack + Jira cross-ref"]
   },
   {
     id: "integrations",
-    question: "Show me how this connects to Slack and tickets",
-    highlights: ["Slack threads", "Jira & ticket context"]
+    question:
+      "Pull the Slack thread and Jira ticket tied to `auth_middleware.go` — why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days and link the original design note.",
+    highlights: ["#platform-auth thread", "PROJ-1847 + commits"]
   }
 ];
 
@@ -128,7 +134,7 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
 
   return (
     <div
-      className={`animate-fade-up mx-auto max-w-3xl ${compact ? "" : "mt-8"}`}
+      className={`animate-fade-up mx-auto ${compact ? "max-w-4xl" : "max-w-3xl"} ${compact ? "" : "mt-8"}`}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -141,7 +147,7 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
       <div
         className={`relative overflow-hidden border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-white/[0.02] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
           compact
-            ? "rounded-xl px-4 py-4 md:px-5 md:py-4"
+            ? "rounded-xl px-5 py-5 md:px-6 md:py-6"
             : "rounded-2xl px-6 py-8 md:px-10 md:py-9"
         }`}
       >
@@ -157,16 +163,16 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
           aria-label={`Example question: ${example.question}. Click to copy.`}
         >
           <p
-            className={`font-medium leading-snug tracking-tight text-white transition-opacity duration-500 ${
+            className={`text-left font-normal leading-relaxed text-white transition-opacity duration-500 ${
               compact
-                ? "min-h-[2.65rem] text-lg md:min-h-[2.85rem] md:text-xl md:leading-snug"
-                : "min-h-[4.5rem] text-2xl md:min-h-[5rem] md:text-[1.75rem] md:leading-tight lg:text-3xl"
+                ? "min-h-[6.5rem] text-[13px] md:min-h-[7rem] md:text-sm"
+                : "min-h-[7.5rem] text-base md:min-h-[8.5rem] md:text-lg lg:text-xl"
             } ${visible ? "opacity-100" : "opacity-0"}`}
           >
             <span className="text-white/25" aria-hidden>
               &ldquo;
             </span>
-            {example.question}
+            <QuestionText text={example.question} />
             <span className="text-white/25" aria-hidden>
               &rdquo;
             </span>
@@ -174,8 +180,8 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
         </button>
 
         <div
-          className={`flex flex-wrap items-center justify-center gap-1.5 transition-opacity duration-500 md:gap-2 ${
-            compact ? "mt-2.5" : "mt-5 md:gap-2.5"
+          className={`flex flex-wrap items-center justify-start gap-1.5 transition-opacity duration-500 md:gap-2 ${
+            compact ? "mt-4" : "mt-5 md:gap-2.5"
           } ${visible ? "opacity-100" : "opacity-0"}`}
           aria-live="polite"
         >
@@ -266,6 +272,27 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
         </p>
       ) : null}
     </div>
+  );
+}
+
+function QuestionText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`)/g);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("`") && part.endsWith("`") ? (
+          <code
+            key={i}
+            className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[0.92em] text-coop-accent/95"
+          >
+            {part.slice(1, -1)}
+          </code>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        )
+      )}
+    </>
   );
 }
 

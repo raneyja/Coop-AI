@@ -37,7 +37,7 @@ export function Hero() {
           <HeroProductMock />
         </div>
 
-        <div className="mx-auto mt-10 w-full max-w-[36rem] md:mt-12">
+        <div className="mx-auto mt-10 w-full max-w-4xl md:mt-12">
           <HeroExampleCarousel compact />
         </div>
       </div>
