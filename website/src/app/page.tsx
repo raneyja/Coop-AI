@@ -1,4 +1,5 @@
 import { Hero } from "@/components/Hero";
+import { HomePartnerLogos } from "@/components/HomePartnerLogos";
 import { Testimonial } from "@/components/Testimonial";
 import { CTASection } from "@/components/CTASection";
 import { FeatureCardGrid } from "@/components/FeatureCardGrid";
@@ -46,6 +47,8 @@ export default function HomePage() {
               Explore all features →
             </Link>
           </p>
+
+          <HomePartnerLogos />
         </div>
       </section>
 
