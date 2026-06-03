@@ -65,8 +65,8 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const example = HERO_EXAMPLES[index];
-  const isCopied = copiedId === example.id;
+  const activeExample = HERO_EXAMPLES[index];
+  const isCopied = copiedId === activeExample.id;
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -130,7 +130,11 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
     window.setTimeout(() => setPaused(false), ROTATE_MS * 2);
   }
 
-  const demoHref = `/demo?prompt=${encodeURIComponent(example.question)}`;
+  const demoHref = `/demo?prompt=${encodeURIComponent(activeExample.question)}`;
+
+  const cardPadding = compact
+    ? "px-5 py-5 md:px-6 md:py-6"
+    : "px-6 py-8 md:px-10 md:py-9";
 
   return (
     <div
@@ -146,52 +150,73 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
     >
       <div
         className={`relative overflow-hidden border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-white/[0.02] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
-          compact
-            ? "rounded-xl px-5 py-5 md:px-6 md:py-6"
-            : "rounded-2xl px-6 py-8 md:px-10 md:py-9"
-        }`}
+          compact ? "rounded-xl" : "rounded-2xl"
+        } ${cardPadding}`}
       >
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coop-accent/40 to-transparent"
           aria-hidden
         />
 
-        <button
-          type="button"
-          onClick={() => handleActivate(example)}
-          className="group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark rounded-lg"
-          aria-label={`Example question: ${example.question}. Click to copy.`}
-        >
-          <p
-            className={`text-left font-normal leading-relaxed text-white transition-opacity duration-500 ${
-              compact
-                ? "min-h-[6.5rem] text-[13px] md:min-h-[7rem] md:text-sm"
-                : "min-h-[7.5rem] text-base md:min-h-[8.5rem] md:text-lg lg:text-xl"
-            } ${visible ? "opacity-100" : "opacity-0"}`}
-          >
-            <span className="text-white/25" aria-hidden>
-              &ldquo;
-            </span>
-            <QuestionText text={example.question} />
-            <span className="text-white/25" aria-hidden>
-              &rdquo;
-            </span>
-          </p>
-        </button>
+        {/* Stack all slides in one grid cell so height stays at the tallest example */}
+        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1" aria-live="polite">
+          {HERO_EXAMPLES.map((item, i) => {
+            const isActive = i === index;
+            const showSlide = isActive && visible;
 
-        <div
-          className={`flex flex-wrap items-center justify-start gap-1.5 transition-opacity duration-500 md:gap-2 ${
-            compact ? "mt-4" : "mt-5 md:gap-2.5"
-          } ${visible ? "opacity-100" : "opacity-0"}`}
-          aria-live="polite"
-        >
-          <HighlightPill compact={compact}>{example.highlights[0]}</HighlightPill>
-          <span className="text-[10px] font-medium uppercase tracking-widest text-white/20" aria-hidden>
-            +
-          </span>
-          <HighlightPill compact={compact} variant="muted">
-            {example.highlights[1]}
-          </HighlightPill>
+            return (
+              <div
+                key={item.id}
+                className={`flex flex-col transition-opacity duration-500 ${
+                  showSlide
+                    ? "z-10 opacity-100"
+                    : "pointer-events-none z-0 opacity-0"
+                }`}
+                aria-hidden={!isActive}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleActivate(item)}
+                  tabIndex={isActive ? 0 : -1}
+                  className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
+                  aria-label={`Example question: ${item.question}. Click to copy.`}
+                >
+                  <p
+                    className={`text-left font-normal leading-relaxed text-white ${
+                      compact
+                        ? "text-[13px] md:text-sm"
+                        : "text-base md:text-lg lg:text-xl"
+                    }`}
+                  >
+                    <span className="text-white/25" aria-hidden>
+                      &ldquo;
+                    </span>
+                    <QuestionText text={item.question} />
+                    <span className="text-white/25" aria-hidden>
+                      &rdquo;
+                    </span>
+                  </p>
+                </button>
+
+                <div
+                  className={`flex flex-wrap items-center justify-start gap-1.5 md:gap-2 ${
+                    compact ? "mt-4" : "mt-5 md:gap-2.5"
+                  }`}
+                >
+                  <HighlightPill compact={compact}>{item.highlights[0]}</HighlightPill>
+                  <span
+                    className="text-[10px] font-medium uppercase tracking-widest text-white/20"
+                    aria-hidden
+                  >
+                    +
+                  </span>
+                  <HighlightPill compact={compact} variant="muted">
+                    {item.highlights[1]}
+                  </HighlightPill>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div
