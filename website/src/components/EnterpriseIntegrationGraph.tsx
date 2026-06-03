@@ -26,7 +26,6 @@ import {
   NODE_CARD,
   heightPct,
   widthPct,
-  type GraphCategory,
   type GraphNodeDef,
   type LaidOutNode,
   VIEW_H,
@@ -147,19 +146,6 @@ export function EnterpriseIntegrationGraph() {
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 px-4">
-          {(Object.keys(CATEGORY_THEME) as GraphCategory[]).map((cat) => (
-            <span key={cat} className="flex items-center gap-2 text-[11px] text-[#9ca4ad]">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: CATEGORY_THEME[cat].accent }}
-                aria-hidden
-              />
-              {CATEGORY_THEME[cat].label}
-            </span>
-          ))}
         </div>
       </div>
     </div>

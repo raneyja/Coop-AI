@@ -3,7 +3,6 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { EnterpriseIntegrationGraph } from "@/components/EnterpriseIntegrationGraph";
-import { TrustBadges } from "@/components/TrustBadges";
 
 export const metadata: Metadata = {
   title: "Enterprise",
@@ -46,13 +45,7 @@ export default function EnterprisePage() {
         description="CoopAI gives engineering organizations code intelligence with the security controls security and platform teams expect — zero-retention routing, BYOK, and keys that never touch developer machines."
       />
 
-      <section className="pb-8">
-        <div className="mx-auto max-w-6xl px-6">
-          <TrustBadges small />
-        </div>
-      </section>
-
-      <section className="pb-12 md:pb-16">
+      <section className="pb-12 md:pb-16 pt-4">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <EnterpriseIntegrationGraph />
         </div>
