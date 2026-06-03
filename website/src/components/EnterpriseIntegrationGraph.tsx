@@ -60,7 +60,7 @@ export function EnterpriseIntegrationGraph() {
     >
       <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-80" aria-hidden />
 
-      <div className="relative w-full py-4 sm:py-6">
+      <div className="relative w-full py-0">
         <div
           className="enterprise-graph-canvas relative mx-auto w-full"
           style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
@@ -72,17 +72,6 @@ export function EnterpriseIntegrationGraph() {
             aria-hidden
           >
             <defs>
-              <marker
-                id="graph-arrow"
-                markerWidth="7"
-                markerHeight="7"
-                refX="5.5"
-                refY="3.5"
-                orient="auto"
-                markerUnits="strokeWidth"
-              >
-                <path d="M0,0 L7,3.5 L0,7 Z" fill="#58A6FF" fillOpacity="0.7" />
-              </marker>
               <radialGradient id="hub-glow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#58A6FF" stopOpacity="0.3" />
                 <stop offset="100%" stopColor="#58A6FF" stopOpacity="0" />
@@ -113,7 +102,6 @@ export function EnterpriseIntegrationGraph() {
                   stroke={theme.accent}
                   strokeWidth={isActive ? 2 : 1.15}
                   strokeOpacity={isActive ? 0.45 : 0.28}
-                  markerEnd="url(#graph-arrow)"
                   pathLength={1}
                   className="enterprise-graph-path"
                   style={{
@@ -139,9 +127,9 @@ export function EnterpriseIntegrationGraph() {
               animationDelay: "0.05s"
             }}
           >
-            <div className="enterprise-graph-hub-ring relative flex h-full items-center justify-center rounded-xl border border-coop-accent/50 bg-[#1a1d27] px-3 shadow-[0_0_48px_rgba(88,166,255,0.22)]">
+            <div className="enterprise-graph-hub-ring relative flex h-full items-center justify-center rounded-xl border border-coop-accent/50 bg-[#1a1d27] px-4 shadow-[0_0_48px_rgba(88,166,255,0.22)]">
               <div className="pointer-events-none absolute -inset-1 rounded-xl bg-coop-accent/10 blur-md" aria-hidden />
-              <p className="relative whitespace-nowrap text-[1.45cqw] font-semibold tracking-tight text-white">
+              <p className="relative whitespace-nowrap text-[1.65cqw] font-semibold tracking-tight text-white">
                 CoopAI
               </p>
             </div>

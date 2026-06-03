@@ -40,18 +40,19 @@ export default function EnterprisePage() {
   return (
     <>
       <PageHeader
+        tight
         eyebrow="Enterprise"
-        title="Built for teams that can't send code to the public cloud unchecked"
+        title="Teams need context, too"
         description="CoopAI gives engineering organizations code intelligence with the security controls security and platform teams expect — zero-retention routing, BYOK, and keys that never touch developer machines."
       />
 
-      <section className="pb-12 md:pb-16 pt-4">
+      <section className="pb-6 md:pb-8">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <EnterpriseIntegrationGraph />
         </div>
       </section>
 
-      <section className="py-16">
+      <section className="pt-6 pb-16 md:pt-8">
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid gap-6 md:grid-cols-2">
             {enterpriseFeatures.map((feature) => (

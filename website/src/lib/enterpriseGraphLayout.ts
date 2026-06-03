@@ -28,7 +28,7 @@ export type LaidOutNode = GraphNodeDef & {
 export const VIEW_W = 1000;
 export const VIEW_H = 760;
 
-export const CANVAS_PAD = { top: 44, right: 40, bottom: 56, left: 40 };
+export const CANVAS_PAD = { top: 36, right: 40, bottom: 40, left: 40 };
 
 export const INNER_BOUNDS = {
   left: CANVAS_PAD.left,
@@ -39,7 +39,7 @@ export const INNER_BOUNDS = {
 
 export const NODE_CARD = { height: 52, minWidth: 160 };
 
-export const HUB_CARD = { width: 108, height: 40 };
+export const HUB_CARD = { width: 132, height: 48 };
 
 export const GRAPH_HUB = {
   x: VIEW_W / 2,

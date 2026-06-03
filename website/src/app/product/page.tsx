@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { HeroExampleCarousel } from "@/components/HeroExampleCarousel";
+import { ModelProviderLogos } from "@/components/ModelProviderLogos";
 import { ProductShowcaseCarousel } from "@/components/ProductShowcaseCarousel";
 import { siteConfig } from "@/lib/site.config";
 
@@ -54,6 +55,7 @@ export default function ProductPage() {
 
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-6">
+          <ModelProviderLogos />
           <h2 className="text-2xl font-semibold text-white">Quick actions</h2>
           <p className="mt-3 max-w-2xl text-coop-muted">
             One-click workflows grounded in your repo. Each action builds a structured prompt with
@@ -81,18 +83,18 @@ export default function ProductPage() {
             {[
               {
                 step: "01",
-                title: "Connect your repos",
-                body: "Install webhooks from GitHub, GitLab, or Bitbucket. CoopAI builds a remote graph of ownership, dependencies, and change history."
+                title: "Connect repos",
+                body: "GitHub or GitLab webhooks on your Coop server; Pro adds Lightning per repo. No laptop clones."
               },
               {
                 step: "02",
-                title: "Install the extension",
-                body: "Developers open VS Code, point at your CoopAI server, and start asking questions with full repo context — no clone required."
+                title: "Install in VS Code",
+                body: "API key, pick a repo, ask questions—no local clone."
               },
               {
                 step: "03",
-                title: "Get instant answers",
-                body: "Quick actions and chat pull from the graph, Slack, and tickets. Senior engineers spend less time on repeat questions."
+                title: "Get answers",
+                body: "Quick actions and chat from your graph, Slack, and tickets."
               }
             ].map((item) => (
               <li key={item.step} className="relative">

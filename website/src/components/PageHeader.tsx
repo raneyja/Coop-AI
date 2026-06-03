@@ -5,11 +5,15 @@ type PageHeaderProps = {
   title: ReactNode;
   titleClassName?: string;
   description?: string;
+  /** Less padding below the header (e.g. when content follows immediately) */
+  tight?: boolean;
 };
 
-export function PageHeader({ eyebrow, title, titleClassName, description }: PageHeaderProps) {
+export function PageHeader({ eyebrow, title, titleClassName, description, tight = false }: PageHeaderProps) {
   return (
-    <div className="mx-auto max-w-3xl px-6 pt-16 pb-12 text-center md:pt-24">
+    <div
+      className={`mx-auto max-w-3xl px-6 text-center ${tight ? "pt-14 pb-4 md:pt-20 md:pb-5" : "pt-16 pb-12 md:pt-24"}`}
+    >
       {eyebrow && (
         <p className="text-sm font-medium uppercase tracking-widest text-coop-accent">{eyebrow}</p>
       )}
