@@ -28,10 +28,12 @@ export function LogoStrip({
         {items.map(({ name, Icon, colored }) => (
           <li
             key={name}
-            className="flex items-center gap-2 opacity-45 transition-opacity duration-200 hover:opacity-75"
+            className="flex items-center gap-2 text-white/55 opacity-45 transition-[opacity,color] duration-200 hover:text-white/75 hover:opacity-75"
           >
-            <span className={colored ? "opacity-80" : undefined}>
-              <Icon className="h-5 w-5 shrink-0 md:h-[22px] md:w-[22px]" />
+            <span className={colored ? "opacity-90" : undefined}>
+              <Icon
+                className={`h-5 w-5 shrink-0 md:h-[22px] md:w-[22px]${colored ? "" : " text-inherit"}`}
+              />
             </span>
             <span className="text-xs font-medium tracking-tight text-white/70 md:text-sm">{name}</span>
           </li>
