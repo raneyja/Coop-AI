@@ -158,70 +158,45 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
           aria-hidden
         />
 
-        {/* Stack all slides in one grid cell so height stays at the tallest example */}
-        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1" aria-live="polite">
-          {HERO_EXAMPLES.map((item, i) => {
-            const isActive = i === index;
-            const showSlide = isActive && visible;
+        {/* In-flow sizer: all slides visible to layout (fixes mobile Safari grid + opacity) */}
+        <div className="relative">
+          <div className="invisible grid [&>*]:col-start-1 [&>*]:row-start-1" aria-hidden>
+            {HERO_EXAMPLES.map((item) => (
+              <HeroSlideBody key={`sizer-${item.id}`} item={item} compact={compact} />
+            ))}
+          </div>
 
-            return (
-              <div
-                key={item.id}
-                className={`flex flex-col transition-opacity duration-500 ${
-                  showSlide
-                    ? "z-10 opacity-100"
-                    : "pointer-events-none z-0 opacity-0"
-                }`}
-                aria-hidden={!isActive}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleActivate(item)}
-                  tabIndex={isActive ? 0 : -1}
-                  className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
-                  aria-label={`Example question: ${item.question}. Click to copy.`}
-                >
-                  <p
-                    className={`text-left font-normal leading-relaxed text-white ${
-                      compact
-                        ? "text-[13px] md:text-sm"
-                        : "text-base md:text-lg lg:text-xl"
-                    }`}
-                  >
-                    <span className="text-white/25" aria-hidden>
-                      &ldquo;
-                    </span>
-                    <QuestionText text={item.question} />
-                    <span className="text-white/25" aria-hidden>
-                      &rdquo;
-                    </span>
-                  </p>
-                </button>
+          <div className="absolute inset-0 grid [&>*]:col-start-1 [&>*]:row-start-1" aria-live="polite">
+            {HERO_EXAMPLES.map((item, i) => {
+              const isActive = i === index;
+              const showSlide = isActive && visible;
 
+              return (
                 <div
-                  className={`flex flex-wrap items-center justify-start gap-1.5 md:gap-2 ${
-                    compact ? "mt-4" : "mt-5 md:gap-2.5"
+                  key={item.id}
+                  className={`flex flex-col transition-opacity duration-500 ${
+                    showSlide
+                      ? "z-10 opacity-100"
+                      : "pointer-events-none z-0 opacity-0"
                   }`}
+                  aria-hidden={!isActive}
                 >
-                  <HighlightPill compact={compact}>{item.highlights[0]}</HighlightPill>
-                  <span
-                    className="text-[10px] font-medium uppercase tracking-widest text-white/20"
-                    aria-hidden
-                  >
-                    +
-                  </span>
-                  <HighlightPill compact={compact} variant="muted">
-                    {item.highlights[1]}
-                  </HighlightPill>
+                  <HeroSlideBody
+                    item={item}
+                    compact={compact}
+                    interactive
+                    isActive={isActive}
+                    onActivate={() => handleActivate(item)}
+                  />
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         <div
           className={`flex flex-col items-center gap-2 sm:flex-row sm:justify-between ${
-            compact ? "mt-3" : "mt-6 gap-3"
+            compact ? "mt-3 min-h-[4.25rem] sm:min-h-0" : "mt-6 min-h-[3.5rem] gap-3 sm:min-h-0"
           }`}
         >
           <div className="flex items-center gap-2" role="tablist" aria-label="Example questions">
@@ -296,6 +271,68 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
           Motion reduced — use the dots to browse examples.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function HeroSlideBody({
+  item,
+  compact,
+  interactive = false,
+  isActive = false,
+  onActivate
+}: {
+  item: HeroExample;
+  compact: boolean;
+  interactive?: boolean;
+  isActive?: boolean;
+  onActivate?: () => void;
+}) {
+  const question = (
+    <p
+      className={`text-left font-normal leading-relaxed text-white ${
+        compact ? "text-[13px] md:text-sm" : "text-base md:text-lg lg:text-xl"
+      }`}
+    >
+      <span className="text-white/25" aria-hidden>
+        &ldquo;
+      </span>
+      <QuestionText text={item.question} />
+      <span className="text-white/25" aria-hidden>
+        &rdquo;
+      </span>
+    </p>
+  );
+
+  return (
+    <div className="flex flex-col">
+      {interactive ? (
+        <button
+          type="button"
+          onClick={onActivate}
+          tabIndex={isActive ? 0 : -1}
+          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
+          aria-label={`Example question: ${item.question}. Click to copy.`}
+        >
+          {question}
+        </button>
+      ) : (
+        <div className="w-full">{question}</div>
+      )}
+
+      <div
+        className={`flex flex-wrap items-center justify-start gap-1.5 md:gap-2 ${
+          compact ? "mt-4" : "mt-5 md:gap-2.5"
+        }`}
+      >
+        <HighlightPill compact={compact}>{item.highlights[0]}</HighlightPill>
+        <span className="text-[10px] font-medium uppercase tracking-widest text-white/20" aria-hidden>
+          +
+        </span>
+        <HighlightPill compact={compact} variant="muted">
+          {item.highlights[1]}
+        </HighlightPill>
+      </div>
     </div>
   );
 }
