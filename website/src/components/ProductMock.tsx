@@ -35,8 +35,8 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
       role="img"
       aria-label={scenario.ariaLabel}
     >
-      <div className="rounded-2xl border border-white/10 bg-coop-surface/90 p-2 shadow-2xl shadow-black/30">
-        <div className="overflow-hidden rounded-xl border border-white/5 bg-[#0d1117]">
+      <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/10 bg-coop-surface/90 p-2 shadow-2xl shadow-black/30">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/5 bg-[#0d1117]">
           <div className="flex items-center gap-3 border-b border-white/5 bg-[#161b22] px-3 py-2">
             <div className="flex gap-1.5" aria-hidden>
               <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
@@ -54,13 +54,13 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
             <span className="font-mono text-[9px] text-coop-muted/80">CoopAI</span>
           </div>
 
-          <div className="relative flex min-h-[300px] flex-col md:min-h-[320px] md:flex-row">
-            <aside className="relative z-10 flex w-full shrink-0 flex-col border-b border-white/5 bg-[#0d1117] md:w-[42%] md:border-b-0 md:border-r">
-              <div className="border-b border-white/5 px-3 py-2">
+          <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
+            <aside className="relative z-10 flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-white/5 bg-[#0d1117] md:w-[42%] md:border-b-0 md:border-r">
+              <div className="shrink-0 border-b border-white/5 px-3 py-2">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-coop-muted">CoopAI</p>
               </div>
 
-              <div className="flex flex-1 flex-col gap-3 p-3 text-xs">
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 text-xs">
                 <div className="rounded-lg border border-white/8 bg-white/[0.03] p-2.5">
                   <p className="text-[10px] font-medium text-coop-muted">You</p>
                   <p className="mt-1 leading-relaxed text-white/90">{scenario.question}</p>
@@ -113,10 +113,12 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
               </div>
             </aside>
 
-            <div className="relative min-w-0 flex-1 bg-[#0d1117] p-3 font-mono text-[11px] leading-[1.55] md:p-4">
-              {scenario.code.lines.map((line) => (
-                <CodeLine key={line.n} n={line.n} tokens={line.tokens} highlight={line.highlight} />
-              ))}
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0d1117] p-3 font-mono text-[11px] leading-[1.55] md:p-4">
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {scenario.code.lines.map((line) => (
+                  <CodeLine key={line.n} n={line.n} tokens={line.tokens} highlight={line.highlight} />
+                ))}
+              </div>
 
               <div
                 className={`absolute right-2 top-[5.5rem] max-w-[11rem] rounded-md border bg-[#161b22]/95 px-2 py-1.5 text-[9px] leading-snug shadow-lg backdrop-blur-sm md:right-4 ${CALLOUT_BORDER[scenario.code.callout.tone]}`}

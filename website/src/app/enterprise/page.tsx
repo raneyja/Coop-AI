@@ -43,7 +43,7 @@ export default function EnterprisePage() {
         tight
         eyebrow="Enterprise"
         title="Teams need context, too"
-        description="CoopAI gives engineering organizations code intelligence with the security controls security and platform teams expect — zero-retention routing, BYOK, and keys that never touch developer machines."
+        description="CoopAI gives engineering teams deep code intelligence across their entire stack"
       />
 
       <section className="pb-6 md:pb-8">

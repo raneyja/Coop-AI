@@ -7,6 +7,9 @@ import { PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
 const ROTATE_MS = 5500;
 const FADE_MS = 480;
 
+/** Fixed height so slide changes never shift page layout below the carousel */
+const SLIDE_HEIGHT = "h-[32rem] sm:h-[30rem] md:h-[28rem]";
+
 export function ProductShowcaseCarousel() {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -74,12 +77,14 @@ export function ProductShowcaseCarousel() {
         }
       }}
     >
-      <div
-        className={`transition-opacity duration-500 ${visible ? "opacity-100" : "opacity-0"}`}
-        aria-live="polite"
-        aria-atomic
-      >
-        <ProductMock scenario={scenario} />
+      <div className={`relative w-full ${SLIDE_HEIGHT}`} aria-live="polite" aria-atomic>
+        <div
+          className={`absolute inset-0 transition-opacity duration-500 ${
+            visible ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        >
+          <ProductMock scenario={scenario} className="h-full" />
+        </div>
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-4">
