@@ -156,7 +156,7 @@ export default function PrivacyPage() {
       </ul>
       <p>
         To exercise these rights, contact us at{" "}
-        <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>.
+        <a href={`mailto:${siteConfig.privacyEmail}`}>{siteConfig.privacyEmail}</a>.
       </p>
 
       <h2>8. Cookies and tracking</h2>
@@ -189,7 +189,7 @@ export default function PrivacyPage() {
       <h2>12. Contact us</h2>
       <p>
         Questions about this Privacy Policy? Contact{" "}
-        <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>.
+        <a href={`mailto:${siteConfig.privacyEmail}`}>{siteConfig.privacyEmail}</a>.
       </p>
     </LegalLayout>
   );

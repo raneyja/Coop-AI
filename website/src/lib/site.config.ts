@@ -8,6 +8,7 @@ export const siteConfig = {
   subheadline:
     "Understand any codebase in seconds. CoopAI connects code history, Slack, tickets, and your code graph to answer questions directly inside VS Code.",
   contactEmail: "hello@coop-ai.dev",
+  privacyEmail: "privacy@coop-ai.dev",
   links: {
     github: "https://github.com/coop-ai",
     vscodeMarketplace: process.env.NEXT_PUBLIC_VSCODE_MARKETPLACE_URL || "",
