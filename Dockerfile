@@ -12,10 +12,9 @@ RUN npm run build:backend && npm run build:workers
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git ca-certificates python3 python3-pip \
+    git ca-certificates python3 \
   && rm -rf /var/lib/apt/lists/* \
-  && npm install -g @sourcegraph/scip-typescript \
-  && pip3 install --break-system-packages scip-python
+  && npm install -g @sourcegraph/scip-typescript @sourcegraph/scip-python
 
 WORKDIR /app
 
