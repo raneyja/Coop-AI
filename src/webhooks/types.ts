@@ -1,4 +1,4 @@
-export type WebhookProvider = "github" | "gitlab" | "slack";
+export type WebhookProvider = "github" | "gitlab" | "bitbucket" | "slack";
 
 export type RepositoryRef = {
   provider: Exclude<WebhookProvider, "slack">;

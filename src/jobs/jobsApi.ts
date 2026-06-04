@@ -9,6 +9,8 @@ import type { WorkerPool } from "./workerPool";
 import type { OrgStore } from "../server/orgStore";
 import type { ServerConfig } from "../server/serverConfig";
 import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import { AuditLogger, auditActor } from "../server/audit/auditLogger";
+import type { UserStore } from "../server/users/userStore";
 
 export type JobsApiDeps = {
   queue: JobQueue;
@@ -17,6 +19,8 @@ export type JobsApiDeps = {
   config: JobQueueConfig;
   orgStore?: OrgStore;
   serverConfig?: ServerConfig;
+  auditLogger?: AuditLogger;
+  userStore?: UserStore;
 };
 
 type ParsedJobsRequest = {
@@ -110,7 +114,8 @@ async function handleCreateJob(
       parsed.headers,
       deps.orgStore,
       deps.serverConfig?.legacyApiToken,
-      deps.serverConfig?.requireApiAuth ?? false
+      deps.serverConfig?.requireApiAuth ?? false,
+      deps.userStore
     );
     if (type === JobType.INDEX_REPOSITORY) {
       if (!auth) {
@@ -128,6 +133,14 @@ async function handleCreateJob(
       userId: auth ? authUserId(auth) : body.userId ? String(body.userId) : undefined,
       estimatedDurationMs: body.estimatedDurationMs ? Number(body.estimatedDurationMs) : undefined,
       scheduled: Boolean(body.scheduled)
+    });
+    const actor = auth ? auditActor(auth) : { userId: undefined, principal: "anonymous" };
+    await deps.auditLogger?.record({
+      orgId: auth?.orgId ?? "dev",
+      userId: actor.userId,
+      principal: actor.principal,
+      action: "job.create",
+      metadata: { jobId: submit.jobId, type }
     });
     writeJson(response, 202, submit);
   } catch (error) {
@@ -268,7 +281,8 @@ async function authorize(headers: Record<string, string | undefined>, deps: Jobs
     headers,
     deps.orgStore,
     deps.serverConfig?.legacyApiToken,
-    deps.serverConfig?.requireApiAuth ?? false
+    deps.serverConfig?.requireApiAuth ?? false,
+    deps.userStore
   );
   if (requireAuth(auth, deps.serverConfig?.requireApiAuth ?? false)) {
     return true;

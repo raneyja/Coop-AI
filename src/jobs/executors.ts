@@ -1,4 +1,4 @@
-import type { GraphCache } from "../cache/graphCache";
+import type { DependencyEdge, GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
 import { chunkAndEmbed } from "../indexing/chunkAndEmbed";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
@@ -453,8 +453,8 @@ async function resolveDependencyEdges(
   orgId: string | undefined,
   repoId: string,
   filePaths: string[],
-  preserved: Array<{ from: string; to: string; type: "import" | "reference" }>
-): Promise<Array<{ from: string; to: string; type: "import" | "reference" }>> {
+  preserved: DependencyEdge[]
+): Promise<DependencyEdge[]> {
   const pathSet = new Set(filePaths);
   if (orgId) {
     const pool = await getDbPool();

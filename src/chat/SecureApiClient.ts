@@ -299,7 +299,11 @@ export function readConfiguration(): Omit<
     branch: config.get<string>("defaultBranch", ""),
     defaultCodeHost: readCodeHostProvider(config.get<string>("defaultCodeHost", "github")),
     gitlabBaseUrl: config.get<string>("gitlab.baseUrl", "https://gitlab.com/api/v4"),
-    jiraBaseUrl: config.get<string>("jira.baseUrl", "https://your-domain.atlassian.net")
+    jiraBaseUrl: config.get<string>("jira.baseUrl", "https://your-domain.atlassian.net"),
+    devMode: config.get<boolean>("devMode", false),
+    hasGitHubAppInstalled: false,
+    hasGitLabAppInstalled: false,
+    hasBitbucketAppInstalled: false
   };
 }
 

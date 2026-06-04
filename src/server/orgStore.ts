@@ -47,6 +47,10 @@ export type AuthContext = {
   orgName: string;
   plan: OrgPlan;
   apiKeyId: string;
+  /** Human user id — set only for Enterprise SSO sessions; undefined for org API keys. */
+  userId?: string;
+  /** User role from the SSO session (e.g. 'owner' | 'admin' | 'member'). */
+  role?: string;
 };
 
 export class OrgStore {

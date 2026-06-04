@@ -22,6 +22,11 @@ import { getDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
 import { handleOrgApiRequest } from "../server/orgApi";
+import { UserStore } from "../server/users/userStore";
+import { SsoConfigStore } from "../server/sso/ssoConfigStore";
+import { SamlService } from "../server/sso/samlService";
+import { AuditLogger } from "../server/audit/auditLogger";
+import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 import { requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
@@ -93,6 +98,14 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       : pool
         ? new OrgStore(pool)
         : undefined);
+
+  // Per-user identity, SSO, and audit logging (Enterprise). All no-op without a DB pool.
+  const userStore = pool ? new UserStore(pool) : undefined;
+  const ssoConfigStore = pool ? new SsoConfigStore(pool) : undefined;
+  const auditLogger = new AuditLogger(pool ?? null);
+  const samlService = serverConfig.ssoBaseUrl
+    ? new SamlService({ baseUrl: serverConfig.ssoBaseUrl, spEntityId: serverConfig.ssoSpEntityId })
+    : undefined;
 
   const githubAppConfig = loadGitHubAppConfig();
   const githubApp =
@@ -227,7 +240,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         parsed.headers,
         orgStore,
         serverConfig.legacyApiToken,
-        serverConfig.requireApiAuth
+        serverConfig.requireApiAuth,
+        userStore
       );
 
       if (
@@ -260,10 +274,31 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      if (
+        await handleSamlApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            query: parsed.query,
+            headers: parsed.headers,
+            body: parsed.body,
+            // CRITICAL: SAML callback is form-encoded — pass the raw body so
+            // SAMLResponse isn't lost by JSON parsing.
+            rawBody: parsed.rawBody.toString("utf8")
+          },
+          response,
+          { orgStore, userStore, ssoConfigStore, samlService, auditLogger, serverConfig }
+        )
+      ) {
+        return;
+      }
+
       if (await handleOrgApiRequest(orgParsed, response, {
         orgStore,
         jobQueue: jobs.queue,
-        serverConfig
+        serverConfig,
+        userStore,
+        auditLogger
       })) {
         return;
       }
@@ -291,7 +326,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig },
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger },
           request
         )
       ) {
@@ -313,7 +348,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             workers: jobs.workers,
             config: jobs.config,
             orgStore,
-            serverConfig
+            serverConfig,
+            userStore,
+            auditLogger
           }
         )
       ) {
@@ -357,7 +394,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           parsed.headers,
           orgStore,
           serverConfig.legacyApiToken,
-          serverConfig.requireApiAuth
+          serverConfig.requireApiAuth,
+          userStore
         );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });
@@ -413,7 +451,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           parsed.headers,
           orgStore,
           serverConfig.legacyApiToken,
-          serverConfig.requireApiAuth
+          serverConfig.requireApiAuth,
+          userStore
         );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });
@@ -433,7 +472,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           parsed.headers,
           orgStore,
           serverConfig.legacyApiToken,
-          serverConfig.requireApiAuth
+          serverConfig.requireApiAuth,
+          userStore
         );
         if (!requireAuth(auth, serverConfig.requireApiAuth)) {
           writeJson(response, 401, { error: "unauthorized" });

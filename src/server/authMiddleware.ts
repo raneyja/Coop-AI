@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import type { OrgPlan } from "./orgStore";
 import { canUseLightningPlan, type AuthContext, type OrgStore } from "./orgStore";
+import type { UserStore } from "./users/userStore";
 
 export type AuthenticatedRequest = {
   auth?: AuthContext;
@@ -19,17 +20,36 @@ export async function resolveAuthContext(
   headers: Record<string, string | undefined>,
   orgStore: OrgStore | undefined,
   legacyApiToken?: string,
-  requireApiAuth = false
+  requireApiAuth = false,
+  userStore?: UserStore
 ): Promise<AuthContext | undefined> {
   const token = extractBearerToken(headers);
   if (!token) {
     return undefined;
   }
 
+  // 1. Org API key (Free/Pro). Checked first so this path is byte-for-byte
+  //    unchanged; an SSO session token will never match an api_keys hash.
   if (orgStore) {
     const orgAuth = await orgStore.resolveAuth(token);
     if (orgAuth) {
       return orgAuth;
+    }
+  }
+
+  // 2. Enterprise SSO session token. resolveUserSession returns undefined for
+  //    unknown, expired, OR deactivated users — the offboarding 401 path.
+  if (userStore) {
+    const session = await userStore.resolveUserSession(token);
+    if (session) {
+      return {
+        orgId: session.orgId,
+        orgName: session.orgName,
+        plan: session.plan,
+        apiKeyId: `session:${session.userId}`,
+        userId: session.userId,
+        role: session.role
+      };
     }
   }
 
@@ -111,6 +131,14 @@ export async function lightningAllowed(
   return plan !== undefined && canUseLightningPlan(plan);
 }
 
+/**
+ * Stable principal id for the actor behind a request.
+ *  - Enterprise SSO: the human user id.
+ *  - Org API key / legacy: `apikey:<apiKeyId>` (never the bare org id).
+ */
 export function authUserId(auth: AuthContext): string {
-  return auth.orgId;
+  if (auth.userId) {
+    return auth.userId;
+  }
+  return `apikey:${auth.apiKeyId}`;
 }

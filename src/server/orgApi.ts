@@ -16,16 +16,20 @@ import {
   resolveAuthContext,
   resolveOrgPlanFromDb
 } from "./authMiddleware";
+import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
 import { CollectionStore } from "./collectionStore";
-import { canUseLightningPlan, type OrgStore } from "./orgStore";
+import { canUseLightningPlan, type AuthContext, type OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
+import type { UserStore } from "./users/userStore";
 
 export type OrgApiDeps = {
   orgStore?: OrgStore;
   jobQueue?: JobQueue;
   serverConfig: ServerConfig;
+  auditLogger?: AuditLogger;
+  userStore?: UserStore;
 };
 
 type ParsedRequest = {
@@ -49,7 +53,8 @@ export async function handleOrgApiRequest(
     parsed.headers,
     deps.orgStore,
     deps.serverConfig.legacyApiToken,
-    deps.serverConfig.requireApiAuth
+    deps.serverConfig.requireApiAuth,
+    deps.userStore
   );
   if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) {
     writeJson(response, 401, { error: "unauthorized" });
@@ -75,6 +80,7 @@ export async function handleOrgApiRequest(
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/orgs/credentials/github") {
     await handleStoreGithubCredential(parsed, response, deps, auth!);
+    await audit(deps, auth!, "org.credential.store", { provider: "github" });
     return true;
   }
 
@@ -91,6 +97,7 @@ export async function handleOrgApiRequest(
     }
     const repoId = decodeURIComponent(enableMatch[1]);
     await handleEnableLightning(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.lightning.enable", { repoId });
     return true;
   }
 
@@ -104,6 +111,7 @@ export async function handleOrgApiRequest(
       lightningEnabled: false,
       indexStatus: "disabled"
     });
+    await audit(deps, auth!, "repo.lightning.disable", { repoId });
     writeJson(response, 200, { repo: record });
     return true;
   }
@@ -128,6 +136,7 @@ export async function handleOrgApiRequest(
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/collections") {
     await handleCreateCollection(parsed, response, auth!.orgId);
+    await audit(deps, auth!, "collection.create");
     return true;
   }
 
@@ -140,6 +149,7 @@ export async function handleOrgApiRequest(
   if (parsed.method === "POST" && addRepoMatch) {
     const collectionId = decodeURIComponent(addRepoMatch[1]);
     await handleAddCollectionRepo(collectionId, parsed, response, auth!.orgId);
+    await audit(deps, auth!, "collection.repo.add", { collectionId });
     return true;
   }
 
@@ -148,6 +158,7 @@ export async function handleOrgApiRequest(
     const collectionId = decodeURIComponent(removeRepoMatch[1]);
     const repoId = decodeURIComponent(removeRepoMatch[2]);
     await handleRemoveCollectionRepo(collectionId, repoId, response, auth!.orgId);
+    await audit(deps, auth!, "collection.repo.remove", { collectionId, repoId });
     return true;
   }
 
@@ -162,6 +173,7 @@ export async function handleOrgApiRequest(
   if (parsed.method === "GET" && fileMatch) {
     const repoId = decodeURIComponent(fileMatch[1]);
     await handleGetRepoFile(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.file.fetch", { repoId, path: parsed.query?.get("path") ?? undefined });
     return true;
   }
 
@@ -385,6 +397,22 @@ async function handleGetRepoManifest(
     files: files.map((file) => ({ path: file.filePath, symbols: file.symbols })),
     fileCount: files.length,
     lastCrawledAt: crawled ? new Date(crawled).toISOString() : undefined
+  });
+}
+
+async function audit(
+  deps: OrgApiDeps,
+  auth: AuthContext,
+  action: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  const actor = auditActor(auth);
+  await deps.auditLogger?.record({
+    orgId: auth.orgId,
+    userId: actor.userId,
+    principal: actor.principal,
+    action,
+    metadata
   });
 }
 

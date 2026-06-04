@@ -12,6 +12,8 @@ import {
   resolveOrgPlanFromDb
 } from "../server/authMiddleware";
 import type { OrgStore } from "../server/orgStore";
+import { AuditLogger, auditActor } from "../server/audit/auditLogger";
+import type { UserStore } from "../server/users/userStore";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 
 export type ChatApiDeps = {
@@ -19,6 +21,8 @@ export type ChatApiDeps = {
   config?: LlmServerConfig;
   orgStore?: OrgStore;
   serverConfig?: ServerConfig;
+  auditLogger?: AuditLogger;
+  userStore?: UserStore;
 };
 
 type ParsedChatRequest = {
@@ -31,6 +35,8 @@ type ParsedChatRequest = {
 type ChatOrgContext = {
   orgId: string;
   plan: ChatOrgPlan;
+  userId?: string;
+  principal: string;
 };
 
 export function createChatRouter(deps: ChatApiDeps = {}): ModelRouter {
@@ -52,7 +58,16 @@ export async function handleChatApiRequest(
       return true;
     }
     const router = createChatRouter(deps);
-    await handleInlineCompletionRequest(parsed.body, response, router, config, org);
+    try {
+      await handleInlineCompletionRequest(parsed.body, response, router, config, org);
+    } finally {
+      await deps.auditLogger?.record({
+        orgId: org.orgId,
+        userId: org.userId,
+        principal: org.principal,
+        action: "completion.inline"
+      });
+    }
     return true;
   }
 
@@ -120,6 +135,14 @@ export async function handleChatApiRequest(
     });
   }
 
+  await deps.auditLogger?.record({
+    orgId: org.orgId,
+    userId: org.userId,
+    principal: org.principal,
+    action: "chat.completion",
+    metadata: { provider, model, requestId }
+  });
+
   response.end();
   return true;
 }
@@ -141,7 +164,8 @@ async function resolveChatOrg(
     headers,
     deps.orgStore,
     serverConfig.legacyApiToken,
-    serverConfig.requireApiAuth
+    serverConfig.requireApiAuth,
+    deps.userStore
   );
 
   if (!requireAuth(auth, serverConfig.requireApiAuth)) {
@@ -150,7 +174,7 @@ async function resolveChatOrg(
   }
 
   if (!auth) {
-    return { orgId: "dev", plan: "free" };
+    return { orgId: "dev", plan: "free", principal: "dev" };
   }
 
   if (!(await requireOrgPlan(deps.orgStore, auth, response, "free", "pro", "enterprise"))) {
@@ -158,7 +182,8 @@ async function resolveChatOrg(
   }
 
   const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
-  return { orgId: auth.orgId, plan };
+  const actor = auditActor(auth);
+  return { orgId: auth.orgId, plan, userId: actor.userId, principal: actor.principal };
 }
 
 function writeSse(response: ServerResponse, payload: unknown): void {
