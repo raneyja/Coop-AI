@@ -1,5 +1,6 @@
 import { toRepositoryRelativePath } from "../../context/repoFilePath";
 import { degradationCacheKey } from "../../cache/degradationCache";
+import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
 import { getOwnershipGraphEngine } from "../../engines/ownershipGraphRegistry";
 import type { OwnershipReport } from "../../types/ownership";
@@ -7,6 +8,7 @@ import { contextResult, unavailableResult, type FeatureExecutionContext } from "
 
 export async function ownershipMap(context: FeatureExecutionContext) {
   const params = context.request.params;
+  const codeHost = resolveCodeHostContext(params);
   const key = degradationCacheKey("ownership", [params.repoId, params.file]);
 
   if (context.status.level === "cached" || context.status.level === "unavailable") {
@@ -20,22 +22,25 @@ export async function ownershipMap(context: FeatureExecutionContext) {
           cacheAge: cached.cacheAge,
           fallbackLevel: "cached"
         },
-        "GitHub offline. Showing cached ownership.",
+        `${codeHostLabel(codeHost?.provider)} offline. Showing cached ownership.`,
         true
       );
     }
-    return unavailableResult(context, "GitHub is offline and no cached ownership data is available.");
+    return unavailableResult(
+      context,
+      `${codeHostLabel(codeHost?.provider)} is offline and no cached ownership data is available.`
+    );
   }
 
   const engine = getOwnershipGraphEngine();
-  const ownerRepo = resolveOwnerRepo(params);
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
 
-  if (engine && ownerRepo && file) {
+  if (engine && codeHost && file) {
     try {
       const report = await engine.mapOwnership({
-        owner: ownerRepo.owner,
-        repo: ownerRepo.repo,
+        provider: codeHost.provider,
+        owner: codeHost.owner,
+        repo: codeHost.repo,
         path: file,
         branch: params.branch,
         isDirectory: file.endsWith("/")
@@ -63,7 +68,7 @@ export async function ownershipMap(context: FeatureExecutionContext) {
         partial: context.status.level !== "full" || report.completeness !== "full"
       };
 
-      await context.cache.set(key, data, { provider: "github", feature: "ownership_map" });
+      await context.cache.set(key, data, { provider: codeHost.provider, feature: "ownership_map" });
       return contextResult(context, data, ownershipSummaryMessage(report), context.status.level !== "full");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Ownership analysis failed.";
@@ -74,10 +79,10 @@ export async function ownershipMap(context: FeatureExecutionContext) {
   const slackOffline = context.status.unavailableProviders.includes("slack");
   const data = placeholderOwnershipData(params, context.status.level);
   data.slackStatus = slackOffline ? null : { status: "availability-requested" };
-  await context.cache.set(key, data, { provider: "github", feature: "ownership_map" });
+  await context.cache.set(key, data, { provider: codeHost?.provider ?? "github", feature: "ownership_map" });
   const skipped = [
     !engine ? "Ownership engine not initialized" : undefined,
-    !ownerRepo ? "Repository not configured" : undefined,
+    !codeHost ? "Repository not configured" : undefined,
     !file ? "No file in context" : undefined,
     slackOffline ? "Slack offline" : undefined
   ]
@@ -92,28 +97,46 @@ export async function ownershipMap(context: FeatureExecutionContext) {
   );
 }
 
-function resolveOwnerRepo(params: {
+function resolveCodeHostContext(params: {
   owner?: string;
   repo?: string;
   repoId?: string;
-}): { owner: string; repo: string } | undefined {
+  provider?: string;
+}): { owner: string; repo: string; provider: CodeHostProvider } | undefined {
+  if (params.repoId) {
+    const fromId = coordinatesFromRepoId(
+      params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
+    );
+    if (fromId) {
+      return { owner: fromId.owner, repo: fromId.repo, provider: fromId.provider };
+    }
+    const slash = params.repoId.split("/");
+    if (slash.length === 2) {
+      return { owner: slash[0], repo: slash[1], provider: "github" };
+    }
+  }
   if (params.owner && params.repo) {
-    return { owner: params.owner, repo: params.repo };
-  }
-  if (!params.repoId) {
-    return undefined;
-  }
-  const fromId = coordinatesFromRepoId(
-    params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
-  );
-  if (fromId) {
-    return { owner: fromId.owner, repo: fromId.repo };
-  }
-  const slash = params.repoId.split("/");
-  if (slash.length === 2) {
-    return { owner: slash[0], repo: slash[1] };
+    const provider = normalizeCodeHostProvider(params.provider);
+    return { owner: params.owner, repo: params.repo, provider };
   }
   return undefined;
+}
+
+function normalizeCodeHostProvider(value?: string): CodeHostProvider {
+  if (value === "gitlab" || value === "bitbucket" || value === "github") {
+    return value;
+  }
+  return "github";
+}
+
+function codeHostLabel(provider?: CodeHostProvider): string {
+  if (provider === "gitlab") {
+    return "GitLab";
+  }
+  if (provider === "bitbucket") {
+    return "Bitbucket";
+  }
+  return "GitHub";
 }
 
 function placeholderOwnershipData(

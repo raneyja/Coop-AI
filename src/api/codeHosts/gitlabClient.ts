@@ -152,6 +152,19 @@ export class GitLabClient implements CodeHostClient {
     return this.getCommitHistory(coords, { path: filePath, limit });
   }
 
+  public async getCommitBySha(coords: RepoCoordinates, sha: string): Promise<CommitInfo> {
+    const projectId = await this.projectId(coords);
+    const commit = await codeHostRequestJson<GitLabCommit>(
+      `${this.apiBase}/projects/${projectId}/repository/commits/${encodeURIComponent(sha)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return mapGitLabCommit(commit);
+  }
+
   public async getBlameData(coords: RepoCoordinates, filePath: string): Promise<BlameData> {
     const branch = await this.resolveBranch(coords);
     const projectId = await this.projectId(coords);

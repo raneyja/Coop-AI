@@ -5,7 +5,9 @@ import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ManifestSymbol } from "../manifest/types";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
-import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
+import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
+import { getConnector } from "../server/codeHostConnectors/registry";
+import { gitlabApiBaseUrl, loadGitLabAppConfig } from "../server/gitlabAppConfig";
 import { CollectionStore } from "../server/collectionStore";
 import { getDbPool, requireDbPool } from "../server/db";
 import { buildPartialFailure } from "./errorHandling";
@@ -15,6 +17,7 @@ import type { JobExecutionContext, ProgressReporter } from "./executors";
 const require = createRequire(__filename);
 
 const GITHUB_API = "https://api.github.com";
+const BITBUCKET_API = "https://api.bitbucket.org/2.0";
 const SYMBOL_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".py", ".go", ".java", ".rb"]);
 
 export type { ManifestSymbol };
@@ -28,7 +31,8 @@ type ParsedRepo = {
 
 type TreeBlob = {
   path: string;
-  sha: string;
+  /** Present for GitHub git-blob API; GitLab/Bitbucket fetch by path instead. */
+  sha?: string;
 };
 
 type GitHubRef = {
@@ -164,20 +168,15 @@ async function crawlStructureManifestForRepo(
   signal: AbortSignal
 ): Promise<unknown> {
   const target = parseRepoId(repoId);
-  if (target.provider !== "github") {
-    throw new Error(
-      `Unsupported code host provider "${target.provider}" for structure manifest crawl. Only github is supported.`
-    );
-  }
 
-  const token = await resolveGithubTokenForOrg(orgId, {
-    orgStore: ctx.orgStore,
-    githubApp: ctx.githubApp,
+  const token = await resolveCodeHostTokenForOrg(orgId, target.provider, {
+    orgStore: ctx.orgStore!,
+    connector: getConnector(target.provider),
     allowPatFallback: ctx.allowPatFallback ?? false
   });
   if (!token) {
     throw new Error(
-      `Missing GitHub App installation for organization (install the CoopAI GitHub App)`
+      `Missing ${target.provider} App installation for organization (install the CoopAI ${target.provider} App)`
     );
   }
 
@@ -189,8 +188,7 @@ async function crawlStructureManifestForRepo(
     throw new Error("Job cancelled");
   }
 
-  const headers = githubHeaders(token);
-  const { branch, blobs } = await fetchGithubRecursiveTree(target, headers);
+  const { branch, blobs } = await fetchRecursiveTree(target, token);
   const symbolCandidates = blobs.filter((blob) => hasSymbolExtension(blob.path));
 
   await report(15, `Tree loaded (${blobs.length} files, ${symbolCandidates.length} to parse)`);
@@ -212,7 +210,7 @@ async function crawlStructureManifestForRepo(
     const progress = 15 + Math.round((i / Math.max(symbolCandidates.length, 1)) * 70);
     await report(progress, `Parsing symbols: ${blob.path}`);
 
-    const body = await fetchGithubBlob(target, blob.sha, headers);
+    const body = await fetchFileContent(target, blob, token, branch);
     const symbols = await extractSymbols(blob.path, body);
     manifestRows.push({ filePath: blob.path, symbols });
   }
@@ -246,6 +244,47 @@ export function parseRepoId(repoId: string): ParsedRepo {
     throw new Error(`Invalid repoId provider: ${providerPart}`);
   }
   return { provider, owner, repo, repoId };
+}
+
+function resolveGitlabApiBase(): string {
+  return gitlabApiBaseUrl(loadGitLabAppConfig()?.gitlabBaseUrl);
+}
+
+async function fetchRecursiveTree(
+  target: ParsedRepo,
+  token: string
+): Promise<{ branch: string; blobs: TreeBlob[] }> {
+  switch (target.provider) {
+    case "github":
+      return fetchGithubRecursiveTree(target, githubHeaders(token));
+    case "gitlab":
+      return fetchGitlabRecursiveTree(target, token);
+    case "bitbucket":
+      return fetchBitbucketRecursiveTree(target, token);
+    default:
+      throw new Error(`Unsupported provider: ${target.provider}`);
+  }
+}
+
+async function fetchFileContent(
+  target: ParsedRepo,
+  blob: TreeBlob,
+  token: string,
+  branch: string
+): Promise<string> {
+  switch (target.provider) {
+    case "github":
+      if (!blob.sha) {
+        throw new Error(`Missing blob sha for ${blob.path}`);
+      }
+      return fetchGithubBlob(target, blob.sha, githubHeaders(token));
+    case "gitlab":
+      return fetchGitlabFile(target, blob.path, token, branch);
+    case "bitbucket":
+      return fetchBitbucketFile(target, blob.path, token, branch);
+    default:
+      throw new Error(`Unsupported provider: ${target.provider}`);
+  }
 }
 
 async function fetchGithubRecursiveTree(
@@ -291,6 +330,119 @@ async function fetchGithubBlob(
   return Buffer.from(blob.content.replace(/\n/g, ""), "base64").toString("utf8");
 }
 
+async function fetchGitlabRecursiveTree(
+  target: ParsedRepo,
+  token: string
+): Promise<{ branch: string; blobs: TreeBlob[] }> {
+  const apiBase = resolveGitlabApiBase();
+  const headers = gitlabHeaders(token);
+  const projectId = encodeURIComponent(`${target.owner}/${target.repo}`);
+  const project = await codeHostRequestJson<{ default_branch: string }>(
+    `${apiBase}/projects/${projectId}`,
+    { headers, provider: "gitlab" }
+  );
+  const branch = project.default_branch;
+  const blobs: TreeBlob[] = [];
+  let page = 1;
+  while (true) {
+    const tree = await codeHostRequestJson<Array<{ path: string; type: string }>>(
+      `${apiBase}/projects/${projectId}/repository/tree?recursive=true&per_page=100&page=${page}&ref=${encodeURIComponent(branch)}`,
+      { headers, provider: "gitlab" }
+    );
+    for (const entry of tree) {
+      if (entry.type === "blob") {
+        blobs.push({ path: entry.path });
+      }
+    }
+    if (tree.length < 100) {
+      break;
+    }
+    page += 1;
+  }
+  return { branch, blobs };
+}
+
+async function fetchGitlabFile(
+  target: ParsedRepo,
+  filePath: string,
+  token: string,
+  branch: string
+): Promise<string> {
+  const apiBase = resolveGitlabApiBase();
+  const headers = gitlabHeaders(token);
+  const projectId = encodeURIComponent(`${target.owner}/${target.repo}`);
+  const response = await fetch(
+    `${apiBase}/projects/${projectId}/repository/files/${encodeURIComponent(filePath)}/raw?ref=${encodeURIComponent(branch)}`,
+    { headers }
+  );
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`GitLab file fetch failed (${response.status}): ${body}`);
+  }
+  return response.text();
+}
+
+// Bitbucket has no recursive tree endpoint — BFS directory walk. Slower than GitHub/GitLab
+// on large repos but acceptable for one-time manifest crawl.
+async function fetchBitbucketRecursiveTree(
+  target: ParsedRepo,
+  token: string
+): Promise<{ branch: string; blobs: TreeBlob[] }> {
+  const headers = bitbucketHeaders(token);
+  const repoUrl = `${BITBUCKET_API}/repositories/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
+  const repo = await codeHostRequestJson<{ mainbranch?: { name: string } }>(repoUrl, {
+    headers,
+    provider: "bitbucket"
+  });
+  const branch = repo.mainbranch?.name ?? "main";
+  const blobs: TreeBlob[] = [];
+  const dirs: string[] = [""];
+
+  while (dirs.length > 0) {
+    const dir = dirs.pop()!;
+    let nextUrl = dir
+      ? `${repoUrl}/src/${encodeURIComponent(branch)}/${encodeBitbucketPath(dir)}?pagelen=100`
+      : `${repoUrl}/src/${encodeURIComponent(branch)}/?pagelen=100`;
+
+    while (nextUrl) {
+      const page = await codeHostRequestJson<{
+        values?: Array<{ path: string; type: string }>;
+        next?: string;
+      }>(nextUrl, { headers, provider: "bitbucket" });
+
+      for (const item of page.values ?? []) {
+        if (item.type === "commit_file") {
+          blobs.push({ path: item.path });
+        } else if (item.type === "commit_directory") {
+          dirs.push(item.path);
+        }
+      }
+      nextUrl = page.next ?? "";
+    }
+  }
+
+  return { branch, blobs };
+}
+
+async function fetchBitbucketFile(
+  target: ParsedRepo,
+  filePath: string,
+  token: string,
+  branch: string
+): Promise<string> {
+  const headers = bitbucketHeaders(token);
+  const repoUrl = `${BITBUCKET_API}/repositories/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
+  const response = await fetch(
+    `${repoUrl}/src/${encodeURIComponent(branch)}/${encodeBitbucketPath(filePath)}`,
+    { headers }
+  );
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Bitbucket file fetch failed (${response.status}): ${body}`);
+  }
+  return response.text();
+}
+
 function githubHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
@@ -298,6 +450,28 @@ function githubHeaders(token: string): Record<string, string> {
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "coop-ai-backend"
   };
+}
+
+function gitlabHeaders(token: string): Record<string, string> {
+  return {
+    "PRIVATE-TOKEN": token,
+    "User-Agent": "coop-ai-backend"
+  };
+}
+
+function bitbucketHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    "User-Agent": "coop-ai-backend"
+  };
+}
+
+function encodeBitbucketPath(filePath: string): string {
+  return filePath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 }
 
 function hasSymbolExtension(filePath: string): boolean {

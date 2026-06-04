@@ -53,31 +53,50 @@ export function activate(context: vscode.ExtensionContext): void {
   const codeHostCache = new CacheManager({ storageUri: context.globalStorageUri });
   void codeHostCache.initialize();
   const getApiBaseUrl = () => readConfiguration().apiBaseUrl;
+  const useCloudCodeHostProxy = () => readLightningBackend() === "cloud" && !isCoopDevMode();
+  const cloudCodeHostFileFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostFileFetcher = async ({
+    repoId,
+    path,
+    coords
+  }) => {
+    const file = await api.fetchRepoFileViaCloud(getApiBaseUrl(), repoId, path, coords.branch);
+    return {
+      path: file.path,
+      content: file.content,
+      encoding: (file.encoding as "utf-8" | undefined) ?? "utf-8",
+      branch: file.branch,
+      truncated: file.truncated,
+      size: file.content.length,
+      lines: linesFromText(file.content)
+    };
+  };
+  const cloudCodeHostHealthCheck = async (
+    provider: CodeHostProvider
+  ): Promise<{ ok: boolean; message: string }> => {
+    if (!(await api.hasToken())) {
+      return { ok: false, message: "Add your Coop API key first." };
+    }
+    const statusByProvider = {
+      github: () => api.getGithubInstallationStatus(getApiBaseUrl()),
+      gitlab: () => api.getGitlabInstallationStatus(getApiBaseUrl()),
+      bitbucket: () => api.getBitbucketInstallationStatus(getApiBaseUrl())
+    } as const;
+    const labelByProvider = {
+      github: "GitHub App",
+      gitlab: "GitLab OAuth App",
+      bitbucket: "Bitbucket OAuth App"
+    } as const;
+    const status = await statusByProvider[provider]();
+    return status.installed
+      ? { ok: true, message: `${labelByProvider[provider]} is authorized for your organization.` }
+      : { ok: false, message: `Authorize ${labelByProvider[provider]} from settings.` };
+  };
   const codeHostRouter = new CodeHostRouter({
     secrets: codeHostSecrets,
     cache: codeHostCache,
-    useCloudGithubProxy: () => readLightningBackend() === "cloud" && !isCoopDevMode(),
-    cloudGithubFileFetcher: async ({ repoId, path, coords }) => {
-      const file = await api.fetchRepoFileViaCloud(getApiBaseUrl(), repoId, path, coords.branch);
-      return {
-        path: file.path,
-        content: file.content,
-        encoding: (file.encoding as "utf-8" | undefined) ?? "utf-8",
-        branch: file.branch,
-        truncated: file.truncated,
-        size: file.content.length,
-        lines: linesFromText(file.content)
-      };
-    },
-    cloudGithubHealthCheck: async () => {
-      if (!(await api.hasToken())) {
-        return { ok: false, message: "Add your Coop API key first." };
-      }
-      const status = await api.getGithubInstallationStatus(getApiBaseUrl());
-      return status.installed
-        ? { ok: true, message: "GitHub App is installed for your organization." }
-        : { ok: false, message: "Install the CoopAI GitHub App from settings." };
-    }
+    useCloudCodeHostProxy,
+    cloudCodeHostFileFetcher,
+    cloudCodeHostHealthCheck
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
   registerDecisionArchaeologyEngine(

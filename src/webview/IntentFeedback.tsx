@@ -200,10 +200,7 @@ function buildDetails(state: IntentFeedbackState): { subtitle?: string; footer?:
     };
   }
   if (state.status === "warning") {
-    return {
-      subtitle,
-      footer: "Expensive operation"
-    };
+    return { subtitle };
   }
   if (state.status === "complete") {
     return {

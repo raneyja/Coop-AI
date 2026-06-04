@@ -1,6 +1,7 @@
 export type OwnershipTier = "primary" | "secondary" | "familiar";
 
 export type MapOwnershipParams = {
+  provider?: import("../api/codeHosts/types").CodeHostProvider;
   owner: string;
   repo: string;
   path: string;

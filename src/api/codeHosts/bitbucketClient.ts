@@ -19,8 +19,10 @@ import { CodeHostError } from "./types";
 const BITBUCKET_API = "https://api.bitbucket.org/2.0";
 
 type BitbucketClientOptions = {
-  username: string;
-  appPassword: string;
+  username?: string;
+  appPassword?: string;
+  /** OAuth access token (Bearer auth) — used by cloud backend App installations. */
+  token?: string;
   rateLimitTracker?: RateLimitTracker;
 };
 
@@ -29,12 +31,22 @@ export class BitbucketClient implements CodeHostClient {
   private readonly headers: Record<string, string>;
 
   public constructor(private readonly options: BitbucketClientOptions) {
-    const encoded = Buffer.from(`${options.username}:${options.appPassword}`).toString("base64");
-    this.headers = {
-      Authorization: `Basic ${encoded}`,
-      Accept: "application/json",
-      "User-Agent": "coop-ai-extension"
-    };
+    if (options.token) {
+      this.headers = {
+        Authorization: `Bearer ${options.token}`,
+        Accept: "application/json",
+        "User-Agent": "coop-ai-extension"
+      };
+    } else if (options.username && options.appPassword) {
+      const encoded = Buffer.from(`${options.username}:${options.appPassword}`).toString("base64");
+      this.headers = {
+        Authorization: `Basic ${encoded}`,
+        Accept: "application/json",
+        "User-Agent": "coop-ai-extension"
+      };
+    } else {
+      throw new Error("BitbucketClient requires token or username+appPassword");
+    }
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
@@ -138,6 +150,18 @@ export class BitbucketClient implements CodeHostClient {
 
   public async getFileHistory(coords: RepoCoordinates, filePath: string, limit = 20): Promise<CommitInfo[]> {
     return this.getCommitHistory(coords, { path: filePath, limit });
+  }
+
+  public async getCommitBySha(coords: RepoCoordinates, sha: string): Promise<CommitInfo> {
+    const commit = await codeHostRequestJson<BitbucketCommit>(
+      `${this.repoUrl(coords)}/commit/${encodeURIComponent(sha)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return mapBitbucketCommit(commit);
   }
 
   public async getBlameData(coords: RepoCoordinates, filePath: string): Promise<BlameData> {

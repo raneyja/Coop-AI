@@ -2,11 +2,13 @@ import { toRepositoryRelativePath } from "../../context/repoFilePath";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { DecisionTimeline } from "../../types/decisionTimeline";
 import { getDecisionArchaeologyEngine } from "../../engines/decisionArchaeologyRegistry";
+import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function traceDecision(context: FeatureExecutionContext) {
   const params = context.request.params;
+  const codeHost = resolveCodeHostContext(params);
   const key = degradationCacheKey("decision", [
     params.repoId,
     params.file,
@@ -25,32 +27,35 @@ export async function traceDecision(context: FeatureExecutionContext) {
           cached: true,
           cacheAge: cached.cacheAge
         },
-        "GitHub offline. Showing cached decision history.",
+        `${codeHostLabel(codeHost?.provider)} offline. Showing cached decision history.`,
         true
       );
     }
-    return unavailableResult(context, "GitHub is offline and no cached decision history is available.");
+    return unavailableResult(
+      context,
+      `${codeHostLabel(codeHost?.provider)} is offline and no cached decision history is available.`
+    );
   }
 
   const engine = getDecisionArchaeologyEngine();
-  const ownerRepo = resolveOwnerRepo(params);
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
   const fileSource = params.fileSource as string | undefined;
 
   if (fileSource === "external" || (!file && params.file)) {
     return contextResult(
       context,
-      placeholderDecisionData(params, context.status.level, "Active file is not in the workspace or a git repo."),
+      placeholderDecisionData(params, codeHost?.provider, context.status.level, "Active file is not in the workspace or a git repo."),
       "Open the project with File → Open Folder (the repo root), or use the remote file tree in chat.",
       false
     );
   }
 
-  if (engine && ownerRepo && file) {
+  if (engine && codeHost && file) {
     try {
       const timeline = await engine.traceDecision({
-        owner: ownerRepo.owner,
-        repo: ownerRepo.repo,
+        provider: codeHost.provider,
+        owner: codeHost.owner,
+        repo: codeHost.repo,
         file,
         lineRange: params.lines
           ? { start: params.lines.start, end: params.lines.end }
@@ -75,13 +80,13 @@ export async function traceDecision(context: FeatureExecutionContext) {
         partial: context.status.level !== "full" || timeline.completeness !== "full"
       };
 
-      await context.cache.set(key, data, { provider: "github", feature: "trace_why" });
+      await context.cache.set(key, data, { provider: codeHost.provider, feature: "trace_why" });
       return contextResult(context, data, timelineSummaryMessage(timeline), false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Decision trace failed.";
       return contextResult(
         context,
-        placeholderDecisionData(params, context.status.level, message),
+        placeholderDecisionData(params, codeHost.provider, context.status.level, message),
         message,
         false
       );
@@ -90,14 +95,14 @@ export async function traceDecision(context: FeatureExecutionContext) {
 
   const slackOffline = context.status.unavailableProviders.includes("slack");
   const jiraOffline = context.status.unavailableProviders.includes("jira");
-  const data = placeholderDecisionData(params, context.status.level);
+  const data = placeholderDecisionData(params, codeHost?.provider, context.status.level);
   data.slackContext = slackOffline ? null : { status: "slack-thread-search-requested" };
   data.jiraContext = jiraOffline ? null : { status: "ticket-lookup-requested" };
 
-  await context.cache.set(key, data, { provider: "github", feature: "trace_why" });
+  await context.cache.set(key, data, { provider: codeHost?.provider ?? "github", feature: "trace_why" });
   const skipped = [
     !engine ? "Decision engine not initialized" : undefined,
-    !ownerRepo ? "Repository not configured" : undefined,
+    !codeHost ? "Repository not configured" : undefined,
     !file ? "No file in context" : undefined,
     slackOffline ? "Slack offline" : undefined,
     jiraOffline ? "Jira offline" : undefined
@@ -108,39 +113,58 @@ export async function traceDecision(context: FeatureExecutionContext) {
   return contextResult(context, data, skipped || context.status.message, false);
 }
 
-function resolveOwnerRepo(params: {
+function resolveCodeHostContext(params: {
   owner?: string;
   repo?: string;
   repoId?: string;
-}): { owner: string; repo: string } | undefined {
+  provider?: string;
+}): { owner: string; repo: string; provider: CodeHostProvider } | undefined {
+  if (params.repoId) {
+    const fromId = coordinatesFromRepoId(
+      params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
+    );
+    if (fromId) {
+      return { owner: fromId.owner, repo: fromId.repo, provider: fromId.provider };
+    }
+    const slash = params.repoId.split("/");
+    if (slash.length === 2) {
+      return { owner: slash[0], repo: slash[1], provider: "github" };
+    }
+  }
   if (params.owner && params.repo) {
-    return { owner: params.owner, repo: params.repo };
-  }
-  if (!params.repoId) {
-    return undefined;
-  }
-  const fromId = coordinatesFromRepoId(
-    params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
-  );
-  if (fromId) {
-    return { owner: fromId.owner, repo: fromId.repo };
-  }
-  const slash = params.repoId.split("/");
-  if (slash.length === 2) {
-    return { owner: slash[0], repo: slash[1] };
+    const provider = normalizeCodeHostProvider(params.provider);
+    return { owner: params.owner, repo: params.repo, provider };
   }
   return undefined;
 }
 
+function normalizeCodeHostProvider(value?: string): CodeHostProvider {
+  if (value === "gitlab" || value === "bitbucket" || value === "github") {
+    return value;
+  }
+  return "github";
+}
+
+function codeHostLabel(provider?: CodeHostProvider): string {
+  if (provider === "gitlab") {
+    return "GitLab";
+  }
+  if (provider === "bitbucket") {
+    return "Bitbucket";
+  }
+  return "GitHub";
+}
+
 function placeholderDecisionData(
   params: { file?: string; lines?: { start: number; end: number } },
+  provider: CodeHostProvider | undefined,
   level: string,
   error?: string
 ): Record<string, unknown> {
   return {
     file: params.file,
     lines: params.lines,
-    commitHistory: { status: "decision-history-requested", provider: "github" },
+    commitHistory: { status: "decision-history-requested", provider: provider ?? "github" },
     error,
     fallbackLevel: level
   };

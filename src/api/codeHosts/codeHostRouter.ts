@@ -30,7 +30,7 @@ import type {
 } from "./types";
 import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates, coordinatesFromRepoId } from "./types";
 
-export type CloudGithubFileFetcher = (options: {
+export type CloudCodeHostFileFetcher = (options: {
   repoId: string;
   path: string;
   coords: RepoCoordinates;
@@ -40,10 +40,10 @@ export type CodeHostRouterOptions = {
   secrets: CodeHostSecrets;
   cache: CacheManager;
   rateLimitTracker?: RateLimitTracker;
-  /** When true, GitHub file reads use the backend proxy (no local PAT). */
-  useCloudGithubProxy?: () => boolean;
-  cloudGithubFileFetcher?: CloudGithubFileFetcher;
-  cloudGithubHealthCheck?: () => Promise<{ ok: boolean; message: string }>;
+  /** When true, code host file reads use the backend proxy (no local PAT). */
+  useCloudCodeHostProxy?: () => boolean;
+  cloudCodeHostFileFetcher?: CloudCodeHostFileFetcher;
+  cloudCodeHostHealthCheck?: (provider: CodeHostProvider) => Promise<{ ok: boolean; message: string }>;
 };
 
 export class CodeHostRouter {
@@ -77,12 +77,8 @@ export class CodeHostRouter {
   }
 
   public async testProvider(provider: CodeHostProvider): Promise<{ ok: boolean; message: string }> {
-    if (
-      provider === "github" &&
-      this.options.useCloudGithubProxy?.() &&
-      this.options.cloudGithubHealthCheck
-    ) {
-      return this.options.cloudGithubHealthCheck();
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostHealthCheck) {
+      return this.options.cloudCodeHostHealthCheck(provider);
     }
     const client = await this.getClient(provider);
     return client.testConnection();
@@ -175,14 +171,10 @@ export class CodeHostRouter {
   public async getFileContent(filePath: string, coords?: Partial<RepoCoordinates>): Promise<RemoteFileContent> {
     const resolved = await this.resolveCoordinates(coords);
     const path = filePath.replace(/^\/+/, "");
-    if (
-      resolved.provider === "github" &&
-      this.options.useCloudGithubProxy?.() &&
-      this.options.cloudGithubFileFetcher
-    ) {
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostFileFetcher) {
       const repoId = repoIdFromCoordinates(resolved);
       return this.cached(this.key("fileContent", resolved, path, "cloud"), "fileContent", async () =>
-        this.options.cloudGithubFileFetcher!({ repoId, path, coords: resolved })
+        this.options.cloudCodeHostFileFetcher!({ repoId, path, coords: resolved })
       );
     }
     return this.cached(this.key("fileContent", resolved, path), "fileContent", async () =>
@@ -208,6 +200,13 @@ export class CodeHostRouter {
     const path = toRepositoryRelativePath(filePath);
     return this.cached(this.key("fileHistory", resolved, path, limit), "commitHistory", async () =>
       (await this.getClient(resolved.provider)).getFileHistory(resolved, path, limit)
+    );
+  }
+
+  public async getCommitBySha(sha: string, coords?: Partial<RepoCoordinates>): Promise<CommitInfo> {
+    const resolved = await this.resolveCoordinates(coords);
+    return this.cached(this.key("commit", resolved, sha), "commitHistory", async () =>
+      (await this.getClient(resolved.provider)).getCommitBySha(resolved, sha)
     );
   }
 
@@ -374,7 +373,7 @@ export class CodeHostRouter {
     let client: CodeHostClient;
     switch (provider) {
       case "github": {
-        if (this.options.useCloudGithubProxy?.()) {
+        if (this.options.useCloudCodeHostProxy?.()) {
           throw new CodeHostError(
             "GitHub file access uses the CoopAI cloud backend. Install the GitHub App in settings.",
             "auth",
@@ -389,6 +388,14 @@ export class CodeHostRouter {
         break;
       }
       case "gitlab": {
+        if (this.options.useCloudCodeHostProxy?.()) {
+          throw new CodeHostError(
+            "GitLab file access uses the CoopAI cloud backend. Authorize GitLab in settings.",
+            "auth",
+            401,
+            provider
+          );
+        }
         if (!creds.gitlabToken) {
           throw new CodeHostError("GitLab token is missing. Add it in CoopAI settings.", "auth", 401, provider);
         }
@@ -400,6 +407,14 @@ export class CodeHostRouter {
         break;
       }
       case "bitbucket": {
+        if (this.options.useCloudCodeHostProxy?.()) {
+          throw new CodeHostError(
+            "Bitbucket file access uses the CoopAI cloud backend. Authorize Bitbucket in settings.",
+            "auth",
+            401,
+            provider
+          );
+        }
         if (!creds.bitbucketUsername || !creds.bitbucketAppPassword) {
           throw new CodeHostError("Bitbucket credentials are missing. Add them in CoopAI settings.", "auth", 401, provider);
         }

@@ -67,6 +67,10 @@ export async function updateWorkspacePrompt(entry: WorkspacePromptEntry): Promis
   await writeWorkspacePrompts(merged);
 }
 
+export async function replaceWorkspacePrompts(prompts: WorkspacePromptEntry[]): Promise<void> {
+  await writeWorkspacePrompts(prompts);
+}
+
 export async function deleteWorkspacePrompt(id: string): Promise<void> {
   const existing = await loadWorkspacePrompts();
   const merged = existing.filter((item) => item.id !== id);

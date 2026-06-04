@@ -28,6 +28,18 @@ import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import type { GitHubAppService } from "../server/githubAppService";
 import { handleGitHubAppApiRequest } from "../server/githubAppApi";
+import { loadGitLabAppConfig } from "../server/gitlabAppConfig";
+import type { GitLabAppConfig } from "../server/gitlabAppConfig";
+import { GitLabAppService, createGitLabAppService } from "../server/gitlabAppService";
+import { handleGitLabAppApiRequest } from "../server/gitlabAppApi";
+import { GitHubConnector } from "../server/codeHostConnectors/githubConnector";
+import { GitLabConnector, createGitLabConnector } from "../server/codeHostConnectors/gitlabConnector";
+import { BitbucketConnector, createBitbucketConnector } from "../server/codeHostConnectors/bitbucketConnector";
+import { registerConnector } from "../server/codeHostConnectors/registry";
+import { loadBitbucketAppConfig } from "../server/bitbucketAppConfig";
+import type { BitbucketAppConfig } from "../server/bitbucketAppConfig";
+import { BitbucketAppService, createBitbucketAppService } from "../server/bitbucketAppService";
+import { handleBitbucketAppApiRequest } from "../server/bitbucketAppApi";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -53,6 +65,10 @@ export type WebhookServerRuntime = {
   serverConfig: ServerConfig;
   githubApp?: GitHubAppService;
   githubAppConfig?: ReturnType<typeof loadGitHubAppConfig>;
+  gitlabApp?: GitLabAppService;
+  gitlabAppConfig?: GitLabAppConfig;
+  bitbucketApp?: BitbucketAppService;
+  bitbucketAppConfig?: BitbucketAppConfig;
 };
 
 type ParsedRequest = {
@@ -84,6 +100,44 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       ? createGithubAppService(githubAppConfig, serverConfig.credentialsEncryptionKey)
       : undefined;
 
+  const gitlabAppConfig = loadGitLabAppConfig();
+  const gitlabApp =
+    gitlabAppConfig && serverConfig.credentialsEncryptionKey
+      ? createGitLabAppService(
+          gitlabAppConfig.clientId,
+          gitlabAppConfig.clientSecret,
+          gitlabAppConfig.gitlabBaseUrl,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
+  // Register connectors once per server instance so the generic
+  // resolveCodeHostTokenForOrg can refresh tokens for any provider.
+  if (githubApp && githubAppConfig) {
+    registerConnector(new GitHubConnector(githubApp, githubAppConfig));
+  }
+  if (gitlabApp && gitlabAppConfig && orgStore && serverConfig.credentialsEncryptionKey) {
+    registerConnector(
+      createGitLabConnector(gitlabAppConfig, serverConfig.credentialsEncryptionKey, orgStore)
+    );
+  }
+
+  const bitbucketAppConfig = loadBitbucketAppConfig();
+  const bitbucketApp =
+    bitbucketAppConfig && serverConfig.credentialsEncryptionKey
+      ? createBitbucketAppService(
+          bitbucketAppConfig.clientId,
+          bitbucketAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
+  if (bitbucketApp && bitbucketAppConfig && orgStore && serverConfig.credentialsEncryptionKey) {
+    registerConnector(
+      createBitbucketConnector(bitbucketAppConfig, serverConfig.credentialsEncryptionKey, orgStore)
+    );
+  }
+
   const cache =
     options.cache ??
     (await createGraphCache(config.cache.backend, {
@@ -110,7 +164,6 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       cache,
       consistency,
       orgStore,
-      githubApp,
       allowPatFallback: serverConfig.devMode
     });
   if (serverConfig.jobsWorkersEnabled) {
@@ -187,11 +240,30 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      if (
+        await handleGitLabAppApiRequest(orgParsed, response, {
+          orgStore,
+          gitlabApp,
+          gitlabAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleBitbucketAppApiRequest(orgParsed, response, {
+          orgStore,
+          bitbucketApp,
+          bitbucketAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
       if (await handleOrgApiRequest(orgParsed, response, {
         orgStore,
         jobQueue: jobs.queue,
-        serverConfig,
-        githubApp
+        serverConfig
       })) {
         return;
       }
@@ -391,7 +463,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     orgStore,
     serverConfig,
     githubApp,
-    githubAppConfig
+    githubAppConfig,
+    gitlabApp,
+    gitlabAppConfig,
+    bitbucketApp,
+    bitbucketAppConfig
   };
 }
 

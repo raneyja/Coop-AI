@@ -11,6 +11,13 @@ const TRANSIENT_NETWORK_PATTERNS = [
   "socket hang up"
 ];
 
+const SETUP_REQUIRED_PATTERNS = [
+  "api key is missing",
+  "chat api returned 401",
+  "chat api returned 403",
+  "must use https"
+];
+
 /**
  * Turn low-level fetch/network errors into actionable chat UI copy.
  */
@@ -28,8 +35,16 @@ export function formatUserFacingNetworkError(error: unknown, fallback = "Chat re
     return fallback;
   }
 
+  if (SETUP_REQUIRED_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+    return "Coop isn't connected yet. Open Coop settings to finish setup, then try again.";
+  }
+
   if (TRANSIENT_NETWORK_PATTERNS.some((pattern) => normalized.includes(pattern))) {
-    return "Couldn't reach the Coop API. Check your API key and base URL in CoopAI settings.";
+    return "Coop isn't connected yet. Open Coop settings to finish setup, then try again.";
+  }
+
+  if (normalized.includes("chat api returned")) {
+    return "Coop isn't ready yet. Please try again in a moment.";
   }
 
   return error.message;

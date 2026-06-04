@@ -1,0 +1,65 @@
+---
+description: CoopAI VS Code webview UI — use shared design tokens and component classes
+globs: src/webview/**/*
+alwaysApply: false
+---
+
+# Webview UI design policy
+
+New and updated UI in `src/webview/` must match the Coop design system in `src/webview/globals.css`. Do **not** introduce one-off modals, VS Code validation boxes, or raw `style={{ background: var(--vscode-button-...) }}` unless there is no existing pattern.
+
+## Tokens (prefer CSS variables)
+
+- Surfaces: `--coop-panel-canvas`, `--coop-composer-surface`, `--coop-settings-card`, `--coop-pill-surface`
+- Text: `--coop-panel-foreground`, `--coop-panel-muted`, `--coop-composer-text`
+- Borders: `--coop-composer-border`, `--coop-settings-divider`, `--coop-pill-border`
+
+## Layout shell
+
+- Root panels: `coop-panel coop-canvas-bg`
+- Settings-style pages: `coop-settings-shell`, `coop-settings-header`, `coop-settings-body`, `coop-settings-card`
+
+## Modals & overlays
+
+- Backdrop + dialog: `coop-prompt-modal-backdrop` → `coop-prompt-modal`
+- Header: `coop-prompt-modal-header`, `coop-prompt-modal-title`, close via `coop-icon-btn` + SVG (see `PromptLibraryModal.tsx`)
+- Body scroll: `coop-prompt-modal-scroll`
+- Section labels: `coop-prompt-modal-section-title`, body copy: `coop-prompt-modal-muted` / `coop-prompt-modal-note`
+- Footer actions: `coop-prompt-modal-footer` + `coop-settings-action-btn`
+- Escape to close; backdrop click closes
+
+## Controls
+
+- Primary/secondary actions: `coop-settings-action-btn` (not raw VS Code button vars)
+- Text actions: `coop-text-btn`
+- Icon buttons: `coop-icon-btn`
+- Toggle rows: `coop-settings-checkbox-row`, `coop-settings-row-title`, `coop-settings-row-desc`
+- Header chips/pills: `coop-quick-action-pill` + `coop-quick-action-status-dot`
+- Top-bar toggles (on/off): `coop-autocomplete-control` pattern (`AutocompleteStatus.tsx`)
+
+## Lists & status
+
+- Integration/repo rows: `coop-health-integration`, `coop-health-integration-name`, `coop-health-integration-meta`
+- Status chips: `coop-health-status` (+ `--healthy` / `--degraded` / `--offline` when applicable)
+- Inline errors: `coop-settings-test-message--error`
+
+## Integration result cards
+
+Quick-action and multi-source outputs (Find Owner, Trace Decision, Jira/Teams/Slack sections, source conflicts) use the shared shell in `src/webview/components/IntegrationResultCard.tsx` and `coop-result-*` classes in `globals.css`.
+
+- Card shell: `IntegrationResultCard` + `IntegrationResultStack`
+- Sections: `IntegrationResultSection`, `IntegrationResultRow`, `IntegrationResultCollapsible`
+- Chips / nested blocks: `IntegrationResultBadge`, `IntegrationResultNested`, `IntegrationResultCode`
+- Actions: `coop-settings-action-btn`, `coop-text-btn` (not raw `vscode-button-*`)
+
+Do **not** use `vscode-editorWidget-background`, heavy `border-b` stacks, or uppercase section labels on new integration output UI.
+
+## Reference implementations
+
+- Modal: `src/webview/components/PromptLibraryModal.tsx`
+- Settings sections: `src/webview/components/SettingsPanel.tsx`
+- Integration results: `src/webview/OwnershipCard.tsx`, `src/webview/DecisionTimeline.tsx`
+- Explorer overlay: `src/webview/RemoteExplorer.tsx`
+- Context mode: `src/webview/LightningModePanel.tsx`
+
+Before adding new CSS classes, check if an existing `coop-*` class in `globals.css` already fits.

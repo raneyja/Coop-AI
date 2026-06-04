@@ -198,6 +198,7 @@ export interface CodeHostClient {
   getFileContent(coords: RepoCoordinates, path: string): Promise<RemoteFileContent>;
   getCommitHistory(coords: RepoCoordinates, options?: { path?: string; limit?: number }): Promise<CommitInfo[]>;
   getFileHistory(coords: RepoCoordinates, path: string, limit?: number): Promise<CommitInfo[]>;
+  getCommitBySha(coords: RepoCoordinates, sha: string): Promise<CommitInfo>;
   getBlameData(coords: RepoCoordinates, path: string): Promise<BlameData>;
   listPullRequests(coords: RepoCoordinates, options?: { state?: string; limit?: number }): Promise<PullRequestSummary[]>;
   getPullRequestComments(coords: RepoCoordinates, prNumber: number): Promise<PullRequestComment[]>;

@@ -115,6 +115,16 @@ export class JobQueue extends EventEmitter {
   }
 
   public async claimNext(): Promise<Job | undefined> {
+    const job = this.backend.claimNext
+      ? await this.backend.claimNext()
+      : await this.claimNextInMemory();
+    if (job) {
+      this.emitProgress(job, "Job started");
+    }
+    return job;
+  }
+
+  private async claimNextInMemory(): Promise<Job | undefined> {
     const queued = await this.backend.listByStatus(["queued"]);
     if (queued.length === 0) {
       return undefined;
@@ -125,7 +135,6 @@ export class JobQueue extends EventEmitter {
     job.startedAt = new Date();
     job.progress = 5;
     await this.backend.update(job);
-    this.emitProgress(job, "Job started");
     return job;
   }
 

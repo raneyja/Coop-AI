@@ -1,6 +1,7 @@
-import React from "react";
-import { MAX_PINNED_PROMPTS } from "./promptLibraryTypes";
+import React, { useMemo, useState } from "react";
+import { PromptLibraryRow } from "./PromptLibraryRow";
 import type { PromptLibraryItem } from "./promptLibraryTypes";
+import { resolveTopPrompts } from "./promptLibraryTypes";
 
 type PromptLibraryTop5EditorProps = {
   prompts: PromptLibraryItem[];
@@ -10,7 +11,15 @@ type PromptLibraryTop5EditorProps = {
   onManageLibrary: () => void;
 };
 
-const EMPTY_VALUE = "";
+function reorderPinnedIds(pinnedIds: string[], fromIndex: number, toIndex: number): string[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= pinnedIds.length || toIndex >= pinnedIds.length) {
+    return pinnedIds;
+  }
+  const next = [...pinnedIds];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
 
 export function PromptLibraryTop5Editor({
   prompts,
@@ -19,33 +28,17 @@ export function PromptLibraryTop5Editor({
   onUpdatePinned,
   onManageLibrary
 }: PromptLibraryTop5EditorProps): React.ReactElement {
-  const slots = Array.from({ length: MAX_PINNED_PROMPTS }, (_, index) => pinnedIds[index] ?? EMPTY_VALUE);
+  const topPrompts = useMemo(() => resolveTopPrompts(prompts, pinnedIds), [prompts, pinnedIds]);
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | undefined>();
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | undefined>();
 
-  const setSlot = (index: number, id: string) => {
-    const next = [...slots];
-    if (id) {
-      for (let slotIndex = 0; slotIndex < next.length; slotIndex += 1) {
-        if (slotIndex !== index && next[slotIndex] === id) {
-          next[slotIndex] = EMPTY_VALUE;
-        }
-      }
-    }
-    next[index] = id;
-    onUpdatePinned(next.filter(Boolean));
-  };
-
-  const moveSlot = (index: number, direction: -1 | 1) => {
-    const next = [...pinnedIds];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) {
+  const handleDrop = (targetIndex: number) => {
+    if (dragSourceIndex === undefined) {
       return;
     }
-    [next[index], next[target]] = [next[target], next[index]];
-    onUpdatePinned(next);
-  };
-
-  const clearSlot = (index: number) => {
-    onUpdatePinned(pinnedIds.filter((_, slotIndex) => slotIndex !== index));
+    onUpdatePinned(reorderPinnedIds(pinnedIds, dragSourceIndex, targetIndex));
+    setDragSourceIndex(undefined);
+    setDropTargetIndex(undefined);
   };
 
   return (
@@ -55,53 +48,28 @@ export function PromptLibraryTop5Editor({
       </p>
       {!hasWorkspace ? (
         <p className="coop-settings-row-desc">Open a folder to load workspace prompts.</p>
+      ) : topPrompts.length === 0 ? (
+        <p className="coop-settings-row-desc">None pinned yet.</p>
       ) : (
-        <ul className="space-y-2">
-          {slots.map((slotId, index) => (
-            <li key={index} className="flex items-center gap-2">
-              <span className="w-4 shrink-0 text-[11px] text-[var(--coop-panel-muted)]">{index + 1}.</span>
-              <select
-                className="coop-settings-field min-w-0 flex-1"
-                value={slotId}
-                disabled={!hasWorkspace}
-                onChange={(event) => setSlot(index, event.target.value)}
-                aria-label={`Top prompt slot ${index + 1}`}
-              >
-                <option value={EMPTY_VALUE}>— empty —</option>
-                {prompts.map((prompt) => (
-                  <option key={prompt.id} value={prompt.id}>
-                    {prompt.title}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="coop-prompt-modal-icon-btn"
-                aria-label={`Move slot ${index + 1} up`}
-                disabled={index === 0 || !slotId}
-                onClick={() => moveSlot(index, -1)}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="coop-prompt-modal-icon-btn"
-                aria-label={`Move slot ${index + 1} down`}
-                disabled={index >= pinnedIds.length - 1 || !slotId}
-                onClick={() => moveSlot(index, 1)}
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                className="coop-prompt-modal-icon-btn"
-                aria-label={`Clear slot ${index + 1}`}
-                disabled={!slotId}
-                onClick={() => clearSlot(index)}
-              >
-                ×
-              </button>
-            </li>
+        <ul className="coop-prompt-modal-list">
+          {topPrompts.map((prompt, index) => (
+            <PromptLibraryRow
+              key={prompt.id}
+              mode="settings"
+              prompt={prompt}
+              pinned
+              pinnedIndex={index}
+              pinnedCount={topPrompts.length}
+              dragging={dragSourceIndex === index}
+              dropTarget={dropTargetIndex === index && dragSourceIndex !== index}
+              onDragStart={setDragSourceIndex}
+              onDragOver={setDropTargetIndex}
+              onDrop={handleDrop}
+              onDragEnd={() => {
+                setDragSourceIndex(undefined);
+                setDropTargetIndex(undefined);
+              }}
+            />
           ))}
         </ul>
       )}

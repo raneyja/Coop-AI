@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { settingsScreenForProvider } from "../chat/settingsScreens";
+import type { SettingsScreen } from "../chat/settingsScreens";
+import { CoopPanelHeader } from "./components/CoopPanelHeader";
 import { RefreshButton } from "./components/RefreshButton";
 import type { CodeHostProviderPreference, RemoteTreeNode, RepoContext } from "../chat/types";
 
@@ -24,7 +27,7 @@ type RemoteExplorerProps = {
   onExpand: (path: string) => void;
   onSelectFile: (path: string) => void;
   onSelectRepo: (path: string) => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (screen?: SettingsScreen) => void;
 };
 
 export function parseRepoNodePath(
@@ -267,30 +270,27 @@ export function RemoteExplorer({
 
   return (
     <div className={`coop-explorer-shell ${className}`}>
-      <header className="coop-settings-header">
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[13px] font-semibold text-[var(--coop-panel-foreground)]">Remote workspace</h2>
-          <p className="coop-settings-card-desc truncate">{breadcrumb}</p>
-          {treeState.stale ? (
-            <p className="mt-0.5 text-[10px] text-[var(--vscode-editorWarning-foreground,var(--coop-panel-muted))]">
-              Showing cached data (host may be rate-limited).
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {!isRepoList ? (
-            <button type="button" className="coop-settings-action-btn" onClick={onBrowseRepos}>
-              Repos
-            </button>
-          ) : null}
-          <RefreshButton onClick={() => (isRepoList ? onRefreshRepos() : onRefresh(treeState.path || ""))} />
-          <button type="button" className="coop-icon-btn shrink-0" onClick={onClose} aria-label="Close explorer" title="Close">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 6.586L3.414 2 2 3.414 6.586 8 2 12.586 3.414 14 8 9.414 12.586 14 14 12.586 9.414 8 14 3.414 12.586 2 8 6.586z" />
-            </svg>
-          </button>
-        </div>
-      </header>
+      <CoopPanelHeader
+        title="Remote workspace"
+        subtitle={breadcrumb}
+        onClose={onClose}
+        closeAriaLabel="Close explorer"
+        actions={
+          <>
+            {!isRepoList ? (
+              <button type="button" className="coop-settings-action-btn" onClick={onBrowseRepos}>
+                Repos
+              </button>
+            ) : null}
+            <RefreshButton onClick={() => (isRepoList ? onRefreshRepos() : onRefresh(treeState.path || ""))} />
+          </>
+        }
+      />
+      {treeState.stale ? (
+        <p className="coop-panel-header-subtitle px-4 pb-2 text-[10px] text-[var(--vscode-editorWarning-foreground,var(--coop-panel-muted))]">
+          Showing cached data (host may be rate-limited).
+        </p>
+      ) : null}
 
       <div className="coop-explorer-body">
         <div className="coop-settings-card !space-y-0 !p-0">
@@ -304,7 +304,15 @@ export function RemoteExplorer({
               <li className="coop-explorer-empty space-y-2">
                 <div className="break-words">{treeState.error}</div>
                 {authHint && onOpenSettings ? (
-                  <button type="button" className="coop-settings-action-btn" onClick={onOpenSettings}>
+                  <button
+                    type="button"
+                    className="coop-settings-action-btn"
+                    onClick={() =>
+                      onOpenSettings(
+                        settingsScreenForProvider(treeState.provider ?? "github") ?? "code-hosts"
+                      )
+                    }
+                  >
                     Open settings to add token
                   </button>
                 ) : null}

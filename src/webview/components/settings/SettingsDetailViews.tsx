@@ -26,10 +26,14 @@ export type SettingsDetailProps = {
   onClearGithubToken: () => void;
   onInstallGithubApp: () => void;
   onRefreshGithubInstallation: () => void;
+  onInstallGitlabApp: () => void;
+  onRefreshGitlabInstallation: () => void;
   gitlabTokenDraft: string;
   onGitlabTokenDraftChange: (value: string) => void;
   onSaveGitlabToken: () => void;
   onClearGitlabToken: () => void;
+  onInstallBitbucketApp: () => void;
+  onRefreshBitbucketInstallation: () => void;
   bitbucketUsernameDraft: string;
   onBitbucketUsernameDraftChange: (value: string) => void;
   bitbucketPasswordDraft: string;
@@ -427,54 +431,103 @@ function GitLabDetail({
   onGitlabTokenDraftChange,
   onSaveGitlabToken,
   onClearGitlabToken,
+  onInstallGitlabApp,
+  onRefreshGitlabInstallation,
   onTestCodeHost,
   savedFlashKey,
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
+  const cloudPath = !prefs.devMode;
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">GitLab token {prefs.hasGitLabToken ? "(configured)" : ""}</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasGitLabToken}
-          value={gitlabTokenDraft}
-          placeholder="glpat-…"
-          onChange={onGitlabTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveGitlabToken}>
-          Save GitLab token
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearGitlabToken}
-          disabled={!prefs.hasGitLabToken}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="gitlab"
-          label="Test GitLab"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestCodeHost("gitlab")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "gitlab"} />
-      </div>
+      {cloudPath ? (
+        <>
+          <p className="coop-settings-card-desc">
+            Connect repositories through the CoopAI GitLab OAuth App. CoopAI stores installation
+            credentials on the server — no personal access token is saved in VS Code.
+          </p>
+          <div className="coop-health-integration">
+            <div>
+              <div className="coop-health-integration-name">GitLab OAuth App</div>
+              <div className="coop-health-integration-meta">
+                {prefs.hasGitLabAppInstalled ? "Authorized for your organization" : "Not authorized"}
+              </div>
+            </div>
+            <span
+              className={`coop-health-status ${prefs.hasGitLabAppInstalled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
+            >
+              {prefs.hasGitLabAppInstalled ? "Connected" : "Required"}
+            </span>
+          </div>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={onInstallGitlabApp}>
+              {prefs.hasGitLabAppInstalled ? "Manage GitLab authorization" : "Authorize GitLab"}
+            </button>
+            <button type="button" className="coop-settings-action-btn" onClick={onRefreshGitlabInstallation}>
+              Refresh status
+            </button>
+            <TestButton
+              testKey="gitlab"
+              label="Test GitLab"
+              pendingTest={pendingTest}
+              testResult={testResult}
+              onClick={() => onTestCodeHost("gitlab")}
+            />
+          </div>
+        </>
+      ) : null}
+      {prefs.devMode ? (
+        <>
+          <p className="coop-prompt-modal-section-title">Developer fallback (PAT)</p>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">GitLab token {prefs.hasGitLabToken ? "(configured)" : ""}</span>
+            <ConfiguredSecretInput
+              configured={prefs.hasGitLabToken}
+              value={gitlabTokenDraft}
+              placeholder="glpat-…"
+              onChange={onGitlabTokenDraftChange}
+              className="coop-settings-field"
+            />
+          </label>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={onSaveGitlabToken}>
+              Save GitLab token
+            </button>
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onClick={onClearGitlabToken}
+              disabled={!prefs.hasGitLabToken}
+            >
+              Clear
+            </button>
+            {!cloudPath ? (
+              <TestButton
+                testKey="gitlab"
+                label="Test GitLab"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestCodeHost("gitlab")}
+              />
+            ) : null}
+            <SaveFlashLabel show={savedFlashKey === "gitlab"} />
+          </div>
 
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">GitLab API base URL</span>
-        <input
-          type="url"
-          value={prefs.gitlabBaseUrl}
-          onChange={(e) => onUpdate({ gitlabBaseUrl: e.target.value })}
-          className="coop-settings-field"
-        />
-      </label>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">GitLab API base URL</span>
+            <input
+              type="url"
+              value={prefs.gitlabBaseUrl}
+              onChange={(e) => onUpdate({ gitlabBaseUrl: e.target.value })}
+              className="coop-settings-field"
+            />
+          </label>
+          <p className="coop-settings-card-desc coop-prompt-modal-muted">
+            Internal use only (`coopAI.devMode`). Production users should use the GitLab OAuth App above.
+          </p>
+        </>
+      ) : null}
     </SettingsSection>
   );
 }
@@ -487,56 +540,105 @@ function BitbucketDetail({
   onBitbucketPasswordDraftChange,
   onSaveBitbucketCredentials,
   onClearBitbucketCredentials,
+  onInstallBitbucketApp,
+  onRefreshBitbucketInstallation,
   onTestCodeHost,
   savedFlashKey,
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
+  const cloudPath = !prefs.devMode;
   return (
     <SettingsSection>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Bitbucket username</span>
-          <input
-            type="text"
-            value={bitbucketUsernameDraft}
-            onChange={(e) => onBitbucketUsernameDraftChange(e.target.value)}
-            className="coop-settings-field"
-          />
-        </label>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">
-            App password {prefs.hasBitbucketCredentials ? "(configured)" : ""}
-          </span>
-          <ConfiguredSecretInput
-            configured={prefs.hasBitbucketCredentials}
-            value={bitbucketPasswordDraft}
-            onChange={onBitbucketPasswordDraftChange}
-            className="coop-settings-field"
-          />
-        </label>
-      </div>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveBitbucketCredentials}>
-          Save Bitbucket credentials
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearBitbucketCredentials}
-          disabled={!prefs.hasBitbucketCredentials}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="bitbucket"
-          label="Test Bitbucket"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestCodeHost("bitbucket")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "bitbucket"} />
-      </div>
+      {cloudPath ? (
+        <>
+          <p className="coop-settings-card-desc">
+            Connect repositories through the CoopAI Bitbucket OAuth App. CoopAI stores installation
+            credentials on the server — no app password is saved in VS Code.
+          </p>
+          <div className="coop-health-integration">
+            <div>
+              <div className="coop-health-integration-name">Bitbucket OAuth App</div>
+              <div className="coop-health-integration-meta">
+                {prefs.hasBitbucketAppInstalled ? "Authorized for your organization" : "Not authorized"}
+              </div>
+            </div>
+            <span
+              className={`coop-health-status ${prefs.hasBitbucketAppInstalled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
+            >
+              {prefs.hasBitbucketAppInstalled ? "Connected" : "Required"}
+            </span>
+          </div>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={onInstallBitbucketApp}>
+              {prefs.hasBitbucketAppInstalled ? "Manage Bitbucket authorization" : "Authorize Bitbucket"}
+            </button>
+            <button type="button" className="coop-settings-action-btn" onClick={onRefreshBitbucketInstallation}>
+              Refresh status
+            </button>
+            <TestButton
+              testKey="bitbucket"
+              label="Test Bitbucket"
+              pendingTest={pendingTest}
+              testResult={testResult}
+              onClick={() => onTestCodeHost("bitbucket")}
+            />
+          </div>
+        </>
+      ) : null}
+      {prefs.devMode ? (
+        <>
+          <p className="coop-prompt-modal-section-title">Developer fallback (app password)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Bitbucket username</span>
+              <input
+                type="text"
+                value={bitbucketUsernameDraft}
+                onChange={(e) => onBitbucketUsernameDraftChange(e.target.value)}
+                className="coop-settings-field"
+              />
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                App password {prefs.hasBitbucketCredentials ? "(configured)" : ""}
+              </span>
+              <ConfiguredSecretInput
+                configured={prefs.hasBitbucketCredentials}
+                value={bitbucketPasswordDraft}
+                onChange={onBitbucketPasswordDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+          </div>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={onSaveBitbucketCredentials}>
+              Save Bitbucket credentials
+            </button>
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onClick={onClearBitbucketCredentials}
+              disabled={!prefs.hasBitbucketCredentials}
+            >
+              Clear
+            </button>
+            {!cloudPath ? (
+              <TestButton
+                testKey="bitbucket"
+                label="Test Bitbucket"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestCodeHost("bitbucket")}
+              />
+            ) : null}
+            <SaveFlashLabel show={savedFlashKey === "bitbucket"} />
+          </div>
+          <p className="coop-settings-card-desc coop-prompt-modal-muted">
+            Internal use only (`coopAI.devMode`). Production users should use the Bitbucket OAuth App above.
+          </p>
+        </>
+      ) : null}
     </SettingsSection>
   );
 }

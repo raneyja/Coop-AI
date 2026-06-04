@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { MAX_PINNED_PROMPTS } from "./promptLibraryTypes";
+import { CoopPanelHeader } from "./CoopPanelHeader";
+import { PromptLibraryRow } from "./PromptLibraryRow";
+import {
+  createDraftPromptId,
+  MAX_PINNED_PROMPTS,
+  partitionPrompts,
+  promptLibrarySnapshotsEqual
+} from "./promptLibraryTypes";
 import type { PromptLibraryItem } from "./promptLibraryTypes";
-import { resolveTopPrompts } from "./promptLibraryTypes";
 
 type PromptLibraryModalProps = {
   open: boolean;
   prompts: PromptLibraryItem[];
   pinnedIds: string[];
   hasWorkspace: boolean;
-  currentInput?: string;
   onClose: () => void;
   onRun?: (id: string) => void;
-  onSave: (payload: { title: string; template: string }) => void;
-  onUpdate: (payload: { id: string; title: string; template: string }) => void;
-  onDelete: (id: string) => void;
-  onUpdatePinned: (pinnedIds: string[]) => void;
+  onCommit: (payload: { prompts: PromptLibraryItem[]; pinnedIds: string[] }) => void;
 };
 
 type EditorState =
@@ -22,34 +24,27 @@ type EditorState =
   | { mode: "new"; title: string; template: string }
   | { mode: "edit"; id: string; title: string; template: string };
 
-function CloseIcon(): React.ReactElement {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-type PromptEditorOverlayProps = {
+type PromptDetailOverlayProps = {
   editor: Exclude<EditorState, { mode: "closed" }>;
   onChange: (editor: Exclude<EditorState, { mode: "closed" }>) => void;
-  onCancel: () => void;
+  onDiscard: () => void;
   onSave: () => void;
 };
 
-function PromptEditorOverlay({
+function PromptDetailOverlay({
   editor,
   onChange,
-  onCancel,
+  onDiscard,
   onSave
-}: PromptEditorOverlayProps): React.ReactElement {
+}: PromptDetailOverlayProps): React.ReactElement {
   const isNew = editor.mode === "new";
+  const canSave = editor.title.trim().length > 0 && editor.template.trim().length > 0;
 
   return (
     <div
       className="coop-prompt-modal-stack"
       role="presentation"
-      onClick={onCancel}
+      onClick={onDiscard}
     >
       <div
         className="coop-prompt-modal coop-prompt-editor-modal"
@@ -58,14 +53,14 @@ function PromptEditorOverlay({
         aria-labelledby="coop-prompt-editor-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="coop-prompt-modal-header">
-          <h2 id="coop-prompt-editor-title" className="coop-prompt-modal-title">
-            {isNew ? "New prompt" : "Edit prompt"}
-          </h2>
-          <button type="button" className="coop-icon-btn" aria-label="Cancel" onClick={onCancel}>
-            <CloseIcon />
-          </button>
-        </header>
+        <CoopPanelHeader
+          variant="modal"
+          titleElement="h2"
+          titleId="coop-prompt-editor-title"
+          title={isNew ? "New prompt" : "Edit prompt"}
+          onClose={onDiscard}
+          closeAriaLabel="Close"
+        />
 
         <label className="coop-prompt-editor-field">
           <span className="coop-prompt-modal-section-title">Title</span>
@@ -91,14 +86,14 @@ function PromptEditorOverlay({
         </label>
 
         <div className="coop-prompt-modal-actions">
-          <button type="button" className="coop-settings-action-btn" onClick={onCancel}>
+          <button type="button" className="coop-settings-action-btn" onClick={onDiscard}>
             Cancel
           </button>
           <button
             type="button"
             className="coop-settings-action-btn"
             onClick={onSave}
-            disabled={!editor.title.trim() || !editor.template.trim()}
+            disabled={!canSave}
           >
             Save
           </button>
@@ -108,30 +103,49 @@ function PromptEditorOverlay({
   );
 }
 
+function reorderPinnedIds(pinnedIds: string[], fromIndex: number, toIndex: number): string[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= pinnedIds.length || toIndex >= pinnedIds.length) {
+    return pinnedIds;
+  }
+  const next = [...pinnedIds];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+function clonePrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
+  return prompts.map((prompt) => ({ ...prompt }));
+}
+
 export function PromptLibraryModal({
   open,
   prompts,
   pinnedIds,
   hasWorkspace,
-  currentInput = "",
   onClose,
   onRun,
-  onSave,
-  onUpdate,
-  onDelete,
-  onUpdatePinned
+  onCommit
 }: PromptLibraryModalProps): React.ReactElement | null {
   const [search, setSearch] = useState("");
+  const [draftPrompts, setDraftPrompts] = useState<PromptLibraryItem[]>(() => clonePrompts(prompts));
+  const [draftPinnedIds, setDraftPinnedIds] = useState<string[]>(() => [...pinnedIds]);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
   const [pinMessage, setPinMessage] = useState<string | undefined>();
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | undefined>();
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | undefined>();
 
   useEffect(() => {
     if (!open) {
       setSearch("");
       setEditor({ mode: "closed" });
       setPinMessage(undefined);
+      setDragSourceIndex(undefined);
+      setDropTargetIndex(undefined);
+      return;
     }
-  }, [open]);
+    setDraftPrompts(clonePrompts(prompts));
+    setDraftPinnedIds([...pinnedIds]);
+  }, [open, prompts, pinnedIds]);
 
   useEffect(() => {
     if (!open) {
@@ -150,48 +164,46 @@ export function PromptLibraryModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, editor.mode, onClose]);
 
-  const topPrompts = useMemo(() => resolveTopPrompts(prompts, pinnedIds), [prompts, pinnedIds]);
-  const filteredPrompts = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return prompts;
-    }
-    return prompts.filter((prompt) => prompt.title.toLowerCase().includes(query));
-  }, [prompts, search]);
+  const savedSnapshot = useMemo(() => ({ prompts, pinnedIds }), [prompts, pinnedIds]);
+  const isDirty = useMemo(
+    () =>
+      !promptLibrarySnapshotsEqual(savedSnapshot, {
+        prompts: draftPrompts,
+        pinnedIds: draftPinnedIds
+      }),
+    [savedSnapshot, draftPrompts, draftPinnedIds]
+  );
+
+  const { pinned, unpinned } = useMemo(
+    () => partitionPrompts(draftPrompts, draftPinnedIds, search),
+    [draftPrompts, draftPinnedIds, search]
+  );
 
   if (!open) {
     return null;
   }
 
-  const movePinned = (index: number, direction: -1 | 1) => {
-    const next = [...pinnedIds];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) {
-      return;
-    }
-    [next[index], next[target]] = [next[target], next[index]];
-    onUpdatePinned(next);
-  };
-
-  const unpinAt = (index: number) => {
-    onUpdatePinned(pinnedIds.filter((_, i) => i !== index));
-  };
-
   const togglePin = (id: string) => {
     setPinMessage(undefined);
-    if (pinnedIds.includes(id)) {
-      onUpdatePinned(pinnedIds.filter((entry) => entry !== id));
-      return;
-    }
-    if (pinnedIds.length >= MAX_PINNED_PROMPTS) {
-      setPinMessage("Unpin a prompt from your top 5 before adding another.");
-      return;
-    }
-    onUpdatePinned([...pinnedIds, id]);
+    setDraftPinnedIds((current) => {
+      if (current.includes(id)) {
+        return current.filter((entry) => entry !== id);
+      }
+      if (current.length >= MAX_PINNED_PROMPTS) {
+        setPinMessage("Unpin a prompt from your top 5 before adding another.");
+        return current;
+      }
+      return [...current, id];
+    });
   };
 
-  const submitEditor = () => {
-    if (editor.mode === "closed") {
+  const deleteDraftPrompt = (id: string) => {
+    setDraftPrompts((current) => current.filter((prompt) => prompt.id !== id));
+    setDraftPinnedIds((current) => current.filter((entry) => entry !== id));
+  };
+
+  const applyEditorToDraft = () => {
+    if (editor.mode !== "new" && editor.mode !== "edit") {
       return;
     }
     const title = editor.title.trim();
@@ -200,22 +212,64 @@ export function PromptLibraryModal({
       return;
     }
     if (editor.mode === "new") {
-      onSave({ title, template });
+      setDraftPrompts((current) => [...current, { id: createDraftPromptId(), title, template }]);
     } else {
-      onUpdate({ id: editor.id, title, template });
+      setDraftPrompts((current) =>
+        current.map((prompt) =>
+          prompt.id === editor.id ? { ...prompt, title, template } : prompt
+        )
+      );
     }
     setEditor({ mode: "closed" });
   };
 
-  const openNewEditor = (template = "") => {
-    setEditor({ mode: "new", title: "", template });
+  const openNewEditor = () => {
+    setEditor({ mode: "new", title: "", template: "" });
   };
+
+  const openEdit = (entry: PromptLibraryItem) => {
+    setEditor({
+      mode: "edit",
+      id: entry.id,
+      title: entry.title,
+      template: entry.template ?? ""
+    });
+  };
+
+  const handleDrop = (targetIndex: number) => {
+    if (dragSourceIndex === undefined) {
+      return;
+    }
+    setDraftPinnedIds((current) => reorderPinnedIds(current, dragSourceIndex, targetIndex));
+    setDragSourceIndex(undefined);
+    setDropTargetIndex(undefined);
+  };
+
+  const commitDraft = () => {
+    if (!isDirty) {
+      return;
+    }
+    onCommit({
+      prompts: draftPrompts.map((prompt) => ({
+        id: prompt.id,
+        title: prompt.title,
+        template: prompt.template ?? "",
+        actionId: prompt.actionId
+      })),
+      pinnedIds: draftPinnedIds
+    });
+  };
+
+  const hasPrompts = draftPrompts.length > 0;
+  const hasResults = pinned.length > 0 || unpinned.length > 0;
+  const showPinHint = pinned.length === 0 && hasResults;
+  const editorOpen = editor.mode !== "closed";
 
   return (
     <div
       className="coop-prompt-modal-backdrop"
       role="presentation"
-      onClick={editor.mode === "closed" ? onClose : undefined}
+      onClick={editorOpen ? undefined : onClose}
     >
       <div
         className="coop-prompt-modal"
@@ -224,14 +278,14 @@ export function PromptLibraryModal({
         aria-labelledby="coop-prompt-modal-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="coop-prompt-modal-header">
-          <h2 id="coop-prompt-modal-title" className="coop-prompt-modal-title">
-            Prompt library
-          </h2>
-          <button type="button" className="coop-icon-btn" aria-label="Close" onClick={onClose}>
-            <CloseIcon />
-          </button>
-        </header>
+        <CoopPanelHeader
+          variant="modal"
+          titleElement="h2"
+          titleId="coop-prompt-modal-title"
+          title="Prompt library"
+          onClose={onClose}
+          closeAriaLabel="Close"
+        />
 
         {!hasWorkspace ? (
           <p className="coop-prompt-modal-empty">
@@ -239,129 +293,85 @@ export function PromptLibraryModal({
           </p>
         ) : (
           <>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search prompts…"
-              className="coop-prompt-modal-search"
-              aria-label="Search prompts"
-            />
+            <div className="coop-prompt-modal-inset coop-prompt-modal-inset--top">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search prompts…"
+                className="coop-prompt-modal-search"
+                aria-label="Search prompts"
+              />
+            </div>
 
             {pinMessage ? (
-              <p className="coop-prompt-modal-note" role="status">
+              <p className="coop-prompt-modal-note coop-prompt-modal-inset" role="status">
                 {pinMessage}
               </p>
             ) : null}
 
-            <section className="coop-prompt-modal-section">
-              <h3 className="coop-prompt-modal-section-title">Top 5 (personal)</h3>
-              {topPrompts.length === 0 ? (
-                <p className="coop-prompt-modal-muted">Pin prompts below to show them in chat.</p>
-              ) : (
-                <ul className="coop-prompt-modal-top-list">
-                  {topPrompts.map((prompt, index) => (
-                    <li key={prompt.id} className="coop-prompt-modal-top-row">
-                      <span className="coop-prompt-modal-top-index">{index + 1}.</span>
-                      <span className="min-w-0 flex-1 truncate">{prompt.title}</span>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          className="coop-prompt-modal-icon-btn"
-                          aria-label={`Move ${prompt.title} up`}
-                          disabled={index === 0}
-                          onClick={() => movePinned(index, -1)}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="coop-prompt-modal-icon-btn"
-                          aria-label={`Move ${prompt.title} down`}
-                          disabled={index === topPrompts.length - 1}
-                          onClick={() => movePinned(index, 1)}
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          className="coop-prompt-modal-icon-btn"
-                          aria-label={`Unpin ${prompt.title}`}
-                          onClick={() => unpinAt(index)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {Array.from({ length: Math.max(0, MAX_PINNED_PROMPTS - topPrompts.length) }).map((_, index) => (
-                <p key={`empty-${index}`} className="coop-prompt-modal-slot">
-                  {topPrompts.length + index + 1}. Add prompt…
-                </p>
-              ))}
-            </section>
-
-            <section className="coop-prompt-modal-section coop-prompt-modal-scroll">
-              <h3 className="coop-prompt-modal-section-title">All prompts</h3>
-              {filteredPrompts.length === 0 ? (
+            <div className="coop-prompt-modal-body">
+              {!hasPrompts ? (
                 <p className="coop-prompt-modal-muted">No prompts yet.</p>
+              ) : !hasResults ? (
+                <p className="coop-prompt-modal-muted">No prompts match your search.</p>
               ) : (
-                <ul className="coop-prompt-modal-all-list">
-                  {filteredPrompts.map((prompt) => {
-                    const pinned = pinnedIds.includes(prompt.id);
-                    return (
-                      <li key={prompt.id} className="coop-prompt-modal-all-row">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate text-left"
-                          onClick={() => onRun?.(prompt.id)}
-                          title={onRun ? "Run prompt" : prompt.title}
-                        >
-                          {prompt.title}
-                        </button>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button
-                            type="button"
-                            className="coop-prompt-modal-icon-btn"
-                            aria-label={pinned ? `Unpin ${prompt.title}` : `Pin ${prompt.title}`}
-                            onClick={() => togglePin(prompt.id)}
-                          >
-                            {pinned ? "★" : "☆"}
-                          </button>
-                          <button
-                            type="button"
-                            className="coop-prompt-modal-icon-btn"
-                            aria-label={`Edit ${prompt.title}`}
-                            onClick={() =>
-                              setEditor({
-                                mode: "edit",
-                                id: prompt.id,
-                                title: prompt.title,
-                                template: prompt.template ?? ""
-                              })
-                            }
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="coop-prompt-modal-icon-btn"
-                            aria-label={`Delete ${prompt.title}`}
-                            onClick={() => onDelete(prompt.id)}
-                          >
-                            Del
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+                <>
+                  {showPinHint ? (
+                    <p className="coop-prompt-modal-muted mb-2">
+                      Pin prompts for quick access in chat.
+                    </p>
+                  ) : null}
 
-            <footer className="coop-prompt-modal-footer">
+                  <ul className="coop-prompt-modal-list">
+                    {pinned.map((prompt, index) => (
+                      <PromptLibraryRow
+                        key={prompt.id}
+                        mode="manage"
+                        prompt={prompt}
+                        pinned
+                        pinnedIndex={index}
+                        pinnedCount={pinned.length}
+                        dragging={dragSourceIndex === index}
+                        dropTarget={dropTargetIndex === index && dragSourceIndex !== index}
+                        onSelect={openEdit}
+                        onTogglePin={togglePin}
+                        onEdit={openEdit}
+                        onDelete={deleteDraftPrompt}
+                        onDragStart={setDragSourceIndex}
+                        onDragOver={setDropTargetIndex}
+                        onDrop={handleDrop}
+                        onDragEnd={() => {
+                          setDragSourceIndex(undefined);
+                          setDropTargetIndex(undefined);
+                        }}
+                      />
+                    ))}
+
+                    {pinned.length > 0 && unpinned.length > 0 ? (
+                      <li className="coop-prompt-modal-list-divider" aria-hidden="true">
+                        Other prompts
+                      </li>
+                    ) : null}
+
+                    {unpinned.map((prompt) => (
+                      <PromptLibraryRow
+                        key={prompt.id}
+                        mode="manage"
+                        prompt={prompt}
+                        pinned={false}
+                        onSelect={openEdit}
+                        onTogglePin={togglePin}
+                        onEdit={openEdit}
+                        onDelete={deleteDraftPrompt}
+                      />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <footer className="coop-prompt-modal-footer coop-prompt-modal-inset coop-prompt-modal-inset--bottom">
               <button
                 type="button"
                 className="coop-settings-action-btn"
@@ -372,22 +382,22 @@ export function PromptLibraryModal({
               <button
                 type="button"
                 className="coop-settings-action-btn"
-                onClick={() => openNewEditor(currentInput.trim())}
-                disabled={!currentInput.trim()}
+                onClick={commitDraft}
+                disabled={!isDirty}
               >
-                Save current
+                Save
               </button>
             </footer>
           </>
         )}
       </div>
 
-      {editor.mode !== "closed" ? (
-        <PromptEditorOverlay
+      {editorOpen ? (
+        <PromptDetailOverlay
           editor={editor}
           onChange={setEditor}
-          onCancel={() => setEditor({ mode: "closed" })}
-          onSave={submitEditor}
+          onDiscard={() => setEditor({ mode: "closed" })}
+          onSave={applyEditorToDraft}
         />
       ) : null}
     </div>

@@ -138,8 +138,41 @@ export class CoopBackendClient {
   }
 
   public async getGithubAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getCodeHostAppInstallUrl(baseUrl, "github");
+  }
+
+  public async getGithubInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+    return this.getCodeHostInstallationStatus(baseUrl, "github");
+  }
+
+  public async getGitlabAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getCodeHostAppInstallUrl(baseUrl, "gitlab");
+  }
+
+  public async getGitlabInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+    return this.getCodeHostInstallationStatus(baseUrl, "gitlab");
+  }
+
+  public async getBitbucketAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getCodeHostAppInstallUrl(baseUrl, "bitbucket");
+  }
+
+  public async getBitbucketInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+    return this.getCodeHostInstallationStatus(baseUrl, "bitbucket");
+  }
+
+  public async getCodeHostAppInstallUrl(
+    baseUrl: string,
+    provider: "github" | "gitlab" | "bitbucket"
+  ): Promise<string> {
     assertCoopEndpoint(baseUrl);
-    const response = await this.http.get<{ url: string }>("/v1/github/app/install-url", {
+    const response = await this.http.get<{ url: string }>(`/v1/${provider}/app/install-url`, {
       baseURL: baseUrl.replace(/\/$/, ""),
       headers: await this.authHeaders()
     });
@@ -150,15 +183,16 @@ export class CoopBackendClient {
     return url;
   }
 
-  public async getGithubInstallationStatus(
-    baseUrl: string
+  public async getCodeHostInstallationStatus(
+    baseUrl: string,
+    provider: "github" | "gitlab" | "bitbucket"
   ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{
       installed: boolean;
       installationId?: number;
       tokenExpiresAt?: string;
-    }>("/v1/orgs/github/installation", {
+    }>(`/v1/orgs/${provider}/installation`, {
       baseURL: baseUrl.replace(/\/$/, ""),
       headers: await this.authHeaders(),
       validateStatus: () => true

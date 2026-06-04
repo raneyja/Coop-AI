@@ -21,6 +21,7 @@
   },
   "include": [
     "src/webview/**/*",
+    "src/chat/settingsScreens.ts",
     "src/types/decisionTimeline.ts"
   ]
 }

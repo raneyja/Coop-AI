@@ -87,6 +87,22 @@ export class SecureApiClient {
     return this.backend.getGithubInstallationStatus(baseUrl);
   }
 
+  public async getGitlabAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getGitlabAppInstallUrl(baseUrl);
+  }
+
+  public async getGitlabInstallationStatus(baseUrl: string): Promise<{ installed: boolean }> {
+    return this.backend.getGitlabInstallationStatus(baseUrl);
+  }
+
+  public async getBitbucketAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getBitbucketAppInstallUrl(baseUrl);
+  }
+
+  public async getBitbucketInstallationStatus(baseUrl: string): Promise<{ installed: boolean }> {
+    return this.backend.getBitbucketInstallationStatus(baseUrl);
+  }
+
   public async fetchRepoFileViaCloud(
     baseUrl: string,
     repoId: string,
@@ -379,12 +395,26 @@ export async function readPreferences(
   const integrationCreds = integrationSecrets ? await integrationSecrets.getCredentials() : {};
   const devMode = isCoopDevMode();
   let hasGitHubAppInstalled = false;
+  let hasGitLabAppInstalled = false;
+  let hasBitbucketAppInstalled = false;
   if (await api.hasToken()) {
     try {
       const status = await api.getGithubInstallationStatus(base.apiBaseUrl);
       hasGitHubAppInstalled = status.installed;
     } catch {
       hasGitHubAppInstalled = false;
+    }
+    try {
+      const status = await api.getGitlabInstallationStatus(base.apiBaseUrl);
+      hasGitLabAppInstalled = status.installed;
+    } catch {
+      hasGitLabAppInstalled = false;
+    }
+    try {
+      const status = await api.getBitbucketInstallationStatus(base.apiBaseUrl);
+      hasBitbucketAppInstalled = status.installed;
+    } catch {
+      hasBitbucketAppInstalled = false;
     }
   }
   return {
@@ -394,9 +424,11 @@ export async function readPreferences(
     hasGitHubAppInstalled,
     devMode,
     hasGitLabToken: Boolean(codeHostCreds.gitlabToken),
+    hasGitLabAppInstalled,
     hasBitbucketCredentials: Boolean(
       codeHostCreds.bitbucketUsername && codeHostCreds.bitbucketAppPassword
     ),
+    hasBitbucketAppInstalled,
     hasSlackToken: Boolean(integrationCreds.slackToken),
     hasJiraCredentials: Boolean(integrationCreds.jiraEmail && integrationCreds.jiraToken),
     hasTeamsToken: Boolean(integrationCreds.teamsToken),

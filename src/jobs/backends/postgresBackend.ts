@@ -6,6 +6,12 @@ import type { QueueBackend } from "./types";
 type PgPool = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
   end?: () => Promise<void>;
+  connect?: () => Promise<PgClient>;
+};
+
+type PgClient = {
+  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+  release?: () => void;
 };
 
 export class PostgresQueueBackend implements PostgresCapableBackend {
@@ -65,6 +71,46 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
       [statuses]
     );
     return result.rows.map(rowToJob);
+  }
+
+  public async claimNext(): Promise<Job | undefined> {
+    await this.ensureInit();
+    const client = await (this.pool as PgPool & { connect?: () => Promise<PgClient> }).connect?.();
+    if (!client) {
+      return claimNextWithoutLock(this.pool!);
+    }
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `SELECT * FROM jobs
+         WHERE status = 'queued'
+         ORDER BY
+           CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
+           created_at ASC
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`
+      );
+      const row = result.rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        return undefined;
+      }
+      const job = rowToJob(row);
+      job.status = "running";
+      job.startedAt = new Date();
+      job.progress = 5;
+      await client.query(
+        `UPDATE jobs SET status = $2, started_at = $3, progress = $4 WHERE id = $1`,
+        [job.id, job.status, job.startedAt, job.progress]
+      );
+      await client.query("COMMIT");
+      return job;
+    } catch {
+      await client.query("ROLLBACK").catch(() => undefined);
+      return claimNextWithoutLock(this.pool!);
+    } finally {
+      client.release?.();
+    }
   }
 
   public async update(job: Job): Promise<void> {
@@ -209,4 +255,27 @@ function parseJson(value: unknown): unknown {
     return JSON.parse(value);
   }
   return value;
+}
+
+async function claimNextWithoutLock(pool: PgPool): Promise<Job | undefined> {
+  const result = await pool.query(
+    `SELECT * FROM jobs WHERE status = 'queued'
+     ORDER BY
+       CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
+       created_at ASC
+     LIMIT 1`
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return undefined;
+  }
+  const job = rowToJob(row);
+  job.status = "running";
+  job.startedAt = new Date();
+  job.progress = 5;
+  await pool.query(
+    `UPDATE jobs SET status = $2, started_at = $3, progress = $4 WHERE id = $1 AND status = 'queued'`,
+    [job.id, job.status, job.startedAt, job.progress]
+  );
+  return job;
 }

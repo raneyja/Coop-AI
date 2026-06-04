@@ -30,6 +30,17 @@ export type GraphQueryApiOptions = {
 export class GraphQueryApi {
   public constructor(private readonly options: GraphQueryApiOptions) {}
 
+  /**
+   * Lightning Mode entry point — delegates to hybridQuery while preserving the
+   * zero-clone `queryGraph` path used by webhooks and free-tier users.
+   */
+  public async queryGraphHybrid(
+    request: GraphQueryRequest,
+    hybrid: import("../indexing/hybridQuery").HybridQueryLayer
+  ): Promise<unknown> {
+    return hybrid.queryGraph(this, request);
+  }
+
   public async queryGraph(request: GraphQueryRequest): Promise<unknown> {
     if (request.filters?.forceRefresh && this.options.refresh) {
       await this.options.refresh(request.repoId);

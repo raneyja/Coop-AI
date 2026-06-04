@@ -37,7 +37,9 @@ export type Preferences = {
   hasGitHubAppInstalled: boolean;
   devMode: boolean;
   hasGitLabToken: boolean;
+  hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
+  hasBitbucketAppInstalled: boolean;
   hasSlackToken: boolean;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;

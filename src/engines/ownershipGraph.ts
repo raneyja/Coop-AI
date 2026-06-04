@@ -48,7 +48,7 @@ export class OwnershipGraphEngine {
     const path = toRepositoryRelativePath(params.path);
     const warnings: string[] = [];
     const coords: RepoCoordinates = {
-      provider: "github",
+      provider: params.provider ?? "github",
       owner: params.owner,
       repo: params.repo,
       branch: params.branch
@@ -298,13 +298,14 @@ export async function mapOwnership(
   owner: string,
   repo: string,
   path: string,
-  branch?: string
+  branch?: string,
+  provider?: import("../api/codeHosts/types").CodeHostProvider
 ): Promise<OwnershipReport> {
   const engine = getOwnershipGraphEngine();
   if (!engine) {
     throw new Error("Ownership graph engine is not registered.");
   }
-  return engine.mapOwnership({ owner, repo, path, branch });
+  return engine.mapOwnership({ owner, repo, path, branch, provider });
 }
 
 function errorMessage(error: unknown): string {

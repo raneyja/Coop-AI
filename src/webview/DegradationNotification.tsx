@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import type { SettingsScreen } from "../chat/settingsScreens";
+import { settingsScreenForProvider } from "../chat/settingsScreens";
+import { CoopNavList, CoopNavRow } from "./components/CoopNavRow";
 import { RefreshButton } from "./components/RefreshButton";
 import type {
   DegradationFeatureStatusPayload,
@@ -14,10 +17,8 @@ type DegradationNotificationProps = {
   onDismiss: () => void;
   onRetry: (provider?: string, feature?: string) => void;
   onRefresh: (feature?: string) => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (screen?: SettingsScreen) => void;
 };
-
-const CODE_HOST_PROVIDERS = new Set(["github", "gitlab", "bitbucket"]);
 
 const TONES: Record<DegradationNotificationPayload["severity"], { border: string; background: string; foreground: string }> = {
   info: {
@@ -112,11 +113,15 @@ export function DegradationNotification({
             <div className="coop-health-panel-scroll no-scrollbar">
               <section>
                 <h3 className="coop-settings-section-label">Integrations</h3>
-                <div className="coop-health-integration-grid">
+                <CoopNavList>
                   {health.map((entry) => (
-                    <IntegrationCard key={entry.provider} entry={entry} onOpenSettings={onOpenSettings} />
+                    <IntegrationRow
+                      key={entry.provider}
+                      entry={entry}
+                      onOpenSettings={onOpenSettings}
+                    />
                   ))}
-                </div>
+                </CoopNavList>
               </section>
 
               {Object.values(featureStatuses).length > 0 ? (
@@ -175,29 +180,31 @@ export function DegradationNotification({
   );
 }
 
-function IntegrationCard({
+function IntegrationRow({
   entry,
   onOpenSettings
 }: {
   entry: IntegrationHealthPayload;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (screen?: SettingsScreen) => void;
 }): React.ReactElement {
-  const isCodeHost = CODE_HOST_PROVIDERS.has(entry.provider);
-  const showConfigure = isCodeHost && entry.status !== "healthy" && onOpenSettings;
+  const settingsScreen = settingsScreenForProvider(entry.provider);
+  const subtitle =
+    entry.status === "healthy"
+      ? latencyText(entry.latency)
+      : entry.error || "Not configured";
 
   return (
-    <div className="coop-health-integration">
-      <div className="flex items-center justify-between gap-2">
-        <span className="coop-health-integration-name">{humanize(entry.provider)}</span>
-        <StatusPill status={entry.status} />
-      </div>
-      <p className="coop-health-integration-meta">{entry.error || latencyText(entry.latency)}</p>
-      {showConfigure ? (
-        <button type="button" className="coop-settings-action-btn mt-2" onClick={onOpenSettings}>
-          Add token in settings
-        </button>
-      ) : null}
-    </div>
+    <CoopNavRow
+      title={humanize(entry.provider)}
+      subtitle={subtitle}
+      trailing={<StatusPill status={entry.status} />}
+      onClick={() => {
+        if (!onOpenSettings) {
+          return;
+        }
+        onOpenSettings(settingsScreen ?? "hub");
+      }}
+    />
   );
 }
 

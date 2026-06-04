@@ -54,7 +54,9 @@ const DEFAULT_PREFS: Preferences = {
   hasGitHubAppInstalled: false,
   devMode: false,
   hasGitLabToken: false,
+  hasGitLabAppInstalled: false,
   hasBitbucketCredentials: false,
+  hasBitbucketAppInstalled: false,
   hasSlackToken: false,
   hasJiraCredentials: false,
   hasTeamsToken: false,
@@ -64,8 +66,8 @@ const DEFAULT_PREFS: Preferences = {
 const TEST_RESULT_FLASH_MS = 1500;
 const SAVE_FLASH_MS = 2000;
 const TEST_TIMEOUT_MS = 12000;
-/** Poll GitHub App install status while settings is open (catches uninstall without manual refresh). */
-const GITHUB_INSTALL_POLL_MS = 30_000;
+/** Poll code-host OAuth install status while settings is open (catches uninstall without manual refresh). */
+const CODE_HOST_INSTALL_POLL_MS = 30_000;
 
 type SettingsViewProps = {
   vscode: VsCodeApi;
@@ -100,11 +102,15 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const testTimeoutRef = useRef<number | null>(null);
   const savedFlashTimerRef = useRef<number | null>(null);
   const githubInstalledRef = useRef(false);
+  const gitlabInstalledRef = useRef(false);
+  const bitbucketInstalledRef = useRef(false);
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
 
-  const pollGithubInstallation = useCallback(() => {
+  const pollCodeHostInstallations = useCallback(() => {
     post({ type: "settings:refresh-github-installation" });
+    post({ type: "settings:refresh-gitlab-installation" });
+    post({ type: "settings:refresh-bitbucket-installation" });
   }, [post]);
 
   const flashSaved = useCallback((key: SettingsSaveKey) => {
@@ -212,6 +218,20 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             setConnectionTestOk(false);
           }
           githubInstalledRef.current = message.payload.hasGitHubAppInstalled;
+          if (gitlabInstalledRef.current && !message.payload.hasGitLabAppInstalled) {
+            setConnectionTestMessage(
+              "GitLab authorization was removed. Authorize GitLab again to access repositories."
+            );
+            setConnectionTestOk(false);
+          }
+          gitlabInstalledRef.current = message.payload.hasGitLabAppInstalled;
+          if (bitbucketInstalledRef.current && !message.payload.hasBitbucketAppInstalled) {
+            setConnectionTestMessage(
+              "Bitbucket authorization was removed. Authorize Bitbucket again to access repositories."
+            );
+            setConnectionTestOk(false);
+          }
+          bitbucketInstalledRef.current = message.payload.hasBitbucketAppInstalled;
           setPrefs(message.payload);
           break;
         case "settings:navigate": {
@@ -237,22 +257,22 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   }, [completeTest, post]);
 
   useEffect(() => {
-    pollGithubInstallation();
-    const onFocus = () => pollGithubInstallation();
+    pollCodeHostInstallations();
+    const onFocus = () => pollCodeHostInstallations();
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        pollGithubInstallation();
+        pollCodeHostInstallations();
       }
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
-    const interval = window.setInterval(pollGithubInstallation, GITHUB_INSTALL_POLL_MS);
+    const interval = window.setInterval(pollCodeHostInstallations, CODE_HOST_INSTALL_POLL_MS);
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(interval);
     };
-  }, [pollGithubInstallation]);
+  }, [pollCodeHostInstallations]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -363,6 +383,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         }}
         onInstallGithubApp={() => post({ type: "settings:install-github-app" })}
         onRefreshGithubInstallation={() => post({ type: "settings:refresh-github-installation" })}
+        onInstallGitlabApp={() => post({ type: "settings:install-gitlab-app" })}
+        onRefreshGitlabInstallation={() => post({ type: "settings:refresh-gitlab-installation" })}
         gitlabTokenDraft={gitlabTokenDraft}
         onGitlabTokenDraftChange={setGitlabTokenDraft}
         onSaveGitlabToken={() => {
@@ -379,6 +401,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           post({ type: "settings:clear-gitlab-token" });
           setGitlabTokenDraft("");
         }}
+        onInstallBitbucketApp={() => post({ type: "settings:install-bitbucket-app" })}
+        onRefreshBitbucketInstallation={() => post({ type: "settings:refresh-bitbucket-installation" })}
         bitbucketUsernameDraft={bitbucketUsernameDraft}
         onBitbucketUsernameDraftChange={setBitbucketUsernameDraft}
         bitbucketPasswordDraft={bitbucketPasswordDraft}

@@ -204,7 +204,9 @@ export class CoopChatSession {
       hasGitHubAppInstalled: false,
       devMode: false,
       hasGitLabToken: false,
+      hasGitLabAppInstalled: false,
       hasBitbucketCredentials: false,
+      hasBitbucketAppInstalled: false,
       hasSlackToken: false,
       hasJiraCredentials: false,
       hasTeamsToken: false,
@@ -680,6 +682,20 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         await this.options.healthMonitor.force("github");
         return;
+      case "settings:install-gitlab-app":
+        await this.handleInstallGitlabApp();
+        return;
+      case "settings:refresh-gitlab-installation":
+        await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("gitlab");
+        return;
+      case "settings:install-bitbucket-app":
+        await this.handleInstallBitbucketApp();
+        return;
+      case "settings:refresh-bitbucket-installation":
+        await this.refreshAllSessionsPreferences();
+        await this.options.healthMonitor.force("bitbucket");
+        return;
       case "settings:update-github-token":
         if (!isCoopDevMode()) {
           return;
@@ -698,6 +714,9 @@ export class CoopChatSession {
         await this.options.healthMonitor.force("github");
         return;
       case "settings:update-gitlab-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.codeHostSecrets.setGitLabToken(message.payload.token);
         this.options.codeHostRouter.clearClientCache("gitlab");
         await this.refreshAllSessionsPreferences();
@@ -710,6 +729,9 @@ export class CoopChatSession {
         await this.options.healthMonitor.force("gitlab");
         return;
       case "settings:update-bitbucket-credentials":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.codeHostSecrets.setBitbucketCredentials(
           message.payload.username,
           message.payload.appPassword
@@ -1842,6 +1864,40 @@ export class CoopChatSession {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not open GitHub App install URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleInstallGitlabApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Add your Coop API key before authorizing GitLab.");
+      return;
+    }
+    try {
+      const url = await this.options.api.getGitlabAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete GitLab authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open GitLab authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleInstallBitbucketApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Add your Coop API key before authorizing Bitbucket.");
+      return;
+    }
+    try {
+      const url = await this.options.api.getBitbucketAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Bitbucket authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Bitbucket authorize URL.";
       void vscode.window.showErrorMessage(message);
     }
   }

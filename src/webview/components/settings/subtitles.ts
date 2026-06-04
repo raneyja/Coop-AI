@@ -47,12 +47,26 @@ export function apiHubSubtitle(prefs: Preferences): string {
   }
 }
 
+export function gitlabIsConfigured(prefs: Preferences): boolean {
+  if (prefs.devMode) {
+    return prefs.hasGitLabAppInstalled || prefs.hasGitLabToken;
+  }
+  return prefs.hasGitLabAppInstalled;
+}
+
+export function bitbucketIsConfigured(prefs: Preferences): boolean {
+  if (prefs.devMode) {
+    return prefs.hasBitbucketAppInstalled || prefs.hasBitbucketCredentials;
+  }
+  return prefs.hasBitbucketAppInstalled;
+}
+
 export function codeHostsHubSubtitle(prefs: Preferences): string {
   const defaultHost = CODE_HOST_LABELS[prefs.defaultCodeHost];
   const configured = countConfigured([
     githubIsConfigured(prefs),
-    prefs.hasGitLabToken,
-    prefs.hasBitbucketCredentials
+    gitlabIsConfigured(prefs),
+    bitbucketIsConfigured(prefs)
   ]);
   return `${defaultHost} default · ${configured}`;
 }
@@ -87,9 +101,9 @@ export function codeHostConfigured(prefs: Preferences, provider: Preferences["de
     return githubIsConfigured(prefs);
   }
   if (provider === "gitlab") {
-    return prefs.hasGitLabToken;
+    return gitlabIsConfigured(prefs);
   }
-  return prefs.hasBitbucketCredentials;
+  return bitbucketIsConfigured(prefs);
 }
 
 export function integrationConfigured(

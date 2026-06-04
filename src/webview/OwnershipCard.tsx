@@ -1,5 +1,16 @@
 import React, { useMemo, useState } from "react";
 import type { OwnershipReport, OwnershipRisk, OwnershipScore } from "../types/ownership";
+import {
+  IntegrationResultActions,
+  IntegrationResultBadge,
+  IntegrationResultCard,
+  IntegrationResultCode,
+  IntegrationResultCollapsible,
+  IntegrationResultRow,
+  IntegrationResultSection,
+  IntegrationResultStack,
+  IntegrationResultText
+} from "./components/IntegrationResultCard";
 
 export type OwnershipCardPayload = OwnershipReport & {
   narrative?: string;
@@ -15,6 +26,15 @@ const COMPLETENESS_LABEL: Record<OwnershipReport["completeness"], string> = {
   full: "Full analysis",
   partial: "Partial analysis",
   minimal: "Minimal analysis"
+};
+
+const COMPLETENESS_TONE: Record<
+  OwnershipReport["completeness"],
+  "default" | "partial" | "minimal"
+> = {
+  full: "default",
+  partial: "partial",
+  minimal: "minimal"
 };
 
 const RISK_LABELS: Record<keyof OwnershipRisk, string> = {
@@ -38,159 +58,139 @@ export function OwnershipCard({
   );
 
   return (
-    <section
-      className="mx-3 mb-3 rounded-md border text-xs shadow-sm"
-      style={{
-        borderColor: "var(--vscode-widget-border)",
-        background: "var(--vscode-editorWidget-background)",
-        color: "var(--coop-panel-foreground)"
-      }}
-      aria-label="Ownership analysis"
-    >
-      <header
-        className="flex items-start justify-between gap-2 border-b px-3 py-2"
-        style={{ borderColor: "var(--vscode-widget-border)" }}
+    <IntegrationResultStack>
+      <IntegrationResultCard
+        title="Code ownership"
+        meta={`${report.owner}/${report.repo} · ${report.path}`}
+        status={COMPLETENESS_LABEL[report.completeness]}
+        statusTone={COMPLETENESS_TONE[report.completeness]}
+        onDismiss={onDismiss}
+        ariaLabel="Ownership analysis"
       >
-        <div className="min-w-0">
-          <p className="font-medium">Code ownership</p>
-          <p className="mt-0.5 truncate text-[11px] opacity-80">
-            {report.owner}/{report.repo} · {report.path}
-          </p>
-          <p className="mt-1 text-[10px] uppercase tracking-wide opacity-70">
-            {COMPLETENESS_LABEL[report.completeness]}
-          </p>
-        </div>
-        {onDismiss ? (
-          <button type="button" className="shrink-0 text-[11px] opacity-75 hover:opacity-100" onClick={onDismiss}>
-            Dismiss
-          </button>
+        {report.narrative ? (
+          <IntegrationResultSection label="Summary">
+            <IntegrationResultText>{report.narrative}</IntegrationResultText>
+          </IntegrationResultSection>
         ) : null}
-      </header>
 
-      {report.narrative ? (
-        <div
-          className="border-b px-3 py-2 text-[11px] leading-relaxed"
-          style={{ borderColor: "var(--vscode-widget-border)" }}
-        >
-          <p className="mb-1 font-medium">Summary</p>
-          <div className="whitespace-pre-wrap opacity-90">{report.narrative}</div>
-        </div>
-      ) : null}
-
-      <div className="border-b px-3 py-2" style={{ borderColor: "var(--vscode-widget-border)" }}>
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-wide opacity-70">Experts</p>
-        <div className="space-y-2">
-          {primary ? <ExpertRow label="Primary" expert={primary} onCopyDraft={onCopyDraft} draft={report.messageDraft} /> : null}
-          {secondary.map((expert) => (
-            <ExpertRow key={expert.owner} label="Secondary" expert={expert} />
-          ))}
-          {backup.slice(0, 2).map((expert) => (
-            <ExpertRow key={expert.owner} label="Backup" expert={expert} />
-          ))}
-          {!primary && report.scores.length === 0 ? (
-            <p className="text-[11px] opacity-70">No clear owners identified from available signals.</p>
-          ) : null}
-        </div>
-      </div>
-
-      {activeRisks.length > 0 ? (
-        <div className="border-b px-3 py-2" style={{ borderColor: "var(--vscode-widget-border)" }}>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-70">Risk flags</p>
-          <div className="flex flex-wrap gap-1">
-            {activeRisks.map(([key]) => (
-              <span
-                key={key}
-                className="rounded px-1.5 py-0.5 text-[10px]"
-                style={{
-                  background: "var(--vscode-inputValidation-warningBackground)",
-                  color: "var(--vscode-inputValidation-warningForeground)"
-                }}
-              >
-                {RISK_LABELS[key]}
-              </span>
+        <IntegrationResultSection label="Experts">
+          <div className="space-y-2">
+            {primary ? (
+              <ExpertRow
+                label="Primary"
+                expert={primary}
+                onCopyDraft={onCopyDraft}
+                draft={report.messageDraft}
+              />
+            ) : null}
+            {secondary.map((expert) => (
+              <ExpertRow key={expert.owner} label="Secondary" expert={expert} />
             ))}
+            {backup.slice(0, 2).map((expert) => (
+              <ExpertRow key={expert.owner} label="Backup" expert={expert} />
+            ))}
+            {!primary && report.scores.length === 0 ? (
+              <IntegrationResultText muted>
+                No clear owners identified from available signals.
+              </IntegrationResultText>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        </IntegrationResultSection>
 
-      {report.orgContext ? (
-        <div className="border-b px-3 py-2" style={{ borderColor: "var(--vscode-widget-border)" }}>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-70">Team</p>
-          <p className="text-[11px]">
-            Owned by{" "}
-            {report.orgContext.htmlUrl ? (
-              <a href={report.orgContext.htmlUrl} className="underline opacity-90">
-                @{report.orgContext.teamName}
-              </a>
-            ) : (
-              <span className="opacity-90">@{report.orgContext.teamName}</span>
-            )}
-          </p>
-          {report.orgContext.members.length > 0 ? (
-            <p className="mt-1 text-[10px] opacity-75">Members: {report.orgContext.members.join(", ")}</p>
-          ) : null}
-          {report.orgContext.slackChannel ? (
-            <p className="mt-1 text-[10px] opacity-75">Slack: {report.orgContext.slackChannel}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="border-b px-3 py-2" style={{ borderColor: "var(--vscode-widget-border)" }}>
-        <p className="text-[11px] opacity-90">{report.teamGraph.escalationPath}</p>
-        {report.teamGraph.crossTeamNote ? (
-          <p className="mt-1 text-[10px] opacity-75">{report.teamGraph.crossTeamNote}</p>
+        {activeRisks.length > 0 ? (
+          <IntegrationResultSection label="Risk flags">
+            <div className="flex flex-wrap gap-1.5">
+              {activeRisks.map(([key]) => (
+                <IntegrationResultBadge key={key} tone="warning">
+                  {RISK_LABELS[key]}
+                </IntegrationResultBadge>
+              ))}
+            </div>
+          </IntegrationResultSection>
         ) : null}
-      </div>
 
-      {report.history.length > 0 ? (
-        <CollapsibleSection
-          title="Ownership evolution"
-          open={expanded.history}
-          onToggle={() => setExpanded((s) => ({ ...s, history: !s.history }))}
-        >
-          <ul className="space-y-1 text-[11px] opacity-90">
-            {report.history.map((entry) => (
-              <li key={entry.period}>
-                <span className="font-medium">{entry.label}:</span> {entry.narrative}
-              </li>
-            ))}
-          </ul>
-        </CollapsibleSection>
-      ) : null}
+        {report.orgContext ? (
+          <IntegrationResultSection label="Team">
+            <IntegrationResultText>
+              Owned by{" "}
+              {report.orgContext.htmlUrl ? (
+                <a href={report.orgContext.htmlUrl} className="coop-text-btn !px-0 !py-0">
+                  @{report.orgContext.teamName}
+                </a>
+              ) : (
+                `@${report.orgContext.teamName}`
+              )}
+            </IntegrationResultText>
+            {report.orgContext.members.length > 0 ? (
+              <IntegrationResultText muted>
+                Members: {report.orgContext.members.join(", ")}
+              </IntegrationResultText>
+            ) : null}
+            {report.orgContext.slackChannel ? (
+              <IntegrationResultText muted>Slack: {report.orgContext.slackChannel}</IntegrationResultText>
+            ) : null}
+          </IntegrationResultSection>
+        ) : null}
 
-      {report.messageDraft.text ? (
-        <CollapsibleSection
-          title="Message draft"
-          open={expanded.draft}
-          onToggle={() => setExpanded((s) => ({ ...s, draft: !s.draft }))}
-        >
-          <pre className="whitespace-pre-wrap rounded p-2 text-[10px] opacity-90" style={{ background: "var(--vscode-textBlockQuote-background)" }}>
-            {report.messageDraft.text}
-          </pre>
-          {onCopyDraft ? (
-            <button
-              type="button"
-              className="mt-2 rounded px-2 py-1 text-[11px]"
-              style={{
-                background: "var(--vscode-button-background)",
-                color: "var(--vscode-button-foreground)"
-              }}
-              onClick={() => onCopyDraft(report.messageDraft.text)}
-            >
-              Message {report.messageDraft.recipient}
-            </button>
+        <IntegrationResultSection>
+          <IntegrationResultText>{report.teamGraph.escalationPath}</IntegrationResultText>
+          {report.teamGraph.crossTeamNote ? (
+            <IntegrationResultText muted>{report.teamGraph.crossTeamNote}</IntegrationResultText>
           ) : null}
-        </CollapsibleSection>
-      ) : null}
+        </IntegrationResultSection>
 
-      {report.warnings.length > 0 ? (
-        <div className="px-3 py-2 text-[10px] opacity-75">
-          {report.warnings.map((warning) => (
-            <p key={warning}>· {warning}</p>
-          ))}
-        </div>
-      ) : null}
-    </section>
+        {report.history.length > 0 ? (
+          <IntegrationResultSection className="!py-0">
+            <IntegrationResultCollapsible
+              title="Ownership evolution"
+              open={expanded.history}
+              onToggle={() => setExpanded((s) => ({ ...s, history: !s.history }))}
+            >
+              <ul className="space-y-1.5">
+                {report.history.map((entry) => (
+                  <li key={entry.period} className="coop-result-text">
+                    <span className="font-medium">{entry.label}:</span> {entry.narrative}
+                  </li>
+                ))}
+              </ul>
+            </IntegrationResultCollapsible>
+          </IntegrationResultSection>
+        ) : null}
+
+        {report.messageDraft.text ? (
+          <IntegrationResultSection className="!py-0">
+            <IntegrationResultCollapsible
+              title="Message draft"
+              open={expanded.draft}
+              onToggle={() => setExpanded((s) => ({ ...s, draft: !s.draft }))}
+            >
+              <IntegrationResultCode>{report.messageDraft.text}</IntegrationResultCode>
+              {onCopyDraft ? (
+                <IntegrationResultActions>
+                  <button
+                    type="button"
+                    className="coop-settings-action-btn"
+                    onClick={() => onCopyDraft(report.messageDraft.text)}
+                  >
+                    Message {report.messageDraft.recipient}
+                  </button>
+                </IntegrationResultActions>
+              ) : null}
+            </IntegrationResultCollapsible>
+          </IntegrationResultSection>
+        ) : null}
+
+        {report.warnings.length > 0 ? (
+          <IntegrationResultSection>
+            {report.warnings.map((warning) => (
+              <IntegrationResultText key={warning} muted>
+                · {warning}
+              </IntegrationResultText>
+            ))}
+          </IntegrationResultSection>
+        ) : null}
+      </IntegrationResultCard>
+    </IntegrationResultStack>
   );
 }
 
@@ -206,70 +206,31 @@ function ExpertRow({
   draft?: OwnershipReport["messageDraft"];
 }): React.ReactElement {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-[11px]">
-          <span className="opacity-70">{label}:</span>{" "}
-          <span className="font-medium">@{expert.owner}</span>{" "}
-          <span className="opacity-75">({expert.score} pts)</span>
-        </p>
-        <div className="mt-0.5 flex flex-wrap gap-1">
-          {expert.specialty ? (
-            <span
-              className="rounded px-1 py-0.5 text-[10px]"
-              style={{
-                background: "var(--vscode-badge-background)",
-                color: "var(--vscode-badge-foreground)"
-              }}
-            >
-              {expert.specialty}
-            </span>
-          ) : null}
-          {expert.presence ? (
-            <span className="text-[10px] opacity-75">{expert.presence.label}</span>
-          ) : null}
-        </div>
+    <IntegrationResultRow
+      label={label}
+      action={
+        onCopyDraft && draft && label === "Primary" ? (
+          <button
+            type="button"
+            className="coop-settings-action-btn"
+            onClick={() => onCopyDraft(draft.text)}
+          >
+            Message {expert.owner}
+          </button>
+        ) : undefined
+      }
+    >
+      <p>
+        <span className="font-medium">@{expert.owner}</span>{" "}
+        <span className="text-[var(--coop-panel-muted)]">({expert.score} pts)</span>
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {expert.specialty ? <IntegrationResultBadge tone="info">{expert.specialty}</IntegrationResultBadge> : null}
+        {expert.presence ? (
+          <span className="text-[10px] text-[var(--coop-panel-muted)]">{expert.presence.label}</span>
+        ) : null}
       </div>
-      {onCopyDraft && draft && label === "Primary" ? (
-        <button
-          type="button"
-          className="shrink-0 rounded px-2 py-0.5 text-[10px]"
-          style={{
-            background: "var(--vscode-button-secondaryBackground)",
-            color: "var(--vscode-button-secondaryForeground)"
-          }}
-          onClick={() => onCopyDraft(draft.text)}
-        >
-          Message {expert.owner}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function CollapsibleSection({
-  title,
-  open,
-  onToggle,
-  children
-}: {
-  title: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div className="border-b" style={{ borderColor: "var(--vscode-widget-border)" }}>
-      <button
-        type="button"
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wide opacity-70"
-        onClick={onToggle}
-      >
-        {title}
-        <span>{open ? "−" : "+"}</span>
-      </button>
-      {open ? <div className="px-3 pb-2">{children}</div> : null}
-    </div>
+    </IntegrationResultRow>
   );
 }
 

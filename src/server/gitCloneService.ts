@@ -66,6 +66,9 @@ function buildCloneUrl(target: CloneTarget, token?: string): string {
   if (token && target.provider === "gitlab") {
     return `https://oauth2:${encodeURIComponent(token)}@${host}/${slug}`;
   }
+  if (token && target.provider === "bitbucket") {
+    return `https://x-token-auth:${encodeURIComponent(token)}@${host}/${slug}`;
+  }
   return `https://${host}/${slug}`;
 }
 

@@ -81,7 +81,9 @@ export type UserPreferences = {
   hasGitHubAppInstalled: boolean;
   devMode: boolean;
   hasGitLabToken: boolean;
+  hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
+  hasBitbucketAppInstalled: boolean;
   hasSlackToken: boolean;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;
@@ -243,8 +245,12 @@ export type WebviewInbound =
   | { type: "settings:clear-github-token" }
   | { type: "settings:install-github-app" }
   | { type: "settings:refresh-github-installation" }
+  | { type: "settings:install-gitlab-app" }
+  | { type: "settings:refresh-gitlab-installation" }
   | { type: "settings:update-gitlab-token"; payload: { token: string } }
   | { type: "settings:clear-gitlab-token" }
+  | { type: "settings:install-bitbucket-app" }
+  | { type: "settings:refresh-bitbucket-installation" }
   | {
       type: "settings:update-bitbucket-credentials";
       payload: { username: string; appPassword: string };

@@ -2,7 +2,9 @@ import type { GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
 import { chunkAndEmbed } from "../indexing/chunkAndEmbed";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
-import { resolveGithubTokenForOrg } from "../server/codeHostCredentialResolver";
+import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
+import { getConnector } from "../server/codeHostConnectors/registry";
+import type { CodeHostProvider } from "../api/codeHosts/types";
 import { getDbPool } from "../server/db";
 import type { GitHubAppService } from "../server/githubAppService";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
@@ -128,14 +130,12 @@ export async function buildDependencyGraph(
 
   let graph = ctx.cache.getGraph(repoId);
   if (!graph) {
-    const parts = repoId.split(":");
-    const slug = parts.length > 1 ? parts[1] : repoId;
-    const [owner, repo] = slug.split("/");
+    const target = parseRepoId(repoId);
     graph = ctx.cache.upsertRepository({
       repoId,
-      owner: owner ?? "unknown",
-      repo: repo ?? slug,
-      provider: parts[0] === "gitlab" ? "gitlab" : "github"
+      owner: target.owner,
+      repo: target.repo,
+      provider: target.provider
     });
   }
 
@@ -184,21 +184,20 @@ async function indexRepository(
       repoId,
       owner: target.owner,
       repo: target.repo,
-      provider: target.provider === "bitbucket" ? "github" : target.provider
+      provider: target.provider
     });
   }
 
   let cloneLocalPath: string | undefined;
   try {
+    const provider = providerForRepo(repoId);
     const token =
       orgId && ctx.orgStore
-        ? providerForRepo(repoId) === "github"
-          ? await resolveGithubTokenForOrg(orgId, {
-              orgStore: ctx.orgStore,
-              githubApp: ctx.githubApp,
-              allowPatFallback: ctx.allowPatFallback ?? false
-            })
-          : await ctx.orgStore.getCredential(orgId, providerForRepo(repoId))
+        ? await resolveCodeHostTokenForOrg(orgId, provider, {
+            orgStore: ctx.orgStore,
+            connector: getConnector(provider),
+            allowPatFallback: ctx.allowPatFallback ?? false
+          })
         : undefined;
     await report(45, "Cloning repository");
     const target = parseRepoId(repoId);
@@ -296,14 +295,8 @@ async function indexRepository(
   }
 }
 
-function providerForRepo(repoId: string): string {
-  if (repoId.startsWith("gitlab:")) {
-    return "gitlab";
-  }
-  if (repoId.startsWith("bitbucket:")) {
-    return "bitbucket";
-  }
-  return "github";
+function providerForRepo(repoId: string): CodeHostProvider {
+  return parseRepoId(repoId).provider;
 }
 
 async function analyzeOwnership(
@@ -359,14 +352,12 @@ function ensureRepoGraph(ctx: JobExecutionContext, repoId: string, params: Recor
   if (ctx.cache.getGraph(repoId)) {
     return;
   }
-  const parts = repoId.split(":");
-  const slug = parts.length > 1 ? parts[1] : repoId;
-  const [owner, repo] = slug.split("/");
+  const target = parseRepoId(repoId);
   ctx.cache.upsertRepository({
     repoId,
-    owner: String(params.owner ?? owner ?? "unknown"),
-    repo: String(params.repo ?? repo ?? slug),
-    provider: parts[0] === "gitlab" ? "gitlab" : "github"
+    owner: String(params.owner ?? target.owner),
+    repo: String(params.repo ?? target.repo),
+    provider: target.provider
   });
 }
 

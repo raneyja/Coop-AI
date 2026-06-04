@@ -15,6 +15,9 @@ export type CoopRuntimeServices = {
   codeHostRouter: CodeHostRouter;
   codeHostSecrets: CodeHostSecrets;
   integrationSecrets: IntegrationSecrets;
+  indexManager: import("./indexing/indexManager").IndexManager;
+  indexBackend: import("./indexing/indexBackend").IndexBackend;
+  lightningStatusBar: import("./extension/lightningStatusBar").LightningStatusBar;
 };
 
 export class CoopSidebarProvider implements vscode.WebviewViewProvider {

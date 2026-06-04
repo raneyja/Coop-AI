@@ -8,4 +8,5 @@ export interface QueueBackend {
   update(job: Job): Promise<void>;
   delete(id: string): Promise<boolean>;
   countJobsForUser(userId: string, jobType: string, window: "hour" | "today"): Promise<number>;
+  claimNext?(): Promise<Job | undefined>;
 }

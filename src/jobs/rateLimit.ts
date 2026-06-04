@@ -10,6 +10,7 @@ export type RateLimitWindow = {
 export const RATE_LIMITS: Partial<Record<JobType, RateLimitWindow>> = {
   [JobType.SCAN_KNOWLEDGE_GAPS]: { perDay: 5, perHour: 1 },
   [JobType.BUILD_DEPENDENCY_GRAPH]: { perDay: 10, perHour: 3 },
+  [JobType.BUILD_STRUCTURE_MANIFEST]: { perDay: 20, perHour: 20 },
   [JobType.INDEX_REPOSITORY]: { perDay: 3, perHour: 1 },
   [JobType.ANALYZE_OWNERSHIP]: { perDay: 20, perHour: 5 },
   [JobType.GENERATE_REPO_SUMMARY]: { perDay: 20, perHour: 5 }

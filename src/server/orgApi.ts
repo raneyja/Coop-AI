@@ -1,7 +1,9 @@
 import type { ServerResponse } from "node:http";
 import type { JobQueue } from "../jobs/jobQueue";
 import { GitHubClient } from "../api/codeHosts/githubClient";
-import { CodeHostError } from "../api/codeHosts/types";
+import { GitLabClient } from "../api/codeHosts/gitlabClient";
+import { BitbucketClient } from "../api/codeHosts/bitbucketClient";
+import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { requireDbPool, getDbPool } from "./db";
@@ -14,8 +16,8 @@ import {
   resolveAuthContext,
   resolveOrgPlanFromDb
 } from "./authMiddleware";
-import { resolveGithubTokenForOrg } from "./codeHostCredentialResolver";
-import type { GitHubAppService } from "./githubAppService";
+import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
+import { getConnector } from "./codeHostConnectors/registry";
 import { CollectionStore } from "./collectionStore";
 import { canUseLightningPlan, type OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
@@ -24,7 +26,6 @@ export type OrgApiDeps = {
   orgStore?: OrgStore;
   jobQueue?: JobQueue;
   serverConfig: ServerConfig;
-  githubApp?: GitHubAppService;
 };
 
 type ParsedRequest = {
@@ -209,30 +210,22 @@ async function handleGetRepoFile(
   }
 
   const target = parseRepoId(repoId);
-  if (target.provider !== "github") {
-    writeJson(response, 400, { error: "Only GitHub repositories are supported for cloud file fetch" });
-    return;
-  }
-
-  const token = await resolveGithubTokenForOrg(auth.orgId, {
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
     orgStore: deps.orgStore!,
-    githubApp: deps.githubApp,
+    connector: getConnector(target.provider),
     allowPatFallback: deps.serverConfig.devMode
   });
   if (!token) {
     writeJson(response, 401, {
-      error: "GitHub App is not installed for this organization. Install it from CoopAI settings."
+      error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`
     });
     return;
   }
 
   const branch = parsed.query?.get("branch")?.trim() || undefined;
-  const client = new GitHubClient({ token });
+  const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
   try {
-    const file = await client.getFileContent(
-      { provider: "github", owner: target.owner, repo: target.repo, branch },
-      filePath
-    );
+    const file = await fetchRepoFile(coords, filePath, token);
     writeJson(response, 200, {
       repoId,
       path: file.path,
@@ -397,6 +390,23 @@ async function handleGetRepoManifest(
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+async function fetchRepoFile(
+  coords: RepoCoordinates,
+  filePath: string,
+  token: string
+): Promise<Awaited<ReturnType<GitHubClient["getFileContent"]>>> {
+  switch (coords.provider) {
+    case "github":
+      return new GitHubClient({ token }).getFileContent(coords, filePath);
+    case "gitlab":
+      return new GitLabClient({ token }).getFileContent(coords, filePath);
+    case "bitbucket":
+      return new BitbucketClient({ token }).getFileContent(coords, filePath);
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

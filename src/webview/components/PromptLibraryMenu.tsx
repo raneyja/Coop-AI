@@ -19,7 +19,7 @@ export function PromptLibraryMenu({
   }
 
   return (
-    <div className="coop-prompt-menu absolute bottom-full left-0 z-40 mb-1.5 w-[min(100%,var(--coop-prompt-panel-width,480px))]">
+    <div className="coop-prompt-menu">
       <div className="coop-prompt-menu-panel">
         {topPrompts.length === 0 ? (
           <p className="coop-prompt-menu-empty">No pinned prompts yet</p>
@@ -31,9 +31,10 @@ export function PromptLibraryMenu({
                   type="button"
                   role="option"
                   className="coop-prompt-menu-row"
+                  title={prompt.title}
                   onClick={() => onRun(prompt.id)}
                 >
-                  {prompt.title}
+                  <span className="coop-prompt-menu-row-label">{prompt.title}</span>
                 </button>
               </li>
             ))}

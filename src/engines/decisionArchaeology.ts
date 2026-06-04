@@ -3,7 +3,7 @@ import { getDecisionArchaeologyEngine } from "./decisionArchaeologyRegistry";
 import { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
-import type { BlameLine, CommitInfo, PullRequestComment, RepoCoordinates } from "../api/codeHosts/types";
+import type { BlameLine, CodeHostProvider, CommitInfo, PullRequestComment, RepoCoordinates } from "../api/codeHosts/types";
 import { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { JiraClient } from "../api/jira/jiraClient";
 import { SlackClient, type SlackThread } from "../api/slack/slackClient";
@@ -38,6 +38,7 @@ export type TraceDecisionOptions = {
 };
 
 export type TraceDecisionParams = {
+  provider?: CodeHostProvider;
   owner: string;
   repo: string;
   file: string;
@@ -46,7 +47,7 @@ export type TraceDecisionParams = {
   codeSnippet?: string;
 };
 
-type GitHubPullDetail = {
+type PullRequestDetail = {
   number: number;
   title: string;
   body?: string;
@@ -59,13 +60,20 @@ type GitHubPullDetail = {
   labels: string[];
 };
 
+type GitHubPullDetail = PullRequestDetail;
+
 export class DecisionArchaeologyEngine {
   public constructor(private readonly options: TraceDecisionOptions) {}
 
   public async traceDecision(params: TraceDecisionParams): Promise<DecisionTimeline> {
     const { owner, repo, lineRange, branch, codeSnippet } = params;
     const file = toRepositoryRelativePath(params.file);
-    const coords: RepoCoordinates = { provider: "github", owner, repo, branch };
+    const coords = await this.options.codeHostRouter.resolveCoordinates({
+      provider: params.provider,
+      owner,
+      repo,
+      branch
+    });
 
     const timeline: DecisionTimeline = {
       file,
@@ -79,8 +87,7 @@ export class DecisionArchaeologyEngine {
 
     let blameLines: BlameLine[] = [];
     try {
-      const resolved = await this.options.codeHostRouter.resolveCoordinates(coords);
-      const blame = await this.options.codeHostRouter.getBlameData(file, resolved);
+      const blame = await this.options.codeHostRouter.getBlameData(file, coords);
       blameLines = filterBlameForRange(blame.lines, lineRange);
       if (blameLines.length === 0 && lineRange) {
         timeline.warnings.push("No blame data for the selected line range; using full file blame.");
@@ -93,20 +100,20 @@ export class DecisionArchaeologyEngine {
 
     if (blameLines.length === 0 && !timeline.fallbackMessage) {
       timeline.warnings.push(
-        `GitHub returned no blame lines for ${file}. Confirm the file exists at github.com/${owner}/${repo} on branch ${branch ?? "main"}.`
+        `No blame lines for ${file} on ${coords.provider} (${owner}/${repo}${branch ? `@${branch}` : ""}).`
       );
     }
 
-    const introduction = await this.findOriginalIntroduction(owner, repo, file, blameLines, branch);
+    const introduction = await this.findOriginalIntroduction(coords, file, blameLines);
     if (!introduction) {
       let recent: CommitInfo | undefined;
       try {
-        recent = await this.tryRecentFileHistory(owner, repo, file, branch);
+        recent = await this.tryRecentFileHistory(coords, file);
       } catch (error) {
         timeline.warnings.push(`File history lookup failed: ${errorMessage(error)}`);
       }
       if (!recent) {
-        timeline.fallbackMessage = `Could not load commit history for ${file} on GitHub (${owner}/${repo}${branch ? `@${branch}` : ""}). Check settings and that the file exists on the remote repo.`;
+        timeline.fallbackMessage = `Could not load commit history for ${file} on ${coords.provider} (${owner}/${repo}${branch ? `@${branch}` : ""}). Check settings and that the file exists on the remote repo.`;
         return timeline;
       }
       timeline.originalCommit = mapCommit(recent);
@@ -130,13 +137,13 @@ export class DecisionArchaeologyEngine {
     const refs = parseReferences(commit.message);
     let prNumber: number | undefined = refs.prNumbers[0];
     if (!prNumber) {
-      prNumber = await this.findPrForCommit(owner, repo, commit.sha);
+      prNumber = await this.findPrForCommit(coords, commit.sha);
     }
 
     let prBody = "";
     if (prNumber) {
       try {
-        const pr = await this.fetchGitHubPullRequest(owner, repo, prNumber);
+        const pr = await this.fetchPullRequest(coords, prNumber, file);
         prBody = pr.body ?? "";
         const comments = await this.options.codeHostRouter.getPRComments(prNumber, coords);
         const reviews = mapPrComments(comments);
@@ -216,22 +223,19 @@ export class DecisionArchaeologyEngine {
   }
 
   private async findOriginalIntroduction(
-    owner: string,
-    repo: string,
+    coords: RepoCoordinates,
     file: string,
-    blameLines: BlameLine[],
-    branch?: string
+    blameLines: BlameLine[]
   ): Promise<CommitInfo | undefined> {
     const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))];
     if (uniqueShas.length === 0) {
       return undefined;
     }
 
-    const coords: RepoCoordinates = { provider: "github", owner, repo, branch };
     const commits: CommitInfo[] = [];
 
     for (const sha of uniqueShas) {
-      const detail = await this.fetchCommitDetail(owner, repo, sha).catch(() => undefined);
+      const detail = await this.fetchCommitDetail(coords, sha).catch(() => undefined);
       if (detail) {
         commits.push(detail);
       }
@@ -252,52 +256,29 @@ export class DecisionArchaeologyEngine {
     return oldest;
   }
 
-  private async tryRecentFileHistory(
-    owner: string,
-    repo: string,
-    file: string,
-    branch?: string
-  ): Promise<CommitInfo | undefined> {
-    const history = await this.options.codeHostRouter.getFileHistory(file, 5, {
-      provider: "github",
-      owner,
-      repo,
-      branch
-    });
+  private async tryRecentFileHistory(coords: RepoCoordinates, file: string): Promise<CommitInfo | undefined> {
+    const history = await this.options.codeHostRouter.getFileHistory(file, 5, coords);
     return history[0];
   }
 
-  private async fetchCommitDetail(owner: string, repo: string, sha: string): Promise<CommitInfo> {
-    const creds = await this.options.codeHostSecrets.getCredentials();
-    if (!creds.githubToken) {
-      throw new Error("GitHub token required for commit details.");
-    }
-    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${sha}`;
-    const payload = await codeHostRequestJson<{
-      sha: string;
-      html_url?: string;
-      commit: { message: string; author?: { name?: string; date?: string } };
-      author?: { login?: string };
-    }>(url, {
-      headers: githubHeaders(creds.githubToken),
-      provider: "github"
-    });
-    return {
-      sha: payload.sha,
-      author: payload.commit.author?.name ?? payload.author?.login ?? "unknown",
-      authorLogin: payload.author?.login,
-      date: payload.commit.author?.date ?? new Date(0).toISOString(),
-      message: payload.commit.message,
-      htmlUrl: payload.html_url
-    };
+  private async fetchCommitDetail(coords: RepoCoordinates, sha: string): Promise<CommitInfo> {
+    return this.options.codeHostRouter.getCommitBySha(sha, coords);
   }
 
-  private async findPrForCommit(owner: string, repo: string, sha: string): Promise<number | undefined> {
+  private async findPrForCommit(coords: RepoCoordinates, sha: string): Promise<number | undefined> {
+    if (coords.provider === "github") {
+      return this.findGithubPrForCommit(coords, sha);
+    }
+    return undefined;
+  }
+
+  private async findGithubPrForCommit(coords: RepoCoordinates, sha: string): Promise<number | undefined> {
     const creds = await this.options.codeHostSecrets.getCredentials();
     if (!creds.githubToken) {
+      // TODO: Cloud mode — commit→PR linking needs a backend proxy for GET /repos/{owner}/{repo}/commits/{sha}/pulls.
       return undefined;
     }
-    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${sha}/pulls`;
+    const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/commits/${sha}/pulls`;
     const pulls = await codeHostRequestJson<Array<{ number: number }>>(url, {
       headers: githubHeaders(creds.githubToken),
       provider: "github"
@@ -305,16 +286,46 @@ export class DecisionArchaeologyEngine {
     return pulls[0]?.number;
   }
 
-  private async fetchGitHubPullRequest(
-    owner: string,
-    repo: string,
+  private async fetchPullRequest(
+    coords: RepoCoordinates,
+    prNumber: number,
+    file: string
+  ): Promise<PullRequestDetail> {
+    if (coords.provider === "github") {
+      const creds = await this.options.codeHostSecrets.getCredentials();
+      if (creds.githubToken) {
+        return this.fetchGithubPullRequestViaRest(coords, prNumber);
+      }
+    }
+
+    const prs = await this.options.codeHostRouter.getPRsForFile(file, 50, coords);
+    const summary = prs.find((pr) => pr.number === prNumber);
+    if (!summary) {
+      throw new Error(`Pull request #${prNumber} not found.`);
+    }
+    return {
+      number: summary.number,
+      title: summary.title,
+      body: "",
+      state: summary.state,
+      merged: summary.merged,
+      author: summary.author,
+      createdAt: summary.createdAt,
+      updatedAt: summary.updatedAt,
+      htmlUrl: summary.htmlUrl,
+      labels: []
+    };
+  }
+
+  private async fetchGithubPullRequestViaRest(
+    coords: RepoCoordinates,
     prNumber: number
   ): Promise<GitHubPullDetail> {
     const creds = await this.options.codeHostSecrets.getCredentials();
     if (!creds.githubToken) {
       throw new Error("GitHub token required for PR details.");
     }
-    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${prNumber}`;
+    const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/pulls/${prNumber}`;
     const pr = await codeHostRequestJson<{
       number: number;
       title: string;
@@ -554,6 +565,7 @@ export async function traceDecision(
     throw new Error("Decision archaeology engine is not initialized.");
   }
   return engine.traceDecision({
+    provider: options?.provider,
     owner,
     repo,
     file,

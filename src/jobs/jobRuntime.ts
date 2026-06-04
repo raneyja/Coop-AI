@@ -15,7 +15,6 @@ export type JobRuntime = {
   scheduler: JobScheduler;
 };
 
-import type { GitHubAppService } from "../server/githubAppService";
 import type { OrgStore } from "../server/orgStore";
 
 export function createJobRuntime(options: {
@@ -23,7 +22,6 @@ export function createJobRuntime(options: {
   cache: GraphCache;
   consistency?: GraphConsistencyManager;
   orgStore?: OrgStore;
-  githubApp?: GitHubAppService;
   allowPatFallback?: boolean;
 }): JobRuntime {
   const config = options.config ?? loadJobQueueConfig();
@@ -39,7 +37,6 @@ export function createJobRuntime(options: {
       cache: options.cache,
       consistency: options.consistency,
       orgStore: options.orgStore,
-      githubApp: options.githubApp,
       allowPatFallback: options.allowPatFallback
     },
     monitor

@@ -172,6 +172,18 @@ export class GitHubClient implements CodeHostClient {
     return this.getCommitHistory(coords, { path: filePath, limit });
   }
 
+  public async getCommitBySha(coords: RepoCoordinates, sha: string): Promise<CommitInfo> {
+    const commit = await codeHostRequestJson<GitHubCommit>(
+      `${this.repoUrl(coords)}/commits/${encodeURIComponent(sha)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return mapGitHubCommit(commit);
+  }
+
   public async getBlameData(coords: RepoCoordinates, filePath: string): Promise<BlameData> {
     const branch = await this.resolveBranch(coords);
     const owner = coords.owner;

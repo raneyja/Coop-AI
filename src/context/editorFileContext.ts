@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { toRepositoryRelativePath } from "./repoFilePath";
 
-export type EditorFileSource = "workspace" | "git" | "external";
+export type EditorFileSource = "workspace" | "git" | "remote" | "external";
 
 export type ResolvedEditorFile = {
   file?: string;
@@ -20,6 +20,17 @@ export type ResolvedEditorFile = {
  */
 export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile {
   const uri = editor.document.uri;
+  if (uri.scheme === "vscode-vfs" || uri.scheme === "github") {
+    const remote = parseVfsGithubFile(uri);
+    if (remote) {
+      return {
+        file: toRepositoryRelativePath(remote.file),
+        fileSource: "remote",
+        owner: remote.owner,
+        repo: remote.repo
+      };
+    }
+  }
   if (uri.scheme !== "file") {
     return {
       fileSource: "external",
@@ -59,6 +70,36 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
     warning:
       "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone, or pick a file from the remote tree in chat."
   };
+}
+
+function parseVfsGithubFile(uri: vscode.Uri): { owner: string; repo: string; file: string } | undefined {
+  const candidates = [uri.path, uri.fsPath, uri.toString()];
+  for (const candidate of candidates) {
+    const parsed = parseVfsGithubPath(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function parseVfsGithubPath(raw: string): { owner: string; repo: string; file: string } | undefined {
+  const normalized = raw
+    .replace(/^vscode-vfs:\/\/github/i, "")
+    .replace(/^github:\/\//i, "")
+    .replace(/^\//, "");
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments[0]?.toLowerCase() === "github") {
+    segments.shift();
+  }
+  if (segments.length < 3) {
+    return undefined;
+  }
+  const [owner, repo, ...rest] = segments;
+  if (!owner || !repo || rest.length === 0) {
+    return undefined;
+  }
+  return { owner, repo, file: rest.join("/") };
 }
 
 function findGitRoot(filePath: string): string | undefined {

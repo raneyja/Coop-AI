@@ -29,10 +29,14 @@ type SettingsPanelProps = {
   onClearGithubToken: () => void;
   onInstallGithubApp: () => void;
   onRefreshGithubInstallation: () => void;
+  onInstallGitlabApp: () => void;
+  onRefreshGitlabInstallation: () => void;
   gitlabTokenDraft: string;
   onGitlabTokenDraftChange: (value: string) => void;
   onSaveGitlabToken: () => void;
   onClearGitlabToken: () => void;
+  onInstallBitbucketApp: () => void;
+  onRefreshBitbucketInstallation: () => void;
   bitbucketUsernameDraft: string;
   onBitbucketUsernameDraftChange: (value: string) => void;
   bitbucketPasswordDraft: string;

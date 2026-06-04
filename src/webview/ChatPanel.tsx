@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SettingsScreen } from "../chat/settingsScreens";
+import { ActiveFileLabel } from "./components/ActiveFileLabel";
 import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { ChatComposer } from "./components/ChatComposer";
-import { ChatStream, ChatMessage } from "./components/ChatStream";
+import { ChatStream, ChatMessage, type ChatInlineArtifact } from "./components/ChatStream";
 import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
@@ -16,7 +18,9 @@ import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
 import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./AutocompleteStatus";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
-import { OwnershipCard, type OwnershipCardPayload } from "./OwnershipCard";
+import type { OwnershipCardPayload } from "./OwnershipCard";
+import type { LightningModeState } from "../indexing/lightningTypes";
+import { LightningModePanel, LightningStatusBadge } from "./LightningModePanel";
 import type { ChatImageAttachment } from "../chat/types";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
@@ -107,7 +111,9 @@ type InboundMessage =
       type: "threads:list";
       payload: { activeId: string; activeTitle: string; threads: ThreadListItem[] };
     }
-  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } };
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
+  | { type: "lightning:open" }
+  | { type: "lightning:state"; payload: LightningModeState };
 
 type ChatPanelProps = {
   vscode: VsCodeApi;
@@ -256,21 +262,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
   const [autocompleteMessage, setAutocompleteMessage] = useState<string | undefined>();
-  const [decisionTimeline, setDecisionTimeline] = useState<DecisionTimelinePayload | undefined>();
-  const [ownershipCard, setOwnershipCard] = useState<OwnershipCardPayload | undefined>();
+  const [inlineArtifacts, setInlineArtifacts] = useState<ChatInlineArtifact[]>([]);
   const [threadsState, setThreadsState] = useState<{
     activeId: string;
     activeTitle: string;
     threads: ThreadListItem[];
   } | null>(null);
+  const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
+  const [lightningPanelOpen, setLightningPanelOpen] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
     setIsStreaming(false);
     setError("");
-    setDecisionTimeline(undefined);
-    setOwnershipCard(undefined);
+    setInlineArtifacts([]);
     setUsageLabel(undefined);
     setIntentFeedback(undefined);
     setJobProgress(undefined);
@@ -292,6 +298,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const isActiveChat = messages.length > 0 || Boolean(streamMessage) || isStreaming;
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+
+  const openSettings = useCallback(
+    (screen?: SettingsScreen) => {
+      post({ type: "ui:open-settings", payload: screen ? { screen } : undefined });
+    },
+    [post]
+  );
 
   const requestTree = useCallback((path = "") => {
     post({ type: "repo:list", payload: { path, scope: "files" } });
@@ -331,6 +344,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setAttachments([]);
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
+        case "lightning:open":
+          setLightningPanelOpen(true);
+          break;
+        case "lightning:state":
+          setLightningState(message.payload);
+          break;
         case "chat:delta":
           setIsStreaming(true);
           setStreamingBuffer((prev) => prev + message.payload.chunk);
@@ -338,12 +357,29 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "chat:complete":
           setMessages((prev) => [...prev, message.payload.message]);
           if (message.payload.message.role === "assistant") {
-            setDecisionTimeline((current) =>
-              current ? { ...current, narrative: message.payload.message.content } : current
-            );
-            setOwnershipCard((current) =>
-              current ? { ...current, narrative: message.payload.message.content } : current
-            );
+            const narrative = message.payload.message.content;
+            setInlineArtifacts((current) => {
+              for (let i = current.length - 1; i >= 0; i -= 1) {
+                const artifact = current[i];
+                if (artifact.kind === "decision" && !artifact.timeline.narrative) {
+                  const next = [...current];
+                  next[i] = {
+                    ...artifact,
+                    timeline: { ...artifact.timeline, narrative }
+                  };
+                  return next;
+                }
+                if (artifact.kind === "ownership" && !artifact.report.narrative) {
+                  const next = [...current];
+                  next[i] = {
+                    ...artifact,
+                    report: { ...artifact.report, narrative }
+                  };
+                  return next;
+                }
+              }
+              return current;
+            });
           }
           setStreamingBuffer("");
           setIsStreaming(false);
@@ -388,10 +424,27 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setInput(message.payload.message);
           break;
         case "decision:timeline":
-          setDecisionTimeline(message.payload.timeline);
+          setIntentFeedback(undefined);
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: `decision-${Date.now()}-${current.length}`,
+              kind: "decision",
+              timestamp: Date.now(),
+              timeline: message.payload.timeline
+            }
+          ]);
           break;
         case "ownership:card":
-          setOwnershipCard(message.payload.report);
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: `ownership-${Date.now()}-${current.length}`,
+              kind: "ownership",
+              timestamp: Date.now(),
+              report: message.payload.report
+            }
+          ]);
           break;
         case "job:progress":
           setJobProgress(message.payload);
@@ -417,6 +470,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     };
     window.addEventListener("message", listener);
     post({ type: "webview-ready" });
+    post({ type: "lightning:ready" });
     return () => window.removeEventListener("message", listener);
   }, [post]);
 
@@ -590,7 +644,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onExpand={(path) => requestTree(path)}
           onSelectFile={(path) => post({ type: "repo:open-file", payload: { path } })}
           onSelectRepo={handleSelectRepo}
-          onOpenSettings={() => post({ type: "ui:open-settings" })}
+          onOpenSettings={openSettings}
         />
       ) : null}
       <ChatComposer
@@ -598,7 +652,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         maxLength={INPUT_MAX}
         isStreaming={isStreaming}
         variant={isActiveChat ? "chat" : "landing"}
-        contextFile={context.file}
         usageLabel={usageLabel}
         attachments={attachments}
         attachmentError={attachmentError}
@@ -614,7 +667,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const composerStack = (
     <>
-      <div className="relative mb-1">
+      <div className="relative mb-1 flex items-center gap-2">
         <PromptLibraryPill
           prompts={promptLibrary.prompts}
           pinnedIds={promptLibrary.pinnedIds}
@@ -625,6 +678,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onRun={(id) => post({ type: "prompts:run", payload: { id } })}
           onSeeAll={openPromptLibrary}
         />
+        {context.file ? <ActiveFileLabel filePath={context.file} /> : null}
       </div>
       {composerInner}
     </>
@@ -651,7 +705,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onNewThread={() => post({ type: "threads:new" })}
           />
         ) : null}
-        <div className={threadsState ? "shrink-0" : "ml-auto flex w-full justify-end"}>
+        <div className={threadsState ? "ml-auto flex shrink-0 items-center gap-2" : "ml-auto flex w-full items-center justify-end gap-2"}>
+          {lightningState ? (
+            <LightningStatusBadge state={lightningState} onClick={() => setLightningPanelOpen(true)} />
+          ) : null}
           <AutocompleteStatus
             status={autocompleteStatus}
             message={autocompleteMessage}
@@ -666,9 +723,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         <>
           <ChatStream
             messages={messages}
+            artifacts={inlineArtifacts}
             streamingMessage={streamMessage}
             endRef={messageEndRef}
             renderBody={renderMessageBody}
+            onDismissArtifact={(id) =>
+              setInlineArtifacts((current) => current.filter((artifact) => artifact.id !== id))
+            }
+            onCopyOwnershipDraft={handleCopyOwnershipDraft}
           />
           <DegradationNotification
             compact
@@ -678,28 +740,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onDismiss={() => setDegradationNotification(undefined)}
             onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
-              setDecisionTimeline(undefined);
-              setOwnershipCard(undefined);
-              post({ type: "degradation:refresh", payload: { feature, retrace: true } });
+              post({ type: "degradation:refresh", payload: { feature } });
             }}
-            onOpenSettings={() => post({ type: "ui:open-settings" })}
+            onOpenSettings={openSettings}
           />
-          {decisionTimeline ? (
-            <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)]">
-              <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
-            </div>
-          ) : null}
-          {ownershipCard ? (
-            <div className="max-h-[40%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)]">
-              <OwnershipCard
-                report={ownershipCard}
-                onDismiss={() => setOwnershipCard(undefined)}
-                onCopyDraft={handleCopyOwnershipDraft}
-              />
-            </div>
-          ) : null}
           {conflictState?.conflicts.length ? (
-            <div className="max-h-[35%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)] px-3 py-2">
+            <div className="max-h-[35%] shrink-0 overflow-y-auto border-t border-[var(--coop-composer-border)] py-2">
               <ConflictResolution
                 state={conflictState}
                 onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
@@ -732,17 +778,29 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onDismiss={() => setDegradationNotification(undefined)}
             onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
-              setDecisionTimeline(undefined);
-              setOwnershipCard(undefined);
-              post({ type: "degradation:refresh", payload: { feature, retrace: true } });
+              post({ type: "degradation:refresh", payload: { feature } });
             }}
-            onOpenSettings={() => post({ type: "ui:open-settings" })}
+            onOpenSettings={openSettings}
           />
+          {inlineArtifacts.length > 0 ? (
+            <div className="no-scrollbar mx-3 mb-2 max-h-[45vh] shrink-0 space-y-2 overflow-y-auto">
+              {inlineArtifacts.map((artifact) =>
+                artifact.kind === "decision" ? (
+                  <DecisionTimeline
+                    key={artifact.id}
+                    timeline={artifact.timeline}
+                    onDismiss={() =>
+                      setInlineArtifacts((current) => current.filter((entry) => entry.id !== artifact.id))
+                    }
+                  />
+                ) : null
+              )}
+            </div>
+          ) : null}
           <IntentFeedback
             state={intentFeedback}
             onDismiss={() => setIntentFeedback(undefined)}
             onRefreshContext={() => {
-              setDecisionTimeline(undefined);
               setIntentFeedback({
                 status: "loading",
                 actionId: "trace-decision",
@@ -753,16 +811,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               post({ type: "degradation:refresh", payload: { retrace: true } });
             }}
           />
-          {decisionTimeline ? (
-            <DecisionTimeline timeline={decisionTimeline} onDismiss={() => setDecisionTimeline(undefined)} />
-          ) : null}
-          {ownershipCard ? (
-            <OwnershipCard
-              report={ownershipCard}
-              onDismiss={() => setOwnershipCard(undefined)}
-              onCopyDraft={handleCopyOwnershipDraft}
-            />
-          ) : null}
           <ConflictResolution
             state={conflictState}
             onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
@@ -793,17 +841,39 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         prompts={promptLibrary.prompts}
         pinnedIds={promptLibrary.pinnedIds}
         hasWorkspace={promptLibrary.hasWorkspace}
-        currentInput={input}
         onClose={() => setPromptModalOpen(false)}
         onRun={(id) => {
           setPromptModalOpen(false);
           post({ type: "prompts:run", payload: { id } });
         }}
-        onSave={(payload) => post({ type: "prompts:save", payload })}
-        onUpdate={(payload) => post({ type: "prompts:update", payload })}
-        onDelete={(id) => post({ type: "prompts:delete", payload: { id } })}
-        onUpdatePinned={(pinnedIds) => post({ type: "prompts:update-pinned", payload: { pinnedIds } })}
+        onCommit={(payload) =>
+          post({
+            type: "prompts:commit",
+            payload: {
+              prompts: payload.prompts.map((prompt) => ({
+                id: prompt.id,
+                title: prompt.title,
+                template: prompt.template ?? "",
+                actionId: prompt.actionId
+              })),
+              pinnedIds: payload.pinnedIds
+            }
+          })
+        }
       />
+      {lightningState ? (
+        <LightningModePanel
+          state={lightningState}
+          open={lightningPanelOpen}
+          onClose={() => setLightningPanelOpen(false)}
+          onEnableGlobal={() => post({ type: "lightning:enable-global" })}
+          onDisableGlobal={() => post({ type: "lightning:disable-global" })}
+          onEnableRepo={(repoId) => post({ type: "lightning:enable-repo", payload: { repoId } })}
+          onDisableRepo={(repoId) => post({ type: "lightning:disable-repo", payload: { repoId } })}
+          onRefreshRepo={(repoId) => post({ type: "lightning:refresh-repo", payload: { repoId } })}
+          onUpgrade={() => post({ type: "lightning:upgrade" })}
+        />
+      ) : null}
       <PanelWidthEnforcer vscode={vscode} />
     </div>
   );

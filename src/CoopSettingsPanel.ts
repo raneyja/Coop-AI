@@ -13,6 +13,7 @@ export class CoopSettingsPanel {
   public static createOrReveal(extensionUri: vscode.Uri, session: CoopChatSession): CoopSettingsPanel {
     if (CoopSettingsPanel.instance) {
       CoopSettingsPanel.instance.bindSession(session);
+      session.flushPendingSettingsNavigation();
       CoopSettingsPanel.instance.panel.reveal(vscode.ViewColumn.Active);
       return CoopSettingsPanel.instance;
     }

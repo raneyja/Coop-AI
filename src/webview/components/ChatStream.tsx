@@ -1,5 +1,7 @@
 import React from "react";
 import type { ChatImageAttachment } from "../../chat/types";
+import { DecisionTimeline, type DecisionTimelinePayload } from "../DecisionTimeline";
+import { OwnershipCard, type OwnershipCardPayload } from "../OwnershipCard";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -9,11 +11,28 @@ export type ChatMessage = {
   attachments?: ChatImageAttachment[];
 };
 
+export type ChatInlineArtifact =
+  | {
+      id: string;
+      kind: "decision";
+      timestamp: number;
+      timeline: DecisionTimelinePayload;
+    }
+  | {
+      id: string;
+      kind: "ownership";
+      timestamp: number;
+      report: OwnershipCardPayload;
+    };
+
 type ChatStreamProps = {
   messages: ChatMessage[];
+  artifacts: ChatInlineArtifact[];
   streamingMessage: ChatMessage | null;
   endRef: React.RefObject<HTMLDivElement | null>;
   renderBody: (content: string) => React.ReactElement[];
+  onDismissArtifact: (id: string) => void;
+  onCopyOwnershipDraft: (text: string) => void;
 };
 
 function inferLinks(content: string): Array<{ label: string; url: string }> {
@@ -103,13 +122,59 @@ function MessageBlock({
   );
 }
 
-export function ChatStream({ messages, streamingMessage, endRef, renderBody }: ChatStreamProps): React.ReactElement {
+export function ChatStream({
+  messages,
+  artifacts,
+  streamingMessage,
+  endRef,
+  renderBody,
+  onDismissArtifact,
+  onCopyOwnershipDraft
+}: ChatStreamProps): React.ReactElement {
+  const timelineEntries = [
+    ...messages.map((message, index) => ({
+      id: `msg-${message.timestamp}-${index}`,
+      type: "message" as const,
+      timestamp: message.timestamp,
+      message
+    })),
+    ...artifacts.map((artifact) => ({
+      id: `artifact-${artifact.id}`,
+      type: "artifact" as const,
+      timestamp: artifact.timestamp,
+      artifact
+    }))
+  ].sort((a, b) => a.timestamp - b.timestamp);
+
   return (
     <div className="chat-thread no-scrollbar" role="log" aria-live="polite">
       <div className="chat-thread-messages">
-        {messages.map((message, index) => (
-          <MessageBlock key={`${message.timestamp}-${index}`} message={message} renderBody={renderBody} />
-        ))}
+        {timelineEntries.map((entry) =>
+          entry.type === "message" ? (
+            <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
+          ) : (
+            <article key={entry.id} className="chat-message chat-message--assistant" data-role="assistant">
+              <div className="chat-message-inner">
+                <div className="chat-message-meta">
+                  <span className="chat-message-label">CoopAI</span>
+                  <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
+                </div>
+                {entry.artifact.kind === "decision" ? (
+                  <DecisionTimeline
+                    timeline={entry.artifact.timeline}
+                    onDismiss={() => onDismissArtifact(entry.artifact.id)}
+                  />
+                ) : (
+                  <OwnershipCard
+                    report={entry.artifact.report}
+                    onDismiss={() => onDismissArtifact(entry.artifact.id)}
+                    onCopyDraft={onCopyOwnershipDraft}
+                  />
+                )}
+              </div>
+            </article>
+          )
+        )}
 
         {streamingMessage ? (
           <article className="chat-message chat-message--assistant chat-message--streaming">
