@@ -18,6 +18,7 @@ import {
   type BrandIconProps
 } from "./logos/brand-icons";
 import { parseChatProse } from "@/lib/chatProseParser";
+import { useChatScrollAnchor } from "@/hooks/useChatScrollAnchor";
 import {
   FILE_CONTEXT_STORIES,
   type StorySearchStep
@@ -211,6 +212,14 @@ export function FileContextStoryDemo({
   const isHomepage = variant === "homepage";
   const stageHeight = DEMO_STAGE_H[variant];
   const focusComposer = isHomepage && showComposer;
+  const threadRef = useChatScrollAnchor([
+    phase,
+    visibleBlocks,
+    searchStep,
+    storyIndex,
+    showUserBubble,
+    typedLen
+  ]);
 
   return (
     <div className={`file-context-story ${className}`.trim()}>
@@ -265,7 +274,11 @@ export function FileContextStoryDemo({
             </div>
           ) : (
             <>
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-2 pt-3 md:px-5">
+          <div
+            ref={threadRef}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2 pt-3 md:px-5"
+          >
+            <div className="flex min-h-full w-full flex-col justify-end gap-4">
               {showUserBubble && (
                 <div className="story-bubble-in max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
                   <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{story.question}</p>
@@ -310,6 +323,7 @@ export function FileContextStoryDemo({
                   )}
                 </div>
               )}
+            </div>
             </div>
 
             <div

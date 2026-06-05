@@ -1,4 +1,7 @@
+"use client";
+
 import type { CodeToken, ProductMockScenario } from "@/lib/productMockScenarios";
+import { useChatScrollAnchor } from "@/hooks/useChatScrollAnchor";
 import { StoryChatProse } from "./StoryChatProse";
 import { StoryComposer } from "./StoryComposer";
 
@@ -15,6 +18,7 @@ type ProductMockProps = {
 
 export function ProductMock({ scenario, className = "" }: ProductMockProps) {
   const gradientId = `mock-bridge-${scenario.id}`;
+  const threadRef = useChatScrollAnchor([scenario.id]);
 
   return (
     <div
@@ -40,7 +44,11 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
 
         <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
           <aside className="relative z-10 flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-[#2a2a2a] bg-[#1e1e1e] md:w-[44%] md:border-b-0 md:border-r">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-2 pt-3">
+            <div
+              ref={threadRef}
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2 pt-3"
+            >
+              <div className="flex min-h-full w-full flex-col justify-end gap-3">
               <div className="max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
                 <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{scenario.question}</p>
               </div>
@@ -50,6 +58,7 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
                   <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
                 </div>
                 <StoryChatProse content={scenario.answer.content} />
+              </div>
               </div>
             </div>
 
