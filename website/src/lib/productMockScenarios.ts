@@ -9,14 +9,9 @@ export type ProductMockScenario = {
   question: string;
   ariaLabel: string;
   tabs: { active: string; inactive?: string };
-  response: {
-    title: string;
-    status: string;
-    statusTone: "accent" | "warning" | "success" | "violet";
-    meta: string;
-    summary: string;
-    sections?: Array<{ label: string; lines: string[] }>;
-    badges?: Array<{ label: string; tone: "amber" | "muted" | "accent" | "violet" }>;
+  answer: {
+    /** Cursor-style prose — same format as the extension ChatProse renderer */
+    content: string;
   };
   code: {
     lines: Array<{ n: number; tokens: CodeToken[]; highlight?: boolean }>;
@@ -33,23 +28,19 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     ariaLabel:
       "CoopAI identifying code ownership and suggested reviewers for token validation",
     tabs: { active: "token_validator.ts", inactive: "auth_routes.go" },
-    response: {
-      title: "Code ownership",
-      status: "High confidence",
-      statusTone: "accent",
-      meta: "billing/auth · token_validator.ts",
-      summary:
-        "Jessica Dawson owns this routine — 90% blame over the last 60 commits. Marcus and Elena touch adjacent auth and schema paths.",
-      sections: [
-        {
-          label: "Suggested reviewers",
-          lines: ["@marcus_vance · auth routing", "@elena_rostova · downstream DB hooks"]
-        }
-      ],
-      badges: [
-        { label: "High blast radius", tone: "amber" },
-        { label: "Slack #billing-auth", tone: "muted" }
-      ]
+    answer: {
+      content: `**Short answer**
+
+Jessica Dawson owns this routine — 90% blame over the last 60 commits on \`token_validator.ts\`. Marcus and Elena touch adjacent auth and schema paths.
+
+**Suggested reviewers**
+
+- \`@marcus_vance\` — auth routing
+- \`@elena_rostova\` — downstream DB hooks
+
+**Risk signals**
+
+High blast radius on empty-payload handling. Slack \`#billing-auth\` discussed this in Sep.`
     },
     code: {
       lines: [
@@ -101,23 +92,20 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     question: "What's the blast radius if we change the retry backoff in payments_queue.go?",
     ariaLabel: "CoopAI analyzing blast radius and dependent services for a payments change",
     tabs: { active: "payments_queue.go", inactive: "ledger_client.ts" },
-    response: {
-      title: "Blast radius",
-      status: "High risk",
-      statusTone: "warning",
-      meta: "payments/core · ProcessRetryBackoff()",
-      summary:
-        "14 files reference this symbol. 3 services import the module directly; 2 public API contracts include the retry envelope.",
-      sections: [
-        {
-          label: "Affected services",
-          lines: ["api-gateway (runtime dep)", "billing-worker (batch retries)", "ledger-svc (settlement hooks)"]
-        }
-      ],
-      badges: [
-        { label: "2 external APIs", tone: "amber" },
-        { label: "Breaking change risk", tone: "amber" }
-      ]
+    answer: {
+      content: `**Short answer**
+
+14 files reference \`ProcessRetryBackoff()\`. 3 services import the module directly; 2 public API contracts include the retry envelope.
+
+**Affected services**
+
+- \`api-gateway\` — runtime dependency
+- \`billing-worker\` — batch retries
+- \`ledger-svc\` — settlement hooks
+
+**Recommendation**
+
+Treat as a **breaking change risk** — staged rollout recommended. Tuned in PR #8821, shared across services.`
     },
     code: {
       lines: [
@@ -156,24 +144,18 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     question: "Who should review this PR for the OAuth token refresh changes?",
     ariaLabel: "CoopAI suggesting reviewers for an OAuth token refresh pull request",
     tabs: { active: "oauth_refresh.ts", inactive: "session_store.go" },
-    response: {
-      title: "Review recommendations",
-      status: "Ready",
-      statusTone: "success",
-      meta: "auth/oauth · PR #1247",
-      summary:
-        "Jessica Dawson authored 61% of touched lines. Marcus Vance reviewed adjacent auth routing in the last 30 days.",
-      sections: [
-        {
-          label: "Suggested reviewers",
-          lines: [
-            "@jessica_dawson · primary owner (61% blame)",
-            "@marcus_vance · 9 files in auth/ (last 30d)",
-            "@elena_rostova · schema migrations downstream"
-          ]
-        }
-      ],
-      badges: [{ label: "Security-sensitive path", tone: "violet" }]
+    answer: {
+      content: `**Short answer**
+
+Jessica Dawson authored 61% of touched lines in PR #1247. Marcus Vance reviewed adjacent auth routing in the last 30 days.
+
+**Suggested reviewers**
+
+- \`@jessica_dawson\` — primary owner (61% blame)
+- \`@marcus_vance\` — 9 files in \`auth/\` (last 30d)
+- \`@elena_rostova\` — schema migrations downstream
+
+Security-sensitive OAuth refresh path — include a security reviewer before merge.`
     },
     code: {
       lines: [
@@ -217,24 +199,18 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     question: "Help me understand how auth flows through this repo.",
     ariaLabel: "CoopAI explaining repository architecture and auth flow",
     tabs: { active: "cmd/api/main.go", inactive: "middleware/auth.go" },
-    response: {
-      title: "Repository overview",
-      status: "Mapped",
-      statusTone: "accent",
-      meta: "monorepo · 4 packages touch auth",
-      summary:
-        "Entry at cmd/api → middleware/auth → internal/session. Token validation lives in billing/auth; workers call ledger_client for settlement.",
-      sections: [
-        {
-          label: "Key paths",
-          lines: [
-            "cmd/api — HTTP entry & route registration",
-            "middleware/auth — session + JWT gate",
-            "billing/auth — token_validator.ts"
-          ]
-        }
-      ],
-      badges: [{ label: "12k symbols indexed", tone: "muted" }]
+    answer: {
+      content: `**Short answer**
+
+Auth entry at \`cmd/api\` → \`middleware/auth\` → \`internal/session\`. Token validation lives in \`billing/auth\`; workers call \`ledger_client\` for settlement.
+
+**Key paths**
+
+- \`cmd/api/main.go\` — HTTP entry & route registration
+- \`middleware/auth.go\` — session + JWT gate
+- \`billing/auth/token_validator.ts\` — signature validation
+
+12k symbols indexed across 4 packages that touch auth.`
     },
     code: {
       lines: [
@@ -267,27 +243,18 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     question: "What knowledge gaps exist around the legacy billing adapter?",
     ariaLabel: "CoopAI surfacing knowledge gaps and missing context for legacy billing code",
     tabs: { active: "billing_adapter.ts", inactive: "README.md" },
-    response: {
-      title: "Knowledge gaps",
-      status: "Gaps found",
-      statusTone: "warning",
-      meta: "billing/legacy · billing_adapter.ts",
-      summary:
-        "No commits in 14 months; primary owner left the team. Runbook link 404s. Two related Jira tickets remain open without resolution notes.",
-      sections: [
-        {
-          label: "Missing context",
-          lines: [
-            "No ADR for v1 → v2 adapter migration",
-            "Incident postmortem references lost Slack thread",
-            "Downstream schema owner unknown"
-          ]
-        }
-      ],
-      badges: [
-        { label: "Tribal knowledge risk", tone: "amber" },
-        { label: "No recent owner", tone: "amber" }
-      ]
+    answer: {
+      content: `**Short answer**
+
+No commits in 14 months; primary owner left the team. Runbook link 404s. Two related Jira tickets remain open without resolution notes.
+
+**Missing context**
+
+- No ADR for v1 → v2 adapter migration
+- Incident postmortem references lost Slack thread
+- Downstream schema owner unknown
+
+\`billing_adapter.ts\` is tribal-knowledge risk — confirm with platform-payments before changes.`
     },
     code: {
       lines: [
@@ -323,27 +290,16 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     question: "Show me how this connects to Slack and tickets.",
     ariaLabel: "CoopAI linking code to Slack threads and Jira tickets",
     tabs: { active: "incident_handler.go", inactive: "BILL-4421" },
-    response: {
-      title: "Connected context",
-      status: "Linked",
-      statusTone: "violet",
-      meta: "incidents · incident_handler.go",
-      summary:
-        "Slack #incidents thread (Feb 12) discusses payload retries. Jira BILL-4421 tracks the billing outage root cause tied to this handler.",
-      sections: [
-        {
-          label: "Sources",
-          lines: [
-            "Slack #incidents — 14 messages, 3 engineers",
-            "Jira BILL-4421 — P1 billing outage (resolved)",
-            "PR #1198 — fix merged 2d after thread"
-          ]
-        }
-      ],
-      badges: [
-        { label: "Slack", tone: "violet" },
-        { label: "Jira BILL-4421", tone: "accent" }
-      ]
+    answer: {
+      content: `**Short answer**
+
+Slack \`#incidents\` thread (Feb 12) discusses payload retries. Jira \`BILL-4421\` tracks the billing outage root cause tied to \`incident_handler.go\`.
+
+**Linked sources**
+
+- Slack \`#incidents\` — 14 messages, 3 engineers
+- Jira \`BILL-4421\` — P1 billing outage (resolved)
+- PR #1198 — fix merged 2 days after thread`
     },
     code: {
       lines: [
