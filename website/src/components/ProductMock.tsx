@@ -18,7 +18,7 @@ type ProductMockProps = {
 
 export function ProductMock({ scenario, className = "" }: ProductMockProps) {
   const gradientId = `mock-bridge-${scenario.id}`;
-  const threadRef = useChatScrollAnchor([scenario.id]);
+  const { containerRef: threadRef, anchorRef: threadAnchorRef } = useChatScrollAnchor([scenario.id]);
 
   return (
     <div
@@ -59,6 +59,8 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
                 </div>
                 <StoryChatProse content={scenario.answer.content} />
               </div>
+
+              <div ref={threadAnchorRef} className="h-px shrink-0" aria-hidden />
               </div>
             </div>
 

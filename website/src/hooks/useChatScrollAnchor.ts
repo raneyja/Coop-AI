@@ -1,23 +1,43 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
+
+type ChatScrollAnchorRefs = {
+  containerRef: RefObject<HTMLDivElement | null>;
+  anchorRef: RefObject<HTMLDivElement | null>;
+};
 
 /** Keeps a chat thread scrolled to the latest message (bottom-anchored). */
-export function useChatScrollAnchor(deps: unknown[]) {
-  const ref = useRef<HTMLDivElement>(null);
+export function useChatScrollAnchor(deps: unknown[]): ChatScrollAnchorRefs {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const scrollToBottom = () => {
-      el.scrollTop = el.scrollHeight;
+  useLayoutEffect(() => {
+    const scrollToLatest = () => {
+      anchorRef.current?.scrollIntoView({ block: "end" });
+      const el = containerRef.current;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
     };
 
-    scrollToBottom();
-    requestAnimationFrame(scrollToBottom);
+    scrollToLatest();
+    const raf = requestAnimationFrame(scrollToLatest);
+
+    const observeTarget = containerRef.current?.firstElementChild ?? containerRef.current;
+    if (!observeTarget) {
+      return () => cancelAnimationFrame(raf);
+    }
+
+    const ro = new ResizeObserver(scrollToLatest);
+    ro.observe(observeTarget);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- caller supplies scroll triggers
   }, deps);
 
-  return ref;
+  return { containerRef, anchorRef };
 }

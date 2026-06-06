@@ -212,13 +212,13 @@ export function FileContextStoryDemo({
   const isHomepage = variant === "homepage";
   const stageHeight = DEMO_STAGE_H[variant];
   const focusComposer = isHomepage && showComposer;
-  const threadRef = useChatScrollAnchor([
+  const { containerRef: threadRef, anchorRef: threadAnchorRef } = useChatScrollAnchor([
     phase,
     visibleBlocks,
     searchStep,
     storyIndex,
     showUserBubble,
-    typedLen
+    focusComposer
   ]);
 
   return (
@@ -323,6 +323,8 @@ export function FileContextStoryDemo({
                   )}
                 </div>
               )}
+
+              <div ref={threadAnchorRef} className="h-px shrink-0" aria-hidden />
             </div>
             </div>
 
