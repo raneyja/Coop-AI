@@ -3,6 +3,7 @@ import type { URLSearchParams } from "node:url";
 import type { BitbucketAppService } from "./bitbucketAppService";
 import { bitbucketSyntheticInstallationId } from "./bitbucketAppService";
 import type { BitbucketAppConfig } from "./bitbucketAppConfig";
+import { requireInstallAdmin } from "./authMiddleware";
 import type { OrgStore, AuthContext } from "./orgStore";
 
 export type BitbucketAppApiDeps = {
@@ -44,6 +45,9 @@ async function handleInstallUrl(
 ): Promise<boolean> {
   if (!auth || auth.orgId === "legacy") {
     writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (!requireInstallAdmin(auth, response)) {
     return true;
   }
   if (!deps.bitbucketApp || !deps.bitbucketAppConfig) {

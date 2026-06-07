@@ -284,7 +284,7 @@
       "properties": {
         "coopAI.defaultModel": {
           "type": "string",
-          "default": "claude-3-5-sonnet-20241022",
+          "default": "claude-sonnet-4-6",
           "description": "Default model for CoopAI chat requests."
         },
         "coopAI.llmProvider": {
@@ -563,12 +563,6 @@
           "default": true,
           "description": "Show best-effort context when integrations are degraded or offline."
         },
-        "coopAI.degradation.healthCheckInterval": {
-          "type": "number",
-          "default": 60000,
-          "minimum": 5000,
-          "description": "Interval in milliseconds between integration health checks."
-        },
         "coopAI.degradation.cacheRetention.fresh": {
           "type": "number",
           "default": 0.08,
@@ -603,7 +597,7 @@
           "type": "number",
           "default": 10000,
           "minimum": 500,
-          "description": "Timeout in milliseconds for background integration health checks."
+          "description": "Timeout in milliseconds for background integration calls."
         },
         "coopAI.degradation.notifyUser": {
           "type": "boolean",
@@ -760,7 +754,10 @@
     "watch:webview": "npm-run-all -p watch:webview:css watch:webview:js",
     "watch:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --watch",
     "watch:webview:js": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --watch",
-    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json"
+    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json",
+    "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",
+    "test:slash-commands": "npx tsx src/context/slashCommands.test.ts",
+    "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

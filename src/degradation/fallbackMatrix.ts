@@ -53,11 +53,12 @@ export const FEATURE_ALIASES: Record<QuickActionFeatureId, FeatureId> = {
 export const FALLBACK_MATRIX: Record<FeatureId, FallbackDefinition> = {
   trace_why: {
     required: ["github"],
-    optional: ["slack", "jira"],
+    optional: ["slack", "jira", "teams"],
     fallback: {
       github_offline: "Show cached commit history (may be stale)",
       slack_offline: "Show PR comments only (no Slack context)",
       jira_offline: "Show PR + Slack (no ticket context)",
+      teams_offline: "Show PR + Slack/Jira (no Teams context)",
       all_online: "Full decision timeline"
     }
   },

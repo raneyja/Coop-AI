@@ -25,29 +25,35 @@ export class LightningStatusBar implements vscode.Disposable {
   }
 
   public async refresh(): Promise<void> {
-    const state = await this.buildState();
-    const showLocalIndexing = isCoopDevMode() && this.indexBackend.kind === "local";
-    if (!state.canUseLightning) {
-      this.item.text = "$(cloud) CoopAI: Zero-Clone";
-      this.item.tooltip =
-        "Zero-Clone: remote graph from code hosts; connect Slack, Jira, Notion, and more in Settings. Pro adds Lightning Mode.";
-    } else if (!state.globalEnabled) {
-      this.item.text = "$(cloud) CoopAI: Zero-Clone";
-      this.item.tooltip = showLocalIndexing
-        ? "Remote code graph. Click to enable Lightning (local graph index)."
-        : "Remote code graph. Click to enable Lightning (Coop cloud index).";
-    } else if (state.indexingRepos > 0) {
-      this.item.text = "$(zap) CoopAI: Lightning · indexing";
-      this.item.tooltip = showLocalIndexing
-        ? "Building local code graph index…"
-        : "Building cloud code graph index…";
-    } else {
-      this.item.text = `$(zap) CoopAI: Lightning · ${state.readyRepos} ready`;
-      this.item.tooltip = showLocalIndexing
-        ? "Local code graph index ready. Click to manage."
-        : "Coop cloud index ready. Click to manage.";
+    try {
+      const state = await this.buildState();
+      const showLocalIndexing = isCoopDevMode() && this.indexBackend.kind === "local";
+      if (!state.canUseLightning) {
+        this.item.text = "$(cloud) CoopAI: Zero-Clone";
+        this.item.tooltip =
+          "Zero-Clone: remote graph from code hosts; connect Slack, Jira, Notion, and more in Settings. Pro adds Lightning Mode.";
+      } else if (!state.globalEnabled) {
+        this.item.text = "$(cloud) CoopAI: Zero-Clone";
+        this.item.tooltip = showLocalIndexing
+          ? "Remote code graph. Click to enable Lightning (local graph index)."
+          : "Remote code graph. Click to enable Lightning (Coop cloud index).";
+      } else if (state.indexingRepos > 0) {
+        this.item.text = "$(zap) CoopAI: Lightning · indexing";
+        this.item.tooltip = showLocalIndexing
+          ? "Building local code graph index…"
+          : "Building cloud code graph index…";
+      } else {
+        this.item.text = `$(zap) CoopAI: Lightning · ${state.readyRepos} ready`;
+        this.item.tooltip = showLocalIndexing
+          ? "Local code graph index ready. Click to manage."
+          : "Coop cloud index ready. Click to manage.";
+      }
+      this.item.show();
+    } catch {
+      this.item.text = "$(cloud) CoopAI";
+      this.item.tooltip = "CoopAI";
+      this.item.show();
     }
-    this.item.show();
   }
 
   public async buildState(): Promise<LightningModeState> {

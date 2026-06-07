@@ -10,6 +10,7 @@ import { requireDbPool, getDbPool } from "./db";
 import { JobType } from "../jobs/types";
 import {
   authUserId,
+  canInstallIntegrations,
   extractBearerToken,
   requireAuth,
   requireOrgPlan,
@@ -68,7 +69,11 @@ export async function handleOrgApiRequest(
       orgName: auth!.orgName,
       plan,
       canUseLightning: canUseLightningPlan(plan),
-      lightningBackend: "cloud"
+      lightningBackend: "cloud",
+      userId: auth!.userId,
+      role: auth!.role,
+      authMethod: auth!.userId ? "sso_session" : "api_key",
+      canInstallIntegrations: canInstallIntegrations(auth!)
     });
     return true;
   }

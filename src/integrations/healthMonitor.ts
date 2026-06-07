@@ -51,8 +51,6 @@ export type HealthMonitorOptions = {
   now?: () => Date;
 };
 
-export type HealthSubscriber = (health: IntegrationHealth[]) => void;
-
 type HealthSample = {
   ok: boolean;
   latency: number;
@@ -95,9 +93,7 @@ export class HealthMonitor {
   private readonly providers: IntegrationProvider[];
   private readonly store: IntegrationHealthStore;
   private readonly samples = new Map<IntegrationProvider, HealthSample[]>();
-  private readonly subscribers = new Set<HealthSubscriber>();
   private readonly now: () => Date;
-  private timer?: ReturnType<typeof setInterval>;
 
   public constructor(private options: HealthMonitorOptions) {
     this.adapters = options.adapters ?? {};
@@ -105,36 +101,6 @@ export class HealthMonitor {
     this.store = options.store ?? new MemoryHealthStore();
     this.now = options.now ?? (() => new Date());
     this.seed();
-  }
-
-  public start(): void {
-    if (this.timer || !this.options.config.enableGracefulFallback) {
-      return;
-    }
-    void this.checkAll();
-    this.timer = setInterval(() => void this.checkAll(), this.options.config.healthCheckInterval);
-  }
-
-  public stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
-    }
-  }
-
-  public updateConfig(config: DegradationConfig): void {
-    const wasRunning = Boolean(this.timer);
-    this.stop();
-    this.options = { ...this.options, config };
-    if (wasRunning && config.enableGracefulFallback) {
-      this.start();
-    }
-  }
-
-  public subscribe(subscriber: HealthSubscriber): () => void {
-    this.subscribers.add(subscriber);
-    void this.getAll().then(subscriber);
-    return () => this.subscribers.delete(subscriber);
   }
 
   public async get(provider: IntegrationProvider): Promise<IntegrationHealth> {
@@ -145,12 +111,6 @@ export class HealthMonitor {
     const values = await this.store.getAll();
     const byProvider = new Map(values.map((health) => [health.provider, health]));
     return this.providers.map((provider) => cloneHealth(byProvider.get(provider) ?? this.defaultHealth(provider)));
-  }
-
-  public async checkAll(): Promise<IntegrationHealth[]> {
-    const results = await Promise.all(this.providers.map((provider) => this.updateHealth(provider)));
-    await this.notify();
-    return results;
   }
 
   public async updateHealth(provider: IntegrationProvider): Promise<IntegrationHealth> {
@@ -191,15 +151,6 @@ export class HealthMonitor {
     }
   }
 
-  public async force(provider?: IntegrationProvider): Promise<IntegrationHealth[]> {
-    if (provider) {
-      const result = await this.updateHealth(provider);
-      await this.notify();
-      return [result];
-    }
-    return this.checkAll();
-  }
-
   private seed(): void {
     for (const provider of this.providers) {
       void this.store.update(this.defaultHealth(provider));
@@ -234,13 +185,6 @@ export class HealthMonitor {
     }
     const failures = samples.filter((sample) => !sample.ok).length;
     return failures / samples.length;
-  }
-
-  private async notify(): Promise<void> {
-    const health = await this.getAll();
-    for (const subscriber of this.subscribers) {
-      subscriber(health);
-    }
   }
 }
 

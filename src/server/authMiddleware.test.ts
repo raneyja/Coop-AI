@@ -153,5 +153,30 @@ void (async () => {
   assert.equal(deadResolved, undefined);
   assert.equal(requireAuth(deadResolved, true), false);
 
+  const { canInstallIntegrations, requireInstallAdmin } = await import("./authMiddleware");
+  assert.equal(canInstallIntegrations({ orgId: "o", orgName: "O", plan: "enterprise", apiKeyId: "k1" }), true);
+  assert.equal(
+    canInstallIntegrations({
+      orgId: "o",
+      orgName: "O",
+      plan: "enterprise",
+      apiKeyId: "session:u1",
+      userId: "u1",
+      role: "member"
+    }),
+    false
+  );
+  assert.equal(
+    canInstallIntegrations({
+      orgId: "o",
+      orgName: "O",
+      plan: "enterprise",
+      apiKeyId: "session:u1",
+      userId: "u1",
+      role: "admin"
+    }),
+    true
+  );
+
   console.log("authMiddleware.test.ts: ok");
 })();

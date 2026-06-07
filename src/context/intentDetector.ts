@@ -36,6 +36,8 @@ export type IntentEventContext = {
   selectedSymbol?: string;
   /** User message text for manifest scoring at query time. */
   queryText?: string;
+  /** Slash-command integration source (/jira, /slack, …) requesting live fetch. */
+  integrationProvider?: import("../chat/types").IntegrationChatProvider;
   buttonClicked?: string;
   source?: "editor" | "webview" | "command" | "test";
 };
@@ -61,6 +63,7 @@ export type IntentDetectionOptions = {
   source?: IntentEventContext["source"];
   now?: Date;
   idFactory?: () => string;
+  integrationProvider?: IntentEventContext["integrationProvider"];
 };
 
 const CODE_FILE_PATTERN = /\.(ts|tsx|js|jsx|go|py|rb|java|kt|cs|rs|php|swift|m|mm|c|cc|cpp|h|hpp)$/i;
@@ -151,6 +154,7 @@ export class IntentDetector {
       {
         ...repoContextToIntentContext(context),
         queryText: emptyToUndefined(queryText),
+        integrationProvider: options.integrationProvider,
         source: options.source ?? "webview"
       },
       options
@@ -207,8 +211,10 @@ export function repoContextFromEditor(
     }
   }
 
-  if (preferences.includeSelection && !selection.isEmpty) {
-    next.selectedLines = [selection.start.line + 1, selection.end.line + 1];
+  if (preferences.includeSelection) {
+    next.selectedLines = selection.isEmpty
+      ? undefined
+      : [selection.start.line + 1, selection.end.line + 1];
   }
 
   return enrichRepoContextWithEditorState(next, editor);

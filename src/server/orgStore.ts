@@ -77,6 +77,21 @@ export class OrgStore {
     return row ? rowToOrg(row) : undefined;
   }
 
+  public async findOrganizationByName(name: string): Promise<Organization | undefined> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT id, name, plan, created_at FROM organizations WHERE lower(name) = lower($1) LIMIT 2`,
+      [trimmed]
+    );
+    if (result.rows.length !== 1) {
+      return undefined;
+    }
+    return rowToOrg(result.rows[0]);
+  }
+
   public async setOrganizationPlan(orgId: string, plan: OrgPlan): Promise<Organization | undefined> {
     const result = await this.pool.query(
       `UPDATE organizations SET plan = $2 WHERE id = $1

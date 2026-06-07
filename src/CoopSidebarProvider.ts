@@ -35,7 +35,9 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
       extensionContext,
       api,
       ...services,
-      enforceSidebarMinWidth: true,
+      // Let the panel shrink freely with the window; the webview reflows responsively
+      // instead of forcing the sidebar back to a minimum width.
+      enforceSidebarMinWidth: false,
       threadScopeKey: resolveThreadScopeKey(),
       onDescriptionChange: (description) => {
         if (this.view) {

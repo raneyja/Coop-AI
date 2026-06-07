@@ -139,6 +139,7 @@ export async function openRemoteFileInEditor(params: {
   owner: string;
   repo: string;
   filePath: string;
+  line?: number;
   provider?: CodeHostProviderPreference;
   branch?: string;
 }): Promise<void> {
@@ -169,7 +170,12 @@ export async function openRemoteFileInEditor(params: {
   if (localPath && (ready || isRepoOpenInWorkspace(localPath))) {
     const fileUri = vscode.Uri.file(path.join(localPath, relative));
     if (fs.existsSync(fileUri.fsPath)) {
-      await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      const editor = await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      if (params.line) {
+        const position = new vscode.Position(Math.max(0, params.line - 1), 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      }
       await restoreCoopSidebar();
       return;
     }
@@ -178,7 +184,12 @@ export async function openRemoteFileInEditor(params: {
   if (ready && provider === "github") {
     try {
       const fileUri = githubRepoFileVfsUri(params.owner, params.repo, relative);
-      await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      const editor = await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      if (params.line) {
+        const position = new vscode.Position(Math.max(0, params.line - 1), 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      }
       await restoreCoopSidebar();
       return;
     } catch (error) {

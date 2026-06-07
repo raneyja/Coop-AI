@@ -14,7 +14,6 @@ export type DegradationCacheRetentionDays = {
 
 export type DegradationConfig = {
   enableGracefulFallback: boolean;
-  healthCheckInterval: number;
   cacheRetentionDays: DegradationCacheRetentionDays;
   timeouts: DegradationTimeouts;
   notifyUser: boolean;
@@ -23,7 +22,6 @@ export type DegradationConfig = {
 
 export type DegradationConfigInput = Partial<{
   enableGracefulFallback: boolean;
-  healthCheckInterval: number;
   cacheRetentionDays: Partial<DegradationCacheRetentionDays>;
   timeouts: Partial<DegradationTimeouts>;
   notifyUser: boolean;
@@ -32,7 +30,6 @@ export type DegradationConfigInput = Partial<{
 
 export const DEFAULT_DEGRADATION_CONFIG: DegradationConfig = {
   enableGracefulFallback: true,
-  healthCheckInterval: 60_000,
   cacheRetentionDays: {
     fresh: 0.08,
     warm: 1,

@@ -3,6 +3,7 @@ import type { URLSearchParams } from "node:url";
 import type { GitLabAppService } from "./gitlabAppService";
 import { gitlabSyntheticInstallationId } from "./gitlabAppService";
 import type { GitLabAppConfig } from "./gitlabAppConfig";
+import { requireInstallAdmin } from "./authMiddleware";
 import type { OrgStore, AuthContext } from "./orgStore";
 
 export type GitLabAppApiDeps = {
@@ -44,6 +45,9 @@ async function handleInstallUrl(
 ): Promise<boolean> {
   if (!auth || auth.orgId === "legacy") {
     writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (!requireInstallAdmin(auth, response)) {
     return true;
   }
   if (!deps.gitlabApp || !deps.gitlabAppConfig) {

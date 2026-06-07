@@ -293,6 +293,25 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      // Chat + inline completion routes must run before handleOrgApiRequest:
+      // the org handler greedily claims every "/v1/*" path and 404s anything it
+      // doesn't recognize, which would otherwise swallow "/v1/chat".
+      if (
+        await handleChatApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger },
+          request
+        )
+      ) {
+        return;
+      }
+
       if (await handleOrgApiRequest(orgParsed, response, {
         orgStore,
         jobQueue: jobs.queue,
@@ -308,26 +327,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           {
             method: parsed.method,
             pathname: parsed.pathname,
-            headers: parsed.headers
-          },
-          response,
-          { orgStore, serverConfig }
-        )
-      ) {
-        return;
-      }
-
-      if (
-        await handleChatApiRequest(
-          {
-            method: parsed.method,
-            pathname: parsed.pathname,
             headers: parsed.headers,
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger },
-          request
+          { orgStore, ssoConfigStore, userStore, serverConfig }
         )
       ) {
         return;

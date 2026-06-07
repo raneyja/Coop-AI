@@ -103,11 +103,11 @@ function defaultInlineModelFor(provider: LlmProvider): string {
     case "openai":
       return "gpt-4o-mini";
     case "anthropic":
-      return "claude-3-haiku-20240307";
+      return "claude-haiku-4-5-20251001";
     case "deepseek":
       return "deepseek-chat";
     case "gemini":
-      return "gemini-1.5-flash";
+      return "gemini-2.5-flash";
   }
 }
 

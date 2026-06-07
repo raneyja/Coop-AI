@@ -4,7 +4,7 @@ import type { RepoContext } from "../chat/types";
 export function quickActionPrompt(actionId: QuickActionId, ctx: RepoContext): string {
   switch (actionId) {
     case "understand-repo":
-      return `Understand this repository quickly.\nContext:\n- file: ${ctx.file || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- language: ${ctx.languageId || "unknown"}\nFocus on architecture, key systems, and likely risks.`;
+      return `Understand this repository quickly.\nContext:\n- repo: ${ctx.owner || "unknown"}/${ctx.repo || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- active file: ${ctx.file || "none"}\n- language: ${ctx.languageId || "unknown"}\nFocus on overall architecture, major subsystems, entry points, and likely risks across the repository — not only the active file.`;
     case "trace-decision": {
       const lineHint = ctx.selectedLines ? `${ctx.selectedLines[0]}-${ctx.selectedLines[1]}` : "none";
       return `Trace the likely engineering decision behind this code.\nContext:\n- file: ${ctx.file || "unknown"}\n- selected lines: ${lineHint}\nProvide likely rationale, tradeoffs, and alternatives.`;

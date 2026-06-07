@@ -1,6 +1,12 @@
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import {
+  attachLocalFilesToData,
+  hasLocalDiskContext,
+  readLocalWorkspaceFiles
+} from "../../context/localFileContext";
+import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function blastRadius(context: FeatureExecutionContext) {
@@ -22,6 +28,10 @@ export async function blastRadius(context: FeatureExecutionContext) {
         `${codeHostLabel(provider)} offline; showing cached impact analysis.`,
         true
       );
+    }
+    const local = await tryLocalBlastRadiusFallback(context, provider);
+    if (local) {
+      return local;
     }
     return unavailableResult(
       context,
@@ -71,4 +81,36 @@ function codeHostLabel(provider: CodeHostProvider): string {
     return "Bitbucket";
   }
   return "GitHub";
+}
+
+async function tryLocalBlastRadiusFallback(context: FeatureExecutionContext, provider: CodeHostProvider) {
+  const params = context.request.params;
+  if (!hasLocalDiskContext(params) || !params.file) {
+    return undefined;
+  }
+
+  const local = await readLocalWorkspaceFiles({
+    file: params.file,
+    fileSource: params.fileSource,
+    openEditors: context.request.intent.context.openEditors,
+    lines: params.lines,
+    resolveAbsolutePath: resolveLocalAbsolutePath
+  });
+  if (!local) {
+    return undefined;
+  }
+
+  return contextResult(
+    context,
+    attachLocalFilesToData(
+      {
+        file: params.file,
+        dependencyGraph: { status: "local-workspace" },
+        includeTransitive: false
+      },
+      local
+    ),
+    `${codeHostLabel(provider)} offline — analyzing from local workspace.`,
+    true
+  );
 }

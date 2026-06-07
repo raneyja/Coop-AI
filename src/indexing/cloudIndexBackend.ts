@@ -56,16 +56,26 @@ export class CloudIndexBackend implements IndexBackend {
   }
 
   public async listRepoStatuses(config: LightningConfiguration): Promise<IndexRepoStatus[]> {
-    const { repos } = await this.client.listOrgRepos(this.getBaseUrl());
-    const records = Array.isArray(repos) ? repos : [];
-    return records.map((record) => {
-      const status = cloudRecordToStatus(record as Record<string, unknown>);
-      const local = config.repos.find((entry) => entry.repoId === status.repoId);
-      return {
-        ...status,
-        enabled: local?.enabled ?? status.enabled
-      };
-    });
+    try {
+      const { repos } = await this.client.listOrgRepos(this.getBaseUrl());
+      const records = Array.isArray(repos) ? repos : [];
+      return records.map((record) => {
+        const status = cloudRecordToStatus(record as Record<string, unknown>);
+        const local = config.repos.find((entry) => entry.repoId === status.repoId);
+        return {
+          ...status,
+          enabled: local?.enabled ?? status.enabled
+        };
+      });
+    } catch {
+      return config.repos.map((entry) => ({
+        repoId: entry.repoId,
+        enabled: entry.enabled,
+        status: entry.enabled ? "ready" : "disabled",
+        lastIndexedAt: undefined,
+        error: undefined
+      }));
+    }
   }
 
   public async search(repoId: string, pattern: string): Promise<LocalSearchResult> {

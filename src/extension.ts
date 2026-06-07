@@ -23,6 +23,9 @@ import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
+import { buildLiveRepoSummary, resolveRepoSummaryCoords } from "./context/buildRepoSummaryContext";
+import { registerRepoSummaryLoader } from "./context/repoSummaryRegistry";
+import type { ManifestFileEntry } from "./manifest/types";
 import { HealthMonitor, type IntegrationProvider } from "./integrations/healthMonitor";
 import { getIndexManager } from "./indexing/indexManager";
 import { createIndexBackend } from "./indexing/createIndexBackend";
@@ -113,14 +116,39 @@ export function activate(context: vscode.ExtensionContext): void {
       integrationSecrets
     })
   );
+  registerRepoSummaryLoader(async (context) => {
+    const coords = resolveRepoSummaryCoords(context.request.params);
+    if (!coords) {
+      return undefined;
+    }
+    return buildLiveRepoSummary({
+      codeHostRouter,
+      owner: coords.owner,
+      repo: coords.repo,
+      branch: coords.branch,
+      repoId: coords.repoId,
+      activeFile: context.request.params.file,
+      loadManifest: async (repoId): Promise<ManifestFileEntry[]> => {
+        try {
+          const baseUrl = readConfiguration().apiBaseUrl;
+          const response = await api.fetchRepoManifest(baseUrl, repoId);
+          return (response.files ?? []).map((file) => ({
+            filePath: file.path,
+            symbols: (file.symbols ?? []) as ManifestFileEntry["symbols"]
+          }));
+        } catch {
+          return [];
+        }
+      }
+    });
+  });
   let degradationConfig = readDegradationConfiguration();
   const healthMonitor = new HealthMonitor({
     config: degradationConfig,
     adapters: createHealthAdapters(api, codeHostRouter, integrationSecrets),
-    providers: ["github", "gitlab", "bitbucket", "slack", "jira", "teams"]
+    providers: ["github", "gitlab", "bitbucket", "slack", "jira", "teams", "confluence", "notion", "google-docs"]
   });
   const degradationCache = new LayeredDegradationCache({ config: degradationConfig });
-  healthMonitor.start();
   const indexManager = getIndexManager({ secrets: context.secrets });
   const indexBackend = createIndexBackend({
     indexManager,
@@ -148,7 +176,25 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   context.subscriptions.push(
-    { dispose: () => healthMonitor.stop() },
+    vscode.window.registerUriHandler({
+      handleUri(uri: vscode.Uri) {
+        if (uri.path !== "/auth/callback") {
+          return;
+        }
+        const token = new URLSearchParams(uri.fragment).get("coopToken")?.trim();
+        if (!token) {
+          return;
+        }
+        void (async () => {
+          await api.setToken(token);
+          await refreshAllSessions();
+          void vscode.window.showInformationMessage("Signed in to Coop.");
+        })();
+      }
+    })
+  );
+
+  context.subscriptions.push(
     lightningStatusBar,
     vscode.window.registerWebviewViewProvider("coopAI.sidebar", provider, {
       webviewOptions: {
@@ -276,7 +322,6 @@ export function activate(context: vscode.ExtensionContext): void {
       if (event.affectsConfiguration("coopAI")) {
         if (event.affectsConfiguration("coopAI.degradation")) {
           degradationConfig = readDegradationConfiguration();
-          healthMonitor.updateConfig(degradationConfig);
         }
         if (event.affectsConfiguration("coopAI.lightning") || event.affectsConfiguration("coopAI.license")) {
           void lightningStatusBar.refresh();
@@ -361,10 +406,12 @@ function createHealthAdapters(
         }
       ])
     );
-  const integrationHealth = async (provider: "slack" | "jira" | "teams") => {
-    const { testDecisionIntegration } = await import("./api/integrations/integrationTest");
+  const integrationHealth = async (
+    provider: import("./chat/types").IntegrationChatProvider
+  ) => {
+    const { testIntegrationChat } = await import("./api/integrations/integrationTest");
     const started = Date.now();
-    const response = await testDecisionIntegration(provider, integrationSecrets);
+    const response = await testIntegrationChat(provider, integrationSecrets);
     const configured = response.message.includes("not configured");
     return {
       ok: response.ok,
@@ -374,17 +421,18 @@ function createHealthAdapters(
     };
   };
 
-  adapters.slack = {
-    provider: "slack",
-    healthCheck: async () => integrationHealth("slack")
-  };
-  adapters.jira = {
-    provider: "jira",
-    healthCheck: async () => integrationHealth("jira")
-  };
-  adapters.teams = {
-    provider: "teams",
-    healthCheck: async () => integrationHealth("teams")
-  };
+  for (const provider of [
+    "slack",
+    "jira",
+    "teams",
+    "confluence",
+    "notion",
+    "google-docs"
+  ] as const) {
+    adapters[provider] = {
+      provider,
+      healthCheck: async () => integrationHealth(provider)
+    };
+  }
   return adapters;
 }

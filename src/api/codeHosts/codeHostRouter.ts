@@ -279,6 +279,32 @@ export class CodeHostRouter {
     });
   }
 
+  public async listRepoPullRequests(
+    coords?: Partial<RepoCoordinates>,
+    options?: { state?: string; limit?: number }
+  ): Promise<PullRequestSummary[]> {
+    const resolved = await this.resolveCoordinates(coords);
+    const limit = options?.limit ?? 20;
+    const state = options?.state ?? "all";
+    const prs = await this.cached(this.key("prIssue", resolved, "repo-prs", state), "prIssue", async () =>
+      (await this.getClient(resolved.provider)).listPullRequests(resolved, { state, limit: 50 })
+    );
+    return prs.slice(0, limit);
+  }
+
+  public async listRepoIssues(
+    coords?: Partial<RepoCoordinates>,
+    options?: { state?: string; limit?: number }
+  ): Promise<IssueSummary[]> {
+    const resolved = await this.resolveCoordinates(coords);
+    const limit = options?.limit ?? 20;
+    const state = options?.state ?? "all";
+    const issues = await this.cached(this.key("prIssue", resolved, "repo-issues", state), "prIssue", async () =>
+      (await this.getClient(resolved.provider)).listIssues(resolved, { state, limit: 50 })
+    );
+    return issues.slice(0, limit);
+  }
+
   public async getPRsForFile(
     filePath: string,
     limit = 20,
@@ -361,6 +387,11 @@ export class CodeHostRouter {
       return;
     }
     this.clients.clear();
+  }
+
+  /** Drop cached GitHub/GitLab file, blame, and history responses. */
+  public clearDataCache(): Promise<void> {
+    return this.options.cache.clear();
   }
 
   private async getClient(provider: CodeHostProvider): Promise<CodeHostClient> {

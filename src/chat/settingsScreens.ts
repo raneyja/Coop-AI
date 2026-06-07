@@ -10,6 +10,9 @@ export type SettingsScreen =
   | "integration-slack"
   | "integration-jira"
   | "integration-teams"
+  | "integration-confluence"
+  | "integration-notion"
+  | "integration-google-docs"
   | "workspace"
   | "prompts";
 
@@ -26,6 +29,9 @@ export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   "integration-slack": "Slack",
   "integration-jira": "Jira",
   "integration-teams": "Microsoft Teams",
+  "integration-confluence": "Confluence",
+  "integration-notion": "Notion",
+  "integration-google-docs": "Google Docs",
   workspace: "Workspace",
   prompts: "Prompt library"
 };
@@ -36,7 +42,10 @@ const PROVIDER_SETTINGS_SCREEN: Record<string, SettingsScreen> = {
   bitbucket: "code-host-bitbucket",
   slack: "integration-slack",
   jira: "integration-jira",
-  teams: "integration-teams"
+  teams: "integration-teams",
+  confluence: "integration-confluence",
+  notion: "integration-notion",
+  "google-docs": "integration-google-docs"
 };
 
 export function settingsScreenForProvider(provider: string): SettingsScreen | undefined {
@@ -47,7 +56,14 @@ export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
   if (screen === "code-host-github" || screen === "code-host-gitlab" || screen === "code-host-bitbucket") {
     return "code-hosts";
   }
-  if (screen === "integration-slack" || screen === "integration-jira" || screen === "integration-teams") {
+  if (
+    screen === "integration-slack" ||
+    screen === "integration-jira" ||
+    screen === "integration-teams" ||
+    screen === "integration-confluence" ||
+    screen === "integration-notion" ||
+    screen === "integration-google-docs"
+  ) {
     return "integrations";
   }
   return "hub";

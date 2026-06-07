@@ -50,6 +50,9 @@ export async function handleSamlApiRequest(
   if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/metadata`) {
     return handleMetadata(parsed, response, deps);
   }
+  if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/start`) {
+    return handlePublicStart(parsed, response, deps);
+  }
   if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/login`) {
     return handleLogin(parsed, response, deps);
   }
@@ -79,6 +82,58 @@ async function handleMetadata(
   const xml = deps.samlService!.generateMetadata();
   response.writeHead(200, { "content-type": "application/samlmetadata+xml; charset=utf-8" });
   response.end(xml);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/auth/saml/start  — public org-scoped SSO entry (no bearer required).
+// ---------------------------------------------------------------------------
+async function handlePublicStart(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: SamlApiDeps
+): Promise<boolean> {
+  const orgId = parsed.query?.get("orgId")?.trim();
+  const orgName = parsed.query?.get("org")?.trim();
+  const redirect = sanitizeRedirect(parsed.query?.get("redirect"));
+
+  let resolvedOrgId = orgId;
+  if (!resolvedOrgId && orgName) {
+    const org = await deps.orgStore!.findOrganizationByName(orgName);
+    resolvedOrgId = org?.id;
+  }
+  if (!resolvedOrgId) {
+    writeJson(response, 400, {
+      error: "missing_org",
+      message: "Provide orgId or org (organization name) to start SSO."
+    });
+    return true;
+  }
+
+  const org = await deps.orgStore!.getOrganization(resolvedOrgId);
+  if (!org || org.plan !== "enterprise") {
+    writeJson(response, 403, { error: "plan_required", message: "SSO is available on the Enterprise plan only." });
+    return true;
+  }
+
+  const config = await deps.ssoConfigStore!.getEnabledConfig(resolvedOrgId);
+  if (!config) {
+    writeJson(response, 409, { error: "sso_not_configured", message: "SSO is not enabled for this organization." });
+    return true;
+  }
+
+  const relayState = encodeRelayState({ orgId: resolvedOrgId, redirect: redirect ?? undefined });
+  try {
+    const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
+    if (parsed.query?.get("format") === "json") {
+      writeJson(response, 200, { redirectUrl: url });
+    } else {
+      response.writeHead(302, { location: url });
+      response.end();
+    }
+  } catch (error) {
+    writeJson(response, 502, { error: "sso_login_failed", message: errorMessage(error) });
+  }
   return true;
 }
 

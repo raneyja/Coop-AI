@@ -131,6 +131,33 @@ export class UserStore {
     return result.rows.map(rowToUser);
   }
 
+  public async createUser(orgId: string, email: string, role: UserRole = "member"): Promise<UserRecord> {
+    const inserted = await this.pool.query(
+      `INSERT INTO users (org_id, email, role)
+       VALUES ($1, $2, $3)
+       RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
+      [orgId, email.trim(), role]
+    );
+    const user = rowToUser(inserted.rows[0]);
+    await this.ensureMembership(user.id, user.orgId, user.role);
+    return user;
+  }
+
+  public async setUserRole(userId: string, role: UserRole): Promise<UserRecord | undefined> {
+    const updated = await this.pool.query(
+      `UPDATE users SET role = $2 WHERE id = $1
+       RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
+      [userId, role]
+    );
+    const row = updated.rows[0];
+    if (!row) {
+      return undefined;
+    }
+    const user = rowToUser(row);
+    await this.ensureMembership(user.id, user.orgId, user.role);
+    return user;
+  }
+
   // -- Sessions ---------------------------------------------------------------
 
   public async createSession(

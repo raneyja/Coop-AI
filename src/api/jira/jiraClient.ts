@@ -142,7 +142,7 @@ export class JiraClient {
   }
 
   public async searchIssues(jql: string, limit = 20): Promise<JiraIssue[]> {
-    const result = await this.request<{ issues?: JiraIssuePayload[] }>("/search", {
+    const result = await this.request<{ issues?: JiraIssuePayload[] }>("/search/jql", {
       method: "POST",
       body: {
         jql,
@@ -205,10 +205,29 @@ export class JiraClient {
     }
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      throw new JiraApiError(text || `Jira HTTP ${response.status}`, response.status);
+      throw new JiraApiError(formatJiraErrorBody(text, response.status), response.status);
     }
     return (await response.json()) as T;
   }
+}
+
+function formatJiraErrorBody(text: string, status: number): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return `Jira HTTP ${status}`;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { errorMessages?: string[]; message?: string };
+    if (Array.isArray(parsed.errorMessages) && parsed.errorMessages.length > 0) {
+      return parsed.errorMessages.join(" ");
+    }
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    /* not JSON */
+  }
+  return trimmed;
 }
 
 type JiraIssuePayload = {

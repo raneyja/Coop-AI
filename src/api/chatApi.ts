@@ -259,12 +259,12 @@ function readUseCase(value: unknown): UseCase {
 function defaultModelFor(provider: LlmProvider): string {
   switch (provider) {
     case "openai":
-      return "gpt-4o-mini";
+      return "gpt-5.1";
     case "anthropic":
-      return "claude-3-5-sonnet-20241022";
+      return "claude-sonnet-4-6";
     case "deepseek":
       return "deepseek-chat";
     case "gemini":
-      return "gemini-1.5-flash";
+      return "gemini-2.5-flash";
   }
 }

@@ -10,6 +10,8 @@ export type ThemeMode = "light" | "dark" | "high-contrast";
 export type CodeHostProviderPreference = "github" | "gitlab" | "bitbucket";
 
 export type DecisionIntegrationProvider = "slack" | "jira" | "teams";
+export type DocIntegrationProvider = "confluence" | "notion" | "google-docs";
+export type IntegrationChatProvider = DecisionIntegrationProvider | DocIntegrationProvider;
 
 export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
 
@@ -80,6 +82,11 @@ export type UserPreferences = {
   hasGitHubToken: boolean;
   hasGitHubAppInstalled: boolean;
   devMode: boolean;
+  orgName?: string;
+  plan?: "free" | "pro" | "enterprise";
+  userRole?: string;
+  authMethod?: "api_key" | "sso_session";
+  canInstallIntegrations?: boolean;
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
@@ -87,7 +94,11 @@ export type UserPreferences = {
   hasSlackToken: boolean;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;
+  hasConfluenceCredentials: boolean;
+  hasNotionToken: boolean;
+  hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
+  confluenceBaseUrl: string;
 };
 
 export type ChatUsagePayload = {
@@ -154,28 +165,6 @@ export type ConflictResolutionState = {
   updatedAt: string;
 };
 
-export type IntegrationHealthPayload = {
-  provider: string;
-  status: "healthy" | "degraded" | "offline";
-  lastCheck: string;
-  error?: string;
-  recoveryStrategy: "retry" | "cache" | "skip";
-  latency?: number;
-  errorRate?: number;
-};
-
-export type DegradationFeatureStatusPayload = {
-  feature: string;
-  canonicalFeature: string;
-  level: "full" | "partial" | "cached" | "unavailable";
-  label: string;
-  message: string;
-  required: string[];
-  optional: string[];
-  unavailableProviders: string[];
-  degradedProviders: string[];
-};
-
 export type DegradationNotificationPayload = {
   id: string;
   severity: "info" | "warning" | "critical";
@@ -211,6 +200,7 @@ export type WebviewInbound =
         quickAction?: string;
         savedPromptId?: string;
         attachments?: ChatImageAttachment[];
+        historyContent?: string;
       };
     }
   | { type: "prompts:list-request" }
@@ -236,10 +226,12 @@ export type WebviewInbound =
   | { type: "repo:list"; payload: { path?: string; scope?: "repos" | "files" } }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number } }
   | { type: "settings:update"; payload: Partial<UserPreferences> }
   | { type: "settings:update-api-key"; payload: { apiKey: string } }
   | { type: "settings:clear-api-key" }
+  | { type: "settings:sign-in-sso"; payload?: { org?: string } }
+  | { type: "settings:sign-out" }
   | { type: "settings:test-connection" }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
@@ -266,8 +258,24 @@ export type WebviewInbound =
   | { type: "settings:clear-jira-credentials" }
   | { type: "settings:update-teams-token"; payload: { token: string } }
   | { type: "settings:clear-teams-token" }
-  | { type: "settings:test-integration"; payload: { provider: DecisionIntegrationProvider } }
-  | { type: "degradation:retry"; payload?: { provider?: string; feature?: string } }
+  | {
+      type: "settings:update-confluence-credentials";
+      payload: { email: string; token: string; baseUrl?: string };
+    }
+  | { type: "settings:clear-confluence-credentials" }
+  | { type: "settings:copy-jira-to-confluence" }
+  | { type: "settings:update-notion-token"; payload: { token: string } }
+  | { type: "settings:clear-notion-token" }
+  | { type: "settings:update-google-docs-token"; payload: { token: string } }
+  | { type: "settings:clear-google-docs-token" }
+  | {
+      type: "settings:test-integration";
+      payload: {
+        provider: IntegrationChatProvider;
+        draft?: { email?: string; token?: string; baseUrl?: string };
+      };
+    }
+  | { type: "context:dismiss-warning" }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | { type: "ownership:copy-draft"; payload: { text: string } }
@@ -311,10 +319,21 @@ export type WebviewOutbound =
   | { type: "settings:state"; payload: UserPreferences }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
-  | { type: "degradation:health"; payload: IntegrationHealthPayload[] }
-  | { type: "degradation:feature-status"; payload: Record<string, DegradationFeatureStatusPayload> }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
+  | {
+      type: "command:confirm";
+      payload: {
+        title: string;
+        message: string;
+        run: {
+          message: string;
+          quickAction: string;
+          attachments?: ChatImageAttachment[];
+          historyContent?: string;
+        };
+      };
+    }
   | { type: "decision:timeline"; payload: { timeline: unknown; dismissed?: boolean } }
   | { type: "ownership:card"; payload: { report: unknown; dismissed?: boolean } }
   | { type: "job:progress"; payload: JobProgressPayload }

@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
+import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
 import type { ChatHistoryMessage, ChatContextPayload, StreamChunk, UseCase, ChatImageAttachment } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
@@ -52,6 +53,10 @@ export type MeResponse = {
   plan: "free" | "pro" | "enterprise";
   canUseLightning: boolean;
   lightningBackend?: string;
+  userId?: string;
+  role?: string;
+  authMethod?: "api_key" | "sso_session";
+  canInstallIntegrations?: boolean;
 };
 
 export type CoopBackendClientOptions = {
@@ -172,15 +177,78 @@ export class CoopBackendClient {
     provider: "github" | "gitlab" | "bitbucket"
   ): Promise<string> {
     assertCoopEndpoint(baseUrl);
-    const response = await this.http.get<{ url: string }>(`/v1/${provider}/app/install-url`, {
-      baseURL: baseUrl.replace(/\/$/, ""),
-      headers: await this.authHeaders()
-    });
+    const response = await this.http.get<{ url: string } & CoopApiErrorBody>(
+      `/v1/${provider}/app/install-url`,
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
     const url = response.data?.url?.trim();
     if (!url) {
       throw new Error("Install URL was not returned by the server.");
     }
     return url;
+  }
+
+  public async startPublicSamlLogin(
+    baseUrl: string,
+    options: { orgId?: string; org?: string; redirect?: string }
+  ): Promise<string> {
+    assertCoopEndpoint(baseUrl);
+    const params = new URLSearchParams({ format: "json" });
+    if (options.orgId?.trim()) {
+      params.set("orgId", options.orgId.trim());
+    }
+    if (options.org?.trim()) {
+      params.set("org", options.org.trim());
+    }
+    if (options.redirect?.trim()) {
+      params.set("redirect", options.redirect.trim());
+    }
+    const response = await this.http.get<{ redirectUrl?: string } & CoopApiErrorBody>(
+      `/v1/auth/saml/start?${params.toString()}`,
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const redirectUrl = response.data?.redirectUrl?.trim();
+    if (!redirectUrl) {
+      throw new Error("SSO redirect URL was not returned by the server.");
+    }
+    return redirectUrl;
+  }
+
+  public async startSamlLogin(baseUrl: string, redirect?: string): Promise<string> {
+    assertCoopEndpoint(baseUrl);
+    const params = new URLSearchParams({ format: "json" });
+    if (redirect?.trim()) {
+      params.set("redirect", redirect.trim());
+    }
+    const response = await this.http.get<{ redirectUrl?: string } & CoopApiErrorBody>(
+      `/v1/auth/saml/login?${params.toString()}`,
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const redirectUrl = response.data?.redirectUrl?.trim();
+    if (!redirectUrl) {
+      throw new Error("SSO redirect URL was not returned by the server.");
+    }
+    return redirectUrl;
   }
 
   public async getCodeHostInstallationStatus(

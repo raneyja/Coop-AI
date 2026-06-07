@@ -1,6 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import type { RepoContext } from "../chat/types";
+import {
+  isLocalDiskFileSource,
+  normalizeRelativePath,
+  sliceFileContent,
+  type LocalFileContextPayload
+} from "./localFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
 
 export type EditorFileSource = "workspace" | "git" | "remote" | "external";
@@ -129,6 +136,123 @@ function readGithubRemote(gitRoot: string): { owner: string; repo: string } | un
     return undefined;
   }
   return undefined;
+}
+
+export function findEditorForRepoFile(
+  relativePath: string,
+  options?: { includeRemote?: boolean }
+): vscode.TextEditor | undefined {
+  const normalized = normalizeRelativePath(relativePath);
+  const matchesPath = (resolved: ResolvedEditorFile): boolean => {
+    if (!resolved.file?.trim()) {
+      return false;
+    }
+    const fileNorm = normalizeRelativePath(resolved.file);
+    if (fileNorm === normalized || fileNorm.endsWith(`/${normalized}`) || normalized.endsWith(`/${fileNorm}`)) {
+      if (options?.includeRemote) {
+        return resolved.fileSource !== "external";
+      }
+      return isLocalDiskFileSource(resolved.fileSource);
+    }
+    return false;
+  };
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (matchesPath(resolveEditorFile(editor))) {
+      return editor;
+    }
+  }
+  const active = vscode.window.activeTextEditor;
+  if (active && matchesPath(resolveEditorFile(active))) {
+    return active;
+  }
+  return undefined;
+}
+
+/** Prefer matching path, then any visible editor with readable content (local or GitHub remote). */
+export function pickEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
+  const normalized = preferredPath?.trim() ? normalizeRelativePath(preferredPath) : undefined;
+  if (normalized) {
+    return findEditorForRepoFile(normalized, { includeRemote: true });
+  }
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    const resolved = resolveEditorFile(editor);
+    if (resolved.file?.trim() && resolved.fileSource !== "external") {
+      return editor;
+    }
+  }
+
+  const active = vscode.window.activeTextEditor;
+  if (active) {
+    const resolved = resolveEditorFile(active);
+    if (resolved.file?.trim() && resolved.fileSource !== "external") {
+      return active;
+    }
+  }
+
+  return undefined;
+}
+
+/** Prefer matching path, then any visible on-disk editor (chat webview steals editor focus). */
+export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
+  const normalized = preferredPath?.trim() ? normalizeRelativePath(preferredPath) : undefined;
+  if (normalized) {
+    const matched = findEditorForRepoFile(normalized);
+    if (matched) {
+      return matched;
+    }
+  }
+
+  const active = vscode.window.activeTextEditor;
+  if (active?.document.uri.scheme === "file") {
+    const resolved = resolveEditorFile(active);
+    if (isLocalDiskFileSource(resolved.fileSource)) {
+      return active;
+    }
+  }
+
+  return vscode.window.visibleTextEditors.find((editor) => {
+    if (editor.document.uri.scheme !== "file") {
+      return false;
+    }
+    return isLocalDiskFileSource(resolveEditorFile(editor).fileSource);
+  });
+}
+
+/** Read live editor buffer content for chat (includes unsaved edits; local or remote tab). */
+export function readActiveEditorFileForChat(
+  ctx: Pick<RepoContext, "file" | "fileSource" | "selectedLines">
+): LocalFileContextPayload | undefined {
+  const editor = pickEditorForContext(ctx.file);
+  if (!editor) {
+    return undefined;
+  }
+
+  const resolved = resolveEditorFile(editor);
+  if (!resolved.file?.trim() || resolved.fileSource === "external") {
+    return undefined;
+  }
+
+  const normalized = normalizeRelativePath(resolved.file);
+  const sliced = sliceFileContent(
+    editor.document.getText(),
+    ctx.selectedLines ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] } : undefined
+  );
+
+  return {
+    source: "local-workspace",
+    activeFile: normalized,
+    files: [
+      {
+        path: normalized,
+        content: sliced.content,
+        encoding: "utf8",
+        ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+      }
+    ],
+    fallbackLevel: "partial"
+  };
 }
 
 export function parseGithubRemoteFromGitConfig(config: string): { owner: string; repo: string } | undefined {

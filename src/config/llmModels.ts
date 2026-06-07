@@ -1,15 +1,17 @@
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 
+// Curated, current-gen models verified available against each provider's API.
+// Ordered balanced/default first, then most capable, then fast/low-cost.
 export const MODELS_BY_PROVIDER: Record<LlmProvider, string[]> = {
-  anthropic: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  anthropic: ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5-20251001"],
+  openai: ["gpt-5.1", "gpt-5.5", "gpt-5-mini", "gpt-4o-mini"],
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
   deepseek: ["deepseek-chat", "deepseek-reasoner"]
 };
 
 export const DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
-  anthropic: "claude-3-5-sonnet-20241022",
-  openai: "gpt-4o-mini",
-  gemini: "gemini-1.5-flash",
+  anthropic: "claude-sonnet-4-6",
+  openai: "gpt-5.1",
+  gemini: "gemini-2.5-flash",
   deepseek: "deepseek-chat"
 };

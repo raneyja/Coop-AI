@@ -1,4 +1,22 @@
 import type { RepoContext } from "../chat/types";
+import { isLocalDiskFileSource } from "./localFileContext";
+
+const DISK_LINK_WARNING = "Only files on disk can be linked to GitHub";
+
+/** Drop misleading disk-link warnings when a valid repo file is still in context. */
+export function stripStaleContextWarning(ctx: RepoContext): RepoContext {
+  if (!ctx.contextWarning?.includes(DISK_LINK_WARNING)) {
+    return ctx;
+  }
+  if (ctx.file?.trim() && ctx.fileSource !== "external") {
+    return { ...ctx, contextWarning: undefined };
+  }
+  return ctx;
+}
+
+function isFocusLossDiskLinkWarning(warning: string | undefined): boolean {
+  return Boolean(warning?.includes(DISK_LINK_WARNING));
+}
 
 /**
  * Merge incoming editor/webview context without clobbering repo/file fields
@@ -16,8 +34,19 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
       ? existing.fileSource
       : incoming.fileSource ?? existing.fileSource;
     if (incoming.fileSource === "external" && existing.fileSource === "remote") {
-      merged.contextWarning = existing.contextWarning;
-    } else if (!incoming.contextWarning && existing.contextWarning) {
+      merged.contextWarning = isFocusLossDiskLinkWarning(incoming.contextWarning)
+        ? existing.contextWarning && !isFocusLossDiskLinkWarning(existing.contextWarning)
+          ? existing.contextWarning
+          : undefined
+        : incoming.contextWarning ?? existing.contextWarning;
+    } else if (isFocusLossDiskLinkWarning(incoming.contextWarning)) {
+      merged.contextWarning = undefined;
+    } else if (
+      isFocusLossDiskLinkWarning(merged.contextWarning) &&
+      (isLocalDiskFileSource(merged.fileSource) || merged.fileSource === "remote")
+    ) {
+      merged.contextWarning = undefined;
+    } else if (!incoming.contextWarning) {
       merged.contextWarning = existing.contextWarning;
     }
   }
@@ -35,11 +64,11 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     merged.provider = existing.provider;
   }
 
-  if (!incoming.selectedLines && existing.selectedLines) {
+  if (!incoming.selectedLines && existing.selectedLines && !("selectedLines" in incoming)) {
     merged.selectedLines = existing.selectedLines;
   }
 
-  return merged;
+  return stripStaleContextWarning(merged);
 }
 
 function shouldPreserveFileSource(

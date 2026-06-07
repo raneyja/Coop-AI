@@ -1,6 +1,7 @@
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import { getRepoSummaryLoader } from "../../context/repoSummaryRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function repoSummary(context: FeatureExecutionContext) {
@@ -29,17 +30,43 @@ export async function repoSummary(context: FeatureExecutionContext) {
     );
   }
 
-  const data = {
-    repoId: params.repoId,
-    branch: params.branch,
-    activeFile: params.file,
-    treeStructure: { status: "tree-structure-requested", provider },
-    ownership: { status: "ownership-summary-requested" },
-    architecture: { status: "architecture-summary-requested" },
-    fallbackLevel: context.status.level
-  };
-  await context.cache.set(key, data, { provider, feature: "repo_summary" });
-  return contextResult(context, data, context.status.message, context.status.level !== "full");
+  const loader = getRepoSummaryLoader();
+  if (loader) {
+    try {
+      const live = await loader(context);
+      if (live) {
+        const data = {
+          ...live,
+          fallbackLevel: context.status.level,
+          partial: context.status.level !== "full"
+        };
+        await context.cache.set(key, data, { provider, feature: "repo_summary" });
+        return contextResult(context, data, summaryMessage(data, context.status.message), context.status.level !== "full");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Repository summary failed.";
+      return unavailableResult(context, message);
+    }
+  }
+
+  return unavailableResult(
+    context,
+    `${codeHostLabel(provider)} repository summary is unavailable. Connect your code host and try again.`
+  );
+}
+
+function summaryMessage(data: Record<string, unknown>, fallback: string): string {
+  const fileCount = typeof data.manifest === "object" && data.manifest !== null
+    ? (data.manifest as { fileCount?: number }).fileCount
+    : undefined;
+  const entryFiles = Array.isArray(data.entryFiles) ? data.entryFiles.length : 0;
+  if (fileCount && fileCount > 0) {
+    return `Live repository summary (${fileCount} indexed files, ${entryFiles} entry files).`;
+  }
+  if (entryFiles > 0) {
+    return `Live repository summary (${entryFiles} entry files from ${String(data.source ?? "code host")}).`;
+  }
+  return fallback;
 }
 
 function resolveCodeHostProvider(params: { repoId?: string; provider?: string }): CodeHostProvider {

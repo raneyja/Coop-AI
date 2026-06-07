@@ -1,23 +1,59 @@
 import * as vscode from "vscode";
 import { resolveEditorFile } from "./editorFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
+import { parseGithubVfsUri } from "./githubVfsUri";
 import type { EditorContext } from "../manifest/types";
 import type { RepoContext } from "../chat/types";
 
 export function collectOpenEditorPaths(): string[] {
-  const paths = new Set<string>();
+  return collectOpenEditorFileRefs().map((ref) => ref.relativePath);
+}
+
+export type OpenEditorFileRef = {
+  relativePath: string;
+  absolutePath: string;
+};
+
+/** Open text editor tabs with repo-relative paths (local disk and GitHub remote). */
+export function collectOpenEditorFileRefs(): OpenEditorFileRef[] {
+  const refs: OpenEditorFileRef[] = [];
+  const seen = new Set<string>();
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
       const input = tab.input;
-      if (input instanceof vscode.TabInputText) {
+      if (!(input instanceof vscode.TabInputText)) {
+        continue;
+      }
+
+      if (input.uri.scheme === "file") {
         const relative = vscode.workspace.asRelativePath(input.uri);
-        if (relative && !relative.startsWith("..")) {
-          paths.add(toRepositoryRelativePath(relative));
+        if (!relative || relative.startsWith("..")) {
+          continue;
         }
+        const relativePath = toRepositoryRelativePath(relative);
+        if (seen.has(relativePath)) {
+          continue;
+        }
+        seen.add(relativePath);
+        refs.push({ relativePath, absolutePath: input.uri.fsPath });
+        continue;
+      }
+
+      if (input.uri.scheme === "github" || input.uri.scheme === "vscode-vfs") {
+        const remote = parseGithubVfsUri(input.uri.toString());
+        if (!remote) {
+          continue;
+        }
+        const relativePath = toRepositoryRelativePath(remote.file);
+        if (seen.has(relativePath)) {
+          continue;
+        }
+        seen.add(relativePath);
+        refs.push({ relativePath, absolutePath: input.uri.toString() });
       }
     }
   }
-  return [...paths];
+  return refs;
 }
 
 export function selectedSymbolFromEditor(editor: vscode.TextEditor | undefined): string | undefined {
@@ -55,13 +91,6 @@ export function enrichRepoContextWithEditorState(
   };
   if (selectedSymbol) {
     next.selectedSymbol = selectedSymbol;
-  }
-  if (editor && !next.file) {
-    const resolved = resolveEditorFile(editor);
-    if (resolved.file) {
-      next.file = resolved.file;
-      next.fileSource = resolved.fileSource;
-    }
   }
   return next;
 }

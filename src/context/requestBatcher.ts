@@ -15,6 +15,7 @@ export type ContextRequestParams = {
   };
   quickAction?: string;
   fileSource?: string;
+  integrationProvider?: import("../chat/types").IntegrationChatProvider;
   [key: string]: unknown;
 };
 
@@ -201,7 +202,9 @@ export function buildContextRequests(event: IntentEvent, types: ContextRequestTy
       languageId: event.context.languageId,
       lines: event.context.lines,
       quickAction: event.context.buttonClicked,
-      fileSource: event.context.fileSource
+      fileSource: event.context.fileSource,
+      integrationProvider: event.context.integrationProvider,
+      openEditors: event.context.openEditors
     },
     intent: event,
     cost: event.costEstimate,

@@ -79,6 +79,21 @@ export class SecureApiClient {
     await this.backend.storeGithubCredential(baseUrl, token);
   }
 
+  public async fetchMe(baseUrl: string) {
+    return this.backend.fetchMe(baseUrl);
+  }
+
+  public async startPublicSamlLogin(
+    baseUrl: string,
+    options: { orgId?: string; org?: string; redirect?: string }
+  ): Promise<string> {
+    return this.backend.startPublicSamlLogin(baseUrl, options);
+  }
+
+  public async startSamlLogin(baseUrl: string, redirect?: string): Promise<string> {
+    return this.backend.startSamlLogin(baseUrl, redirect);
+  }
+
   public async getGithubAppInstallUrl(baseUrl: string): Promise<string> {
     return this.backend.getGithubAppInstallUrl(baseUrl);
   }
@@ -280,6 +295,9 @@ export function readConfiguration(): Omit<
   | "hasSlackToken"
   | "hasJiraCredentials"
   | "hasTeamsToken"
+  | "hasConfluenceCredentials"
+  | "hasNotionToken"
+  | "hasGoogleDocsToken"
 > {
   const config = vscode.workspace.getConfiguration("coopAI");
   const llmProvider = readProviderPreference(config.get<string>("llmProvider", "anthropic"));
@@ -300,6 +318,7 @@ export function readConfiguration(): Omit<
     defaultCodeHost: readCodeHostProvider(config.get<string>("defaultCodeHost", "github")),
     gitlabBaseUrl: config.get<string>("gitlab.baseUrl", "https://gitlab.com/api/v4"),
     jiraBaseUrl: config.get<string>("jira.baseUrl", "https://your-domain.atlassian.net"),
+    confluenceBaseUrl: config.get<string>("confluence.baseUrl", "https://your-domain.atlassian.net/wiki"),
     devMode: config.get<boolean>("devMode", false),
     hasGitHubAppInstalled: false,
     hasGitLabAppInstalled: false,
@@ -358,7 +377,6 @@ export function readDegradationConfiguration(): DegradationConfig {
   const config = vscode.workspace.getConfiguration("coopAI.degradation");
   return mergeDegradationConfig({
     enableGracefulFallback: config.get<boolean>("enableGracefulFallback"),
-    healthCheckInterval: config.get<number>("healthCheckInterval"),
     cacheRetentionDays: {
       fresh: config.get<number>("cacheRetention.fresh"),
       warm: config.get<number>("cacheRetention.warm"),
@@ -401,7 +419,22 @@ export async function readPreferences(
   let hasGitHubAppInstalled = false;
   let hasGitLabAppInstalled = false;
   let hasBitbucketAppInstalled = false;
+  let orgName: string | undefined;
+  let plan: UserPreferences["plan"];
+  let userRole: string | undefined;
+  let authMethod: UserPreferences["authMethod"];
+  let canInstallIntegrations = false;
   if (await api.hasToken()) {
+    try {
+      const me = await api.fetchMe(base.apiBaseUrl);
+      orgName = me.orgName;
+      plan = me.plan;
+      userRole = me.role;
+      authMethod = me.authMethod;
+      canInstallIntegrations = me.canInstallIntegrations ?? false;
+    } catch {
+      // Non-fatal — other preference fields still load.
+    }
     try {
       const status = await api.getGithubInstallationStatus(base.apiBaseUrl);
       hasGitHubAppInstalled = status.installed;
@@ -427,6 +460,11 @@ export async function readPreferences(
     hasGitHubToken: Boolean(codeHostCreds.githubToken),
     hasGitHubAppInstalled,
     devMode,
+    orgName,
+    plan,
+    userRole,
+    authMethod,
+    canInstallIntegrations,
     hasGitLabToken: Boolean(codeHostCreds.gitlabToken),
     hasGitLabAppInstalled,
     hasBitbucketCredentials: Boolean(
@@ -436,7 +474,11 @@ export async function readPreferences(
     hasSlackToken: Boolean(integrationCreds.slackToken),
     hasJiraCredentials: Boolean(integrationCreds.jiraEmail && integrationCreds.jiraToken),
     hasTeamsToken: Boolean(integrationCreds.teamsToken),
-    jiraBaseUrl: integrationCreds.jiraBaseUrl ?? base.jiraBaseUrl
+    hasConfluenceCredentials: Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken),
+    hasNotionToken: Boolean(integrationCreds.notionToken),
+    hasGoogleDocsToken: Boolean(integrationCreds.googleDocsToken),
+    jiraBaseUrl: integrationCreds.jiraBaseUrl ?? base.jiraBaseUrl,
+    confluenceBaseUrl: integrationCreds.confluenceBaseUrl ?? base.confluenceBaseUrl
   };
 }
 
@@ -490,6 +532,9 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   }
   if (updates.jiraBaseUrl !== undefined) {
     ops.push(["jira.baseUrl", updates.jiraBaseUrl]);
+  }
+  if (updates.confluenceBaseUrl !== undefined) {
+    ops.push(["confluence.baseUrl", updates.confluenceBaseUrl]);
   }
   for (const [key, value] of ops) {
     await config.update(key, value, vscode.ConfigurationTarget.Global);

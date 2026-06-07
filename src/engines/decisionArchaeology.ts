@@ -104,7 +104,7 @@ export class DecisionArchaeologyEngine {
       );
     }
 
-    const introduction = await this.findOriginalIntroduction(coords, file, blameLines);
+    const introduction = await this.findOriginalIntroduction(coords, file, blameLines, lineRange);
     if (!introduction) {
       let recent: CommitInfo | undefined;
       try {
@@ -225,7 +225,8 @@ export class DecisionArchaeologyEngine {
   private async findOriginalIntroduction(
     coords: RepoCoordinates,
     file: string,
-    blameLines: BlameLine[]
+    blameLines: BlameLine[],
+    lineRange?: LineRange
   ): Promise<CommitInfo | undefined> {
     const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))];
     if (uniqueShas.length === 0) {
@@ -243,6 +244,12 @@ export class DecisionArchaeologyEngine {
 
     if (commits.length === 0) {
       return undefined;
+    }
+
+    if (lineRange) {
+      // Line-specific trace: follow blame for the selection, not the file's first commit.
+      commits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      return commits[0];
     }
 
     commits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());

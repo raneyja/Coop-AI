@@ -120,9 +120,13 @@ function providerBody(
 ): Record<string, unknown> {
   switch (provider) {
     case "openai":
+      return openAiBody(commonBody, messages);
     case "deepseek":
+      // DeepSeek is OpenAI-compatible and uses the classic chat-completions params.
       return {
-        ...commonBody,
+        model: commonBody.model,
+        temperature: commonBody.temperature,
+        max_tokens: commonBody.max_tokens,
         messages: messages.map((message) => ({
           role: message.role,
           content: formatOpenAiContent(message)
@@ -134,6 +138,31 @@ function providerBody(
     case "gemini":
       return geminiBody(commonBody, messages);
   }
+}
+
+/**
+ * OpenAI request body. GPT-5 and o-series ("reasoning") models reject `max_tokens`
+ * (require `max_completion_tokens`) and only accept the default temperature, while the
+ * gpt-4.x / gpt-3.5 family uses the classic params. Branch on the model accordingly.
+ */
+function openAiBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
+  const model = String(commonBody.model ?? "");
+  const isReasoningModel = /^(gpt-5|o\d)/.test(model);
+  const body: Record<string, unknown> = {
+    model,
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: formatOpenAiContent(message)
+    })),
+    store: false
+  };
+  if (isReasoningModel) {
+    body.max_completion_tokens = commonBody.max_tokens;
+  } else {
+    body.max_tokens = commonBody.max_tokens;
+    body.temperature = commonBody.temperature;
+  }
+  return body;
 }
 
 function formatOpenAiContent(message: ChatRequestMessage): string | Array<Record<string, unknown>> {
@@ -205,8 +234,10 @@ function anthropicBody(commonBody: Record<string, unknown>, messages: ChatReques
 function geminiBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
   const systemMessages = messages.filter((message) => message.role === "system").map((message) => message.content);
   const nonSystemMessages = messages.filter((message) => message.role !== "system");
+  // generateContent only accepts a fixed set of top-level fields. Anything else
+  // (model, temperature, retention_policy, labels, disable_web_search) is rejected,
+  // so emit only valid fields. Omitting tools means no web-search grounding.
   return {
-    ...omit(commonBody, ["max_tokens", "metadata"]),
     generationConfig: {
       temperature: commonBody.temperature,
       maxOutputTokens: commonBody.max_tokens
@@ -217,17 +248,10 @@ function geminiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
         ...systemMessages.map((text) => ({ text }))
       ]
     },
-    tools: [],
     contents: nonSystemMessages.map((message) => ({
       role: message.role === "assistant" ? "model" : "user",
       parts: formatGeminiParts(message)
-    })),
-    labels: commonBody.metadata,
-    disable_web_search: true
+    }))
   };
 }
 
-function omit(value: Record<string, unknown>, keys: string[]): Record<string, unknown> {
-  const blocked = new Set(keys);
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !blocked.has(key)));
-}

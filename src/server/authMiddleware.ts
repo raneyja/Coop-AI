@@ -142,3 +142,36 @@ export function authUserId(auth: AuthContext): string {
   }
   return `apikey:${auth.apiKeyId}`;
 }
+
+const INTEGRATION_ADMIN_ROLES = new Set(["owner", "admin"]);
+
+/** Org API keys (no human userId) may install integrations during bootstrap. */
+export function canInstallIntegrations(auth: AuthContext): boolean {
+  if (!auth.userId) {
+    return true;
+  }
+  return INTEGRATION_ADMIN_ROLES.has(String(auth.role ?? "").toLowerCase());
+}
+
+export function requireInstallAdmin(
+  auth: AuthContext | undefined,
+  response: ServerResponse
+): auth is AuthContext {
+  if (!auth) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return false;
+  }
+  if (!canInstallIntegrations(auth)) {
+    writeJson(response, 403, {
+      error: "admin_required",
+      message: "Only organization admins can connect code hosts."
+    });
+    return false;
+  }
+  return true;
+}
+
+function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
+  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body));
+}
