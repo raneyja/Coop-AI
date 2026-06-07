@@ -1,4 +1,5 @@
 import React from "react";
+import { coopNoticeClass, type CoopNoticeTone } from "./components/CoopNotice";
 import type { JobProgressState } from "./types";
 
 export type { JobProgressState };
@@ -10,32 +11,27 @@ type JobProgressProps = {
   onDismiss?: () => void;
 };
 
-const STATUS_TONE: Record<JobProgressState["status"], { border: string; accent: string }> = {
-  queued: {
-    border: "var(--vscode-inputValidation-infoBorder)",
-    accent: "var(--vscode-progressBar-background)"
-  },
-  running: {
-    border: "var(--vscode-focusBorder)",
-    accent: "var(--vscode-progressBar-background)"
-  },
-  completed: {
-    border: "var(--vscode-testing-iconPassed)",
-    accent: "var(--vscode-testing-iconPassed)"
-  },
-  partial: {
-    border: "var(--vscode-inputValidation-warningBorder)",
-    accent: "var(--vscode-inputValidation-warningBorder)"
-  },
-  failed: {
-    border: "var(--vscode-inputValidation-errorBorder)",
-    accent: "var(--vscode-inputValidation-errorBorder)"
-  },
-  cancelled: {
-    border: "var(--vscode-widget-border)",
-    accent: "var(--vscode-descriptionForeground)"
-  }
+const STATUS_ACCENT: Record<JobProgressState["status"], string> = {
+  queued: "var(--vscode-progressBar-background)",
+  running: "var(--vscode-progressBar-background)",
+  completed: "var(--vscode-testing-iconPassed, #22c55e)",
+  partial: "var(--vscode-inputValidation-warningBorder, #d19a66)",
+  failed: "var(--vscode-inputValidation-errorBorder, #f87171)",
+  cancelled: "var(--coop-panel-muted)"
 };
+
+function noticeToneForStatus(status: JobProgressState["status"]): CoopNoticeTone {
+  switch (status) {
+    case "queued":
+      return "info";
+    case "partial":
+      return "warning";
+    case "failed":
+      return "error";
+    default:
+      return "neutral";
+  }
+}
 
 export function JobProgress({
   state,
@@ -47,20 +43,19 @@ export function JobProgress({
     return null;
   }
 
-  const tone = STATUS_TONE[state.status];
+  const accent = STATUS_ACCENT[state.status];
   const canCancel = state.status === "queued" && Boolean(onCancel);
   const canView = (state.status === "completed" || state.status === "partial") && Boolean(onViewResults);
   const canDismiss = state.status !== "running" && state.status !== "queued" && Boolean(onDismiss);
 
   return (
     <section
-      className="mx-3 mb-2 rounded-md border px-3 py-2 text-xs shadow-sm"
-      style={{ borderColor: tone.border, background: "var(--vscode-editorWidget-background)" }}
+      className={`mx-3 mb-2 ${coopNoticeClass(noticeToneForStatus(state.status))}`}
       role="status"
       aria-live="polite"
     >
-      <div className="flex items-start gap-2">
-        <StatusIcon status={state.status} accent={tone.accent} />
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <StatusIcon status={state.status} accent={accent} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="truncate font-medium text-[var(--coop-panel-foreground)]">{state.title}</p>
@@ -93,13 +88,13 @@ export function JobProgress({
             >
               <div
                 className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${state.progress}%`, background: tone.accent }}
+                style={{ width: `${state.progress}%`, background: accent }}
               />
             </div>
           )}
 
           {state.status === "completed" && state.resultSummary ? (
-            <div className="mt-2 space-y-1 rounded border border-[var(--vscode-widget-border)] p-2">
+            <div className="mt-2 space-y-1 rounded border border-[var(--coop-border)] p-2">
               <p className="font-medium">Knowledge Gap scan complete</p>
               <p>Results: {state.resultSummary.foundGaps ?? 0} gaps found</p>
               <ul className="list-inside list-disc opacity-90">
@@ -114,7 +109,7 @@ export function JobProgress({
             {canCancel ? (
               <button
                 type="button"
-                className="rounded border border-[var(--vscode-button-border)] px-2 py-0.5 text-[11px] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+                className="rounded border border-[var(--coop-border)] px-2 py-0.5 text-[11px] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
                 onClick={() => onCancel?.(state.jobId)}
               >
                 Cancel Job

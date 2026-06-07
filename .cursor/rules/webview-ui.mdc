@@ -41,7 +41,8 @@ New and updated UI in `src/webview/` must match the Coop design system in `src/w
 
 - Integration/repo rows: `coop-health-integration`, `coop-health-integration-name`, `coop-health-integration-meta`
 - Status chips: `coop-health-status` (+ `--healthy` / `--degraded` / `--offline` when applicable)
-- Inline errors: `coop-settings-test-message--error`
+- Inline errors (one-line copy): `coop-settings-test-message--error`
+- Banners & alerts (extension errors, degradation, intent/job status): `CoopNotice` + `coop-notice` (+ `--error` / `--warning` / `--info`, `--compact`, `--stacked`). Do **not** use `vscode-inputValidation-*` backgrounds or borders for new UI.
 
 ## Integration result cards
 

@@ -18,14 +18,14 @@ services:
     ports:
       - "8787:8787"
     env_file:
-      - .env.backend.example
+      - .env.backend
     environment:
       DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
       JOBS_BACKEND: postgres
       GRAPH_CACHE_BACKEND: postgres
       JOBS_WORKERS: "0"
       NODE_ENV: production
-      COOP_REQUIRE_API_AUTH: "true"
+      COOP_REQUIRE_API_AUTH: "false"
     depends_on:
       - postgres
 
@@ -33,7 +33,7 @@ services:
     build: .
     command: ["node", "dist/workerEntry.js"]
     env_file:
-      - .env.backend.example
+      - .env.backend
     environment:
       DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
       JOBS_BACKEND: postgres

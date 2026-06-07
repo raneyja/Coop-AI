@@ -2,6 +2,7 @@ import React from "react";
 import type { ChatImageAttachment } from "../../chat/types";
 import { DecisionTimeline, type DecisionTimelinePayload } from "../DecisionTimeline";
 import { OwnershipCard, type OwnershipCardPayload } from "../OwnershipCard";
+import { ChatMessageActions } from "./ChatMessageActions";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -35,11 +36,6 @@ type ChatStreamProps = {
   onCopyOwnershipDraft: (text: string) => void;
 };
 
-function inferLinks(content: string): Array<{ label: string; url: string }> {
-  const matches = content.match(/https?:\/\/[^\s)]+/g) || [];
-  return matches.map((url, idx) => ({ label: `Link ${idx + 1}`, url }));
-}
-
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -62,18 +58,19 @@ function humanizeActionTag(tag: string): string {
 
 function MessageBlock({
   message,
-  renderBody
+  renderBody,
+  isStreaming = false
 }: {
   message: ChatMessage;
   renderBody: (content: string) => React.ReactElement[];
+  isStreaming?: boolean;
 }): React.ReactElement {
   const isUser = message.role === "user";
-  const links = message.links || inferLinks(message.content);
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
 
   return (
     <article
-      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant"}`}
+      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}`}
       data-role={message.role}
     >
       <div className="chat-message-inner">
@@ -85,7 +82,15 @@ function MessageBlock({
         ) : !isUser ? (
           <div className="chat-message-meta">
             <span className="chat-message-label">CoopAI</span>
+            {isStreaming ? (
+              <span className="chat-streaming-indicator" aria-hidden="true">
+                <span className="chat-streaming-dot" />
+                <span className="chat-streaming-dot" />
+                <span className="chat-streaming-dot" />
+              </span>
+            ) : null}
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
+            <ChatMessageActions content={message.content} visible={Boolean(message.content)} />
           </div>
         ) : (
           <time className="chat-message-time chat-message-time--solo">{formatTime(message.timestamp)}</time>
@@ -106,16 +111,6 @@ function MessageBlock({
 
         {parsed.body ? (
           <div className="chat-message-body">{renderBody(parsed.body)}</div>
-        ) : null}
-
-        {links.length > 0 ? (
-          <div className="chat-message-links">
-            {links.map((link) => (
-              <a key={link.url} href={link.url}>
-                {link.label}
-              </a>
-            ))}
-          </div>
         ) : null}
       </div>
     </article>
@@ -153,7 +148,7 @@ export function ChatStream({
           entry.type === "message" ? (
             <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
           ) : (
-            <article key={entry.id} className="chat-message chat-message--assistant" data-role="assistant">
+            <article key={entry.id} className="chat-message chat-message--assistant group" data-role="assistant">
               <div className="chat-message-inner">
                 <div className="chat-message-meta">
                   <span className="chat-message-label">CoopAI</span>
@@ -177,19 +172,7 @@ export function ChatStream({
         )}
 
         {streamingMessage ? (
-          <article className="chat-message chat-message--assistant chat-message--streaming">
-            <div className="chat-message-inner">
-              <div className="chat-message-meta">
-                <span className="chat-message-label">CoopAI</span>
-                <span className="chat-streaming-indicator" aria-hidden="true">
-                  <span className="chat-streaming-dot" />
-                  <span className="chat-streaming-dot" />
-                  <span className="chat-streaming-dot" />
-                </span>
-              </div>
-              <div className="chat-message-body">{renderBody(streamingMessage.content)}</div>
-            </div>
-          </article>
+          <MessageBlock message={streamingMessage} renderBody={renderBody} isStreaming />
         ) : null}
 
         <div ref={endRef} className="chat-thread-anchor" />

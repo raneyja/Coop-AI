@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { DegradationFeatureStatusPayload, QuickActionId, RepoContext } from "../types";
+import { QuickActionId, RepoContext } from "../types";
 
 type ActionConfig = {
   id: QuickActionId;
@@ -11,8 +11,8 @@ type ActionConfig = {
 type QuickActionGridProps = {
   context: RepoContext;
   disabled?: boolean;
-  featureStatuses?: Record<string, DegradationFeatureStatusPayload>;
   onAction: (actionId: QuickActionId, prompt: string) => void;
+  launchStagger?: boolean;
 };
 
 const ACTIONS: ActionConfig[] = [
@@ -21,7 +21,7 @@ const ACTIONS: ActionConfig[] = [
     label: "Understand Repo",
     description: "Architecture, ownership & key files",
     prompt: (ctx) =>
-      `Understand this repository quickly.\nContext:\n- file: ${ctx.file || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- language: ${ctx.languageId || "unknown"}\nFocus on architecture, key systems, and likely risks.`
+      `Understand this repository quickly.\nContext:\n- repo: ${ctx.owner || "unknown"}/${ctx.repo || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- active file: ${ctx.file || "none"}\n- language: ${ctx.languageId || "unknown"}\nFocus on overall architecture, major subsystems, entry points, and likely risks across the repository — not only the active file.`
   },
   {
     id: "trace-decision",
@@ -92,8 +92,8 @@ function actionHint(action: ActionConfig, context: RepoContext, dimmed: boolean)
 export function QuickActionGrid({
   context,
   disabled,
-  featureStatuses = {},
-  onAction
+  onAction,
+  launchStagger = false
 }: QuickActionGridProps): React.ReactElement {
   const actions = useMemo(
     () =>
@@ -108,18 +108,16 @@ export function QuickActionGrid({
   return (
     <ul className="w-full min-w-0 list-none p-0 m-0" aria-label="Quick actions">
       {actions.map((action) => {
-        const status = featureStatuses[action.id];
-        const unavailable = status?.level === "unavailable";
         const hint = actionHint(action, context, action.dimmed);
         return (
           <li key={action.id}>
             <button
               type="button"
-              disabled={disabled || unavailable || action.blocked}
-              title={status?.message || hint}
-              aria-label={`${action.label}: ${status?.label || hint}`}
+              disabled={disabled || action.blocked}
+              title={hint}
+              aria-label={`${action.label}: ${hint}`}
               onClick={() => onAction(action.id, action.prompt(context))}
-              className="coop-quick-action-row"
+              className={`coop-quick-action-row${launchStagger ? " coop-quick-action-row--launch-stagger" : ""}`}
             >
               {action.label}
             </button>

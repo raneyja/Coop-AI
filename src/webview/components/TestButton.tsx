@@ -7,7 +7,10 @@ export type SettingsTestKey =
   | "bitbucket"
   | "slack"
   | "jira"
-  | "teams";
+  | "teams"
+  | "confluence"
+  | "notion"
+  | "google-docs";
 
 type TestButtonProps = {
   testKey: SettingsTestKey;

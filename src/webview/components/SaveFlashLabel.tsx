@@ -7,7 +7,10 @@ export type SettingsSaveKey =
   | "bitbucket"
   | "slack"
   | "jira"
-  | "teams";
+  | "teams"
+  | "confluence"
+  | "notion"
+  | "google-docs";
 
 type SaveFlashLabelProps = {
   show: boolean;

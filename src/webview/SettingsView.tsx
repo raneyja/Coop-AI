@@ -7,7 +7,7 @@ import type { SettingsTestKey } from "./components/TestButton";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
-import type { CodeHostProviderPreference, DecisionIntegrationProvider } from "../chat/types";
+import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
 
 type PersistedSettingsState = {
   screen?: SettingsScreen;
@@ -34,7 +34,7 @@ type InboundMessage =
     };
 
 const DEFAULT_PREFS: Preferences = {
-  model: "claude-3-5-sonnet-20241022",
+  model: "claude-sonnet-4-6",
   llmProvider: "anthropic",
   temperature: 0.5,
   maxTokens: 2000,
@@ -60,7 +60,11 @@ const DEFAULT_PREFS: Preferences = {
   hasSlackToken: false,
   hasJiraCredentials: false,
   hasTeamsToken: false,
-  jiraBaseUrl: "https://your-domain.atlassian.net"
+  hasConfluenceCredentials: false,
+  hasNotionToken: false,
+  hasGoogleDocsToken: false,
+  jiraBaseUrl: "https://your-domain.atlassian.net",
+  confluenceBaseUrl: "https://your-domain.atlassian.net/wiki"
 };
 
 const TEST_RESULT_FLASH_MS = 1500;
@@ -86,6 +90,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const [jiraEmailDraft, setJiraEmailDraft] = useState("");
   const [jiraTokenDraft, setJiraTokenDraft] = useState("");
   const [teamsTokenDraft, setTeamsTokenDraft] = useState("");
+  const [confluenceEmailDraft, setConfluenceEmailDraft] = useState("");
+  const [confluenceTokenDraft, setConfluenceTokenDraft] = useState("");
+  const [notionTokenDraft, setNotionTokenDraft] = useState("");
+  const [googleDocsTokenDraft, setGoogleDocsTokenDraft] = useState("");
   const [connectionTestMessage, setConnectionTestMessage] = useState<string | undefined>();
   const [connectionTestOk, setConnectionTestOk] = useState<boolean | undefined>();
   const [savedFlashKey, setSavedFlashKey] = useState<SettingsSaveKey | null>(null);
@@ -309,9 +317,28 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     };
   }, []);
 
-  const testIntegration = (provider: DecisionIntegrationProvider) => {
+  const testIntegration = (provider: IntegrationChatProvider) => {
     beginTest(provider);
-    post({ type: "settings:test-integration", payload: { provider } });
+    post({
+      type: "settings:test-integration",
+      payload: {
+        provider,
+        draft:
+          provider === "confluence"
+            ? {
+                email: confluenceEmailDraft.trim() || undefined,
+                token: confluenceTokenDraft.trim() || undefined,
+                baseUrl: prefs.confluenceBaseUrl
+              }
+            : provider === "jira"
+              ? {
+                  email: jiraEmailDraft.trim() || undefined,
+                  token: jiraTokenDraft.trim() || undefined,
+                  baseUrl: prefs.jiraBaseUrl
+                }
+              : undefined
+      }
+    });
   };
 
   const testCodeHost = (provider: CodeHostProviderPreference) => {
@@ -360,6 +387,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setConnectionTestMessage(undefined);
           setConnectionTestOk(undefined);
         }}
+        onSignInSso={(org) => post({ type: "settings:sign-in-sso", payload: org ? { org } : undefined })}
+        onSignOut={() => post({ type: "settings:sign-out" })}
         onTestConnection={() => {
           beginTest("connection");
           post({ type: "settings:test-connection" });
@@ -485,6 +514,71 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onClearTeamsToken={() => {
           post({ type: "settings:clear-teams-token" });
           setTeamsTokenDraft("");
+        }}
+        confluenceEmailDraft={confluenceEmailDraft}
+        onConfluenceEmailDraftChange={setConfluenceEmailDraft}
+        confluenceTokenDraft={confluenceTokenDraft}
+        onConfluenceTokenDraftChange={setConfluenceTokenDraft}
+        onSaveConfluenceCredentials={() => {
+          const email = confluenceEmailDraft.trim();
+          const token = confluenceTokenDraft.trim();
+          if (!email || !token) {
+            setConnectionTestMessage("Enter Confluence account email and API token.");
+            return;
+          }
+          post({
+            type: "settings:update-confluence-credentials",
+            payload: {
+              email,
+              token,
+              baseUrl: prefs.confluenceBaseUrl
+            }
+          });
+          setConfluenceTokenDraft("");
+          flashSaved("confluence");
+        }}
+        onClearConfluenceCredentials={() => {
+          post({ type: "settings:clear-confluence-credentials" });
+          setConfluenceEmailDraft("");
+          setConfluenceTokenDraft("");
+        }}
+        onCopyJiraToConfluence={() => {
+          post({ type: "settings:copy-jira-to-confluence" });
+          setConfluenceEmailDraft("");
+          setConfluenceTokenDraft("");
+          flashSaved("confluence");
+        }}
+        notionTokenDraft={notionTokenDraft}
+        onNotionTokenDraftChange={setNotionTokenDraft}
+        onSaveNotionToken={() => {
+          const trimmed = notionTokenDraft.trim();
+          if (!trimmed) {
+            setConnectionTestMessage("Enter a Notion integration token.");
+            return;
+          }
+          post({ type: "settings:update-notion-token", payload: { token: trimmed } });
+          setNotionTokenDraft("");
+          flashSaved("notion");
+        }}
+        onClearNotionToken={() => {
+          post({ type: "settings:clear-notion-token" });
+          setNotionTokenDraft("");
+        }}
+        googleDocsTokenDraft={googleDocsTokenDraft}
+        onGoogleDocsTokenDraftChange={setGoogleDocsTokenDraft}
+        onSaveGoogleDocsToken={() => {
+          const trimmed = googleDocsTokenDraft.trim();
+          if (!trimmed) {
+            setConnectionTestMessage("Enter a Google Docs access token.");
+            return;
+          }
+          post({ type: "settings:update-google-docs-token", payload: { token: trimmed } });
+          setGoogleDocsTokenDraft("");
+          flashSaved("google-docs");
+        }}
+        onClearGoogleDocsToken={() => {
+          post({ type: "settings:clear-google-docs-token" });
+          setGoogleDocsTokenDraft("");
         }}
         onTestIntegration={testIntegration}
         onClearChat={() => post({ type: "chat:clear" })}

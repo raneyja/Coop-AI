@@ -12,7 +12,7 @@ export {
 
 import type {
   CodeHostProviderPreference,
-  DecisionIntegrationProvider
+  IntegrationChatProvider
 } from "../../../chat/types";
 import type { SettingsScreen } from "../../../chat/settingsScreens";
 
@@ -36,6 +36,11 @@ export type Preferences = {
   hasGitHubToken: boolean;
   hasGitHubAppInstalled: boolean;
   devMode: boolean;
+  orgName?: string;
+  plan?: "free" | "pro" | "enterprise";
+  userRole?: string;
+  authMethod?: "api_key" | "sso_session";
+  canInstallIntegrations?: boolean;
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
@@ -43,7 +48,11 @@ export type Preferences = {
   hasSlackToken: boolean;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;
+  hasConfluenceCredentials: boolean;
+  hasNotionToken: boolean;
+  hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
+  confluenceBaseUrl: string;
 };
 
 export type CodeHostScreen = Extract<
@@ -53,7 +62,12 @@ export type CodeHostScreen = Extract<
 
 export type IntegrationScreen = Extract<
   SettingsScreen,
-  "integration-slack" | "integration-jira" | "integration-teams"
+  | "integration-slack"
+  | "integration-jira"
+  | "integration-teams"
+  | "integration-confluence"
+  | "integration-notion"
+  | "integration-google-docs"
 >;
 
 export function codeHostFromScreen(screen: CodeHostScreen): CodeHostProviderPreference {
@@ -66,12 +80,21 @@ export function codeHostFromScreen(screen: CodeHostScreen): CodeHostProviderPref
   return "bitbucket";
 }
 
-export function integrationFromScreen(screen: IntegrationScreen): DecisionIntegrationProvider {
+export function integrationFromScreen(screen: IntegrationScreen): IntegrationChatProvider {
   if (screen === "integration-slack") {
     return "slack";
   }
   if (screen === "integration-jira") {
     return "jira";
   }
-  return "teams";
+  if (screen === "integration-teams") {
+    return "teams";
+  }
+  if (screen === "integration-confluence") {
+    return "confluence";
+  }
+  if (screen === "integration-notion") {
+    return "notion";
+  }
+  return "google-docs";
 }

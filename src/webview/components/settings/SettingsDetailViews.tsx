@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MODELS_BY_PROVIDER, DEFAULT_MODEL_BY_PROVIDER } from "../../../config/llmModels";
 import { TestButton, type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -11,6 +11,51 @@ import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { codeHostConfigured, integrationConfigured } from "./subtitles";
 
+/**
+ * URL inputs bound directly to persisted prefs lose keystrokes: each change posts to the
+ * extension host and the echoed `settings:state` re-renders the field back to the old value.
+ * This keeps a local draft and only re-syncs from the persisted value while the field is not
+ * focused, so typing is never clobbered mid-edit.
+ */
+function SettingsUrlField({
+  value,
+  placeholder,
+  onCommit
+}: {
+  value: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+}): React.ReactElement {
+  const [draft, setDraft] = useState(value);
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setDraft(value);
+    }
+  }, [value]);
+
+  return (
+    <input
+      type="url"
+      value={draft}
+      placeholder={placeholder}
+      className="coop-settings-field"
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onCommit(e.target.value);
+      }}
+      onBlur={() => {
+        focusedRef.current = false;
+        onCommit(draft.trim());
+      }}
+    />
+  );
+}
+
 export type SettingsDetailProps = {
   prefs: Preferences;
   onUpdate: (partial: Partial<Preferences>) => void;
@@ -18,6 +63,8 @@ export type SettingsDetailProps = {
   onApiKeyDraftChange: (value: string) => void;
   onSaveApiKey: () => void;
   onClearApiKey: () => void;
+  onSignInSso: (org?: string) => void;
+  onSignOut: () => void;
   onTestConnection: () => void;
   onTestCodeHost: (provider: CodeHostProviderPreference) => void;
   githubTokenDraft: string;
@@ -54,7 +101,22 @@ export type SettingsDetailProps = {
   onTeamsTokenDraftChange: (value: string) => void;
   onSaveTeamsToken: () => void;
   onClearTeamsToken: () => void;
-  onTestIntegration: (provider: "slack" | "jira" | "teams") => void;
+  confluenceEmailDraft: string;
+  onConfluenceEmailDraftChange: (value: string) => void;
+  confluenceTokenDraft: string;
+  onConfluenceTokenDraftChange: (value: string) => void;
+  onSaveConfluenceCredentials: () => void;
+  onClearConfluenceCredentials: () => void;
+  onCopyJiraToConfluence: () => void;
+  notionTokenDraft: string;
+  onNotionTokenDraftChange: (value: string) => void;
+  onSaveNotionToken: () => void;
+  onClearNotionToken: () => void;
+  googleDocsTokenDraft: string;
+  onGoogleDocsTokenDraftChange: (value: string) => void;
+  onSaveGoogleDocsToken: () => void;
+  onClearGoogleDocsToken: () => void;
+  onTestIntegration: (provider: import("../../../chat/types").IntegrationChatProvider) => void;
   onClearChat: () => void;
   connectionTestMessage?: string;
   connectionTestOk?: boolean;
@@ -96,6 +158,12 @@ export function SettingsDetailView({
       return <JiraDetail {...props} />;
     case "integration-teams":
       return <TeamsDetail {...props} />;
+    case "integration-confluence":
+      return <ConfluenceDetail {...props} />;
+    case "integration-notion":
+      return <NotionDetail {...props} />;
+    case "integration-google-docs":
+      return <GoogleDocsDetail {...props} />;
     case "workspace":
       return <WorkspaceDetail {...props} />;
     case "prompts":
@@ -110,12 +178,80 @@ function ModelDetail({
   onUpdate,
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
-  const models = useMemo(() => MODELS_BY_PROVIDER[prefs.llmProvider] ?? [], [prefs.llmProvider]);
+  const [draft, setDraft] = useState({
+    llmProvider: prefs.llmProvider,
+    model: prefs.model,
+    temperature: prefs.temperature,
+    maxTokens: prefs.maxTokens,
+    llmEnabled: prefs.llmEnabled,
+    autocompleteEnabled: prefs.autocompleteEnabled
+  });
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<number | null>(null);
+
+  // Re-sync from persisted prefs only when there are no pending edits, so an
+  // unrelated settings:state push can't clobber what the user is editing.
+  useEffect(() => {
+    if (!dirty) {
+      setDraft({
+        llmProvider: prefs.llmProvider,
+        model: prefs.model,
+        temperature: prefs.temperature,
+        maxTokens: prefs.maxTokens,
+        llmEnabled: prefs.llmEnabled,
+        autocompleteEnabled: prefs.autocompleteEnabled
+      });
+    }
+  }, [
+    prefs.llmProvider,
+    prefs.model,
+    prefs.temperature,
+    prefs.maxTokens,
+    prefs.llmEnabled,
+    prefs.autocompleteEnabled,
+    dirty
+  ]);
+
+  useEffect(
+    () => () => {
+      if (savedTimer.current !== null) {
+        window.clearTimeout(savedTimer.current);
+      }
+    },
+    []
+  );
+
+  const models = useMemo(() => MODELS_BY_PROVIDER[draft.llmProvider] ?? [], [draft.llmProvider]);
+
+  const update = (partial: Partial<typeof draft>) => {
+    setDraft((prev) => ({ ...prev, ...partial }));
+    setDirty(true);
+    setSaved(false);
+  };
 
   const onProviderChange = (provider: LlmProviderPreference) => {
-    const defaultModel = DEFAULT_MODEL_BY_PROVIDER[provider];
-    const nextModel = MODELS_BY_PROVIDER[provider].includes(prefs.model) ? prefs.model : defaultModel;
-    onUpdate({ llmProvider: provider, model: nextModel });
+    const nextModel = MODELS_BY_PROVIDER[provider].includes(draft.model)
+      ? draft.model
+      : DEFAULT_MODEL_BY_PROVIDER[provider];
+    update({ llmProvider: provider, model: nextModel });
+  };
+
+  const handleSave = () => {
+    onUpdate({
+      llmProvider: draft.llmProvider,
+      model: draft.model,
+      temperature: draft.temperature,
+      maxTokens: draft.maxTokens,
+      llmEnabled: draft.llmEnabled,
+      autocompleteEnabled: draft.autocompleteEnabled
+    });
+    setDirty(false);
+    setSaved(true);
+    if (savedTimer.current !== null) {
+      window.clearTimeout(savedTimer.current);
+    }
+    savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
   };
 
   return (
@@ -124,7 +260,7 @@ function ModelDetail({
         <label className="coop-settings-field-row">
           <span className="coop-settings-label">LLM provider (routed server-side)</span>
           <select
-            value={prefs.llmProvider}
+            value={draft.llmProvider}
             onChange={(e) => onProviderChange(e.target.value as LlmProviderPreference)}
             className="coop-settings-field"
           >
@@ -138,8 +274,8 @@ function ModelDetail({
         <label className="coop-settings-field-row">
           <span className="coop-settings-label">Model</span>
           <select
-            value={prefs.model}
-            onChange={(e) => onUpdate({ model: e.target.value })}
+            value={draft.model}
+            onChange={(e) => update({ model: e.target.value })}
             className="coop-settings-field"
           >
             {models.map((model) => (
@@ -158,8 +294,8 @@ function ModelDetail({
               min={0}
               max={2}
               step={0.1}
-              value={prefs.temperature}
-              onChange={(e) => onUpdate({ temperature: Number(e.target.value) })}
+              value={draft.temperature}
+              onChange={(e) => update({ temperature: Number(e.target.value) })}
               className="coop-settings-field"
             />
           </label>
@@ -170,8 +306,8 @@ function ModelDetail({
               min={256}
               max={8192}
               step={256}
-              value={prefs.maxTokens}
-              onChange={(e) => onUpdate({ maxTokens: Number(e.target.value) })}
+              value={draft.maxTokens}
+              onChange={(e) => update({ maxTokens: Number(e.target.value) })}
               className="coop-settings-field"
             />
           </label>
@@ -180,15 +316,22 @@ function ModelDetail({
         <SettingsCheckboxRow
           title="Enable live LLM chat"
           description="Routes requests through /v1/chat"
-          checked={prefs.llmEnabled}
-          onChange={(checked) => onUpdate({ llmEnabled: checked })}
+          checked={draft.llmEnabled}
+          onChange={(checked) => update({ llmEnabled: checked })}
         />
         <SettingsCheckboxRow
           title="Enable inline autocomplete"
           description="When the API supports it"
-          checked={prefs.autocompleteEnabled}
-          onChange={(checked) => onUpdate({ autocompleteEnabled: checked })}
+          checked={draft.autocompleteEnabled}
+          onChange={(checked) => update({ autocompleteEnabled: checked })}
         />
+
+        <div className="coop-settings-actions">
+          <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
+            Save model settings
+          </button>
+          <SaveFlashLabel show={saved} />
+        </div>
       </SettingsSection>
 
       <SettingsSection title="Chat">
@@ -210,6 +353,8 @@ function ApiDetail({
   onApiKeyDraftChange,
   onSaveApiKey,
   onClearApiKey,
+  onSignInSso,
+  onSignOut,
   onTestConnection,
   connectionTestMessage,
   connectionTestOk,
@@ -217,8 +362,83 @@ function ApiDetail({
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
+  const [urlDraft, setUrlDraft] = useState(prefs.apiBaseUrl);
+  const [urlDirty, setUrlDirty] = useState(false);
+  const [urlSaved, setUrlSaved] = useState(false);
+  const [ssoOrgDraft, setSsoOrgDraft] = useState(prefs.orgName ?? "");
+  const urlSavedTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!urlDirty) {
+      setUrlDraft(prefs.apiBaseUrl);
+    }
+  }, [prefs.apiBaseUrl, urlDirty]);
+
+  useEffect(() => {
+    if (prefs.orgName) {
+      setSsoOrgDraft(prefs.orgName);
+    }
+  }, [prefs.orgName]);
+
+  useEffect(
+    () => () => {
+      if (urlSavedTimer.current !== null) {
+        window.clearTimeout(urlSavedTimer.current);
+      }
+    },
+    []
+  );
+
+  const saveUrl = () => {
+    onUpdate({ apiBaseUrl: urlDraft.trim() });
+    setUrlDirty(false);
+    setUrlSaved(true);
+    if (urlSavedTimer.current !== null) {
+      window.clearTimeout(urlSavedTimer.current);
+    }
+    urlSavedTimer.current = window.setTimeout(() => setUrlSaved(false), 2000);
+  };
+
   return (
     <SettingsSection>
+      {prefs.hasApiKey && prefs.authMethod === "sso_session" ? (
+        <p className="coop-settings-card-desc">
+          Signed in to {prefs.orgName ?? "your organization"}
+          {prefs.userRole ? ` as ${prefs.userRole}` : ""}.
+        </p>
+      ) : null}
+      {prefs.plan === "enterprise" ? (
+        <>
+          <p className="coop-prompt-modal-section-title">Enterprise sign-in</p>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">Organization name</span>
+            <input
+              type="text"
+              value={ssoOrgDraft}
+              placeholder="Acme Corp"
+              className="coop-settings-field"
+              onChange={(e) => setSsoOrgDraft(e.target.value)}
+            />
+          </label>
+          <div className="coop-settings-actions">
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onClick={() => onSignInSso(ssoOrgDraft.trim() || undefined)}
+            >
+              Sign in with SSO
+            </button>
+            {prefs.hasApiKey ? (
+              <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
+                Sign out
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      <p className="coop-prompt-modal-section-title">
+        {prefs.plan === "enterprise" ? "API key (admin / automation)" : "CoopAI API key"}
+      </p>
       <label className="coop-settings-field-row">
         <span className="coop-settings-label">CoopAI API key</span>
         <ConfiguredSecretInput
@@ -271,11 +491,22 @@ function ApiDetail({
         <span className="coop-settings-label">API base URL</span>
         <input
           type="url"
-          value={prefs.apiBaseUrl}
-          onChange={(e) => onUpdate({ apiBaseUrl: e.target.value })}
+          value={urlDraft}
+          placeholder="http://localhost:8787"
           className="coop-settings-field"
+          onChange={(e) => {
+            setUrlDraft(e.target.value);
+            setUrlDirty(true);
+            setUrlSaved(false);
+          }}
         />
       </label>
+      <div className="coop-settings-actions">
+        <button type="button" className="coop-settings-action-btn" onClick={saveUrl} disabled={!urlDirty}>
+          Save URL
+        </button>
+        <SaveFlashLabel show={urlSaved} />
+      </div>
     </SettingsSection>
   );
 }
@@ -341,6 +572,7 @@ function GitHubDetail({
   testResult
 }: SettingsDetailProps): React.ReactElement {
   const cloudPath = !prefs.devMode;
+  const canInstall = prefs.canInstallIntegrations === true;
   return (
     <SettingsSection>
       {cloudPath ? (
@@ -349,6 +581,12 @@ function GitHubDetail({
             Connect repositories through the CoopAI GitHub App. CoopAI stores installation credentials on the server —
             no personal access token is saved in VS Code.
           </p>
+          {!canInstall ? (
+            <p className="coop-settings-card-desc">
+              GitHub is connected by your organization admin. Ask IT to install the CoopAI GitHub App if repositories
+              are unavailable.
+            </p>
+          ) : null}
           <div className="coop-health-integration">
             <div>
               <div className="coop-health-integration-name">GitHub App</div>
@@ -363,9 +601,11 @@ function GitHubDetail({
             </span>
           </div>
           <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onInstallGithubApp}>
-              {prefs.hasGitHubAppInstalled ? "Manage GitHub App" : "Install GitHub App"}
-            </button>
+            {canInstall ? (
+              <button type="button" className="coop-settings-action-btn" onClick={onInstallGithubApp}>
+                {prefs.hasGitHubAppInstalled ? "Manage GitHub App" : "Install GitHub App"}
+              </button>
+            ) : null}
             <button type="button" className="coop-settings-action-btn" onClick={onRefreshGithubInstallation}>
               Refresh status
             </button>
@@ -516,11 +756,10 @@ function GitLabDetail({
 
           <label className="coop-settings-field-row">
             <span className="coop-settings-label">GitLab API base URL</span>
-            <input
-              type="url"
+            <SettingsUrlField
               value={prefs.gitlabBaseUrl}
-              onChange={(e) => onUpdate({ gitlabBaseUrl: e.target.value })}
-              className="coop-settings-field"
+              placeholder="https://gitlab.com/api/v4"
+              onCommit={(gitlabBaseUrl) => onUpdate({ gitlabBaseUrl })}
             />
           </label>
           <p className="coop-settings-card-desc coop-prompt-modal-muted">
@@ -647,7 +886,7 @@ function IntegrationsListDetail({ prefs, onNavigate }: SettingsDetailProps): Rea
   return (
     <>
       <p className="coop-settings-card-desc px-0.5">
-        Optional integrations for Trace Decision. Tokens are stored in VS Code SecretStorage only.
+        Optional integrations for chat and Trace Decision. Tokens are stored in VS Code SecretStorage only.
       </p>
       <CoopNavList>
         <CoopNavRow
@@ -667,6 +906,24 @@ function IntegrationsListDetail({ prefs, onNavigate }: SettingsDetailProps): Rea
           subtitle={integrationConfigured(prefs, "teams") ? "Configured" : "Not configured"}
           configured={integrationConfigured(prefs, "teams")}
           onClick={() => onNavigate("integration-teams")}
+        />
+        <CoopNavRow
+          title="Confluence"
+          subtitle={integrationConfigured(prefs, "confluence") ? "Configured" : "Not configured"}
+          configured={integrationConfigured(prefs, "confluence")}
+          onClick={() => onNavigate("integration-confluence")}
+        />
+        <CoopNavRow
+          title="Notion"
+          subtitle={integrationConfigured(prefs, "notion") ? "Configured" : "Not configured"}
+          configured={integrationConfigured(prefs, "notion")}
+          onClick={() => onNavigate("integration-notion")}
+        />
+        <CoopNavRow
+          title="Google Docs"
+          subtitle={integrationConfigured(prefs, "google-docs") ? "Configured" : "Not configured"}
+          configured={integrationConfigured(prefs, "google-docs")}
+          onClick={() => onNavigate("integration-google-docs")}
         />
       </CoopNavList>
     </>
@@ -739,12 +996,10 @@ function JiraDetail({
     <SettingsSection>
       <label className="coop-settings-field-row">
         <span className="coop-settings-label">Jira site URL</span>
-        <input
-          type="url"
+        <SettingsUrlField
           value={prefs.jiraBaseUrl}
           placeholder="https://your-company.atlassian.net"
-          onChange={(e) => onUpdate({ jiraBaseUrl: e.target.value })}
-          className="coop-settings-field"
+          onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
         />
       </label>
 
@@ -846,21 +1101,229 @@ function TeamsDetail({
   );
 }
 
+function ConfluenceDetail({
+  prefs,
+  onUpdate,
+  confluenceEmailDraft,
+  onConfluenceEmailDraftChange,
+  confluenceTokenDraft,
+  onConfluenceTokenDraftChange,
+  onSaveConfluenceCredentials,
+  onClearConfluenceCredentials,
+  onCopyJiraToConfluence,
+  onTestIntegration,
+  savedFlashKey,
+  pendingTest,
+  testResult
+}: SettingsDetailProps): React.ReactElement {
+  return (
+    <SettingsSection>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Confluence site URL</span>
+        <SettingsUrlField
+          value={prefs.confluenceBaseUrl}
+          placeholder="https://your-company.atlassian.net/wiki"
+          onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
+        />
+      </label>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">
+          Confluence account email {prefs.hasConfluenceCredentials ? "(configured)" : ""}
+        </span>
+        <input
+          type="email"
+          value={confluenceEmailDraft}
+          placeholder="you@company.com"
+          onChange={(e) => onConfluenceEmailDraftChange(e.target.value)}
+          className="coop-settings-field"
+        />
+      </label>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Confluence API token</span>
+        <ConfiguredSecretInput
+          configured={prefs.hasConfluenceCredentials}
+          value={confluenceTokenDraft}
+          placeholder="Atlassian API token"
+          onChange={onConfluenceTokenDraftChange}
+          className="coop-settings-field"
+        />
+      </label>
+      <div className="coop-settings-actions">
+        <button type="button" className="coop-settings-action-btn" onClick={onCopyJiraToConfluence}>
+          Use Jira credentials
+        </button>
+        <button type="button" className="coop-settings-action-btn" onClick={onSaveConfluenceCredentials}>
+          Save Confluence credentials
+        </button>
+        <button
+          type="button"
+          className="coop-settings-action-btn"
+          onClick={onClearConfluenceCredentials}
+          disabled={!prefs.hasConfluenceCredentials}
+        >
+          Clear
+        </button>
+        <TestButton
+          testKey="confluence"
+          label="Test Confluence"
+          pendingTest={pendingTest}
+          testResult={testResult}
+          onClick={() => onTestIntegration("confluence")}
+        />
+        <SaveFlashLabel show={savedFlashKey === "confluence"} />
+      </div>
+    </SettingsSection>
+  );
+}
+
+function NotionDetail({
+  prefs,
+  notionTokenDraft,
+  onNotionTokenDraftChange,
+  onSaveNotionToken,
+  onClearNotionToken,
+  onTestIntegration,
+  savedFlashKey,
+  pendingTest,
+  testResult
+}: SettingsDetailProps): React.ReactElement {
+  return (
+    <SettingsSection>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Notion integration token {prefs.hasNotionToken ? "(configured)" : ""}</span>
+        <ConfiguredSecretInput
+          configured={prefs.hasNotionToken}
+          value={notionTokenDraft}
+          placeholder="secret_…"
+          onChange={onNotionTokenDraftChange}
+          className="coop-settings-field"
+        />
+      </label>
+      <div className="coop-settings-actions">
+        <button type="button" className="coop-settings-action-btn" onClick={onSaveNotionToken}>
+          Save Notion token
+        </button>
+        <button
+          type="button"
+          className="coop-settings-action-btn"
+          onClick={onClearNotionToken}
+          disabled={!prefs.hasNotionToken}
+        >
+          Clear
+        </button>
+        <TestButton
+          testKey="notion"
+          label="Test Notion"
+          pendingTest={pendingTest}
+          testResult={testResult}
+          onClick={() => onTestIntegration("notion")}
+        />
+        <SaveFlashLabel show={savedFlashKey === "notion"} />
+      </div>
+    </SettingsSection>
+  );
+}
+
+function GoogleDocsDetail({
+  prefs,
+  googleDocsTokenDraft,
+  onGoogleDocsTokenDraftChange,
+  onSaveGoogleDocsToken,
+  onClearGoogleDocsToken,
+  onTestIntegration,
+  savedFlashKey,
+  pendingTest,
+  testResult
+}: SettingsDetailProps): React.ReactElement {
+  return (
+    <SettingsSection>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">
+          Google Docs (Drive) access token {prefs.hasGoogleDocsToken ? "(configured)" : ""}
+        </span>
+        <ConfiguredSecretInput
+          configured={prefs.hasGoogleDocsToken}
+          value={googleDocsTokenDraft}
+          placeholder="OAuth access token with Drive read scope"
+          onChange={onGoogleDocsTokenDraftChange}
+          className="coop-settings-field"
+        />
+      </label>
+      <div className="coop-settings-actions">
+        <button type="button" className="coop-settings-action-btn" onClick={onSaveGoogleDocsToken}>
+          Save Google Docs token
+        </button>
+        <button
+          type="button"
+          className="coop-settings-action-btn"
+          onClick={onClearGoogleDocsToken}
+          disabled={!prefs.hasGoogleDocsToken}
+        >
+          Clear
+        </button>
+        <TestButton
+          testKey="google-docs"
+          label="Test Google Docs"
+          pendingTest={pendingTest}
+          testResult={testResult}
+          onClick={() => onTestIntegration("google-docs")}
+        />
+        <SaveFlashLabel show={savedFlashKey === "google-docs"} />
+      </div>
+    </SettingsSection>
+  );
+}
+
 function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactElement {
+  const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!dirty) {
+      setDraft({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
+    }
+  }, [prefs.owner, prefs.repo, prefs.branch, dirty]);
+
+  useEffect(
+    () => () => {
+      if (savedTimer.current !== null) {
+        window.clearTimeout(savedTimer.current);
+      }
+    },
+    []
+  );
+
+  const update = (partial: Partial<typeof draft>) => {
+    setDraft((prev) => ({ ...prev, ...partial }));
+    setDirty(true);
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    onUpdate({ owner: draft.owner.trim(), repo: draft.repo.trim(), branch: draft.branch.trim() });
+    setDirty(false);
+    setSaved(true);
+    if (savedTimer.current !== null) {
+      window.clearTimeout(savedTimer.current);
+    }
+    savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
+  };
+
   return (
     <>
       <SettingsSection title="Repository">
         <p className="coop-settings-card-desc">
-          For Trace Decision. These save automatically when you type. Use the same owner and repo name as on
-          github.com.
+          For Trace Decision. Use the same owner and repo name as on github.com, then click Save.
         </p>
         <div className="grid grid-cols-3 gap-3">
           <label className="coop-settings-field-row">
             <span className="coop-settings-label">Owner</span>
             <input
               type="text"
-              value={prefs.owner}
-              onChange={(e) => onUpdate({ owner: e.target.value })}
+              value={draft.owner}
+              onChange={(e) => update({ owner: e.target.value })}
               className="coop-settings-field"
             />
           </label>
@@ -868,8 +1331,8 @@ function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactE
             <span className="coop-settings-label">Repo</span>
             <input
               type="text"
-              value={prefs.repo}
-              onChange={(e) => onUpdate({ repo: e.target.value })}
+              value={draft.repo}
+              onChange={(e) => update({ repo: e.target.value })}
               className="coop-settings-field"
             />
           </label>
@@ -877,11 +1340,17 @@ function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactE
             <span className="coop-settings-label">Branch</span>
             <input
               type="text"
-              value={prefs.branch}
-              onChange={(e) => onUpdate({ branch: e.target.value })}
+              value={draft.branch}
+              onChange={(e) => update({ branch: e.target.value })}
               className="coop-settings-field"
             />
           </label>
+        </div>
+        <div className="coop-settings-actions">
+          <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
+            Save repository
+          </button>
+          <SaveFlashLabel show={saved} />
         </div>
       </SettingsSection>
 

@@ -1,5 +1,15 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatImageAttachment } from "../../chat/types";
+import { LaunchTypewriter } from "./LaunchTypewriter";
+import type { LaunchIntroPhase } from "../hooks/useLaunchTypewriter";
+import {
+  matchSlashCommands,
+  segmentComposerSlashHighlights,
+  slashCommandDisplayToken,
+  slashMenuQuery,
+  slashMenuRange,
+  type SlashCommandDef
+} from "../../context/slashCommands";
 import {
   attachmentsFromClipboard,
   attachmentsFromDataTransfer,
@@ -21,6 +31,10 @@ type ChatComposerProps = {
   onSend: () => void;
   onStop: () => void;
   onToggleExplorer: () => void;
+  launchIntroPhase?: LaunchIntroPhase;
+  launchIntroVisibleLength?: number;
+  launchIntroFlashIndex?: number | null;
+  onLaunchIntroSkip?: () => void;
 };
 
 function SendIcon(): React.ReactElement {
@@ -72,12 +86,49 @@ export function ChatComposer({
   onAttachmentError,
   onSend,
   onStop,
-  onToggleExplorer
+  onToggleExplorer,
+  launchIntroPhase = "done",
+  launchIntroVisibleLength = 0,
+  launchIntroFlashIndex = null,
+  onLaunchIntroSkip
 }: ChatComposerProps): React.ReactElement {
   const isChat = variant === "chat";
+  const launchIntroActive = !isChat && launchIntroPhase !== "done";
+  const launchIntroDone = !isChat && launchIntroPhase === "done";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const mirrorRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canSend = Boolean(value.trim() || attachments.length);
+  const highlightSegments = useMemo(() => segmentComposerSlashHighlights(value), [value]);
+
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const slashQuery = slashMenuQuery(value, cursorPosition);
+  const slashMatches = useMemo(() => {
+    if (slashQuery === null) {
+      return [];
+    }
+    return matchSlashCommands(slashQuery);
+  }, [slashQuery]);
+  const showSlashMenu = !isStreaming && !slashDismissed && slashMatches.length > 0;
+
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [slashQuery]);
+
+  const syncCursor = useCallback((el: HTMLTextAreaElement) => {
+    setCursorPosition(el.selectionStart);
+  }, []);
+
+  const syncMirrorScroll = useCallback(() => {
+    const textarea = textareaRef.current;
+    const mirror = mirrorRef.current;
+    if (!textarea || !mirror) {
+      return;
+    }
+    mirror.scrollTop = textarea.scrollTop;
+  }, []);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -86,7 +137,42 @@ export function ChatComposer({
     }
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
-  }, []);
+    syncMirrorScroll();
+  }, [syncMirrorScroll]);
+
+  const applySlashCommand = useCallback(
+    (def: SlashCommandDef) => {
+      const el = textareaRef.current;
+      const cursor = el?.selectionStart ?? cursorPosition;
+      const range = slashMenuRange(value, cursor);
+      const token = `/${slashCommandDisplayToken(def)} `;
+      if (range) {
+        const next = value.slice(0, range.start) + token + value.slice(range.end);
+        onChange(next);
+        const newCursor = range.start + token.length;
+        requestAnimationFrame(() => {
+          el?.focus();
+          el?.setSelectionRange(newCursor, newCursor);
+          setCursorPosition(newCursor);
+        });
+      } else {
+        onChange(token);
+        requestAnimationFrame(() => {
+          el?.focus();
+          const pos = token.length;
+          el?.setSelectionRange(pos, pos);
+          setCursorPosition(pos);
+        });
+      }
+    },
+    [cursorPosition, onChange, value]
+  );
+
+  const skipLaunchIntroIfNeeded = useCallback(() => {
+    if (launchIntroActive) {
+      onLaunchIntroSkip?.();
+    }
+  }, [launchIntroActive, onLaunchIntroSkip]);
 
   useEffect(() => {
     resize();
@@ -148,6 +234,29 @@ export function ChatComposer({
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    skipLaunchIntroIfNeeded();
+    if (showSlashMenu) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSlashActiveIndex((index) => (index + 1) % slashMatches.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSlashActiveIndex((index) => (index - 1 + slashMatches.length) % slashMatches.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        applySlashCommand(slashMatches[slashActiveIndex] ?? slashMatches[0]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashDismissed(true);
+        return;
+      }
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       if (canSend && !isStreaming) {
@@ -159,12 +268,53 @@ export function ChatComposer({
   return (
     <div className={`relative z-10 shrink-0 ${isChat ? "chat-composer--active" : "coop-canvas-bg px-3 pb-3 pt-2"}`}>
       <div
-        className="coop-composer transition-[border-color] duration-150"
+        className={`coop-composer relative transition-[border-color] duration-150${
+          launchIntroActive ? " coop-composer--launch-intro" : ""
+        }${launchIntroDone ? " coop-composer--launch-ready" : ""}`}
         onDragOver={(event) => {
           event.preventDefault();
         }}
         onDrop={handleDrop}
       >
+        {launchIntroActive ? (
+          <LaunchTypewriter
+            phase={launchIntroPhase}
+            visibleLength={launchIntroVisibleLength}
+            flashIndex={launchIntroFlashIndex}
+          />
+        ) : null}
+        {showSlashMenu ? (
+          <div className="coop-prompt-menu" role="listbox" aria-label="Slash commands">
+            <div className="coop-prompt-menu-panel">
+              <ul className="coop-prompt-menu-list">
+                {slashMatches.map((def, index) => (
+                  <li key={def.name}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === slashActiveIndex}
+                      className={`coop-prompt-menu-row${
+                        index === slashActiveIndex ? " coop-prompt-menu-row--active" : ""
+                      }`}
+                      onMouseEnter={() => setSlashActiveIndex(index)}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        applySlashCommand(def);
+                      }}
+                    >
+                      <span className="coop-prompt-menu-row-label">
+                        <span className="coop-slash-hint-command font-medium">
+                          /{slashCommandDisplayToken(def)}
+                        </span>
+                        <span className="ml-2 text-[var(--coop-panel-muted)]">{def.description}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
         {attachments.length > 0 ? (
           <div
             className="flex flex-wrap gap-2 border-b px-3 py-2"
@@ -173,7 +323,7 @@ export function ChatComposer({
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="group relative h-14 w-14 overflow-hidden rounded-md border border-[var(--vscode-widget-border)] bg-[var(--vscode-editor-background)]"
+                className="group relative h-14 w-14 overflow-hidden rounded-md border border-[var(--coop-border)] bg-[var(--coop-composer-surface)]"
                 title={attachment.name}
               >
                 <img src={attachment.dataUrl} alt={attachment.name} className="h-full w-full object-cover" />
@@ -191,26 +341,52 @@ export function ChatComposer({
           </div>
         ) : null}
 
-        <textarea
-          ref={textareaRef}
-          value={value}
-          rows={1}
-          disabled={isStreaming}
-          placeholder={isChat ? "Ask a follow-up…" : "Ask Coop"}
-          aria-label="Chat input"
-          onChange={(e) => {
-            onChange(e.target.value);
-            resize();
-          }}
-          onKeyDown={onKeyDown}
-          onPaste={handlePaste}
-          className="
-            block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1
-            text-[13px] leading-relaxed text-[var(--coop-composer-text)]
-            placeholder:text-[var(--coop-composer-placeholder)]
-            outline-none max-h-[140px]
-          "
-        />
+        <div className={`coop-composer-input-grid${launchIntroActive ? " opacity-0" : ""}`}>
+          <div
+            ref={mirrorRef}
+            aria-hidden="true"
+            className="coop-composer-input-mirror"
+          >
+            {highlightSegments.map((segment, index) =>
+              segment.kind === "slash-command" ? (
+                <span key={index} className="coop-slash-hint-command">
+                  {segment.text}
+                </span>
+              ) : (
+                <span key={index}>{segment.text}</span>
+              )
+            )}
+            {value.endsWith("\n") ? " " : "\n"}
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            rows={1}
+            disabled={isStreaming}
+            placeholder={isChat ? "Ask a follow-up, or type /…" : "Ask Coop, or type / for commands"}
+            aria-label="Chat input"
+            onChange={(e) => {
+              onChange(e.target.value);
+              syncCursor(e.target);
+              setSlashDismissed(false);
+              resize();
+            }}
+            onFocus={(e) => {
+              syncCursor(e.currentTarget);
+              skipLaunchIntroIfNeeded();
+            }}
+            onClick={(e) => {
+              syncCursor(e.currentTarget);
+              skipLaunchIntroIfNeeded();
+            }}
+            onSelect={(e) => syncCursor(e.currentTarget)}
+            onKeyUp={(e) => syncCursor(e.currentTarget)}
+            onScroll={syncMirrorScroll}
+            onKeyDown={onKeyDown}
+            onPaste={handlePaste}
+            className="coop-composer-input"
+          />
+        </div>
 
         <div className="coop-composer-toolbar flex items-center justify-between gap-2 px-2 pb-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -288,15 +464,11 @@ export function ChatComposer({
         <p className="mt-1 text-center text-[10px] text-[var(--coop-panel-muted)] opacity-70">
           {value.length}/{maxLength} · Shift+Enter for new line
           {attachmentError ? (
-            <span className="block text-[var(--vscode-inputValidation-errorForeground,var(--vscode-errorForeground))]">
-              {attachmentError}
-            </span>
+            <span className="coop-settings-test-message--error block">{attachmentError}</span>
           ) : null}
         </p>
       ) : attachmentError ? (
-        <p className="mt-1 text-center text-[10px] text-[var(--vscode-inputValidation-errorForeground,var(--vscode-errorForeground))]">
-          {attachmentError}
-        </p>
+        <p className="coop-settings-test-message--error mt-1 text-center text-[10px]">{attachmentError}</p>
       ) : null}
     </div>
   );

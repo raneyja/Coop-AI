@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { SettingsScreen } from "../chat/settingsScreens";
 import { ActiveFileLabel } from "./components/ActiveFileLabel";
 import { ChatActivityStrip } from "./components/ChatActivityStrip";
+import { CoopNotice } from "./components/CoopNotice";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatStream, ChatMessage, type ChatInlineArtifact } from "./components/ChatStream";
+import { ChatProse } from "./components/ChatProse";
 import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
@@ -22,13 +24,13 @@ import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
 import { LightningModePanel, LightningStatusBadge } from "./LightningModePanel";
 import type { ChatImageAttachment } from "../chat/types";
+import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
+import { useDebouncedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
   ConflictActionId,
   ConflictResolutionState,
-  DegradationFeatureStatusPayload,
   DegradationNotificationPayload,
-  IntegrationHealthPayload,
   IntentFeedbackState,
   JobProgressState,
   RepoContext
@@ -69,10 +71,16 @@ type InboundMessage =
     }
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
-  | { type: "degradation:health"; payload: IntegrationHealthPayload[] }
-  | { type: "degradation:feature-status"; payload: Record<string, DegradationFeatureStatusPayload> }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
+  | {
+      type: "command:confirm";
+      payload: {
+        title: string;
+        message: string;
+        run: { message: string; quickAction: string; attachments?: ChatImageAttachment[] };
+      };
+    }
   | { type: "job:progress"; payload: JobProgressState }
   | { type: "job:complete"; payload: JobProgressState }
   | {
@@ -125,67 +133,11 @@ type PersistedWebviewState = {
 
 const INPUT_MAX = 12_000;
 
-function inferLinks(content: string): Array<{ label: string; url: string }> {
-  const matches = content.match(/https?:\/\/[^\s)]+/g) || [];
-  return matches.map((url, idx) => ({ label: `Link ${idx + 1}`, url }));
-}
-
-function renderMessageBody(content: string): React.ReactElement[] {
-  const blocks = content.split("```");
-  return blocks.map((part, index) => {
-    const isCode = index % 2 === 1;
-    if (!isCode) {
-      const paragraphs = part.split(/\n{2,}/).filter((segment) => segment.length > 0);
-      if (paragraphs.length === 0) {
-        return (
-          <p key={`text-${index}`} className="whitespace-pre-wrap break-words">
-            {part}
-          </p>
-        );
-      }
-      return (
-        <React.Fragment key={`text-${index}`}>
-          {paragraphs.map((segment, paragraphIndex) => (
-            <p key={`text-${index}-${paragraphIndex}`} className="whitespace-pre-wrap break-words">
-              {segment}
-            </p>
-          ))}
-        </React.Fragment>
-      );
-    }
-    const [firstLine, ...rest] = part.split("\n");
-    const language = firstLine.trim() || "text";
-    return (
-      <pre key={`code-${index}`} className="chat-code-block">
-        <code data-lang={language}>{rest.join("\n")}</code>
-      </pre>
-    );
-  });
-}
-
-function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }): React.ReactElement {
-  return (
-    <div
-      className="mx-3 mb-2 flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs"
-      style={{
-        borderColor: "var(--vscode-inputValidation-errorBorder)",
-        background: "var(--vscode-inputValidation-errorBackground)",
-        color: "var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground))"
-      }}
-      role="alert"
-    >
-      <span className="min-w-0 break-words">{message}</span>
-      <button type="button" className="shrink-0 opacity-80 hover:opacity-100" onClick={onDismiss}>
-        Dismiss
-      </button>
-    </div>
-  );
-}
-
 function ChatFooter({
   error,
   onDismissError,
   contextWarning,
+  onDismissContextWarning,
   intentFeedback,
   onDismissIntent,
   jobProgress,
@@ -198,6 +150,7 @@ function ChatFooter({
   error: string;
   onDismissError: () => void;
   contextWarning?: string;
+  onDismissContextWarning?: () => void;
   intentFeedback?: IntentFeedbackState;
   onDismissIntent: () => void;
   jobProgress?: JobProgressState;
@@ -213,6 +166,7 @@ function ChatFooter({
         error={error || undefined}
         onDismissError={onDismissError}
         contextWarning={contextWarning}
+        onDismissContextWarning={onDismissContextWarning}
         intentFeedback={intentFeedback}
         onDismissIntent={onDismissIntent}
         jobProgress={jobProgress}
@@ -248,9 +202,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }>({ path: "", items: [], scope: "files" });
   const [intentFeedback, setIntentFeedback] = useState<IntentFeedbackState | undefined>();
   const [jobProgress, setJobProgress] = useState<JobProgressState | undefined>();
+  const [commandConfirm, setCommandConfirm] = useState<{
+    title: string;
+    message: string;
+    run: { message: string; quickAction: string; attachments?: ChatImageAttachment[] };
+  } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
-  const [health, setHealth] = useState<IntegrationHealthPayload[]>([]);
-  const [featureStatuses, setFeatureStatuses] = useState<Record<string, DegradationFeatureStatusPayload>>({});
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
   const [promptLibrary, setPromptLibrary] = useState<{
@@ -270,7 +227,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   } | null>(null);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [lightningPanelOpen, setLightningPanelOpen] = useState(false);
+  const [chatHistorySynced, setChatHistorySynced] = useState(false);
+  const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const debouncedStream = useDebouncedProse(streamingBuffer, 75);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
@@ -280,24 +240,45 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setUsageLabel(undefined);
     setIntentFeedback(undefined);
     setJobProgress(undefined);
+    setCommandConfirm(undefined);
     setAttachmentError("");
   }, []);
 
   const streamMessage = useMemo<ChatMessage | null>(() => {
-    if (!streamingBuffer) {
+    if (!debouncedStream) {
       return null;
     }
     return {
       role: "assistant",
-      content: streamingBuffer,
+      content: debouncedStream,
       timestamp: Date.now(),
-      links: inferLinks(streamingBuffer)
+      links: []
     };
-  }, [streamingBuffer]);
+  }, [debouncedStream]);
 
   const isActiveChat = messages.length > 0 || Boolean(streamMessage) || isStreaming;
+  const handleLaunchIntroComplete = useCallback(() => setLaunchIntroConsumed(true), []);
+  const showLaunchIntro = chatHistorySynced && !isActiveChat && !launchIntroConsumed;
+  const launchIntro = useLaunchTypewriter(showLaunchIntro, handleLaunchIntroComplete);
+  const launchIntroDone = chatHistorySynced && launchIntro.phase === "done";
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+  const renderBody = useCallback(
+    (content: string) => [
+      <ChatProse
+        key="chat-prose"
+        content={content}
+        onOpenFile={(path, line) => post({ type: "repo:open-file", payload: { path, line } })}
+      />
+    ],
+    [post]
+  );
+
+  useEffect(() => {
+    if (chatHistorySynced && isActiveChat) {
+      setLaunchIntroConsumed(true);
+    }
+  }, [chatHistorySynced, isActiveChat]);
 
   const openSettings = useCallback(
     (screen?: SettingsScreen) => {
@@ -326,6 +307,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "chat:history":
           setMessages(message.payload);
+          setChatHistorySynced(true);
           setStreamingBuffer("");
           setIsStreaming(false);
           if (message.payload.length === 0) {
@@ -411,17 +393,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "conflict:update":
           setConflictState(message.payload);
           break;
-        case "degradation:health":
-          setHealth(message.payload);
-          break;
-        case "degradation:feature-status":
-          setFeatureStatuses(message.payload);
-          break;
         case "degradation:notification":
           setDegradationNotification(message.payload);
           break;
         case "trace:autoload":
           setInput(message.payload.message);
+          break;
+        case "command:confirm":
+          setIsStreaming(false);
+          setStreamingBuffer("");
+          setCommandConfirm(message.payload);
           break;
         case "decision:timeline":
           setIntentFeedback(undefined);
@@ -545,12 +526,34 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [submitPrompt]
   );
 
+  const insertSlashCommand = useCallback(
+    (command: string) => {
+      launchIntro.skip();
+      setLaunchIntroConsumed(true);
+      setInput(`/${command} `);
+    },
+    [launchIntro]
+  );
+
   const dismissJobProgress = useCallback(() => setJobProgress(undefined), []);
   const cancelJob = useCallback((jobId: string) => post({ type: "job:cancel", payload: { jobId } }), [post]);
   const viewJobResults = useCallback(
     (jobId: string) => post({ type: "job:view-results", payload: { jobId } }),
     [post]
   );
+
+  const handleRunCommand = useCallback(() => {
+    setCommandConfirm((pending) => {
+      if (!pending) {
+        return undefined;
+      }
+      setError("");
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      post({ type: "chat:send", payload: pending.run });
+      return undefined;
+    });
+  }, [post]);
 
   const handleStopStreaming = useCallback(() => {
     post({ type: "chat:stream-cancel" });
@@ -661,12 +664,32 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         onSend={handleSend}
         onStop={handleStopStreaming}
         onToggleExplorer={toggleExplorer}
+        launchIntroPhase={launchIntro.phase}
+        launchIntroVisibleLength={launchIntro.visibleLength}
+        launchIntroFlashIndex={launchIntro.flashIndex}
+        onLaunchIntroSkip={launchIntro.skip}
       />
     </div>
   );
 
   const composerStack = (
     <>
+      {commandConfirm ? (
+        <CoopNotice
+          tone="info"
+          title={commandConfirm.title}
+          message={commandConfirm.message}
+          className="mb-1"
+          onDismiss={() => setCommandConfirm(undefined)}
+          dismissLabel="Cancel"
+        >
+          <div className="mt-2">
+            <button type="button" className="coop-settings-action-btn" onClick={handleRunCommand}>
+              Run
+            </button>
+          </div>
+        </CoopNotice>
+      ) : null}
       <div className="relative mb-1 flex items-center gap-2">
         <PromptLibraryPill
           prompts={promptLibrary.prompts}
@@ -726,7 +749,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             artifacts={inlineArtifacts}
             streamingMessage={streamMessage}
             endRef={messageEndRef}
-            renderBody={renderMessageBody}
+            renderBody={renderBody}
             onDismissArtifact={(id) =>
               setInlineArtifacts((current) => current.filter((artifact) => artifact.id !== id))
             }
@@ -734,13 +757,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           />
           <DegradationNotification
             compact
-            health={health}
-            featureStatuses={featureStatuses}
             notification={degradationNotification}
             onDismiss={() => setDegradationNotification(undefined)}
-            onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
               post({ type: "degradation:refresh", payload: { feature } });
+              setDegradationNotification(undefined);
             }}
             onOpenSettings={openSettings}
           />
@@ -757,6 +778,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             error={error}
             onDismissError={() => setError("")}
             contextWarning={context.contextWarning}
+            onDismissContextWarning={() => post({ type: "context:dismiss-warning" })}
             intentFeedback={intentFeedback}
             onDismissIntent={() => setIntentFeedback(undefined)}
             jobProgress={jobProgress}
@@ -770,15 +792,20 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         </>
       ) : (
         <>
-          {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
+          {error ? (
+            <CoopNotice
+              tone="error"
+              message={error}
+              onDismiss={() => setError("")}
+              className="mx-3 mb-2"
+            />
+          ) : null}
           <DegradationNotification
-            health={health}
-            featureStatuses={featureStatuses}
             notification={degradationNotification}
             onDismiss={() => setDegradationNotification(undefined)}
-            onRetry={(provider, feature) => post({ type: "degradation:retry", payload: { provider, feature } })}
             onRefresh={(feature) => {
               post({ type: "degradation:refresh", payload: { feature } });
+              setDegradationNotification(undefined);
             }}
             onOpenSettings={openSettings}
           />
@@ -819,10 +846,19 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <EmptyState
             context={context}
             disabled={isStreaming}
-            featureStatuses={featureStatuses}
             onAction={handleQuickAction}
+            onSlashCommand={insertSlashCommand}
+            launchIntroDone={launchIntroDone}
           />
           <div className="relative z-20 shrink-0 pb-2">
+            <p
+              className={`coop-launch-sync-whisper px-3 pb-1${
+                launchIntro.showSyncWhisper ? " coop-launch-sync-whisper--visible" : ""
+              }`}
+              aria-live="polite"
+            >
+              Syncing context…
+            </p>
             <ChatActivityStrip
               contextWarning={context.contextWarning}
               jobProgress={jobProgress}

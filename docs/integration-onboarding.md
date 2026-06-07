@@ -139,6 +139,37 @@ Set `JIRA_DEMO_GITHUB_OWNER` to your GitHub org so ticket descriptions list `git
 
 ---
 
+### Confluence
+
+| Field | Value |
+|-------|-------|
+| Confluence site URL | `https://your-domain.atlassian.net/wiki` |
+| Confluence account email | Same Atlassian account email as Jira |
+| Confluence API token | Same [Atlassian API token](https://id.atlassian.com/manage-profile/security/api-tokens) as Jira |
+
+**Test:** **Test Confluence**
+
+Use a **classic API token** (not scoped) so the extension hits `https://your-domain.atlassian.net/wiki/rest/api` directly.
+
+#### Demo pages
+
+`scripts/populate_confluence.py` creates architecture, onboarding, and ADR pages in a **COOP** space. Page bodies include `github:owner/repo` references so Coop's CQL search finds them.
+
+```bash
+cd scripts && cp .env.example .env   # set CONFLUENCE_* (or reuse JIRA_*)
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python populate_confluence.py --dry-run
+.venv/bin/python populate_confluence.py
+```
+
+Set `CONFLUENCE_DEMO_GITHUB_OWNER` (or `JIRA_DEMO_GITHUB_OWNER`) to match **Settings → Repository → owner**, and use a repo name that appears in the seeded pages (default suffix `coop-ai-core`) or edit the script's `repos` fields.
+
+**In chat:** `/confluence` or ask *"any confluence pages for this repo?"* after connecting credentials.
+
+> **Note:** Understand Repo today uses GitHub context only; Confluence is optional for **Knowledge Gaps** and explicit `/confluence` queries. The seeder supports testing those integration paths.
+
+---
+
 ### Microsoft Teams
 
 | Field | Value |
@@ -153,11 +184,15 @@ Set `JIRA_DEMO_GITHUB_OWNER` to your GitHub org so ticket descriptions list `git
 
 ---
 
-## 5. Model (no keys in extension)
+## 5. Model (LLM keys on server)
 
 **Settings section:** Model
 
-Provider and model are selected in the UI. **LLM API keys live on the Coop server**, not in the extension. If chat fails, check server-side keys with your operator.
+Provider and model are selected in the UI. **LLM API keys are not entered in the extension** — they are configured on the Coop server by your administrator.
+
+**Non-technical setup guide:** [llm-provider-keys.md](./llm-provider-keys.md) — step-by-step instructions to register Anthropic, OpenAI, Gemini, or DeepSeek and hand keys to your operator.
+
+**In the extension:** open **Model**, choose **LLM provider** and **Model**, keep **Enable live LLM chat** on, then try chat after your admin confirms keys are installed.
 
 ---
 
@@ -170,6 +205,7 @@ Not configured in the extension UI. See:
 | [api-v1.md](./api-v1.md) | Coop API auth (`COOP_API_TOKEN`) |
 | [webhook-backend.md](./webhook-backend.md) | GitHub/GitLab/Slack inbound webhooks |
 | [job-queue.md](./job-queue.md) | Jobs API, Postgres, Redis |
+| [llm-provider-keys.md](./llm-provider-keys.md) | Register LLM providers (plain-language guide) |
 | [zero-retention-llm.md](./zero-retention-llm.md) | LLM env vars, BYOK |
 
 ### LLM provider env vars (server)
@@ -198,7 +234,7 @@ Not configured in the extension UI. See:
 - GitHub/GitLab/Bitbucket scope docs not yet shown in UI
 - License key has no settings field (`coopAI.licenseKey` in code only)
 - Lightning Mode private-repo clone does not use saved code-host PATs
-- Confluence / Notion / Google Docs appear in health checks but are not configurable yet
+- Confluence / Notion / Google Docs appear in Settings → Integrations as **Coming soon** (degradation fallback plumbing only)
 
 ---
 

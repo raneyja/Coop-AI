@@ -1,4 +1,5 @@
 import React from "react";
+import { ChatProse } from "./ChatProse";
 
 type IntegrationResultCardProps = {
   title: string;
@@ -156,6 +157,15 @@ export function IntegrationResultText({
   children: React.ReactNode;
   muted?: boolean;
 }): React.ReactElement {
+  if (typeof children === "string") {
+    return (
+      <ChatProse
+        content={children}
+        className={muted ? "coop-result-text coop-result-text--muted" : "coop-result-text"}
+      />
+    );
+  }
+
   return <p className={muted ? "coop-result-text coop-result-text--muted" : "coop-result-text"}>{children}</p>;
 }
 

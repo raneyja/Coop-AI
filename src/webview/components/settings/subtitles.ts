@@ -26,6 +26,15 @@ function integrationNames(prefs: Preferences): string {
   if (prefs.hasTeamsToken) {
     names.push("Teams");
   }
+  if (prefs.hasConfluenceCredentials) {
+    names.push("Confluence");
+  }
+  if (prefs.hasNotionToken) {
+    names.push("Notion");
+  }
+  if (prefs.hasGoogleDocsToken) {
+    names.push("Google Docs");
+  }
   return names.length > 0 ? names.join(" · ") : "None configured";
 }
 
@@ -108,7 +117,7 @@ export function codeHostConfigured(prefs: Preferences, provider: Preferences["de
 
 export function integrationConfigured(
   prefs: Preferences,
-  provider: "slack" | "jira" | "teams"
+  provider: "slack" | "jira" | "teams" | "confluence" | "notion" | "google-docs"
 ): boolean {
   if (provider === "slack") {
     return prefs.hasSlackToken;
@@ -116,5 +125,14 @@ export function integrationConfigured(
   if (provider === "jira") {
     return prefs.hasJiraCredentials;
   }
-  return prefs.hasTeamsToken;
+  if (provider === "teams") {
+    return prefs.hasTeamsToken;
+  }
+  if (provider === "confluence") {
+    return prefs.hasConfluenceCredentials;
+  }
+  if (provider === "notion") {
+    return prefs.hasNotionToken;
+  }
+  return prefs.hasGoogleDocsToken;
 }

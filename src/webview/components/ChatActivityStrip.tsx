@@ -5,6 +5,7 @@ type ChatActivityStripProps = {
   error?: string;
   onDismissError?: () => void;
   contextWarning?: string;
+  onDismissContextWarning?: () => void;
   jobProgress?: JobProgressState;
   onDismissJob?: () => void;
   onCancelJob?: (jobId: string) => void;
@@ -21,6 +22,7 @@ export function ChatActivityStrip({
   error,
   onDismissError,
   contextWarning,
+  onDismissContextWarning,
   jobProgress,
   onDismissJob,
   onCancelJob,
@@ -124,6 +126,11 @@ export function ChatActivityStrip({
       {contextWarning ? (
         <div className="chat-activity-strip-row chat-activity-strip-row--warning">
           <span className="min-w-0">{contextWarning}</span>
+          {onDismissContextWarning ? (
+            <button type="button" className="chat-activity-strip-action" onClick={onDismissContextWarning}>
+              Dismiss
+            </button>
+          ) : null}
         </div>
       ) : null}
       {conflictCount > 0 ? (

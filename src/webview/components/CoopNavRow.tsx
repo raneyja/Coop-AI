@@ -9,7 +9,8 @@ type CoopNavRowProps = {
   subtitle: string;
   configured?: boolean;
   trailing?: React.ReactNode;
-  onClick: () => void;
+  disabled?: boolean;
+  onClick?: () => void;
 };
 
 export function CoopNavRow({
@@ -17,10 +18,17 @@ export function CoopNavRow({
   subtitle,
   configured,
   trailing,
+  disabled = false,
   onClick
 }: CoopNavRowProps): React.ReactElement {
   return (
-    <button type="button" className="coop-nav-row" onClick={onClick}>
+    <button
+      type="button"
+      className={`coop-nav-row${disabled ? " coop-nav-row--disabled" : ""}`}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
+    >
       <span className="min-w-0 flex-1 text-left">
         <span className="coop-settings-row-title flex items-center gap-1.5">
           {configured !== undefined ? (

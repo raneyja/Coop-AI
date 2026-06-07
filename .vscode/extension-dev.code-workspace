@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "name": "Coop AI",
+      "path": ".."
+    }
+  ],
+  "settings": {
+    "coopAI.devMode": true
+  }
+}

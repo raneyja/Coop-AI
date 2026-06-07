@@ -63,28 +63,6 @@ export type ConflictResolutionState = {
   updatedAt: string;
 };
 
-export type IntegrationHealthPayload = {
-  provider: string;
-  status: "healthy" | "degraded" | "offline";
-  lastCheck: string;
-  error?: string;
-  recoveryStrategy: "retry" | "cache" | "skip";
-  latency?: number;
-  errorRate?: number;
-};
-
-export type DegradationFeatureStatusPayload = {
-  feature: string;
-  canonicalFeature: string;
-  level: "full" | "partial" | "cached" | "unavailable";
-  label: string;
-  message: string;
-  required: string[];
-  optional: string[];
-  unavailableProviders: string[];
-  degradedProviders: string[];
-};
-
 export type JobProgressState = {
   jobId: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | "partial";

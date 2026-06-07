@@ -1,4 +1,5 @@
 import React from "react";
+import { coopNoticeClass, type CoopNoticeTone } from "./components/CoopNotice";
 import { RefreshButton } from "./components/RefreshButton";
 import type { IntentFeedbackState } from "./types";
 
@@ -8,51 +9,27 @@ type IntentFeedbackProps = {
   onRefreshContext?: () => void;
 };
 
-type FeedbackTone = {
-  border: string;
-  background: string;
-  foreground: string;
-  accent: string;
+const ACCENTS: Record<IntentFeedbackState["status"], string> = {
+  idle: "var(--coop-panel-muted)",
+  loading: "var(--vscode-progressBar-background)",
+  warning: "var(--vscode-inputValidation-warningBorder, #d19a66)",
+  "rate-limited": "var(--vscode-textLink-foreground, #3794ff)",
+  complete: "var(--vscode-testing-iconPassed, #22c55e)",
+  error: "var(--vscode-inputValidation-errorBorder, #f87171)"
 };
 
-const TONES: Record<IntentFeedbackState["status"], FeedbackTone> = {
-  idle: {
-    border: "var(--vscode-widget-border)",
-    background: "var(--vscode-editorWidget-background)",
-    foreground: "var(--vscode-descriptionForeground)",
-    accent: "var(--vscode-descriptionForeground)"
-  },
-  loading: {
-    border: "var(--vscode-focusBorder)",
-    background: "var(--vscode-editorWidget-background)",
-    foreground: "var(--coop-panel-foreground)",
-    accent: "var(--vscode-progressBar-background)"
-  },
-  warning: {
-    border: "var(--vscode-inputValidation-warningBorder)",
-    background: "var(--vscode-inputValidation-warningBackground)",
-    foreground: "var(--vscode-inputValidation-warningForeground, var(--coop-panel-foreground))",
-    accent: "var(--vscode-inputValidation-warningBorder)"
-  },
-  "rate-limited": {
-    border: "var(--vscode-inputValidation-infoBorder)",
-    background: "var(--vscode-inputValidation-infoBackground)",
-    foreground: "var(--vscode-inputValidation-infoForeground, var(--coop-panel-foreground))",
-    accent: "var(--vscode-inputValidation-infoBorder)"
-  },
-  complete: {
-    border: "var(--vscode-widget-border)",
-    background: "var(--vscode-editorWidget-background)",
-    foreground: "var(--vscode-descriptionForeground)",
-    accent: "var(--vscode-testing-iconPassed)"
-  },
-  error: {
-    border: "var(--vscode-inputValidation-errorBorder)",
-    background: "var(--vscode-inputValidation-errorBackground)",
-    foreground: "var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground))",
-    accent: "var(--vscode-inputValidation-errorBorder)"
+function noticeToneForStatus(status: IntentFeedbackState["status"]): CoopNoticeTone {
+  switch (status) {
+    case "warning":
+      return "warning";
+    case "rate-limited":
+      return "info";
+    case "error":
+      return "error";
+    default:
+      return "neutral";
   }
-};
+}
 
 const ACTION_LABELS: Record<string, string> = {
   "understand-repo": "Understand Repo",
@@ -67,7 +44,7 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
     return null;
   }
 
-  const tone = TONES[state.status];
+  const accent = ACCENTS[state.status];
   const progress = normalizeProgress(state.progress, state.status);
   const details = buildDetails(state);
   const canDismiss = state.status !== "loading" && Boolean(onDismiss);
@@ -77,17 +54,12 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
 
   return (
     <section
-      className="mx-3 mb-2 rounded-md border px-3 py-2 text-xs shadow-sm"
-      style={{
-        borderColor: tone.border,
-        background: tone.background,
-        color: tone.foreground
-      }}
+      className={`mx-3 mb-2 ${coopNoticeClass(noticeToneForStatus(state.status))}`}
       role={state.status === "error" ? "alert" : "status"}
       aria-live={state.status === "loading" ? "polite" : "assertive"}
     >
-      <div className="flex items-start gap-2">
-        <StatusGlyph status={state.status} accent={tone.accent} />
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <StatusGlyph status={state.status} accent={accent} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="min-w-0">
@@ -120,7 +92,7 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
           ) : null}
 
           {state.status === "loading" || state.status === "warning" ? (
-            <ProgressBar progress={progress} accent={tone.accent} indeterminate={state.progress === undefined} />
+            <ProgressBar progress={progress} accent={accent} indeterminate={state.progress === undefined} />
           ) : null}
 
           {details.footer ? (
