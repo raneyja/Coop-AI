@@ -14,7 +14,6 @@ export function useChatScrollAnchor(deps: unknown[]): ChatScrollAnchorRefs {
 
   useLayoutEffect(() => {
     const scrollToLatest = () => {
-      anchorRef.current?.scrollIntoView({ block: "end" });
       const el = containerRef.current;
       if (el) {
         el.scrollTop = el.scrollHeight;
