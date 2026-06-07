@@ -1,7 +1,9 @@
+// Coop validation: COOP-101 trace test
 import type { ServerResponse } from "node:http";
 import type { URLSearchParams } from "node:url";
 import type { GitHubAppService } from "./githubAppService";
 import type { GitHubAppConfig } from "./githubAppConfig";
+import { requireInstallAdmin } from "./authMiddleware";
 import type { OrgStore } from "./orgStore";
 import type { AuthContext } from "./orgStore";
 
@@ -44,6 +46,9 @@ async function handleInstallUrl(
 ): Promise<boolean> {
   if (!auth || auth.orgId === "legacy") {
     writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (!requireInstallAdmin(auth, response)) {
     return true;
   }
   if (!deps.githubApp || !deps.githubAppConfig) {
