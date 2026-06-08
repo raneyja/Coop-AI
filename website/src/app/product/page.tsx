@@ -4,17 +4,24 @@ import { CTASection } from "@/components/CTASection";
 import { HeroExampleCarousel } from "@/components/HeroExampleCarousel";
 import { ModelProviderLogos } from "@/components/ModelProviderLogos";
 import { ProductShowcaseCarousel } from "@/components/ProductShowcaseCarousel";
+import { QuickActionList } from "@/components/QuickActionList";
+import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/lib/site.config";
 
 export const metadata: Metadata = {
   title: "Product",
-  description: "Quick actions, chat, and zero-clone code intelligence inside VS Code."
+  description:
+    "Graph-grounded code intelligence, inline completions, and in-file edits inside VS Code — zero-clone indexing included."
 };
 
 const capabilities = [
   {
     title: "Remote knowledge graph",
     body: "CoopAI indexes repositories via webhooks and background jobs. The extension queries ownership, dependents, and decision signals without requiring a full local clone."
+  },
+  {
+    title: "Inline complete & edit",
+    body: "Ghost-text completions and selection-based edits in the open file. Graph-informed suggestions match team patterns — craftsmanship in the editor, not autonomous agents."
   },
   {
     title: "Multi-model chat",
@@ -33,6 +40,10 @@ const capabilities = [
     body: "CoopAI connects organizational context — Slack threads, tickets, and PR history — so answers reflect how decisions were actually made."
   },
   {
+    title: "Completion-only routing",
+    body: "Inline requests use a dedicated zero-retention path (`x-use-case: code-completion-only`) — separate from chat, with keys on your server."
+  },
+  {
     title: "Graceful degradation",
     body: "When graph data is unavailable, CoopAI falls back transparently and tells you what context is missing instead of hallucinating."
   }
@@ -43,11 +54,11 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="Code intelligence, inside the editor"
-        description="CoopAI connects code history, Slack, tickets, and your code graph to answer questions directly inside VS Code."
+        title="Understand deeply. Write in place."
+        description="CoopAI connects your code graph, Slack, and tickets for deep questions — and graph-grounded inline completions and in-file edits while you stay in the open file."
       />
 
-      <section className="border-b border-white/5 pb-16 pt-4 md:pb-20">
+      <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">
         <div className="mx-auto max-w-6xl px-6">
           <ProductShowcaseCarousel />
         </div>
@@ -56,19 +67,13 @@ export default function ProductPage() {
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-6">
           <ModelProviderLogos />
-          <h2 className="text-2xl font-semibold text-white">Quick actions</h2>
-          <p className="mt-3 max-w-2xl text-coop-muted">
-            One-click workflows grounded in your repo. Each action builds a structured prompt with
-            file, branch, and selection context.
-          </p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {siteConfig.features.map((f) => (
-              <div key={f.id} className="rounded-xl border border-white/10 p-5">
-                <h3 className="font-semibold text-white">{f.title}</h3>
-                <p className="mt-2 text-sm text-coop-muted">{f.description}</p>
-              </div>
-            ))}
-          </div>
+          <SectionHeading
+            label="quick_actions"
+            title="Quick actions & code creation"
+            description="One-click intelligence workflows plus inline complete and in-file edit — each grounded in file, branch, selection, and graph context."
+            className="mt-2"
+          />
+          <QuickActionList className="mt-10" />
 
           <div className="mx-auto mt-14 max-w-4xl md:mt-16">
             <HeroExampleCarousel compact />
@@ -76,9 +81,9 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <section className="border-y border-white/5 bg-coop-surface/20 py-16">
+      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-2xl font-semibold text-white">How it works</h2>
+          <SectionHeading label="setup" title="How it works" />
           <ol className="mt-10 grid gap-8 md:grid-cols-3">
             {[
               {
@@ -93,12 +98,12 @@ export default function ProductPage() {
               },
               {
                 step: "03",
-                title: "Get answers",
-                body: "Quick actions and chat from your graph, Slack, and tickets."
+                title: "Ask & write",
+                body: "Quick actions, chat, inline complete, and in-file edit — grounded in your graph, Slack, and tickets."
               }
             ].map((item) => (
-              <li key={item.step} className="relative">
-                <span className="font-mono text-sm text-coop-accent">{item.step}</span>
+              <li key={item.step} className="coop-card">
+                <span className="font-mono text-sm text-coop-index">{item.step}</span>
                 <h3 className="mt-2 text-lg font-semibold text-white">{item.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">{item.body}</p>
               </li>
@@ -107,20 +112,38 @@ export default function ProductPage() {
         </div>
       </section>
 
+      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <SectionHeading
+            label="write"
+            title={siteConfig.codeCreation.title}
+            description={siteConfig.codeCreation.tagline}
+          />
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {siteConfig.codeCreation.features.map((item) => (
+              <div key={item.id} className="coop-card">
+                <h3 className="font-semibold text-white">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-2xl font-semibold text-white">Capabilities</h2>
+          <SectionHeading label="features" title="Capabilities" />
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {capabilities.map((cap) => (
-              <div key={cap.title} className="rounded-xl border border-white/10 p-6">
+              <div key={cap.title} className="coop-card">
                 <h3 className="font-semibold text-white">{cap.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">{cap.body}</p>
               </div>
             ))}
           </div>
           <p className="mt-8 text-sm text-coop-muted">
-            Inline autocomplete and file @-mentions are on the roadmap.{" "}
-            <span className="text-white/70">Currently in active development.</span>
+            Graph-backed completion context and file @-mentions in chat are rolling out next.{" "}
+            <span className="text-white/70">Inline complete and edit selection are in active development.</span>
           </p>
         </div>
       </section>

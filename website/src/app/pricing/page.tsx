@@ -31,7 +31,7 @@ const tiers: PricingTier[] = [
     features: [
       "Zero-Clone remote code graph",
       "Optional integrations (Slack, Jira, Notion, and more)",
-      "Chat & quick actions — no full clone needed",
+      "Chat, quick actions, inline complete & edit — no full clone needed",
       "Workspace prompt library",
       "Cloud-hosted"
     ],
@@ -84,7 +84,7 @@ export default function PricingPage() {
           <>
             Start for free with Zero-Clone.
             <br />
-            Go Pro for <span className="font-semibold text-coop-accent">Lightning Mode</span>.
+            Go Pro for <span className="font-semibold text-coop-index">Lightning Mode</span>.
           </>
         }
         description="Every plan comes with a remote code graph from GitHub, GitLab, or Bitbucket, along with Slack, Jira, Notion, and other key tools. Pro unlocks Lightning Mode — managed cloud code graph indexing for dramatically quicker cross-repo search."
@@ -96,17 +96,17 @@ export default function PricingPage() {
             {tiers.map((tier) => (
               <div
                 key={tier.name}
-                className={`relative flex flex-col rounded-2xl border p-8 ${
+                className={`relative flex flex-col rounded-sm border p-8 ${
                   tier.highlighted
-                    ? "border-coop-blue/50 bg-coop-surface/50 shadow-lg shadow-coop-blue/10"
-                    : "border-white/10 bg-white/[0.02]"
+                    ? "border-coop-index/40 bg-coop-surface/50"
+                    : "border-coop-border bg-coop-editor"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="text-lg font-semibold text-white">{tier.name}</h2>
                   {tier.recommended ? (
-                    <span className="shrink-0 rounded-full border border-coop-blue/40 bg-coop-blue/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-coop-accent">
-                      Recommended
+                    <span className="shrink-0 rounded-sm border border-coop-index/40 bg-coop-index/10 px-2.5 py-0.5 font-mono text-[11px] text-coop-index">
+                      default
                     </span>
                   ) : null}
                 </div>
@@ -123,7 +123,7 @@ export default function PricingPage() {
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex gap-2 text-sm leading-snug text-coop-muted">
-                      <span className="mt-0.5 shrink-0 text-coop-accent" aria-hidden>
+                      <span className="mt-0.5 shrink-0 text-coop-index" aria-hidden>
                         ✓
                       </span>
                       <span>{feature}</span>
@@ -132,7 +132,7 @@ export default function PricingPage() {
                 </ul>
 
                 {tier.note ? (
-                  <p className="mt-5 border-t border-white/10 pt-4 text-sm text-coop-muted">
+                  <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">
                     {tier.note}
                   </p>
                 ) : (

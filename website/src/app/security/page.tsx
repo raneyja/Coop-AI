@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function SecurityPage() {
   return (
     <>
-      <div className="border-b border-white/5 bg-coop-surface/20 py-12">
+      <div className="border-b border-coop-border bg-coop-surface/20 py-12">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h1 className="text-4xl font-semibold tracking-tight text-white">Security</h1>
           <p className="mt-4 text-lg text-coop-muted">

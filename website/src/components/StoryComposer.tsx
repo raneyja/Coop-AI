@@ -29,7 +29,7 @@ export function StoryComposer({
             <p className="min-h-[2.75rem] text-[13px] leading-relaxed text-[#e5e5e5]">
               {typedQuestion || <span className="text-[#9d9d9d]">Ask Coop</span>}
               {isTyping ? (
-                <span className="story-cursor ml-px inline-block h-[1em] w-[2px] translate-y-[1px] bg-coop-accent" />
+                <span className="story-cursor ml-px inline-block h-[1em] w-[2px] translate-y-[1px] bg-coop-index" />
               ) : null}
             </p>
           ) : (

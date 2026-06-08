@@ -9,10 +9,13 @@ const config: Config = {
         coop: {
           blue: "#1F6FEB",
           accent: "#58A6FF",
+          index: "#3FB950",
+          warn: "#D29922",
           dark: "#0D1117",
           surface: "#161B22",
           border: "#30363D",
-          muted: "#9CA4AD"
+          muted: "#9CA4AD",
+          editor: "#1e1e1e"
         }
       },
       fontFamily: {

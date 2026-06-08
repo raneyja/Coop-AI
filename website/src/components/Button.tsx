@@ -3,9 +3,13 @@ import { marketplaceHref } from "@/lib/site.config";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
+const base =
+  "inline-flex items-center justify-center rounded-sm px-4 py-2 text-sm font-medium font-mono transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index";
+
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-white text-coop-dark hover:bg-white/90",
-  secondary: "border border-white/15 bg-white/5 text-white hover:bg-white/10",
+  primary: "bg-coop-index text-coop-dark hover:bg-[#46c35a]",
+  secondary:
+    "border border-coop-border bg-coop-surface text-white/90 hover:border-coop-muted/50 hover:bg-[#1c2128]",
   ghost: "text-coop-muted hover:text-white"
 };
 
@@ -18,7 +22,7 @@ type ButtonProps = {
 };
 
 export function Button({ href, children, variant = "primary", external, className = "" }: ButtonProps) {
-  const classes = `inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition ${variants[variant]} ${className}`;
+  const classes = `${base} ${variants[variant]} ${className}`;
 
   if (external) {
     return (

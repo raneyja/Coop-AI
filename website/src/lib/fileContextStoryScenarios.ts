@@ -21,7 +21,8 @@ export type StorySourceLink = {
   sublabel: string;
 };
 
-export type FileContextStory = {
+export type InquiryStory = {
+  kind: "inquiry";
   id: string;
   feature: string;
   activeTab: string;
@@ -41,8 +42,12 @@ export type FileContextStory = {
   };
 };
 
-export const FILE_CONTEXT_STORIES: FileContextStory[] = [
+/** @deprecated Use InquiryStory */
+export type FileContextStory = InquiryStory;
+
+export const FILE_CONTEXT_STORIES: InquiryStory[] = [
   {
+    kind: "inquiry",
     id: "blast-radius",
     feature: "Blast Radius",
     activeTab: "token_validator.ts",
@@ -144,6 +149,7 @@ Slack thread in \`#billing-auth\` (Sep 18) covers empty-payload handling. Jira \
     }
   },
   {
+    kind: "inquiry",
     id: "trace-decision",
     feature: "Trace Decision",
     activeTab: "auth_middleware.go",
@@ -239,7 +245,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
   }
 ];
 
-export function getFileContextStory(id: string): FileContextStory {
+export function getFileContextStory(id: string): InquiryStory {
   const story = FILE_CONTEXT_STORIES.find((s) => s.id === id);
   if (!story) throw new Error(`Unknown story: ${id}`);
   return story;

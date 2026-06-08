@@ -4,7 +4,7 @@ import { siteConfig } from "@/lib/site.config";
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-coop-dark">
+    <footer className="border-t border-coop-border bg-coop-dark">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-4">
           <div className="md:col-span-1">
@@ -83,7 +83,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/5 pt-8 sm:flex-row sm:items-center">
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-coop-border pt-8 sm:flex-row sm:items-center">
           <p className="text-sm text-coop-muted">
             © {new Date().getFullYear()} CoopAI. All rights reserved.
           </p>

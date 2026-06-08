@@ -51,7 +51,7 @@ export default async function DemoPage({ searchParams }: DemoPageProps) {
             submitLabel="Join waitlist"
           />
           {!waitlistFirst && (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 lg:col-span-2">
+            <div className="coop-panel p-8 lg:col-span-2">
               <h3 className="text-lg font-semibold text-white">Prefer to try it yourself?</h3>
               <p className="mt-2 text-sm text-coop-muted">
                 The free developer extension will be available on the VS Code Marketplace at launch.

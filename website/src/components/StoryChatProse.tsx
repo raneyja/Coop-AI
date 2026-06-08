@@ -30,7 +30,7 @@ export function StoryChatProse({
         </div>
       ))}
       {showCursor ? (
-        <span className="story-cursor inline-block h-4 w-0.5 translate-y-[2px] bg-coop-accent" aria-hidden />
+        <span className="story-cursor inline-block h-4 w-0.5 translate-y-[2px] bg-coop-index" aria-hidden />
       ) : null}
     </div>
   );

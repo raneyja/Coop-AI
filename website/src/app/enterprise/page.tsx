@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { EnterpriseIntegrationGraph } from "@/components/EnterpriseIntegrationGraph";
+import { SectionHeading } from "@/components/SectionHeading";
 
 export const metadata: Metadata = {
   title: "Enterprise",
@@ -43,12 +44,15 @@ export default function EnterprisePage() {
         tight
         eyebrow="Enterprise"
         title="Teams need context, too"
-        description="CoopAI gives engineering teams deep code intelligence across their entire stack"
+        description="CoopAI gives engineering teams deep code intelligence and graph-grounded code creation across their entire stack"
       />
 
-      <section className="pb-6 md:pb-8">
+      <section className="border-b border-coop-border pb-6 md:pb-8">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <EnterpriseIntegrationGraph />
+          <p className="mt-2 font-mono text-[10px] text-coop-muted">
+            symbol graph (scip) · full-text (zoekt) · edges from webhook index jobs
+          </p>
         </div>
       </section>
 
@@ -56,7 +60,7 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid gap-6 md:grid-cols-2">
             {enterpriseFeatures.map((feature) => (
-              <div key={feature.title} className="rounded-xl border border-white/10 p-6">
+              <div key={feature.title} className="coop-card">
                 <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-coop-muted">{feature.body}</p>
               </div>
@@ -65,29 +69,28 @@ export default function EnterprisePage() {
         </div>
       </section>
 
-      <section className="border-y border-white/5 bg-coop-surface/20 py-16">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-2xl font-semibold text-white">For engineering leaders</h2>
-          <p className="mt-4 text-coop-muted">
-            Reduce the tax of tribal knowledge. CoopAI helps teams onboard faster, answer questions
-            without interrupting senior engineers, and surface ownership and blast radius before
-            changes ship — with controls your security team can review.
-          </p>
-          <ul className="mt-8 space-y-3 text-left text-sm text-coop-muted">
+      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
+        <div className="mx-auto max-w-3xl px-6">
+          <SectionHeading
+            label="leadership"
+            title="For engineering leaders"
+            description="Reduce the tax of tribal knowledge. CoopAI helps teams onboard faster, answer questions without interrupting senior engineers, and surface ownership and blast radius before changes ship — with controls your security team can review."
+          />
+          <ul className="mt-8 space-y-3 text-sm text-coop-muted">
             <li className="flex gap-3">
-              <span className="text-coop-accent">✓</span>
+              <span className="text-coop-index">✓</span>
               Deploy CoopAI on infrastructure you control
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-accent">✓</span>
+              <span className="text-coop-index">✓</span>
               Integrate with GitHub, GitLab, and Bitbucket webhooks
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-accent">✓</span>
+              <span className="text-coop-index">✓</span>
               Zero-clone architecture — no full repo copies on every laptop
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-accent">✓</span>
+              <span className="text-coop-index">✓</span>
               DPA-ready zero-retention addendum template available
             </li>
           </ul>
@@ -98,7 +101,7 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-6xl px-6 text-center">
           <p className="text-coop-muted">
             Read our full security posture on the{" "}
-            <Link href="/security" className="font-medium text-coop-accent hover:text-white">
+            <Link href="/security" className="font-medium text-coop-index hover:text-white">
               Security page
             </Link>
             .

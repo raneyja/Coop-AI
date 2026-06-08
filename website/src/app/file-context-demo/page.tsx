@@ -5,7 +5,7 @@ import { FileContextStoryDemo } from "@/components/FileContextStoryDemo";
 
 export const metadata: Metadata = {
   title: "File Context Story — Preview",
-  description: "Auto-playing demo: ask a question, search your stack, get a grounded answer.",
+  description: "Auto-playing demo: deep questions, inline complete, and in-file edit in VS Code.",
   robots: { index: false, follow: false }
 };
 
@@ -15,8 +15,8 @@ export default function FileContextDemoPage() {
       <PageHeader
         tight
         eyebrow="Preview · not linked in nav"
-        title="Ask a question. CoopAI searches your stack."
-        description="Watch a developer type a real question, see CoopAI pull context from GitHub, GitLab, Slack, and Jira, then return an answer grounded in files and repos across the org."
+        title="Understand deeply. Write in place."
+        description="Watch scenarios alternate: deep questions with stack-wide search, graph-grounded inline completions, and in-file edits with inline diffs."
       />
 
       <section className="pb-24">
@@ -25,7 +25,7 @@ export default function FileContextDemoPage() {
             <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-amber-200/90">
               Auto-playing demo
             </span>
-            <Link href="/" className="text-coop-accent hover:text-white">
+            <Link href="/" className="text-coop-index hover:text-white">
               ← Back to homepage
             </Link>
           </div>

@@ -13,9 +13,9 @@ export function BlogPostRow({ post }: BlogPostRowProps) {
         <p className="text-sm text-coop-muted">
           <span>{formatPostDateShort(post.publishedAt)}</span>
           <span className="mx-2 text-white/20">·</span>
-          <span className="capitalize text-coop-accent">{formatCategoryLabel(post.category)}</span>
+          <span className="capitalize text-coop-index">{formatCategoryLabel(post.category)}</span>
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-white transition-colors group-hover:text-coop-accent md:text-2xl">
+        <h2 className="mt-2 text-xl font-semibold tracking-tight text-white transition-colors group-hover:text-coop-index md:text-2xl">
           <Link href={`/blog/${post.slug}`} className="after:absolute after:inset-0">
             {post.title}
           </Link>

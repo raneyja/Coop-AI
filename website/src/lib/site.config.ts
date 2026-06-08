@@ -3,10 +3,12 @@ export const siteConfig = {
   domain: "coop-ai.dev",
   url: "https://coop-ai.dev",
   description:
-    "Understand any codebase in seconds. CoopAI connects code history, Slack, tickets, and your code graph to answer questions in VS Code.",
+    "Understand and refine code in place. CoopAI connects your code graph, Slack, and tickets to answer deep questions and write graph-grounded completions inside VS Code.",
   tagline: "Your codebase, finally explained.",
   subheadline:
-    "Understand any codebase in seconds. CoopAI connects code history, Slack, tickets, and your code graph to answer questions directly inside VS Code.",
+    "Understand any codebase in seconds — then complete and edit with graph-grounded context. CoopAI connects code history, Slack, tickets, and your symbol graph directly inside VS Code.",
+  /** Shown above the hero headline — tech stack hints, not marketing copy */
+  heroMeta: "zero-clone · zoekt + scip",
   contactEmail: "hello@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   links: {
@@ -53,6 +55,32 @@ export const siteConfig = {
       description: "Missing context and blind spots before you ship."
     }
   ],
+  codeCreation: {
+    title: "Graph-grounded code creation",
+    tagline: "Stay in the file. Write like you've been in the repo for years.",
+    description:
+      "CoopAI is built for engineers perfecting production code — not vibe-coding greenfield apps. Inline completions and in-file edits draw from your indexed graph, team patterns, and open buffer so suggestions match how your org actually writes code.",
+    features: [
+      {
+        id: "inline-complete",
+        title: "Inline complete",
+        description:
+          "Ghost-text completions as you type — single- and multi-line, Tab to accept. Optional graph context for callers, types, and conventions from your indexed repo."
+      },
+      {
+        id: "edit-selection",
+        title: "Edit selection",
+        description:
+          "Highlight a block, describe the change, review an inline diff. Accept, retry, or undo — craftsmanship in the editor, not an autonomous agent rewriting your tree."
+      },
+      {
+        id: "completion-routing",
+        title: "Completion-only routing",
+        description:
+          "Inline requests use a separate zero-retention code-completion path (`x-use-case: code-completion-only`) — distinct from chat, with keys on your server."
+      }
+    ]
+  },
   contextIntelligence: {
     title: "Lightning Intelligence",
     tagline: "Understand any codebase instantly — without cloning monorepos.",

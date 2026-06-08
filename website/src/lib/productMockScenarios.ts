@@ -3,14 +3,17 @@ export type CodeToken = {
   v: string;
 };
 
-export type ProductMockScenario = {
+export type ProductMockScenarioBase = {
   id: string;
   feature: string;
-  question: string;
   ariaLabel: string;
   tabs: { active: string; inactive?: string };
+};
+
+export type InquiryProductMockScenario = ProductMockScenarioBase & {
+  variant?: "inquiry";
+  question: string;
   answer: {
-    /** Cursor-style prose — same format as the extension ChatProse renderer */
     content: string;
   };
   code: {
@@ -18,6 +21,19 @@ export type ProductMockScenario = {
     callout: { title: string; subtitle: string; detail: string; tone: "violet" | "amber" | "accent" };
   };
 };
+
+export type CodeCreationProductMockScenario = ProductMockScenarioBase & {
+  variant: "complete" | "edit";
+  codeCreationId: string;
+};
+
+export type ProductMockScenario = InquiryProductMockScenario | CodeCreationProductMockScenario;
+
+export function isInquiryProductMock(
+  scenario: ProductMockScenario
+): scenario is InquiryProductMockScenario {
+  return scenario.variant !== "complete" && scenario.variant !== "edit";
+}
 
 export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
   {
@@ -85,6 +101,15 @@ High blast radius on empty-payload handling. Slack \`#billing-auth\` discussed t
         tone: "violet"
       }
     }
+  },
+  {
+    id: "inline-complete",
+    variant: "complete",
+    feature: "Inline complete",
+    ariaLabel:
+      "CoopAI inline completion finishing an empty-payload guard using graph-informed AuthError patterns",
+    tabs: { active: "token_validator.ts", inactive: "session_store.go" },
+    codeCreationId: "inline-complete"
   },
   {
     id: "blast-radius",
@@ -192,6 +217,15 @@ Security-sensitive OAuth refresh path — include a security reviewer before mer
         tone: "accent"
       }
     }
+  },
+  {
+    id: "edit-selection",
+    variant: "edit",
+    feature: "Edit selection",
+    ariaLabel:
+      "CoopAI editing a selected OAuth refresh branch to match team rejection semantics from token_validator.ts",
+    tabs: { active: "oauth_refresh.ts", inactive: "token_validator.ts" },
+    codeCreationId: "edit-selection"
   },
   {
     id: "understand-repo",

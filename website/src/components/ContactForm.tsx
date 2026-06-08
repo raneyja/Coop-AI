@@ -61,7 +61,7 @@ export function ContactForm({
 
   if (status === "success") {
     return (
-      <div className="rounded-2xl border border-white/10 bg-coop-surface/50 p-8 text-center">
+      <div className="coop-panel p-8 text-center">
         <p className="text-lg font-medium text-white">Thanks — we&apos;ll be in touch soon.</p>
         <p className="mt-2 text-sm text-coop-muted">
           {type === "demo"
@@ -73,7 +73,7 @@ export function ContactForm({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-coop-surface/50 p-8">
+    <div className="coop-panel p-8">
       <h2 className="text-xl font-semibold text-white">{title}</h2>
       <p className="mt-2 text-sm text-coop-muted">{description}</p>
 
@@ -97,7 +97,7 @@ export function ContactForm({
               rows={3}
               defaultValue={defaultMessage}
               key={defaultMessage ?? "message-empty"}
-              className="mt-1.5 w-full rounded-lg border border-white/10 bg-coop-dark px-3 py-2 text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-blue focus:outline-none focus:ring-1 focus:ring-coop-blue"
+              className="mt-1.5 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30"
               placeholder="Team size, repos, security requirements..."
             />
           </div>
@@ -112,7 +112,7 @@ export function ContactForm({
         <button
           type="submit"
           disabled={status === "loading"}
-          className="w-full rounded-full bg-white py-2.5 text-sm font-medium text-coop-dark transition hover:bg-white/90 disabled:opacity-60 sm:w-auto sm:px-8"
+          className="w-full rounded-sm bg-coop-index py-2.5 font-mono text-sm font-medium text-coop-dark transition hover:bg-[#46c35a] disabled:opacity-60 sm:w-auto sm:px-8"
         >
           {status === "loading" ? "Submitting…" : submitLabel}
         </button>
@@ -146,7 +146,7 @@ function Field({
         type={type}
         required={required}
         placeholder={placeholder}
-        className="mt-1.5 w-full rounded-lg border border-white/10 bg-coop-dark px-3 py-2 text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-blue focus:outline-none focus:ring-1 focus:ring-coop-blue"
+        className="mt-1.5 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30"
       />
     </div>
   );

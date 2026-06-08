@@ -17,12 +17,13 @@ export function LogoStrip({
   ariaLabel
 }: LogoStripProps) {
   const sectionStyles =
-    variant === "section" ? "mb-10 border-b border-white/5 pb-10" : "";
+    variant === "section" ? "mb-10 border-b border-coop-border pb-10" : "";
 
   return (
     <div className={`${sectionStyles} ${className}`.trim()} aria-label={ariaLabel ?? label}>
-      <p className="mb-5 text-center text-[11px] font-medium uppercase tracking-[0.2em] text-white/30">
-        {label}
+      <p className="coop-section-label mb-5 text-center">
+        <span className="text-coop-muted">{"// "}</span>
+        {label.toLowerCase()}
       </p>
       <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4 md:gap-x-10">
         {items.map(({ name, Icon, colored }) => (

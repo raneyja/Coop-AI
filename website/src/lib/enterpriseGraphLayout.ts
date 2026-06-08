@@ -52,7 +52,7 @@ export const CATEGORY_THEME: Record<
 > = {
   repos: { accent: "#58A6FF", zone: "rgba(88, 166, 255, 0.06)", label: "Repositories" },
   code: { accent: "#79C0FF", zone: "rgba(121, 192, 255, 0.05)", label: "Code graph" },
-  collab: { accent: "#BC8CFF", zone: "rgba(188, 140, 255, 0.06)", label: "Team context" },
+  collab: { accent: "#D29922", zone: "rgba(210, 153, 34, 0.05)", label: "Team context" },
   ai: { accent: "#3FB950", zone: "rgba(63, 185, 80, 0.06)", label: "AI & inference" },
   editor: { accent: "#1F6FEB", zone: "rgba(31, 111, 235, 0.05)", label: "Developer surface" }
 };

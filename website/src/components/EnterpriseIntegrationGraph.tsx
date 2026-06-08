@@ -3,13 +3,13 @@
 import { useMemo } from "react";
 import {
   Box,
+  Cpu,
   FileCode2,
   FolderGit2,
   FolderOpen,
   GitCommitHorizontal,
   GitGraph,
   MessageSquare,
-  Sparkles,
   SquareCode,
   Ticket,
   type LucideIcon
@@ -38,7 +38,7 @@ const ICONS: Record<GraphNodeDef["icon"], LucideIcon> = {
   bitbucket: Box,
   slack: MessageSquare,
   jira: Ticket,
-  sparkles: Sparkles,
+  sparkles: Cpu,
   vscode: SquareCode,
   fileCode: FileCode2,
   folder: FolderOpen,
@@ -71,13 +71,6 @@ export function EnterpriseIntegrationGraph() {
             preserveAspectRatio="xMidYMid meet"
             aria-hidden
           >
-            <defs>
-              <radialGradient id="hub-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#58A6FF" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#58A6FF" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-
             {categoryArcs.map((arc) => (
               <path
                 key={arc.category}
@@ -89,8 +82,6 @@ export function EnterpriseIntegrationGraph() {
               />
             ))}
 
-            <circle cx={GRAPH_HUB.x} cy={GRAPH_HUB.y} r="88" fill="url(#hub-glow)" />
-
             {layout.map((node, i) => {
               const theme = CATEGORY_THEME[node.category];
               const isActive = node.connectionWeight === "active";
@@ -100,13 +91,12 @@ export function EnterpriseIntegrationGraph() {
                   d={connectionPath(node)}
                   fill="none"
                   stroke={theme.accent}
-                  strokeWidth={isActive ? 2 : 1.15}
-                  strokeOpacity={isActive ? 0.45 : 0.28}
+                  strokeWidth={isActive ? 1.5 : 1}
+                  strokeOpacity={isActive ? 0.55 : 0.22}
                   pathLength={1}
-                  className="enterprise-graph-path"
+                  className={isActive ? "enterprise-graph-path" : undefined}
                   style={{
-                    animationDelay: `${0.15 + i * 0.055}s`,
-                    ["--path-pulse-opacity" as string]: isActive ? "0.55" : "0.35"
+                    animationDelay: `${0.15 + i * 0.055}s`
                   }}
                 />
               );
@@ -127,10 +117,9 @@ export function EnterpriseIntegrationGraph() {
               animationDelay: "0.05s"
             }}
           >
-            <div className="enterprise-graph-hub-ring relative flex h-full items-center justify-center rounded-xl border border-coop-accent/50 bg-[#1a1d27] px-4 shadow-[0_0_48px_rgba(88,166,255,0.22)]">
-              <div className="pointer-events-none absolute -inset-1 rounded-xl bg-coop-accent/10 blur-md" aria-hidden />
-              <p className="relative whitespace-nowrap text-[1.65cqw] font-semibold tracking-tight text-white">
-                CoopAI
+            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-sm border-2 border-coop-index bg-[#1a1d27] px-4 font-mono">
+              <p className="whitespace-nowrap text-[1.65cqw] font-semibold text-white">
+                coop<span className="text-coop-index">index</span>
               </p>
             </div>
           </div>
@@ -170,7 +159,7 @@ function GraphNodeCard({
       aria-label={`${node.label} — ${node.categoryLabel}`}
     >
       <div
-        className="group flex h-full w-full items-stretch overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1d27] shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:shadow-[0_12px_32px_rgba(0,0,0,0.45)] hover:ring-2 hover:ring-white/10"
+        className="group flex h-full w-full items-stretch overflow-hidden rounded-sm border border-white/[0.08] bg-[#1a1d27] transition duration-200 hover:border-coop-muted/40"
         style={{
           borderLeftWidth: 3,
           borderLeftColor: theme.accent

@@ -36,9 +36,9 @@ import {
 } from "@/lib/fileContextGraphLayout";
 
 const FEATURE_TONE: Record<FileContextScenario["feature"], string> = {
-  "Trace Decision": "text-coop-accent border-coop-accent/40 bg-coop-accent/10",
+  "Trace Decision": "text-coop-index border-coop-index/40 bg-coop-index/10",
   "Blast Radius": "text-amber-300 border-amber-400/40 bg-amber-400/10",
-  "Knowledge Gaps": "text-violet-300 border-violet-400/40 bg-violet-400/10",
+  "Knowledge Gaps": "text-coop-warn border-coop-warn/40 bg-coop-warn/10",
   "Understand Repo": "text-emerald-300 border-emerald-400/40 bg-emerald-400/10"
 };
 
@@ -64,11 +64,14 @@ type FileContextGraphProps = {
   /** Start on a specific scenario id */
   initialScenarioId?: string;
   className?: string;
+  /** Sidebar layout — graph only, no file picker or detail panels */
+  compact?: boolean;
 };
 
 export function FileContextGraph({
   initialScenarioId = FILE_CONTEXT_SCENARIOS[0].id,
-  className = ""
+  className = "",
+  compact = false
 }: FileContextGraphProps) {
   const [scenarioId, setScenarioId] = useState(initialScenarioId);
   const [fileFocused, setFileFocused] = useState(false);
@@ -127,28 +130,32 @@ export function FileContextGraph({
   const hubTopPct = (FILE_HUB.y / VIEW_H) * 100;
 
   return (
-    <div className={`file-context-graph ${className}`.trim()}>
+    <div className={`file-context-graph ${compact ? "flex h-full min-h-0 flex-col" : ""} ${className}`.trim()}>
       {/* File picker */}
+      {!compact && (
       <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
         {FILE_CONTEXT_SCENARIOS.map((s) => (
           <button
             key={s.id}
             type="button"
             onClick={() => switchScenario(s.id)}
-            className={`rounded-full border px-3.5 py-1.5 font-mono text-xs transition md:text-sm ${
+            className={`rounded-sm border px-3.5 py-1.5 font-mono text-xs transition md:text-sm ${
               s.id === scenarioId
-                ? "border-coop-accent/50 bg-coop-accent/15 text-white"
-                : "border-white/10 bg-white/[0.02] text-white/60 hover:border-white/20 hover:text-white/85"
+                ? "border-coop-index/50 bg-coop-index/10 text-white"
+                : "border-coop-border bg-coop-editor text-white/60 hover:border-coop-muted/50 hover:text-white/85"
             }`}
           >
             {s.file.name}
           </button>
         ))}
       </div>
+      )}
 
       {/* Desktop graph */}
       <div
-        className={`file-context-graph-stage relative hidden overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1117] md:block ${
+        className={`file-context-graph-stage relative overflow-hidden border border-coop-border bg-[#0f1117] ${
+          compact ? "h-full min-h-[18rem] flex-1 rounded-sm" : "hidden rounded-sm md:block"
+        } ${
           transitioning ? "opacity-60" : "opacity-100"
         } transition-opacity duration-200`}
         aria-label={`Context sources linked to ${scenario.file.name}`}
@@ -156,23 +163,29 @@ export function FileContextGraph({
         <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-70" aria-hidden />
 
         <div
-          className="file-context-graph-canvas relative mx-auto w-full"
-          style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
+          className={`file-context-graph-canvas relative ${
+            compact ? "absolute inset-0 h-full w-full" : "mx-auto w-full"
+          }`}
+          style={compact ? undefined : { aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
         >
           <svg
             className="absolute inset-0 h-full w-full"
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            preserveAspectRatio="xMidYMid meet"
+            preserveAspectRatio={compact ? "xMidYMid slice" : "xMidYMid meet"}
             aria-hidden
           >
             <defs>
+              {!compact && (
               <radialGradient id="file-hub-glow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#79C0FF" stopOpacity="0.28" />
                 <stop offset="100%" stopColor="#79C0FF" stopOpacity="0" />
               </radialGradient>
+              )}
             </defs>
 
+            {!compact && (
             <circle cx={FILE_HUB.x} cy={FILE_HUB.y} r="96" fill="url(#file-hub-glow)" />
+            )}
 
             {orbitNodes.map((node, i) => {
               const theme = ORBIT_THEME[node.kind] ?? ORBIT_THEME.graph;
@@ -252,6 +265,7 @@ export function FileContextGraph({
           </div>
 
           {/* VS Code output chip */}
+          {!compact && (
           <div
             className="absolute z-10 -translate-x-1/2"
             style={{ left: `${hubLeftPct}%`, top: `${hubTopPct + heightPct(FILE_CARD.height) * 0.72}%` }}
@@ -261,10 +275,12 @@ export function FileContextGraph({
               Answers in VS Code sidebar
             </div>
           </div>
+          )}
         </div>
       </div>
 
       {/* Mobile list */}
+      {!compact && (
       <div className="space-y-3 md:hidden">
         <div
           className="rounded-xl border border-[#79C0FF]/35 bg-[#1a1d27] p-4"
@@ -292,8 +308,10 @@ export function FileContextGraph({
           ))}
         </ul>
       </div>
+      )}
 
       {/* Detail panel */}
+      {!compact && (
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <ContextPacket
           scenario={scenario}
@@ -329,6 +347,7 @@ export function FileContextGraph({
           </p>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -396,7 +415,7 @@ function OrbitNodeCard({
       onBlur={onLeave}
     >
       <div
-        className={`group flex h-full w-full items-stretch overflow-hidden rounded-xl border bg-[#1a1d27] shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.45)] ${
+        className={`group flex h-full w-full items-stretch overflow-hidden rounded-sm border bg-[#1a1d27] transition duration-200 hover:border-coop-muted/40 ${
           node.isGap
             ? "border-dashed border-amber-400/45"
             : active

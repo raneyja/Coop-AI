@@ -32,7 +32,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
   return (
     <>
       {featuredPosts.length > 0 && (
-        <section className="border-b border-white/5 py-12 md:py-16">
+        <section className="border-b border-coop-border py-12 md:py-16">
           <div className="mx-auto max-w-6xl px-6">
             {featuredPosts.length === 1 ? (
               <div className="max-w-3xl">
@@ -52,11 +52,14 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
         </section>
       )}
 
-      <section className="border-b border-white/5 py-10 md:py-12">
+      <section className="border-b border-coop-border py-10 md:py-12">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col gap-4 border border-white/10 bg-coop-surface/30 px-6 py-8 md:flex-row md:items-center md:justify-between">
+          <div className="coop-panel flex flex-col gap-4 px-6 py-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-coop-accent">Stay in the loop</p>
+              <p className="coop-section-label">
+                <span className="text-coop-muted">{"// "}</span>
+                stay in the loop
+              </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
                 Product updates from the CoopAI team
               </h2>
@@ -67,7 +70,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
             </div>
             <a
               href="mailto:hello@coop-ai.dev?subject=CoopAI%20blog%20updates"
-              className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white px-5 py-2.5 text-sm font-medium text-coop-dark transition hover:bg-white/90"
+              className="inline-flex shrink-0 items-center justify-center rounded-sm border border-coop-border bg-coop-surface px-5 py-2.5 font-mono text-sm text-white/90 transition hover:border-coop-muted/50"
             >
               Get updates →
             </a>
@@ -93,10 +96,10 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
                       setActiveFilter(filter);
                       setVisibleCount(12);
                     }}
-                    className={`rounded-full px-4 py-1.5 text-sm transition ${
+                    className={`rounded-sm px-4 py-1.5 font-mono text-sm transition ${
                       isActive
-                        ? "bg-white text-coop-dark"
-                        : "border border-white/10 text-coop-muted hover:border-white/20 hover:text-white"
+                        ? "bg-coop-index text-coop-dark"
+                        : "border border-coop-border text-coop-muted hover:border-coop-muted/50 hover:text-white"
                     }`}
                   >
                     {label}
@@ -109,7 +112,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
           {visiblePosts.length === 0 ? (
             <p className="mt-12 text-coop-muted">No posts in this category yet.</p>
           ) : (
-            <div className="mt-8 divide-y divide-white/10 border-t border-white/10">
+            <div className="mt-8 divide-y divide-coop-border border-t border-coop-border">
               {visiblePosts.map((post) => (
                 <BlogPostRow key={post.slug} post={post} />
               ))}
@@ -121,7 +124,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
               <button
                 type="button"
                 onClick={() => setVisibleCount((count) => count + 12)}
-                className="text-sm font-medium text-coop-accent transition hover:text-white"
+                className="text-sm font-medium text-coop-index transition hover:text-white"
               >
                 View more ↓
               </button>

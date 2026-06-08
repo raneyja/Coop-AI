@@ -45,6 +45,18 @@ export const HERO_EXAMPLES: HeroExample[] = [
     question:
       "Pull the Slack thread and Jira ticket tied to `auth_middleware.go` — why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days and link the original design note.",
     highlights: ["#platform-auth thread", "PROJ-1847 + commits"]
+  },
+  {
+    id: "inline-complete",
+    question:
+      "I'm finishing the empty-payload guard in `token_validator.ts` — complete the `if` using the same `AuthError` pattern as the rest of `billing/auth` and what our graph shows for downstream callers.",
+    highlights: ["ghost-text complete", "graph · AuthError pattern"]
+  },
+  {
+    id: "edit-selection",
+    question:
+      "Select the refresh-token branch in `oauth_refresh.ts` and edit it to match rejection semantics from `token_validator.ts` — throw `AuthError('empty_or_unsigned_payload')` instead of returning null.",
+    highlights: ["⌥K edit selection", "inline diff accept"]
   }
 ];
 
@@ -149,14 +161,8 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
       }}
     >
       <div
-        className={`relative overflow-hidden border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-white/[0.02] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
-          compact ? "rounded-xl" : "rounded-2xl"
-        } ${cardPadding}`}
+        className={`coop-panel-inset relative overflow-hidden rounded-sm ${cardPadding}`}
       >
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coop-accent/40 to-transparent"
-          aria-hidden
-        />
 
         {/* In-flow sizer: all slides visible to layout (fixes mobile Safari grid + opacity) */}
         <div className="relative">
@@ -213,8 +219,8 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
                 } ${
                   i === index
                     ? compact
-                      ? "w-5 bg-coop-accent"
-                      : "w-7 bg-coop-accent"
+                      ? "w-5 bg-coop-index"
+                      : "w-7 bg-coop-index"
                     : compact
                       ? "w-1 bg-white/20 hover:bg-white/40"
                       : "w-1.5 bg-white/20 hover:bg-white/40"
@@ -229,7 +235,7 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
             }`}
           >
             {isCopied ? (
-              <span className="font-medium text-coop-accent">Copied to clipboard</span>
+              <span className="font-medium text-coop-index">Copied to clipboard</span>
             ) : (
               <>
                 <span className="text-white/50">Click to copy</span>
@@ -311,7 +317,7 @@ function HeroSlideBody({
           type="button"
           onClick={onActivate}
           tabIndex={isActive ? 0 : -1}
-          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
+          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-index/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
           aria-label={`Example question: ${item.question}. Click to copy.`}
         >
           {question}
@@ -346,7 +352,7 @@ function QuestionText({ text }: { text: string }) {
         part.startsWith("`") && part.endsWith("`") ? (
           <code
             key={i}
-            className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[0.92em] text-coop-accent/95"
+            className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[0.92em] text-coop-index/95"
           >
             {part.slice(1, -1)}
           </code>
@@ -373,8 +379,8 @@ function HighlightPill({
     <span
       className={
         variant === "default"
-          ? `inline-flex items-center rounded-full border border-coop-accent/25 bg-coop-blue/10 font-medium text-coop-accent ${size}`
-          : `inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] font-medium text-white/70 ${size}`
+          ? `inline-flex items-center rounded-sm border border-coop-border bg-coop-surface font-mono text-coop-index ${size}`
+          : `inline-flex items-center rounded-sm border border-coop-border bg-coop-editor font-mono text-white/70 ${size}`
       }
     >
       {children}

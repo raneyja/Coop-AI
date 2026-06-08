@@ -8,8 +8,35 @@
   }
 
   ::selection {
-    background-color: rgba(31, 111, 235, 0.35);
+    background-color: rgba(63, 185, 80, 0.25);
     color: white;
+  }
+}
+
+@layer components {
+  .coop-panel {
+    @apply rounded-sm border border-coop-border bg-coop-editor;
+  }
+
+  .coop-panel-inset {
+    @apply coop-panel border-l-2 border-l-coop-index;
+  }
+
+  .coop-prompt-line {
+    @apply font-mono text-sm text-coop-muted;
+  }
+
+  .coop-prompt-line::before {
+    content: "$ ";
+    @apply text-coop-index;
+  }
+
+  .coop-section-label {
+    @apply font-mono text-xs text-coop-index;
+  }
+
+  .coop-card {
+    @apply rounded-sm border border-coop-border bg-coop-editor p-5;
   }
 }
 
@@ -36,7 +63,7 @@
 }
 
 .enterprise-graph-hub-ring {
-  animation: enterprise-graph-hub-pulse 4s ease-in-out 0.8s infinite;
+  animation: none;
 }
 
 .enterprise-graph-node {
@@ -47,16 +74,12 @@
 .enterprise-graph-path {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation:
-    enterprise-graph-draw 1.1s cubic-bezier(0.4, 0, 0.2, 1) forwards,
-    enterprise-graph-flow 3.2s ease-in-out 1.1s infinite;
+  animation: enterprise-graph-draw 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .enterprise-graph-node {
-    animation:
-      enterprise-graph-node-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both,
-      enterprise-graph-node-float 7s ease-in-out 0.7s infinite;
+    animation: enterprise-graph-node-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 

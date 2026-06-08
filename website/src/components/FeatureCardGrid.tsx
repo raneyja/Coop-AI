@@ -17,7 +17,7 @@ export function FeatureCardGrid({
     <div
       className={
         compact
-          ? "flex flex-wrap justify-center gap-3"
+          ? "flex flex-wrap justify-center gap-2"
           : small
             ? "mx-auto grid w-full max-w-xl gap-2 sm:grid-cols-2 lg:grid-cols-4"
             : "grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -28,10 +28,10 @@ export function FeatureCardGrid({
           key={item.label}
           className={
             compact
-              ? "rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-coop-muted"
+              ? "rounded-sm border border-coop-border bg-coop-editor px-2.5 py-1 font-mono text-[11px] text-coop-muted"
               : small
-                ? "rounded-lg border border-white/10 bg-white/[0.03] p-2.5"
-                : "rounded-xl border border-white/10 bg-white/[0.03] p-5"
+                ? "rounded-sm border border-coop-border bg-coop-editor p-2.5"
+                : "rounded-sm border border-coop-border bg-coop-editor p-5"
           }
         >
           <p

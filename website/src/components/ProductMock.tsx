@@ -1,22 +1,43 @@
 "use client";
 
 import type { CodeToken, ProductMockScenario } from "@/lib/productMockScenarios";
+import { isInquiryProductMock } from "@/lib/productMockScenarios";
+import { CODE_CREATION_STORIES } from "@/lib/codeCreationScenarios";
 import { useChatScrollAnchor } from "@/hooks/useChatScrollAnchor";
+import { ProductCreationMock } from "./ProductCreationMock";
 import { StoryChatProse } from "./StoryChatProse";
 import { StoryComposer } from "./StoryComposer";
 
 const CALLOUT_BORDER = {
   violet: "border-violet-400/30 shadow-violet-500/10",
   amber: "border-amber-400/30 shadow-amber-500/10",
-  accent: "border-coop-accent/30 shadow-coop-blue/10"
+  accent: "border-coop-index/30 shadow-coop-index/10"
 } as const;
 
 type ProductMockProps = {
   scenario: ProductMockScenario;
   className?: string;
+  onAnimationComplete?: () => void;
 };
 
-export function ProductMock({ scenario, className = "" }: ProductMockProps) {
+export function ProductMock({ scenario, className = "", onAnimationComplete }: ProductMockProps) {
+  if (!isInquiryProductMock(scenario)) {
+    const creationStory = CODE_CREATION_STORIES.find((s) => s.id === scenario.codeCreationId);
+    if (!creationStory) {
+      return null;
+    }
+
+    return (
+      <ProductCreationMock
+        story={creationStory}
+        tabs={scenario.tabs}
+        ariaLabel={scenario.ariaLabel}
+        className={className}
+        onCycleComplete={onAnimationComplete}
+      />
+    );
+  }
+
   const gradientId = `mock-bridge-${scenario.id}`;
   const { containerRef: threadRef, anchorRef: threadAnchorRef } = useChatScrollAnchor([scenario.id]);
 
@@ -26,7 +47,7 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
       role="img"
       aria-label={scenario.ariaLabel}
     >
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-[#1e1e1e] shadow-2xl shadow-black/40 ring-1 ring-[#2a2a2a]">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-sm bg-[#1e1e1e] ring-1 ring-coop-border">
         <div className="flex items-center gap-3 border-b border-[#2a2a2a] bg-[#252526] px-4 py-2.5">
           <div className="flex gap-1.5" aria-hidden>
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
@@ -49,18 +70,18 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
               className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2 pt-3"
             >
               <div className="flex min-h-full w-full flex-col justify-end gap-3">
-              <div className="max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
-                <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{scenario.question}</p>
-              </div>
-
-              <div className="min-w-0 border-l-2 border-coop-accent/55 py-1 pl-3 pr-1">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
+                <div className="max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
+                  <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{scenario.question}</p>
                 </div>
-                <StoryChatProse content={scenario.answer.content} />
-              </div>
 
-              <div ref={threadAnchorRef} className="h-px shrink-0" aria-hidden />
+                <div className="min-w-0 border-l-2 border-coop-index/55 py-1 pl-3 pr-1">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
+                  </div>
+                  <StoryChatProse content={scenario.answer.content} />
+                </div>
+
+                <div ref={threadAnchorRef} className="h-px shrink-0" aria-hidden />
               </div>
             </div>
 
@@ -85,7 +106,7 @@ export function ProductMock({ scenario, className = "" }: ProductMockProps) {
                     ? "font-medium text-amber-200/95"
                     : scenario.code.callout.tone === "violet"
                       ? "font-medium text-violet-200/95"
-                      : "font-medium text-coop-accent"
+                      : "font-medium text-coop-index"
                 }
               >
                 {scenario.code.callout.title}
@@ -143,7 +164,7 @@ function CodeLine({
 
   return (
     <div
-      className={`flex gap-2 rounded-sm pr-28 ${highlight ? "bg-coop-accent/10 ring-1 ring-inset ring-coop-accent/35" : ""}`}
+      className={`flex gap-2 rounded-sm pr-28 ${highlight ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""}`}
     >
       <span className="w-4 shrink-0 select-none text-right text-[#858585]">{n}</span>
       <span className="min-w-0 flex-1">

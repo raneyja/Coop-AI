@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductMock } from "./ProductMock";
-import { PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
+import { isInquiryProductMock, PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
 
 const ROTATE_MS = 5500;
 const FADE_MS = 480;
@@ -19,6 +19,7 @@ export function ProductShowcaseCarousel() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scenario = PRODUCT_MOCK_SCENARIOS[index];
+  const isInquiry = isInquiryProductMock(scenario);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -42,16 +43,17 @@ export function ProductShowcaseCarousel() {
   }, [goTo, index]);
 
   useEffect(() => {
-    if (reduceMotion || paused) {
+    if (reduceMotion || paused || !isInquiry) {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
       return;
     }
+
     timerRef.current = setInterval(advance, ROTATE_MS);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [advance, paused, reduceMotion]);
+  }, [advance, paused, reduceMotion, isInquiry]);
 
   useEffect(() => {
     return () => {
@@ -83,7 +85,12 @@ export function ProductShowcaseCarousel() {
             visible ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
-          <ProductMock scenario={scenario} className="h-full" />
+          <ProductMock
+            key={scenario.id}
+            scenario={scenario}
+            className="h-full"
+            onAnimationComplete={!isInquiry ? advance : undefined}
+          />
         </div>
       </div>
 
@@ -96,10 +103,10 @@ export function ProductShowcaseCarousel() {
               role="tab"
               aria-selected={i === index}
               onClick={() => selectSlide(i)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-sm border px-3 py-1.5 font-mono text-xs transition ${
                 i === index
-                  ? "border-coop-accent/40 bg-coop-blue/15 text-white"
-                  : "border-white/10 bg-white/[0.03] text-coop-muted hover:border-white/20 hover:text-white"
+                  ? "border-coop-index/50 bg-coop-index/10 text-white"
+                  : "border-coop-border bg-coop-editor text-coop-muted hover:border-coop-muted/50 hover:text-white"
               }`}
             >
               {item.feature}
@@ -112,7 +119,7 @@ export function ProductShowcaseCarousel() {
             <span
               key={i}
               className={`h-1 rounded-full transition-all duration-300 ${
-                i === index ? "w-6 bg-coop-accent" : "w-1.5 bg-white/20"
+                i === index ? "w-6 bg-coop-index" : "w-1.5 bg-white/20"
               }`}
             />
           ))}
@@ -123,7 +130,11 @@ export function ProductShowcaseCarousel() {
             Motion reduced — select a feature below to browse examples.
           </p>
         ) : (
-          <p className="text-center text-xs text-coop-muted">Auto-advances every few seconds · hover to pause</p>
+          <p className="text-center text-xs text-coop-muted">
+            {isInquiry
+              ? "Auto-advances every few seconds · hover to pause"
+              : "Plays prompt → context → outcome · advances when complete · hover to pause"}
+          </p>
         )}
       </div>
     </div>
