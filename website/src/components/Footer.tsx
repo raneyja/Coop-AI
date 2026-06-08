@@ -51,6 +51,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/blog" className="text-sm text-coop-muted hover:text-white">
+                  Blog
+                </Link>
+              </li>
+              <li>
                 <a
                   href={`mailto:${siteConfig.contactEmail}`}
                   className="text-sm text-coop-muted hover:text-white"

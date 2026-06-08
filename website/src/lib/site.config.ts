@@ -18,7 +18,8 @@ export const siteConfig = {
     { label: "Product", href: "/product" },
     { label: "Enterprise", href: "/enterprise" },
     { label: "Pricing", href: "/pricing" },
-    { label: "Security", href: "/security" }
+    { label: "Security", href: "/security" },
+    { label: "Blog", href: "/blog" }
   ] as const,
   quote: {
     text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",

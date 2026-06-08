@@ -17,6 +17,8 @@ This folder is self-contained — it does not share dependencies with the VS Cod
 | `/terms` | Terms of Service |
 | `/demo` | Book a demo + extension waitlist forms |
 | `/docs` | Documentation placeholder (coming soon) |
+| `/blog` | Blog index |
+| `/blog/[slug]` | Individual blog posts (Markdown in `content/blog/`) |
 
 ## Local development
 
