@@ -8,23 +8,31 @@ type BlogFeaturedCardProps = {
 };
 
 export function BlogFeaturedCard({ post, large = false }: BlogFeaturedCardProps) {
+  const aspectClass = large ? "aspect-[16/10]" : "aspect-[4/3]";
+
   return (
     <article className="group relative flex flex-col">
       <div
-        className={`border border-white/10 bg-coop-surface/40 transition group-hover:border-white/20 group-hover:bg-coop-surface/60 ${
-          large ? "aspect-[16/10]" : "aspect-[4/3]"
-        }`}
-        aria-hidden
-      />
+        className={`relative overflow-hidden border border-coop-border bg-coop-surface/40 transition group-hover:border-coop-muted/50 group-hover:bg-coop-surface/60 ${aspectClass}`}
+      >
+        {post.heroImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.heroImage}
+            alt={post.heroImageAlt ?? post.title}
+            className="h-full w-full object-cover"
+          />
+        ) : null}
+      </div>
 
       <div className="mt-4">
         <p className="text-sm text-coop-muted">
           <span>{formatPostDateShort(post.publishedAt)}</span>
           <span className="mx-2 text-white/20">·</span>
-          <span className="text-coop-accent">{formatCategoryLabel(post.category)}</span>
+          <span className="text-coop-index">{formatCategoryLabel(post.category)}</span>
         </p>
         <h2
-          className={`mt-2 font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-coop-accent ${
+          className={`mt-2 font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-coop-index ${
             large ? "text-3xl md:text-4xl" : "text-xl"
           }`}
         >
