@@ -4,8 +4,10 @@ const ISSUE_CACHE_TTL_MS = 30 * 60 * 1000;
 
 export type JiraClientOptions = {
   baseUrl: string;
-  email: string;
-  apiToken: string;
+  email?: string;
+  apiToken?: string;
+  oauthAccessToken?: string;
+  cloudId?: string;
   now?: () => number;
 };
 
@@ -57,15 +59,26 @@ type CacheEntry<T> = { data: T; expiresAt: number };
 export class JiraClient {
   private readonly authHeader: string;
   private readonly apiBase: string;
+  private readonly siteBaseUrl: string;
   private readonly now: () => number;
   private readonly issueCache = new Map<string, CacheEntry<JiraIssue>>();
   private readonly epicCache = new Map<string, CacheEntry<JiraEpic>>();
 
   public constructor(private readonly options: JiraClientOptions) {
-    const base = options.baseUrl.replace(/\/+$/, "");
-    this.apiBase = `${base}/rest/api/3`;
-    const encoded = Buffer.from(`${options.email}:${options.apiToken}`).toString("base64");
-    this.authHeader = `Basic ${encoded}`;
+    if (options.oauthAccessToken && options.cloudId) {
+      this.apiBase = `https://api.atlassian.com/ex/jira/${options.cloudId}/rest/api/3`;
+      this.authHeader = `Bearer ${options.oauthAccessToken}`;
+      this.siteBaseUrl = options.baseUrl.replace(/\/+$/, "");
+    } else {
+      if (!options.email || !options.apiToken) {
+        throw new Error("Jira email and API token are required.");
+      }
+      const base = options.baseUrl.replace(/\/+$/, "");
+      this.apiBase = `${base}/rest/api/3`;
+      this.siteBaseUrl = base;
+      const encoded = Buffer.from(`${options.email}:${options.apiToken}`).toString("base64");
+      this.authHeader = `Basic ${encoded}`;
+    }
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -103,7 +116,7 @@ export class JiraClient {
     ].join(",");
 
     const payload = await this.request<JiraIssuePayload>(`/issue/${encodeURIComponent(normalized)}?fields=${fields}`);
-    const issue = mapJiraIssue(payload, this.options.baseUrl);
+    const issue = mapJiraIssue(payload, this.siteBaseUrl);
 
     const epicKey = issue.epicKey ?? extractEpicFromFields(payload);
     if (epicKey && !issue.epicName) {
@@ -134,7 +147,7 @@ export class JiraClient {
       summary: payload.fields.summary,
       description: extractDescription(payload.fields.description),
       status: payload.fields.status?.name ?? "unknown",
-      htmlUrl: `${this.options.baseUrl}/browse/${payload.key}`
+      htmlUrl: `${this.siteBaseUrl.replace(/\/+$/, "")}/browse/${payload.key}`
     };
 
     this.epicCache.set(normalized, { data: epic, expiresAt: this.now() + ISSUE_CACHE_TTL_MS });
@@ -151,7 +164,7 @@ export class JiraClient {
       }
     });
 
-    return (result.issues ?? []).map((issue) => mapJiraIssue(issue, this.options.baseUrl));
+    return (result.issues ?? []).map((issue) => mapJiraIssue(issue, this.siteBaseUrl));
   }
 
   public async getTransitionHistory(issueKey: string): Promise<JiraTransition[]> {

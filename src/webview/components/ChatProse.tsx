@@ -1,22 +1,33 @@
 import React, { useMemo } from "react";
 import { parseChatProse } from "../lib/chatProseParser";
 import type { ChatInlineNode, ChatProseBlock } from "../lib/chatProseTypes";
+import { ChatActionLink } from "./ChatActionLink";
 import { ChatCodeBlock } from "./ChatCodeBlock";
 import { ChatCodeCitation } from "./ChatCodeCitation";
 import { ChatJiraTicketStack } from "./ChatJiraTicketStack";
+import { useChatLinks } from "./ChatLinkContext";
 
 type ChatProseProps = {
   content: string;
   onOpenFile?: (path: string, line?: number) => void;
+  onOpenLink?: (url: string) => void;
   className?: string;
 };
 
-export function ChatProse({ content, onOpenFile, className }: ChatProseProps): React.ReactElement {
+export function ChatProse({
+  content,
+  onOpenFile,
+  onOpenLink,
+  className
+}: ChatProseProps): React.ReactElement {
+  const contextLinks = useChatLinks();
+  const openFile = onOpenFile ?? contextLinks.onOpenFile;
+  const openLink = onOpenLink ?? contextLinks.onOpenLink;
   const document = useMemo(() => parseChatProse(content), [content]);
 
   return (
     <div className={className ? `coop-chat-prose ${className}` : "coop-chat-prose"}>
-      {document.blocks.map((block, index) => renderBlock(block, index, onOpenFile))}
+      {document.blocks.map((block, index) => renderBlock(block, index, openFile, openLink))}
     </div>
   );
 }
@@ -24,12 +35,16 @@ export function ChatProse({ content, onOpenFile, className }: ChatProseProps): R
 function renderBlock(
   block: ChatProseBlock,
   index: number,
-  onOpenFile?: (path: string, line?: number) => void
+  onOpenFile?: (path: string, line?: number) => void,
+  onOpenLink?: (url: string) => void
 ): React.ReactElement {
   switch (block.type) {
     case "section-heading":
       return (
-        <p key={`heading-${index}`} className="coop-chat-heading">
+        <p
+          key={`heading-${index}`}
+          className={block.headingLevel === 2 ? "coop-chat-subheading" : "coop-chat-heading"}
+        >
           {block.text}
         </p>
       );
@@ -54,17 +69,25 @@ function renderBlock(
       return (
         <ListTag key={`list-${index}`} className="coop-chat-list">
           {block.items.map((item, itemIndex) => (
-            <li key={`list-${index}-${itemIndex}`}>{renderInlineNodes(item.content, onOpenFile)}</li>
+            <li key={`list-${index}-${itemIndex}`}>
+              {renderInlineNodes(item.content, onOpenFile, onOpenLink)}
+            </li>
           ))}
         </ListTag>
       );
     }
     case "jira-ticket-stack":
-      return <ChatJiraTicketStack key={`jira-${index}`} tickets={block.tickets} />;
+      return (
+        <ChatJiraTicketStack
+          key={`jira-${index}`}
+          tickets={block.tickets}
+          onOpenLink={onOpenLink}
+        />
+      );
     case "paragraph":
       return (
         <p key={`paragraph-${index}`} className="coop-chat-paragraph">
-          {renderInlineNodes(block.content, onOpenFile)}
+          {renderInlineNodes(block.content, onOpenFile, onOpenLink)}
         </p>
       );
     default:
@@ -78,7 +101,8 @@ function renderBlock(
 
 function renderInlineNodes(
   nodes: ChatInlineNode[],
-  onOpenFile?: (path: string, line?: number) => void
+  onOpenFile?: (path: string, line?: number) => void,
+  onOpenLink?: (url: string) => void
 ): React.ReactNode[] {
   return nodes.map((node, index) => {
     switch (node.type) {
@@ -86,6 +110,8 @@ function renderInlineNodes(
         return <React.Fragment key={`text-${index}`}>{node.text}</React.Fragment>;
       case "strong":
         return <strong key={`strong-${index}`}>{node.text}</strong>;
+      case "em":
+        return <em key={`em-${index}`} className="coop-chat-em">{node.text}</em>;
       case "inline-code":
         return (
           <code key={`inline-code-${index}`} className="coop-chat-inline-code">
@@ -94,20 +120,21 @@ function renderInlineNodes(
         );
       case "file-link":
         return (
-          <button
+          <ChatActionLink
             key={`file-link-${index}`}
-            type="button"
-            className="coop-chat-file-link"
+            kind="file"
+            label={node.label}
             onClick={() => onOpenFile?.(node.path, node.line)}
-          >
-            {node.label}
-          </button>
+          />
         );
       case "external-link":
         return (
-          <a key={`external-link-${index}`} href={node.url} target="_blank" rel="noreferrer">
-            {node.label}
-          </a>
+          <ChatActionLink
+            key={`external-link-${index}`}
+            kind="external"
+            label={node.label}
+            onClick={() => onOpenLink?.(node.url)}
+          />
         );
       default:
         return null;

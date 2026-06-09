@@ -1,6 +1,7 @@
 export type ChatInlineNode =
   | { type: "text"; text: string }
   | { type: "strong"; text: string }
+  | { type: "em"; text: string }
   | { type: "inline-code"; code: string }
   | { type: "file-link"; path: string; line?: number; label: string }
   | { type: "external-link"; label: string; url: string };
@@ -8,6 +9,7 @@ export type ChatInlineNode =
 export type ChatSectionHeadingBlock = {
   type: "section-heading";
   text: string;
+  headingLevel?: 1 | 2;
 };
 
 export type ChatCodeFenceBlock = {

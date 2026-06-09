@@ -76,10 +76,14 @@ export function analyzeCommitPatterns(commits: CommitInfo[], now = Date.now()): 
     const author = authorKey(commit);
     const entry = byAuthor.get(author) ?? {
       author,
+      authorLogin: commit.authorLogin,
       counts: { sixMonths: 0, oneYear: 0, allTime: 0 },
       recencyScore: 0,
       messages: []
     };
+    if (commit.authorLogin && !entry.authorLogin) {
+      entry.authorLogin = commit.authorLogin;
+    }
     const age = now - new Date(commit.date).getTime();
     entry.counts.allTime += 1;
     if (age <= MS_180D) {
@@ -218,7 +222,16 @@ export function calculateOwnershipScores(
     ...signals.issues.map((i) => i.author)
   ]);
 
-  const rawScores: Array<{ author: string; raw: number; commitCount: number; reviewApprovals: number; issueResolutions: number; activityWeight: number; role: OwnershipScore["role"] }> = [];
+  const rawScores: Array<{
+    author: string;
+    authorLogin?: string;
+    raw: number;
+    commitCount: number;
+    reviewApprovals: number;
+    issueResolutions: number;
+    activityWeight: number;
+    role: OwnershipScore["role"];
+  }> = [];
 
   for (const author of authors) {
     const activity = activityMap.get(author);
@@ -249,6 +262,7 @@ export function calculateOwnershipScores(
 
     rawScores.push({
       author,
+      authorLogin: commit?.authorLogin,
       raw,
       commitCount: commit?.counts.sixMonths ?? 0,
       reviewApprovals: review?.approvals ?? 0,
@@ -264,6 +278,7 @@ export function calculateOwnershipScores(
       const score = Math.round((entry.raw / maxRaw) * 100);
       return {
         owner: entry.author,
+        githubLogin: entry.authorLogin,
         score,
         tier: tierForScore(score),
         specialty: specialtyMap.get(entry.author),

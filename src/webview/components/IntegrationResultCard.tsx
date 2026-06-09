@@ -1,5 +1,7 @@
 import React from "react";
+import { ChatActionLink } from "./ChatActionLink";
 import { ChatProse } from "./ChatProse";
+import { useChatLinks } from "./ChatLinkContext";
 
 type IntegrationResultCardProps = {
   title: string;
@@ -111,6 +113,8 @@ export function IntegrationResultCollapsible({
   linkLabel?: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  const { onOpenLink } = useChatLinks();
+
   return (
     <div className="coop-result-collapsible">
       <div className="coop-result-collapsible-header">
@@ -126,9 +130,12 @@ export function IntegrationResultCollapsible({
           <span className="truncate">{title}</span>
         </button>
         {link ? (
-          <a href={link} className="coop-text-btn shrink-0 text-[10px]" target="_blank" rel="noreferrer">
-            {linkLabel ?? "Open"}
-          </a>
+          <ChatActionLink
+            kind="external"
+            label={linkLabel ?? "Open"}
+            className="shrink-0 text-[10px]"
+            onClick={() => onOpenLink?.(link)}
+          />
         ) : null}
       </div>
       {open ? <div className="coop-result-collapsible-body">{children}</div> : null}

@@ -396,6 +396,12 @@
           "default": true,
           "description": "Reuse identical chat responses for 5 minutes."
         },
+        "coopAI.chat.sessionIdleMinutes": {
+          "type": "number",
+          "default": 240,
+          "minimum": 0,
+          "description": "Minutes away from CoopAI before the sidebar opens on a fresh thread instead of restoring the last one. Prior threads stay in the thread list. Set to 0 to always restore the last thread."
+        },
         "coopAI.includeSelection": {
           "type": "boolean",
           "default": true,
@@ -757,7 +763,12 @@
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json",
     "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",
     "test:slash-commands": "npx tsx src/context/slashCommands.test.ts",
-    "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts"
+    "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
+    "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
+    "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",
+    "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
+    "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
+    "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

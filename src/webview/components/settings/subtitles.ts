@@ -1,4 +1,10 @@
+import { identityDirectorySummary } from "../../../identity/identityDirectory";
 import type { Preferences } from "./types";
+export {
+  accountHubSubtitle,
+  connectionsHubSubtitle,
+  preferencesHubSubtitle
+} from "./connectionCopy";
 
 const CODE_HOST_LABELS: Record<Preferences["defaultCodeHost"], string> = {
   github: "GitHub",
@@ -17,10 +23,10 @@ function countConfigured(flags: boolean[]): string {
 
 function integrationNames(prefs: Preferences): string {
   const names: string[] = [];
-  if (prefs.hasSlackToken) {
+  if (integrationConfigured(prefs, "slack")) {
     names.push("Slack");
   }
-  if (prefs.hasJiraCredentials) {
+  if (integrationConfigured(prefs, "jira")) {
     names.push("Jira");
   }
   if (prefs.hasTeamsToken) {
@@ -91,6 +97,13 @@ export function workspaceHubSubtitle(prefs: Preferences): string {
   return `${repo} · ${branch}`;
 }
 
+export function identityLinksHubSubtitle(prefs: Preferences): string {
+  return identityDirectorySummary(prefs.identityDirectory);
+}
+
+/** @deprecated Use identityLinksHubSubtitle */
+export const teamHubSubtitle = identityLinksHubSubtitle;
+
 export function promptsHubSubtitle(pinnedCount: number): string {
   if (pinnedCount === 0) {
     return "No quick prompts pinned";
@@ -117,19 +130,23 @@ export function codeHostConfigured(prefs: Preferences, provider: Preferences["de
 
 export function integrationConfigured(
   prefs: Preferences,
-  provider: "slack" | "jira" | "teams" | "confluence" | "notion" | "google-docs"
+  provider: IntegrationChatProvider
 ): boolean {
   if (provider === "slack") {
-    return prefs.hasSlackToken;
+    return prefs.devMode ? prefs.hasSlackToken : prefs.hasSlackInstalled || prefs.hasSlackToken;
   }
   if (provider === "jira") {
-    return prefs.hasJiraCredentials;
+    return prefs.devMode
+      ? prefs.hasJiraCredentials
+      : prefs.hasAtlassianInstalled || prefs.hasJiraCredentials;
   }
   if (provider === "teams") {
     return prefs.hasTeamsToken;
   }
   if (provider === "confluence") {
-    return prefs.hasConfluenceCredentials;
+    return prefs.devMode
+      ? prefs.hasConfluenceCredentials
+      : prefs.hasAtlassianInstalled || prefs.hasConfluenceCredentials;
   }
   if (provider === "notion") {
     return prefs.hasNotionToken;

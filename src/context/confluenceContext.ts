@@ -4,6 +4,7 @@ import {
   resolveConfluenceAuth,
   resolveConfluenceBaseUrl
 } from "../api/confluence/resolveConfluenceBaseUrl";
+import { createConfluenceClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildConfluenceCql, buildRepoOrQuery } from "./docSearchQuery";
@@ -42,6 +43,9 @@ export function shouldFetchConfluenceContext(request: ContextFetchRequest): bool
   if (request.params.integrationProvider === "confluence") {
     return true;
   }
+  if (request.params.quickAction === "knowledge-gaps") {
+    return true;
+  }
   if (request.type !== "chat_context") {
     return false;
   }
@@ -56,7 +60,7 @@ export async function fetchConfluenceSearchContext(options: {
 }): Promise<ConfluenceSearchContext> {
   const creds = await options.secrets.getCredentials();
   const auth = resolveConfluenceAuth(creds);
-  if (!auth) {
+  if (!auth && !creds.atlassianCloudId) {
     return {
       source: "confluence-search",
       cql: "",
@@ -80,7 +84,7 @@ export async function fetchConfluenceSearchContext(options: {
     jiraBaseUrl: creds.jiraBaseUrl
   });
   const siteError = confluenceSiteUrlError(baseUrl);
-  if (siteError) {
+  if (siteError && !creds.atlassianCloudId) {
     return {
       source: "confluence-search",
       cql,
@@ -89,11 +93,24 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const client = new ConfluenceClient({
-    baseUrl,
-    email: auth.email,
-    apiToken: auth.apiToken
-  });
+  const oauthClient = createConfluenceClientFromCredentials(creds, baseUrl);
+  const client =
+    oauthClient ??
+    (auth
+      ? new ConfluenceClient({
+          baseUrl,
+          email: auth.email,
+          apiToken: auth.apiToken
+        })
+      : undefined);
+  if (!client) {
+    return {
+      source: "confluence-search",
+      cql,
+      pages: [],
+      error: "Confluence credentials not configured."
+    };
+  }
 
   try {
     const pages = await client.searchPages(cql, options.limit ?? 20);

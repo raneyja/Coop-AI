@@ -21,6 +21,7 @@ import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { SlackClient } from "../api/slack/slackClient";
 import { enrichScoresWithPresence } from "../api/slack/presenceCheck";
+import { getIdentityDirectory } from "../identity/identityDirectoryRegistry";
 import type {
   MapOwnershipParams,
   OrgTeamContext,
@@ -132,7 +133,8 @@ export class OwnershipGraphEngine {
     const slack = await this.resolveSlackClient();
     if (slack) {
       try {
-        scores = await enrichScoresWithPresence(scores, slack);
+        const identityDirectory = await getIdentityDirectory();
+        scores = await enrichScoresWithPresence(scores, slack, { identityDirectory });
       } catch (error) {
         warnings.push(`Slack presence lookup failed: ${errorMessage(error)}`);
       }

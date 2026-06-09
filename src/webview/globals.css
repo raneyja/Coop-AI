@@ -875,6 +875,17 @@
     border-left: 2px solid var(--coop-border);
   }
 
+  .chat-message--evidence .chat-message-inner {
+    padding: 4px 2px 4px 12px;
+    border-left: 2px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 45%, var(--coop-border));
+  }
+
+  .chat-message-label--evidence {
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 10px;
+  }
+
   .chat-message-meta {
     @apply mb-2 flex items-center gap-2;
   }
@@ -921,6 +932,20 @@
     @apply inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide;
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
+  }
+
+  .chat-message-body--quick-action {
+    @apply flex flex-col gap-1;
+  }
+
+  .chat-action-intent {
+    @apply m-0 text-[13px] leading-[1.55];
+    color: var(--coop-panel-foreground);
+  }
+
+  .chat-action-context {
+    @apply m-0 text-[11px] leading-snug;
+    color: var(--coop-panel-muted);
   }
 
   .chat-message-body {
@@ -1102,11 +1127,12 @@
   }
 
   .coop-chat-prose {
-    @apply min-w-0;
+    @apply min-w-0 text-[13px] leading-relaxed;
+    color: var(--coop-panel-foreground);
   }
 
   .coop-chat-heading {
-    @apply m-0 text-[13px] font-semibold;
+    @apply m-0 text-[14px] font-semibold leading-snug tracking-tight;
     color: var(--coop-panel-foreground);
   }
 
@@ -1118,8 +1144,41 @@
     @apply mt-2;
   }
 
+  .coop-chat-heading + .coop-chat-heading,
+  .coop-chat-paragraph + .coop-chat-heading,
+  .coop-chat-list + .coop-chat-heading {
+    @apply mt-4;
+  }
+
+  .coop-chat-subheading {
+    @apply m-0 text-[13px] font-semibold leading-snug tracking-tight;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-chat-heading + .coop-chat-subheading,
+  .coop-chat-subheading + .coop-chat-list,
+  .coop-chat-subheading + .coop-chat-paragraph {
+    @apply mt-2;
+  }
+
+  .coop-chat-subheading + .coop-chat-subheading,
+  .coop-chat-list + .coop-chat-subheading,
+  .coop-chat-paragraph + .coop-chat-subheading {
+    @apply mt-4;
+  }
+
   .coop-chat-paragraph {
     @apply m-0 whitespace-pre-wrap break-words;
+  }
+
+  .coop-chat-em {
+    @apply italic;
+    color: inherit;
+  }
+
+  .coop-chat-prose strong {
+    @apply font-semibold;
+    color: var(--coop-panel-foreground);
   }
 
   .coop-chat-paragraph + .coop-chat-paragraph,
@@ -1208,18 +1267,37 @@
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
 
-  .coop-chat-file-link {
-    @apply inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] transition-colors duration-150;
+  /* Cursor-style actionable references in chat (files, Confluence, Jira, PRs). */
+  .coop-chat-action-link {
+    @apply inline cursor-pointer border-0 bg-transparent p-0 transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
-    background: var(--coop-pill-surface);
-    border-color: var(--coop-pill-border);
     color: var(--vscode-textLink-foreground);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--vscode-textLink-foreground) 55%, transparent);
+    text-underline-offset: 2px;
   }
 
-  .coop-chat-file-link:hover {
-    background: var(--coop-pill-surface-hover);
-    border-color: var(--coop-pill-border-hover);
+  .coop-chat-action-link:hover,
+  .coop-chat-action-link:focus-visible {
+    color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+    text-decoration-color: currentColor;
   }
+
+  .coop-chat-action-link--file {
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+    font-size: 0.92em;
+  }
+
+  .coop-chat-action-link--external::after {
+    content: "↗";
+    display: inline-block;
+    margin-left: 0.15em;
+    font-size: 0.82em;
+    opacity: 0.8;
+    text-decoration: none;
+  }
+
 
   .coop-settings-shell {
     @apply min-h-0;
@@ -1546,6 +1624,10 @@
     box-shadow:
       0 8px 24px color-mix(in srgb, var(--coop-panel-foreground) 6%, transparent),
       0 2px 8px color-mix(in srgb, var(--coop-panel-foreground) 4%, transparent);
+  }
+
+  .coop-explorer-search-wrap {
+    @apply px-3 pb-2;
   }
 
   .coop-explorer-body {

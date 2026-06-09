@@ -3,6 +3,7 @@ import type { JobQueue } from "../jobs/jobQueue";
 import { GitHubClient } from "../api/codeHosts/githubClient";
 import { GitLabClient } from "../api/codeHosts/gitlabClient";
 import { BitbucketClient } from "../api/codeHosts/bitbucketClient";
+import { buildExplorerFileSearchQuery } from "../api/codeHosts/codeHostRouter";
 import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
@@ -21,7 +22,9 @@ import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
 import { CollectionStore } from "./collectionStore";
+import { normalizeIdentityDirectory } from "../identity/identityDirectory";
 import { canUseLightningPlan, type AuthContext, type OrgStore } from "./orgStore";
+import { OrgIdentityDirectoryStore } from "./orgIdentityDirectoryStore";
 import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
 
@@ -62,25 +65,46 @@ export async function handleOrgApiRequest(
     return true;
   }
 
+  if (!auth) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+
   if (parsed.method === "GET" && parsed.pathname === "/v1/me") {
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     writeJson(response, 200, {
-      orgId: auth!.orgId,
-      orgName: auth!.orgName,
+      orgId: auth.orgId,
+      orgName: auth.orgName,
       plan,
       canUseLightning: canUseLightningPlan(plan),
       lightningBackend: "cloud",
-      userId: auth!.userId,
-      role: auth!.role,
-      authMethod: auth!.userId ? "sso_session" : "api_key",
-      canInstallIntegrations: canInstallIntegrations(auth!)
+      userId: auth.userId,
+      role: auth.role,
+      authMethod: auth.userId ? "sso_session" : "api_key",
+      canInstallIntegrations: canInstallIntegrations(auth)
     });
     return true;
   }
 
-  if (!deps.orgStore || auth!.orgId === "legacy") {
+  if (!deps.orgStore || auth.orgId === "legacy") {
     writeJson(response, 503, { error: "organization database not configured" });
     return true;
+  }
+
+  if (parsed.pathname === "/v1/identity-directory") {
+    const store = new OrgIdentityDirectoryStore(requireDbPool());
+    if (parsed.method === "GET") {
+      const directory = await store.get(auth!.orgId);
+      writeJson(response, 200, { directory });
+      return true;
+    }
+    if (parsed.method === "PUT") {
+      const body = parsed.body as { directory?: unknown };
+      const directory = await store.save(auth!.orgId, normalizeIdentityDirectory(body?.directory));
+      await audit(deps, auth!, "identity.directory.save", { people: directory.people.length });
+      writeJson(response, 200, { directory });
+      return true;
+    }
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/orgs/credentials/github") {
@@ -179,6 +203,22 @@ export async function handleOrgApiRequest(
     const repoId = decodeURIComponent(fileMatch[1]);
     await handleGetRepoFile(repoId, parsed, response, deps, auth!);
     await audit(deps, auth!, "repo.file.fetch", { repoId, path: parsed.query?.get("path") ?? undefined });
+    return true;
+  }
+
+  const treeMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/tree$/);
+  if (parsed.method === "GET" && treeMatch) {
+    const repoId = decodeURIComponent(treeMatch[1]);
+    await handleGetRepoTree(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.tree.fetch", { repoId, path: parsed.query?.get("path") ?? undefined });
+    return true;
+  }
+
+  const searchMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/search$/);
+  if (parsed.method === "GET" && searchMatch) {
+    const repoId = decodeURIComponent(searchMatch[1]);
+    await handleGetRepoSearch(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.search", { repoId, query: parsed.query?.get("q") ?? undefined });
     return true;
   }
 
@@ -437,6 +477,137 @@ async function fetchRepoFile(
       return new GitLabClient({ token }).getFileContent(coords, filePath);
     case "bitbucket":
       return new BitbucketClient({ token }).getFileContent(coords, filePath);
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function handleGetRepoTree(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const dirPath = parsed.query?.get("path")?.trim() ?? "";
+  const target = parseRepoId(repoId);
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
+    orgStore: deps.orgStore!,
+    connector: getConnector(target.provider),
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`
+    });
+    return;
+  }
+
+  const branch = parsed.query?.get("branch")?.trim() || undefined;
+  const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
+  try {
+    const tree = await fetchRepoTree(coords, dirPath, token);
+    writeJson(response, 200, {
+      repoId,
+      path: tree.path,
+      branch: tree.branch,
+      entries: tree.entries
+    });
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to fetch tree";
+    writeJson(response, 502, { error: message });
+  }
+}
+
+async function handleGetRepoSearch(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const query = parsed.query?.get("q")?.trim() ?? "";
+  if (!query) {
+    writeJson(response, 400, { error: "q query parameter is required" });
+    return;
+  }
+  const limit = Math.min(Math.max(Number(parsed.query?.get("limit") ?? 30) || 30, 1), 50);
+  const target = parseRepoId(repoId);
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
+    orgStore: deps.orgStore!,
+    connector: getConnector(target.provider),
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`
+    });
+    return;
+  }
+
+  const branch = parsed.query?.get("branch")?.trim() || undefined;
+  const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
+  try {
+    const hits = await searchRepoFiles(coords, query, token, limit);
+    writeJson(response, 200, {
+      repoId,
+      query,
+      hits: hits.map((hit) => ({
+        path: hit.path,
+        name: hit.path.split("/").pop() ?? hit.path
+      }))
+    });
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to search repository files";
+    writeJson(response, 502, { error: message });
+  }
+}
+
+async function searchRepoFiles(
+  coords: RepoCoordinates,
+  query: string,
+  token: string,
+  limit: number
+): Promise<Array<{ path: string }>> {
+  switch (coords.provider) {
+    case "github": {
+      const searchQuery = buildExplorerFileSearchQuery(query, coords.provider);
+      return new GitHubClient({ token }).searchCode(coords, searchQuery, limit);
+    }
+    case "gitlab":
+      return new GitLabClient({ token }).searchCode(coords, query, limit);
+    case "bitbucket":
+      throw new CodeHostError(
+        "File search isn't supported for this code host yet.",
+        "unsupported",
+        400,
+        coords.provider
+      );
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function fetchRepoTree(
+  coords: RepoCoordinates,
+  dirPath: string,
+  token: string
+): Promise<Awaited<ReturnType<GitHubClient["getRepositoryTree"]>>> {
+  switch (coords.provider) {
+    case "github":
+      return new GitHubClient({ token }).getRepositoryTree(coords, dirPath);
+    case "gitlab":
+      return new GitLabClient({ token }).getRepositoryTree(coords, dirPath);
+    case "bitbucket":
+      return new BitbucketClient({ token }).getRepositoryTree(coords, dirPath);
     default:
       throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
   }

@@ -22,11 +22,56 @@ type DecisionTimelineProps = {
 
 type SectionId = "commit" | "pr" | "slack" | "teams" | "jira" | "alternatives" | "code" | "warnings";
 
-const COMPLETENESS_LABEL: Record<DecisionTimelineData["completeness"], string> = {
-  full: "Full trace",
-  partial: "Partial trace",
-  minimal: "Minimal trace"
-};
+function evidenceStatusLabel(timeline: DecisionTimelineData): string {
+  const sources: string[] = [];
+  if (timeline.originalCommit || timeline.fallbackMessage) {
+    sources.push("GitHub");
+  }
+  if (timeline.linkedPR) {
+    sources.push("PR");
+  }
+  if (timeline.jiraTicket) {
+    sources.push("Jira");
+  }
+  if (timeline.slackThread) {
+    sources.push("Slack");
+  }
+  if (timeline.teamsThread) {
+    sources.push("Teams");
+  }
+
+  if (sources.length >= 3) {
+    return `${sources.length} sources`;
+  }
+  if (sources.length === 2) {
+    return sources.join(" · ");
+  }
+  if (sources.length === 1) {
+    return sources[0] === "GitHub" ? "GitHub only" : sources[0]!;
+  }
+  return "Limited evidence";
+}
+
+function keyFindingLine(timeline: DecisionTimelineData): string | undefined {
+  const parts: string[] = [];
+  if (timeline.originalCommit) {
+    parts.push(`from commit ${timeline.originalCommit.sha.slice(0, 7)}`);
+  } else if (timeline.fallbackMessage) {
+    return timeline.fallbackMessage;
+  }
+  if (timeline.linkedPR) {
+    parts.push(`PR #${timeline.linkedPR.number}`);
+  } else if (timeline.originalCommit) {
+    parts.push("no linked PR");
+  }
+  if (timeline.jiraTicket) {
+    parts.push(timeline.jiraTicket.key);
+  }
+  if (timeline.slackThread) {
+    parts.push("Slack thread linked");
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
 const COMPLETENESS_TONE: Record<
   DecisionTimelineData["completeness"],
@@ -53,6 +98,7 @@ export function DecisionTimeline({
   });
 
   const decisionMakers = useMemo(() => collectDecisionMakers(timeline), [timeline]);
+  const keyFinding = useMemo(() => keyFindingLine(timeline), [timeline]);
   const meta = [
     timeline.file,
     timeline.lineRange
@@ -71,17 +117,17 @@ export function DecisionTimeline({
   return (
     <IntegrationResultStack>
       <IntegrationResultCard
-        title="Decision archaeology"
+        title="Decision trace"
         meta={meta}
-        status={COMPLETENESS_LABEL[timeline.completeness]}
+        status={evidenceStatusLabel(timeline)}
         statusTone={COMPLETENESS_TONE[timeline.completeness]}
         onDismiss={onDismiss}
-        ariaLabel="Decision archaeology timeline"
+        ariaLabel="Decision trace sources"
         scrollable
       >
-        {timeline.narrative ? (
-          <IntegrationResultSection label="Summary">
-            <IntegrationResultText>{timeline.narrative}</IntegrationResultText>
+        {keyFinding ? (
+          <IntegrationResultSection label="Key finding">
+            <IntegrationResultText muted>{keyFinding}</IntegrationResultText>
           </IntegrationResultSection>
         ) : null}
 

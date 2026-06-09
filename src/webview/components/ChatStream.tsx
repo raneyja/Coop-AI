@@ -56,6 +56,70 @@ function humanizeActionTag(tag: string): string {
     .join(" ");
 }
 
+/** Split quick-action bubble body into intent line + optional context chip line. */
+function parseQuickActionBody(body: string): { intent: string; contextLine?: string; legacyBody?: string } {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return { intent: "" };
+  }
+
+  // Legacy bubbles: full prompt with "Context:" block — show intent only.
+  const legacyContext = trimmed.indexOf("\nContext:");
+  if (legacyContext > 0) {
+    return {
+      intent: trimmed.slice(0, legacyContext).trim(),
+      legacyBody: trimmed.slice(legacyContext).trim()
+    };
+  }
+
+  const newline = trimmed.indexOf("\n");
+  if (newline === -1) {
+    return { intent: trimmed };
+  }
+
+  const intent = trimmed.slice(0, newline).trim();
+  const rest = trimmed.slice(newline + 1).trim();
+  if (!rest) {
+    return { intent };
+  }
+
+  // New compact format: second line is "key: value · key: value"
+  if (/^[\w ]+: .+( · [\w ]+: .+)*$/.test(rest)) {
+    return { intent, contextLine: rest };
+  }
+
+  return { intent: trimmed };
+}
+
+function QuickActionBody({
+  body,
+  renderBody
+}: {
+  body: string;
+  renderBody: (content: string) => React.ReactElement[];
+}): React.ReactElement {
+  const parsed = parseQuickActionBody(body);
+
+  if (parsed.legacyBody) {
+    return (
+      <div className="chat-message-body chat-message-body--quick-action">
+        <p className="chat-action-intent">{parsed.intent}</p>
+      </div>
+    );
+  }
+
+  if (parsed.contextLine) {
+    return (
+      <div className="chat-message-body chat-message-body--quick-action">
+        <p className="chat-action-intent">{parsed.intent}</p>
+        <p className="chat-action-context">{parsed.contextLine}</p>
+      </div>
+    );
+  }
+
+  return <div className="chat-message-body">{renderBody(body)}</div>;
+}
+
 function MessageBlock({
   message,
   renderBody,
@@ -110,7 +174,11 @@ function MessageBlock({
         ) : null}
 
         {parsed.body ? (
-          <div className="chat-message-body">{renderBody(parsed.body)}</div>
+          isUser && parsed.tag ? (
+            <QuickActionBody body={parsed.body} renderBody={renderBody} />
+          ) : (
+            <div className="chat-message-body">{renderBody(parsed.body)}</div>
+          )
         ) : null}
       </div>
     </article>
@@ -148,10 +216,10 @@ export function ChatStream({
           entry.type === "message" ? (
             <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
           ) : (
-            <article key={entry.id} className="chat-message chat-message--assistant group" data-role="assistant">
+            <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
               <div className="chat-message-inner">
                 <div className="chat-message-meta">
-                  <span className="chat-message-label">CoopAI</span>
+                  <span className="chat-message-label chat-message-label--evidence">Sources</span>
                   <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
                 </div>
                 {entry.artifact.kind === "decision" ? (

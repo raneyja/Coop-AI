@@ -27,3 +27,8 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 
 - Marketing site: `website/` (separate Tailwind stack; not shared with the extension webview)
 - Backend/docs: `docs/`
+
+## Agent → user instructions
+
+When giving setup, env, or test steps (not code review), follow **`.cursor/rules/user-instructions.mdc`**: always say **which surface** (file path, terminal, extension UI, browser), whether config must be **added vs changed**, and distinguish similar env vars (e.g. `GITHUB_APP_*` vs `GITHUB_OAUTH_*`).
+

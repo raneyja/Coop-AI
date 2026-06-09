@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { quickActionModelPrompt } from "../../prompts/quickActionPrompts";
 import { QuickActionId, RepoContext } from "../types";
 
 type ActionConfig = {
@@ -20,38 +21,31 @@ const ACTIONS: ActionConfig[] = [
     id: "understand-repo",
     label: "Understand Repo",
     description: "Architecture, ownership & key files",
-    prompt: (ctx) =>
-      `Understand this repository quickly.\nContext:\n- repo: ${ctx.owner || "unknown"}/${ctx.repo || "unknown"}\n- branch: ${ctx.branch || "unknown"}\n- active file: ${ctx.file || "none"}\n- language: ${ctx.languageId || "unknown"}\nFocus on overall architecture, major subsystems, entry points, and likely risks across the repository — not only the active file.`
+    prompt: (ctx) => quickActionModelPrompt("understand-repo", ctx)
   },
   {
     id: "trace-decision",
     label: "Trace Decision",
     description: "Why this code exists",
-    prompt: (ctx) => {
-      const lineHint = ctx.selectedLines ? `${ctx.selectedLines[0]}-${ctx.selectedLines[1]}` : "none";
-      return `Trace the likely engineering decision behind this code.\nContext:\n- file: ${ctx.file || "unknown"}\n- selected lines: ${lineHint}\nProvide likely rationale, tradeoffs, and alternatives.`;
-    }
+    prompt: (ctx) => quickActionModelPrompt("trace-decision", ctx)
   },
   {
     id: "find-owner",
     label: "Find Owner",
     description: "Who owns this & escalation path",
-    prompt: (ctx) =>
-      `Find likely owner(s) for this area.\nContext:\n- file: ${ctx.file || "unknown"}\n- repo: ${ctx.owner || "unknown"}/${ctx.repo || "unknown"}\nInclude confidence and fallback contacts.`
+    prompt: (ctx) => quickActionModelPrompt("find-owner", ctx)
   },
   {
     id: "blast-radius",
     label: "Blast Radius",
     description: "Impact of changing this code",
-    prompt: (ctx) =>
-      `Estimate blast radius for modifying this area.\nContext:\n- file: ${ctx.file || "unknown"}\n- language: ${ctx.languageId || "unknown"}\nInclude integration, API, and operational risks.`
+    prompt: (ctx) => quickActionModelPrompt("blast-radius", ctx)
   },
   {
     id: "knowledge-gaps",
     label: "Knowledge Gaps",
     description: "Missing context & blind spots",
-    prompt: (ctx) =>
-      `List key unknowns in this code area.\nContext:\n- file: ${ctx.file || "unknown"}\n- branch: ${ctx.branch || "unknown"}\nReturn open questions and what evidence is needed.`
+    prompt: (ctx) => quickActionModelPrompt("knowledge-gaps", ctx)
   }
 ];
 

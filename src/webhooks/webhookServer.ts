@@ -33,6 +33,9 @@ import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import type { GitHubAppService } from "../server/githubAppService";
 import { handleGitHubAppApiRequest } from "../server/githubAppApi";
+import { loadGitHubOAuthConfig } from "../server/githubOAuthConfig";
+import { createGitHubOAuthService } from "../server/githubOAuthService";
+import { createGitHubOAuthConnector } from "../server/codeHostConnectors/githubOAuthConnector";
 import { loadGitLabAppConfig } from "../server/gitlabAppConfig";
 import type { GitLabAppConfig } from "../server/gitlabAppConfig";
 import { GitLabAppService, createGitLabAppService } from "../server/gitlabAppService";
@@ -45,6 +48,14 @@ import { loadBitbucketAppConfig } from "../server/bitbucketAppConfig";
 import type { BitbucketAppConfig } from "../server/bitbucketAppConfig";
 import { BitbucketAppService, createBitbucketAppService } from "../server/bitbucketAppService";
 import { handleBitbucketAppApiRequest } from "../server/bitbucketAppApi";
+import { loadSlackAppConfig } from "../server/slackAppConfig";
+import { createSlackAppService } from "../server/slackAppService";
+import { handleSlackAppApiRequest } from "../server/slackAppApi";
+import { loadAtlassianAppConfig } from "../server/atlassianAppConfig";
+import { createAtlassianAppService } from "../server/atlassianAppService";
+import { handleAtlassianAppApiRequest } from "../server/atlassianAppApi";
+import { IntegrationConnectionStore } from "../server/integrationConnectionStore";
+import { handleIntegrationApiRequest } from "../server/integrationApi";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -113,6 +124,16 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       ? createGithubAppService(githubAppConfig, serverConfig.credentialsEncryptionKey)
       : undefined;
 
+  const githubOAuthConfig = loadGitHubOAuthConfig();
+  const githubOAuth =
+    githubOAuthConfig && serverConfig.credentialsEncryptionKey
+      ? createGitHubOAuthService(
+          githubOAuthConfig.clientId,
+          githubOAuthConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
   const gitlabAppConfig = loadGitLabAppConfig();
   const gitlabApp =
     gitlabAppConfig && serverConfig.credentialsEncryptionKey
@@ -128,6 +149,10 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   // resolveCodeHostTokenForOrg can refresh tokens for any provider.
   if (githubApp && githubAppConfig) {
     registerConnector(new GitHubConnector(githubApp, githubAppConfig));
+  } else if (githubOAuth && githubOAuthConfig && orgStore && serverConfig.credentialsEncryptionKey) {
+    registerConnector(
+      createGitHubOAuthConnector(githubOAuthConfig, serverConfig.credentialsEncryptionKey, orgStore)
+    );
   }
   if (gitlabApp && gitlabAppConfig && orgStore && serverConfig.credentialsEncryptionKey) {
     registerConnector(
@@ -150,6 +175,33 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       createBitbucketConnector(bitbucketAppConfig, serverConfig.credentialsEncryptionKey, orgStore)
     );
   }
+
+  const integrationStore =
+    pool && serverConfig.credentialsEncryptionKey
+      ? new IntegrationConnectionStore(pool, serverConfig.credentialsEncryptionKey)
+      : pool
+        ? new IntegrationConnectionStore(pool)
+        : undefined;
+
+  const slackAppConfig = loadSlackAppConfig();
+  const slackApp =
+    slackAppConfig && serverConfig.credentialsEncryptionKey
+      ? createSlackAppService(
+          slackAppConfig.clientId,
+          slackAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
+  const atlassianAppConfig = loadAtlassianAppConfig();
+  const atlassianApp =
+    atlassianAppConfig && serverConfig.credentialsEncryptionKey
+      ? createAtlassianAppService(
+          atlassianAppConfig.clientId,
+          atlassianAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
 
   const cache =
     options.cache ??
@@ -248,7 +300,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         await handleGitHubAppApiRequest(orgParsed, response, {
           orgStore,
           githubApp,
-          githubAppConfig
+          githubAppConfig,
+          githubOAuth,
+          githubOAuthConfig
         }, auth)
       ) {
         return;
@@ -269,6 +323,26 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           orgStore,
           bitbucketApp,
           bitbucketAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleSlackAppApiRequest(orgParsed, response, {
+          integrationStore,
+          slackApp,
+          slackAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleAtlassianAppApiRequest(orgParsed, response, {
+          integrationStore,
+          atlassianApp,
+          atlassianAppConfig
         }, auth)
       ) {
         return;
@@ -308,6 +382,15 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           { router: chatRouter, orgStore, serverConfig, userStore, auditLogger },
           request
         )
+      ) {
+        return;
+      }
+
+      if (
+        await handleIntegrationApiRequest(orgParsed, response, {
+          integrationStore,
+          atlassianApp
+        }, auth)
       ) {
         return;
       }

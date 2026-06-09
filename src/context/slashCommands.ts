@@ -59,6 +59,12 @@ export function slashCommandHistoryContent(def: SlashCommandDef, args: string): 
   return trimmed ? `/${token} ${trimmed}` : `/${token}`;
 }
 
+/**
+ * Action slash commands (/gaps, /blast, …) resolve to the same `actionId` as QuickActionGrid
+ * buttons. Shared behavior (use-case prompts, context fetch, response enrichment) lives in
+ * CoopChatSession via resolveEffectiveQuickAction() and chatResponseEnrichment.ts — update
+ * those when adding or changing quick-action behavior.
+ */
 export const SLASH_COMMANDS: SlashCommandDef[] = [
   {
     name: "understand",

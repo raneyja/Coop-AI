@@ -41,10 +41,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push("## Evidence bundle");
   lines.push(formatOwnershipReportForPrompt(report));
   lines.push("");
-  lines.push("## Output format");
-  lines.push(
-    "Respond with markdown sections: **True experts**, **Availability**, **Risks**, **Escalation path**, **Knowledge transfer**, **Recommended next step**."
-  );
+  lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
 }

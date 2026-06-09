@@ -18,17 +18,44 @@ function test(name: string, fn: () => void): void {
 
 const AUDIENCE_MARKER = "## Audience & environment";
 const OUTPUT_CONTRACT_MARKER = "## Response style";
+const TYPOGRAPHY_MARKER = "## Typography (not markdown)";
 
 test("chat use case includes audience and output contract", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes(AUDIENCE_MARKER));
+  assert.ok(prompt.includes(TYPOGRAPHY_MARKER));
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
+  assert.ok(prompt.includes("Do NOT use: # headings"));
+  assert.ok(prompt.includes("*italics* for uncertainty"));
+  assert.ok(prompt.includes("Uniform response template"));
+  assert.ok(prompt.includes("## Required response structure"));
 });
 
 test("comprehension use case includes audience block via withOutputContract", () => {
   const prompt = systemPromptForUseCase("comprehension");
   assert.ok(prompt.includes(AUDIENCE_MARKER));
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
+  assert.ok(prompt.includes("## Required response structure"));
+  assert.ok(prompt.includes("**Architecture**"));
+});
+
+test("knowledge_gaps use case requires grouped subsection structure", () => {
+  const prompt = systemPromptForUseCase("knowledge_gaps");
+  assert.ok(prompt.includes("## Grouping"));
+  assert.ok(prompt.includes("**Documentation gaps**"));
+  assert.ok(prompt.includes("**Confluence pages reviewed**"));
+  assert.ok(prompt.includes('count="N"'));
+  assert.ok(prompt.includes("**Documentation coverage**"));
+  assert.ok(prompt.includes("subsection title"));
+  assert.ok(prompt.includes("Never alternate **Open question:**"));
+  assert.ok(prompt.includes("**What to check:**"));
+  assert.ok(prompt.includes("Never bullet the title"));
+});
+
+test("blast_radius use case includes impact sections", () => {
+  const prompt = systemPromptForUseCase("blast_radius");
+  assert.ok(prompt.includes("**Transitive dependents**"));
+  assert.ok(prompt.includes("**Testing surfaces**"));
 });
 
 test("inline_completion excludes audience and output contract", () => {
@@ -160,7 +187,8 @@ test("buildUserMessageWithContext renders confluence_pages from context bundle",
     ]
   });
 
-  assert.ok(message.includes("<confluence_pages>"));
+  assert.ok(message.includes('<confluence_pages count="1">'));
+  assert.ok(message.includes("List all 1 page titles under **Confluence pages reviewed**"));
   assert.ok(message.includes("Auth middleware RFC"));
 });
 

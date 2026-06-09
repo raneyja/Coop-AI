@@ -8,6 +8,7 @@ import {
   sliceFileContent,
   type LocalFileContextPayload
 } from "./localFileContext";
+import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { toRepositoryRelativePath } from "./repoFilePath";
 
 export type EditorFileSource = "workspace" | "git" | "remote" | "external";
@@ -253,6 +254,42 @@ export function readActiveEditorFileForChat(
     ],
     fallbackLevel: "partial"
   };
+}
+
+function revealLineInEditor(editor: vscode.TextEditor, line?: number): void {
+  if (!line) {
+    return;
+  }
+  const position = new vscode.Position(Math.max(0, line - 1), 0);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+}
+
+/** Focus an open tab or open a workspace file in the main editor (user-initiated navigation). */
+export async function focusRepoFileInEditor(path: string, line?: number): Promise<boolean> {
+  const existing = pickEditorForContext(path);
+  if (existing) {
+    const editor = await vscode.window.showTextDocument(existing.document, {
+      viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
+      preview: false,
+      preserveFocus: false
+    });
+    revealLineInEditor(editor, line);
+    return true;
+  }
+
+  const absolute = resolveLocalAbsolutePath(path);
+  if (absolute) {
+    const editor = await vscode.window.showTextDocument(vscode.Uri.file(absolute), {
+      viewColumn: vscode.ViewColumn.One,
+      preview: false,
+      preserveFocus: false
+    });
+    revealLineInEditor(editor, line);
+    return true;
+  }
+
+  return false;
 }
 
 export function parseGithubRemoteFromGitConfig(config: string): { owner: string; repo: string } | undefined {

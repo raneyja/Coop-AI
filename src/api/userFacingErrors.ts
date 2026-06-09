@@ -63,7 +63,9 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   sso_unavailable: "Enterprise SSO is not available on this Coop environment.",
   missing_org: "Enter your organization name to sign in with SSO.",
   "GitHub App is not configured on this server":
-    "GitHub integration is not configured on the Coop server. Contact your Coop administrator."
+    "GitHub integration is not configured on the Coop server. Contact your Coop administrator.",
+  github_not_configured:
+    "GitHub is not configured on the Coop server. Ask your admin to add GitHub OAuth or GitHub App credentials."
 };
 
 export function formatCoopApiError(

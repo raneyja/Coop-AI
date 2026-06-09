@@ -16,6 +16,7 @@ export type IntegrationCredentials = {
   jiraToken?: string;
   jiraEmail?: string;
   jiraBaseUrl?: string;
+  atlassianCloudId?: string;
   teamsToken?: string;
   confluenceToken?: string;
   confluenceEmail?: string;
@@ -24,10 +25,31 @@ export type IntegrationCredentials = {
   googleDocsToken?: string;
 };
 
+export type IntegrationCloudFetcher = () => Promise<Partial<IntegrationCredentials>>;
+
 export class IntegrationSecrets {
+  private cloudFetcher?: IntegrationCloudFetcher;
+
   public constructor(private readonly secrets: vscode.SecretStorage) {}
 
+  public setCloudFetcher(fetcher?: IntegrationCloudFetcher): void {
+    this.cloudFetcher = fetcher;
+  }
+
   public async getCredentials(): Promise<IntegrationCredentials> {
+    const local = await this.readLocalCredentials();
+    if (!this.cloudFetcher) {
+      return local;
+    }
+    try {
+      const cloud = await this.cloudFetcher();
+      return mergeIntegrationCredentials(local, cloud);
+    } catch {
+      return local;
+    }
+  }
+
+  private async readLocalCredentials(): Promise<IntegrationCredentials> {
     const [
       slackToken,
       jiraToken,
@@ -146,4 +168,19 @@ export class IntegrationSecrets {
 function trimOrUndefined(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function mergeIntegrationCredentials(
+  local: IntegrationCredentials,
+  cloud: Partial<IntegrationCredentials>
+): IntegrationCredentials {
+  const merged = { ...local };
+  for (const [key, value] of Object.entries(cloud) as Array<
+    [keyof IntegrationCredentials, string | undefined]
+  >) {
+    if (typeof value === "string" && value.trim()) {
+      merged[key] = value.trim();
+    }
+  }
+  return merged;
 }

@@ -50,6 +50,16 @@ export const FEATURE_ALIASES: Record<QuickActionFeatureId, FeatureId> = {
   "understand-repo": "repo_summary"
 };
 
+const DOC_PROVIDERS: IntegrationProvider[] = ["confluence", "notion", "google-docs"];
+
+function hasOnlineDocProvider(health: IntegrationHealth[]): boolean {
+  return health.some(
+    (entry) =>
+      DOC_PROVIDERS.includes(entry.provider) &&
+      (entry.status === "healthy" || entry.status === "degraded")
+  );
+}
+
 export const FALLBACK_MATRIX: Record<FeatureId, FallbackDefinition> = {
   trace_why: {
     required: ["github"],
@@ -181,11 +191,16 @@ export function explainFallback(
     return definition.fallback[`${degradedRequired.provider}_slow`] ?? `${displayFeature(canonicalFeature)} is running in partial mode.`;
   }
   if (offlineOptional) {
-    const docsOffline = definition.optional.some((provider) => provider === "confluence" || provider === "notion" || provider === "google-docs");
-    if (docsOffline && ["confluence", "notion", "google-docs"].includes(offlineOptional.provider)) {
+    const isDocProvider = DOC_PROVIDERS.includes(offlineOptional.provider);
+    if (isDocProvider && !hasOnlineDocProvider(health)) {
       return definition.fallback.docs_offline ?? "Documentation systems are offline; showing repository-only results.";
     }
-    return definition.fallback[`${offlineOptional.provider}_offline`] ?? `${displayProvider(offlineOptional.provider)} is offline; showing partial results.`;
+    if (!isDocProvider) {
+      return (
+        definition.fallback[`${offlineOptional.provider}_offline`] ??
+        `${displayProvider(offlineOptional.provider)} is offline; showing partial results.`
+      );
+    }
   }
   return `${displayFeature(canonicalFeature)} is running in best-effort mode.`;
 }

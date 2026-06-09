@@ -1,4 +1,4 @@
-import type { Job, JobResultRecord, JobStatus } from "../types";
+import type { Job, JobParams, JobResultRecord, JobStatus } from "../types";
 import { JobType } from "../types";
 import type { PostgresCapableBackend } from "../resultStorage";
 import type { QueueBackend } from "./types";
@@ -54,7 +54,10 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
         job.estimatedDurationMs
       ]
     );
-    await this.incrementRateLimit(job.userId, job.type);
+  }
+
+  public async recordJobSubmission(userId: string, jobType: JobType): Promise<void> {
+    await this.incrementRateLimit(userId, jobType);
   }
 
   public async get(id: string): Promise<Job | undefined> {
@@ -121,6 +124,36 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
     await this.ensureInit();
     const result = await this.pool!.query(`DELETE FROM jobs WHERE id = $1`, [id]);
     return result.rows.length > 0;
+  }
+
+  public async findReusableCompletedJob(
+    userId: string,
+    jobType: JobType,
+    params: JobParams,
+    maxAgeMs: number
+  ): Promise<Job | undefined> {
+    await this.ensureInit();
+    const repoId = params.repoId ? String(params.repoId).trim() : "";
+    if (!repoId) {
+      return undefined;
+    }
+    const file = params.file ? String(params.file).trim() : "";
+    const since = new Date(Date.now() - maxAgeMs);
+    const result = await this.pool!.query(
+      `SELECT * FROM jobs
+       WHERE type = $1
+         AND user_id = $2
+         AND status IN ('completed', 'partial')
+         AND result IS NOT NULL
+         AND completed_at >= $3
+         AND params->>'repoId' = $4
+         AND COALESCE(params->>'file', '') = $5
+       ORDER BY completed_at DESC
+       LIMIT 1`,
+      [jobType, userId, since, repoId, file]
+    );
+    const row = result.rows[0];
+    return row ? rowToJob(row) : undefined;
   }
 
   public async countJobsForUser(userId: string, jobType: string, window: "hour" | "today"): Promise<number> {

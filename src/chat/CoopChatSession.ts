@@ -62,11 +62,17 @@ import type {
   RepoContext,
   ThemeMode,
   ThemePayload,
+  SettingsStatePayload,
   UserPreferences,
   WebviewInbound,
   WebviewOutbound
 } from "./types";
+import { clearPresenceCaches } from "../api/slack/presenceCheck";
 import { CACHE_TTL_MS } from "./types";
+import {
+  deliverableForQuickAction,
+  displayStatusForChatDeliverable
+} from "../jobs/jobActivityPolicy";
 import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/JobApiClient";
 import { formatWaitTime } from "../jobs/types";
 import type { JobProgressPayload } from "./types";
@@ -77,9 +83,11 @@ import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
 import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
-import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
+import { enrichChatResponseForAction } from "./chatResponseEnrichment";
+import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
+import { openReferencedLink } from "./openReferencedLink";
 import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, useCaseFromQuickAction } from "../prompts/systemPrompts";
-import { quickActionPrompt } from "../prompts/quickActionPrompts";
+import { quickActionDisplayText, quickActionModelPrompt } from "../prompts/quickActionPrompts";
 import {
   parseSlashCommand,
   slashCommandHistoryContent,
@@ -105,8 +113,9 @@ import {
   updatePinnedPromptIds
 } from "../prompts/pinnedPrompts";
 import { ChatThreadStore } from "./chatThreadStore";
+import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
-import { type SettingsScreen, isSettingsScreen } from "./settingsScreens";
+import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import type { ManifestFileEntry } from "../manifest/types";
@@ -126,7 +135,12 @@ import {
   type LocalFileContextPayload
 } from "../context/localFileContext";
 import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../context/localContextMerge";
-import { readActiveEditorFileForChat, pickEditorForContext, resolveEditorFile } from "../context/editorFileContext";
+import {
+  focusRepoFileInEditor,
+  readActiveEditorFileForChat,
+  pickEditorForContext,
+  resolveEditorFile
+} from "../context/editorFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { readWorkspaceFileFromAbsolutePath, readWorkspaceFileFromDisk, resolveLocalAbsolutePath } from "../context/localFileResolver";
@@ -150,6 +164,7 @@ export type CoopChatSessionOptions = {
   indexManager: import("../indexing/indexManager").IndexManager;
   indexBackend: IndexBackend;
   lightningStatusBar: LightningStatusBar;
+  identityDirectoryStore: import("../identity/identityDirectoryStore").IdentityDirectoryStore;
   onDescriptionChange?: (description: string) => void;
   onTitleChange?: (title: string) => void;
   enforceSidebarMinWidth?: boolean;
@@ -236,6 +251,8 @@ export class CoopChatSession {
       hasBitbucketCredentials: false,
       hasBitbucketAppInstalled: false,
       hasSlackToken: false,
+      hasSlackInstalled: false,
+      hasAtlassianInstalled: false,
       hasJiraCredentials: false,
       hasTeamsToken: false,
       hasConfluenceCredentials: false,
@@ -285,6 +302,7 @@ export class CoopChatSession {
 
   public touch(): void {
     coopSessionRegistry.setActive(this);
+    this.threadStore?.recordActivity();
   }
 
   public async initialize(): Promise<void> {
@@ -301,7 +319,7 @@ export class CoopChatSession {
     this.postTheme();
     await this.pushSettingsState();
     if (this.threadStore) {
-      const active = this.threadStore.getActiveThread();
+      const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.chatHistory.push(...active.messages);
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
@@ -507,7 +525,7 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, ...context };
       this.postContext();
     }
-    const prompt = quickActionPrompt(actionId, this.currentContext);
+    const prompt = quickActionModelPrompt(actionId, this.currentContext);
     await this.handleChatSend(prompt, actionId);
   }
 
@@ -546,6 +564,7 @@ export class CoopChatSession {
           await this.pushSettingsState();
           void this.pushLightningState();
           this.postToChat({ type: "chat:history", payload: this.chatHistory });
+          this.pushThreadsList();
           void this.pushWorkspacePrompts();
           this.workspacePromptWatcher?.dispose();
           this.workspacePromptWatcher = watchWorkspacePrompts(() => void this.pushWorkspacePrompts());
@@ -560,7 +579,7 @@ export class CoopChatSession {
         return;
       case "ui:open-settings": {
         const screen = message.payload?.screen;
-        this.openSettings(screen && isSettingsScreen(screen) ? screen : undefined);
+        this.openSettings(screen && isSettingsScreen(migrateSettingsScreen(screen)) ? migrateSettingsScreen(screen) : undefined);
         return;
       }
       case "ui:ensure-min-width":
@@ -672,6 +691,9 @@ export class CoopChatSession {
           await this.handleRepoList(message.payload.path || "");
         }
         return;
+      case "repo:search":
+        await this.handleRepoSearch(message.payload.query);
+        return;
       case "repo:select":
         await this.handleRepoSelect(message.payload);
         return;
@@ -687,6 +709,9 @@ export class CoopChatSession {
         return;
       case "repo:open-file":
         void this.handleRemoteFileIntent(message.payload);
+        return;
+      case "link:open":
+        void openReferencedLink(message.payload.url);
         return;
       case "settings:update":
         await updateConfiguration(message.payload);
@@ -721,19 +746,31 @@ export class CoopChatSession {
         await this.handleInstallGithubApp();
         return;
       case "settings:refresh-github-installation":
-        await this.refreshAllSessionsPreferences();
+        await this.handleRefreshInstallation("github", source);
         return;
       case "settings:install-gitlab-app":
         await this.handleInstallGitlabApp();
         return;
       case "settings:refresh-gitlab-installation":
-        await this.refreshAllSessionsPreferences();
+        await this.handleRefreshInstallation("gitlab", source);
         return;
       case "settings:install-bitbucket-app":
         await this.handleInstallBitbucketApp();
         return;
       case "settings:refresh-bitbucket-installation":
-        await this.refreshAllSessionsPreferences();
+        await this.handleRefreshInstallation("bitbucket", source);
+        return;
+      case "settings:install-slack-app":
+        await this.handleInstallSlackApp();
+        return;
+      case "settings:refresh-slack-installation":
+        await this.handleRefreshInstallation("slack", source);
+        return;
+      case "settings:install-atlassian-app":
+        await this.handleInstallAtlassianApp();
+        return;
+      case "settings:refresh-atlassian-installation":
+        await this.handleRefreshInstallation(message.payload?.key ?? "jira", source);
         return;
       case "settings:update-github-token":
         if (!isCoopDevMode()) {
@@ -835,7 +872,7 @@ export class CoopChatSession {
         const creds = await this.options.integrationSecrets.getCredentials();
         if (!creds.jiraEmail || !creds.jiraToken) {
           void vscode.window.showWarningMessage(
-            "Configure Jira email and API token first (Decision archaeology → Jira)."
+            "Configure Jira email and API token first (Settings → Connections → Jira)."
           );
           return;
         }
@@ -868,6 +905,14 @@ export class CoopChatSession {
       case "settings:clear-google-docs-token":
         await this.options.integrationSecrets.clearGoogleDocsToken();
         await this.refreshAllSessionsPreferences();
+        return;
+      case "settings:save-identity-directory":
+        await this.options.identityDirectoryStore.save(
+          message.payload.directory,
+          this.preferences.apiBaseUrl
+        );
+        clearPresenceCaches();
+        await this.pushSettingsState();
         return;
       case "settings:test-integration":
         await this.handleTestIntegration(message.payload.provider, source, message.payload.draft);
@@ -970,8 +1015,28 @@ export class CoopChatSession {
     return this.runIntentFetch(event, { quiet: true });
   }
 
-  private async handleRemoteFileIntent(intent: { path: string; line?: number }): Promise<void> {
-    const { path, line } = intent;
+  private async handleRemoteFileIntent(intent: { path: string; line?: number; focus?: boolean }): Promise<void> {
+    const { path, line, focus } = intent;
+
+    if (focus) {
+      const opened = await focusRepoFileInEditor(path, line);
+      if (opened) {
+        return;
+      }
+      if (this.currentContext.owner && this.currentContext.repo) {
+        await openRemoteFileInEditor({
+          owner: this.currentContext.owner,
+          repo: this.currentContext.repo,
+          filePath: path,
+          line,
+          provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+          branch: this.currentContext.branch,
+          preserveSidebarFocus: false
+        });
+      }
+      return;
+    }
+
     this.currentContext = mergeRepoContext(this.currentContext, {
       file: path,
       fileSource: "remote",
@@ -1494,6 +1559,121 @@ export class CoopChatSession {
     }
   }
 
+  private async handleRefreshInstallation(
+    key:
+      | import("./types").CodeHostProviderPreference
+      | "slack"
+      | "jira"
+      | "confluence"
+      | "teams"
+      | "notion"
+      | "google-docs",
+    source: "chat" | "settings"
+  ): Promise<void> {
+    try {
+      await this.refreshAllSessionsPreferences();
+      const prefs = this.preferences;
+      const result = this.refreshStatusForKey(key, prefs);
+      this.publishRefreshResult(result, source);
+    } catch (error) {
+      this.publishRefreshResult(
+        { ok: false, message: this.testFailureMessage(error) },
+        source
+      );
+    }
+  }
+
+  private refreshStatusForKey(
+    key:
+      | import("./types").CodeHostProviderPreference
+      | "slack"
+      | "jira"
+      | "confluence"
+      | "teams"
+      | "notion"
+      | "google-docs",
+    prefs: UserPreferences
+  ): { ok: boolean; message: string } {
+    switch (key) {
+      case "github": {
+        const connected = prefs.hasGitHubAppInstalled || prefs.hasGitHubToken;
+        return connected
+          ? { ok: true, message: "GitHub status refreshed — connected." }
+          : { ok: false, message: "GitHub status refreshed — not connected. Install the GitHub App." };
+      }
+      case "gitlab": {
+        const connected = prefs.hasGitLabAppInstalled || prefs.hasGitLabToken;
+        return connected
+          ? { ok: true, message: "GitLab status refreshed — connected." }
+          : { ok: false, message: "GitLab status refreshed — not connected. Authorize GitLab." };
+      }
+      case "bitbucket": {
+        const connected = prefs.hasBitbucketAppInstalled || prefs.hasBitbucketCredentials;
+        return connected
+          ? { ok: true, message: "Bitbucket status refreshed — connected." }
+          : { ok: false, message: "Bitbucket status refreshed — not connected. Authorize Bitbucket." };
+      }
+      case "slack": {
+        const connected = prefs.hasSlackInstalled || prefs.hasSlackToken;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.slackTeamName
+                ? `Slack status refreshed — connected to ${prefs.slackTeamName}.`
+                : "Slack status refreshed — connected."
+            }
+          : { ok: false, message: "Slack status refreshed — not connected. Connect Slack." };
+      }
+      case "jira": {
+        const connected = prefs.hasAtlassianInstalled || prefs.hasJiraCredentials;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.atlassianSiteName
+                ? `Jira status refreshed — connected to ${prefs.atlassianSiteName}.`
+                : "Jira status refreshed — connected."
+            }
+          : { ok: false, message: "Jira status refreshed — not connected. Connect Atlassian." };
+      }
+      case "confluence": {
+        const connected = prefs.hasAtlassianInstalled || prefs.hasConfluenceCredentials;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.atlassianSiteName
+                ? `Confluence status refreshed — connected to ${prefs.atlassianSiteName}.`
+                : "Confluence status refreshed — connected."
+            }
+          : { ok: false, message: "Confluence status refreshed — not connected. Connect Atlassian." };
+      }
+      case "teams":
+        return prefs.hasTeamsToken
+          ? { ok: true, message: "Teams status refreshed — connected." }
+          : { ok: false, message: "Teams status refreshed — not connected." };
+      case "notion":
+        return prefs.hasNotionToken
+          ? { ok: true, message: "Notion status refreshed — connected." }
+          : { ok: false, message: "Notion status refreshed — not connected." };
+      case "google-docs":
+        return prefs.hasGoogleDocsToken
+          ? { ok: true, message: "Google Docs status refreshed — connected." }
+          : { ok: false, message: "Google Docs status refreshed — not connected." };
+      default:
+        return { ok: true, message: "Status refreshed." };
+    }
+  }
+
+  private publishRefreshResult(
+    result: { ok: boolean; message: string },
+    source: "chat" | "settings"
+  ): void {
+    if (source === "settings") {
+      this.postToSettings({ type: "settings:refresh-result", payload: result });
+    } else {
+      this.postToChat({ type: "settings:refresh-result", payload: result });
+    }
+  }
+
   private async handleChatSend(
     message: string,
     quickAction?: string,
@@ -1533,7 +1713,10 @@ export class CoopChatSession {
     }
 
     const historyContent =
-      options?.historyContent ?? (quickAction ? `[${quickAction}] ${message}` : message);
+      options?.historyContent ??
+      (quickAction
+        ? `[${quickAction}] ${quickActionDisplayText(quickAction as QuickActionId, this.currentContext)}`
+        : message);
     const userMessage: ChatMessage = {
       role: "user",
       content: historyContent,
@@ -1558,7 +1741,8 @@ export class CoopChatSession {
       if (ranAsync) {
         const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, message);
         await this.runIntentFetch(intentEvent, { quiet: true });
-        await this.continueChatAfterContext(message, undefined, attachments);
+        this.applyKnowledgeGapJobResultToBundle(quickAction);
+        await this.continueChatAfterContext(message, quickAction, attachments);
         return;
       }
     }
@@ -1594,7 +1778,7 @@ export class CoopChatSession {
 
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
-      const resolved = args.length > 0 ? args : quickActionPrompt(actionId, this.currentContext);
+      const resolved = args.length > 0 ? args : quickActionModelPrompt(actionId, this.currentContext);
       // Heavy actions spawn a minute-long background job — confirm before running.
       if (shouldUseAsyncJob(actionId)) {
         this.post({
@@ -1653,13 +1837,13 @@ export class CoopChatSession {
   private isIntegrationConnected(provider: IntegrationChatProvider): boolean {
     switch (provider) {
       case "slack":
-        return this.preferences.hasSlackToken;
+        return this.preferences.hasSlackToken || this.preferences.hasSlackInstalled;
       case "jira":
-        return this.preferences.hasJiraCredentials;
+        return this.preferences.hasJiraCredentials || this.preferences.hasAtlassianInstalled;
       case "teams":
         return this.preferences.hasTeamsToken;
       case "confluence":
-        return this.preferences.hasConfluenceCredentials;
+        return this.preferences.hasConfluenceCredentials || this.preferences.hasAtlassianInstalled;
       case "notion":
         return this.preferences.hasNotionToken;
       case "google-docs":
@@ -1788,6 +1972,7 @@ export class CoopChatSession {
       integrationProvider?: IntegrationChatProvider;
     }
   ): Promise<void> {
+    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
     const cacheKey = JSON.stringify({
@@ -1818,7 +2003,7 @@ export class CoopChatSession {
     let full = "";
 
     try {
-      const skipLocalAttach = quickAction === "understand-repo" || Boolean(integrationProvider);
+      const skipLocalAttach = effectiveQuickAction === "understand-repo" || Boolean(integrationProvider);
       const localPayload = skipLocalAttach ? undefined : await this.resolveChatLocalFiles();
       if (localPayload?.files.length) {
         this.injectLocalFilesIntoBundle(localPayload);
@@ -1841,7 +2026,7 @@ export class CoopChatSession {
       const ownershipReport = this.ownershipReportFromBundle();
       const repoSummary = this.repoSummaryFromBundle();
       const llmMessage =
-        quickAction === "trace-decision" && decisionTimeline
+        effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
               file: this.currentContext.file ?? decisionTimeline.file,
@@ -1849,13 +2034,13 @@ export class CoopChatSession {
               codeSnippet: decisionTimeline.codeSnippet,
               userQuestion: content
             })
-          : quickAction === "find-owner" && ownershipReport
+          : effectiveQuickAction === "find-owner" && ownershipReport
             ? buildOwnershipSynthesisUserPrompt({
                 report: ownershipReport,
                 file: this.currentContext.file ?? ownershipReport.path,
                 userQuestion: content
               })
-            : quickAction === "understand-repo" && repoSummary
+            : effectiveQuickAction === "understand-repo" && repoSummary
               ? buildRepoSummarySynthesisUserPrompt({
                   owner: this.currentContext.owner ?? this.preferences.owner ?? "unknown",
                   repo: this.currentContext.repo ?? this.preferences.repo ?? "unknown",
@@ -1869,7 +2054,7 @@ export class CoopChatSession {
                 : content;
 
       const useContextBundle =
-        Boolean(quickAction) ||
+        Boolean(effectiveQuickAction) ||
         Boolean(integrationProvider) ||
         contextBundleHasIntegrationSearch(contextBundle) ||
         contextBundle.some(
@@ -1888,7 +2073,7 @@ export class CoopChatSession {
               repo: this.currentContext.repo,
               branch: this.currentContext.branch,
               file:
-                quickAction === "understand-repo" || integrationProvider
+                effectiveQuickAction === "understand-repo" || integrationProvider
                   ? undefined
                   : this.currentContext.file,
               selectedLines: this.currentContext.selectedLines,
@@ -1914,8 +2099,14 @@ export class CoopChatSession {
       const jiraSearch = contextBundle
         .map((entry) => (entry.data as { jiraSearch?: { issues?: unknown[]; error?: string } } | undefined)?.jiraSearch)
         .find(Boolean);
+      const confluenceSearch = contextBundle
+        .map(
+          (entry) =>
+            (entry.data as { confluenceSearch?: { pages?: unknown[]; error?: string } } | undefined)?.confluenceSearch
+        )
+        .find(Boolean);
       this.logContextDebug(
-        quickAction === "understand-repo"
+        effectiveQuickAction === "understand-repo"
           ? entryFileCount > 0
             ? `Understand Repo: ${entryFileCount} entry file(s) in context bundle`
             : `Understand Repo: no entry files in bundle (check GitHub connection)`
@@ -1923,13 +2114,17 @@ export class CoopChatSession {
             ? jiraSearch?.error
               ? `Jira search failed: ${jiraSearch.error}`
               : `Jira: ${jiraSearch?.issues?.length ?? 0} issue(s) in context bundle`
-            : localPayload?.files.length
-              ? `Attached ${localPayload.files[0]?.content.length ?? 0} chars from ${localPayload.activeFile}`
-              : `No file content attached (file=${this.currentContext.file ?? "none"}, openTabs=${collectOpenEditorPaths().join(", ") || "none"})`
+            : integrationProvider === "confluence" || confluenceSearch || effectiveQuickAction === "knowledge-gaps"
+              ? confluenceSearch?.error
+                ? `Confluence search failed: ${confluenceSearch.error}`
+                : `Confluence: ${confluenceSearch?.pages?.length ?? 0} page(s) in context bundle`
+              : localPayload?.files.length
+                ? `Attached ${localPayload.files[0]?.content.length ?? 0} chars from ${localPayload.activeFile}`
+                : `No file content attached (file=${this.currentContext.file ?? "none"}, openTabs=${collectOpenEditorPaths().join(", ") || "none"})`
       );
 
       if (
-        quickAction !== "understand-repo" &&
+        effectiveQuickAction !== "understand-repo" &&
         !integrationProvider &&
         !localPayload?.files.length &&
         collectOpenEditorPaths().length > 0
@@ -1949,7 +2144,7 @@ export class CoopChatSession {
               : "CoopAI could not read open file content. Open the repo folder (File → Open Folder) or open the workspace file .vscode/extension-dev.code-workspace, then reload."
         };
         this.postContext();
-      } else if (quickAction === "understand-repo" && entryFileCount > 0 && this.currentContext.contextWarning) {
+      } else if (effectiveQuickAction === "understand-repo" && entryFileCount > 0 && this.currentContext.contextWarning) {
         this.currentContext = { ...this.currentContext, contextWarning: undefined };
         this.postContext();
       }
@@ -1968,7 +2163,7 @@ export class CoopChatSession {
           attachments: attachments?.length ? attachments : undefined,
           model: this.preferences.model,
           provider: this.preferences.llmProvider,
-          useCase: useCaseFromQuickAction(quickAction),
+          useCase: useCaseFromQuickAction(effectiveQuickAction),
           temperature: this.preferences.temperature,
           maxTokens: this.preferences.maxTokens
         },
@@ -1987,7 +2182,13 @@ export class CoopChatSession {
         return;
       }
 
-      const finalMessage = { ...result.message, content: full };
+      const enrichedContent = enrichChatResponseForAction({
+        quickAction: effectiveQuickAction,
+        content: full,
+        contextBundle,
+        activeFile: this.currentContext.file
+      });
+      const finalMessage = { ...result.message, content: enrichedContent };
       this.chatHistory.push(finalMessage);
       this.post({ type: "chat:complete", payload: { message: finalMessage } });
       this.post({ type: "chat:history", payload: this.chatHistory });
@@ -2027,11 +2228,10 @@ export class CoopChatSession {
     const repoId = buildRepoId(this.preferences, this.currentContext);
     const jobToken = ++this.jobRunToken;
     this.jobClient.setBaseUrl(resolveCoopBaseUrl().baseUrl);
-    this.postJobProgress({
+    this.postQuickActionJobActivity(quickAction, {
       jobId: "pending",
       status: "queued",
-      title: jobTitleForAction(quickAction),
-      message: "Starting scan... (this may take a minute)",
+      message: activeJobMessageForAction(quickAction),
       progress: 5
     });
 
@@ -2050,11 +2250,27 @@ export class CoopChatSession {
       });
 
       this.activeJobId = submit.jobId;
-      this.postJobProgress({
+
+      if (submit.cached) {
+        const ageLabel = formatCachedScanAge(submit.completedAt);
+        this.postQuickActionJobActivity(quickAction, {
+          jobId: submit.jobId,
+          status: "running",
+          message: ageLabel
+            ? `Using scan from ${ageLabel} ago…`
+            : "Using recent scan…",
+          progress: 80
+        });
+        const resultPayload = await this.jobClient.getJobResult(submit.jobId);
+        const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
+        this.lastJobResult = result;
+        return true;
+      }
+
+      this.postQuickActionJobActivity(quickAction, {
         jobId: submit.jobId,
         status: "queued",
-        title: jobTitleForAction(quickAction),
-        message: `Job #${submit.jobId.slice(0, 8)} queued.`,
+        message: `Queued (est. ${submit.estimatedWaitTime ?? "a few minutes"})…`,
         progress: 10,
         estimatedWaitTime: submit.estimatedWaitTime
       });
@@ -2063,43 +2279,32 @@ export class CoopChatSession {
         if (jobToken !== this.jobRunToken) {
           throw new Error("Job aborted");
         }
-        this.postJobProgress({
+        const terminal = event.status === "completed" || event.status === "partial";
+        this.postQuickActionJobActivity(quickAction, {
           jobId: event.jobId,
-          status: event.status === "partial" ? "partial" : event.status,
-          title: jobTitleForAction(quickAction),
-          message: event.message,
-          progress: event.progress,
+          status: terminal ? "running" : event.status,
+          message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
+          progress: terminal ? Math.max(event.progress, 90) : event.progress,
           estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
         });
       });
 
       const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
       this.lastJobResult = result;
-      const summary = extractGapSummary(result);
-      this.post({
-        type: "job:complete",
-        payload: {
-          jobId: submit.jobId,
-          status: String(result.status ?? resultPayload.status ?? "completed") === "partial" ? "partial" : "completed",
-          title: jobTitleForAction(quickAction),
-          message: "Scan complete",
-          progress: 100,
-          resultSummary: summary,
-          result
-        }
-      });
       return true;
     } catch (error) {
       if (jobToken !== this.jobRunToken) {
         return false;
       }
       const message = error instanceof Error ? error.message : "Background job failed";
-      this.postJobProgress({
+      const rateLimited = /daily limit reached|hourly limit reached|rate limit/i.test(message);
+      this.postQuickActionJobActivity(quickAction, {
         jobId: this.activeJobId ?? "unknown",
-        status: "failed",
-        title: jobTitleForAction(quickAction),
-        message,
-        progress: 0
+        status: "running",
+        message: rateLimited
+          ? "Deep-scan limit reached — preparing answer from available context…"
+          : "Background scan unavailable — preparing answer from available context…",
+        progress: 75
       });
       return false;
     }
@@ -2112,6 +2317,8 @@ export class CoopChatSession {
         jobId,
         status: "cancelled",
         title: "Job cancelled",
+        deliverable: "standalone",
+        showViewResults: false,
         message: "The job was cancelled before it started.",
         progress: 0
       });
@@ -2138,6 +2345,55 @@ export class CoopChatSession {
 
   private postJobProgress(payload: JobProgressPayload): void {
     this.post({ type: "job:progress", payload });
+  }
+
+  private postQuickActionJobActivity(
+    quickAction: string,
+    patch: Partial<JobProgressPayload> & Pick<JobProgressPayload, "jobId" | "progress">
+  ): void {
+    const deliverable = deliverableForQuickAction(quickAction);
+    const status = patch.status ?? "running";
+    this.postJobProgress({
+      title: jobTitleForAction(quickAction),
+      deliverable,
+      showViewResults: deliverable === "standalone" && this.preferences.devMode,
+      ...patch,
+      status: deliverable === "chat" ? displayStatusForChatDeliverable(status) : status
+    });
+  }
+
+  private applyKnowledgeGapJobResultToBundle(quickAction: string | undefined): void {
+    if (quickAction !== "knowledge-gaps" || !this.lastJobResult) {
+      return;
+    }
+    const result = this.lastJobResult as Record<string, unknown>;
+    const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+    const jobScan = {
+      source: "knowledge-gap-job",
+      cached: Boolean(result.cached),
+      foundGaps: typeof result.foundGaps === "number" ? result.foundGaps : gaps.length,
+      highPriority: Number(result.highPriority ?? 0),
+      mediumPriority: Number(result.mediumPriority ?? 0),
+      lowPriority: Number(result.lowPriority ?? 0),
+      gaps: gaps.slice(0, 50)
+    };
+    const index = this.lastContextBundle.findIndex((entry) => entry.type === "knowledge_gaps");
+    if (index >= 0) {
+      const existing = this.lastContextBundle[index];
+      const data =
+        typeof existing.data === "object" && existing.data !== null
+          ? { ...(existing.data as Record<string, unknown>) }
+          : {};
+      this.lastContextBundle[index] = {
+        ...existing,
+        data: { ...data, jobScan }
+      };
+      return;
+    }
+    this.lastContextBundle.push({
+      type: "knowledge_gaps",
+      data: { jobScan }
+    });
   }
 
   private async handleRepoListRepos(): Promise<void> {
@@ -2179,6 +2435,52 @@ export class CoopChatSession {
   }): Promise<void> {
     this.setRepoContext(payload);
     await this.handleRepoList("");
+  }
+
+  private async handleRepoSearch(query: string): Promise<void> {
+    const trimmed = query.trim();
+    this.post({
+      type: "repo:search-results",
+      payload: { query: trimmed, items: [], loading: true }
+    });
+    if (!trimmed) {
+      this.post({
+        type: "repo:search-results",
+        payload: { query: "", items: [] }
+      });
+      return;
+    }
+    if (!this.currentContext.owner || !this.currentContext.repo) {
+      this.post({
+        type: "repo:search-results",
+        payload: { query: trimmed, items: [], error: "Select a repository to search files." }
+      });
+      return;
+    }
+    try {
+      const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+      const hits = await this.options.codeHostRouter.searchRepositoryFiles(trimmed, {
+        provider,
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        branch: this.currentContext.branch
+      });
+      const items = hits.map((hit) => ({
+        path: hit.path,
+        name: hit.name,
+        type: "file" as const
+      }));
+      this.post({
+        type: "repo:search-results",
+        payload: { query: trimmed, items }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to search repository files.";
+      this.post({
+        type: "repo:search-results",
+        payload: { query: trimmed, items: [], error: message }
+      });
+    }
   }
 
   private async handleRepoList(path: string): Promise<void> {
@@ -2722,6 +3024,52 @@ export class CoopChatSession {
     }
   }
 
+  private async handleInstallSlackApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Sign in to Coop before connecting Slack.");
+      return;
+    }
+    if (this.preferences.canInstallIntegrations === false) {
+      void vscode.window.showErrorMessage(
+        "Only your organization admin can connect Slack. Ask IT to authorize the Slack app."
+      );
+      return;
+    }
+    try {
+      const url = await this.options.api.getSlackAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Slack authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Slack authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleInstallAtlassianApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Sign in to Coop before connecting Atlassian.");
+      return;
+    }
+    if (this.preferences.canInstallIntegrations === false) {
+      void vscode.window.showErrorMessage(
+        "Only your organization admin can connect Atlassian. Ask IT to authorize Jira and Confluence."
+      );
+      return;
+    }
+    try {
+      const url = await this.options.api.getAtlassianAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Atlassian authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Atlassian authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
   private async handleLightningEnableRepo(repoId: string): Promise<void> {
     const [owner, repo] = parseRepoIdParts(repoId);
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
@@ -2884,7 +3232,12 @@ export class CoopChatSession {
   }
 
   private async pushSettingsState(): Promise<void> {
-    const message: WebviewOutbound = { type: "settings:state", payload: this.preferences };
+    const identityDirectory = await this.options.identityDirectoryStore.load(this.preferences.apiBaseUrl);
+    const payload: SettingsStatePayload = {
+      ...this.preferences,
+      identityDirectory
+    };
+    const message: WebviewOutbound = { type: "settings:state", payload };
     this.postToChat(message);
     this.postToSettings(message);
   }
@@ -3012,6 +3365,28 @@ function jobTitleForAction(actionId: string): string {
       return "Generating repository summary";
     default:
       return "Running background job";
+  }
+}
+
+function activeJobMessageForAction(actionId: string): string {
+  switch (actionId) {
+    case "knowledge-gaps":
+      return "Scanning repository for knowledge gaps…";
+    case "blast-radius":
+      return "Building dependency graph…";
+    default:
+      return "Running background scan…";
+  }
+}
+
+function preparingAnswerMessageForAction(actionId: string): string {
+  switch (actionId) {
+    case "knowledge-gaps":
+      return "Scan complete — preparing answer…";
+    case "blast-radius":
+      return "Graph ready — preparing answer…";
+    default:
+      return "Preparing answer…";
   }
 }
 
@@ -3171,4 +3546,20 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
     return "teams";
   }
   return normalized as IntegrationProvider;
+}
+
+function formatCachedScanAge(completedAt?: string): string | undefined {
+  if (!completedAt) {
+    return undefined;
+  }
+  const completedMs = Date.parse(completedAt);
+  if (!Number.isFinite(completedMs)) {
+    return undefined;
+  }
+  const minutes = Math.max(1, Math.round((Date.now() - completedMs) / 60_000));
+  if (minutes < 60) {
+    return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  }
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? "1 hour" : `${hours} hours`;
 }

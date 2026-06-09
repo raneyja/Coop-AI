@@ -17,6 +17,7 @@ export type TimeBucketCounts = {
 
 export type CommitPatternStats = {
   author: string;
+  authorLogin?: string;
   counts: TimeBucketCounts;
   recencyScore: number;
   lastCommitDate?: string;
@@ -64,6 +65,7 @@ export type SlackPresenceStatus = {
 
 export type OwnershipScore = {
   owner: string;
+  githubLogin?: string;
   score: number;
   tier: OwnershipTier;
   specialty?: string;

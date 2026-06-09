@@ -172,6 +172,8 @@ Appended (via `withOutputContract`) to every chat use-case system prompt **excep
 - Assume strong technical fluency; skip basic explanations unless asked.
 - Favor concrete, actionable answers: real file paths, code, and specifics over generic advice.
 - Be concise and direct. This is a working tool, not a tutorial.
+- Do not open with filler ("Great question", "Certainly", or restating the request).
+- Omit sections with no evidence — never pad with generic advice.
 ```
 
 This is intentionally placed in the **system prompt** (not the user message body): it is per-session truth, not per-turn intent, so it never pollutes what the user "said" or leaks into stored history.
@@ -182,20 +184,22 @@ This is intentionally placed in the **system prompt** (not the user message body
 
 **File:** `src/prompts/systemPrompts.ts` → `CURSOR_STYLE_OUTPUT_CONTRACT`
 
-Appended to every chat use-case system prompt **except** `inline_completion`. Teaches models to write answers the `ChatProse` renderer can elevate into Cursor-quality UI.
+Appended to every chat use-case system prompt **except** `inline_completion`. Teaches models to write answers the `ChatProse` renderer can elevate into Cursor-quality UI. Each use case also gets a **`USE_CASE_STRUCTURE`** block (required section titles and grouping rules).
 
 ```
-## Response style
-- Lead with a direct 1-2 sentence answer, then explain.
-- Section labels: standalone **bold line** on its own line (not # markdown headers).
-- Use inline `code` for identifiers; fenced blocks for multi-line code with language tag.
-- Cite repo code: ```startLine:endLine:filepath` fence format.
-- File paths in backticks: `src/foo.ts` or `src/foo.ts:42`.
-- Bullets for parallel items; numbered for sequences.
-- Complete sentences. No fabricated URLs or paths.
+## Typography (not markdown)
+- Main section titles: **Title** alone on its own line (blank line before).
+- Subsection titles: same pattern nested under a main section.
+- No # headings, tables, blockquotes, or README-style layout.
+- Field labels (**Open question:**, **What to check:**) are bullets inside subsections — never top-level.
+
+## Uniform response template
+1. **Summary** or **Answer** — direct 1-2 sentence lead (always first).
+2. Main sections from the use-case structure — omit empty sections.
+3. Multi-item audits: one **subsection title** per item, then 2-4 bullets beneath.
 ```
 
-**UI contract:** The webview parser (`src/webview/lib/chatProseParser.ts`) turns this into section headings, clickable file links, citation cards, and code blocks. Models that follow the contract get the full interactive experience; models that emit `# Markdown headers` still render, but as plain paragraphs (intentionally — we avoid README-style document formatting).
+**UI contract:** The webview parser (`src/webview/lib/chatProseParser.ts`) runs `normalizeCoopChatProse()` then parses into section headings, clickable file links, citation cards, and code blocks.
 
 ---
 
@@ -207,7 +211,7 @@ Appended to every chat use-case system prompt **except** `inline_completion`. Te
 - Each entry: `{ role, content, attachments? }`.
 - **Stored content** is what the user saw:
   - Free chat: raw message text.
-  - Quick actions: `[action-id] <quickActionPrompt text>` (see below).
+  - Quick actions: `[action-id]` + compact display text + context chips (see below).
 - History is sent **as-is** — it does not re-attach context blocks from earlier turns. Only the **latest** user message gets `buildUserMessageWithContext()`.
 
 ---
@@ -224,21 +228,35 @@ User text is sent verbatim (after context attachment). Example:
 How does streaming work in ChatPanel?
 ```
 
-### B. Quick action (starter prompt)
+### B. Quick action (display vs model prompt)
 
 **File:** `src/prompts/quickActionPrompts.ts`
 
-Quick actions do not send the button label alone. They send a **structured starter prompt** with repo context baked in:
+Quick actions split **what the user sees** from **what the model receives**:
 
-| Action | Starter prompt pattern |
-|--------|------------------------|
-| Understand repo | Architecture focus + file, branch, language |
-| Trace decision | Rationale/tradeoffs + file, selected lines |
-| Find owner | Owners + confidence + file, repo |
-| Blast radius | Integration/API/ops risk + file, language |
-| Knowledge gaps | Unknowns + evidence needed + file, branch |
+| Export | Purpose |
+|--------|---------|
+| `quickActionDisplayText()` / `formatQuickActionHistoryContent()` | Chat bubble + thread history |
+| `quickActionModelPrompt()` | User turn sent to the LLM (before synthesis/context wrapping) |
 
-**In the chat UI**, the user bubble is prefixed: `[understand-repo] Understand this repository quickly…`
+**In the chat UI**, the user bubble shows:
+
+```
+KNOWLEDGE GAPS                          ← tag from [knowledge-gaps]
+Audit documentation and ownership gaps for this area.
+
+file: Dockerfile · branch: main · repo: acme/widgets
+```
+
+Format instructions and evidence-source hints live in the **system prompt** (`USE_CASE_STRUCTURE`) and **model user turn** — not in the bubble.
+
+| Action | Display (bubble) | Model turn adds |
+|--------|------------------|-----------------|
+| Understand repo | Repo-wide architecture intent | Entry files, graph context, repo-wide scope |
+| Trace decision | Decision-tracing intent | PR/Slack/Teams/Jira evidence instructions |
+| Find owner | Owner lookup intent | Identity links, Slack presence, escalation |
+| Blast radius | Impact estimate intent | Dependency graph, local files, ops/API risk |
+| Knowledge gaps | Gap audit intent | `knowledge_gap_scan`, Confluence/Notion/Google Docs |
 
 **`useCase`** still switches the system prompt to the matching specialist role.
 
@@ -257,8 +275,7 @@ When context fetching produced a structured artifact, the user's text may be **r
 ## Evidence bundle
 <formatted timeline: commits, PRs, Slack, Jira, etc.>
 
-## Output format
-Respond with markdown sections: **Summary**, **Business context**, …
+Synthesize from evidence only. Follow the required response structure in your system instructions.
 ```
 
 **Find owner** (when `ownershipReport` exists):
@@ -272,9 +289,10 @@ Respond with markdown sections: **Summary**, **Business context**, …
 ## Evidence bundle
 <scores, experts, Slack, escalation data>
 
-## Output format
-Respond with markdown sections: **True experts**, **Availability**, …
+Synthesize from evidence only. Follow the required response structure in your system instructions.
 ```
+
+**Understand repo** (when `repoSummary` exists): same pattern — evidence bundle + defer to system structure (no duplicate `## Output format` block).
 
 The UI still shows the quick-action user bubble; the model receives the full synthesis document.
 
@@ -410,7 +428,7 @@ The user `message` is built by the autocomplete layer from editor prefix/suffix 
 | Element | In chat UI | Sent to model |
 |---------|------------|---------------|
 | User free text | Exact text | Same text after `<attached_context>` block |
-| Quick action | `[action-id]` + starter prompt | Same (synthesis may replace message body for decision/ownership) |
+| Quick action | Tag + compact intent + context chips | `quickActionModelPrompt()` (synthesis may replace message body for decision/ownership/repo summary) |
 | Prior turns | Full thread | `history[]` without re-attached context |
 | Repo / file / branch | Composer chips & explorer | `<attached_context>` metadata lines |
 | Fetched integrations | Decision timeline / ownership **cards** | Raw JSON in `<graph_context>` + synthesis sections |
@@ -436,7 +454,7 @@ Edit `CURSOR_STYLE_OUTPUT_CONTRACT` in `systemPrompts.ts`. Keep in sync with `sr
 
 - Intent fetch types and bundle shape: `src/context/` pipeline + `CoopChatSession.runIntentFetch`
 - Context XML structure: `buildUserMessageWithContext()` in `systemPrompts.ts`
-- Quick-action starter questions: `quickActionPrompts.ts`
+- Quick-action display vs model text: `quickActionPrompts.ts` (`quickActionDisplayText`, `quickActionModelPrompt`)
 
 ### Change generation parameters
 
@@ -446,26 +464,20 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ---
 
-## Example: full prompt for a trace-decision turn
+## Example: full prompt for a knowledge-gaps turn
 
-**User clicks "Trace Decision" on `src/api/chatApi.ts` lines 46–51.**
+**User clicks "Knowledge Gaps" on `Dockerfile`.**
 
-1. **UI user bubble:** `[trace-decision] Trace the likely engineering decision…`
-2. **Intent fetch** loads `decision_history` into `contextBundle`; timeline card renders in UI.
-3. **API `useCase`:** `decision_archaeology`
+1. **UI user bubble:** `[knowledge-gaps]` tag + `Audit documentation and ownership gaps for this area.` + `file: Dockerfile · branch: main`
+2. **Intent fetch** loads ownership, dependencies, Confluence search, and optional background `knowledge_gap_scan` into `contextBundle`.
+3. **API `useCase`:** `knowledge_gaps`
 4. **System message (conceptual):**
 
    ```
    [ENTERPRISE CONFIDENTIAL PREAMBLE]
 
-   You are a code historian. You have been given:
-   - Original code commit and message
-   - PR discussion…
-   [DECISION_HISTORIAN_SYSTEM full text]
-
-   ## Response style
-   - Lead with a direct 1-2 sentence answer…
-   [CURSOR_STYLE_OUTPUT_CONTRACT]
+   You audit engineering health: missing docs, orphaned code…
+   [KNOWLEDGE_GAPS_SYSTEM + OPERATING_CONTEXT + CURSOR_STYLE_OUTPUT_CONTRACT + USE_CASE_STRUCTURE]
    ```
 
 5. **User message (conceptual):**
@@ -474,23 +486,18 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
    <attached_context>
    repo: acme/payments-api
    branch: main
-   <file path="src/api/chatApi.ts" lines="46-51" />
-   <graph_context>{ "type": "decision_history", "data": { "timeline": { … } } }</graph_context>
+   <file path="Dockerfile" />
+   <knowledge_gap_scan found="3" …>…</knowledge_gap_scan>
+   <confluence_pages>…</confluence_pages>
    </attached_context>
 
-   ## Task
-   Trace the likely engineering decision behind this code.
-   …
-
-   ## Evidence bundle
-   ### Commit abc123 …
-   ### PR #42 …
-
-   ## Output format
-   Respond with markdown sections: **Summary**, …
+   Audit documentation, ownership, and operational unknowns for this file or area.
+   Be direct and thorough; no preamble, filler, or restating this request.
+   Context: file Dockerfile, branch main, repo acme/payments-api.
+   Use attached knowledge_gap_scan findings, Confluence/Notion/Google Docs search results…
    ```
 
-6. **Model response** is streamed back, parsed by `ChatProse`, and rendered with clickable paths and citation fences.
+6. **Model response** is streamed back, normalized by `normalizeCoopChatProse()`, parsed by `ChatProse`, and rendered with subsection grouping.
 
 ---
 

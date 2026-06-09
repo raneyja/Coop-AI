@@ -6,6 +6,6 @@
     }
   ],
   "settings": {
-    "coopAI.devMode": true
+    "coopAI.devMode": false
   }
 }

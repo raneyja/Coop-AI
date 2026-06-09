@@ -30,6 +30,8 @@ import { HealthMonitor, type IntegrationProvider } from "./integrations/healthMo
 import { getIndexManager } from "./indexing/indexManager";
 import { createIndexBackend } from "./indexing/createIndexBackend";
 import { LightningStatusBar } from "./extension/lightningStatusBar";
+import { IdentityDirectoryStore } from "./identity/identityDirectoryStore";
+import { registerIdentityDirectoryProvider } from "./identity/identityDirectoryRegistry";
 
 function resolveSession(fallback: CoopChatSession): CoopChatSession {
   return coopSessionRegistry.getActive() ?? fallback;
@@ -73,6 +75,24 @@ export function activate(context: vscode.ExtensionContext): void {
       lines: linesFromText(file.content)
     };
   };
+  const cloudCodeHostTreeFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostTreeFetcher = async ({
+    repoId,
+    path,
+    coords
+  }) => {
+    const tree = await api.fetchRepoTreeViaCloud(getApiBaseUrl(), repoId, path, coords.branch);
+    return {
+      path: tree.path,
+      branch: tree.branch,
+      entries: tree.entries
+    };
+  };
+  const cloudCodeHostSearchFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostSearchFetcher = async ({
+    repoId,
+    query,
+    coords,
+    limit
+  }) => api.fetchRepoSearchViaCloud(getApiBaseUrl(), repoId, query, coords.branch, limit);
   const cloudCodeHostHealthCheck = async (
     provider: CodeHostProvider
   ): Promise<{ ok: boolean; message: string }> => {
@@ -99,9 +119,46 @@ export function activate(context: vscode.ExtensionContext): void {
     cache: codeHostCache,
     useCloudCodeHostProxy,
     cloudCodeHostFileFetcher,
+    cloudCodeHostTreeFetcher,
+    cloudCodeHostSearchFetcher,
     cloudCodeHostHealthCheck
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
+  integrationSecrets.setCloudFetcher(async () => {
+    if (isCoopDevMode() || !(await api.hasToken())) {
+      return {};
+    }
+    const baseUrl = getApiBaseUrl();
+    const overlay: import("./api/integrations/integrationSecrets").IntegrationCredentials = {};
+    try {
+      const slackStatus = await api.getSlackInstallationStatus(baseUrl);
+      if (slackStatus.installed) {
+        const creds = await api.getIntegrationCredentials(baseUrl, "slack");
+        overlay.slackToken = creds.accessToken;
+      }
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      const atlassianStatus = await api.getAtlassianInstallationStatus(baseUrl);
+      if (atlassianStatus.installed) {
+        const creds = await api.getIntegrationCredentials(baseUrl, "atlassian");
+        const siteUrl = creds.metadata.siteUrl?.replace(/\/+$/, "");
+        overlay.jiraToken = creds.accessToken;
+        overlay.confluenceToken = creds.accessToken;
+        overlay.jiraEmail = creds.metadata.email;
+        overlay.confluenceEmail = creds.metadata.email;
+        overlay.atlassianCloudId = creds.metadata.cloudId;
+        if (siteUrl) {
+          overlay.jiraBaseUrl = siteUrl;
+          overlay.confluenceBaseUrl = `${siteUrl}/wiki`;
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    return overlay;
+  });
   registerDecisionArchaeologyEngine(
     createDecisionArchaeologyEngine({
       codeHostRouter,
@@ -157,6 +214,8 @@ export function activate(context: vscode.ExtensionContext): void {
     secrets: context.secrets
   });
   const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);
+  const identityDirectoryStore = new IdentityDirectoryStore(context, api.getBackendClient());
+  registerIdentityDirectoryProvider(() => identityDirectoryStore.load(readConfiguration().apiBaseUrl));
   const services = {
     healthMonitor,
     degradationCache,
@@ -165,7 +224,8 @@ export function activate(context: vscode.ExtensionContext): void {
     integrationSecrets,
     indexManager,
     indexBackend,
-    lightningStatusBar
+    lightningStatusBar,
+    identityDirectoryStore
   };
   const provider = new CoopSidebarProvider(context.extensionUri, context, api, services);
 
@@ -412,12 +472,13 @@ function createHealthAdapters(
     const { testIntegrationChat } = await import("./api/integrations/integrationTest");
     const started = Date.now();
     const response = await testIntegrationChat(provider, integrationSecrets);
-    const configured = response.message.includes("not configured");
+    const unconfigured =
+      response.message.includes("not configured") || /\bare required\b/i.test(response.message);
     return {
-      ok: response.ok,
-      degraded: !response.ok && !configured,
+      ok: response.ok || unconfigured,
+      degraded: !response.ok && !unconfigured,
       latency: Date.now() - started,
-      error: response.ok ? undefined : response.message
+      error: response.ok || unconfigured ? undefined : response.message
     };
   };
 

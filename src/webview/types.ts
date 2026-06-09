@@ -71,6 +71,8 @@ export type JobProgressState = {
   progress: number;
   estimatedWaitTime?: string;
   estimatedTimeRemaining?: string;
+  deliverable?: "chat" | "standalone";
+  showViewResults?: boolean;
   resultSummary?: {
     foundGaps?: number;
     highPriority?: number;

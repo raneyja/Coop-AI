@@ -1,4 +1,4 @@
-import type { Job, JobStatus } from "../types";
+import type { Job, JobParams, JobStatus, JobType } from "../types";
 
 export interface QueueBackend {
   readonly name: string;
@@ -8,5 +8,12 @@ export interface QueueBackend {
   update(job: Job): Promise<void>;
   delete(id: string): Promise<boolean>;
   countJobsForUser(userId: string, jobType: string, window: "hour" | "today"): Promise<number>;
+  recordJobSubmission?(userId: string, jobType: JobType): Promise<void>;
+  findReusableCompletedJob?(
+    userId: string,
+    jobType: JobType,
+    params: JobParams,
+    maxAgeMs: number
+  ): Promise<Job | undefined>;
   claimNext?(): Promise<Job | undefined>;
 }

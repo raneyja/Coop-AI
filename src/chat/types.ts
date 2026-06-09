@@ -1,3 +1,5 @@
+import type { IdentityDirectory } from "../identity/types";
+
 export const VIEW_ID = "coopAI.sidebar";
 export const CHAT_PANEL_VIEW_TYPE = "coopAI.chatEditor";
 export const SETTINGS_PANEL_VIEW_TYPE = "coopAI.settings";
@@ -92,6 +94,10 @@ export type UserPreferences = {
   hasBitbucketCredentials: boolean;
   hasBitbucketAppInstalled: boolean;
   hasSlackToken: boolean;
+  hasSlackInstalled: boolean;
+  slackTeamName?: string;
+  hasAtlassianInstalled: boolean;
+  atlassianSiteName?: string;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;
   hasConfluenceCredentials: boolean;
@@ -99,6 +105,10 @@ export type UserPreferences = {
   hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
   confluenceBaseUrl: string;
+};
+
+export type SettingsStatePayload = UserPreferences & {
+  identityDirectory: IdentityDirectory;
 };
 
 export type ChatUsagePayload = {
@@ -183,6 +193,10 @@ export type JobProgressPayload = {
   progress: number;
   estimatedWaitTime?: string;
   estimatedTimeRemaining?: string;
+  /** Chat answer is the deliverable — hide terminal scan-complete UI. */
+  deliverable?: "chat" | "standalone";
+  /** Dev-only: allow opening raw JSON job output. */
+  showViewResults?: boolean;
   resultSummary?: {
     foundGaps?: number;
     highPriority?: number;
@@ -224,9 +238,11 @@ export type WebviewInbound =
   | { type: "threads:switch"; payload: { threadId: string } }
   | { type: "threads:new" }
   | { type: "repo:list"; payload: { path?: string; scope?: "repos" | "files" } }
+  | { type: "repo:search"; payload: { query: string } }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string; line?: number } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number; focus?: boolean } }
+  | { type: "link:open"; payload: { url: string } }
   | { type: "settings:update"; payload: Partial<UserPreferences> }
   | { type: "settings:update-api-key"; payload: { apiKey: string } }
   | { type: "settings:clear-api-key" }
@@ -243,6 +259,10 @@ export type WebviewInbound =
   | { type: "settings:clear-gitlab-token" }
   | { type: "settings:install-bitbucket-app" }
   | { type: "settings:refresh-bitbucket-installation" }
+  | { type: "settings:install-slack-app" }
+  | { type: "settings:refresh-slack-installation" }
+  | { type: "settings:install-atlassian-app" }
+  | { type: "settings:refresh-atlassian-installation"; payload?: { key?: "jira" | "confluence" } }
   | {
       type: "settings:update-bitbucket-credentials";
       payload: { username: string; appPassword: string };
@@ -268,6 +288,7 @@ export type WebviewInbound =
   | { type: "settings:clear-notion-token" }
   | { type: "settings:update-google-docs-token"; payload: { token: string } }
   | { type: "settings:clear-google-docs-token" }
+  | { type: "settings:save-identity-directory"; payload: { directory: IdentityDirectory } }
   | {
       type: "settings:test-integration";
       payload: {
@@ -314,11 +335,21 @@ export type WebviewOutbound =
         loading?: boolean;
       };
     }
+  | {
+      type: "repo:search-results";
+      payload: {
+        query: string;
+        items: RemoteTreeNode[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
-  | { type: "settings:state"; payload: UserPreferences }
+  | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | {

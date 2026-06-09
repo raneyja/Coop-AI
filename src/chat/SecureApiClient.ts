@@ -118,6 +118,35 @@ export class SecureApiClient {
     return this.backend.getBitbucketInstallationStatus(baseUrl);
   }
 
+  public async getSlackAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getSlackAppInstallUrl(baseUrl);
+  }
+
+  public async getAtlassianAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getAtlassianAppInstallUrl(baseUrl);
+  }
+
+  public async getSlackInstallationStatus(baseUrl: string): Promise<{ installed: boolean; teamName?: string }> {
+    return this.backend.getSlackInstallationStatus(baseUrl);
+  }
+
+  public async getAtlassianInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; siteName?: string; siteUrl?: string }> {
+    return this.backend.getAtlassianInstallationStatus(baseUrl);
+  }
+
+  public async getIntegrationCredentials(
+    baseUrl: string,
+    provider: "slack" | "atlassian"
+  ): Promise<{
+    accessToken: string;
+    metadata: Record<string, string | undefined>;
+  }> {
+    const response = await this.backend.getIntegrationCredentials(baseUrl, provider);
+    return { accessToken: response.accessToken, metadata: response.metadata };
+  }
+
   public async fetchRepoFileViaCloud(
     baseUrl: string,
     repoId: string,
@@ -131,6 +160,42 @@ export class SecureApiClient {
     truncated?: boolean;
   }> {
     return this.backend.fetchRepoFile(baseUrl, repoId, path, branch);
+  }
+
+  public async fetchRepoSearchViaCloud(
+    baseUrl: string,
+    repoId: string,
+    query: string,
+    branch?: string,
+    limit = 30
+  ): Promise<Array<{ path: string; name: string }>> {
+    const result = await this.backend.fetchRepoSearch(baseUrl, repoId, query, branch, limit);
+    return result.hits ?? [];
+  }
+
+  public async fetchRepoTreeViaCloud(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<{
+    path: string;
+    branch: string;
+    entries: Array<{
+      path: string;
+      name: string;
+      type: "file" | "dir";
+      size?: number;
+      sha?: string;
+      lastModified?: string;
+    }>;
+  }> {
+    const result = await this.backend.fetchRepoTree(baseUrl, repoId, path, branch);
+    return {
+      path: result.path,
+      branch: result.branch,
+      entries: result.entries
+    };
   }
 
   public async testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
@@ -293,6 +358,8 @@ export function readConfiguration(): Omit<
   | "hasGitLabToken"
   | "hasBitbucketCredentials"
   | "hasSlackToken"
+  | "hasSlackInstalled"
+  | "hasAtlassianInstalled"
   | "hasJiraCredentials"
   | "hasTeamsToken"
   | "hasConfluenceCredentials"
@@ -322,7 +389,9 @@ export function readConfiguration(): Omit<
     devMode: config.get<boolean>("devMode", false),
     hasGitHubAppInstalled: false,
     hasGitLabAppInstalled: false,
-    hasBitbucketAppInstalled: false
+    hasBitbucketAppInstalled: false,
+    hasSlackInstalled: false,
+    hasAtlassianInstalled: false
   };
 }
 
@@ -419,6 +488,10 @@ export async function readPreferences(
   let hasGitHubAppInstalled = false;
   let hasGitLabAppInstalled = false;
   let hasBitbucketAppInstalled = false;
+  let hasSlackInstalled = false;
+  let hasAtlassianInstalled = false;
+  let slackTeamName: string | undefined;
+  let atlassianSiteName: string | undefined;
   let orgName: string | undefined;
   let plan: UserPreferences["plan"];
   let userRole: string | undefined;
@@ -453,7 +526,31 @@ export async function readPreferences(
     } catch {
       hasBitbucketAppInstalled = false;
     }
+    try {
+      const status = await api.getSlackInstallationStatus(base.apiBaseUrl);
+      hasSlackInstalled = status.installed;
+      slackTeamName = status.teamName;
+    } catch {
+      hasSlackInstalled = false;
+    }
+    try {
+      const status = await api.getAtlassianInstallationStatus(base.apiBaseUrl);
+      hasAtlassianInstalled = status.installed;
+      atlassianSiteName = status.siteName;
+    } catch {
+      hasAtlassianInstalled = false;
+    }
   }
+  const hasSlackToken = devMode
+    ? Boolean(integrationCreds.slackToken)
+    : hasSlackInstalled || Boolean(integrationCreds.slackToken);
+  const hasJiraCredentials = devMode
+    ? Boolean(integrationCreds.jiraEmail && integrationCreds.jiraToken)
+    : hasAtlassianInstalled || Boolean(integrationCreds.jiraEmail && integrationCreds.jiraToken);
+  const hasConfluenceCredentials = devMode
+    ? Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken)
+    : hasAtlassianInstalled ||
+      Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
   return {
     ...base,
     hasApiKey: await api.hasToken(),
@@ -471,10 +568,14 @@ export async function readPreferences(
       codeHostCreds.bitbucketUsername && codeHostCreds.bitbucketAppPassword
     ),
     hasBitbucketAppInstalled,
-    hasSlackToken: Boolean(integrationCreds.slackToken),
-    hasJiraCredentials: Boolean(integrationCreds.jiraEmail && integrationCreds.jiraToken),
+    hasSlackToken,
+    hasSlackInstalled,
+    slackTeamName,
+    hasAtlassianInstalled,
+    atlassianSiteName,
+    hasJiraCredentials,
     hasTeamsToken: Boolean(integrationCreds.teamsToken),
-    hasConfluenceCredentials: Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken),
+    hasConfluenceCredentials,
     hasNotionToken: Boolean(integrationCreds.notionToken),
     hasGoogleDocsToken: Boolean(integrationCreds.googleDocsToken),
     jiraBaseUrl: integrationCreds.jiraBaseUrl ?? base.jiraBaseUrl,

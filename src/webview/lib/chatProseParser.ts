@@ -6,6 +6,12 @@ import type {
   ChatProseBlock,
   ChatProseDocument
 } from "./chatProseTypes";
+import { isCoopMainSection } from "./coopChatSections";
+import {
+  isKgFieldLabelText,
+  normalizeCoopChatProse,
+  normalizeKgFieldLabel
+} from "./normalizeKnowledgeGapProse";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+.+/;
@@ -16,6 +22,7 @@ const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
 const INLINE_URL_RE = /^https?:\/\/[^\s)]+/;
 const INLINE_CODE_RE = /^`([^`\n]+)`/;
 const INLINE_STRONG_RE = /^\*\*([^*\n]+)\*\*/;
+const INLINE_EM_RE = /^\*([^*\n]+)\*/;
 const FILE_WITH_EXTENSION_RE = /^[^/\s]+\.[A-Za-z0-9._-]+(?::\d+)?$/;
 const FILE_LINE_RE = /^(.*):(\d+)$/;
 
@@ -23,7 +30,9 @@ const JIRA_TICKET_LINK_LINE_RE = /^\[([A-Z][A-Z0-9]+-\d+)\]\((https?:\/\/[^)]+)\
 const JIRA_FIELD_LINE_RE = /^([A-Za-z][A-Za-z ]*):\s*(.+)$/;
 
 export function parseChatProse(content: string): ChatProseDocument {
-  const normalized = normalizeJiraTicketBreaks(content.replace(/\r\n/g, "\n"));
+  const normalized = normalizeCoopChatProse(
+    normalizeJiraTicketBreaks(content.replace(/\r\n/g, "\n"))
+  );
   const lines = normalized.split("\n");
   const blocks: ChatProseBlock[] = [];
   let i = 0;
@@ -42,11 +51,20 @@ export function parseChatProse(content: string): ChatProseDocument {
     }
 
     if (isSectionHeading(lines[i])) {
+      const text = stripHeadingSyntax(lines[i]);
       blocks.push({
         type: "section-heading",
-        text: stripHeadingSyntax(lines[i])
+        text,
+        headingLevel: resolveHeadingLevel(text, blocks)
       });
       i += 1;
+      continue;
+    }
+
+    const knowledgeGapList = tryParseKnowledgeGapGroupedList(lines, i);
+    if (knowledgeGapList) {
+      blocks.push(...knowledgeGapList.blocks);
+      i = knowledgeGapList.nextIndex;
       continue;
     }
 
@@ -145,6 +163,103 @@ function tryParseList(
   }
 
   return { items, nextIndex: i };
+}
+
+function hasGroupedSubsections(blocks: ChatProseBlock[]): boolean {
+  return blocks.some(
+    (block) => block.type === "list" && block.items.some((item) => isKgFieldListItem(item.content))
+  );
+}
+
+function resolveHeadingLevel(text: string, blocks: ChatProseBlock[]): 1 | 2 {
+  const lower = text.toLowerCase();
+  if (isCoopMainSection(lower) || lower.startsWith("key unknowns")) {
+    return 1;
+  }
+  const hasMainHeading = blocks.some(
+    (block) => block.type === "section-heading" && block.headingLevel === 1
+  );
+  if (hasMainHeading || hasGroupedSubsections(blocks)) {
+    return 2;
+  }
+  return 1;
+}
+
+function isKgFieldListItem(content: ChatInlineNode[]): boolean {
+  const first = content[0];
+  return first?.type === "strong" && isKgFieldLabelText(first.text);
+}
+
+function isKgCategoryListItem(content: ChatInlineNode[]): boolean {
+  if (content.length !== 1 || content[0]?.type !== "strong") {
+    return false;
+  }
+  const text = content[0].text;
+  if (isKgFieldLabelText(text)) {
+    return false;
+  }
+  if (isCoopMainSection(text)) {
+    return false;
+  }
+  return !text.endsWith("?");
+}
+
+function normalizeKgFieldListItem(item: ChatListItem): ChatListItem {
+  const content = [...item.content];
+  const first = content[0];
+  if (first?.type === "strong" && isKgFieldLabelText(first.text)) {
+    content[0] = { type: "strong", text: `${normalizeKgFieldLabel(first.text)}:` };
+  }
+  return { ...item, content };
+}
+
+function tryParseKnowledgeGapGroupedList(
+  lines: string[],
+  startIndex: number
+): { blocks: ChatProseBlock[]; nextIndex: number } | null {
+  const parsed = tryParseList(lines, startIndex);
+  if (!parsed) {
+    return null;
+  }
+
+  const categoryItems = parsed.items.filter((item) => isKgCategoryListItem(item.content));
+  const fieldItems = parsed.items.filter((item) => isKgFieldListItem(item.content));
+  if (categoryItems.length === 0 || fieldItems.length < 2) {
+    return null;
+  }
+
+  const blocks: ChatProseBlock[] = [];
+  let pendingFields: ChatListItem[] = [];
+
+  const flushFields = () => {
+    if (pendingFields.length === 0) {
+      return;
+    }
+    blocks.push({ type: "list", items: pendingFields });
+    pendingFields = [];
+  };
+
+  for (const item of parsed.items) {
+    if (isKgCategoryListItem(item.content)) {
+      flushFields();
+      const title = item.content[0]!.type === "strong" ? item.content[0].text : "";
+      blocks.push({
+        type: "section-heading",
+        text: title,
+        headingLevel: isCoopMainSection(title) ? 1 : 2
+      });
+      continue;
+    }
+    if (isKgFieldListItem(item.content)) {
+      pendingFields.push(normalizeKgFieldListItem(item));
+      continue;
+    }
+    flushFields();
+    blocks.push({ type: "list", items: [item] });
+  }
+  flushFields();
+
+  return { blocks, nextIndex: parsed.nextIndex };
 }
 
 function parseParagraph(
@@ -249,6 +364,14 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
       continue;
     }
 
+    const emMatch = remaining.match(INLINE_EM_RE);
+    if (emMatch) {
+      flushText();
+      nodes.push({ type: "em", text: emMatch[1] });
+      cursor += emMatch[0].length;
+      continue;
+    }
+
     textBuffer += input[cursor];
     cursor += 1;
   }
@@ -306,13 +429,25 @@ function hostLabelFromUrl(url: string): string {
   }
 }
 
+const FIELD_LABEL_HEADING_RE =
+  /^(open question|what to check|question|evidence needed|unknown|risk|owner|answer|status|impact|confidence|note|priority|type|source)s?:$/i;
+
 function isSectionHeading(line: string): boolean {
   const trimmed = line.trim();
   if (!SECTION_HEADING_RE.test(trimmed) && !MARKDOWN_HEADING_RE.test(trimmed)) {
     return false;
   }
   const plain = stripHeadingSyntax(trimmed);
-  return !plain.endsWith(".");
+  if (plain.endsWith(".")) {
+    return false;
+  }
+  if (FIELD_LABEL_HEADING_RE.test(plain)) {
+    return false;
+  }
+  if (plain.endsWith(":") && plain.length <= 60) {
+    return false;
+  }
+  return true;
 }
 
 function stripHeadingSyntax(line: string): string {

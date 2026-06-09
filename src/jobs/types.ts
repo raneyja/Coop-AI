@@ -61,6 +61,9 @@ export interface JobSubmitResponse {
   status: JobStatus;
   estimatedWaitTimeMs: number;
   estimatedWaitTime: string;
+  /** True when an existing completed scan was returned instead of enqueueing a new job. */
+  cached?: boolean;
+  completedAt?: string;
 }
 
 export const PRIORITY_WEIGHT: Record<JobPriority, number> = {

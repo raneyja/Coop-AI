@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { OwnershipReport, OwnershipRisk, OwnershipScore } from "../types/ownership";
+import { ChatActionLink } from "./components/ChatActionLink";
+import { useChatLinks } from "./components/ChatLinkContext";
 import {
   IntegrationResultActions,
   IntegrationResultBadge,
@@ -23,9 +25,9 @@ type OwnershipCardProps = {
 };
 
 const COMPLETENESS_LABEL: Record<OwnershipReport["completeness"], string> = {
-  full: "Full analysis",
-  partial: "Partial analysis",
-  minimal: "Minimal analysis"
+  full: "Full signals",
+  partial: "Partial signals",
+  minimal: "Git history only"
 };
 
 const COMPLETENESS_TONE: Record<
@@ -50,6 +52,7 @@ export function OwnershipCard({
   onDismiss,
   onCopyDraft
 }: OwnershipCardProps): React.ReactElement {
+  const { onOpenLink } = useChatLinks();
   const [expanded, setExpanded] = useState({ history: false, draft: false });
   const { primary, secondary, backup } = useMemo(() => groupExperts(report.scores), [report.scores]);
   const activeRisks = useMemo(
@@ -60,19 +63,13 @@ export function OwnershipCard({
   return (
     <IntegrationResultStack>
       <IntegrationResultCard
-        title="Code ownership"
+        title="Ownership signals"
         meta={`${report.owner}/${report.repo} · ${report.path}`}
         status={COMPLETENESS_LABEL[report.completeness]}
         statusTone={COMPLETENESS_TONE[report.completeness]}
         onDismiss={onDismiss}
-        ariaLabel="Ownership analysis"
+        ariaLabel="Ownership signals"
       >
-        {report.narrative ? (
-          <IntegrationResultSection label="Summary">
-            <IntegrationResultText>{report.narrative}</IntegrationResultText>
-          </IntegrationResultSection>
-        ) : null}
-
         <IntegrationResultSection label="Experts">
           <div className="space-y-2">
             {primary ? (
@@ -114,9 +111,11 @@ export function OwnershipCard({
             <IntegrationResultText>
               Owned by{" "}
               {report.orgContext.htmlUrl ? (
-                <a href={report.orgContext.htmlUrl} className="coop-text-btn !px-0 !py-0">
-                  @{report.orgContext.teamName}
-                </a>
+                <ChatActionLink
+                  kind="external"
+                  label={`@${report.orgContext.teamName}`}
+                  onClick={() => onOpenLink?.(report.orgContext!.htmlUrl!)}
+                />
               ) : (
                 `@${report.orgContext.teamName}`
               )}

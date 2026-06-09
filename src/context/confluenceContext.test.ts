@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { buildConfluenceCql } from "./docSearchQuery";
-import { wantsConfluenceContext } from "./confluenceContext";
+import { shouldFetchConfluenceContext, wantsConfluenceContext } from "./confluenceContext";
+import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -26,6 +27,14 @@ test("buildConfluenceCql searches repo terms", () => {
   const cql = buildConfluenceCql("acme", "coop-ai-core");
   assert.ok(cql?.includes('text ~ "acme/coop-ai-core"'));
   assert.ok(cql?.includes("type=page"));
+});
+
+test("shouldFetchConfluenceContext includes knowledge-gaps quick action", () => {
+  const request = {
+    type: "knowledge_gaps",
+    params: { quickAction: "knowledge-gaps" }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchConfluenceContext(request), true);
 });
 
 const total = passed + failed;

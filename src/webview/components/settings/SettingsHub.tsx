@@ -4,11 +4,10 @@ import { CoopPanelHeader } from "../CoopPanelHeader";
 import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./types";
 import { SETTINGS_SCREEN_TITLES, settingsScreenParentLabel } from "./types";
 import {
-  apiHubSubtitle,
-  codeHostsHubSubtitle,
-  integrationsHubSubtitle,
-  modelHubSubtitle,
-  promptsHubSubtitle,
+  accountHubSubtitle,
+  connectionsHubSubtitle,
+  identityLinksHubSubtitle,
+  preferencesHubSubtitle,
   workspaceHubSubtitle
 } from "./subtitles";
 
@@ -22,16 +21,20 @@ const HUB_ROWS: Array<{
   screen: SettingsDetailScreen;
   title: string;
   subtitle: (prefs: Preferences, pinnedCount: number) => string;
+  configured?: (prefs: Preferences) => boolean | undefined;
 }> = [
-  { screen: "model", title: "Model & chat", subtitle: (p) => modelHubSubtitle(p) },
-  { screen: "api", title: "Coop API", subtitle: (p) => apiHubSubtitle(p) },
-  { screen: "code-hosts", title: "Code hosts", subtitle: (p) => codeHostsHubSubtitle(p) },
-  { screen: "integrations", title: "Integrations", subtitle: (p) => integrationsHubSubtitle(p) },
+  { screen: "account", title: "Account", subtitle: (p) => accountHubSubtitle(p), configured: (p) => p.hasApiKey },
+  {
+    screen: "connections",
+    title: "Connections",
+    subtitle: (p) => connectionsHubSubtitle(p)
+  },
+  { screen: "team", title: "Team", subtitle: (p) => identityLinksHubSubtitle(p) },
   { screen: "workspace", title: "Workspace", subtitle: (p) => workspaceHubSubtitle(p) },
   {
-    screen: "prompts",
-    title: "Prompt library",
-    subtitle: (_p, pinned) => promptsHubSubtitle(pinned)
+    screen: "preferences",
+    title: "Preferences",
+    subtitle: (p, pinned) => preferencesHubSubtitle(p, pinned)
   }
 ];
 
@@ -43,7 +46,7 @@ export function SettingsHub({ prefs, pinnedCount, onNavigate }: SettingsHubProps
           key={row.screen}
           title={row.title}
           subtitle={row.subtitle(prefs, pinnedCount)}
-          configured={row.screen === "api" ? prefs.hasApiKey : undefined}
+          configured={row.configured?.(prefs)}
           onClick={() => onNavigate(row.screen)}
         />
       ))}
@@ -78,10 +81,10 @@ export function SettingsNavHeader({
         isHub ? (
           prefs.hasApiKey ? (
             <span className="shrink-0 text-[11px] text-[var(--vscode-testing-iconPassed,#22c55e)]">
-              API key configured
+              Signed in
             </span>
           ) : (
-            <span className="shrink-0 text-[11px] text-[var(--coop-panel-muted)]">No API key</span>
+            <span className="shrink-0 text-[11px] text-[var(--coop-panel-muted)]">Not signed in</span>
           )
         ) : undefined
       }

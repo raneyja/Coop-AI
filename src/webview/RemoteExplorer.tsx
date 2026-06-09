@@ -15,16 +15,25 @@ type TreeState = {
   provider?: CodeHostProviderPreference;
 };
 
+type SearchState = {
+  query: string;
+  items: RemoteTreeNode[];
+  error?: string;
+  loading?: boolean;
+};
+
 type RemoteExplorerProps = {
   open: boolean;
   context: RepoContext;
   treeState: TreeState;
+  searchState: SearchState;
   className?: string;
   onClose: () => void;
   onRefresh: (path: string) => void;
   onRefreshRepos: () => void;
   onBrowseRepos: () => void;
   onExpand: (path: string) => void;
+  onSearch: (query: string) => void;
   onSelectFile: (path: string) => void;
   onSelectRepo: (path: string) => void;
   onOpenSettings?: (screen?: SettingsScreen) => void;
@@ -133,6 +142,36 @@ function RepoIcon(): React.ReactElement {
   );
 }
 
+function SearchResultRow({
+  node,
+  selectedPath,
+  onOpenFile
+}: {
+  node: TreeNodeState;
+  selectedPath?: string;
+  onOpenFile: (path: string) => void;
+}): React.ReactElement {
+  const isSelected = selectedPath === node.path;
+  const directory = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "";
+
+  return (
+    <li>
+      <button
+        type="button"
+        className={`coop-explorer-row${isSelected ? " coop-explorer-row--selected" : ""}`}
+        onClick={() => onOpenFile(node.path)}
+      >
+        <span className="coop-explorer-row-chevron" />
+        <span className="coop-explorer-row-icon">
+          <FileIcon />
+        </span>
+        <span className="coop-explorer-row-name">{node.name}</span>
+        {directory ? <span className="coop-explorer-row-meta">{directory}</span> : null}
+      </button>
+    </li>
+  );
+}
+
 function TreeRow({
   node,
   depth,
@@ -197,22 +236,31 @@ function TreeRow({
   );
 }
 
+const SEARCH_DEBOUNCE_MS = 300;
+
 export function RemoteExplorer({
   open,
   context,
   treeState,
+  searchState,
   className = "",
   onClose,
   onRefresh,
   onRefreshRepos,
   onBrowseRepos,
   onExpand,
+  onSearch,
   onSelectFile,
   onSelectRepo,
   onOpenSettings
 }: RemoteExplorerProps): React.ReactElement | null {
   const [nodes, setNodes] = useState<TreeNodeState[]>([]);
+  const [query, setQuery] = useState("");
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const isRepoList = treeState.scope === "repos";
+  const trimmedQuery = query.trim();
+  const isFileSearch = !isRepoList && trimmedQuery.length > 0;
+  const searchResultsStale = isFileSearch && searchState.query !== trimmedQuery;
 
   const breadcrumb = useMemo(() => {
     if (isRepoList) {
@@ -233,6 +281,21 @@ export function RemoteExplorer({
 
   useEffect(() => {
     if (!open) {
+      setQuery("");
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    setQuery("");
+  }, [isRepoList]);
+
+  useEffect(() => {
+    if (!open) {
       return;
     }
     if (isRepoList) {
@@ -241,6 +304,53 @@ export function RemoteExplorer({
     }
     setNodes((current) => mergeTreeLevel(current, treeState.path || "", treeState.items, treeState.loading));
   }, [open, isRepoList, treeState.items, treeState.path, treeState.loading]);
+
+  useEffect(() => {
+    if (!open || isRepoList) {
+      return;
+    }
+    if (!trimmedQuery) {
+      onSearch("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      onSearch(trimmedQuery);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, isRepoList, trimmedQuery, onSearch]);
+
+  const filteredNodes = useMemo(() => {
+    if (!isRepoList || !trimmedQuery) {
+      return nodes;
+    }
+    const needle = trimmedQuery.toLowerCase();
+    return nodes.filter((node) => node.name.toLowerCase().includes(needle));
+  }, [isRepoList, nodes, trimmedQuery]);
+
+  const localSearchMatches = useMemo(() => {
+    if (!isFileSearch) {
+      return [];
+    }
+    const needle = trimmedQuery.toLowerCase();
+    return flattenLoadedTree(nodes).filter(
+      (node) =>
+        node.type !== "repo" &&
+        (node.path.toLowerCase().includes(needle) || node.name.toLowerCase().includes(needle))
+    );
+  }, [isFileSearch, nodes, trimmedQuery]);
+
+  const fileSearchNodes = useMemo(() => {
+    if (!isFileSearch) {
+      return [];
+    }
+    if (!searchResultsStale && !searchState.loading && searchState.items.length > 0) {
+      return searchState.items.map((item) => toTreeNode(item, false));
+    }
+    return localSearchMatches;
+  }, [isFileSearch, localSearchMatches, searchResultsStale, searchState.items, searchState.loading]);
+
+  const awaitingRemoteSearch =
+    isFileSearch && (searchResultsStale || searchState.loading) && fileSearchNodes.length === 0;
 
   const handleToggle = useCallback(
     (node: TreeNodeState) => {
@@ -267,6 +377,11 @@ export function RemoteExplorer({
   }
 
   const authHint = treeState.error?.toLowerCase().includes("token") || treeState.error?.toLowerCase().includes("auth");
+  const searchSettingsHint =
+    searchState.error?.toLowerCase().includes("github app") ||
+    searchState.error?.toLowerCase().includes("install") ||
+    searchState.error?.toLowerCase().includes("authorize") ||
+    searchState.error?.toLowerCase().includes("not installed");
 
   return (
     <div className={`coop-explorer-shell ${className}`}>
@@ -292,15 +407,61 @@ export function RemoteExplorer({
         </p>
       ) : null}
 
+      <div className="coop-explorer-search-wrap">
+        <input
+          ref={searchInputRef}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={isRepoList ? "Filter repositories…" : "Search files…"}
+          className="coop-prompt-modal-search"
+          aria-label={isRepoList ? "Filter repositories" : "Search files"}
+        />
+      </div>
+
       <div className="coop-explorer-body">
         <div className="coop-settings-card !space-y-0 !p-0">
           <ul className="coop-explorer-list no-scrollbar">
-            {treeState.loading && nodes.length === 0 ? (
+            {isFileSearch ? (
+              awaitingRemoteSearch ? (
+                <li className="coop-explorer-empty">Searching files…</li>
+              ) : searchState.error && fileSearchNodes.length === 0 ? (
+                <li className="coop-explorer-empty space-y-2">
+                  <div className="break-words">{searchState.error}</div>
+                  {searchSettingsHint && onOpenSettings ? (
+                    <button
+                      type="button"
+                      className="coop-settings-action-btn"
+                      onClick={() =>
+                        onOpenSettings(
+                          settingsScreenForProvider(treeState.provider ?? "github") ?? "connections"
+                        )
+                      }
+                    >
+                      Open settings to connect GitHub
+                    </button>
+                  ) : null}
+                </li>
+              ) : fileSearchNodes.length === 0 ? (
+                <li className="coop-explorer-empty">No files match your search.</li>
+              ) : (
+                fileSearchNodes.map((node) => (
+                  <SearchResultRow
+                    key={node.path}
+                    node={node}
+                    selectedPath={context.file}
+                    onOpenFile={(path) => {
+                      onSelectFile(path);
+                      onClose();
+                    }}
+                  />
+                ))
+              )
+            ) : treeState.loading && filteredNodes.length === 0 ? (
               <li className="coop-explorer-empty">
                 {isRepoList ? "Loading repositories…" : "Loading remote tree…"}
               </li>
-            ) : null}
-            {treeState.error ? (
+            ) : treeState.error ? (
               <li className="coop-explorer-empty space-y-2">
                 <div className="break-words">{treeState.error}</div>
                 {authHint && onOpenSettings ? (
@@ -309,7 +470,7 @@ export function RemoteExplorer({
                     className="coop-settings-action-btn"
                     onClick={() =>
                       onOpenSettings(
-                        settingsScreenForProvider(treeState.provider ?? "github") ?? "code-hosts"
+                        settingsScreenForProvider(treeState.provider ?? "github") ?? "connections"
                       )
                     }
                   >
@@ -317,14 +478,16 @@ export function RemoteExplorer({
                   </button>
                 ) : null}
               </li>
-            ) : nodes.length === 0 && !treeState.loading ? (
+            ) : filteredNodes.length === 0 && !treeState.loading ? (
               <li className="coop-explorer-empty">
                 {isRepoList
-                  ? "No repositories found. Pin repos in settings or add a GitHub token."
+                  ? trimmedQuery
+                    ? "No repositories match your filter."
+                    : "No repositories found. Pin repos in settings or add a GitHub token."
                   : "No files in this directory."}
               </li>
             ) : (
-              nodes.map((node) => (
+              filteredNodes.map((node) => (
                 <TreeRow
                   key={node.path}
                   node={node}
@@ -403,4 +566,18 @@ function toTreeNode(item: RemoteTreeNode, loading?: boolean): TreeNodeState {
 
 function normalizeDir(path: string): string {
   return path.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function flattenLoadedTree(nodes: TreeNodeState[]): TreeNodeState[] {
+  const flat: TreeNodeState[] = [];
+  const walk = (list: TreeNodeState[]): void => {
+    for (const node of list) {
+      flat.push(node);
+      if (node.children?.length) {
+        walk(node.children as TreeNodeState[]);
+      }
+    }
+  };
+  walk(nodes);
+  return flat;
 }

@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
+import type { IdentityDirectory } from "../identity/types";
 import type { ChatHistoryMessage, ChatContextPayload, StreamChunk, UseCase, ChatImageAttachment } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
@@ -172,6 +173,135 @@ export class CoopBackendClient {
     return this.getCodeHostInstallationStatus(baseUrl, "bitbucket");
   }
 
+  public async getSlackAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getIntegrationAppInstallUrl(baseUrl, "slack");
+  }
+
+  public async getAtlassianAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getIntegrationAppInstallUrl(baseUrl, "atlassian");
+  }
+
+  public async getSlackInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    teamName?: string;
+    teamId?: string;
+    tokenExpiresAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      installed: boolean;
+      teamName?: string;
+      teamId?: string;
+      tokenExpiresAt?: string;
+    } & CoopApiErrorBody>("/v1/orgs/slack/installation", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return {
+      installed: Boolean(response.data?.installed),
+      teamName: response.data?.teamName,
+      teamId: response.data?.teamId,
+      tokenExpiresAt: response.data?.tokenExpiresAt
+    };
+  }
+
+  public async getAtlassianInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    siteName?: string;
+    siteUrl?: string;
+    cloudId?: string;
+    email?: string;
+    tokenExpiresAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      installed: boolean;
+      siteName?: string;
+      siteUrl?: string;
+      cloudId?: string;
+      email?: string;
+      tokenExpiresAt?: string;
+    } & CoopApiErrorBody>("/v1/orgs/atlassian/installation", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return {
+      installed: Boolean(response.data?.installed),
+      siteName: response.data?.siteName,
+      siteUrl: response.data?.siteUrl,
+      cloudId: response.data?.cloudId,
+      email: response.data?.email,
+      tokenExpiresAt: response.data?.tokenExpiresAt
+    };
+  }
+
+  public async getIntegrationCredentials(
+    baseUrl: string,
+    provider: "slack" | "atlassian"
+  ): Promise<{
+    provider: "slack" | "atlassian";
+    accessToken: string;
+    metadata: Record<string, string | undefined>;
+    tokenExpiresAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      provider: "slack" | "atlassian";
+      accessToken: string;
+      metadata: Record<string, string | undefined>;
+      tokenExpiresAt?: string;
+    } & CoopApiErrorBody>("/v1/orgs/integrations/credentials", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      params: { provider },
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const accessToken = response.data?.accessToken?.trim();
+    if (!accessToken) {
+      throw new Error(`${provider} credentials were not returned by the server.`);
+    }
+    return {
+      provider,
+      accessToken,
+      metadata: response.data?.metadata ?? {},
+      tokenExpiresAt: response.data?.tokenExpiresAt
+    };
+  }
+
+  private async getIntegrationAppInstallUrl(
+    baseUrl: string,
+    provider: "slack" | "atlassian"
+  ): Promise<string> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{ url: string } & CoopApiErrorBody>(
+      `/v1/${provider}/app/install-url`,
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const url = response.data?.url?.trim();
+    if (!url) {
+      throw new Error("Install URL was not returned by the server.");
+    }
+    return url;
+  }
+
   public async getCodeHostAppInstallUrl(
     baseUrl: string,
     provider: "github" | "gitlab" | "bitbucket"
@@ -292,6 +422,65 @@ export class CoopBackendClient {
       shouldRetryError: isRetryableError,
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encodedRepo}/files`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { path, branch },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoSearch(
+    baseUrl: string,
+    repoId: string,
+    query: string,
+    branch?: string,
+    limit = 30
+  ): Promise<{
+    repoId: string;
+    query: string;
+    hits: Array<{ path: string; name: string }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/search`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { q: query, branch, limit },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoTree(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    path: string;
+    branch: string;
+    entries: Array<{
+      path: string;
+      name: string;
+      type: "file" | "dir";
+      size?: number;
+      sha?: string;
+      lastModified?: string;
+    }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/tree`, {
           baseURL: baseUrl.replace(/\/$/, ""),
           params: { path, branch },
           headers: await this.authHeaders()
@@ -498,6 +687,28 @@ export class CoopBackendClient {
       model: typeof data.model === "string" ? data.model : body.model,
       provider: typeof data.provider === "string" ? data.provider : body.provider
     };
+  }
+
+  public async fetchIdentityDirectory(baseUrl: string): Promise<IdentityDirectory> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{ directory: IdentityDirectory }>("/v1/identity-directory", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    return response.data.directory;
+  }
+
+  public async saveIdentityDirectory(baseUrl: string, directory: IdentityDirectory): Promise<IdentityDirectory> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.put<{ directory: IdentityDirectory }>(
+      "/v1/identity-directory",
+      { directory },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders()
+      }
+    );
+    return response.data.directory;
   }
 
   private async authHeaders(): Promise<Record<string, string>> {

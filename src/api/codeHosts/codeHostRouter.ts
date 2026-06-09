@@ -36,6 +36,19 @@ export type CloudCodeHostFileFetcher = (options: {
   coords: RepoCoordinates;
 }) => Promise<RemoteFileContent>;
 
+export type CloudCodeHostTreeFetcher = (options: {
+  repoId: string;
+  path: string;
+  coords: RepoCoordinates;
+}) => Promise<RemoteTree>;
+
+export type CloudCodeHostSearchFetcher = (options: {
+  repoId: string;
+  query: string;
+  coords: RepoCoordinates;
+  limit?: number;
+}) => Promise<Array<{ path: string; name: string }>>;
+
 export type CodeHostRouterOptions = {
   secrets: CodeHostSecrets;
   cache: CacheManager;
@@ -43,6 +56,8 @@ export type CodeHostRouterOptions = {
   /** When true, code host file reads use the backend proxy (no local PAT). */
   useCloudCodeHostProxy?: () => boolean;
   cloudCodeHostFileFetcher?: CloudCodeHostFileFetcher;
+  cloudCodeHostTreeFetcher?: CloudCodeHostTreeFetcher;
+  cloudCodeHostSearchFetcher?: CloudCodeHostSearchFetcher;
   cloudCodeHostHealthCheck?: (provider: CodeHostProvider) => Promise<{ ok: boolean; message: string }>;
 };
 
@@ -96,9 +111,48 @@ export class CodeHostRouter {
   public async getRepositoryTree(path = "", coords?: Partial<RepoCoordinates>): Promise<RemoteTree> {
     const resolved = await this.resolveCoordinates(coords);
     const normalized = path.replace(/^\/+/, "").replace(/\/+$/, "");
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostTreeFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("tree", resolved, normalized, "cloud"), "tree", async () =>
+        this.options.cloudCodeHostTreeFetcher!({ repoId, path: normalized, coords: resolved })
+      );
+    }
     return this.cached(this.key("tree", resolved, normalized), "tree", async () =>
       (await this.getClient(resolved.provider)).getRepositoryTree(resolved, normalized)
     );
+  }
+
+  public async searchRepositoryFiles(
+    query: string,
+    coords?: Partial<RepoCoordinates>,
+    limit = 30
+  ): Promise<Array<{ path: string; name: string }>> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+    const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostSearchFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () =>
+        this.options.cloudCodeHostSearchFetcher!({ repoId, query: trimmed, coords: resolved, limit })
+      );
+    }
+    const client = await this.getClient(resolved.provider);
+    if (!client.searchCode) {
+      throw new CodeHostError(
+        "File search isn't supported for this code host yet.",
+        "unsupported",
+        400,
+        resolved.provider
+      );
+    }
+    const searchQuery = buildExplorerFileSearchQuery(trimmed, resolved.provider);
+    const hits = await client.searchCode(resolved, searchQuery, limit);
+    return hits.map((hit) => ({
+      path: hit.path,
+      name: hit.path.split("/").pop() ?? hit.path
+    }));
   }
 
   /** Repositories shown in the remote explorer picker (pinned config, settings, and live host list). */
@@ -522,4 +576,14 @@ function buildCrossRepoSearchTargets(
     targets.push(coords);
   }
   return targets.length > 0 ? targets : [source];
+}
+
+export function buildExplorerFileSearchQuery(query: string, provider: CodeHostProvider): string {
+  if (provider === "github") {
+    if (query.includes("/")) {
+      return `path:${query}`;
+    }
+    return `${query} in:path`;
+  }
+  return query;
 }

@@ -62,6 +62,16 @@ export async function resolveAuthContext(
     };
   }
 
+  // Local dev: when API auth is not required, accept any bearer token (e.g. "dev").
+  if (!requireApiAuth && token) {
+    return {
+      orgId: "legacy",
+      orgName: "Legacy",
+      plan: "pro",
+      apiKeyId: "legacy-dev"
+    };
+  }
+
   return undefined;
 }
 

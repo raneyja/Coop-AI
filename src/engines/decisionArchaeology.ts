@@ -6,6 +6,7 @@ import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { BlameLine, CodeHostProvider, CommitInfo, PullRequestComment, RepoCoordinates } from "../api/codeHosts/types";
 import { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { JiraClient } from "../api/jira/jiraClient";
+import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { SlackClient, type SlackThread } from "../api/slack/slackClient";
 import { TeamsClient } from "../api/teams/teamsClient";
 import type {
@@ -540,14 +541,7 @@ export class DecisionArchaeologyEngine {
       return this.options.jiraClient;
     }
     const creds = await this.options.integrationSecrets.getCredentials();
-    if (!creds.jiraToken || !creds.jiraEmail) {
-      return undefined;
-    }
-    return new JiraClient({
-      baseUrl: creds.jiraBaseUrl ?? "https://your-domain.atlassian.net",
-      email: creds.jiraEmail,
-      apiToken: creds.jiraToken
-    });
+    return createJiraClientFromCredentials(creds);
   }
 }
 

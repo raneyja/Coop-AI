@@ -1,4 +1,9 @@
 import React from "react";
+import {
+  isActiveJobStatus,
+  shouldShowJobActivityLine,
+  shouldShowViewResultsButton
+} from "../../jobs/jobActivityPolicy";
 import type { IntentFeedbackState, JobProgressState } from "../types";
 
 type ChatActivityStripProps = {
@@ -36,20 +41,10 @@ export function ChatActivityStrip({
       ? intentFeedback.message || intentFeedback.title
       : undefined;
 
-  const jobActive =
-    jobProgress?.status === "queued" || jobProgress?.status === "running";
-  const jobTerminal =
-    jobProgress?.status === "failed" ||
-    jobProgress?.status === "cancelled" ||
-    jobProgress?.status === "completed" ||
-    jobProgress?.status === "partial";
-  const jobLine = jobProgress
-    ? jobActive
-      ? jobProgress.message || jobProgress.title
-      : jobTerminal
-        ? jobProgress.message || jobProgress.title
-        : undefined
-    : undefined;
+  const jobActive = jobProgress ? isActiveJobStatus(jobProgress.status) : false;
+  const showJobLine = jobProgress ? shouldShowJobActivityLine(jobProgress) : false;
+  const jobLine =
+    jobProgress && showJobLine ? jobProgress.message || jobProgress.title : undefined;
 
   const line = error || intentLine || jobLine;
 
@@ -67,7 +62,7 @@ export function ChatActivityStrip({
   const canViewJobResults =
     Boolean(onViewJobResults) &&
     Boolean(jobProgress?.jobId) &&
-    (jobProgress?.status === "completed" || jobProgress?.status === "partial");
+    Boolean(jobProgress && shouldShowViewResultsButton(jobProgress));
 
   return (
     <div className="chat-activity-strip" role="status" aria-live="polite">

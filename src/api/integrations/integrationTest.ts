@@ -10,6 +10,10 @@ import { JiraClient } from "../jira/jiraClient";
 import { NotionClient } from "../notion/notionClient";
 import { SlackClient } from "../slack/slackClient";
 import { TeamsClient } from "../teams/teamsClient";
+import {
+  createConfluenceClientFromCredentials,
+  createJiraClientFromCredentials
+} from "./buildIntegrationClients";
 import type { IntegrationSecrets } from "./integrationSecrets";
 import type { IntegrationChatProvider } from "../../chat/types";
 
@@ -47,14 +51,18 @@ export async function testIntegrationChat(
     case "jira": {
       const email = draft?.email?.trim() || creds.jiraEmail;
       const token = draft?.token?.trim() || creds.jiraToken;
-      if (!email || !token) {
-        return { ok: false, message: "Jira email and API token are required." };
+      const client =
+        draft?.email || draft?.token
+          ? new JiraClient({
+              baseUrl: draft?.baseUrl?.trim() || creds.jiraBaseUrl || "https://your-domain.atlassian.net",
+              email,
+              apiToken: token
+            })
+          : createJiraClientFromCredentials(creds);
+      if (!client) {
+        return { ok: false, message: "Jira is not connected. Connect Atlassian in settings." };
       }
-      return new JiraClient({
-        baseUrl: draft?.baseUrl?.trim() || creds.jiraBaseUrl || "https://your-domain.atlassian.net",
-        email,
-        apiToken: token
-      }).testConnection();
+      return client.testConnection();
     }
     case "teams": {
       if (!creds.teamsToken) {
@@ -73,6 +81,19 @@ export async function testIntegrationChat(
       }
       const host = confluenceSiteHostname(baseUrl);
 
+      const oauthClient =
+        !draft?.email && !draft?.token ? createConfluenceClientFromCredentials(creds, baseUrl) : undefined;
+      if (oauthClient && creds.atlassianCloudId) {
+        const oauthResult = await oauthClient.testConnection();
+        if (oauthResult.ok) {
+          return {
+            ok: true,
+            message: `Confluence connection successful at ${host} (organization OAuth).`
+          };
+        }
+        return oauthResult;
+      }
+
       const tryAuth = async (auth: ConfluenceAuth) =>
         new ConfluenceClient({
           baseUrl,
@@ -84,8 +105,7 @@ export async function testIntegrationChat(
       if (!primary) {
         return {
           ok: false,
-          message:
-            "Confluence email and API token are required. Enter them below, or click Use Jira credentials if Jira is already configured."
+          message: "Confluence is not connected. Connect Atlassian in settings."
         };
       }
 

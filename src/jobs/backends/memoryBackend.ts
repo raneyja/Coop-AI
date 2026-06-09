@@ -1,4 +1,5 @@
-import type { Job, JobStatus } from "../types";
+import type { Job, JobParams, JobStatus, JobType } from "../types";
+import { pickNewestReusableJob } from "../jobReuse";
 import type { QueueBackend } from "./types";
 
 type RateLimitEntry = {
@@ -37,6 +38,19 @@ export class MemoryQueueBackend implements QueueBackend {
     return this.jobs.delete(id);
   }
 
+  public async findReusableCompletedJob(
+    userId: string,
+    jobType: JobType,
+    params: JobParams,
+    maxAgeMs: number
+  ): Promise<Job | undefined> {
+    return pickNewestReusableJob(
+      this.allJobs().filter((job) => job.userId === userId && job.type === jobType),
+      maxAgeMs,
+      params
+    );
+  }
+
   public async countJobsForUser(userId: string, jobType: string, window: "hour" | "today"): Promise<number> {
     const key = `${userId}:${jobType}`;
     const now = Date.now();
@@ -50,6 +64,10 @@ export class MemoryQueueBackend implements QueueBackend {
       return entry.hour.get(userId) ?? 0;
     }
     return entry.day.get(userId) ?? 0;
+  }
+
+  public async recordJobSubmission(userId: string, jobType: JobType): Promise<void> {
+    this.incrementRateLimit(userId, jobType);
   }
 
   public incrementRateLimit(userId: string, jobType: string): void {

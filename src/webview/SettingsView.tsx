@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SettingsPanel, Preferences } from "./components/SettingsPanel";
 import type { SettingsScreen } from "./components/settings/types";
-import { isSettingsScreen, settingsScreenParent } from "./components/settings/types";
+import { isSettingsScreen, migrateSettingsScreen, settingsScreenParent } from "./components/settings/types";
 import type { SettingsSaveKey } from "./components/SaveFlashLabel";
 import type { SettingsTestKey } from "./components/TestButton";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
+import type { SettingsStatePayload } from "../chat/types";
+import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 
 type PersistedSettingsState = {
   screen?: SettingsScreen;
@@ -21,9 +23,10 @@ type VsCodeApi = {
 
 type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
-  | { type: "settings:state"; payload: Preferences }
+  | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | {
       type: "prompts:list";
       payload: {
@@ -58,13 +61,16 @@ const DEFAULT_PREFS: Preferences = {
   hasBitbucketCredentials: false,
   hasBitbucketAppInstalled: false,
   hasSlackToken: false,
+  hasSlackInstalled: false,
+  hasAtlassianInstalled: false,
   hasJiraCredentials: false,
   hasTeamsToken: false,
   hasConfluenceCredentials: false,
   hasNotionToken: false,
   hasGoogleDocsToken: false,
   jiraBaseUrl: "https://your-domain.atlassian.net",
-  confluenceBaseUrl: "https://your-domain.atlassian.net/wiki"
+  confluenceBaseUrl: "https://your-domain.atlassian.net/wiki",
+  identityDirectory: { ...EMPTY_IDENTITY_DIRECTORY }
 };
 
 const TEST_RESULT_FLASH_MS = 1500;
@@ -79,7 +85,9 @@ type SettingsViewProps = {
 
 export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement {
   const persisted = (vscode.getState() as PersistedSettingsState | null) ?? null;
-  const [screen, setScreen] = useState<SettingsScreen>(persisted?.screen ?? "hub");
+  const [screen, setScreen] = useState<SettingsScreen>(() =>
+    migrateSettingsScreen(persisted?.screen ?? "hub")
+  );
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [githubTokenDraft, setGithubTokenDraft] = useState("");
@@ -99,6 +107,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const [savedFlashKey, setSavedFlashKey] = useState<SettingsSaveKey | null>(null);
   const [pendingTest, setPendingTest] = useState<SettingsTestKey | null>(null);
   const [testResult, setTestResult] = useState<{ key: SettingsTestKey; ok: boolean } | null>(null);
+  const [pendingRefresh, setPendingRefresh] = useState<SettingsTestKey | null>(null);
+  const [refreshResult, setRefreshResult] = useState<{ key: SettingsTestKey; ok: boolean } | null>(null);
   const [promptLibrary, setPromptLibrary] = useState<{
     prompts: PromptLibraryItem[];
     pinnedIds: string[];
@@ -106,19 +116,26 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   }>({ prompts: [], pinnedIds: [], hasWorkspace: false });
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const activeTestRef = useRef<SettingsTestKey | null>(null);
+  const activeRefreshRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
+  const refreshResultTimerRef = useRef<number | null>(null);
   const testTimeoutRef = useRef<number | null>(null);
+  const refreshTimeoutRef = useRef<number | null>(null);
   const savedFlashTimerRef = useRef<number | null>(null);
   const githubInstalledRef = useRef(false);
   const gitlabInstalledRef = useRef(false);
   const bitbucketInstalledRef = useRef(false);
+  const slackInstalledRef = useRef(false);
+  const atlassianInstalledRef = useRef(false);
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
 
-  const pollCodeHostInstallations = useCallback(() => {
+  const pollInstallations = useCallback(() => {
     post({ type: "settings:refresh-github-installation" });
     post({ type: "settings:refresh-gitlab-installation" });
     post({ type: "settings:refresh-bitbucket-installation" });
+    post({ type: "settings:refresh-slack-installation" });
+    post({ type: "settings:refresh-atlassian-installation" });
   }, [post]);
 
   const flashSaved = useCallback((key: SettingsSaveKey) => {
@@ -194,6 +211,66 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     [clearTestFlash, clearTestTimeout, completeTest]
   );
 
+  const clearRefreshFlash = useCallback(() => {
+    if (refreshResultTimerRef.current !== null) {
+      window.clearTimeout(refreshResultTimerRef.current);
+      refreshResultTimerRef.current = null;
+    }
+    setRefreshResult(null);
+  }, []);
+
+  const clearRefreshTimeout = useCallback(() => {
+    if (refreshTimeoutRef.current !== null) {
+      window.clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  }, []);
+
+  const completeRefresh = useCallback(
+    (payload: { ok: boolean; message: string }) => {
+      const key = activeRefreshRef.current;
+      if (!key) {
+        return;
+      }
+
+      clearRefreshTimeout();
+      setConnectionTestMessage(payload.message);
+      setConnectionTestOk(payload.ok);
+      setRefreshResult({ key, ok: payload.ok });
+
+      if (refreshResultTimerRef.current !== null) {
+        window.clearTimeout(refreshResultTimerRef.current);
+      }
+      refreshResultTimerRef.current = window.setTimeout(() => {
+        setRefreshResult(null);
+        refreshResultTimerRef.current = null;
+      }, TEST_RESULT_FLASH_MS);
+
+      activeRefreshRef.current = null;
+      setPendingRefresh(null);
+    },
+    [clearRefreshTimeout]
+  );
+
+  const beginRefresh = useCallback(
+    (key: SettingsTestKey) => {
+      clearRefreshFlash();
+      clearRefreshTimeout();
+      activeRefreshRef.current = key;
+      setPendingRefresh(key);
+      refreshTimeoutRef.current = window.setTimeout(() => {
+        if (activeRefreshRef.current !== key) {
+          return;
+        }
+        completeRefresh({
+          ok: false,
+          message: "Refresh timed out. Check your network and try again."
+        });
+      }, TEST_TIMEOUT_MS);
+    },
+    [clearRefreshFlash, clearRefreshTimeout, completeRefresh]
+  );
+
   const handleClose = useCallback(() => {
     post({ type: "ui:close-settings" });
   }, [post]);
@@ -240,10 +317,24 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             setConnectionTestOk(false);
           }
           bitbucketInstalledRef.current = message.payload.hasBitbucketAppInstalled;
+          if (slackInstalledRef.current && !message.payload.hasSlackInstalled) {
+            setConnectionTestMessage(
+              "Slack authorization was removed. Connect Slack again to search threads and check presence."
+            );
+            setConnectionTestOk(false);
+          }
+          slackInstalledRef.current = message.payload.hasSlackInstalled;
+          if (atlassianInstalledRef.current && !message.payload.hasAtlassianInstalled) {
+            setConnectionTestMessage(
+              "Atlassian authorization was removed. Connect again to use Jira and Confluence."
+            );
+            setConnectionTestOk(false);
+          }
+          atlassianInstalledRef.current = message.payload.hasAtlassianInstalled;
           setPrefs(message.payload);
           break;
         case "settings:navigate": {
-          const next = message.payload.screen;
+          const next = migrateSettingsScreen(message.payload.screen);
           if (isSettingsScreen(next)) {
             setScreen(next);
             vscode.setState({ screen: next } satisfies PersistedSettingsState);
@@ -252,6 +343,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         }
         case "settings:test-result":
           completeTest(message.payload);
+          break;
+        case "settings:refresh-result":
+          completeRefresh(message.payload);
           break;
         case "prompts:list":
           setPromptLibrary(message.payload);
@@ -262,25 +356,25 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     };
     window.addEventListener("message", listener);
     return () => window.removeEventListener("message", listener);
-  }, [completeTest, post]);
+  }, [completeRefresh, completeTest, post]);
 
   useEffect(() => {
-    pollCodeHostInstallations();
-    const onFocus = () => pollCodeHostInstallations();
+    pollInstallations();
+    const onFocus = () => pollInstallations();
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        pollCodeHostInstallations();
+        pollInstallations();
       }
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
-    const interval = window.setInterval(pollCodeHostInstallations, CODE_HOST_INSTALL_POLL_MS);
+    const interval = window.setInterval(pollInstallations, CODE_HOST_INSTALL_POLL_MS);
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
       window.clearInterval(interval);
     };
-  }, [pollCodeHostInstallations]);
+  }, [pollInstallations]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -344,6 +438,27 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const testCodeHost = (provider: CodeHostProviderPreference) => {
     beginTest(provider);
     post({ type: "settings:test-code-host", payload: { provider } });
+  };
+
+  const refreshGithub = () => {
+    beginRefresh("github");
+    post({ type: "settings:refresh-github-installation" });
+  };
+  const refreshGitlab = () => {
+    beginRefresh("gitlab");
+    post({ type: "settings:refresh-gitlab-installation" });
+  };
+  const refreshBitbucket = () => {
+    beginRefresh("bitbucket");
+    post({ type: "settings:refresh-bitbucket-installation" });
+  };
+  const refreshSlack = () => {
+    beginRefresh("slack");
+    post({ type: "settings:refresh-slack-installation" });
+  };
+  const refreshAtlassian = (key: "jira" | "confluence") => {
+    beginRefresh(key);
+    post({ type: "settings:refresh-atlassian-installation", payload: { key } });
   };
 
   return (
@@ -411,9 +526,11 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setGithubTokenDraft("");
         }}
         onInstallGithubApp={() => post({ type: "settings:install-github-app" })}
-        onRefreshGithubInstallation={() => post({ type: "settings:refresh-github-installation" })}
+        onRefreshGithubInstallation={refreshGithub}
         onInstallGitlabApp={() => post({ type: "settings:install-gitlab-app" })}
-        onRefreshGitlabInstallation={() => post({ type: "settings:refresh-gitlab-installation" })}
+        onRefreshGitlabInstallation={refreshGitlab}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
         gitlabTokenDraft={gitlabTokenDraft}
         onGitlabTokenDraftChange={setGitlabTokenDraft}
         onSaveGitlabToken={() => {
@@ -431,7 +548,11 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setGitlabTokenDraft("");
         }}
         onInstallBitbucketApp={() => post({ type: "settings:install-bitbucket-app" })}
-        onRefreshBitbucketInstallation={() => post({ type: "settings:refresh-bitbucket-installation" })}
+        onRefreshBitbucketInstallation={refreshBitbucket}
+        onInstallSlackApp={() => post({ type: "settings:install-slack-app" })}
+        onRefreshSlackInstallation={refreshSlack}
+        onInstallAtlassianApp={() => post({ type: "settings:install-atlassian-app" })}
+        onRefreshAtlassianInstallation={refreshAtlassian}
         bitbucketUsernameDraft={bitbucketUsernameDraft}
         onBitbucketUsernameDraftChange={setBitbucketUsernameDraft}
         bitbucketPasswordDraft={bitbucketPasswordDraft}
@@ -581,6 +702,25 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setGoogleDocsTokenDraft("");
         }}
         onTestIntegration={testIntegration}
+        onSaveIdentityDirectory={(directory) => {
+          post({ type: "settings:save-identity-directory", payload: { directory } });
+          flashSaved("team");
+        }}
+        onConnectIntegrationNotice={(provider) => {
+          if (provider === "slack" || provider === "jira" || provider === "confluence") {
+            return;
+          }
+          const label =
+            provider === "google-docs"
+              ? "Google Docs"
+              : provider === "teams"
+                ? "Microsoft Teams"
+                : provider.charAt(0).toUpperCase() + provider.slice(1);
+          setConnectionTestMessage(
+            `${label} browser sign-in is rolling out next. Use developer mode locally until OAuth is enabled.`
+          );
+          setConnectionTestOk(undefined);
+        }}
         onClearChat={() => post({ type: "chat:clear" })}
       />
       </div>

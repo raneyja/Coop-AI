@@ -5,6 +5,7 @@ import type { PromptLibraryItem } from "./promptLibraryTypes";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../../chat/types";
 import { SettingsHub, SettingsNavHeader } from "./settings/SettingsHub";
 import { SettingsDetailView } from "./settings/SettingsDetailViews";
+import type { IdentityDirectory } from "../../identity/types";
 import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./settings/types";
 import { settingsScreenParent } from "./settings/types";
 
@@ -49,6 +50,10 @@ type SettingsPanelProps = {
   onSlackTokenDraftChange: (value: string) => void;
   onSaveSlackToken: () => void;
   onClearSlackToken: () => void;
+  onInstallSlackApp: () => void;
+  onRefreshSlackInstallation: () => void;
+  onInstallAtlassianApp: () => void;
+  onRefreshAtlassianInstallation: (key: "jira" | "confluence") => void;
   jiraEmailDraft: string;
   onJiraEmailDraftChange: (value: string) => void;
   jiraTokenDraft: string;
@@ -81,6 +86,8 @@ type SettingsPanelProps = {
   savedFlashKey: SettingsSaveKey | null;
   pendingTest: SettingsTestKey | null;
   testResult: { key: SettingsTestKey; ok: boolean } | null;
+  pendingRefresh: SettingsTestKey | null;
+  refreshResult: { key: SettingsTestKey; ok: boolean } | null;
   promptLibrary: {
     prompts: PromptLibraryItem[];
     pinnedIds: string[];
@@ -88,6 +95,8 @@ type SettingsPanelProps = {
   };
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
+  onSaveIdentityDirectory: (directory: IdentityDirectory) => void;
+  onConnectIntegrationNotice?: (provider: IntegrationChatProvider) => void;
 };
 
 export function SettingsPanel({

@@ -5,6 +5,7 @@ import { gitlabSyntheticInstallationId } from "./gitlabAppService";
 import type { GitLabAppConfig } from "./gitlabAppConfig";
 import { requireInstallAdmin } from "./authMiddleware";
 import type { OrgStore, AuthContext } from "./orgStore";
+import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
 
 export type GitLabAppApiDeps = {
   orgStore?: OrgStore;
@@ -111,12 +112,11 @@ async function handleCallback(
       await deps.orgStore.storeCredential(orgId, "gitlab:refresh", tokens.refreshToken);
     }
 
-    const redirectBase = deps.gitlabAppConfig.publicBaseUrl;
     writeHtml(
       response,
       200,
       "GitLab authorized successfully. You can close this tab and return to VS Code.",
-      `${redirectBase}/docs?gitlab=installed`
+      resolveOAuthSuccessRedirectUrl(deps.gitlabAppConfig.publicBaseUrl, "gitlab=installed")
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Authorization failed";

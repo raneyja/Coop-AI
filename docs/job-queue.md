@@ -100,6 +100,12 @@ Per-user limits (see `src/jobs/rateLimit.ts`):
 
 HTTP `429` includes `retryAfterMs`.
 
+### Knowledge gap scan reuse
+
+Repeat **Knowledge Gaps** clicks for the same repo + file within **2 hours** reuse the last completed
+`scan_knowledge_gaps` result instead of enqueueing a new job. The API response includes `"cached": true`
+and does **not** count against the hourly/daily limits.
+
 ## Architecture
 
 ```

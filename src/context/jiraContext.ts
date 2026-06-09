@@ -1,5 +1,6 @@
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import { JiraClient, type JiraIssue } from "../api/jira/jiraClient";
+import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 
@@ -145,7 +146,8 @@ export async function fetchJiraSearchContext(options: {
   codeHostConnected?: boolean;
 }): Promise<JiraSearchContext> {
   const creds = await options.secrets.getCredentials();
-  if (!creds.jiraEmail || !creds.jiraToken) {
+  const client = createJiraClientFromCredentials(creds);
+  if (!client) {
     return {
       source: "jira-search",
       jql: "",
@@ -153,12 +155,6 @@ export async function fetchJiraSearchContext(options: {
       error: "Jira credentials not configured."
     };
   }
-
-  const client = new JiraClient({
-    baseUrl: creds.jiraBaseUrl ?? "https://your-domain.atlassian.net",
-    email: creds.jiraEmail,
-    apiToken: creds.jiraToken
-  });
 
   const queryText = options.queryText ?? "";
   const issueKeys = JiraClient.extractIssueKeys(queryText);

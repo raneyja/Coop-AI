@@ -46,7 +46,11 @@ export function ChatCodeCitation({
 
   return (
     <section className="coop-chat-citation">
-      <button type="button" className="coop-chat-citation-header" onClick={() => onOpenFile?.(path, startLine)}>
+      <button
+        type="button"
+        className="coop-chat-citation-header coop-chat-action-link coop-chat-action-link--file"
+        onClick={() => onOpenFile?.(path, startLine)}
+      >
         {label}
       </button>
       <ChatCodeBlock language={languageFromPath(path)} code={code} className="coop-chat-citation-block" />

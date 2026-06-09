@@ -10,41 +10,224 @@ export const OPERATING_CONTEXT = `
 - Assume strong technical fluency; skip basic explanations unless asked.
 - Favor concrete, actionable answers: real file paths, code, and specifics over generic advice.
 - Be concise and direct. This is a working tool, not a tutorial.
+- Do not open with filler ("Great question", "Certainly", or restating the request).
+- Omit sections with no evidence — never pad with generic advice.
 `;
 
 export const CURSOR_STYLE_OUTPUT_CONTRACT = `
-## Response style
-- Lead with a direct 1-2 sentence answer, then explain.
-- Section labels: standalone **bold line** on its own line. Never use # or ### markdown headers — they render as literal text.
-- Use inline \`code\` for identifiers; fenced blocks for multi-line code with language tag.
+## Typography (not markdown)
+CoopAI renders chat like Cursor: bold headings, body text, and italics — not markdown documents.
+- Do NOT use: # headings, tables, blockquotes, horizontal rules, images, HTML, or README-style markdown layout.
+- Main section titles (H1): **Title text** alone on its own line (blank line before). Examples: **Summary**, **Answer**, **Documentation gaps**, **Architecture**.
+- Subsection titles (H2): same **Title** pattern nested under a main section — one short topic phrase per line, never a bullet.
+- Inline emphasis: **bold** for key terms and field labels; *italics* for uncertainty, caveats, inferred vs confirmed claims, and brief asides.
+- Lists: \`-\` bullets or \`1.\` numbered lists only — not nested markdown outlines.
+- Code: inline \`backticks\` for identifiers; fenced blocks for multi-line code with a language tag.
 - Cite repo code: \`\`\`startLine:endLine:filepath\` fence format.
 - File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\`.
-- Bullets for parallel items; numbered for sequences.
+- Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
+
+## Uniform response template (all chat — quick actions included)
+1. **Summary** or **Answer** — direct 1-2 sentence lead (always first).
+2. Main sections from the use-case structure below — each **Title** on its own line with a blank line before it.
+3. Under each main section: optional one-line lead, then either bullets or numbered items.
+4. Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item, then 2-4 bullets beneath — never a flat peer list.
+
+## Response style
+- Put a blank line before every main and subsection title.
+- Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are always bullets inside a subsection — never section titles and never top-level bullets without a subsection title above.
 - Complete sentences. No fabricated URLs or paths.
+- Prefer 4-8 topical sections over 15+ peer-level bullets.
+
+## Grouping
+- One theme per subsection. Category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
+- Never alternate **Open question:** and **What to check:** as peer bullets without the subsection title directly above them.
 `;
 
-function withOutputContract(prompt: string): string {
-  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}`;
+const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, string>> = {
+  comprehension: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+
+**Summary**
+1-2 sentence overview of the repo or relevant subsystem.
+
+**Architecture**
+How major pieces connect; boundaries and data flow.
+
+**Key subsystems**
+One bullet per subsystem with supporting file paths.
+
+**Entry points**
+Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
+
+**Risks & unknowns**
+Concrete risks tied to paths or missing evidence.
+
+**Suggested next steps**
+Numbered list of 2-4 onboarding or investigation actions.`,
+
+  decision_archaeology: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each):
+
+**Summary**
+Direct answer in 1-2 sentences.
+
+**Business context**
+Why this code exists.
+
+**Technical decision**
+What was chosen and why.
+
+**Alternatives considered**
+Bullets for rejected options (omit if unknown).
+
+**Trade-offs**
+Costs and benefits accepted.
+
+**Known limitations**
+Future work or caveats from evidence.
+
+**Domain experts**
+Who to ask; cite sources.
+
+**Sources**
+Bullets citing PR, Jira, or Slack — only from attached evidence.`,
+
+  ownership: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each):
+
+**Summary**
+Who to contact first and why, in 1-2 sentences.
+
+**True experts**
+Bullets per person: role, evidence (commits, reviews), confidence.
+
+**Availability**
+Current reachability or response expectations from evidence.
+
+**Risks**
+Single points of failure, stale ownership, bus factor.
+
+**Escalation path**
+Who to ask if primary experts are unavailable.
+
+**Knowledge transfer**
+Who should learn this area next.
+
+**Recommended next step**
+One concrete outreach or review action.`,
+
+  blast_radius: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each):
+
+**Summary**
+What breaks if this area changes, in 1-2 sentences.
+
+**Direct impact**
+Files, modules, or symbols that change with this edit.
+
+**Transitive dependents**
+Downstream callers, imports, or services (when dependency data exists).
+
+**APIs & integrations**
+External contracts, webhooks, auth, or cross-service calls at risk.
+
+**Operational risk**
+Deploy, config, migrations, feature flags, or runtime failure modes.
+
+**Testing surfaces**
+What to regression-test; note gaps if coverage is unknown.`,
+
+  knowledge_gaps: `
+## Required response structure
+Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
+
+**Summary**
+1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case.
+
+**Documentation gaps**
+When \`<confluence_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
+
+**Confluence pages reviewed**
+
+List exactly N bullets — one per \`<page>\` title, in the same order as the XML:
+
+- **{exact <page> title}:** one sentence on whether it documents the active file/area and what it covers or omits
+
+Do not use **Documentation coverage**, "Relevant pages include", or any synonym. Do not summarize pages you skip. If count is 7, list 7 titled bullets.
+
+Then add documentation gap subsections below using this shape (blank line between gaps):
+
+**Dependency configuration**
+
+- **Open question:** one concrete uncertainty about this area
+- **What to check:** doc, code path, ticket, or person that would resolve it
+
+**Error handling for createInstallationAccessToken**
+
+- **Open question:** ...
+- **What to check:** ...
+
+Rules:
+- Subsection title on its own line (**Title**). Never bullet the title.
+- Exactly two bullets under each title: **Open question:** then **What to check:**
+- Never put those field lines as top-level bullets without the subsection title directly above.
+
+**Ownership & maintenance**
+Same subsection + two-bullet pattern (omit if none).
+
+**Integration & operations**
+Same subsection + two-bullet pattern for config, deploy, and ops unknowns (omit if none). Never bundle multiple open questions under one **Operational unknowns** header.
+
+Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**.
+
+**Recommended next steps**
+Numbered list of 2-4 concrete actions.`,
+
+  chat: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+
+**Answer**
+Direct 1-2 sentence answer first.
+
+Then add focused topic sections as needed. Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list.
+
+For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.`
+};
+
+function withOutputContract(
+  prompt: string,
+  useCase: Exclude<UseCase, "inline_completion">
+): string {
+  const structure = USE_CASE_STRUCTURE[useCase] ?? "";
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
 export const COMPREHENSION_SYSTEM = withOutputContract(`You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from supplied context over speculation.
-Cite file paths when referencing code. If context is stale or partial, say so explicitly.`);
+Cite file paths when referencing code. If context is stale or partial, say so explicitly.`, "comprehension");
 
-export const DECISION_ARCHAEOLOGY_SYSTEM = withOutputContract(DECISION_HISTORIAN_SYSTEM);
+export const DECISION_ARCHAEOLOGY_SYSTEM = withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology");
 
-export const OWNERSHIP_SYSTEM = withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM);
+export const OWNERSHIP_SYSTEM = withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM, "ownership");
 
 export const BLAST_RADIUS_SYSTEM = withOutputContract(`You analyze change impact: dependents, APIs, integrations, and operational risk.
-Be explicit about transitive effects and testing surfaces when dependency data is available.`);
+Be explicit about transitive effects and testing surfaces when dependency data is available.`, "blast_radius");
 
 export const KNOWLEDGE_GAPS_SYSTEM = withOutputContract(`You audit engineering health: missing docs, orphaned code, unclear ownership, and open questions.
-List what is unknown and what evidence would reduce risk.`);
+List what is unknown and what evidence would reduce risk.
+When <knowledge_gap_scan> is attached, cite concrete findings (file, gap type, priority) from that scan alongside documentation and code context.
+When <confluence_pages count="N"> is attached, list all N page titles under **Confluence pages reviewed** (exact heading) before any other documentation gaps — match the XML count; never use **Documentation coverage** or partial lists like "Relevant pages include".`, "knowledge_gaps");
 
 export const GENERAL_CHAT_SYSTEM = withOutputContract(`You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite paths; do not fabricate external links.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
-When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.`);
+When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.`, "chat");
 
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
@@ -152,6 +335,7 @@ export function buildUserMessageWithContext(
   const confluencePages = extractConfluenceSearch(context?.contextBundle);
   const notionPages = extractNotionSearch(context?.contextBundle);
   const googleDocs = extractGoogleDocsSearch(context?.contextBundle);
+  const knowledgeGapScan = extractKnowledgeGapJobScan(context?.contextBundle);
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
@@ -164,7 +348,8 @@ export function buildUserMessageWithContext(
     !codeHostActivity &&
     !confluencePages &&
     !notionPages &&
-    !googleDocs
+    !googleDocs &&
+    !knowledgeGapScan
   ) {
     return message;
   }
@@ -236,6 +421,9 @@ export function buildUserMessageWithContext(
   }
   if (googleDocs) {
     lines.push(...formatGoogleDocsForLlm(googleDocs));
+  }
+  if (knowledgeGapScan) {
+    lines.push(...formatKnowledgeGapJobScanForLlm(knowledgeGapScan));
   }
   if (context?.contextBundle !== undefined) {
     lines.push("<graph_context>");
@@ -407,6 +595,16 @@ type GoogleDocsSearchSnippet = {
   error?: string;
 };
 
+type KnowledgeGapJobScanSnippet = {
+  source: string;
+  cached?: boolean;
+  foundGaps: number;
+  highPriority: number;
+  mediumPriority: number;
+  lowPriority: number;
+  gaps: Array<{ file?: string; type?: string; priority?: string; message?: string }>;
+};
+
 function extractConfluenceSearch(bundle: unknown): ConfluenceSearchSnippet | undefined {
   return extractIntegrationSearch(bundle, "confluenceSearch");
 }
@@ -417,6 +615,10 @@ function extractNotionSearch(bundle: unknown): NotionSearchSnippet | undefined {
 
 function extractGoogleDocsSearch(bundle: unknown): GoogleDocsSearchSnippet | undefined {
   return extractIntegrationSearch(bundle, "googleDocsSearch");
+}
+
+function extractKnowledgeGapJobScan(bundle: unknown): KnowledgeGapJobScanSnippet | undefined {
+  return extractIntegrationSearch(bundle, "jobScan");
 }
 
 function extractIntegrationSearch<T>(bundle: unknown, key: string): T | undefined {
@@ -478,8 +680,26 @@ function formatTeamsMessagesForLlm(teams: TeamsSearchSnippet): string[] {
   return lines;
 }
 
+function formatKnowledgeGapJobScanForLlm(scan: KnowledgeGapJobScanSnippet): string[] {
+  const lines: string[] = [
+    `<knowledge_gap_scan cached="${scan.cached ? "true" : "false"}" found="${scan.foundGaps}" high="${scan.highPriority}" medium="${scan.mediumPriority}" low="${scan.lowPriority}">`
+  ];
+  if (scan.gaps.length === 0) {
+    lines.push("<empty>No structured repo gaps from background scan.</empty>");
+  }
+  for (const gap of scan.gaps) {
+    const file = gap.file ? ` file="${escapeXml(gap.file)}"` : "";
+    const type = gap.type ? ` type="${escapeXml(gap.type)}"` : "";
+    const priority = gap.priority ? ` priority="${escapeXml(gap.priority)}"` : "";
+    lines.push(`<gap${file}${type}${priority}>${escapeXml(gap.message ?? "")}</gap>`);
+  }
+  lines.push("</knowledge_gap_scan>");
+  return lines;
+}
+
 function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): string[] {
-  const lines: string[] = ["<confluence_pages>"];
+  const pageCount = confluence.pages.length;
+  const lines: string[] = [`<confluence_pages count="${pageCount}">`];
   if (confluence.error) {
     lines.push(`<error>${escapeXml(confluence.error)}</error>`);
   }
@@ -488,8 +708,13 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
       `<search cql="${escapeXml(confluence.cql)}"${confluence.repoQuery ? ` repo="${escapeXml(confluence.repoQuery)}"` : ""} />`
     );
   }
-  if (confluence.pages.length === 0 && !confluence.error) {
+  if (pageCount === 0 && !confluence.error) {
     lines.push("<empty>No matching Confluence pages found.</empty>");
+  }
+  if (pageCount > 0) {
+    lines.push(
+      `<instruction>List all ${pageCount} page titles under **Confluence pages reviewed** in Knowledge Gaps responses.</instruction>`
+    );
   }
   for (const page of confluence.pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";

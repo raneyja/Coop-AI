@@ -1,4 +1,5 @@
 import React, { useCallback } from "react";
+import { formatChatMessageForCopy } from "../lib/formatChatMessageForCopy";
 
 type ChatMessageActionsProps = {
   content: string;
@@ -11,7 +12,7 @@ export function ChatMessageActions({ content, visible }: ChatMessageActionsProps
       return;
     }
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(formatChatMessageForCopy(content));
     } catch {
       // Ignore clipboard failures in restricted environments.
     }

@@ -142,7 +142,13 @@ export async function openRemoteFileInEditor(params: {
   line?: number;
   provider?: CodeHostProviderPreference;
   branch?: string;
+  /** When false, focus the editor and do not return to the Coop sidebar (user navigation). */
+  preserveSidebarFocus?: boolean;
 }): Promise<void> {
+  const preserveSidebarFocus = params.preserveSidebarFocus ?? true;
+  const openOptions: vscode.TextDocumentShowOptions = preserveSidebarFocus
+    ? EDITOR_OPEN_OPTIONS
+    : { viewColumn: vscode.ViewColumn.One, preview: false, preserveFocus: false };
   if (!params.owner || !params.repo || !params.filePath) {
     return;
   }
@@ -170,13 +176,15 @@ export async function openRemoteFileInEditor(params: {
   if (localPath && (ready || isRepoOpenInWorkspace(localPath))) {
     const fileUri = vscode.Uri.file(path.join(localPath, relative));
     if (fs.existsSync(fileUri.fsPath)) {
-      const editor = await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      const editor = await vscode.window.showTextDocument(fileUri, openOptions);
       if (params.line) {
         const position = new vscode.Position(Math.max(0, params.line - 1), 0);
         editor.selection = new vscode.Selection(position, position);
         editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
       }
-      await restoreCoopSidebar();
+      if (preserveSidebarFocus) {
+        await restoreCoopSidebar();
+      }
       return;
     }
   }
@@ -184,19 +192,23 @@ export async function openRemoteFileInEditor(params: {
   if (ready && provider === "github") {
     try {
       const fileUri = githubRepoFileVfsUri(params.owner, params.repo, relative);
-      const editor = await vscode.window.showTextDocument(fileUri, EDITOR_OPEN_OPTIONS);
+      const editor = await vscode.window.showTextDocument(fileUri, openOptions);
       if (params.line) {
         const position = new vscode.Position(Math.max(0, params.line - 1), 0);
         editor.selection = new vscode.Selection(position, position);
         editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
       }
-      await restoreCoopSidebar();
+      if (preserveSidebarFocus) {
+        await restoreCoopSidebar();
+      }
       return;
     } catch (error) {
       void vscode.window.showWarningMessage(
         `CoopAI added ${relative} to chat context. Could not open the file in the editor: ${formatError(error)}`
       );
-      await restoreCoopSidebar();
+      if (preserveSidebarFocus) {
+        await restoreCoopSidebar();
+      }
       return;
     }
   }
@@ -204,7 +216,9 @@ export async function openRemoteFileInEditor(params: {
   void vscode.window.showWarningMessage(
     `CoopAI added ${relative} to context, but the editor is not ready yet. Wait a moment and click the file again.`
   );
-  await restoreCoopSidebar();
+  if (preserveSidebarFocus) {
+    await restoreCoopSidebar();
+  }
 }
 
 export async function openRepoInEditor(params: {

@@ -6,6 +6,7 @@ export type CacheCategory =
   | "fileContent"
   | "commitHistory"
   | "tree"
+  | "search"
   | "blame"
   | "prIssue"
   | "repoMetadata";
@@ -28,6 +29,7 @@ const TTL_MS: Record<CacheCategory, number> = {
   fileContent: 30 * 60 * 1000,
   commitHistory: 15 * 60 * 1000,
   tree: 15 * 60 * 1000,
+  search: 5 * 60 * 1000,
   blame: 60 * 60 * 1000,
   prIssue: 5 * 60 * 1000,
   repoMetadata: 60 * 60 * 1000

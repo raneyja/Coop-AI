@@ -10,7 +10,8 @@ export type SettingsSaveKey =
   | "teams"
   | "confluence"
   | "notion"
-  | "google-docs";
+  | "google-docs"
+  | "team";
 
 type SaveFlashLabelProps = {
   show: boolean;

@@ -47,10 +47,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   lines.push("## Evidence bundle");
   lines.push(formatTimelineForPrompt(timeline));
   lines.push("");
-  lines.push("## Output format");
-  lines.push(
-    "Respond with markdown sections: **Summary**, **Business context**, **Technical decision**, **Alternatives considered**, **Trade-offs**, **Known limitations**, **Domain experts**, **Sources**."
-  );
+  lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
 }

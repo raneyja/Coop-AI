@@ -3,7 +3,15 @@ import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
-const DOC_PROVIDERS = ["confluence", "notion", "google-docs"];
+const DOC_PROVIDERS = ["confluence", "notion", "google-docs"] as const;
+
+function hasOnlineDocProvider(health: FeatureExecutionContext["health"]): boolean {
+  return health.some(
+    (entry) =>
+      (DOC_PROVIDERS as readonly string[]).includes(entry.provider) &&
+      (entry.status === "healthy" || entry.status === "degraded")
+  );
+}
 
 export async function knowledgeGaps(context: FeatureExecutionContext) {
   const params = context.request.params;
@@ -31,7 +39,11 @@ export async function knowledgeGaps(context: FeatureExecutionContext) {
     );
   }
 
-  const docsOffline = context.status.unavailableProviders.some((entry) => DOC_PROVIDERS.includes(entry));
+  const docsOffline =
+    !hasOnlineDocProvider(context.health) &&
+    context.status.unavailableProviders.some((entry) =>
+      (DOC_PROVIDERS as readonly string[]).includes(entry)
+    );
   const data = {
     file: params.file,
     fileStructure: { status: "file-structure-requested", provider },
@@ -44,7 +56,7 @@ export async function knowledgeGaps(context: FeatureExecutionContext) {
     context,
     data,
     docsOffline ? "Documentation systems offline. Showing orphaned files only." : context.status.message,
-    docsOffline || context.status.level !== "full"
+    docsOffline
   );
 }
 

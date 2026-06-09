@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isChatSessionIdle, resolveLastActiveAt, shouldStartFreshThreadOnRestore } from "./chatThreadRestore";
 import type { ChatMessage } from "./types";
 
 export type ChatThreadSummary = {
@@ -17,6 +18,7 @@ export type ChatThreadRecord = ChatThreadSummary & {
 type ThreadStoreSnapshot = {
   activeThreadId: string;
   threads: ChatThreadRecord[];
+  lastActiveAt: number;
 };
 
 const MAX_THREADS = 40;
@@ -63,6 +65,38 @@ export class ChatThreadStore {
     return this.getThread(this.snapshot.activeThreadId) ?? emptyThread(this.snapshot.activeThreadId);
   }
 
+  public getLastActiveAt(): number {
+    return this.snapshot.lastActiveAt;
+  }
+
+  public isSessionIdle(idleMs: number): boolean {
+    return isChatSessionIdle(this.snapshot.lastActiveAt, idleMs);
+  }
+
+  /** Persist sidebar activity so the next reload can apply the idle timeout. */
+  public recordActivity(): void {
+    this.snapshot.lastActiveAt = Date.now();
+    this.writeSnapshot();
+  }
+
+  /**
+   * Restore the active thread, or start a fresh one when the session has been idle.
+   * Expired sessions keep prior threads in history; only the default view changes.
+   */
+  public resolveStartupThread(idleMs: number): ChatThreadRecord {
+    this.ensureActiveThread();
+    const active = this.getActiveThread();
+
+    if (!shouldStartFreshThreadOnRestore(active, this.snapshot.lastActiveAt, idleMs)) {
+      this.recordActivity();
+      return active;
+    }
+
+    const fresh = this.startNewThread();
+    this.recordActivity();
+    return fresh;
+  }
+
   public listSummaries(): ChatThreadSummary[] {
     return [...this.snapshot.threads]
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -89,6 +123,7 @@ export class ChatThreadStore {
     thread.title = title;
     thread.messageCount = messages.length;
     thread.updatedAt = Date.now();
+    this.snapshot.lastActiveAt = Date.now();
     this.writeSnapshot();
   }
 
@@ -107,6 +142,7 @@ export class ChatThreadStore {
       return undefined;
     }
     this.snapshot.activeThreadId = threadId;
+    this.snapshot.lastActiveAt = Date.now();
     this.writeSnapshot();
     return this.getActiveThread();
   }
@@ -138,7 +174,8 @@ export class ChatThreadStore {
   private ensureActiveThread(): void {
     if (this.snapshot.threads.length === 0) {
       const thread = emptyThread();
-      this.snapshot = { activeThreadId: thread.id, threads: [thread] };
+      const now = Date.now();
+      this.snapshot = { activeThreadId: thread.id, threads: [thread], lastActiveAt: now };
       this.writeSnapshot();
       return;
     }
@@ -169,19 +206,22 @@ export class ChatThreadStore {
   }
 
   private readSnapshot(): ThreadStoreSnapshot {
-    const raw = this.extensionContext.workspaceState.get<ThreadStoreSnapshot>(this.storageKey());
+    const raw = this.extensionContext.workspaceState.get<Partial<ThreadStoreSnapshot>>(this.storageKey());
     if (!raw?.activeThreadId || !Array.isArray(raw.threads)) {
       const thread = emptyThread();
-      return { activeThreadId: thread.id, threads: [thread] };
+      const now = Date.now();
+      return { activeThreadId: thread.id, threads: [thread], lastActiveAt: now };
     }
+    const threads = raw.threads.map((thread) => ({
+      ...thread,
+      messageCount: thread.messageCount ?? thread.messages?.length ?? 0,
+      messages: Array.isArray(thread.messages) ? thread.messages : [],
+      sessionCostUsd: thread.sessionCostUsd ?? 0
+    }));
     return {
       activeThreadId: raw.activeThreadId,
-      threads: raw.threads.map((thread) => ({
-        ...thread,
-        messageCount: thread.messageCount ?? thread.messages?.length ?? 0,
-        messages: Array.isArray(thread.messages) ? thread.messages : [],
-        sessionCostUsd: thread.sessionCostUsd ?? 0
-      }))
+      threads,
+      lastActiveAt: resolveLastActiveAt(raw.lastActiveAt, threads)
     };
   }
 

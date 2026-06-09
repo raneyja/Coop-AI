@@ -1,5 +1,5 @@
 {
   "debug.allowBreakpointsEverywhere": false,
-  "coopAI.devMode": true,
+  "coopAI.devMode": false,
   "coopAI.apiBaseUrl": "http://localhost:8787"
 }

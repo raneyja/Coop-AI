@@ -7,7 +7,8 @@ export {
   settingsScreenForProvider,
   settingsScreenParent,
   settingsScreenParentLabel,
-  isSettingsScreen
+  isSettingsScreen,
+  migrateSettingsScreen
 } from "../../../chat/settingsScreens";
 
 import type {
@@ -46,6 +47,10 @@ export type Preferences = {
   hasBitbucketCredentials: boolean;
   hasBitbucketAppInstalled: boolean;
   hasSlackToken: boolean;
+  hasSlackInstalled: boolean;
+  slackTeamName?: string;
+  hasAtlassianInstalled: boolean;
+  atlassianSiteName?: string;
   hasJiraCredentials: boolean;
   hasTeamsToken: boolean;
   hasConfluenceCredentials: boolean;
@@ -53,6 +58,7 @@ export type Preferences = {
   hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
   confluenceBaseUrl: string;
+  identityDirectory: import("../../../identity/types").IdentityDirectory;
 };
 
 export type CodeHostScreen = Extract<

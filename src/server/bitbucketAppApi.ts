@@ -5,6 +5,7 @@ import { bitbucketSyntheticInstallationId } from "./bitbucketAppService";
 import type { BitbucketAppConfig } from "./bitbucketAppConfig";
 import { requireInstallAdmin } from "./authMiddleware";
 import type { OrgStore, AuthContext } from "./orgStore";
+import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
 
 export type BitbucketAppApiDeps = {
   orgStore?: OrgStore;
@@ -109,12 +110,11 @@ async function handleCallback(
       await deps.orgStore.storeCredential(orgId, "bitbucket:refresh", tokens.refreshToken);
     }
 
-    const redirectBase = deps.bitbucketAppConfig.publicBaseUrl;
     writeHtml(
       response,
       200,
       "Bitbucket authorized successfully. You can close this tab and return to VS Code.",
-      `${redirectBase}/docs?bitbucket=installed`
+      resolveOAuthSuccessRedirectUrl(deps.bitbucketAppConfig.publicBaseUrl, "bitbucket=installed")
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Authorization failed";

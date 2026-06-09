@@ -34,10 +34,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   lines.push("## Repository evidence");
   lines.push(formatRepoSummaryForPrompt(input.summary));
   lines.push("");
-  lines.push("## Output format");
-  lines.push(
-    "Respond with markdown sections: **Architecture overview**, **Key subsystems**, **Entry points**, **Integrations & boundaries**, **Likely risks**, **Suggested onboarding path**."
-  );
+  lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   return lines.join("\n");
 }
 

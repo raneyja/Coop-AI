@@ -61,6 +61,149 @@ test("**Sentence ending with period.** is a paragraph, not section-heading", () 
   assert.equal(doc.blocks[0]!.type, "paragraph");
 });
 
+test("**Open question:** alone is a paragraph, not section-heading", () => {
+  const doc = parseChatProse("**Open question:**");
+  assert.equal(doc.blocks.length, 1);
+  assert.equal(doc.blocks[0]!.type, "paragraph");
+});
+
+test("flat knowledge-gap list promotes categories to subheadings with renamed field labels", () => {
+  const content = [
+    "**Key Unknowns in `src/server/githubAppApi.ts`**",
+    "",
+    "- **Error Handling Specifics**",
+    "- **Question:** How should different types of errors be handled?",
+    "- **Evidence Needed:** Documentation on error handling practices.",
+    "- **Dependencies Configuration**",
+    "- **Question:** What configurations are required for GitHubAppService?",
+    "- **Evidence Needed:** Setup examples for these dependencies."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const headings = doc.blocks.filter((b) => b.type === "section-heading");
+  const subheadings = headings.filter(
+    (b) => b.type === "section-heading" && b.headingLevel === 2
+  );
+  assert.equal(subheadings.length, 2);
+  const lists = doc.blocks.filter((b) => b.type === "list");
+  assert.equal(lists.length, 2);
+  if (lists[0]?.type === "list") {
+    assert.equal(lists[0].items.length, 2);
+    const firstLabel = lists[0].items[0]!.content[0];
+    assert.equal(firstLabel?.type, "strong");
+    if (firstLabel?.type === "strong") {
+      assert.equal(firstLabel.text, "Open question:");
+    }
+    const secondLabel = lists[0].items[1]!.content[0];
+    if (secondLabel?.type === "strong") {
+      assert.equal(secondLabel.text, "What to check:");
+    }
+  }
+  const subheadingTexts = subheadings
+    .filter((b): b is Extract<typeof b, { type: "section-heading" }> => b.type === "section-heading")
+    .map((b) => b.text);
+  assert.ok(subheadingTexts.includes("Error Handling Specifics"));
+  assert.ok(subheadingTexts.includes("Dependencies Configuration"));
+});
+
+test("plain category lines normalize to headings with open question bullets", () => {
+  const content = [
+    "Dependency Configuration",
+    "Question: Are the dependencies always provided?",
+    "Evidence Needed: Documentation for dependency initialization.",
+    "",
+    "Authorization Logic",
+    "Question: What defines a valid AuthContext?",
+    "Evidence Needed: Definition of AuthContext from orgStore."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const headings = doc.blocks.filter((b) => b.type === "section-heading");
+  assert.equal(headings.length, 2);
+  const lists = doc.blocks.filter((b) => b.type === "list");
+  assert.equal(lists.length, 2);
+});
+
+test("answer lead remaps to summary with documentation gaps wrapper", () => {
+  const content = [
+    "**Answer**",
+    "The code has gaps.",
+    "",
+    "Documentation coverage",
+    "Open question: Is there sufficient documentation?",
+    "What to check: Review comments and Confluence pages."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const headings = doc.blocks.filter((b) => b.type === "section-heading");
+  assert.ok(headings.some((h) => h.type === "section-heading" && h.text === "Summary"));
+  assert.ok(headings.some((h) => h.type === "section-heading" && h.text === "Documentation gaps"));
+  assert.ok(headings.some((h) => h.type === "section-heading" && h.text === "Documentation coverage"));
+  const lists = doc.blocks.filter((b) => b.type === "list");
+  assert.equal(lists.length, 1);
+  if (lists[0]?.type === "list") {
+    assert.equal(lists[0].items.length, 2);
+  }
+});
+
+test("open questions layout promotes categories to subheadings with field bullets", () => {
+  const content = [
+    "The key unknowns in the code area primarily revolve around dependencies.",
+    "",
+    "Open Questions",
+    "",
+    "Dependency Configuration",
+    "What specific configurations are required for GitHubAppService?",
+    "What to check: Documentation or comments detailing required environment variables.",
+    "",
+    "Error Handling",
+    "How should the system respond to specific error conditions?",
+    "What to check: Specifications outlining expected behaviors for error scenarios."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const headings = doc.blocks.filter((b) => b.type === "section-heading");
+  const main = headings.filter((b) => b.type === "section-heading" && b.headingLevel === 1);
+  const sub = headings.filter((b) => b.type === "section-heading" && b.headingLevel === 2);
+  assert.equal(main.length, 1);
+  if (main[0]?.type === "section-heading") {
+    assert.equal(main[0].text, "Open Questions");
+  }
+  assert.equal(sub.length, 2);
+  const lists = doc.blocks.filter((b) => b.type === "list");
+  assert.equal(lists.length, 2);
+  if (lists[0]?.type === "list") {
+    assert.equal(lists[0].items.length, 2);
+    const first = lists[0].items[0]!.content[0];
+    if (first?.type === "strong") {
+      assert.equal(first.text, "Open question:");
+    }
+    const second = lists[0].items[1]!.content[0];
+    if (second?.type === "strong") {
+      assert.equal(second.text, "What to check:");
+    }
+  }
+});
+
+test("grouped knowledge-gap prose uses subsection headings", () => {
+  const content = [
+    "**Summary**",
+    "Two documentation gaps remain for the install flow.",
+    "",
+    "**Documentation gaps**",
+    "",
+    "**GitHub App install flow**",
+    "",
+    "- **Open question:** Who may complete installation?",
+    "- **What to check:** Confluence runbook for install admins."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const headings = doc.blocks.filter((b) => b.type === "section-heading");
+  assert.equal(headings.length, 3);
+  if (headings[0]?.type === "section-heading") {
+    assert.equal(headings[0].text, "Summary");
+  }
+  if (headings[2]?.type === "section-heading") {
+    assert.equal(headings[2].text, "GitHub App install flow");
+  }
+});
+
 // ── Test 5: Unordered list ─────────────────────────────────────────────────
 test("unordered list with dash marker", () => {
   const doc = parseChatProse("- alpha\n- beta\n- gamma");
@@ -143,6 +286,19 @@ test("backtick file path with :line becomes a file-link with line", () => {
 });
 
 // ── Test 10: Bold inline ───────────────────────────────────────────────────
+test("*term* inline renders as em node", () => {
+  const doc = parseChatProse("This is *inferred from commit history* only.");
+  const block = doc.blocks[0]!;
+  assert.equal(block.type, "paragraph");
+  if (block.type === "paragraph") {
+    const emNode = block.content.find((n) => n.type === "em");
+    assert.ok(emNode, "expected em node");
+    if (emNode && emNode.type === "em") {
+      assert.equal(emNode.text, "inferred from commit history");
+    }
+  }
+});
+
 test("**term** inline renders as strong node", () => {
   const doc = parseChatProse("This is **important** text.");
   assert.equal(doc.blocks.length, 1);

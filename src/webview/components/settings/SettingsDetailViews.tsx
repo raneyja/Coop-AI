@@ -5,9 +5,18 @@ import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
 import { ConfiguredSecretInput } from "../ConfiguredSecretInput";
 import { PromptLibraryTop5Editor } from "../PromptLibraryTop5Editor";
 import type { PromptLibraryItem } from "../promptLibraryTypes";
-import type { CodeHostProviderPreference, LlmProviderPreference } from "../../../chat/types";
+import type { CodeHostProviderPreference, IntegrationChatProvider, LlmProviderPreference } from "../../../chat/types";
 import type { Preferences, SettingsDetailScreen } from "./types";
+import { ConnectionCard } from "./ConnectionCard";
+import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
+import {
+  codeHostConnectionMeta,
+  codeHostListSubtitle,
+  integrationListSubtitle
+} from "./connectionCopy";
+import { IdentityLinksDetail } from "./IdentityLinksDetail";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
+import type { IdentityDirectory } from "../../../identity/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { codeHostConfigured, integrationConfigured } from "./subtitles";
 
@@ -123,6 +132,8 @@ export type SettingsDetailProps = {
   savedFlashKey: SettingsSaveKey | null;
   pendingTest: SettingsTestKey | null;
   testResult: { key: SettingsTestKey; ok: boolean } | null;
+  pendingRefresh: SettingsTestKey | null;
+  refreshResult: { key: SettingsTestKey; ok: boolean } | null;
   promptLibrary: {
     prompts: PromptLibraryItem[];
     pinnedIds: string[];
@@ -131,6 +142,12 @@ export type SettingsDetailProps = {
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
   onNavigate: (screen: SettingsDetailScreen) => void;
+  onSaveIdentityDirectory: (directory: IdentityDirectory) => void;
+  onInstallSlackApp: () => void;
+  onRefreshSlackInstallation: () => void;
+  onInstallAtlassianApp: () => void;
+  onRefreshAtlassianInstallation: (key: "jira" | "confluence") => void;
+  onConnectIntegrationNotice?: (provider: IntegrationChatProvider) => void;
 };
 
 export function SettingsDetailView({
@@ -140,18 +157,16 @@ export function SettingsDetailView({
   switch (screen) {
     case "model":
       return <ModelDetail {...props} />;
-    case "api":
-      return <ApiDetail {...props} />;
-    case "code-hosts":
-      return <CodeHostsListDetail {...props} />;
+    case "account":
+      return <AccountDetail {...props} />;
+    case "connections":
+      return <ConnectionsListDetail {...props} />;
     case "code-host-github":
       return <GitHubDetail {...props} />;
     case "code-host-gitlab":
       return <GitLabDetail {...props} />;
     case "code-host-bitbucket":
       return <BitbucketDetail {...props} />;
-    case "integrations":
-      return <IntegrationsListDetail {...props} />;
     case "integration-slack":
       return <SlackDetail {...props} />;
     case "integration-jira":
@@ -166,6 +181,10 @@ export function SettingsDetailView({
       return <GoogleDocsDetail {...props} />;
     case "workspace":
       return <WorkspaceDetail {...props} />;
+    case "team":
+      return <IdentityLinksDetail directory={props.prefs.identityDirectory} onSave={props.onSaveIdentityDirectory} />;
+    case "preferences":
+      return <PreferencesListDetail {...props} />;
     case "prompts":
       return <PromptsDetail {...props} />;
     default:
@@ -346,7 +365,7 @@ function ModelDetail({
   );
 }
 
-function ApiDetail({
+function AccountDetail({
   prefs,
   onUpdate,
   apiKeyDraft,
@@ -437,7 +456,7 @@ function ApiDetail({
         </>
       ) : null}
       <p className="coop-prompt-modal-section-title">
-        {prefs.plan === "enterprise" ? "API key (admin / automation)" : "CoopAI API key"}
+        {prefs.plan === "enterprise" ? "API key (admin / automation)" : "Advanced · API key"}
       </p>
       <label className="coop-settings-field-row">
         <span className="coop-settings-label">CoopAI API key</span>
@@ -511,15 +530,20 @@ function ApiDetail({
   );
 }
 
-function CodeHostsListDetail({
+function ConnectionsListDetail({
   prefs,
   onUpdate,
   onNavigate
 }: SettingsDetailProps): React.ReactElement {
   return (
     <>
+      <p className="coop-settings-card-desc px-0.5">
+        Connect source code and collaboration tools through browser sign-in. Credentials are stored on the Coop
+        server for production use — not pasted into VS Code.
+      </p>
+
+      <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
       <SettingsSection>
-        <p className="coop-settings-card-desc">Zero-clone integrations for quick actions and PR workflows.</p>
         <label className="coop-settings-field-row">
           <span className="coop-settings-label">Default code host</span>
           <select
@@ -533,25 +557,85 @@ function CodeHostsListDetail({
           </select>
         </label>
       </SettingsSection>
-
       <CoopNavList>
         <CoopNavRow
           title="GitHub"
-          subtitle={codeHostConfigured(prefs, "github") ? "Configured" : "Not configured"}
+          subtitle={codeHostListSubtitle(prefs, "github")}
           configured={codeHostConfigured(prefs, "github")}
           onClick={() => onNavigate("code-host-github")}
         />
         <CoopNavRow
           title="GitLab"
-          subtitle={codeHostConfigured(prefs, "gitlab") ? "Configured" : "Not configured"}
+          subtitle={codeHostListSubtitle(prefs, "gitlab")}
           configured={codeHostConfigured(prefs, "gitlab")}
           onClick={() => onNavigate("code-host-gitlab")}
         />
         <CoopNavRow
           title="Bitbucket"
-          subtitle={codeHostConfigured(prefs, "bitbucket") ? "Configured" : "Not configured"}
+          subtitle={codeHostListSubtitle(prefs, "bitbucket")}
           configured={codeHostConfigured(prefs, "bitbucket")}
           onClick={() => onNavigate("code-host-bitbucket")}
+        />
+      </CoopNavList>
+
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Tools</p>
+      <CoopNavList>
+        <CoopNavRow
+          title="Slack"
+          subtitle={integrationListSubtitle(prefs, "slack")}
+          configured={integrationConfigured(prefs, "slack")}
+          onClick={() => onNavigate("integration-slack")}
+        />
+        <CoopNavRow
+          title="Jira"
+          subtitle={integrationListSubtitle(prefs, "jira")}
+          configured={integrationConfigured(prefs, "jira")}
+          onClick={() => onNavigate("integration-jira")}
+        />
+        <CoopNavRow
+          title="Microsoft Teams"
+          subtitle={integrationListSubtitle(prefs, "teams")}
+          configured={integrationConfigured(prefs, "teams")}
+          onClick={() => onNavigate("integration-teams")}
+        />
+        <CoopNavRow
+          title="Confluence"
+          subtitle={integrationListSubtitle(prefs, "confluence")}
+          configured={integrationConfigured(prefs, "confluence")}
+          onClick={() => onNavigate("integration-confluence")}
+        />
+        <CoopNavRow
+          title="Notion"
+          subtitle={integrationListSubtitle(prefs, "notion")}
+          configured={integrationConfigured(prefs, "notion")}
+          onClick={() => onNavigate("integration-notion")}
+        />
+        <CoopNavRow
+          title="Google Docs"
+          subtitle={integrationListSubtitle(prefs, "google-docs")}
+          configured={integrationConfigured(prefs, "google-docs")}
+          onClick={() => onNavigate("integration-google-docs")}
+        />
+      </CoopNavList>
+    </>
+  );
+}
+
+function PreferencesListDetail({ prefs, promptLibrary, onNavigate }: SettingsDetailProps): React.ReactElement {
+  const pinned = promptLibrary.pinnedIds.length;
+  return (
+    <>
+      <p className="coop-settings-card-desc px-0.5">Model defaults and your quick prompt library.</p>
+      <CoopNavList>
+        <CoopNavRow
+          title="Model & chat"
+          subtitle={prefs.llmEnabled ? `${prefs.model.replace(/-\d{8}$/, "").replace(/-/g, " ")} · Chat on` : "Chat off"}
+          onClick={() => onNavigate("model")}
+        />
+        <CoopNavRow
+          title="Prompt library"
+          subtitle={pinned === 0 ? "No quick prompts pinned" : pinned === 1 ? "1 quick prompt pinned" : `${pinned} quick prompts pinned`}
+          onClick={() => onNavigate("prompts")}
         />
       </CoopNavList>
     </>
@@ -569,55 +653,39 @@ function GitHubDetail({
   onTestCodeHost,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   const cloudPath = !prefs.devMode;
   const canInstall = prefs.canInstallIntegrations === true;
+  const connected = codeHostConfigured(prefs, "github");
   return (
     <SettingsSection>
       {cloudPath ? (
-        <>
-          <p className="coop-settings-card-desc">
-            Connect repositories through the CoopAI GitHub App. CoopAI stores installation credentials on the server —
-            no personal access token is saved in VS Code.
-          </p>
-          {!canInstall ? (
-            <p className="coop-settings-card-desc">
-              GitHub is connected by your organization admin. Ask IT to install the CoopAI GitHub App if repositories
-              are unavailable.
-            </p>
-          ) : null}
-          <div className="coop-health-integration">
-            <div>
-              <div className="coop-health-integration-name">GitHub App</div>
-              <div className="coop-health-integration-meta">
-                {prefs.hasGitHubAppInstalled ? "Installed for your organization" : "Not installed"}
-              </div>
-            </div>
-            <span
-              className={`coop-health-status ${prefs.hasGitHubAppInstalled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
-            >
-              {prefs.hasGitHubAppInstalled ? "Connected" : "Required"}
-            </span>
-          </div>
-          <div className="coop-settings-actions">
-            {canInstall ? (
-              <button type="button" className="coop-settings-action-btn" onClick={onInstallGithubApp}>
-                {prefs.hasGitHubAppInstalled ? "Manage GitHub App" : "Install GitHub App"}
-              </button>
-            ) : null}
-            <button type="button" className="coop-settings-action-btn" onClick={onRefreshGithubInstallation}>
-              Refresh status
-            </button>
-            <TestButton
-              testKey="github"
-              label="Test GitHub"
-              pendingTest={pendingTest}
-              testResult={testResult}
-              onClick={() => onTestCodeHost("github")}
-            />
-          </div>
-        </>
+        <ConnectionCard
+          name="GitHub"
+          meta={codeHostConnectionMeta(prefs, "github")}
+          connected={connected}
+          required={!connected}
+          description="Connect repositories through the Coop GitHub App. Installation credentials are stored on the server — no personal access token in VS Code."
+          adminNotice={
+            !canInstall
+              ? "GitHub is connected by your organization admin. Ask IT to connect GitHub if repositories are unavailable."
+              : undefined
+          }
+          connectLabel={connected ? "Manage GitHub connection" : "Connect GitHub"}
+          onConnect={canInstall ? onInstallGithubApp : undefined}
+          onRefresh={onRefreshGithubInstallation}
+          refreshKey="github"
+          pendingRefresh={pendingRefresh}
+          refreshResult={refreshResult}
+          onTest={onTestCodeHost ? () => onTestCodeHost("github") : undefined}
+          testKey="github"
+          testLabel="Test GitHub"
+          pendingTest={pendingTest}
+          testResult={testResult}
+        />
       ) : null}
       {prefs.devMode ? (
         <>
@@ -676,46 +744,33 @@ function GitLabDetail({
   onTestCodeHost,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   const cloudPath = !prefs.devMode;
+  const connected = codeHostConfigured(prefs, "gitlab");
   return (
     <SettingsSection>
       {cloudPath ? (
-        <>
-          <p className="coop-settings-card-desc">
-            Connect repositories through the CoopAI GitLab OAuth App. CoopAI stores installation
-            credentials on the server — no personal access token is saved in VS Code.
-          </p>
-          <div className="coop-health-integration">
-            <div>
-              <div className="coop-health-integration-name">GitLab OAuth App</div>
-              <div className="coop-health-integration-meta">
-                {prefs.hasGitLabAppInstalled ? "Authorized for your organization" : "Not authorized"}
-              </div>
-            </div>
-            <span
-              className={`coop-health-status ${prefs.hasGitLabAppInstalled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
-            >
-              {prefs.hasGitLabAppInstalled ? "Connected" : "Required"}
-            </span>
-          </div>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onInstallGitlabApp}>
-              {prefs.hasGitLabAppInstalled ? "Manage GitLab authorization" : "Authorize GitLab"}
-            </button>
-            <button type="button" className="coop-settings-action-btn" onClick={onRefreshGitlabInstallation}>
-              Refresh status
-            </button>
-            <TestButton
-              testKey="gitlab"
-              label="Test GitLab"
-              pendingTest={pendingTest}
-              testResult={testResult}
-              onClick={() => onTestCodeHost("gitlab")}
-            />
-          </div>
-        </>
+        <ConnectionCard
+          name="GitLab"
+          meta={codeHostConnectionMeta(prefs, "gitlab")}
+          connected={connected}
+          required={!connected}
+          description="Connect repositories through the Coop GitLab OAuth app. Credentials are stored on the server — no personal access token in VS Code."
+          connectLabel={connected ? "Manage GitLab connection" : "Connect GitLab"}
+          onConnect={onInstallGitlabApp}
+          onRefresh={onRefreshGitlabInstallation}
+          refreshKey="gitlab"
+          pendingRefresh={pendingRefresh}
+          refreshResult={refreshResult}
+          onTest={() => onTestCodeHost("gitlab")}
+          testKey="gitlab"
+          testLabel="Test GitLab"
+          pendingTest={pendingTest}
+          testResult={testResult}
+        />
       ) : null}
       {prefs.devMode ? (
         <>
@@ -784,46 +839,33 @@ function BitbucketDetail({
   onTestCodeHost,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   const cloudPath = !prefs.devMode;
+  const connected = codeHostConfigured(prefs, "bitbucket");
   return (
     <SettingsSection>
       {cloudPath ? (
-        <>
-          <p className="coop-settings-card-desc">
-            Connect repositories through the CoopAI Bitbucket OAuth App. CoopAI stores installation
-            credentials on the server — no app password is saved in VS Code.
-          </p>
-          <div className="coop-health-integration">
-            <div>
-              <div className="coop-health-integration-name">Bitbucket OAuth App</div>
-              <div className="coop-health-integration-meta">
-                {prefs.hasBitbucketAppInstalled ? "Authorized for your organization" : "Not authorized"}
-              </div>
-            </div>
-            <span
-              className={`coop-health-status ${prefs.hasBitbucketAppInstalled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
-            >
-              {prefs.hasBitbucketAppInstalled ? "Connected" : "Required"}
-            </span>
-          </div>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onInstallBitbucketApp}>
-              {prefs.hasBitbucketAppInstalled ? "Manage Bitbucket authorization" : "Authorize Bitbucket"}
-            </button>
-            <button type="button" className="coop-settings-action-btn" onClick={onRefreshBitbucketInstallation}>
-              Refresh status
-            </button>
-            <TestButton
-              testKey="bitbucket"
-              label="Test Bitbucket"
-              pendingTest={pendingTest}
-              testResult={testResult}
-              onClick={() => onTestCodeHost("bitbucket")}
-            />
-          </div>
-        </>
+        <ConnectionCard
+          name="Bitbucket"
+          meta={codeHostConnectionMeta(prefs, "bitbucket")}
+          connected={connected}
+          required={!connected}
+          description="Connect repositories through the Coop Bitbucket OAuth app. Credentials are stored on the server — no app password in VS Code."
+          connectLabel={connected ? "Manage Bitbucket connection" : "Connect Bitbucket"}
+          onConnect={onInstallBitbucketApp}
+          onRefresh={onRefreshBitbucketInstallation}
+          refreshKey="bitbucket"
+          pendingRefresh={pendingRefresh}
+          refreshResult={refreshResult}
+          onTest={() => onTestCodeHost("bitbucket")}
+          testKey="bitbucket"
+          testLabel="Test Bitbucket"
+          pendingTest={pendingTest}
+          testResult={testResult}
+        />
       ) : null}
       {prefs.devMode ? (
         <>
@@ -882,54 +924,6 @@ function BitbucketDetail({
   );
 }
 
-function IntegrationsListDetail({ prefs, onNavigate }: SettingsDetailProps): React.ReactElement {
-  return (
-    <>
-      <p className="coop-settings-card-desc px-0.5">
-        Optional integrations for chat and Trace Decision. Tokens are stored in VS Code SecretStorage only.
-      </p>
-      <CoopNavList>
-        <CoopNavRow
-          title="Slack"
-          subtitle={integrationConfigured(prefs, "slack") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "slack")}
-          onClick={() => onNavigate("integration-slack")}
-        />
-        <CoopNavRow
-          title="Jira"
-          subtitle={integrationConfigured(prefs, "jira") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "jira")}
-          onClick={() => onNavigate("integration-jira")}
-        />
-        <CoopNavRow
-          title="Microsoft Teams"
-          subtitle={integrationConfigured(prefs, "teams") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "teams")}
-          onClick={() => onNavigate("integration-teams")}
-        />
-        <CoopNavRow
-          title="Confluence"
-          subtitle={integrationConfigured(prefs, "confluence") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "confluence")}
-          onClick={() => onNavigate("integration-confluence")}
-        />
-        <CoopNavRow
-          title="Notion"
-          subtitle={integrationConfigured(prefs, "notion") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "notion")}
-          onClick={() => onNavigate("integration-notion")}
-        />
-        <CoopNavRow
-          title="Google Docs"
-          subtitle={integrationConfigured(prefs, "google-docs") ? "Configured" : "Not configured"}
-          configured={integrationConfigured(prefs, "google-docs")}
-          onClick={() => onNavigate("integration-google-docs")}
-        />
-      </CoopNavList>
-    </>
-  );
-}
-
 function SlackDetail({
   prefs,
   slackTokenDraft,
@@ -937,43 +931,68 @@ function SlackDetail({
   onSaveSlackToken,
   onClearSlackToken,
   onTestIntegration,
+  onInstallSlackApp,
+  onRefreshSlackInstallation,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Slack token {prefs.hasSlackToken ? "(configured)" : ""}</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasSlackToken}
-          value={slackTokenDraft}
-          placeholder="xoxp-… (channels:read, chat:read, users:read)"
-          onChange={onSlackTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveSlackToken}>
-          Save Slack token
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearSlackToken}
-          disabled={!prefs.hasSlackToken}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="slack"
-          label="Test Slack"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("slack")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "slack"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="slack"
+        prefs={prefs}
+        description="Search Slack threads and check teammate availability for Find Owner and Trace Decision."
+        onConnect={onInstallSlackApp}
+        onRefresh={onRefreshSlackInstallation}
+        onTest={() => onTestIntegration("slack")}
+        testKey="slack"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Slack token {prefs.hasSlackToken ? "(configured)" : ""}</span>
+              <ConfiguredSecretInput
+                configured={prefs.hasSlackToken}
+                value={slackTokenDraft}
+                placeholder="xoxp-… (channels:read, chat:read, users:read)"
+                onChange={onSlackTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveSlackToken}>
+                Save Slack token
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearSlackToken}
+                disabled={!prefs.hasSlackToken}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="slack"
+                label="Test Slack"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("slack")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "slack"} />
+            </div>
+            <p className="coop-settings-card-desc coop-prompt-modal-muted">
+              Internal use only (`coopAI.devMode`). Production users connect Slack in the browser above.
+            </p>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -988,65 +1007,97 @@ function JiraDetail({
   onSaveJiraCredentials,
   onClearJiraCredentials,
   onTestIntegration,
+  onInstallAtlassianApp,
+  onRefreshAtlassianInstallation,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Jira site URL</span>
-        <SettingsUrlField
-          value={prefs.jiraBaseUrl}
-          placeholder="https://your-company.atlassian.net"
-          onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
-        />
-      </label>
-
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">
-          Jira account email {prefs.hasJiraCredentials ? "(configured)" : ""}
-        </span>
-        <input
-          type="email"
-          value={jiraEmailDraft}
-          placeholder="you@company.com"
-          onChange={(e) => onJiraEmailDraftChange(e.target.value)}
-          className="coop-settings-field"
-        />
-      </label>
-
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Jira API token</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasJiraCredentials}
-          value={jiraTokenDraft}
-          placeholder="Atlassian API token"
-          onChange={onJiraTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveJiraCredentials}>
-          Save Jira credentials
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearJiraCredentials}
-          disabled={!prefs.hasJiraCredentials}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="jira"
-          label="Test Jira"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("jira")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "jira"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="jira"
+        prefs={prefs}
+        description="Link Jira tickets to Trace Decision and surface repo-related work in chat."
+        onConnect={onInstallAtlassianApp}
+        onRefresh={() => onRefreshAtlassianInstallation("jira")}
+        onTest={() => onTestIntegration("jira")}
+        testKey="jira"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        extraFields={
+          !prefs.devMode ? (
+            <label className="coop-settings-field-row mt-3">
+              <span className="coop-settings-label">Jira site URL</span>
+              <SettingsUrlField
+                value={prefs.jiraBaseUrl}
+                placeholder="https://your-company.atlassian.net"
+                onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
+              />
+            </label>
+          ) : undefined
+        }
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Jira site URL</span>
+              <SettingsUrlField
+                value={prefs.jiraBaseUrl}
+                placeholder="https://your-company.atlassian.net"
+                onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
+              />
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Jira account email {prefs.hasJiraCredentials ? "(configured)" : ""}
+              </span>
+              <input
+                type="email"
+                value={jiraEmailDraft}
+                placeholder="you@company.com"
+                onChange={(e) => onJiraEmailDraftChange(e.target.value)}
+                className="coop-settings-field"
+              />
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Jira API token</span>
+              <ConfiguredSecretInput
+                configured={prefs.hasJiraCredentials}
+                value={jiraTokenDraft}
+                placeholder="Atlassian API token"
+                onChange={onJiraTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveJiraCredentials}>
+                Save Jira credentials
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearJiraCredentials}
+                disabled={!prefs.hasJiraCredentials}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="jira"
+                label="Test Jira"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("jira")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "jira"} />
+            </div>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -1058,45 +1109,61 @@ function TeamsDetail({
   onSaveTeamsToken,
   onClearTeamsToken,
   onTestIntegration,
+  onConnectIntegrationNotice,
   savedFlashKey,
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">
-          Microsoft Teams (Graph) token {prefs.hasTeamsToken ? "(configured)" : ""}
-        </span>
-        <ConfiguredSecretInput
-          configured={prefs.hasTeamsToken}
-          value={teamsTokenDraft}
-          placeholder="OAuth access token for Microsoft Graph"
-          onChange={onTeamsTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveTeamsToken}>
-          Save Teams token
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearTeamsToken}
-          disabled={!prefs.hasTeamsToken}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="teams"
-          label="Test Teams"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("teams")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "teams"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="teams"
+        prefs={prefs}
+        description="Search Microsoft Teams channels and messages for Trace Decision context."
+        onConnectNotice={() => onConnectIntegrationNotice?.("teams")}
+        onTest={() => onTestIntegration("teams")}
+        testKey="teams"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Microsoft Teams (Graph) token {prefs.hasTeamsToken ? "(configured)" : ""}
+              </span>
+              <ConfiguredSecretInput
+                configured={prefs.hasTeamsToken}
+                value={teamsTokenDraft}
+                placeholder="OAuth access token for Microsoft Graph"
+                onChange={onTeamsTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveTeamsToken}>
+                Save Teams token
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearTeamsToken}
+                disabled={!prefs.hasTeamsToken}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="teams"
+                label="Test Teams"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("teams")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "teams"} />
+            </div>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -1112,66 +1179,100 @@ function ConfluenceDetail({
   onClearConfluenceCredentials,
   onCopyJiraToConfluence,
   onTestIntegration,
+  onInstallAtlassianApp,
+  onRefreshAtlassianInstallation,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Confluence site URL</span>
-        <SettingsUrlField
-          value={prefs.confluenceBaseUrl}
-          placeholder="https://your-company.atlassian.net/wiki"
-          onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
-        />
-      </label>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">
-          Confluence account email {prefs.hasConfluenceCredentials ? "(configured)" : ""}
-        </span>
-        <input
-          type="email"
-          value={confluenceEmailDraft}
-          placeholder="you@company.com"
-          onChange={(e) => onConfluenceEmailDraftChange(e.target.value)}
-          className="coop-settings-field"
-        />
-      </label>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Confluence API token</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasConfluenceCredentials}
-          value={confluenceTokenDraft}
-          placeholder="Atlassian API token"
-          onChange={onConfluenceTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onCopyJiraToConfluence}>
-          Use Jira credentials
-        </button>
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveConfluenceCredentials}>
-          Save Confluence credentials
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearConfluenceCredentials}
-          disabled={!prefs.hasConfluenceCredentials}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="confluence"
-          label="Test Confluence"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("confluence")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "confluence"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="confluence"
+        prefs={prefs}
+        description="Search Confluence pages for Knowledge Gaps and documentation context in chat."
+        onConnect={onInstallAtlassianApp}
+        onRefresh={() => onRefreshAtlassianInstallation("confluence")}
+        onTest={() => onTestIntegration("confluence")}
+        testKey="confluence"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        extraFields={
+          !prefs.devMode ? (
+            <label className="coop-settings-field-row mt-3">
+              <span className="coop-settings-label">Confluence site URL</span>
+              <SettingsUrlField
+                value={prefs.confluenceBaseUrl}
+                placeholder="https://your-company.atlassian.net/wiki"
+                onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
+              />
+            </label>
+          ) : undefined
+        }
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Confluence site URL</span>
+              <SettingsUrlField
+                value={prefs.confluenceBaseUrl}
+                placeholder="https://your-company.atlassian.net/wiki"
+                onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
+              />
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Confluence account email {prefs.hasConfluenceCredentials ? "(configured)" : ""}
+              </span>
+              <input
+                type="email"
+                value={confluenceEmailDraft}
+                placeholder="you@company.com"
+                onChange={(e) => onConfluenceEmailDraftChange(e.target.value)}
+                className="coop-settings-field"
+              />
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Confluence API token</span>
+              <ConfiguredSecretInput
+                configured={prefs.hasConfluenceCredentials}
+                value={confluenceTokenDraft}
+                placeholder="Atlassian API token"
+                onChange={onConfluenceTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onCopyJiraToConfluence}>
+                Use Jira credentials
+              </button>
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveConfluenceCredentials}>
+                Save Confluence credentials
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearConfluenceCredentials}
+                disabled={!prefs.hasConfluenceCredentials}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="confluence"
+                label="Test Confluence"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("confluence")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "confluence"} />
+            </div>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -1183,43 +1284,61 @@ function NotionDetail({
   onSaveNotionToken,
   onClearNotionToken,
   onTestIntegration,
+  onConnectIntegrationNotice,
   savedFlashKey,
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Notion integration token {prefs.hasNotionToken ? "(configured)" : ""}</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasNotionToken}
-          value={notionTokenDraft}
-          placeholder="secret_…"
-          onChange={onNotionTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveNotionToken}>
-          Save Notion token
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearNotionToken}
-          disabled={!prefs.hasNotionToken}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="notion"
-          label="Test Notion"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("notion")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "notion"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="notion"
+        prefs={prefs}
+        description="Search Notion pages for documentation context in chat and Knowledge Gaps."
+        onConnectNotice={() => onConnectIntegrationNotice?.("notion")}
+        onTest={() => onTestIntegration("notion")}
+        testKey="notion"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Notion integration token {prefs.hasNotionToken ? "(configured)" : ""}
+              </span>
+              <ConfiguredSecretInput
+                configured={prefs.hasNotionToken}
+                value={notionTokenDraft}
+                placeholder="secret_…"
+                onChange={onNotionTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveNotionToken}>
+                Save Notion token
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearNotionToken}
+                disabled={!prefs.hasNotionToken}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="notion"
+                label="Test Notion"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("notion")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "notion"} />
+            </div>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -1231,45 +1350,61 @@ function GoogleDocsDetail({
   onSaveGoogleDocsToken,
   onClearGoogleDocsToken,
   onTestIntegration,
+  onConnectIntegrationNotice,
   savedFlashKey,
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">
-          Google Docs (Drive) access token {prefs.hasGoogleDocsToken ? "(configured)" : ""}
-        </span>
-        <ConfiguredSecretInput
-          configured={prefs.hasGoogleDocsToken}
-          value={googleDocsTokenDraft}
-          placeholder="OAuth access token with Drive read scope"
-          onChange={onGoogleDocsTokenDraftChange}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveGoogleDocsToken}>
-          Save Google Docs token
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={onClearGoogleDocsToken}
-          disabled={!prefs.hasGoogleDocsToken}
-        >
-          Clear
-        </button>
-        <TestButton
-          testKey="google-docs"
-          label="Test Google Docs"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={() => onTestIntegration("google-docs")}
-        />
-        <SaveFlashLabel show={savedFlashKey === "google-docs"} />
-      </div>
+      <IntegrationConnectionShell
+        provider="google-docs"
+        prefs={prefs}
+        description="Search Google Docs for documentation context in chat."
+        onConnectNotice={() => onConnectIntegrationNotice?.("google-docs")}
+        onTest={() => onTestIntegration("google-docs")}
+        testKey="google-docs"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Google Docs (Drive) access token {prefs.hasGoogleDocsToken ? "(configured)" : ""}
+              </span>
+              <ConfiguredSecretInput
+                configured={prefs.hasGoogleDocsToken}
+                value={googleDocsTokenDraft}
+                placeholder="OAuth access token with Drive read scope"
+                onChange={onGoogleDocsTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveGoogleDocsToken}>
+                Save Google Docs token
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearGoogleDocsToken}
+                disabled={!prefs.hasGoogleDocsToken}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="google-docs"
+                label="Test Google Docs"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("google-docs")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "google-docs"} />
+            </div>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }

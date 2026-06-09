@@ -7,6 +7,7 @@ import { createQueueBackend } from "./backends/createBackend";
 import type { JobRateLimiter } from "./rateLimit";
 import { JobRateLimiter as RateLimiter } from "./rateLimit";
 import { ResultStorage } from "./resultStorage";
+import { reuseTtlForJobType } from "./jobReuse";
 import {
   DEFAULT_ESTIMATED_DURATION_MS,
   type CreateJobInput,
@@ -61,8 +62,36 @@ export class JobQueue extends EventEmitter {
 
   public async createJob(input: CreateJobInput): Promise<JobSubmitResponse> {
     const userId = input.userId ?? "anonymous";
+    const reuseTtlMs = reuseTtlForJobType(input.type);
+    if (reuseTtlMs && this.backend.findReusableCompletedJob) {
+      const cached = await this.backend.findReusableCompletedJob(userId, input.type, input.params, reuseTtlMs);
+      if (cached) {
+        return {
+          jobId: cached.id,
+          status: cached.status,
+          estimatedWaitTimeMs: 0,
+          estimatedWaitTime: formatWaitTime(0),
+          cached: true,
+          completedAt: cached.completedAt?.toISOString()
+        };
+      }
+    }
+
     const check = await this.rateLimiter.canSubmitJob(userId, input.type);
     if (!check.allowed) {
+      if (reuseTtlMs && this.backend.findReusableCompletedJob) {
+        const cached = await this.backend.findReusableCompletedJob(userId, input.type, input.params, reuseTtlMs);
+        if (cached) {
+          return {
+            jobId: cached.id,
+            status: cached.status,
+            estimatedWaitTimeMs: 0,
+            estimatedWaitTime: formatWaitTime(0),
+            cached: true,
+            completedAt: cached.completedAt?.toISOString()
+          };
+        }
+      }
       throw new JobRateLimitError(check.reason, check.retryAfterMs);
     }
 
@@ -83,7 +112,11 @@ export class JobQueue extends EventEmitter {
     };
 
     await this.backend.save(job);
-    this.rateLimiter.recordSubmission(userId, input.type);
+    if (this.backend.recordJobSubmission) {
+      await this.backend.recordJobSubmission(userId, input.type);
+    } else {
+      this.rateLimiter.recordSubmission(userId, input.type);
+    }
     this.updateWaitEstimate();
     const estimatedWaitTimeMs = this.estimateWaitForJob(job);
     this.emit("job:enqueued", job);

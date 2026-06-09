@@ -55,9 +55,33 @@ class DemoPage:
 def demo_pages() -> List[DemoPage]:
     return [
         DemoPage(
+            slug="github-app-api",
+            title="GitHub App API — server routes",
+            repos=["Coop-AI"],
+            sections=[
+                (
+                    "Overview",
+                    "src/server/githubAppApi.ts registers HTTP handlers for GitHub App installation, "
+                    "installation access tokens, and OAuth callback flows used by the Coop backend.",
+                ),
+                (
+                    "Related code",
+                    "githubAppService.ts — GitHub App JWT and installation token exchange.\n"
+                    "githubAppConfig.ts — GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY resolution.\n"
+                    "githubOAuthService.ts — GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET.",
+                ),
+                (
+                    "Operations",
+                    "See docs/webhook-backend.md for local docker-compose. "
+                    "Org-level Connect in Settings uses these routes when coopAI.devMode is false.",
+                ),
+            ],
+            labels=["demo", "github", "api"],
+        ),
+        DemoPage(
             slug="architecture",
             title="Coop AI — Architecture Overview",
-            repos=["coop-ai-core"],
+            repos=["Coop-AI", "coop-ai-core"],
             sections=[
                 (
                     "Summary",
@@ -69,7 +93,8 @@ def demo_pages() -> List[DemoPage]:
                     "Key components",
                     "Extension host (TypeScript): context gathering, integrations, chat session.\n"
                     "Webview (React): chat UI, settings, quick actions.\n"
-                    "Coop backend (optional): LLM routing, webhooks, org API when not fully local.",
+                    "Coop backend (optional): LLM routing, webhooks, org API when not fully local.\n"
+                    "Server routes: src/server/githubAppApi.ts for GitHub App and OAuth callbacks.",
                 ),
                 (
                     "Related work",
@@ -82,7 +107,7 @@ def demo_pages() -> List[DemoPage]:
         DemoPage(
             slug="backend-extraction",
             title="ADR: Backend service extraction (COOP-101)",
-            repos=["coop-ai-core", "coop-backend"],
+            repos=["Coop-AI", "coop-ai-core", "coop-backend"],
             sections=[
                 (
                     "Context",
@@ -105,7 +130,7 @@ def demo_pages() -> List[DemoPage]:
         DemoPage(
             slug="onboarding",
             title="Developer onboarding — VS Code extension",
-            repos=["coop-ai-core"],
+            repos=["Coop-AI", "coop-ai-core"],
             sections=[
                 (
                     "Prerequisites",
@@ -127,7 +152,7 @@ def demo_pages() -> List[DemoPage]:
         DemoPage(
             slug="integrations",
             title="Integrations — Slack, Jira, Confluence",
-            repos=["coop-ai-core"],
+            repos=["Coop-AI", "coop-ai-core"],
             sections=[
                 (
                     "Slack",
@@ -171,7 +196,7 @@ def demo_pages() -> List[DemoPage]:
         DemoPage(
             slug="webview-adr",
             title="ADR: Webview vs native sidebar (COOP-55)",
-            repos=["coop-ai-core"],
+            repos=["Coop-AI", "coop-ai-core"],
             sections=[
                 (
                     "Problem",
@@ -266,12 +291,30 @@ class ConfluenceClient:
         )
 
     def find_page_by_title(self, space_key: str, title: str) -> Optional[str]:
-        cql = f'space="{space_key}" AND type=page AND title="{title.replace(chr(34), chr(92)+chr(34))}"'
-        result = self._request("GET", "/content/search", query={"cql": cql, "limit": "1"})
+        # Title query is more reliable than CQL for punctuation (em dashes, etc.).
+        result = self._request(
+            "GET",
+            "/content",
+            query={
+                "spaceKey": space_key,
+                "title": title,
+                "type": "page",
+                "limit": "1",
+            },
+        )
         results = result.get("results") or []
-        if not results:
+        if results:
+            page_id = results[0].get("id")
+            if page_id:
+                return page_id
+
+        escaped = title.replace('"', '\\"')
+        cql = f'space="{space_key}" AND type=page AND title="{escaped}"'
+        search = self._request("GET", "/content/search", query={"cql": cql, "limit": "1"})
+        search_results = search.get("results") or []
+        if not search_results:
             return None
-        return results[0].get("id")
+        return search_results[0].get("id")
 
     def create_page(
         self,
@@ -500,7 +543,22 @@ def seed_page(client: ConfluenceClient, cfg: Config, page: DemoPage, parent_id: 
         time.sleep(cfg.delay_sec)
         return existing_id
 
-    page_id = client.create_page(cfg.space_key, page.title, storage, parent_id)
+    try:
+        page_id = client.create_page(cfg.space_key, page.title, storage, parent_id)
+    except RuntimeError as error:
+        duplicate = "already exists" in str(error).lower()
+        if not (duplicate and cfg.update_existing):
+            raise
+        recovered_id = client.find_page_by_title(cfg.space_key, page.title)
+        if not recovered_id:
+            raise
+        current = client.get_page(recovered_id)
+        version = current.get("version", {}).get("number", 1)
+        client.update_page(recovered_id, page.title, storage, version)
+        print(f"  updated {page.slug}: {page.title} (recovered from duplicate title)")
+        time.sleep(cfg.delay_sec)
+        return recovered_id
+
     print(f"  created {page.slug}: {page.title}")
     time.sleep(cfg.delay_sec)
     return page_id

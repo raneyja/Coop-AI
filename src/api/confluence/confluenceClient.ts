@@ -3,8 +3,10 @@ import { confluenceSiteUrlError, isPlaceholderAtlassianSite } from "./resolveCon
 
 export type ConfluenceClientOptions = {
   baseUrl: string;
-  email: string;
-  apiToken: string;
+  email?: string;
+  apiToken?: string;
+  oauthAccessToken?: string;
+  cloudId?: string;
 };
 
 export type ConfluencePage = {
@@ -27,7 +29,7 @@ export class ConfluenceApiError extends Error {
 
 const PLATFORM_ACCESS_DENIED = "cannot access Confluence";
 
-function formatConfluenceError(status: number, body: string): string {
+function formatConfluenceError(status: number, body: string, oauthMode = false): string {
   if (status === 403 && body.includes(PLATFORM_ACCESS_DENIED)) {
     return (
       "Confluence returned 403: your account or API token cannot access Confluence on this site. " +
@@ -43,6 +45,15 @@ function formatConfluenceError(status: number, body: string): string {
     );
   }
   if (status === 401) {
+    if (oauthMode && body.includes("scope does not match")) {
+      return (
+        "Confluence OAuth scope mismatch. In the Atlassian developer console (CoopAI Local v2), add Classic scopes " +
+        "search:confluence and read:confluence-space.summary under Confluence API, then Manage Confluence to re-authorize."
+      );
+    }
+    if (oauthMode) {
+      return "Confluence OAuth authentication failed. Click Manage Confluence to re-authorize your organization.";
+    }
     return "Confluence authentication failed. Verify your account email and API token, then save credentials again.";
   }
   return body || `Confluence request failed (${status}).`;
@@ -67,13 +78,25 @@ export class ConfluenceClient {
   private readonly authHeader: string;
   private apiBase: string;
   private readonly siteOrigin: string;
+  private readonly oauthMode: boolean;
   private platformApiBase?: string;
 
   public constructor(private readonly options: ConfluenceClientOptions) {
-    this.siteOrigin = wikiSiteOrigin(options.baseUrl);
-    this.apiBase = wikiApiBase(options.baseUrl);
-    const encoded = Buffer.from(`${options.email}:${options.apiToken}`).toString("base64");
-    this.authHeader = `Basic ${encoded}`;
+    if (options.oauthAccessToken && options.cloudId) {
+      this.oauthMode = true;
+      this.siteOrigin = wikiSiteOrigin(options.baseUrl);
+      this.apiBase = `https://api.atlassian.com/ex/confluence/${options.cloudId}/wiki/rest/api`;
+      this.authHeader = `Bearer ${options.oauthAccessToken}`;
+    } else {
+      this.oauthMode = false;
+      if (!options.email || !options.apiToken) {
+        throw new Error("Confluence email and API token are required.");
+      }
+      this.siteOrigin = wikiSiteOrigin(options.baseUrl);
+      this.apiBase = wikiApiBase(options.baseUrl);
+      const encoded = Buffer.from(`${options.email}:${options.apiToken}`).toString("base64");
+      this.authHeader = `Basic ${encoded}`;
+    }
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
@@ -82,7 +105,18 @@ export class ConfluenceClient {
       return { ok: false, message: siteError };
     }
     try {
-      await this.request<{ displayName?: string }>("/user/current");
+      if (this.oauthMode) {
+        // search:confluence for CQL search; read:confluence-space.summary for space listing.
+        try {
+          await this.request<{ results?: unknown[] }>("/content/search", {
+            query: { cql: "type=page", limit: "1" }
+          });
+        } catch {
+          await this.request<{ results?: unknown[] }>("/space", { query: { limit: "1" } });
+        }
+      } else {
+        await this.request<{ displayName?: string }>("/user/current");
+      }
       return { ok: true, message: "Confluence connection successful." };
     } catch (error) {
       return {
@@ -99,7 +133,7 @@ export class ConfluenceClient {
         title?: string;
         excerpt?: string;
         history?: { lastUpdated?: { when?: string } };
-        _links?: { webui?: string; base?: string };
+        _links?: { webui?: string; base?: string; self?: string };
       }>;
     }>("/content/search", {
       query: {
@@ -114,8 +148,24 @@ export class ConfluenceClient {
       title: page.title ?? "Untitled",
       excerpt: page.excerpt,
       updated: page.history?.lastUpdated?.when ?? new Date(0).toISOString(),
-      htmlUrl: page._links?.base && page._links?.webui ? `${page._links.base}${page._links.webui}` : ""
+      htmlUrl: this.buildPageHtmlUrl(page.id, page._links)
     }));
+  }
+
+  private buildPageHtmlUrl(
+    pageId: string,
+    links?: { webui?: string; base?: string; self?: string }
+  ): string {
+    const webui = links?.webui?.trim();
+    const base = links?.base?.replace(/\/+$/, "");
+    if (base && webui) {
+      return `${base}${webui.startsWith("/") ? webui : `/${webui}`}`;
+    }
+    if (webui) {
+      const wikiPath = webui.startsWith("/wiki") ? webui : `/wiki${webui.startsWith("/") ? webui : `/${webui}`}`;
+      return `${this.siteOrigin}${wikiPath}`;
+    }
+    return `${this.siteOrigin}/wiki/pages/${pageId}`;
   }
 
   private async resolvePlatformApiBase(): Promise<string> {
@@ -152,7 +202,8 @@ export class ConfluenceClient {
     if (shouldRetryOnPlatformApi(first.status, first.body)) {
       if (isPlaceholderAtlassianSite(`${this.siteOrigin}/wiki`)) {
         throw new ConfluenceApiError(
-          confluenceSiteUrlError(`${this.siteOrigin}/wiki`) ?? formatConfluenceError(first.status, first.body),
+          confluenceSiteUrlError(`${this.siteOrigin}/wiki`) ??
+            formatConfluenceError(first.status, first.body, this.oauthMode),
           first.status
         );
       }
@@ -162,10 +213,16 @@ export class ConfluenceClient {
         this.apiBase = platformBase;
         return second.data;
       }
-      throw new ConfluenceApiError(formatConfluenceError(second.status, second.body), second.status);
+      throw new ConfluenceApiError(
+        formatConfluenceError(second.status, second.body, this.oauthMode),
+        second.status
+      );
     }
 
-    throw new ConfluenceApiError(formatConfluenceError(first.status, first.body), first.status);
+    throw new ConfluenceApiError(
+      formatConfluenceError(first.status, first.body, this.oauthMode),
+      first.status
+    );
   }
 
   private async requestOnce<T>(

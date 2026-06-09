@@ -6,6 +6,7 @@ import { CoopNotice } from "./components/CoopNotice";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatStream, ChatMessage, type ChatInlineArtifact } from "./components/ChatStream";
 import { ChatProse } from "./components/ChatProse";
+import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
@@ -66,6 +67,15 @@ type InboundMessage =
         error?: string;
         stale?: boolean;
         provider?: "github" | "gitlab" | "bitbucket";
+        loading?: boolean;
+      };
+    }
+  | {
+      type: "repo:search-results";
+      payload: {
+        query: string;
+        items: RemoteTreeNode[];
+        error?: string;
         loading?: boolean;
       };
     }
@@ -200,6 +210,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     provider?: "github" | "gitlab" | "bitbucket";
     loading?: boolean;
   }>({ path: "", items: [], scope: "files" });
+  const [searchState, setSearchState] = useState<{
+    query: string;
+    items: RemoteTreeNode[];
+    error?: string;
+    loading?: boolean;
+  }>({ query: "", items: [] });
   const [intentFeedback, setIntentFeedback] = useState<IntentFeedbackState | undefined>();
   const [jobProgress, setJobProgress] = useState<JobProgressState | undefined>();
   const [commandConfirm, setCommandConfirm] = useState<{
@@ -263,15 +279,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const launchIntroDone = chatHistorySynced && launchIntro.phase === "done";
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
-  const renderBody = useCallback(
-    (content: string) => [
-      <ChatProse
-        key="chat-prose"
-        content={content}
-        onOpenFile={(path, line) => post({ type: "repo:open-file", payload: { path, line } })}
-      />
-    ],
+  const handleOpenFile = useCallback(
+    (path: string, line?: number) => {
+      post({ type: "repo:open-file", payload: { path, line, focus: true } });
+    },
     [post]
+  );
+
+  const handleOpenLink = useCallback(
+    (url: string) => {
+      post({ type: "link:open", payload: { url } });
+    },
+    [post]
+  );
+
+  const renderBody = useCallback(
+    (content: string) => [<ChatProse key="chat-prose" content={content} />],
+    []
   );
 
   useEffect(() => {
@@ -294,6 +318,17 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const requestRepos = useCallback(() => {
     post({ type: "repo:list", payload: { scope: "repos" } });
   }, [post]);
+
+  const requestFileSearch = useCallback(
+    (query: string) => {
+      if (!query.trim()) {
+        setSearchState({ query: "", items: [] });
+        return;
+      }
+      post({ type: "repo:search", payload: { query } });
+    },
+    [post]
+  );
 
   useEffect(() => {
     const listener = (event: MessageEvent<InboundMessage>) => {
@@ -338,35 +373,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "chat:complete":
           setMessages((prev) => [...prev, message.payload.message]);
-          if (message.payload.message.role === "assistant") {
-            const narrative = message.payload.message.content;
-            setInlineArtifacts((current) => {
-              for (let i = current.length - 1; i >= 0; i -= 1) {
-                const artifact = current[i];
-                if (artifact.kind === "decision" && !artifact.timeline.narrative) {
-                  const next = [...current];
-                  next[i] = {
-                    ...artifact,
-                    timeline: { ...artifact.timeline, narrative }
-                  };
-                  return next;
-                }
-                if (artifact.kind === "ownership" && !artifact.report.narrative) {
-                  const next = [...current];
-                  next[i] = {
-                    ...artifact,
-                    report: { ...artifact.report, narrative }
-                  };
-                  return next;
-                }
-              }
-              return current;
-            });
-          }
+          setJobProgress((current) =>
+            current?.deliverable === "standalone" ? current : undefined
+          );
           setStreamingBuffer("");
           setIsStreaming(false);
           break;
         case "chat:error":
+          setJobProgress((current) =>
+            current?.deliverable === "standalone" ? current : undefined
+          );
           setError(message.payload.message);
           setIsStreaming(false);
           setStreamingBuffer("");
@@ -379,6 +395,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             error: message.payload.error,
             stale: message.payload.stale,
             provider: message.payload.provider,
+            loading: message.payload.loading
+          });
+          break;
+        case "repo:search-results":
+          setSearchState({
+            query: message.payload.query,
+            items: message.payload.items,
+            error: message.payload.error,
             loading: message.payload.loading
           });
           break;
@@ -431,7 +455,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setJobProgress(message.payload);
           break;
         case "job:complete":
-          setJobProgress(message.payload);
+          if (message.payload.deliverable !== "chat") {
+            setJobProgress(message.payload);
+          }
           break;
         case "chat:usage":
           setUsageLabel(
@@ -640,11 +666,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           className="coop-explorer-shell--overlay absolute bottom-full left-0 right-0 z-30 mb-2 w-full"
           context={context}
           treeState={treeState}
-          onClose={() => setIsExplorerOpen(false)}
+          searchState={searchState}
+          onClose={() => {
+            setIsExplorerOpen(false);
+            setSearchState({ query: "", items: [] });
+          }}
           onRefresh={(path) => requestTree(path)}
           onRefreshRepos={requestRepos}
           onBrowseRepos={requestRepos}
           onExpand={(path) => requestTree(path)}
+          onSearch={requestFileSearch}
           onSelectFile={(path) => post({ type: "repo:open-file", payload: { path } })}
           onSelectRepo={handleSelectRepo}
           onOpenSettings={openSettings}
@@ -701,7 +732,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onRun={(id) => post({ type: "prompts:run", payload: { id } })}
           onSeeAll={openPromptLibrary}
         />
-        {context.file ? <ActiveFileLabel filePath={context.file} /> : null}
+        {context.file ? (
+          <ActiveFileLabel
+            filePath={context.file}
+            onOpen={() => post({ type: "repo:open-file", payload: { path: context.file!, focus: true } })}
+          />
+        ) : null}
       </div>
       {composerInner}
     </>
@@ -717,6 +753,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         void handlePanelDrop(event);
       }}
     >
+      <ChatLinkProvider onOpenFile={handleOpenFile} onOpenLink={handleOpenLink}>
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
         {threadsState ? (
           <ThreadHeaderSwitcher
@@ -911,6 +948,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         />
       ) : null}
       <PanelWidthEnforcer vscode={vscode} />
+      </ChatLinkProvider>
     </div>
   );
 }
