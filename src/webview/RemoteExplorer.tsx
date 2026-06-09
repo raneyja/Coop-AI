@@ -445,17 +445,37 @@ export function RemoteExplorer({
               ) : fileSearchNodes.length === 0 ? (
                 <li className="coop-explorer-empty">No files match your search.</li>
               ) : (
-                fileSearchNodes.map((node) => (
-                  <SearchResultRow
-                    key={node.path}
-                    node={node}
-                    selectedPath={context.file}
-                    onOpenFile={(path) => {
-                      onSelectFile(path);
-                      onClose();
-                    }}
-                  />
-                ))
+                fileSearchNodes.map((node) =>
+                  node.type === "dir" ? (
+                    <li key={node.path}>
+                      <button
+                        type="button"
+                        className="coop-explorer-row"
+                        onClick={() => {
+                          onExpand(node.path);
+                          setQuery("");
+                        }}
+                      >
+                        <span className="coop-explorer-row-chevron" />
+                        <span className="coop-explorer-row-icon">
+                          <FolderIcon />
+                        </span>
+                        <span className="coop-explorer-row-name">{node.name}</span>
+                        <span className="coop-explorer-row-meta">{node.path}</span>
+                      </button>
+                    </li>
+                  ) : (
+                    <SearchResultRow
+                      key={node.path}
+                      node={node}
+                      selectedPath={context.file}
+                      onOpenFile={(path) => {
+                        onSelectFile(path);
+                        onClose();
+                      }}
+                    />
+                  )
+                )
               )
             ) : treeState.loading && filteredNodes.length === 0 ? (
               <li className="coop-explorer-empty">

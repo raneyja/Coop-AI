@@ -3,7 +3,7 @@ import type { JobQueue } from "../jobs/jobQueue";
 import { GitHubClient } from "../api/codeHosts/githubClient";
 import { GitLabClient } from "../api/codeHosts/gitlabClient";
 import { BitbucketClient } from "../api/codeHosts/bitbucketClient";
-import { buildExplorerFileSearchQuery } from "../api/codeHosts/codeHostRouter";
+import { buildExplorerFileSearchQuery } from "../api/codeHosts/explorerSearch";
 import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";

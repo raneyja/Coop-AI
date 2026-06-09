@@ -28,6 +28,7 @@ import type {
   RemoteTreeEntry,
   RepoCoordinates
 } from "./types";
+import { buildExplorerFileSearchQuery } from "./explorerSearch";
 import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates, coordinatesFromRepoId } from "./types";
 
 export type CloudCodeHostFileFetcher = (options: {
@@ -578,12 +579,3 @@ function buildCrossRepoSearchTargets(
   return targets.length > 0 ? targets : [source];
 }
 
-export function buildExplorerFileSearchQuery(query: string, provider: CodeHostProvider): string {
-  if (provider === "github") {
-    if (query.includes("/")) {
-      return `path:${query}`;
-    }
-    return `${query} in:path`;
-  }
-  return query;
-}
