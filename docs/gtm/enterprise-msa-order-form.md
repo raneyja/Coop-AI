@@ -10,9 +10,9 @@
 
 ## How this document works
 
-1. **Master Services Agreement (MSA)** — Governs the ongoing relationship.
-2. **Order Form** — Commercial terms for a specific subscription (seats, term, fees). Each Order Form incorporates this MSA.
-3. **Public Terms §8** — The public Terms state that *“Enterprise pricing will be agreed separately.”* This Order Form is that separate commercial agreement.
+1. **Master Services Agreement (MSA)** — Part A below governs the ongoing relationship.
+2. **Order Form** — Use the standalone [order-form.md](./order-form.md) for each subscription (mirrors standard enterprise SaaS order-form layout). Each Order Form incorporates this MSA.
+3. **Public Terms §8** — The public Terms state that *“Enterprise pricing will be agreed separately.”* The Order Form is that separate commercial agreement.
 
 ---
 
@@ -149,75 +149,18 @@ If an SLA exhibit is attached to the Order Form, it governs service credits. Abs
 
 # Part B — Order Form
 
-**Order Form #:** `[OF-YYYY-NNN]`  
-**Effective Date:** `[DATE]`  
-**Subscription Term:** `[12] months` (auto-renews for successive `[12]`-month periods unless either Party gives `[60]` days’ notice before renewal)
+Use the standalone **[order-form.md](./order-form.md)** for each deal. It mirrors the standard two-page enterprise order-form layout (customer block, subscription period, line-item table, terms bullets, dual signatures).
 
-### Customer information
+Quick reference — fields on every order:
 
-| Field | Value |
-|-------|-------|
-| Legal entity name | `[CUSTOMER LEGAL NAME]` |
-| Billing address | `[ADDRESS]` |
-| Primary contact | `[NAME, EMAIL]` |
-| Technical contact | `[NAME, EMAIL]` |
-| Billing contact | `[NAME, EMAIL]` |
+| Section | Fields |
+|---------|--------|
+| Customer Information | Customer, Sponsor Contact, Billing Address, AP Email, PO Required, Order Number |
+| Products and Fee Information | Start/End Date, Deployment type, URL format, Metering metric (Users), line items |
+| Terms & Conditions | PO non-modification, add-on user packages (10), Usage Limitations, auto-renewal (45 days), logo usage |
+| Signatures | Coop AI, Inc. \| Customer |
 
-### Subscription
-
-| Item | Details |
-|------|---------|
-| **Plan** | ☐ Enterprise (includes Pro features + enterprise controls) |
-| **Deployment** | ☐ Coop-hosted cloud &nbsp; ☐ Customer self-hosted |
-| **Licensed seats** | `[N]` Users (minimum commit: `[N]` seats) |
-| **Repositories** | Up to `[N]` repos under Lightning indexing (if applicable) |
-| **SSO** | ☐ SAML (Okta / Azure AD / generic) — included with Enterprise |
-| **BYOK** | ☐ Enabled |
-| **Zero-retention routing** | ☐ Enabled (default for Enterprise) |
-| **Support tier** | ☐ Priority email &nbsp; ☐ Dedicated onboarding (hours: `[N]`) |
-
-### Fees
-
-| Line item | Amount |
-|-----------|--------|
-| Enterprise platform fee (annual) | `$[AMOUNT]` |
-| Per-seat fee (`[N]` × `$[RATE]` / seat / year) | `$[AMOUNT]` |
-| **Minimum annual commit** | **`$[TOTAL]`** |
-| One-time onboarding (optional) | `$[AMOUNT]` |
-| **Total due at signing** | **`$[AMOUNT]`** |
-
-> **Note:** Pro list price is **$20/user/month** on the public pricing page. Enterprise pricing is custom per Terms §8. Typical enterprise packaging uses annual commits with volume discounts — see [pricing-and-packaging.md](./pricing-and-packaging.md).
-
-### Payment terms
-
-☐ Annual invoice, net 30 &nbsp; ☐ Quarterly invoice, net 30 &nbsp; ☐ Other: `[SPECIFY]`
-
-### Special terms
-
-`[Optional: pilot period, phased rollout, custom SLA, data residency, approved LLM providers, etc.]`
-
-### Exhibits (check all that apply)
-
-- ☐ Data Processing Addendum (`dpa-customer-addendum.md`)
-- ☐ LLM Zero-Retention Addendum (`docs/templates/dpa-zero-retention-template.md`) — per provider: `[PROVIDER NAMES]`
-- ☐ SLA exhibit
-- ☐ Security exhibit / questionnaire responses (`security-questionnaire-sig-lite.md` or `security-questionnaire-caiq.md`)
-
-### Signatures
-
-**Customer**
-
-Signature: _________________________  
-Name: `[NAME]`  
-Title: `[TITLE]`  
-Date: __________
-
-**Coop AI, Inc.**
-
-Signature: _________________________  
-Name: `[NAME]`  
-Title: `[TITLE]`  
-Date: __________
+See [pricing-and-packaging.md](./pricing-and-packaging.md) for per-seat pricing guidelines.
 
 ---
 
