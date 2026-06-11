@@ -25,9 +25,12 @@ services:
       GRAPH_CACHE_BACKEND: postgres
       JOBS_WORKERS: "0"
       NODE_ENV: production
-      COOP_REQUIRE_API_AUTH: "false"
+      # COOP_REQUIRE_API_AUTH: set in .env.backend (must be true for production deploys)
+      # Zoekt HTTP endpoint — used by lightningSearch for parallel full-text queries
+      ZOEKT_URL: http://zoekt:6070
     depends_on:
       - postgres
+      - zoekt
 
   worker:
     build: .
@@ -39,8 +42,31 @@ services:
       JOBS_BACKEND: postgres
       GRAPH_CACHE_BACKEND: postgres
       NODE_ENV: production
+      # Path on the shared volume where Zoekt index shards are written after each repo clone
+      ZOEKT_INDEX_PATH: /zoekt-indexes
+      ZOEKT_URL: http://zoekt:6070
+    volumes:
+      - coop_zoekt_indexes:/zoekt-indexes
     depends_on:
       - postgres
+      - zoekt
+
+  zoekt:
+    # Same image as api/worker — the Zoekt webserver binary is included.
+    # Serves the full-text index shards built by the worker container.
+    build: .
+    command:
+      - zoekt-webserver
+      - -index
+      - /zoekt-indexes
+      - -listen
+      - 0.0.0.0:6070
+    ports:
+      - "6070:6070"
+    volumes:
+      - coop_zoekt_indexes:/zoekt-indexes
+    restart: unless-stopped
 
 volumes:
   coop_pg_data:
+  coop_zoekt_indexes:

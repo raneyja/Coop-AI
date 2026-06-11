@@ -54,6 +54,12 @@ type SettingsPanelProps = {
   onRefreshSlackInstallation: () => void;
   onInstallAtlassianApp: () => void;
   onRefreshAtlassianInstallation: (key: "jira" | "confluence") => void;
+  onInstallNotionApp: () => void;
+  onRefreshNotionInstallation: () => void;
+  onInstallGoogleDocsApp: () => void;
+  onRefreshGoogleDocsInstallation: () => void;
+  onInstallTeamsApp: () => void;
+  onRefreshTeamsInstallation: () => void;
   jiraEmailDraft: string;
   onJiraEmailDraftChange: (value: string) => void;
   jiraTokenDraft: string;
@@ -96,7 +102,9 @@ type SettingsPanelProps = {
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
   onSaveIdentityDirectory: (directory: IdentityDirectory) => void;
-  onConnectIntegrationNotice?: (provider: IntegrationChatProvider) => void;
+  collections: import("./settings/types").SettingsCollectionSummary[];
+  collectionsError?: string;
+  onRequestCollections: () => void;
 };
 
 export function SettingsPanel({

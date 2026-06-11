@@ -16,11 +16,28 @@ export type Organization = {
   createdAt: Date;
 };
 
+export type OrgBilling = {
+  billingEmail?: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  seatCount: number;
+  billingStatus: string;
+  onboardingCompletedAt?: Date;
+};
+
 export type ApiKeyRecord = {
   id: string;
   orgId: string;
   label: string;
   createdAt: Date;
+};
+
+export type ApiKeyListItem = {
+  id: string;
+  label: string;
+  createdAt: Date;
+  /** Populated when api_keys.last_used_at is tracked; otherwise undefined. */
+  lastUsed?: Date;
 };
 
 export type OrgRepoRecord = {
@@ -114,6 +131,22 @@ export class OrgStore {
       record: rowToApiKey(result.rows[0]),
       rawKey
     };
+  }
+
+  public async listApiKeys(orgId: string): Promise<ApiKeyListItem[]> {
+    const result = await this.pool.query(
+      `SELECT id, label, created_at FROM api_keys WHERE org_id = $1 ORDER BY created_at DESC`,
+      [orgId]
+    );
+    return result.rows.map(rowToApiKeyListItem);
+  }
+
+  public async revokeApiKey(orgId: string, keyId: string): Promise<boolean> {
+    const result = await this.pool.query(`DELETE FROM api_keys WHERE id = $1 AND org_id = $2`, [
+      keyId,
+      orgId
+    ]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   public async resolveAuth(rawKey: string): Promise<AuthContext | undefined> {
@@ -293,6 +326,100 @@ export class OrgStore {
     );
     return result.rows.map(rowToOrgRepo);
   }
+
+  public async listLightningEnabledReposForScheduledIndex(): Promise<
+    Array<{ orgId: string; repoId: string }>
+  > {
+    const result = await this.pool.query<{ org_id: string; repo_id: string }>(
+      `SELECT r.org_id, r.repo_id
+       FROM org_repos r
+       JOIN organizations o ON o.id = r.org_id
+       WHERE r.lightning_enabled = true
+         AND o.plan IN ('pro', 'enterprise')
+       ORDER BY r.org_id, r.repo_id`
+    );
+    return result.rows.map((row) => ({
+      orgId: String(row.org_id),
+      repoId: String(row.repo_id)
+    }));
+  }
+
+  public async getOrganizationBilling(orgId: string): Promise<OrgBilling | undefined> {
+    const result = await this.pool.query(
+      `SELECT billing_email, stripe_customer_id, stripe_subscription_id, seat_count, billing_status, onboarding_completed_at
+       FROM organizations WHERE id = $1`,
+      [orgId]
+    );
+    const row = result.rows[0];
+    if (!row) return undefined;
+    return rowToBilling(row);
+  }
+
+  public async findOrganizationByStripeCustomerId(customerId: string): Promise<Organization | undefined> {
+    const result = await this.pool.query(
+      `SELECT id, name, plan, created_at FROM organizations WHERE stripe_customer_id = $1 LIMIT 1`,
+      [customerId]
+    );
+    const row = result.rows[0];
+    return row ? rowToOrg(row) : undefined;
+  }
+
+  public async updateOrganizationBilling(
+    orgId: string,
+    patch: Partial<{
+      billingEmail: string;
+      stripeCustomerId: string;
+      stripeSubscriptionId: string;
+      seatCount: number;
+      billingStatus: string;
+    }>
+  ): Promise<void> {
+    const fields: string[] = [];
+    const values: unknown[] = [orgId];
+    let idx = 2;
+    if (patch.billingEmail !== undefined) {
+      fields.push(`billing_email = $${idx++}`);
+      values.push(patch.billingEmail);
+    }
+    if (patch.stripeCustomerId !== undefined) {
+      fields.push(`stripe_customer_id = $${idx++}`);
+      values.push(patch.stripeCustomerId);
+    }
+    if (patch.stripeSubscriptionId !== undefined) {
+      fields.push(`stripe_subscription_id = $${idx++}`);
+      values.push(patch.stripeSubscriptionId);
+    }
+    if (patch.seatCount !== undefined) {
+      fields.push(`seat_count = $${idx++}`);
+      values.push(patch.seatCount);
+    }
+    if (patch.billingStatus !== undefined) {
+      fields.push(`billing_status = $${idx++}`);
+      values.push(patch.billingStatus);
+    }
+    if (fields.length === 0) return;
+    await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
+  }
+
+  public async markOnboardingComplete(orgId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE organizations SET onboarding_completed_at = NOW() WHERE id = $1`,
+      [orgId]
+    );
+  }
+}
+
+function rowToBilling(row: Record<string, unknown>): OrgBilling {
+  return {
+    billingEmail: row.billing_email ? String(row.billing_email) : undefined,
+    stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : undefined,
+    stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : undefined,
+    seatCount: Number(row.seat_count ?? 1),
+    billingStatus: String(row.billing_status ?? "none"),
+    onboardingCompletedAt: row.onboarding_completed_at
+      ? new Date(String(row.onboarding_completed_at))
+      : undefined
+  };
 }
 
 function rowToOrg(row: Record<string, unknown>): Organization {
@@ -308,6 +435,14 @@ function rowToApiKey(row: Record<string, unknown>): ApiKeyRecord {
   return {
     id: String(row.id),
     orgId: String(row.org_id),
+    label: String(row.label),
+    createdAt: new Date(String(row.created_at))
+  };
+}
+
+function rowToApiKeyListItem(row: Record<string, unknown>): ApiKeyListItem {
+  return {
+    id: String(row.id),
     label: String(row.label),
     createdAt: new Date(String(row.created_at))
   };

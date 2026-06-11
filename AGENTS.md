@@ -27,8 +27,13 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 
 - Marketing site: `website/` (separate Tailwind stack; not shared with the extension webview)
 - Backend/docs: `docs/`
+- Enterprise integration onboarding: `docs/enterprise-integration-onboarding.md` (operator vs org admin vs developer)
+- Production Connect checklist: `docs/connect-integrations-production.md`
 
 ## Agent → user instructions
 
-When giving setup, env, or test steps (not code review), follow **`.cursor/rules/user-instructions.mdc`**: always say **which surface** (file path, terminal, extension UI, browser), whether config must be **added vs changed**, and distinguish similar env vars (e.g. `GITHUB_APP_*` vs `GITHUB_OAUTH_*`).
+When giving setup, env, or test steps (not code review), follow:
+
+- **`.cursor/rules/user-instructions.mdc`** — which surface (file, terminal, extension UI, browser); add vs change config; similar env vars
+- **`.cursor/rules/clear-user-requests.mdc`** — lead with required vs optional; one happy path; where secrets come from; don't bury the ask
 

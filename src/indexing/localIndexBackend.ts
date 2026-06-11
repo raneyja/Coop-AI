@@ -54,7 +54,7 @@ export class LocalIndexBackend implements IndexBackend {
     }));
   }
 
-  public async search(repoId: string, pattern: string) {
+  public async search(repoId: string, pattern: string, _options?: import("./indexBackend").IndexSearchOptions) {
     return this.indexManager.search(repoId, pattern);
   }
 

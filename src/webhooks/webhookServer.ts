@@ -26,9 +26,11 @@ import { UserStore } from "../server/users/userStore";
 import { SsoConfigStore } from "../server/sso/ssoConfigStore";
 import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
+import { UsageTracker } from "../server/usageTracker";
+import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
-import { requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import type { GitHubAppService } from "../server/githubAppService";
@@ -54,8 +56,22 @@ import { handleSlackAppApiRequest } from "../server/slackAppApi";
 import { loadAtlassianAppConfig } from "../server/atlassianAppConfig";
 import { createAtlassianAppService } from "../server/atlassianAppService";
 import { handleAtlassianAppApiRequest } from "../server/atlassianAppApi";
+import { loadNotionAppConfig } from "../server/notionAppConfig";
+import { createNotionAppService } from "../server/notionAppService";
+import { handleNotionAppApiRequest } from "../server/notionAppApi";
+import { loadGoogleDocsAppConfig } from "../server/googleDocsAppConfig";
+import { createGoogleDocsAppService } from "../server/googleDocsAppService";
+import { handleGoogleDocsAppApiRequest } from "../server/googleDocsAppApi";
+import { loadTeamsAppConfig } from "../server/teamsAppConfig";
+import { createTeamsAppService } from "../server/teamsAppService";
+import { handleTeamsAppApiRequest } from "../server/teamsAppApi";
 import { IntegrationConnectionStore } from "../server/integrationConnectionStore";
 import { handleIntegrationApiRequest } from "../server/integrationApi";
+import { handleAdminApiRequest } from "../server/adminApi";
+import { handleBillingApiRequest } from "../server/billing/billingApi";
+import { loadBillingConfig } from "../server/billing/billingConfig";
+import { EmailService } from "../server/email/emailService";
+import { applyCors, loadCorsOrigins } from "../server/cors";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -114,6 +130,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const userStore = pool ? new UserStore(pool) : undefined;
   const ssoConfigStore = pool ? new SsoConfigStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
+  const usageTracker = new UsageTracker(pool ?? null);
   const samlService = serverConfig.ssoBaseUrl
     ? new SamlService({ baseUrl: serverConfig.ssoBaseUrl, spEntityId: serverConfig.ssoSpEntityId })
     : undefined;
@@ -203,6 +220,36 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         )
       : undefined;
 
+  const notionAppConfig = loadNotionAppConfig();
+  const notionApp =
+    notionAppConfig && serverConfig.credentialsEncryptionKey
+      ? createNotionAppService(
+          notionAppConfig.clientId,
+          notionAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
+  const googleDocsAppConfig = loadGoogleDocsAppConfig();
+  const googleDocsApp =
+    googleDocsAppConfig && serverConfig.credentialsEncryptionKey
+      ? createGoogleDocsAppService(
+          googleDocsAppConfig.clientId,
+          googleDocsAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
+  const teamsAppConfig = loadTeamsAppConfig();
+  const teamsApp =
+    teamsAppConfig && serverConfig.credentialsEncryptionKey
+      ? createTeamsAppService(
+          teamsAppConfig.clientId,
+          teamsAppConfig.clientSecret,
+          serverConfig.credentialsEncryptionKey
+        )
+      : undefined;
+
   const cache =
     options.cache ??
     (await createGraphCache(config.cache.backend, {
@@ -260,10 +307,24 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     queue
   });
   const chatRouter = createChatRouter();
+  const billingConfig = loadBillingConfig();
+  const emailService = new EmailService(billingConfig);
+
+  const corsOrigins = loadCorsOrigins();
 
   const server = createServer(async (request, response) => {
     try {
       const parsed = await parseRequest(request);
+      if (
+        parsed.pathname.startsWith("/v1/") ||
+        parsed.pathname === "/health" ||
+        parsed.pathname === "/webhooks/stripe"
+      ) {
+        if (applyCors(request, response, corsOrigins)) {
+          return;
+        }
+      }
+
       if (parsed.method === "GET" && parsed.pathname === "/health") {
         const jobStats = jobs.monitor.getStats(jobs.queue);
         writeJson(response, 200, {
@@ -349,6 +410,36 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (
+        await handleNotionAppApiRequest(orgParsed, response, {
+          integrationStore,
+          notionApp,
+          notionAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleGoogleDocsAppApiRequest(orgParsed, response, {
+          integrationStore,
+          googleDocsApp,
+          googleDocsAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleTeamsAppApiRequest(orgParsed, response, {
+          integrationStore,
+          teamsApp,
+          teamsAppConfig
+        }, auth)
+      ) {
+        return;
+      }
+
+      if (
         await handleSamlApiRequest(
           {
             method: parsed.method,
@@ -371,6 +462,21 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       // the org handler greedily claims every "/v1/*" path and 404s anything it
       // doesn't recognize, which would otherwise swallow "/v1/chat".
       if (
+        await handleUsageEventsApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          { orgStore, userStore, serverConfig, usageTracker }
+        )
+      ) {
+        return;
+      }
+
+      if (
         await handleChatApiRequest(
           {
             method: parsed.method,
@@ -379,7 +485,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger },
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker },
           request
         )
       ) {
@@ -389,8 +495,35 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       if (
         await handleIntegrationApiRequest(orgParsed, response, {
           integrationStore,
-          atlassianApp
+          atlassianApp,
+          notionApp,
+          googleDocsApp,
+          teamsApp,
+          slackApp
         }, auth)
+      ) {
+        return;
+      }
+
+      if (
+        await handleBillingApiRequest(
+          { ...orgParsed, rawBody: parsed.rawBody },
+          response,
+          { orgStore, userStore, emailService, auditLogger, serverConfig, pool }
+        )
+      ) {
+        return;
+      }
+
+      if (
+        await handleAdminApiRequest(orgParsed, response, {
+          orgStore,
+          userStore,
+          integrationStore,
+          serverConfig,
+          auditLogger,
+          usageTracker
+        })
       ) {
         return;
       }
@@ -500,6 +633,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           file: parsed.query.get("file") ?? undefined,
           pattern: parsed.query.get("pattern") ?? undefined,
           collectionId: parsed.query.get("collectionId") ?? undefined,
+          mention: parsed.query.get("mention") === "true",
           days: numberParam(parsed.query.get("days")),
           forceRefresh: parsed.query.get("forceRefresh") === "true"
         };
@@ -507,18 +641,38 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         if (query === "searchFiles" && filters.pattern) {
           const pool = await getDbPool();
           if (pool) {
-            const lightning = filters.collectionId
-              ? await lightningSearch(pool, auth!.orgId, {
+            const searchOptions = filters.collectionId
+              ? {
                   collectionId: filters.collectionId,
-                  pattern: filters.pattern
-                })
-              : await lightningSearch(pool, auth!.orgId, repoId, filters.pattern);
+                  pattern: filters.pattern,
+                  mention: filters.mention
+                }
+              : {
+                  repoId,
+                  pattern: filters.pattern,
+                  mention: filters.mention
+                };
+            const lightning = await lightningSearch(pool, auth!.orgId, searchOptions);
             if (lightning.hits.length > 0 || lightning.symbols.length > 0) {
               result = formatLightningSearchResult(
                 filters.collectionId ? undefined : repoId,
                 lightning,
                 filters.collectionId
               );
+            }
+            if (query === "searchFiles") {
+              await usageTracker.record({
+                orgId: auth!.orgId,
+                userId: auth!.userId,
+                principal: authUserId(auth!),
+                eventType: "lightning.search",
+                metadata: {
+                  pattern: filters.pattern,
+                  collectionId: filters.collectionId,
+                  repoId: filters.collectionId ? undefined : repoId,
+                  hitCount: lightning.hits.length + lightning.symbols.length
+                }
+              });
             }
           }
         }

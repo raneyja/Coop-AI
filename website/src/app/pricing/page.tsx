@@ -53,8 +53,8 @@ const tiers: PricingTier[] = [
       "Priority support"
     ],
     recommended: true,
-    cta: "Book a demo",
-    href: "/demo",
+    cta: "Start Pro",
+    href: "/signup",
     highlighted: true
   },
   {

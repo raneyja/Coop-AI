@@ -13,6 +13,7 @@ import { JobType, type Job } from "./types";
 import { buildPartialFailure } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
 import { runScipIndexer } from "./runScipIndexer";
+import { runZoektIndexer } from "./runZoektIndexer";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -206,11 +207,15 @@ async function indexRepository(
 
     let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
     let embedResult: Awaited<ReturnType<typeof chunkAndEmbed>> | undefined;
+    let zoektResult: Awaited<ReturnType<typeof runZoektIndexer>> | undefined;
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
-        await report(60, "Running SCIP symbol indexing");
+        await report(55, "Running SCIP symbol indexing");
         scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool);
+
+        await report(65, "Building Zoekt full-text index");
+        zoektResult = await runZoektIndexer(repoId, orgId, clone.localPath);
 
         let shouldEmbed = false;
         if (ctx.orgStore) {
@@ -275,6 +280,9 @@ async function indexRepository(
       scipAvailable: scipResult?.scipAvailable ?? false,
       symbolCount: scipResult?.symbolCount ?? 0,
       indexSource: scipResult?.source ?? "none",
+      indexQuality: scipResult?.indexQuality ?? "none",
+      language: scipResult?.language,
+      zoektAvailable: zoektResult?.zoektAvailable ?? false,
       embeddingCount: embedResult?.chunkCount ?? 0,
       embeddedFiles: embedResult?.embeddedFiles ?? 0
     };

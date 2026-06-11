@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatImageAttachment } from "../../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../../chat/types";
 import { LaunchTypewriter } from "./LaunchTypewriter";
 import type { LaunchIntroPhase } from "../hooks/useLaunchTypewriter";
 import {
@@ -35,7 +35,35 @@ type ChatComposerProps = {
   launchIntroVisibleLength?: number;
   launchIntroFlashIndex?: number | null;
   onLaunchIntroSkip?: () => void;
+  mentions?: ChatFileMention[];
+  onMentionsChange?: (mentions: ChatFileMention[]) => void;
+  onMentionSearch?: (pattern: string) => void;
+  mentionResults?: MentionSearchResult[];
+  mentionLoading?: boolean;
+  mentionError?: string;
+  mentionHint?: string;
 };
+
+const MAX_MENTIONS = 3;
+
+function mentionMenuQuery(value: string, cursor: number): string | null {
+  const before = value.slice(0, cursor);
+  const match = /(?:^|\s)@([^\s@]{0,80})$/.exec(before);
+  return match ? match[1] : null;
+}
+
+function mentionMenuRange(value: string, cursor: number): { start: number; end: number } | null {
+  const before = value.slice(0, cursor);
+  const match = /(?:^|\s)@([^\s@]{0,80})$/.exec(before);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+  const atIndex = before.lastIndexOf("@");
+  if (atIndex < 0) {
+    return null;
+  }
+  return { start: atIndex, end: cursor };
+}
 
 function SendIcon(): React.ReactElement {
   return (
@@ -90,7 +118,14 @@ export function ChatComposer({
   launchIntroPhase = "done",
   launchIntroVisibleLength = 0,
   launchIntroFlashIndex = null,
-  onLaunchIntroSkip
+  onLaunchIntroSkip,
+  mentions = [],
+  onMentionsChange,
+  onMentionSearch,
+  mentionResults = [],
+  mentionLoading = false,
+  mentionError,
+  mentionHint
 }: ChatComposerProps): React.ReactElement {
   const isChat = variant === "chat";
   const launchIntroActive = !isChat && launchIntroPhase !== "done";
@@ -112,10 +147,40 @@ export function ChatComposer({
     return matchSlashCommands(slashQuery);
   }, [slashQuery]);
   const showSlashMenu = !isStreaming && !slashDismissed && slashMatches.length > 0;
+  const mentionQuery = mentionMenuQuery(value, cursorPosition);
+  const [mentionDismissed, setMentionDismissed] = useState(false);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const showMentionMenu =
+    !isStreaming &&
+    !mentionDismissed &&
+    mentionQuery !== null &&
+    mentions.length < MAX_MENTIONS;
+  const mentionSearchTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setSlashActiveIndex(0);
   }, [slashQuery]);
+
+  useEffect(() => {
+    setMentionActiveIndex(0);
+  }, [mentionQuery]);
+
+  useEffect(() => {
+    if (mentionSearchTimer.current !== null) {
+      window.clearTimeout(mentionSearchTimer.current);
+    }
+    if (!onMentionSearch || mentionQuery === null || mentions.length >= MAX_MENTIONS) {
+      return;
+    }
+    mentionSearchTimer.current = window.setTimeout(() => {
+      onMentionSearch(mentionQuery);
+    }, 250);
+    return () => {
+      if (mentionSearchTimer.current !== null) {
+        window.clearTimeout(mentionSearchTimer.current);
+      }
+    };
+  }, [mentionQuery, mentions.length, onMentionSearch]);
 
   const syncCursor = useCallback((el: HTMLTextAreaElement) => {
     setCursorPosition(el.selectionStart);
@@ -233,8 +298,60 @@ export function ChatComposer({
     [attachments, isStreaming, onAttachmentError, onAttachmentsChange]
   );
 
+  const applyMention = useCallback(
+    (item: MentionSearchResult) => {
+      if (!onMentionsChange || mentions.length >= MAX_MENTIONS) {
+        return;
+      }
+      const el = textareaRef.current;
+      const cursor = el?.selectionStart ?? cursorPosition;
+      const range = mentionMenuRange(value, cursor);
+      const label = item.path.split("/").pop() ?? item.path;
+      const nextMention: ChatFileMention = {
+        repoId: item.repoId,
+        path: item.path,
+        snippet: item.content
+      };
+      onMentionsChange([...mentions, nextMention]);
+      if (range) {
+        const next = `${value.slice(0, range.start)}@${label} ${value.slice(range.end)}`;
+        onChange(next);
+        const newCursor = range.start + label.length + 2;
+        requestAnimationFrame(() => {
+          el?.focus();
+          el?.setSelectionRange(newCursor, newCursor);
+          setCursorPosition(newCursor);
+        });
+      }
+      setMentionDismissed(true);
+    },
+    [cursorPosition, mentions, onChange, onMentionsChange, value]
+  );
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     skipLaunchIntroIfNeeded();
+    if (showMentionMenu && mentionResults.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionActiveIndex((index) => (index + 1) % mentionResults.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionActiveIndex((index) => (index - 1 + mentionResults.length) % mentionResults.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        applyMention(mentionResults[mentionActiveIndex] ?? mentionResults[0]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMentionDismissed(true);
+        return;
+      }
+    }
     if (showSlashMenu) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -283,6 +400,47 @@ export function ChatComposer({
             flashIndex={launchIntroFlashIndex}
           />
         ) : null}
+        {showMentionMenu ? (
+          <div className="coop-prompt-menu" role="listbox" aria-label="File mentions">
+            <div className="coop-prompt-menu-panel">
+              {mentionLoading ? (
+                <p className="coop-prompt-modal-muted px-3 py-2 text-xs">Searching indexed files…</p>
+              ) : mentionError ? (
+                <p className="coop-settings-test-message--error px-3 py-2 text-xs">{mentionError}</p>
+              ) : mentionResults.length === 0 ? (
+                <p className="coop-prompt-modal-muted px-3 py-2 text-xs">
+                  {mentionHint ??
+                    `No indexed files match "${mentionQuery}". Check Workspace → Search scope is set to your collection and wait for repo indexing to finish.`}
+                </p>
+              ) : (
+                <ul className="coop-prompt-menu-list">
+                  {mentionResults.map((item, index) => (
+                    <li key={`${item.repoId}:${item.path}:${item.lineNumber ?? 0}`}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={index === mentionActiveIndex}
+                        className={`coop-prompt-menu-row${
+                          index === mentionActiveIndex ? " coop-prompt-menu-row--active" : ""
+                        }`}
+                        onMouseEnter={() => setMentionActiveIndex(index)}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applyMention(item);
+                        }}
+                      >
+                        <span className="coop-prompt-menu-row-label">
+                          <span className="font-medium">{item.path}</span>
+                          <span className="ml-2 text-[var(--coop-panel-muted)]">{item.repoId}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : null}
         {showSlashMenu ? (
           <div className="coop-prompt-menu" role="listbox" aria-label="Slash commands">
             <div className="coop-prompt-menu-panel">
@@ -313,6 +471,33 @@ export function ChatComposer({
                 ))}
               </ul>
             </div>
+          </div>
+        ) : null}
+        {mentions.length > 0 ? (
+          <div
+            className="flex flex-wrap gap-1.5 border-b px-3 py-2"
+            style={{ borderColor: "var(--coop-composer-border)" }}
+          >
+            {mentions.map((mention) => (
+              <span
+                key={`${mention.repoId}:${mention.path}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--coop-pill-border)] bg-[var(--coop-pill-surface)] px-2 py-0.5 text-[11px]"
+                title={`${mention.repoId} · ${mention.path}`}
+              >
+                <span className="truncate max-w-[180px]">{mention.path.split("/").pop() ?? mention.path}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${mention.path}`}
+                  disabled={isStreaming}
+                  className="text-[var(--coop-panel-muted)] hover:text-[var(--coop-panel-foreground)]"
+                  onClick={() =>
+                    onMentionsChange?.(mentions.filter((entry) => entry.path !== mention.path || entry.repoId !== mention.repoId))
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
           </div>
         ) : null}
         {attachments.length > 0 ? (
@@ -369,6 +554,7 @@ export function ChatComposer({
               onChange(e.target.value);
               syncCursor(e.target);
               setSlashDismissed(false);
+              setMentionDismissed(false);
               resize();
             }}
             onFocus={(e) => {

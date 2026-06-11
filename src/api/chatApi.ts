@@ -13,6 +13,7 @@ import {
 } from "../server/authMiddleware";
 import type { OrgStore } from "../server/orgStore";
 import { AuditLogger, auditActor } from "../server/audit/auditLogger";
+import type { UsageTracker } from "../server/usageTracker";
 import type { UserStore } from "../server/users/userStore";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 
@@ -22,6 +23,7 @@ export type ChatApiDeps = {
   orgStore?: OrgStore;
   serverConfig?: ServerConfig;
   auditLogger?: AuditLogger;
+  usageTracker?: UsageTracker;
   userStore?: UserStore;
 };
 
@@ -66,6 +68,13 @@ export async function handleChatApiRequest(
         userId: org.userId,
         principal: org.principal,
         action: "completion.inline"
+      });
+      await deps.usageTracker?.record({
+        orgId: org.orgId,
+        userId: org.userId,
+        principal: org.principal,
+        eventType: "completion.suggested",
+        metadata: { source: "inline" }
       });
     }
     return true;
@@ -140,6 +149,13 @@ export async function handleChatApiRequest(
     userId: org.userId,
     principal: org.principal,
     action: "chat.completion",
+    metadata: { provider, model, requestId }
+  });
+  await deps.usageTracker?.record({
+    orgId: org.orgId,
+    userId: org.userId,
+    principal: org.principal,
+    eventType: "chat.message",
     metadata: { provider, model, requestId }
   });
 

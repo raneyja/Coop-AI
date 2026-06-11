@@ -47,7 +47,9 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     ) {
       merged.contextWarning = undefined;
     } else if (!incoming.contextWarning) {
-      merged.contextWarning = existing.contextWarning;
+      merged.contextWarning = isFocusLossDiskLinkWarning(existing.contextWarning)
+        ? undefined
+        : existing.contextWarning;
     }
   }
 

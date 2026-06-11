@@ -60,16 +60,19 @@ export class JiraClient {
   private readonly authHeader: string;
   private readonly apiBase: string;
   private readonly siteBaseUrl: string;
+  private readonly oauthMode: boolean;
   private readonly now: () => number;
   private readonly issueCache = new Map<string, CacheEntry<JiraIssue>>();
   private readonly epicCache = new Map<string, CacheEntry<JiraEpic>>();
 
   public constructor(private readonly options: JiraClientOptions) {
     if (options.oauthAccessToken && options.cloudId) {
+      this.oauthMode = true;
       this.apiBase = `https://api.atlassian.com/ex/jira/${options.cloudId}/rest/api/3`;
       this.authHeader = `Bearer ${options.oauthAccessToken}`;
       this.siteBaseUrl = options.baseUrl.replace(/\/+$/, "");
     } else {
+      this.oauthMode = false;
       if (!options.email || !options.apiToken) {
         throw new Error("Jira email and API token are required.");
       }
@@ -84,7 +87,12 @@ export class JiraClient {
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
     try {
-      await this.request<{ accountId?: string }>("/myself");
+      if (this.oauthMode) {
+        // OAuth tokens from Coop's Atlassian app include read:jira-work, not read:jira-user (/myself).
+        await this.searchIssues("updated >= -30d ORDER BY updated DESC", 1);
+      } else {
+        await this.request<{ accountId?: string }>("/myself");
+      }
       return { ok: true, message: "Jira connection successful." };
     } catch (error) {
       return {
@@ -218,13 +226,13 @@ export class JiraClient {
     }
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      throw new JiraApiError(formatJiraErrorBody(text, response.status), response.status);
+      throw new JiraApiError(formatJiraErrorBody(text, response.status, this.oauthMode), response.status);
     }
     return (await response.json()) as T;
   }
 }
 
-function formatJiraErrorBody(text: string, status: number): string {
+function formatJiraErrorBody(text: string, status: number, oauthMode = false): string {
   const trimmed = text.trim();
   if (!trimmed) {
     return `Jira HTTP ${status}`;
@@ -232,15 +240,25 @@ function formatJiraErrorBody(text: string, status: number): string {
   try {
     const parsed = JSON.parse(trimmed) as { errorMessages?: string[]; message?: string };
     if (Array.isArray(parsed.errorMessages) && parsed.errorMessages.length > 0) {
-      return parsed.errorMessages.join(" ");
+      return formatJiraParsedError(parsed.errorMessages.join(" "), status, oauthMode);
     }
     if (typeof parsed.message === "string" && parsed.message.trim()) {
-      return parsed.message.trim();
+      return formatJiraParsedError(parsed.message.trim(), status, oauthMode);
     }
   } catch {
     /* not JSON */
   }
-  return trimmed;
+  return formatJiraParsedError(trimmed, status, oauthMode);
+}
+
+function formatJiraParsedError(message: string, status: number, oauthMode: boolean): string {
+  if (status === 401 && oauthMode && message.includes("scope does not match")) {
+    return (
+      "Jira OAuth scope mismatch. Disconnect and reconnect Atlassian so your token includes read:jira-work " +
+      "(Atlassian developer console → Permissions → Jira API). Then Test Jira again."
+    );
+  }
+  return message;
 }
 
 type JiraIssuePayload = {

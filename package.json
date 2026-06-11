@@ -127,6 +127,14 @@
       {
         "command": "coopAI.autocompletePrev",
         "title": "CoopAI: Previous Autocomplete Suggestion"
+      },
+      {
+        "command": "coopAI.internal.autocompleteAccepted",
+        "title": "CoopAI: Autocomplete Accepted (internal)"
+      },
+      {
+        "command": "coopAI.internal.autocompleteRejected",
+        "title": "CoopAI: Autocomplete Rejected (internal)"
       }
     ],
     "keybindings": [
@@ -147,6 +155,11 @@
         "command": "coopAI.autocompletePrev",
         "key": "alt+[",
         "when": "editorTextFocus && coopAI.autocomplete.enabled"
+      },
+      {
+        "command": "coopAI.internal.autocompleteRejected",
+        "key": "escape",
+        "when": "editorTextFocus && inlineSuggestionVisible && coopAI.autocomplete.enabled"
       }
     ],
     "submenus": [
@@ -436,6 +449,20 @@
           "type": "string",
           "default": "",
           "description": "Default branch when no file context is available."
+        },
+        "coopAI.searchScope.mode": {
+          "type": "string",
+          "enum": [
+            "repo",
+            "collection"
+          ],
+          "default": "repo",
+          "description": "Lightning search and @ picker scope: active repo or a named collection."
+        },
+        "coopAI.searchScope.collectionId": {
+          "type": "string",
+          "default": "",
+          "description": "Collection id when searchScope.mode is collection."
         },
         "coopAI.defaultCodeHost": {
           "type": "string",
@@ -748,7 +775,7 @@
     "build": "npm run build:extension && npm run build:webview && npm run build:backend && npm run build:workers && npm run build:admin",
     "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js",
     "build:backend": "esbuild src/webhooks/webhookServer.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/webhookServer.js",
-    "build:workers": "esbuild src/jobs/workerEntry.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/workerEntry.js",
+    "build:workers": "esbuild src/jobs/workerEntry.ts --bundle --platform=node --format=cjs --sourcemap --external:web-tree-sitter --external:tree-sitter-wasms --outfile=dist/workerEntry.js",
     "build:admin": "esbuild scripts/admin-org.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/admin-org.js",
     "build:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify",
     "build:webview": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js && npm run build:webview:css",
@@ -768,7 +795,8 @@
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
-    "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts"
+    "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
+    "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

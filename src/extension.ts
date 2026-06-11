@@ -11,6 +11,7 @@ import {
   registerCoopAutocomplete,
   registerAutocompleteCommands
 } from "./autocomplete/registerAutocomplete";
+import { readAutocompleteSettings } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
@@ -153,6 +154,33 @@ export function activate(context: vscode.ExtensionContext): void {
           overlay.jiraBaseUrl = siteUrl;
           overlay.confluenceBaseUrl = `${siteUrl}/wiki`;
         }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      const notionStatus = await api.getNotionInstallationStatus(baseUrl);
+      if (notionStatus.installed) {
+        const creds = await api.getIntegrationCredentials(baseUrl, "notion");
+        overlay.notionToken = creds.accessToken;
+      }
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      const googleStatus = await api.getGoogleDocsInstallationStatus(baseUrl);
+      if (googleStatus.installed) {
+        const creds = await api.getIntegrationCredentials(baseUrl, "google-docs");
+        overlay.googleDocsToken = creds.accessToken;
+      }
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      const teamsStatus = await api.getTeamsInstallationStatus(baseUrl);
+      if (teamsStatus.installed) {
+        const creds = await api.getIntegrationCredentials(baseUrl, "teams");
+        overlay.teamsToken = creds.accessToken;
       }
     } catch {
       /* non-fatal */
@@ -386,6 +414,13 @@ export function activate(context: vscode.ExtensionContext): void {
         if (event.affectsConfiguration("coopAI.lightning") || event.affectsConfiguration("coopAI.license")) {
           void lightningStatusBar.refresh();
         }
+        if (event.affectsConfiguration("coopAI.autocomplete.enabled")) {
+          void vscode.commands.executeCommand(
+            "setContext",
+            "coopAI.autocomplete.enabled",
+            readAutocompleteSettings().enabled
+          );
+        }
         void refreshAllSessions();
       }
     })
@@ -398,11 +433,17 @@ export function activate(context: vscode.ExtensionContext): void {
       session.postAutocompleteStatus(payload);
     }
   });
-  registerAutocompleteCommands(context, autocompleteProvider, (payload) => {
+  registerAutocompleteCommands(context, api, autocompleteProvider, (payload) => {
     for (const session of coopSessionRegistry.getAll()) {
       session.postAutocompleteStatus(payload);
     }
   });
+
+  void vscode.commands.executeCommand(
+    "setContext",
+    "coopAI.autocomplete.enabled",
+    readAutocompleteSettings().enabled
+  );
 
   if (vscode.window.registerWebviewPanelSerializer) {
     context.subscriptions.push(
@@ -497,3 +538,4 @@ function createHealthAdapters(
   }
   return adapters;
 }
+

@@ -41,6 +41,16 @@ export type ChatImageAttachment = {
   dataUrl: string;
 };
 
+export type ChatFileMention = {
+  repoId: string;
+  path: string;
+  lines?: [number, number];
+  /** Search snippet when picked from @ menu (optional). */
+  snippet?: string;
+};
+
+export type SearchScopeMode = "repo" | "collection";
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -99,12 +109,20 @@ export type UserPreferences = {
   hasAtlassianInstalled: boolean;
   atlassianSiteName?: string;
   hasJiraCredentials: boolean;
+  hasTeamsInstalled: boolean;
+  teamsDisplayName?: string;
   hasTeamsToken: boolean;
   hasConfluenceCredentials: boolean;
+  hasNotionInstalled: boolean;
+  notionWorkspaceName?: string;
   hasNotionToken: boolean;
+  hasGoogleDocsInstalled: boolean;
+  googleDocsDisplayName?: string;
   hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
   confluenceBaseUrl: string;
+  searchScopeMode: SearchScopeMode;
+  searchCollectionId: string;
 };
 
 export type SettingsStatePayload = UserPreferences & {
@@ -214,9 +232,12 @@ export type WebviewInbound =
         quickAction?: string;
         savedPromptId?: string;
         attachments?: ChatImageAttachment[];
+        mentions?: ChatFileMention[];
         historyContent?: string;
       };
     }
+  | { type: "mention:search"; payload: { pattern: string } }
+  | { type: "collections:list-request" }
   | { type: "prompts:list-request" }
   | { type: "prompts:run"; payload: { id: string } }
   | { type: "prompts:save"; payload: { title: string; template: string; actionId?: string } }
@@ -263,6 +284,12 @@ export type WebviewInbound =
   | { type: "settings:refresh-slack-installation" }
   | { type: "settings:install-atlassian-app" }
   | { type: "settings:refresh-atlassian-installation"; payload?: { key?: "jira" | "confluence" } }
+  | { type: "settings:install-notion-app" }
+  | { type: "settings:refresh-notion-installation" }
+  | { type: "settings:install-google-docs-app" }
+  | { type: "settings:refresh-google-docs-installation" }
+  | { type: "settings:install-teams-app" }
+  | { type: "settings:refresh-teams-installation" }
   | {
       type: "settings:update-bitbucket-credentials";
       payload: { username: string; appPassword: string };
@@ -304,6 +331,7 @@ export type WebviewInbound =
   | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
   | { type: "autocomplete:toggle" }
+  | { type: "autocomplete:set"; payload: { enabled: boolean } }
   | { type: "lightning:ready" }
   | { type: "lightning:enable-global" }
   | { type: "lightning:disable-global" }
@@ -311,6 +339,22 @@ export type WebviewInbound =
   | { type: "lightning:disable-repo"; payload: { repoId: string } }
   | { type: "lightning:refresh-repo"; payload: { repoId: string } }
   | { type: "lightning:upgrade" };
+
+export type MentionSearchResult = {
+  repoId: string;
+  path: string;
+  lineNumber?: number;
+  content?: string;
+  score?: number;
+};
+
+export type OrgCollectionSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  repoCount: number;
+  repoIds?: string[];
+};
 
 export type WebviewOutbound =
   | { type: "theme:update"; payload: ThemePayload }
@@ -380,6 +424,17 @@ export type WebviewOutbound =
         previewText?: string;
       };
     }
+  | {
+      type: "mention:results";
+      payload: {
+        pattern: string;
+        items: MentionSearchResult[];
+        error?: string;
+        loading?: boolean;
+        hint?: string;
+      };
+    }
+  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } }
   | { type: "lightning:open" }
   | {
       type: "lightning:state";

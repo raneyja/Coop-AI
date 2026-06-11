@@ -78,12 +78,21 @@ export class CloudIndexBackend implements IndexBackend {
     }
   }
 
-  public async search(repoId: string, pattern: string): Promise<LocalSearchResult> {
+  public async search(
+    repoId: string,
+    pattern: string,
+    options?: import("./indexBackend").IndexSearchOptions
+  ): Promise<LocalSearchResult> {
     if (!(await this.isEnabledForRepo(repoId))) {
       return { source: "fallback", hits: [], symbols: [], stale: false };
     }
     try {
-      const remote = (await this.client.graphSearch(this.getBaseUrl(), repoId, pattern)) as {
+      const remote = (await this.client.graphSearch(
+        this.getBaseUrl(),
+        repoId,
+        pattern,
+        options?.collectionId
+      )) as {
         data?: Array<{ path: string; size?: number }>;
         symbols?: Array<{
           symbol: string;
@@ -97,6 +106,7 @@ export class CloudIndexBackend implements IndexBackend {
       };
       const hits = (remote.data ?? []).map((entry, index) => ({
         fileName: entry.path,
+        repoId: (entry as { repoId?: string }).repoId,
         lineNumber: index + 1,
         content: entry.path,
         score: 1

@@ -41,11 +41,16 @@ export function createJobRuntime(options: {
     },
     monitor
   );
-  const scheduler = new JobScheduler(queue, config, {
-    notify: async (payload) => {
-      console.log(`[jobs] scheduled notification: ${payload.name} -> ${payload.jobId}`);
-    }
-  });
+  const scheduler = new JobScheduler(
+    queue,
+    config,
+    {
+      notify: async (payload) => {
+        console.log(`[jobs] scheduled notification: ${payload.name} -> ${payload.jobId}`);
+      }
+    },
+    options.orgStore
+  );
 
   queue.on("job:completed", (job) => {
     if (job.startedAt && job.completedAt) {

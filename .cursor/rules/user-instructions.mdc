@@ -1,0 +1,67 @@
+---
+description: How to give the user clear setup, config, and test instructions
+alwaysApply: true
+---
+
+# User instructions — be explicit about WHERE
+
+When telling the user what to do (setup, env vars, testing, validation), **never assume they know which surface to use**. Diagnosis can be sharp; delivery must say **where** each action happens.
+
+## Every step needs a surface
+
+Label each step as one of:
+
+| Surface | When to use | Example |
+|---------|-------------|---------|
+| **File** | Edit or create a file in the editor | "Open `.env.backend` and add a line" |
+| **Terminal** | Run a command after a file is saved | `docker compose up -d --build api` |
+| **Extension UI** | VS Code Extension Host / Coop settings | "Settings → Connections → Connect GitHub" |
+| **Browser** | External OAuth or admin console | "Approve at github.com, then return to VS Code" |
+
+Do **not** say "add these env vars" without naming the file path. Do **not** imply terminal paste for secrets unless the user explicitly asked for a one-liner.
+
+## New vs existing config
+
+If a variable or file **does not exist yet**, say so explicitly:
+
+- ❌ "Set `GITHUB_OAUTH_CLIENT_ID` in `.env.backend`"
+- ✅ "`.env.backend` does not have OAuth lines yet — **add** these two lines after the GitHub section:"
+
+If two similar names exist (e.g. `GITHUB_APP_*` vs `GITHUB_OAUTH_*`), **contrast them in a small table** before the user edits anything: which to fill, which to leave empty, and why.
+
+## Standard setup block format
+
+Use this shape for multi-step setup:
+
+```
+## Goal (one sentence)
+
+### 1. File — `.env/backend` or `path/to/file`
+What to add/change. Show exact lines. Note: create file if missing.
+
+### 2. Terminal — restart/rebuild
+Command(s) to run **after** saving the file.
+
+### 3. Extension UI — Extension Development Host
+What to click. What success looks like.
+
+### 4. Browser (if OAuth)
+What URL/callback to register. What to approve.
+```
+
+## Coop-specific defaults
+
+| Task | File | Notes |
+|------|------|-------|
+| Backend secrets | `.env.backend` (repo root) | Loaded by `docker compose`; not `.env.backend.example` |
+| Extension devMode | Workspace **and** User settings | `.vscode/settings.json` can override User — mention both |
+| Org admin CLI | Terminal via Docker | `DATABASE_URL=postgres://coop:coop@postgres:5432/coopai` — host `localhost` may hit wrong Postgres |
+| Template only | `.env.backend.example` | Document variable names; user copies to `.env.backend` |
+
+## Checklist before sending instructions
+
+- [ ] Named the **exact file path** for any edit
+- [ ] Said **add** vs **change** vs **leave empty**
+- [ ] Separated **File / Terminal / UI / Browser**
+- [ ] Stated what **success looks like** (UI label, test button, curl output)
+- [ ] Did not conflate unrelated layers (Coop API key ≠ GitHub auth)
