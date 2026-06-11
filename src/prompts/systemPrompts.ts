@@ -894,184 +894,167 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         entryFiles?: Array<{ path: string; content: string; truncated?: boolean }>;
       };
     };
-    let data = record.data;
-    if (!data) {
+    const source = record.data;
+    if (!source) {
       return entry;
     }
 
-    if (data.entryFiles?.length) {
-      data = {
-        ...data,
-        entryFiles: data.entryFiles.map((file) => ({
+    let mutated = false;
+    const data: Record<string, unknown> = { ...source };
+
+    if (source.entryFiles?.length) {
+      mutated = true;
+      data.entryFiles = source.entryFiles.map((file) => ({
+        path: file.path,
+        byteLength: file.content.length,
+        ...(file.truncated ? { truncated: true } : {})
+      }));
+    }
+
+    if (source.zeroClone?.files?.length) {
+      mutated = true;
+      data.zeroClone = {
+        ...source.zeroClone,
+        files: source.zeroClone.files.map((file) => ({
           path: file.path,
-          byteLength: file.content.length,
-          ...(file.truncated ? { truncated: true } : {})
+          byteLength: file.content.length
         }))
       };
     }
 
-    if (data.zeroClone?.files?.length) {
-      data = {
-        ...data,
-        zeroClone: {
-          ...data.zeroClone,
-          files: data.zeroClone.files.map((file) => ({
-            path: file.path,
-            byteLength: file.content.length
-          }))
-        }
+    if (source.localFiles?.files?.length) {
+      mutated = true;
+      data.localFiles = {
+        ...source.localFiles,
+        files: source.localFiles.files.map((file) => ({
+          path: file.path,
+          byteLength: file.content.length,
+          ...(file.lineRange ? { lineRange: file.lineRange } : {})
+        }))
       };
     }
 
-    if (data.localFiles?.files?.length) {
-      data = {
-        ...data,
-        localFiles: {
-          ...data.localFiles,
-          files: data.localFiles.files.map((file) => ({
-            path: file.path,
-            byteLength: file.content.length,
-            ...(file.lineRange ? { lineRange: file.lineRange } : {})
-          }))
-        }
+    if (source.jiraSearch?.issues?.length) {
+      mutated = true;
+      data.jiraSearch = {
+        ...source.jiraSearch,
+        issues: source.jiraSearch.issues.map((issue) =>
+          issue && typeof issue === "object"
+            ? {
+                key: (issue as { key?: string }).key,
+                status: (issue as { status?: string }).status,
+                issueType: (issue as { issueType?: string }).issueType
+              }
+            : issue
+        )
       };
     }
 
-    if (data.jiraSearch?.issues?.length) {
-      data = {
-        ...data,
-        jiraSearch: {
-          ...data.jiraSearch,
-          issues: data.jiraSearch.issues.map((issue) =>
-            issue && typeof issue === "object"
-              ? {
-                  key: (issue as { key?: string }).key,
-                  status: (issue as { status?: string }).status,
-                  issueType: (issue as { issueType?: string }).issueType
-                }
-              : issue
-          )
-        }
+    if (source.slackSearch?.messages?.length) {
+      mutated = true;
+      data.slackSearch = {
+        ...source.slackSearch,
+        messages: source.slackSearch.messages.map((msg) =>
+          msg && typeof msg === "object"
+            ? {
+                channelName: (msg as { channelName?: string }).channelName,
+                userName: (msg as { userName?: string }).userName,
+                ts: (msg as { ts?: string }).ts
+              }
+            : msg
+        )
       };
     }
 
-    if (data.slackSearch?.messages?.length) {
-      data = {
-        ...data,
-        slackSearch: {
-          ...data.slackSearch,
-          messages: data.slackSearch.messages.map((msg) =>
-            msg && typeof msg === "object"
-              ? {
-                  channelName: (msg as { channelName?: string }).channelName,
-                  userName: (msg as { userName?: string }).userName,
-                  ts: (msg as { ts?: string }).ts
-                }
-              : msg
-          )
-        }
+    if (source.teamsSearch?.messages?.length) {
+      mutated = true;
+      data.teamsSearch = {
+        ...source.teamsSearch,
+        messages: source.teamsSearch.messages.map((msg) =>
+          msg && typeof msg === "object"
+            ? {
+                fromUserName: (msg as { fromUserName?: string }).fromUserName,
+                createdAt: (msg as { createdAt?: string }).createdAt
+              }
+            : msg
+        )
       };
     }
 
-    if (data.teamsSearch?.messages?.length) {
-      data = {
-        ...data,
-        teamsSearch: {
-          ...data.teamsSearch,
-          messages: data.teamsSearch.messages.map((msg) =>
-            msg && typeof msg === "object"
-              ? {
-                  fromUserName: (msg as { fromUserName?: string }).fromUserName,
-                  createdAt: (msg as { createdAt?: string }).createdAt
-                }
-              : msg
-          )
-        }
+    if (source.codeHostSearch) {
+      mutated = true;
+      data.codeHostSearch = {
+        ...source.codeHostSearch,
+        pullRequests: source.codeHostSearch.pullRequests?.map((pr) =>
+          pr && typeof pr === "object"
+            ? {
+                number: (pr as { number?: number }).number,
+                title: (pr as { title?: string }).title,
+                state: (pr as { state?: string }).state
+              }
+            : pr
+        ),
+        issues: source.codeHostSearch.issues?.map((issue) =>
+          issue && typeof issue === "object"
+            ? {
+                number: (issue as { number?: number }).number,
+                title: (issue as { title?: string }).title,
+                state: (issue as { state?: string }).state
+              }
+            : issue
+        )
       };
     }
 
-    if (data.codeHostSearch) {
-      data = {
-        ...data,
-        codeHostSearch: {
-          ...data.codeHostSearch,
-          pullRequests: data.codeHostSearch.pullRequests?.map((pr) =>
-            pr && typeof pr === "object"
-              ? {
-                  number: (pr as { number?: number }).number,
-                  title: (pr as { title?: string }).title,
-                  state: (pr as { state?: string }).state
-                }
-              : pr
-          ),
-          issues: data.codeHostSearch.issues?.map((issue) =>
-            issue && typeof issue === "object"
-              ? {
-                  number: (issue as { number?: number }).number,
-                  title: (issue as { title?: string }).title,
-                  state: (issue as { state?: string }).state
-                }
-              : issue
-          )
-        }
+    if (source.confluenceSearch?.pages?.length) {
+      mutated = true;
+      data.confluenceSearch = {
+        ...source.confluenceSearch,
+        pages: source.confluenceSearch.pages.map((page) =>
+          page && typeof page === "object"
+            ? {
+                id: (page as { id?: string }).id,
+                title: (page as { title?: string }).title,
+                updated: (page as { updated?: string }).updated
+              }
+            : page
+        )
       };
     }
 
-    if (data.confluenceSearch?.pages?.length) {
-      data = {
-        ...data,
-        confluenceSearch: {
-          ...data.confluenceSearch,
-          pages: data.confluenceSearch.pages.map((page) =>
-            page && typeof page === "object"
-              ? {
-                  id: (page as { id?: string }).id,
-                  title: (page as { title?: string }).title,
-                  updated: (page as { updated?: string }).updated
-                }
-              : page
-          )
-        }
+    if (source.notionSearch?.pages?.length) {
+      mutated = true;
+      data.notionSearch = {
+        ...source.notionSearch,
+        pages: source.notionSearch.pages.map((page) =>
+          page && typeof page === "object"
+            ? {
+                id: (page as { id?: string }).id,
+                title: (page as { title?: string }).title,
+                updated: (page as { updated?: string }).updated
+              }
+            : page
+        )
       };
     }
 
-    if (data.notionSearch?.pages?.length) {
-      data = {
-        ...data,
-        notionSearch: {
-          ...data.notionSearch,
-          pages: data.notionSearch.pages.map((page) =>
-            page && typeof page === "object"
-              ? {
-                  id: (page as { id?: string }).id,
-                  title: (page as { title?: string }).title,
-                  updated: (page as { updated?: string }).updated
-                }
-              : page
-          )
-        }
+    if (source.googleDocsSearch?.documents?.length) {
+      mutated = true;
+      data.googleDocsSearch = {
+        ...source.googleDocsSearch,
+        documents: source.googleDocsSearch.documents.map((doc) =>
+          doc && typeof doc === "object"
+            ? {
+                id: (doc as { id?: string }).id,
+                title: (doc as { title?: string }).title,
+                updated: (doc as { updated?: string }).updated
+              }
+            : doc
+        )
       };
     }
 
-    if (data.googleDocsSearch?.documents?.length) {
-      data = {
-        ...data,
-        googleDocsSearch: {
-          ...data.googleDocsSearch,
-          documents: data.googleDocsSearch.documents.map((doc) =>
-            doc && typeof doc === "object"
-              ? {
-                  id: (doc as { id?: string }).id,
-                  title: (doc as { title?: string }).title,
-                  updated: (doc as { updated?: string }).updated
-                }
-              : doc
-          )
-        }
-      };
-    }
-
-    if (data === record.data) {
+    if (!mutated) {
       return entry;
     }
     return {

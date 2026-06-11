@@ -1,4 +1,5 @@
 import { identityDirectorySummary } from "../../../identity/identityDirectory";
+import type { IntegrationChatProvider } from "../../../chat/types";
 import type { Preferences } from "./types";
 export {
   accountHubSubtitle,

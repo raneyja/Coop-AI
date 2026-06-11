@@ -2,14 +2,17 @@ import React from "react";
 
 export function SettingsSection({
   title,
+  description,
   children
 }: {
   title?: string;
+  description?: string;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
     <section>
       {title ? <h2 className="coop-settings-section-label">{title}</h2> : null}
+      {description ? <p className="coop-settings-card-desc px-0.5">{description}</p> : null}
       <div className="coop-settings-card">{children}</div>
     </section>
   );

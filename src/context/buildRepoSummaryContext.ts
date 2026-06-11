@@ -79,9 +79,7 @@ export async function buildLiveRepoSummary(
     activeFile: options.activeFile,
     repository: repository
       ? {
-          description: repository.description,
           defaultBranch: repository.defaultBranch,
-          language: repository.language,
           isPrivate: repository.isPrivate,
           htmlUrl: repository.htmlUrl
         }

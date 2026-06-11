@@ -39,6 +39,10 @@ export class NetworkResilienceError extends Error {
   }
 }
 
+export function isFetchTimeout(result: Response | TimeoutResult): result is TimeoutResult {
+  return "timeout" in result;
+}
+
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},

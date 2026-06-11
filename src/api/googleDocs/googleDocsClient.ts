@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../networkResilience";
+import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
@@ -97,6 +97,10 @@ export class GoogleDocsClient {
       method: "GET",
       headers: this.headers
     });
+
+    if (isFetchTimeout(response)) {
+      throw new GoogleDocsApiError(response.message);
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");

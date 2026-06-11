@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { calculateOwnershipScores, type OwnershipSignals } from "./ownershipAnalysis";
+import { calculateOwnershipScores } from "./ownershipAnalysis";
+import type { OwnershipSignals } from "../../types/ownership";
 
 let passed = 0;
 let failed = 0;
@@ -30,6 +31,7 @@ test("calculateOwnershipScores propagates github login from commit stats", () =>
     ],
     reviews: [],
     issues: [],
+    specialties: [],
     activity: [
       {
         author: "raneyja",

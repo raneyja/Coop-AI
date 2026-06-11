@@ -3,7 +3,8 @@ import {
   confluenceSiteHostname,
   confluenceSiteUrlError,
   resolveConfluenceAuth,
-  resolveConfluenceBaseUrl
+  resolveConfluenceBaseUrl,
+  type ConfluenceAuth
 } from "../confluence/resolveConfluenceBaseUrl";
 import { GoogleDocsClient } from "../googleDocs/googleDocsClient";
 import { JiraClient } from "../jira/jiraClient";
