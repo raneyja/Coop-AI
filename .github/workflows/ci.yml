@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: |
+          npm run test:chat-prose
+          npm run test:slash-commands
+          npm run test:system-prompts
+          npm run test:quick-action-prompts
+          npm run test:knowledge-gaps-enrichment
+          npm run test:format-chat-copy
+          npm run test:effective-quick-action
+          npm run test:chat-threads
+          npm run test:inline-completion
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t coop-api:ci .
