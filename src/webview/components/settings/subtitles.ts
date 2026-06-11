@@ -29,16 +29,16 @@ function integrationNames(prefs: Preferences): string {
   if (integrationConfigured(prefs, "jira")) {
     names.push("Jira");
   }
-  if (prefs.hasTeamsToken) {
+  if (integrationConfigured(prefs, "teams")) {
     names.push("Teams");
   }
-  if (prefs.hasConfluenceCredentials) {
+  if (integrationConfigured(prefs, "confluence")) {
     names.push("Confluence");
   }
-  if (prefs.hasNotionToken) {
+  if (integrationConfigured(prefs, "notion")) {
     names.push("Notion");
   }
-  if (prefs.hasGoogleDocsToken) {
+  if (integrationConfigured(prefs, "google-docs")) {
     names.push("Google Docs");
   }
   return names.length > 0 ? names.join(" · ") : "None configured";
@@ -133,23 +133,19 @@ export function integrationConfigured(
   provider: IntegrationChatProvider
 ): boolean {
   if (provider === "slack") {
-    return prefs.devMode ? prefs.hasSlackToken : prefs.hasSlackInstalled || prefs.hasSlackToken;
+    return prefs.devMode ? prefs.hasSlackToken : prefs.hasSlackInstalled;
   }
   if (provider === "jira") {
-    return prefs.devMode
-      ? prefs.hasJiraCredentials
-      : prefs.hasAtlassianInstalled || prefs.hasJiraCredentials;
+    return prefs.devMode ? prefs.hasJiraCredentials : prefs.hasAtlassianInstalled;
   }
   if (provider === "teams") {
-    return prefs.hasTeamsToken;
+    return prefs.devMode ? prefs.hasTeamsToken : prefs.hasTeamsInstalled;
   }
   if (provider === "confluence") {
-    return prefs.devMode
-      ? prefs.hasConfluenceCredentials
-      : prefs.hasAtlassianInstalled || prefs.hasConfluenceCredentials;
+    return prefs.devMode ? prefs.hasConfluenceCredentials : prefs.hasAtlassianInstalled;
   }
   if (provider === "notion") {
-    return prefs.hasNotionToken;
+    return prefs.devMode ? prefs.hasNotionToken : prefs.hasNotionInstalled;
   }
-  return prefs.hasGoogleDocsToken;
+  return prefs.devMode ? prefs.hasGoogleDocsToken : prefs.hasGoogleDocsInstalled;
 }

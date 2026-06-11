@@ -73,6 +73,15 @@ export function integrationConnectionMeta(prefs: Preferences, provider: Integrat
   if ((provider === "jira" || provider === "confluence") && prefs.atlassianSiteName) {
     return `Connected to ${prefs.atlassianSiteName}`;
   }
+  if (provider === "notion" && prefs.notionWorkspaceName) {
+    return `Connected to ${prefs.notionWorkspaceName}`;
+  }
+  if (provider === "teams" && prefs.teamsDisplayName) {
+    return `Connected as ${prefs.teamsDisplayName}`;
+  }
+  if (provider === "google-docs" && prefs.googleDocsDisplayName) {
+    return `Connected as ${prefs.googleDocsDisplayName}`;
+  }
   if (prefs.devMode) {
     return "Connected via developer token";
   }
@@ -88,7 +97,6 @@ export function connectionsHubSubtitle(prefs: Preferences): string {
   const tools = [
     integrationConfigured(prefs, "slack"),
     integrationConfigured(prefs, "jira"),
-    integrationConfigured(prefs, "teams"),
     integrationConfigured(prefs, "confluence"),
     integrationConfigured(prefs, "notion"),
     integrationConfigured(prefs, "google-docs")

@@ -1,6 +1,7 @@
 import type { JobQueueConfig } from "../config/jobQueueConfig";
 import type { JobQueue } from "./jobQueue";
 import { JobType } from "./types";
+import type { OrgStore } from "../server/orgStore";
 
 type CronTask = {
   stop: () => void;
@@ -17,7 +18,8 @@ export class JobScheduler {
   public constructor(
     private readonly queue: JobQueue,
     private readonly config: JobQueueConfig,
-    private readonly notifier?: ScheduledJobNotifier
+    private readonly notifier?: ScheduledJobNotifier,
+    private readonly orgStore?: OrgStore
   ) {}
 
   public async start(): Promise<void> {
@@ -28,7 +30,12 @@ export class JobScheduler {
         continue;
       }
       const task = cron.schedule(schedule.trigger, () => {
-        void this.enqueueScheduled(schedule.name, schedule.jobType, schedule.priority, schedule.params);
+        void this.enqueueScheduled(
+          schedule.name,
+          schedule.jobType,
+          schedule.priority,
+          schedule.params
+        );
       });
       this.tasks.push(task);
       console.log(`[jobs] scheduled "${schedule.name}" with cron ${schedule.trigger}`);
@@ -57,6 +64,11 @@ export class JobScheduler {
     params?: Record<string, unknown>
   ): Promise<void> {
     try {
+      if (jobType === JobType.INDEX_REPOSITORY && params?.scope === "nightly-index-all") {
+        await this.enqueueNightlyIndexJobs(name, priority);
+        return;
+      }
+
       const response = await this.queue.createJob({
         type: jobType,
         priority,
@@ -70,6 +82,47 @@ export class JobScheduler {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[jobs] failed to enqueue scheduled job ${name}: ${message}`);
     }
+  }
+
+  private async enqueueNightlyIndexJobs(
+    name: string,
+    priority: "high" | "normal" | "low"
+  ): Promise<void> {
+    if (!this.orgStore) {
+      console.warn(`[jobs] skipping ${name}: organization database not configured`);
+      return;
+    }
+
+    const targets = await this.orgStore.listLightningEnabledReposForScheduledIndex();
+    if (targets.length === 0) {
+      console.log(`[jobs] ${name}: no lightning-enabled repos for pro/enterprise orgs`);
+      return;
+    }
+
+    let enqueued = 0;
+    for (const target of targets) {
+      try {
+        const response = await this.queue.createJob({
+          type: JobType.INDEX_REPOSITORY,
+          priority,
+          params: {
+            scope: "nightly-index-all",
+            orgId: target.orgId,
+            repoId: target.repoId
+          },
+          userId: "system",
+          scheduled: true
+        });
+        enqueued += 1;
+        await this.notifier?.notify({ name, jobId: response.jobId, jobType: JobType.INDEX_REPOSITORY });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(
+          `[jobs] failed to enqueue nightly index for ${target.orgId}/${target.repoId}: ${message}`
+        );
+      }
+    }
+    console.log(`[jobs] enqueued ${enqueued} nightly index job(s) for ${name}`);
   }
 }
 

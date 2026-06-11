@@ -24,7 +24,7 @@ import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeli
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
 import { LightningModePanel, LightningStatusBadge } from "./LightningModePanel";
-import type { ChatImageAttachment } from "../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
 import { useDebouncedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
@@ -131,7 +131,17 @@ type InboundMessage =
     }
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "lightning:open" }
-  | { type: "lightning:state"; payload: LightningModeState };
+  | { type: "lightning:state"; payload: LightningModeState }
+  | {
+      type: "mention:results";
+      payload: {
+        pattern: string;
+        items: MentionSearchResult[];
+        error?: string;
+        loading?: boolean;
+        hint?: string;
+      };
+    };
 
 type ChatPanelProps = {
   vscode: VsCodeApi;
@@ -197,6 +207,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [input, setInput] = useState(cached?.draftInput || "");
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
+  const [mentions, setMentions] = useState<ChatFileMention[]>([]);
+  const [mentionResults, setMentionResults] = useState<MentionSearchResult[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionError, setMentionError] = useState("");
+  const [mentionHint, setMentionHint] = useState("");
   const [error, setError] = useState("");
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -406,6 +421,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             loading: message.payload.loading
           });
           break;
+        case "mention:results":
+          setMentionLoading(Boolean(message.payload.loading));
+          setMentionError(message.payload.error ?? "");
+          if (message.payload.loading) {
+            setMentionHint("");
+          } else {
+            setMentionHint(message.payload.hint ?? "");
+          }
+          if (!message.payload.loading) {
+            setMentionResults(message.payload.items);
+          }
+          break;
         case "intent:feedback":
           setIntentFeedback(message.payload);
           if (message.payload.status === "complete") {
@@ -492,9 +519,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [input, vscode]);
 
   const submitPrompt = useCallback(
-    (prompt: string, quickAction?: QuickActionId, pendingAttachments: ChatImageAttachment[] = attachments) => {
+    (
+      prompt: string,
+      quickAction?: QuickActionId,
+      pendingAttachments: ChatImageAttachment[] = attachments,
+      pendingMentions: ChatFileMention[] = mentions
+    ) => {
       const message = prompt.trim();
-      if (!message && pendingAttachments.length === 0) {
+      if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0) {
         return;
       }
       if (message.length > INPUT_MAX) {
@@ -510,13 +542,26 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         payload: {
           message,
           quickAction,
-          attachments: pendingAttachments.length ? pendingAttachments : undefined
+          attachments: pendingAttachments.length ? pendingAttachments : undefined,
+          mentions: pendingMentions.length ? pendingMentions.slice(0, 3) : undefined
         }
       });
       setInput("");
       setAttachments([]);
+      setMentions([]);
+      setMentionResults([]);
+      setMentionError("");
     },
-    [attachments, post]
+    [attachments, mentions, post]
+  );
+
+  const handleMentionSearch = useCallback(
+    (pattern: string) => {
+      setMentionLoading(true);
+      setMentionError("");
+      post({ type: "mention:search", payload: { pattern } });
+    },
+    [post]
   );
 
   const handleSend = useCallback(() => submitPrompt(input), [input, submitPrompt]);
@@ -689,6 +734,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         usageLabel={usageLabel}
         attachments={attachments}
         attachmentError={attachmentError}
+        mentions={mentions}
+        onMentionsChange={setMentions}
+        onMentionSearch={handleMentionSearch}
+        mentionResults={mentionResults}
+        mentionLoading={mentionLoading}
+        mentionError={mentionError}
+        mentionHint={mentionHint}
         onChange={setInput}
         onAttachmentsChange={setAttachments}
         onAttachmentError={setAttachmentError}
@@ -772,7 +824,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <AutocompleteStatus
             status={autocompleteStatus}
             message={autocompleteMessage}
-            onToggle={() => post({ type: "autocomplete:toggle" })}
+            onToggle={() =>
+              post({
+                type: "autocomplete:set",
+                payload: { enabled: autocompleteStatus === "disabled" }
+              })
+            }
           />
         </div>
       </div>

@@ -272,6 +272,7 @@ export function useCaseFromQuickAction(quickAction: string | undefined): UseCase
 }
 
 type ManifestSnippet = { path: string; content: string; lineRange?: [number, number] };
+type MentionFileSnippet = ManifestSnippet & { repoId: string };
 
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
@@ -310,6 +311,36 @@ export function formatChatMessageWithLocalFiles(options: {
     lines.push("</file_content>");
   }
   lines.push("</local_files>", "</attached_context>", "", options.message.trim());
+  return lines.join("\n");
+}
+
+/** Build the user turn when @-mentioned files are resolved (cross-repo). */
+export function formatChatMessageWithMentionFiles(options: {
+  message: string;
+  files: MentionFileSnippet[];
+  owner?: string;
+  repo?: string;
+  branch?: string;
+}): string {
+  const lines: string[] = ["<attached_context>"];
+  if (options.owner && options.repo) {
+    lines.push(`repo: ${options.owner}/${options.repo}`);
+  }
+  if (options.branch) {
+    lines.push(`branch: ${options.branch}`);
+  }
+  lines.push("<mentioned_files>");
+  lines.push("The file_content blocks below are authoritative source from indexed repositories.");
+  for (const file of options.files) {
+    const range =
+      file.lineRange && file.lineRange.length === 2
+        ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
+        : "";
+    lines.push(`<file_content path="${file.path}" repo="${file.repoId}"${range}>`);
+    lines.push(file.content);
+    lines.push("</file_content>");
+  }
+  lines.push("</mentioned_files>", "</attached_context>", "", options.message.trim());
   return lines.join("\n");
 }
 
@@ -426,6 +457,10 @@ export function buildUserMessageWithContext(
     lines.push(...formatKnowledgeGapJobScanForLlm(knowledgeGapScan));
   }
   if (context?.contextBundle !== undefined) {
+    const qualityNote = buildIndexQualityNote(context.contextBundle);
+    if (qualityNote) {
+      lines.push(qualityNote);
+    }
     lines.push("<graph_context>");
     lines.push(JSON.stringify(sanitizeContextBundleForLlm(context.contextBundle), null, 2));
     lines.push("</graph_context>");
@@ -1044,4 +1079,80 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
       data
     };
   });
+}
+
+/**
+ * Emits a compact XML annotation that tells the LLM what retrieval sources
+ * contributed to the attached graph_context and how much to trust each one.
+ *
+ * The model uses this to calibrate confidence:
+ *  - precise (SCIP):      compiler-derived, exact — treat like ground truth
+ *  - full-text (Zoekt):   token-level exact match — reliable for pattern searches
+ *  - semantic (embedding): similarity-based — flag inferences as "likely, not confirmed"
+ *  - heuristic (tree-sitter): pattern-based — approximate; note caveats on specifics
+ */
+function buildIndexQualityNote(bundle: unknown): string | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+
+  let scipPrecise = false;
+  let zoektAvailable = false;
+  let embeddingAvailable = false;
+  let heuristicOnly = false;
+  let language: string | undefined;
+
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as Record<string, unknown>).data as Record<string, unknown> | undefined;
+    const lightning = data?.lightning as Record<string, unknown> | undefined;
+    if (!lightning) {
+      continue;
+    }
+    if (lightning.scipAvailable) {
+      scipPrecise = true;
+    }
+    if (lightning.zoektAvailable) {
+      zoektAvailable = true;
+    }
+    if (lightning.searchSource === "embedding") {
+      embeddingAvailable = true;
+    }
+    if (lightning.searchSource === "tree-sitter") {
+      heuristicOnly = true;
+    }
+    if (typeof lightning.language === "string") {
+      language = lightning.language;
+    }
+  }
+
+  // No lightning context in this bundle — skip the note
+  if (!scipPrecise && !zoektAvailable && !embeddingAvailable && !heuristicOnly) {
+    return undefined;
+  }
+
+  const sources: string[] = [];
+  if (scipPrecise) {
+    sources.push(`scip${language ? `(${language})` : ""}=precise`);
+  }
+  if (zoektAvailable) {
+    sources.push("zoekt=full-text");
+  }
+  if (embeddingAvailable) {
+    sources.push("embedding=semantic");
+  }
+  if (heuristicOnly && !scipPrecise) {
+    sources.push("tree-sitter=heuristic");
+  }
+
+  const quality = scipPrecise ? "precise" : embeddingAvailable ? "semantic" : "heuristic";
+  return `<index_quality quality="${quality}" sources="${sources.join(",")}">\n` +
+    `When reasoning about code from graph_context:\n` +
+    (scipPrecise ? `- SCIP symbols are compiler-derived. Definitions, types, and references are exact.\n` : "") +
+    (zoektAvailable ? `- Zoekt hits are exact full-text matches. Safe for pattern and token searches.\n` : "") +
+    (embeddingAvailable ? `- Embedding hits are semantic similarity matches. *Flag inferences as approximate* when only embedding context supports the claim.\n` : "") +
+    (heuristicOnly && !scipPrecise ? `- Index is tree-sitter heuristic only. Treat symbol locations as approximate; note caveats for specific line numbers.\n` : "") +
+    `</index_quality>`;
 }

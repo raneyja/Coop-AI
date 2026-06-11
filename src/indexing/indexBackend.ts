@@ -3,6 +3,10 @@ import type { LightningConfiguration } from "../config/lightningConfig";
 
 export type IndexBackendKind = "local" | "cloud";
 
+export type IndexSearchOptions = {
+  collectionId?: string;
+};
+
 export type IndexRepoStatus = {
   repoId: string;
   enabled: boolean;
@@ -23,7 +27,7 @@ export interface IndexBackend {
   refreshRepo(ref: { repoId: string; owner: string; repo: string; branch?: string }): Promise<IndexRepoStatus>;
   getRepoStatus(repoId: string): Promise<IndexRepoStatus | undefined>;
   listRepoStatuses(config: LightningConfiguration): Promise<IndexRepoStatus[]>;
-  search(repoId: string, pattern: string): Promise<LocalSearchResult>;
+  search(repoId: string, pattern: string, options?: IndexSearchOptions): Promise<LocalSearchResult>;
   dependents(repoId: string, file: string): Promise<LocalDependentsResult>;
   summarize(config: LightningConfiguration): Promise<{
     enabledRepos: number;

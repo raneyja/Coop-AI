@@ -242,6 +242,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const range = new vscode.Range(position, position);
     const item = new vscode.InlineCompletionItem(insertText, range);
     item.filterText = context.currentLinePrefix + insertText;
+    item.command = {
+      title: "CoopAI autocomplete accepted",
+      command: "coopAI.internal.autocompleteAccepted",
+      arguments: [context.contextHash, context.languageId]
+    };
     return item;
   }
 

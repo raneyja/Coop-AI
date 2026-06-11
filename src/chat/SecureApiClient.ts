@@ -14,7 +14,16 @@ import { isRetryableError, runResilientRequest, statusFromError } from "../api/n
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import type { ChatMessage, RemoteTreeNode, RepoContext, UserPreferences, LlmProviderPreference, ChatImageAttachment } from "./types";
+import type {
+  ChatMessage,
+  RemoteTreeNode,
+  RepoContext,
+  UserPreferences,
+  LlmProviderPreference,
+  ChatImageAttachment,
+  ChatFileMention,
+  OrgCollectionSummary
+} from "./types";
 import { isCoopDevMode } from "../config/lightningConfig";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -27,6 +36,7 @@ export type StreamChatParams = {
   context: RepoContext & { contextBundle?: unknown };
   history: ChatMessage[];
   attachments?: ChatImageAttachment[];
+  mentions?: ChatFileMention[];
   model: string;
   provider: LlmProviderPreference;
   useCase: UseCase;
@@ -69,6 +79,31 @@ export class SecureApiClient {
 
   public getBackendClient(): CoopBackendClient {
     return this.backend;
+  }
+
+  public async graphSearch(
+    baseUrl: string,
+    repoId: string,
+    pattern: string,
+    collectionId?: string,
+    mention = false
+  ): Promise<unknown> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    return this.backend.graphSearch(baseUrl, repoId, pattern, collectionId, mention);
+  }
+
+  public async listCollections(baseUrl: string): Promise<OrgCollectionSummary[]> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    const response = await this.backend.listCollections(baseUrl);
+    return (response.collections ?? []).map((collection) => ({
+      id: collection.id,
+      name: collection.name,
+      description: collection.description,
+      repoCount: collection.repos?.length ?? 0,
+      repoIds: (collection.repos ?? []).map((repo) => repo.repoId)
+    }));
   }
 
   public async fetchRepoManifest(baseUrl: string, repoId: string) {
@@ -126,6 +161,18 @@ export class SecureApiClient {
     return this.backend.getAtlassianAppInstallUrl(baseUrl);
   }
 
+  public async getNotionAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getNotionAppInstallUrl(baseUrl);
+  }
+
+  public async getGoogleDocsAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getGoogleDocsAppInstallUrl(baseUrl);
+  }
+
+  public async getTeamsAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.backend.getTeamsAppInstallUrl(baseUrl);
+  }
+
   public async getSlackInstallationStatus(baseUrl: string): Promise<{ installed: boolean; teamName?: string }> {
     return this.backend.getSlackInstallationStatus(baseUrl);
   }
@@ -136,9 +183,27 @@ export class SecureApiClient {
     return this.backend.getAtlassianInstallationStatus(baseUrl);
   }
 
+  public async getNotionInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; workspaceName?: string }> {
+    return this.backend.getNotionInstallationStatus(baseUrl);
+  }
+
+  public async getGoogleDocsInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; displayName?: string; email?: string }> {
+    return this.backend.getGoogleDocsInstallationStatus(baseUrl);
+  }
+
+  public async getTeamsInstallationStatus(
+    baseUrl: string
+  ): Promise<{ installed: boolean; displayName?: string; email?: string }> {
+    return this.backend.getTeamsInstallationStatus(baseUrl);
+  }
+
   public async getIntegrationCredentials(
     baseUrl: string,
-    provider: "slack" | "atlassian"
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
   ): Promise<{
     accessToken: string;
     metadata: Record<string, string | undefined>;
@@ -206,9 +271,18 @@ export class SecureApiClient {
       if (!health.ok) {
         return { ok: false, message: "API health check failed." };
       }
+      let orgLabel = "";
+      try {
+        const me = await this.backend.fetchMe(baseUrl);
+        if (me.orgName) {
+          orgLabel = ` Org: ${me.orgName}.`;
+        }
+      } catch {
+        // Health succeeded; org lookup is optional for the test message.
+      }
       const providers = health.llm?.configuredProviders?.join(", ") || "mock mode";
       const mock = health.llm?.mockMode ? " (mock)" : "";
-      return { ok: true, message: `Connected. LLM providers: ${providers}${mock}.` };
+      return { ok: true, message: `Connected.${orgLabel} LLM providers: ${providers}${mock}.` };
     } catch (error) {
       return { ok: false, message: formatUserFacingNetworkError(error, "Connection failed.") };
     }
@@ -253,6 +327,11 @@ export class SecureApiClient {
           contextBundle: body.context.contextBundle
         },
         attachments: body.attachments,
+        mentions: body.mentions?.map((mention) => ({
+          repoId: mention.repoId,
+          path: mention.path,
+          lines: mention.lines
+        })),
         model: body.model,
         provider: body.provider as LlmProvider,
         useCase: body.useCase,
@@ -349,6 +428,20 @@ export class SecureApiClient {
     this.setBaseUrl(baseUrl);
     return this.backend.fetchInlineCompletion(baseUrl, body, signal);
   }
+
+  public async recordUsageEvents(
+    eventType: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    const baseUrl = readConfiguration().apiBaseUrl;
+    if (!baseUrl) {
+      return;
+    }
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    this.setBaseUrl(baseUrl);
+    await this.backend.recordUsageEvents(baseUrl, [{ eventType, metadata }]);
+  }
 }
 
 export function readConfiguration(): Omit<
@@ -361,9 +454,12 @@ export function readConfiguration(): Omit<
   | "hasSlackInstalled"
   | "hasAtlassianInstalled"
   | "hasJiraCredentials"
+  | "hasTeamsInstalled"
   | "hasTeamsToken"
   | "hasConfluenceCredentials"
+  | "hasNotionInstalled"
   | "hasNotionToken"
+  | "hasGoogleDocsInstalled"
   | "hasGoogleDocsToken"
 > {
   const config = vscode.workspace.getConfiguration("coopAI");
@@ -387,11 +483,11 @@ export function readConfiguration(): Omit<
     jiraBaseUrl: config.get<string>("jira.baseUrl", "https://your-domain.atlassian.net"),
     confluenceBaseUrl: config.get<string>("confluence.baseUrl", "https://your-domain.atlassian.net/wiki"),
     devMode: config.get<boolean>("devMode", false),
+    searchScopeMode: config.get<"repo" | "collection">("searchScope.mode", "repo"),
+    searchCollectionId: config.get<string>("searchScope.collectionId", ""),
     hasGitHubAppInstalled: false,
     hasGitLabAppInstalled: false,
-    hasBitbucketAppInstalled: false,
-    hasSlackInstalled: false,
-    hasAtlassianInstalled: false
+    hasBitbucketAppInstalled: false
   };
 }
 
@@ -490,8 +586,14 @@ export async function readPreferences(
   let hasBitbucketAppInstalled = false;
   let hasSlackInstalled = false;
   let hasAtlassianInstalled = false;
+  let hasNotionInstalled = false;
+  let hasGoogleDocsInstalled = false;
+  let hasTeamsInstalled = false;
   let slackTeamName: string | undefined;
   let atlassianSiteName: string | undefined;
+  let notionWorkspaceName: string | undefined;
+  let googleDocsDisplayName: string | undefined;
+  let teamsDisplayName: string | undefined;
   let orgName: string | undefined;
   let plan: UserPreferences["plan"];
   let userRole: string | undefined;
@@ -540,6 +642,27 @@ export async function readPreferences(
     } catch {
       hasAtlassianInstalled = false;
     }
+    try {
+      const status = await api.getNotionInstallationStatus(base.apiBaseUrl);
+      hasNotionInstalled = status.installed;
+      notionWorkspaceName = status.workspaceName;
+    } catch {
+      hasNotionInstalled = false;
+    }
+    try {
+      const status = await api.getGoogleDocsInstallationStatus(base.apiBaseUrl);
+      hasGoogleDocsInstalled = status.installed;
+      googleDocsDisplayName = status.displayName ?? status.email;
+    } catch {
+      hasGoogleDocsInstalled = false;
+    }
+    try {
+      const status = await api.getTeamsInstallationStatus(base.apiBaseUrl);
+      hasTeamsInstalled = status.installed;
+      teamsDisplayName = status.displayName ?? status.email;
+    } catch {
+      hasTeamsInstalled = false;
+    }
   }
   const hasSlackToken = devMode
     ? Boolean(integrationCreds.slackToken)
@@ -574,10 +697,22 @@ export async function readPreferences(
     hasAtlassianInstalled,
     atlassianSiteName,
     hasJiraCredentials,
-    hasTeamsToken: Boolean(integrationCreds.teamsToken),
+    hasTeamsInstalled,
+    teamsDisplayName,
+    hasTeamsToken: devMode
+      ? Boolean(integrationCreds.teamsToken)
+      : hasTeamsInstalled || Boolean(integrationCreds.teamsToken),
     hasConfluenceCredentials,
-    hasNotionToken: Boolean(integrationCreds.notionToken),
-    hasGoogleDocsToken: Boolean(integrationCreds.googleDocsToken),
+    hasNotionInstalled,
+    notionWorkspaceName,
+    hasNotionToken: devMode
+      ? Boolean(integrationCreds.notionToken)
+      : hasNotionInstalled || Boolean(integrationCreds.notionToken),
+    hasGoogleDocsInstalled,
+    googleDocsDisplayName,
+    hasGoogleDocsToken: devMode
+      ? Boolean(integrationCreds.googleDocsToken)
+      : hasGoogleDocsInstalled || Boolean(integrationCreds.googleDocsToken),
     jiraBaseUrl: integrationCreds.jiraBaseUrl ?? base.jiraBaseUrl,
     confluenceBaseUrl: integrationCreds.confluenceBaseUrl ?? base.confluenceBaseUrl
   };
@@ -636,6 +771,12 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   }
   if (updates.confluenceBaseUrl !== undefined) {
     ops.push(["confluence.baseUrl", updates.confluenceBaseUrl]);
+  }
+  if (updates.searchScopeMode !== undefined) {
+    ops.push(["searchScope.mode", updates.searchScopeMode]);
+  }
+  if (updates.searchCollectionId !== undefined) {
+    ops.push(["searchScope.collectionId", updates.searchCollectionId]);
   }
   for (const [key, value] of ops) {
     await config.update(key, value, vscode.ConfigurationTarget.Global);

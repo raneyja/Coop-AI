@@ -52,13 +52,28 @@ export type Preferences = {
   hasAtlassianInstalled: boolean;
   atlassianSiteName?: string;
   hasJiraCredentials: boolean;
+  hasTeamsInstalled: boolean;
+  teamsDisplayName?: string;
   hasTeamsToken: boolean;
   hasConfluenceCredentials: boolean;
+  hasNotionInstalled: boolean;
+  notionWorkspaceName?: string;
   hasNotionToken: boolean;
+  hasGoogleDocsInstalled: boolean;
+  googleDocsDisplayName?: string;
   hasGoogleDocsToken: boolean;
   jiraBaseUrl: string;
   confluenceBaseUrl: string;
+  searchScopeMode: import("../../../chat/types").SearchScopeMode;
+  searchCollectionId: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
+};
+
+export type SettingsCollectionSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  repoCount: number;
 };
 
 export type CodeHostScreen = Extract<

@@ -1,8 +1,21 @@
 # Integration onboarding
 
-How to connect external tools to Coop AI. All extension credentials are stored in VS Code **SecretStorage** (never in workspace files).
+How to connect external tools to Coop AI.
 
 Open settings: Coop AI sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
+
+---
+
+## Production vs developer mode
+
+| Mode | Setting | Where credentials live | Who sets up integrations |
+|------|---------|------------------------|---------------------------|
+| **Production** | `coopAI.devMode: false` | Coop **server** (org OAuth) | [Org admin self-serve Connect](./connect-integrations-production.md) |
+| **Developer** | `coopAI.devMode: true` | VS Code **SecretStorage** (PATs/tokens) | Individual developer |
+
+**Enterprise onboarding plan (operators + customers):** [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md)
+
+In production, developers do **not** paste Slack, Notion, or Google tokens. Org admins use **Settings → Connections → Connect**.
 
 ---
 
@@ -11,9 +24,11 @@ Open settings: Coop AI sidebar → gear icon, or Command Palette → **Coop AI: 
 | Step | What | Required? |
 |------|------|-----------|
 | 1 | [Coop API key](#1-coop-api) | Yes |
-| 2 | [Code host token](#2-code-hosts-github--gitlab--bitbucket) (GitHub/GitLab/Bitbucket) | Yes for repo features |
+| 2 | [Code host](#2-code-hosts-github--gitlab--bitbucket) — **Connect** (production) or PAT (dev mode) | Yes for repo features |
 | 3 | [Repository](#3-repository) owner / repo / branch | Recommended |
-| 4 | [Slack / Jira / Teams](#4-decision-archaeology-slack--jira--teams) | Optional — Trace Decision |
+| 4 | [Integrations](#4-integrations-slack--jira--confluence--notion--google-docs--teams) | Optional — Trace Decision, Knowledge Gaps |
+
+Production checklist: [connect-integrations-production.md](./connect-integrations-production.md).
 
 ---
 
@@ -34,9 +49,13 @@ Open settings: Coop AI sidebar → gear icon, or Command Palette → **Coop AI: 
 
 ## 2. Code hosts (GitHub / GitLab / Bitbucket)
 
-**Settings section:** Code hosts
+**Settings section:** Connections → GitHub / GitLab / Bitbucket
 
-### GitHub
+### GitHub (production)
+
+**Connect GitHub** in the browser — tokens stored on the Coop server. See [github-connect.md](./github-connect.md) and [connect-integrations-production.md](./connect-integrations-production.md).
+
+### GitHub (developer mode only)
 
 | Field | Token type |
 |-------|------------|
@@ -78,17 +97,29 @@ Set default **owner**, **repo**, and **branch** for Trace Decision and context f
 
 ---
 
-## 4. Decision archaeology (Slack / Jira / Teams)
+## 4. Integrations (Slack / Jira / Confluence / Notion / Google Docs / Teams)
 
-**Settings section:** Decision archaeology
+**Settings section:** Connections → Tools
 
-Used by **Trace Decision** to pull Slack threads, Jira tickets, and Teams messages linked to PRs and issues.
+Used by **Trace Decision**, **Knowledge Gaps**, and chat (`/slack`, `/jira`, `/confluence`, `/notion`, `/docs`, `/teams`).
 
-### Slack
+### Production (`coopAI.devMode: false`)
+
+Org admin: **Connect {tool}** → approve in browser → **Refresh status** → **Test**.
+
+Server operator must register OAuth apps once — see [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md).
+
+| Tool | Production Connect |
+|------|---------------------|
+| Slack | Yes |
+| Jira + Confluence | Yes (one Atlassian OAuth) |
+| Notion | Yes |
+| Google Docs | Yes |
+| Microsoft Teams | **Coming soon** (UI); backend OAuth wired |
+
+### Slack (developer mode only)
 
 **Token type:** User OAuth Token (`xoxp-…`) — **not** the bot token (`xoxb-…`).
-
-#### Create the token
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → your app (or create one).
 2. **OAuth & Permissions** → **User Token Scopes** → add:
@@ -99,14 +130,7 @@ Used by **Trace Decision** to pull Slack threads, Jira tickets, and Teams messag
    - `channels:read`
 3. **Reinstall to Workspace** (top of OAuth page).
 4. Copy **User OAuth Token** (`xoxp-…`) from the same page.
-
-#### Add to Coop AI
-
-1. Open Coop AI **Settings** → **Decision archaeology**.
-2. Paste token in **Slack token**.
-3. **Save Slack token** → **Test Slack**.
-
-Success message includes your workspace name.
+5. **Settings → Slack** → paste token → **Save** → **Test Slack**.
 
 #### Demo workspace note
 
@@ -114,7 +138,7 @@ The `scripts/populate_slack.py` seeder uses a **bot token** to post demo threads
 
 ---
 
-### Jira
+### Jira (developer mode only)
 
 | Field | Value |
 |-------|-------|
@@ -123,6 +147,8 @@ The `scripts/populate_slack.py` seeder uses a **bot token** to post demo threads
 | Jira API token | From [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) |
 
 **Test:** **Test Jira**
+
+Production: use **Connect** on the Jira row (same Atlassian OAuth as Confluence).
 
 #### Demo tickets
 
@@ -139,7 +165,7 @@ Set `JIRA_DEMO_GITHUB_OWNER` to your GitHub org so ticket descriptions list `git
 
 ---
 
-### Confluence
+### Confluence (developer mode only)
 
 | Field | Value |
 |-------|-------|
@@ -149,7 +175,7 @@ Set `JIRA_DEMO_GITHUB_OWNER` to your GitHub org so ticket descriptions list `git
 
 **Test:** **Test Confluence**
 
-Use a **classic API token** (not scoped) so the extension hits `https://your-domain.atlassian.net/wiki/rest/api` directly.
+Production: use **Connect** on the Confluence row (shared Atlassian OAuth).
 
 #### Demo pages
 
@@ -170,17 +196,27 @@ Set `CONFLUENCE_DEMO_GITHUB_OWNER` (or `JIRA_DEMO_GITHUB_OWNER`) to match **Sett
 
 ---
 
-### Microsoft Teams
+### Notion (developer mode only)
 
 | Field | Value |
 |-------|-------|
-| Microsoft Teams (Graph) token | OAuth access token for Microsoft Graph |
+| Notion integration token | `secret_…` from a Notion integration |
 
-**No OAuth flow in the extension today** — obtain a token via Azure AD / Graph Explorer and paste manually.
+Production: **Connect Notion** (OAuth). Developer mode: paste token manually.
 
-**Minimum permissions:** `User.Read`; for message search also `ChannelMessage.Read.All` or equivalent.
+### Google Docs (developer mode only)
 
-**Test:** **Test Teams**
+| Field | Value |
+|-------|-------|
+| Google Drive access token | OAuth token with `drive.readonly` |
+
+Production: **Connect Google Docs** (OAuth). Developer mode: paste token manually.
+
+### Microsoft Teams
+
+**Coming soon** in Settings UI. Backend OAuth is implemented; production Connect not exposed yet.
+
+Developer mode (legacy): paste a Microsoft Graph access token manually.
 
 ---
 
@@ -202,6 +238,9 @@ Not configured in the extension UI. See:
 
 | Doc | Covers |
 |-----|--------|
+| [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md) | Operator vs org admin vs developer; rollout phases |
+| [connect-integrations-production.md](./connect-integrations-production.md) | Org admin Connect checklist + redirect URIs |
+| [github-connect.md](./github-connect.md) | GitHub App vs OAuth App |
 | [api-v1.md](./api-v1.md) | Coop API auth (`COOP_API_TOKEN`) |
 | [webhook-backend.md](./webhook-backend.md) | GitHub/GitLab/Slack inbound webhooks |
 | [job-queue.md](./job-queue.md) | Jobs API, Postgres, Redis |
@@ -229,12 +268,14 @@ Not configured in the extension UI. See:
 
 ## Onboarding gaps (future work)
 
-- No first-run wizard or setup checklist in the extension
-- Teams requires manual Graph token paste (no OAuth flow)
-- GitHub/GitLab/Bitbucket scope docs not yet shown in UI
+Tracked in [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md#honest-gap-analysis-product--docs):
+
+- No first-run setup wizard in the extension
+- Teams Connect UI coming soon
+- Operator validation CLI / health panel for all OAuth apps
+- In-app scope documentation on Connect cards
 - License key has no settings field (`coopAI.licenseKey` in code only)
 - Lightning Mode private-repo clone does not use saved code-host PATs
-- Confluence / Notion / Google Docs appear in Settings → Integrations as **Coming soon** (degradation fallback plumbing only)
 
 ---
 

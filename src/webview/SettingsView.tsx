@@ -8,7 +8,7 @@ import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
-import type { SettingsStatePayload } from "../chat/types";
+import type { OrgCollectionSummary, SettingsStatePayload } from "../chat/types";
 import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 
 type PersistedSettingsState = {
@@ -34,7 +34,8 @@ type InboundMessage =
         pinnedIds: string[];
         hasWorkspace: boolean;
       };
-    };
+    }
+  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } };
 
 const DEFAULT_PREFS: Preferences = {
   model: "claude-sonnet-4-6",
@@ -64,12 +65,17 @@ const DEFAULT_PREFS: Preferences = {
   hasSlackInstalled: false,
   hasAtlassianInstalled: false,
   hasJiraCredentials: false,
+  hasTeamsInstalled: false,
   hasTeamsToken: false,
   hasConfluenceCredentials: false,
+  hasNotionInstalled: false,
   hasNotionToken: false,
+  hasGoogleDocsInstalled: false,
   hasGoogleDocsToken: false,
   jiraBaseUrl: "https://your-domain.atlassian.net",
   confluenceBaseUrl: "https://your-domain.atlassian.net/wiki",
+  searchScopeMode: "repo",
+  searchCollectionId: "",
   identityDirectory: { ...EMPTY_IDENTITY_DIRECTORY }
 };
 
@@ -115,6 +121,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     hasWorkspace: boolean;
   }>({ prompts: [], pinnedIds: [], hasWorkspace: false });
   const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [collections, setCollections] = useState<OrgCollectionSummary[]>([]);
+  const [collectionsError, setCollectionsError] = useState<string | undefined>();
   const activeTestRef = useRef<SettingsTestKey | null>(null);
   const activeRefreshRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
@@ -129,6 +137,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const atlassianInstalledRef = useRef(false);
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+  const requestCollections = useCallback(() => {
+    post({ type: "collections:list-request" });
+  }, [post]);
 
   const pollInstallations = useCallback(() => {
     post({ type: "settings:refresh-github-installation" });
@@ -350,6 +361,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         case "prompts:list":
           setPromptLibrary(message.payload);
           break;
+        case "collections:list":
+          setCollections(message.payload.collections);
+          setCollectionsError(message.payload.error);
+          break;
         default:
           break;
       }
@@ -460,6 +475,18 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     beginRefresh(key);
     post({ type: "settings:refresh-atlassian-installation", payload: { key } });
   };
+  const refreshNotion = () => {
+    beginRefresh("notion");
+    post({ type: "settings:refresh-notion-installation" });
+  };
+  const refreshGoogleDocs = () => {
+    beginRefresh("google-docs");
+    post({ type: "settings:refresh-google-docs-installation" });
+  };
+  const refreshTeams = () => {
+    beginRefresh("teams");
+    post({ type: "settings:refresh-teams-installation" });
+  };
 
   return (
     <div className="coop-settings-shell coop-canvas-bg flex h-full min-h-0 w-full flex-col">
@@ -553,6 +580,12 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onRefreshSlackInstallation={refreshSlack}
         onInstallAtlassianApp={() => post({ type: "settings:install-atlassian-app" })}
         onRefreshAtlassianInstallation={refreshAtlassian}
+        onInstallNotionApp={() => post({ type: "settings:install-notion-app" })}
+        onRefreshNotionInstallation={refreshNotion}
+        onInstallGoogleDocsApp={() => post({ type: "settings:install-google-docs-app" })}
+        onRefreshGoogleDocsInstallation={refreshGoogleDocs}
+        onInstallTeamsApp={() => post({ type: "settings:install-teams-app" })}
+        onRefreshTeamsInstallation={refreshTeams}
         bitbucketUsernameDraft={bitbucketUsernameDraft}
         onBitbucketUsernameDraftChange={setBitbucketUsernameDraft}
         bitbucketPasswordDraft={bitbucketPasswordDraft}
@@ -706,22 +739,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           post({ type: "settings:save-identity-directory", payload: { directory } });
           flashSaved("team");
         }}
-        onConnectIntegrationNotice={(provider) => {
-          if (provider === "slack" || provider === "jira" || provider === "confluence") {
-            return;
-          }
-          const label =
-            provider === "google-docs"
-              ? "Google Docs"
-              : provider === "teams"
-                ? "Microsoft Teams"
-                : provider.charAt(0).toUpperCase() + provider.slice(1);
-          setConnectionTestMessage(
-            `${label} browser sign-in is rolling out next. Use developer mode locally until OAuth is enabled.`
-          );
-          setConnectionTestOk(undefined);
-        }}
         onClearChat={() => post({ type: "chat:clear" })}
+        collections={collections}
+        collectionsError={collectionsError}
+        onRequestCollections={requestCollections}
       />
       </div>
       <PromptLibraryModal

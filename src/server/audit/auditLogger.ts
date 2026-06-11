@@ -48,8 +48,52 @@ export function auditActor(auth: AuthContext): { userId?: string; principal: str
  *    could flip this to fail-closed; default here is fail-open + warn.)
  *  - No-op when no DB pool is configured (dev/test without DATABASE_URL).
  */
+export type AuditLogItem = {
+  id: string;
+  action: string;
+  principal?: string;
+  userId?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
 export class AuditLogger {
   public constructor(private readonly pool?: Pool | null) {}
+
+  public async listForOrg(
+    orgId: string,
+    options: { limit: number; cursor?: string }
+  ): Promise<{ entries: AuditLogItem[]; nextCursor?: string }> {
+    if (!this.pool) {
+      return { entries: [] };
+    }
+    const params: unknown[] = [orgId, options.limit + 1];
+    let cursorClause = "";
+    if (options.cursor) {
+      cursorClause = "AND id < $3";
+      params.push(Number(options.cursor));
+    }
+    const result = await this.pool.query(
+      `SELECT id, user_id, principal, action, metadata, created_at
+       FROM audit_log
+       WHERE org_id = $1 ${cursorClause}
+       ORDER BY id DESC
+       LIMIT $2`,
+      params
+    );
+    const rows = result.rows.slice(0, options.limit);
+    const entries: AuditLogItem[] = rows.map((row) => ({
+      id: String(row.id),
+      action: String(row.action),
+      principal: row.principal ? String(row.principal) : undefined,
+      userId: row.user_id ? String(row.user_id) : undefined,
+      metadata: (row.metadata ?? {}) as Record<string, unknown>,
+      createdAt: new Date(String(row.created_at)).toISOString()
+    }));
+    const nextCursor =
+      result.rows.length > options.limit ? String(rows[rows.length - 1]?.id) : undefined;
+    return { entries, nextCursor };
+  }
 
   public async record(entry: AuditEntry): Promise<void> {
     if (!this.pool) {

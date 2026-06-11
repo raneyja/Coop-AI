@@ -505,6 +505,7 @@ async function loadLanguage(ext: string): Promise<unknown> {
   if (cached) {
     return cached;
   }
+  await ensureParserReady();
   const Parser = (await import("web-tree-sitter")).default;
   const wasmsRoot = path.join(
     path.dirname(require.resolve("tree-sitter-wasms/package.json")),

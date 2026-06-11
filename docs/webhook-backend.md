@@ -27,11 +27,24 @@ docker compose up --build
 
 Apply migrations on Postgres:
 
+**Fresh database** (new Docker volume): migrations in `migrations/` run automatically via `docker-entrypoint-initdb.d`.
+
+**Existing database** (upgrade path): use the migration runner, which tracks applied files in `schema_migrations`:
+
+```sh
+export DATABASE_URL=postgres://coop:coop@localhost:5432/coopai
+chmod +x scripts/migrate.sh
+./scripts/migrate.sh
+```
+
+To apply a single migration manually:
+
 ```sh
 psql "$DATABASE_URL" -f migrations/001_jobs.sql
-psql "$DATABASE_URL" -f migrations/002_orgs.sql
-psql "$DATABASE_URL" -f migrations/003_graph_cache.sql
+# ... through migrations/013_org_billing.sql
 ```
+
+Current migrations: `001_jobs` through `013_org_billing` (jobs, orgs, graph cache, manifests, billing, collections, users, integrations, etc.).
 
 The server listens on `PORT` or `8787` by default.
 

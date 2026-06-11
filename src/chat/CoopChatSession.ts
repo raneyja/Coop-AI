@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { readAutocompleteSettings } from "../autocomplete/autocompleteConfig";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import {
@@ -53,12 +54,14 @@ import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
   CachedValue,
+  ChatFileMention,
   ChatImageAttachment,
   ChatMessage,
   ConflictResolutionState,
   ConflictSummary,
   DegradationNotificationPayload,
   IntentFeedbackState,
+  MentionSearchResult,
   RepoContext,
   ThemeMode,
   ThemePayload,
@@ -86,7 +89,12 @@ import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynth
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
 import { openReferencedLink } from "./openReferencedLink";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, useCaseFromQuickAction } from "../prompts/systemPrompts";
+import {
+  buildUserMessageWithContext,
+  formatChatMessageWithLocalFiles,
+  formatChatMessageWithMentionFiles,
+  useCaseFromQuickAction
+} from "../prompts/systemPrompts";
 import { quickActionDisplayText, quickActionModelPrompt } from "../prompts/quickActionPrompts";
 import {
   parseSlashCommand,
@@ -254,12 +262,17 @@ export class CoopChatSession {
       hasSlackInstalled: false,
       hasAtlassianInstalled: false,
       hasJiraCredentials: false,
+      hasTeamsInstalled: false,
       hasTeamsToken: false,
       hasConfluenceCredentials: false,
+      hasNotionInstalled: false,
       hasNotionToken: false,
+      hasGoogleDocsInstalled: false,
       hasGoogleDocsToken: false,
       jiraBaseUrl: "https://your-domain.atlassian.net",
-      confluenceBaseUrl: "https://your-domain.atlassian.net/wiki"
+      confluenceBaseUrl: "https://your-domain.atlassian.net/wiki",
+      searchScopeMode: "repo",
+      searchCollectionId: ""
     };
     this.jobClient = new JobApiClient({
       baseUrl: resolveCoopBaseUrl().baseUrl,
@@ -374,6 +387,13 @@ export class CoopChatSession {
     previewText?: string;
   }): void {
     this.postToChat({ type: "autocomplete:status", payload });
+  }
+
+  private syncAutocompleteStatus(): void {
+    const enabled = readAutocompleteSettings().enabled;
+    this.postAutocompleteStatus({
+      status: enabled ? "ready" : "disabled"
+    });
   }
 
   public newChat(): void {
@@ -560,6 +580,7 @@ export class CoopChatSession {
       case "webview-ready":
         this.postTheme();
         if (source === "chat") {
+          this.syncAutocompleteStatus();
           this.postContext();
           await this.pushSettingsState();
           void this.pushLightningState();
@@ -571,6 +592,7 @@ export class CoopChatSession {
         } else {
           await this.pushSettingsState();
           void this.pushWorkspacePrompts();
+          void this.handleCollectionsListRequest();
           this.flushPendingSettingsNavigation();
         }
         return;
@@ -595,10 +617,25 @@ export class CoopChatSession {
       case "autocomplete:toggle":
         await vscode.commands.executeCommand("coopAI.toggleAutocomplete");
         return;
+      case "autocomplete:set":
+        await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", message.payload.enabled);
+        return;
       case "chat:send":
-        await this.handleChatSend(message.payload.message, message.payload.quickAction, message.payload.attachments, {
-          historyContent: message.payload.historyContent
-        });
+        await this.handleChatSend(
+          message.payload.message,
+          message.payload.quickAction,
+          message.payload.attachments,
+          {
+            historyContent: message.payload.historyContent,
+            mentions: message.payload.mentions
+          }
+        );
+        return;
+      case "mention:search":
+        await this.handleMentionSearch(message.payload.pattern);
+        return;
+      case "collections:list-request":
+        await this.handleCollectionsListRequest();
         return;
       case "chat:stream-cancel":
         this.streamToken++;
@@ -772,6 +809,24 @@ export class CoopChatSession {
       case "settings:refresh-atlassian-installation":
         await this.handleRefreshInstallation(message.payload?.key ?? "jira", source);
         return;
+      case "settings:install-notion-app":
+        await this.handleInstallNotionApp();
+        return;
+      case "settings:refresh-notion-installation":
+        await this.handleRefreshInstallation("notion", source);
+        return;
+      case "settings:install-google-docs-app":
+        await this.handleInstallGoogleDocsApp();
+        return;
+      case "settings:refresh-google-docs-installation":
+        await this.handleRefreshInstallation("google-docs", source);
+        return;
+      case "settings:install-teams-app":
+        await this.handleInstallTeamsApp();
+        return;
+      case "settings:refresh-teams-installation":
+        await this.handleRefreshInstallation("teams", source);
+        return;
       case "settings:update-github-token":
         if (!isCoopDevMode()) {
           return;
@@ -820,6 +875,9 @@ export class CoopChatSession {
         await this.handleTestCodeHost(message.payload.provider, source);
         return;
       case "settings:update-slack-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setSlackToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
         return;
@@ -828,6 +886,9 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         return;
       case "settings:update-jira-credentials":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setJiraCredentials(
           message.payload.email,
           message.payload.token,
@@ -843,6 +904,9 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         return;
       case "settings:update-teams-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setTeamsToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
         return;
@@ -851,6 +915,9 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         return;
       case "settings:update-confluence-credentials":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setConfluenceCredentials(
           message.payload.email,
           message.payload.token,
@@ -891,6 +958,9 @@ export class CoopChatSession {
         return;
       }
       case "settings:update-notion-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setNotionToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
         return;
@@ -899,6 +969,9 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         return;
       case "settings:update-google-docs-token":
+        if (!isCoopDevMode()) {
+          return;
+        }
         await this.options.integrationSecrets.setGoogleDocsToken(message.payload.token);
         await this.refreshAllSessionsPreferences();
         return;
@@ -1646,18 +1719,39 @@ export class CoopChatSession {
             }
           : { ok: false, message: "Confluence status refreshed — not connected. Connect Atlassian." };
       }
-      case "teams":
-        return prefs.hasTeamsToken
-          ? { ok: true, message: "Teams status refreshed — connected." }
-          : { ok: false, message: "Teams status refreshed — not connected." };
-      case "notion":
-        return prefs.hasNotionToken
-          ? { ok: true, message: "Notion status refreshed — connected." }
-          : { ok: false, message: "Notion status refreshed — not connected." };
-      case "google-docs":
-        return prefs.hasGoogleDocsToken
-          ? { ok: true, message: "Google Docs status refreshed — connected." }
-          : { ok: false, message: "Google Docs status refreshed — not connected." };
+      case "teams": {
+        const connected = prefs.hasTeamsInstalled || prefs.hasTeamsToken;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.teamsDisplayName
+                ? `Teams status refreshed — connected as ${prefs.teamsDisplayName}.`
+                : "Teams status refreshed — connected."
+            }
+          : { ok: false, message: "Teams status refreshed — not connected. Connect Microsoft Teams." };
+      }
+      case "notion": {
+        const connected = prefs.hasNotionInstalled || prefs.hasNotionToken;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.notionWorkspaceName
+                ? `Notion status refreshed — connected to ${prefs.notionWorkspaceName}.`
+                : "Notion status refreshed — connected."
+            }
+          : { ok: false, message: "Notion status refreshed — not connected. Connect Notion." };
+      }
+      case "google-docs": {
+        const connected = prefs.hasGoogleDocsInstalled || prefs.hasGoogleDocsToken;
+        return connected
+          ? {
+              ok: true,
+              message: prefs.googleDocsDisplayName
+                ? `Google Docs status refreshed — connected as ${prefs.googleDocsDisplayName}.`
+                : "Google Docs status refreshed — connected."
+            }
+          : { ok: false, message: "Google Docs status refreshed — not connected. Connect Google Docs." };
+      }
       default:
         return { ok: true, message: "Status refreshed." };
     }
@@ -1683,6 +1777,7 @@ export class CoopChatSession {
       integrationProvider?: IntegrationChatProvider;
       /** Bubble/history text; defaults to message (or quick-action tag prefix). */
       historyContent?: string;
+      mentions?: ChatFileMention[];
     }
   ): Promise<void> {
     // Slash-command routing applies only to manually typed messages — never to
@@ -1696,6 +1791,10 @@ export class CoopChatSession {
     }
 
     this.snapEditorContextBeforeSend();
+    if (options?.mentions?.length) {
+      this.currentContext = { ...this.currentContext, contextWarning: undefined };
+      this.postContext();
+    }
     if (quickAction === "understand-repo") {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
@@ -1742,7 +1841,9 @@ export class CoopChatSession {
         const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, message);
         await this.runIntentFetch(intentEvent, { quiet: true });
         this.applyKnowledgeGapJobResultToBundle(quickAction);
-        await this.continueChatAfterContext(message, quickAction, attachments);
+        await this.continueChatAfterContext(message, quickAction, attachments, {
+          mentions: options?.mentions
+        });
         return;
       }
     }
@@ -1765,7 +1866,8 @@ export class CoopChatSession {
     }
     await this.continueChatAfterContext(message, quickAction, attachments, {
       sourceHint: options?.sourceHint,
-      integrationProvider: options?.integrationProvider
+      integrationProvider: options?.integrationProvider,
+      mentions: options?.mentions
     });
   }
 
@@ -1970,6 +2072,7 @@ export class CoopChatSession {
     options?: {
       sourceHint?: string;
       integrationProvider?: IntegrationChatProvider;
+      mentions?: ChatFileMention[];
     }
   ): Promise<void> {
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
@@ -2066,29 +2169,40 @@ export class CoopChatSession {
             entry.type === "knowledge_gaps"
         );
 
+      const mentionFiles = options?.mentions?.length
+        ? await this.resolveMentionFiles(options.mentions)
+        : [];
       const apiMessage =
-        useContextBundle || !localPayload?.files.length
-          ? buildUserMessageWithContext(llmMessage, {
-              owner: this.currentContext.owner,
-              repo: this.currentContext.repo,
-              branch: this.currentContext.branch,
-              file:
-                effectiveQuickAction === "understand-repo" || integrationProvider
-                  ? undefined
-                  : this.currentContext.file,
-              selectedLines: this.currentContext.selectedLines,
-              languageId: this.currentContext.languageId,
-              contextBundle
-            })
-          : formatChatMessageWithLocalFiles({
+        mentionFiles.length > 0
+          ? formatChatMessageWithMentionFiles({
               message: llmMessage,
-              files: localPayload.files,
-              file: this.currentContext.file,
-              selectedLines: this.currentContext.selectedLines,
+              files: mentionFiles,
               owner: this.currentContext.owner,
               repo: this.currentContext.repo,
               branch: this.currentContext.branch
-            });
+            })
+          : useContextBundle || !localPayload?.files.length
+            ? buildUserMessageWithContext(llmMessage, {
+                owner: this.currentContext.owner,
+                repo: this.currentContext.repo,
+                branch: this.currentContext.branch,
+                file:
+                  effectiveQuickAction === "understand-repo" || integrationProvider
+                    ? undefined
+                    : this.currentContext.file,
+                selectedLines: this.currentContext.selectedLines,
+                languageId: this.currentContext.languageId,
+                contextBundle
+              })
+            : formatChatMessageWithLocalFiles({
+                message: llmMessage,
+                files: localPayload.files,
+                file: this.currentContext.file,
+                selectedLines: this.currentContext.selectedLines,
+                owner: this.currentContext.owner,
+                repo: this.currentContext.repo,
+                branch: this.currentContext.branch
+              });
 
       const entryFileCount = contextBundle
         .flatMap((entry) => {
@@ -2161,6 +2275,7 @@ export class CoopChatSession {
           },
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,
+          mentions: options?.mentions,
           model: this.preferences.model,
           provider: this.preferences.llmProvider,
           useCase: useCaseFromQuickAction(effectiveQuickAction),
@@ -3070,6 +3185,75 @@ export class CoopChatSession {
     }
   }
 
+  private async handleInstallNotionApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Sign in to Coop before connecting Notion.");
+      return;
+    }
+    if (this.preferences.canInstallIntegrations === false) {
+      void vscode.window.showErrorMessage(
+        "Only your organization admin can connect Notion. Ask IT to authorize the Notion integration."
+      );
+      return;
+    }
+    try {
+      const url = await this.options.api.getNotionAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Notion authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Notion authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleInstallGoogleDocsApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Sign in to Coop before connecting Google Docs.");
+      return;
+    }
+    if (this.preferences.canInstallIntegrations === false) {
+      void vscode.window.showErrorMessage(
+        "Only your organization admin can connect Google Docs. Ask IT to authorize Google Drive access."
+      );
+      return;
+    }
+    try {
+      const url = await this.options.api.getGoogleDocsAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Google authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Google authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleInstallTeamsApp(): Promise<void> {
+    if (!(await this.options.api.hasToken())) {
+      void vscode.window.showErrorMessage("Sign in to Coop before connecting Microsoft Teams.");
+      return;
+    }
+    if (this.preferences.canInstallIntegrations === false) {
+      void vscode.window.showErrorMessage(
+        "Only your organization admin can connect Microsoft Teams. Ask IT to authorize the Teams app."
+      );
+      return;
+    }
+    try {
+      const url = await this.options.api.getTeamsAppInstallUrl(this.preferences.apiBaseUrl);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage(
+        "Complete Microsoft authorization in your browser, then return here."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open Microsoft authorize URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
   private async handleLightningEnableRepo(repoId: string): Promise<void> {
     const [owner, repo] = parseRepoIdParts(repoId);
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
@@ -3296,6 +3480,281 @@ export class CoopChatSession {
       await session.pushWorkspacePrompts();
     }
   }
+
+  private async handleMentionSearch(pattern: string): Promise<void> {
+    const query = pattern.trim();
+    if (!query) {
+      this.post({
+        type: "mention:results",
+        payload: { pattern: query, items: [] }
+      });
+      return;
+    }
+
+    this.post({
+      type: "mention:results",
+      payload: { pattern: query, items: [], loading: true }
+    });
+
+    try {
+      const searchRepoIds = await this.resolveMentionSearchRepoIds();
+      const repoScope = resolveMentionRepoScope(query, searchRepoIds);
+      if (repoScope && !repoScope.pathQuery) {
+        this.post({
+          type: "mention:results",
+          payload: {
+            pattern: query,
+            items: [],
+            hint: `Type a path after @${repoScope.matchedPrefix}/ — e.g. @${repoScope.matchedPrefix}/cmd/zoekt-webserver/main.go`
+          }
+        });
+        return;
+      }
+
+      const defaultRepoId = buildRepoId(this.preferences, this.currentContext);
+      const searchRepoId = repoScope?.repoId ?? defaultRepoId;
+      const searchPattern = repoScope?.pathQuery ?? query;
+      const collectionId = repoScope ? undefined : resolveSearchCollectionId(this.preferences);
+      const remote = (await this.options.api.graphSearch(
+        this.preferences.apiBaseUrl,
+        searchRepoId,
+        searchPattern,
+        collectionId,
+        true
+      )) as {
+        data?: Array<{ repoId?: string; path?: string; sha?: string; score?: number }>;
+      };
+
+      const items: MentionSearchResult[] = [];
+      for (const hit of remote.data ?? []) {
+        if (!hit.path || isNoisyMentionPath(hit.path)) {
+          continue;
+        }
+        items.push({
+          repoId: hit.repoId ?? searchRepoId,
+          path: hit.path,
+          lineNumber: hit.sha ? Number(hit.sha) : undefined,
+          score: hit.score
+        });
+      }
+
+      const ranked = rankMentionSearchResults(dedupeMentionResults(items), searchPattern).slice(0, 12);
+      this.post({
+        type: "mention:results",
+        payload: { pattern: query, items: ranked }
+      });
+    } catch (error) {
+      this.post({
+        type: "mention:results",
+        payload: {
+          pattern: query,
+          items: [],
+          error: error instanceof Error ? error.message : "Search failed."
+        }
+      });
+    }
+  }
+
+  private async resolveMentionSearchRepoIds(): Promise<string[]> {
+    const collectionId = resolveSearchCollectionId(this.preferences);
+    if (!collectionId) {
+      return [buildRepoId(this.preferences, this.currentContext)];
+    }
+    const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
+    const collection = collections.find((entry) => entry.id === collectionId);
+    const repoIds = collection?.repoIds ?? [];
+    if (repoIds.length > 0) {
+      return repoIds;
+    }
+    return [buildRepoId(this.preferences, this.currentContext)];
+  }
+
+  private async handleCollectionsListRequest(): Promise<void> {
+    try {
+      const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
+      this.post({
+        type: "collections:list",
+        payload: { collections }
+      });
+      this.postToSettings({
+        type: "collections:list",
+        payload: { collections }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load collections.";
+      this.post({
+        type: "collections:list",
+        payload: { collections: [], error: message }
+      });
+      this.postToSettings({
+        type: "collections:list",
+        payload: { collections: [], error: message }
+      });
+    }
+  }
+
+  private async resolveMentionFiles(
+    mentions: ChatFileMention[]
+  ): Promise<Array<{ repoId: string; path: string; content: string; lineRange?: [number, number] }>> {
+    const resolved: Array<{
+      repoId: string;
+      path: string;
+      content: string;
+      lineRange?: [number, number];
+    }> = [];
+
+    for (const mention of mentions.slice(0, 3)) {
+      let content = mention.snippet?.trim() ?? "";
+      if (!content || !mention.lines) {
+        try {
+          const file = await this.options.api
+            .getBackendClient()
+            .fetchRepoFile(
+              this.preferences.apiBaseUrl,
+              mention.repoId,
+              mention.path,
+              this.currentContext.branch ?? this.preferences.branch
+            );
+          content = file.content ?? "";
+        } catch {
+          if (!content) {
+            continue;
+          }
+        }
+      }
+
+      if (mention.lines && mention.lines.length === 2) {
+        const sliced = sliceFileLines(content, mention.lines[0], mention.lines[1]);
+        resolved.push({
+          repoId: mention.repoId,
+          path: mention.path,
+          content: sliced,
+          lineRange: mention.lines
+        });
+      } else {
+        resolved.push({
+          repoId: mention.repoId,
+          path: mention.path,
+          content: content.slice(0, 12_000)
+        });
+      }
+    }
+
+    return resolved;
+  }
+}
+
+function resolveSearchCollectionId(preferences: UserPreferences): string | undefined {
+  if (preferences.searchScopeMode !== "collection") {
+    return undefined;
+  }
+  const collectionId = preferences.searchCollectionId.trim();
+  return collectionId || undefined;
+}
+
+function dedupeMentionResults(items: MentionSearchResult[]): MentionSearchResult[] {
+  const byPath = new Map<string, MentionSearchResult>();
+  for (const item of items) {
+    const key = `${item.repoId}:${item.path}`;
+    const existing = byPath.get(key);
+    if (!existing || (item.score ?? 0) > (existing.score ?? 0)) {
+      byPath.set(key, item);
+    }
+  }
+  return [...byPath.values()];
+}
+
+type MentionRepoScope = {
+  repoId: string;
+  pathQuery: string;
+  matchedPrefix: string;
+};
+
+function resolveMentionRepoScope(pattern: string, repoIds: string[]): MentionRepoScope | undefined {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const candidates = repoIds
+    .flatMap((repoId) => {
+      const [owner, repo] = parseRepoIdParts(repoId);
+      const ownerRepo = `${owner}/${repo}`;
+      return [
+        { repoId, prefix: repoId },
+        { repoId, prefix: ownerRepo },
+        { repoId, prefix: repo }
+      ];
+    })
+    .sort((left, right) => right.prefix.length - left.prefix.length);
+
+  for (const candidate of candidates) {
+    const lower = trimmed.toLowerCase();
+    const prefixLower = candidate.prefix.toLowerCase();
+    if (lower === prefixLower) {
+      return { repoId: candidate.repoId, pathQuery: "", matchedPrefix: candidate.prefix };
+    }
+    if (lower.startsWith(`${prefixLower}/`)) {
+      return {
+        repoId: candidate.repoId,
+        pathQuery: trimmed.slice(candidate.prefix.length + 1),
+        matchedPrefix: candidate.prefix
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function isNoisyMentionPath(path: string): boolean {
+  const normalized = path.toLowerCase();
+  return (
+    normalized.startsWith("testdata/") ||
+    normalized.includes("/testdata/") ||
+    normalized.includes("/shards/") ||
+    normalized.endsWith(".zoekt") ||
+    normalized.endsWith(".pb") ||
+    normalized.includes("/vendor/") ||
+    normalized.includes("/node_modules/")
+  );
+}
+
+function rankMentionSearchResults(items: MentionSearchResult[], query: string): MentionSearchResult[] {
+  const needle = query.trim().toLowerCase();
+  return [...items].sort((left, right) => scoreMentionResult(right, needle) - scoreMentionResult(left, needle));
+}
+
+function scoreMentionResult(item: MentionSearchResult, query: string): number {
+  const path = item.path.toLowerCase();
+  const base = path.split("/").pop() ?? path;
+  let score = item.score ?? 0;
+
+  if (item.content && item.content.toLowerCase().includes(query)) {
+    score += 30;
+  }
+  if (base === query) {
+    score += 50;
+  } else if (base.startsWith(query)) {
+    score += 35;
+  } else if (path.includes(`/${query}/`) || path.startsWith(`${query}/`)) {
+    score += 25;
+  } else if (path.endsWith(`/${query}`)) {
+    score += 20;
+  } else if (path.includes(query)) {
+    score += 10;
+  }
+
+  const depth = path.split("/").length;
+  score -= Math.max(0, depth - 4);
+
+  return score;
+}
+
+function sliceFileLines(content: string, startLine: number, endLine: number): string {
+  const lines = content.split("\n");
+  const start = Math.max(1, startLine);
+  const end = Math.min(lines.length, endLine);
+  return lines.slice(start - 1, end).join("\n");
 }
 
 function buildRepoId(preferences: UserPreferences, context: RepoContext): string {

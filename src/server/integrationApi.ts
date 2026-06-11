@@ -2,12 +2,28 @@ import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationConnectionStore, IntegrationProvider } from "./integrationConnectionStore";
 import type { AtlassianAppService } from "./atlassianAppService";
+import type { NotionAppService } from "./notionAppService";
+import type { GoogleDocsAppService } from "./googleDocsAppService";
+import type { SlackAppService } from "./slackAppService";
+import type { TeamsAppService } from "./teamsAppService";
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+const CREDENTIAL_PROVIDERS: IntegrationProvider[] = [
+  "slack",
+  "atlassian",
+  "notion",
+  "google-docs",
+  "teams"
+];
 
 export type IntegrationApiDeps = {
   integrationStore?: IntegrationConnectionStore;
   atlassianApp?: AtlassianAppService;
+  notionApp?: NotionAppService;
+  googleDocsApp?: GoogleDocsAppService;
+  teamsApp?: TeamsAppService;
+  slackApp?: SlackAppService;
 };
 
 type ParsedRequest = {
@@ -46,7 +62,7 @@ async function handleIntegrationCredentials(
   }
 
   const provider = parsed.query.get("provider") as IntegrationProvider | null;
-  if (provider !== "slack" && provider !== "atlassian") {
+  if (!provider || !CREDENTIAL_PROVIDERS.includes(provider)) {
     writeJson(response, 400, { error: "invalid provider" });
     return true;
   }
@@ -91,17 +107,58 @@ async function resolveAccessToken(
     }
   }
 
+  const refreshToken = await store.getRefreshToken(orgId, provider);
+  if (!refreshToken) {
+    return store.getAccessToken(orgId, provider);
+  }
+
   if (provider === "atlassian" && deps.atlassianApp) {
-    const refreshToken = await store.getRefreshToken(orgId, provider);
-    if (refreshToken) {
-      const refreshed = await deps.atlassianApp.refreshAccessToken(refreshToken);
-      await store.upsert(orgId, provider, refreshed.accessToken, {
-        refreshToken: refreshed.refreshToken,
-        expiresAt: refreshed.expiresAt,
-        metadata: connection.metadata
-      });
-      return refreshed.accessToken;
-    }
+    const refreshed = await deps.atlassianApp.refreshAccessToken(refreshToken);
+    await store.upsert(orgId, provider, refreshed.accessToken, {
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      metadata: connection.metadata
+    });
+    return refreshed.accessToken;
+  }
+
+  if (provider === "notion" && deps.notionApp) {
+    const refreshed = await deps.notionApp.refreshAccessToken(refreshToken);
+    await store.upsert(orgId, provider, refreshed.accessToken, {
+      refreshToken: refreshed.refreshToken,
+      metadata: connection.metadata
+    });
+    return refreshed.accessToken;
+  }
+
+  if (provider === "google-docs" && deps.googleDocsApp) {
+    const refreshed = await deps.googleDocsApp.refreshAccessToken(refreshToken);
+    await store.upsert(orgId, provider, refreshed.accessToken, {
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      metadata: connection.metadata
+    });
+    return refreshed.accessToken;
+  }
+
+  if (provider === "teams" && deps.teamsApp) {
+    const refreshed = await deps.teamsApp.refreshAccessToken(refreshToken);
+    await store.upsert(orgId, provider, refreshed.accessToken, {
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      metadata: connection.metadata
+    });
+    return refreshed.accessToken;
+  }
+
+  if (provider === "slack" && deps.slackApp) {
+    const refreshed = await deps.slackApp.refreshAccessToken(refreshToken);
+    await store.upsert(orgId, provider, refreshed.accessToken, {
+      refreshToken: refreshed.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      metadata: connection.metadata
+    });
+    return refreshed.accessToken;
   }
 
   return store.getAccessToken(orgId, provider);

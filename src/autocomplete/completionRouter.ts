@@ -22,17 +22,17 @@ const MODEL_PRESETS: Record<
 > = {
   haiku: {
     provider: "anthropic",
-    model: "claude-3-haiku-20240307",
+    model: "claude-haiku-4-5-20251001",
     fallback: { provider: "openai", model: "gpt-4o-mini" }
   },
   gpt35: {
     provider: "openai",
     model: "gpt-4o-mini",
-    fallback: { provider: "anthropic", model: "claude-3-haiku-20240307" }
+    fallback: { provider: "anthropic", model: "claude-haiku-4-5-20251001" }
   },
   custom: {
     provider: "anthropic",
-    model: "claude-3-haiku-20240307"
+    model: "claude-haiku-4-5-20251001"
   }
 };
 

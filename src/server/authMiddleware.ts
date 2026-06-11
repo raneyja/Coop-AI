@@ -62,8 +62,9 @@ export async function resolveAuthContext(
     };
   }
 
-  // Local dev: when API auth is not required, accept any bearer token (e.g. "dev").
-  if (!requireApiAuth && token) {
+  // Local dev only: when API auth is not required, accept any bearer token (e.g. "dev").
+  const nodeEnv = process.env.NODE_ENV ?? "development";
+  if (!requireApiAuth && nodeEnv !== "production" && token) {
     return {
       orgId: "legacy",
       orgName: "Legacy",
@@ -161,6 +162,29 @@ export function canInstallIntegrations(auth: AuthContext): boolean {
     return true;
   }
   return INTEGRATION_ADMIN_ROLES.has(String(auth.role ?? "").toLowerCase());
+}
+
+/** Owner/admin for SSO sessions; org API keys pass for bootstrap provisioning. */
+export function canOrgAdmin(auth: AuthContext): boolean {
+  return canInstallIntegrations(auth);
+}
+
+export function requireOrgAdmin(
+  auth: AuthContext | undefined,
+  response: ServerResponse
+): auth is AuthContext {
+  if (!auth) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return false;
+  }
+  if (!canOrgAdmin(auth)) {
+    writeJson(response, 403, {
+      error: "admin_required",
+      message: "Only organization owners and admins can access this endpoint."
+    });
+    return false;
+  }
+  return true;
 }
 
 export function requireInstallAdmin(

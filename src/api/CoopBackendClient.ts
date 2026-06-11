@@ -3,7 +3,14 @@ import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
 import type { IdentityDirectory } from "../identity/types";
-import type { ChatHistoryMessage, ChatContextPayload, StreamChunk, UseCase, ChatImageAttachment } from "./types";
+import type {
+  ChatHistoryMessage,
+  ChatContextPayload,
+  StreamChunk,
+  UseCase,
+  ChatImageAttachment,
+  V1ChatRequestBody
+} from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
 export type StreamChatBody = {
@@ -11,6 +18,7 @@ export type StreamChatBody = {
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
   attachments?: ChatImageAttachment[];
+  mentions?: V1ChatRequestBody["mentions"];
   model: string;
   provider: LlmProvider;
   useCase: UseCase;
@@ -89,21 +97,59 @@ export class CoopBackendClient {
   public async graphSearch(
     baseUrl: string,
     repoId: string,
-    pattern: string
+    pattern: string,
+    collectionId?: string,
+    mention = false
   ): Promise<unknown> {
     assertCoopEndpoint(baseUrl);
     const encodedRepo = encodeURIComponent(repoId);
+    const params: Record<string, string> = { pattern };
+    if (collectionId?.trim()) {
+      params.collectionId = collectionId.trim();
+    }
+    if (mention) {
+      params.mention = "true";
+    }
     const response = await runResilientRequest({
       timeoutMs: 15_000,
       shouldRetryError: isRetryableError,
       run: async () =>
         this.http.get(`/graph/${encodedRepo}/search`, {
           baseURL: baseUrl.replace(/\/$/, ""),
-          params: { pattern },
+          params,
           headers: await this.authHeaders()
         })
     });
     return response.data;
+  }
+
+  public async listCollections(
+    baseUrl: string
+  ): Promise<{
+    collections: Array<{
+      id: string;
+      orgId: string;
+      name: string;
+      description?: string;
+      createdAt: string;
+      repos?: Array<{ collectionId: string; repoId: string; addedAt: string }>;
+    }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      collections: Array<{
+        id: string;
+        orgId: string;
+        name: string;
+        description?: string;
+        createdAt: string;
+        repos?: Array<{ collectionId: string; repoId: string; addedAt: string }>;
+      }>;
+    }>("/v1/collections", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders()
+    });
+    return response.data ?? { collections: [] };
   }
 
   public async graphDependents(baseUrl: string, repoId: string, file: string): Promise<unknown> {
@@ -181,6 +227,18 @@ export class CoopBackendClient {
     return this.getIntegrationAppInstallUrl(baseUrl, "atlassian");
   }
 
+  public async getNotionAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getIntegrationAppInstallUrl(baseUrl, "notion");
+  }
+
+  public async getGoogleDocsAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getIntegrationAppInstallUrl(baseUrl, "google-docs");
+  }
+
+  public async getTeamsAppInstallUrl(baseUrl: string): Promise<string> {
+    return this.getIntegrationAppInstallUrl(baseUrl, "teams");
+  }
+
   public async getSlackInstallationStatus(baseUrl: string): Promise<{
     installed: boolean;
     teamName?: string;
@@ -243,18 +301,46 @@ export class CoopBackendClient {
     };
   }
 
+  public async getNotionInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    workspaceName?: string;
+    workspaceId?: string;
+    tokenExpiresAt?: string;
+  }> {
+    return this.getOrgIntegrationInstallationStatus(baseUrl, "notion");
+  }
+
+  public async getGoogleDocsInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    displayName?: string;
+    email?: string;
+    tokenExpiresAt?: string;
+  }> {
+    return this.getOrgIntegrationInstallationStatus(baseUrl, "google-docs");
+  }
+
+  public async getTeamsInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    displayName?: string;
+    email?: string;
+    tenantId?: string;
+    tokenExpiresAt?: string;
+  }> {
+    return this.getOrgIntegrationInstallationStatus(baseUrl, "teams");
+  }
+
   public async getIntegrationCredentials(
     baseUrl: string,
-    provider: "slack" | "atlassian"
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
   ): Promise<{
-    provider: "slack" | "atlassian";
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams";
     accessToken: string;
     metadata: Record<string, string | undefined>;
     tokenExpiresAt?: string;
   }> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{
-      provider: "slack" | "atlassian";
+      provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams";
       accessToken: string;
       metadata: Record<string, string | undefined>;
       tokenExpiresAt?: string;
@@ -279,9 +365,49 @@ export class CoopBackendClient {
     };
   }
 
+  private async getOrgIntegrationInstallationStatus(
+    baseUrl: string,
+    provider: "notion" | "google-docs" | "teams"
+  ): Promise<{
+    installed: boolean;
+    workspaceName?: string;
+    workspaceId?: string;
+    displayName?: string;
+    email?: string;
+    tenantId?: string;
+    tokenExpiresAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<{
+      installed: boolean;
+      workspaceName?: string;
+      workspaceId?: string;
+      displayName?: string;
+      email?: string;
+      tenantId?: string;
+      tokenExpiresAt?: string;
+    } & CoopApiErrorBody>(`/v1/orgs/${provider}/installation`, {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return {
+      installed: Boolean(response.data?.installed),
+      workspaceName: response.data?.workspaceName,
+      workspaceId: response.data?.workspaceId,
+      displayName: response.data?.displayName,
+      email: response.data?.email,
+      tenantId: response.data?.tenantId,
+      tokenExpiresAt: response.data?.tokenExpiresAt
+    };
+  }
+
   private async getIntegrationAppInstallUrl(
     baseUrl: string,
-    provider: "slack" | "atlassian"
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
   ): Promise<string> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{ url: string } & CoopApiErrorBody>(
@@ -586,6 +712,7 @@ export class CoopBackendClient {
         history: body.history,
         context: body.context,
         attachments: body.attachments,
+        mentions: body.mentions,
         model: body.model,
         provider: body.provider,
         useCase: body.useCase,
@@ -687,6 +814,28 @@ export class CoopBackendClient {
       model: typeof data.model === "string" ? data.model : body.model,
       provider: typeof data.provider === "string" ? data.provider : body.provider
     };
+  }
+
+  public async recordUsageEvents(
+    baseUrl: string,
+    events: Array<{ eventType: string; metadata?: Record<string, unknown> }>
+  ): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    const token = await this.options.getToken();
+    if (!token) {
+      return;
+    }
+    await this.http.post(
+      "/v1/usage/events",
+      { events },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json"
+        }
+      }
+    );
   }
 
   public async fetchIdentityDirectory(baseUrl: string): Promise<IdentityDirectory> {

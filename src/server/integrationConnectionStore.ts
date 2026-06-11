@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { decryptCredential, encryptCredential } from "./credentialCrypto";
 
-export type IntegrationProvider = "slack" | "atlassian";
+export type IntegrationProvider = "slack" | "atlassian" | "notion" | "google-docs" | "teams";
 
 export type IntegrationConnectionMetadata = {
   teamId?: string;
@@ -11,6 +11,11 @@ export type IntegrationConnectionMetadata = {
   cloudId?: string;
   email?: string;
   userId?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  botId?: string;
+  displayName?: string;
+  tenantId?: string;
 };
 
 export type IntegrationConnectionRecord = {
@@ -132,6 +137,11 @@ function parseMetadata(raw: unknown): IntegrationConnectionMetadata {
     siteUrl: typeof record.siteUrl === "string" ? record.siteUrl : undefined,
     cloudId: typeof record.cloudId === "string" ? record.cloudId : undefined,
     email: typeof record.email === "string" ? record.email : undefined,
-    userId: typeof record.userId === "string" ? record.userId : undefined
+    userId: typeof record.userId === "string" ? record.userId : undefined,
+    workspaceId: typeof record.workspaceId === "string" ? record.workspaceId : undefined,
+    workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : undefined,
+    botId: typeof record.botId === "string" ? record.botId : undefined,
+    displayName: typeof record.displayName === "string" ? record.displayName : undefined,
+    tenantId: typeof record.tenantId === "string" ? record.tenantId : undefined
   };
 }

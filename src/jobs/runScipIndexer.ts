@@ -13,16 +13,31 @@ const SCIP_INDEXERS: Array<{
   languages: string[];
   command: string;
   args: (root: string, out: string) => string[];
+  indexQuality: "precise" | "heuristic";
 }> = [
   {
     languages: ["typescript", "javascript", "tsx", "jsx"],
     command: "scip-typescript",
-    args: (root, out) => ["index", "--output", out, root]
+    args: (root, out) => ["index", "--output", out, root],
+    indexQuality: "precise"
   },
   {
     languages: ["python"],
     command: "scip-python",
-    args: (root, out) => ["index", root, "--output", out]
+    args: (root, out) => ["index", root, "--output", out],
+    indexQuality: "precise"
+  },
+  {
+    languages: ["go"],
+    command: "scip-go",
+    args: (root, out) => ["--output", out, root],
+    indexQuality: "precise"
+  },
+  {
+    languages: ["java", "kotlin"],
+    command: "scip-java",
+    args: (root, out) => ["index", "--output", out, "--targetroot", root],
+    indexQuality: "precise"
   }
 ];
 
@@ -31,6 +46,7 @@ export type RunScipIndexerResult = {
   symbolCount: number;
   source: "scip" | "tree-sitter" | "none";
   language?: string;
+  indexQuality: "precise" | "heuristic" | "none";
   error?: string;
 };
 
@@ -63,7 +79,8 @@ export async function runScipIndexer(
           scipAvailable: true,
           symbolCount: rows.length,
           source: "scip",
-          language: resolvedLanguage
+          language: resolvedLanguage,
+          indexQuality: indexer.indexQuality
         };
       }
 
@@ -72,11 +89,12 @@ export async function runScipIndexer(
         symbolCount: 0,
         source: "none",
         language: resolvedLanguage,
+        indexQuality: "none",
         error: "SCIP indexer completed but index.scip was not produced."
       };
     } catch (error) {
       const message = formatExecError("SCIP indexing failed", error);
-      const fallbackRows = await extractTreeSitterSymbols(localPath);
+      const fallbackRows = await safeTreeSitterFallback(localPath);
       if (fallbackRows.length > 0) {
         await store.replaceIndex(orgId, repoId, fallbackRows, indexedAt);
         return {
@@ -84,6 +102,7 @@ export async function runScipIndexer(
           symbolCount: fallbackRows.length,
           source: "tree-sitter",
           language: resolvedLanguage,
+          indexQuality: "heuristic",
           error: message
         };
       }
@@ -92,18 +111,20 @@ export async function runScipIndexer(
         symbolCount: 0,
         source: "none",
         language: resolvedLanguage,
+        indexQuality: "none",
         error: message
       };
     }
   }
 
-  const fallbackRows = await extractTreeSitterSymbols(localPath);
+  const fallbackRows = await safeTreeSitterFallback(localPath);
   await store.replaceIndex(orgId, repoId, fallbackRows, indexedAt);
   return {
     scipAvailable: false,
     symbolCount: fallbackRows.length,
     source: fallbackRows.length > 0 ? "tree-sitter" : "none",
     language: resolvedLanguage,
+    indexQuality: fallbackRows.length > 0 ? "heuristic" : "none",
     error: resolvedLanguage
       ? `No SCIP indexer found on PATH for language "${resolvedLanguage}".`
       : "No SCIP indexer found on PATH and language could not be detected."
@@ -135,11 +156,16 @@ async function commandExists(name: string): Promise<boolean> {
 
 function detectLanguage(localPath: string): string | undefined {
   const markers: Array<[string, string]> = [
+    ["go.mod", "go"],
     ["tsconfig.json", "typescript"],
     ["package.json", "typescript"],
     ["pyproject.toml", "python"],
     ["requirements.txt", "python"],
-    ["setup.py", "python"]
+    ["setup.py", "python"],
+    ["pom.xml", "java"],
+    ["build.gradle.kts", "kotlin"],
+    ["build.gradle", "java"],
+    ["Cargo.toml", "rust"]
   ];
   for (const [file, lang] of markers) {
     if (fs.existsSync(path.join(localPath, file))) {
@@ -147,6 +173,16 @@ function detectLanguage(localPath: string): string | undefined {
     }
   }
   return undefined;
+}
+
+async function safeTreeSitterFallback(localPath: string): Promise<Awaited<ReturnType<typeof extractTreeSitterSymbols>>> {
+  try {
+    return await extractTreeSitterSymbols(localPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "tree-sitter fallback failed";
+    console.warn(`[scip] tree-sitter fallback skipped: ${message}`);
+    return [];
+  }
 }
 
 function formatExecError(prefix: string, error: unknown): string {

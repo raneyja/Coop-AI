@@ -153,7 +153,7 @@ void (async () => {
   assert.equal(deadResolved, undefined);
   assert.equal(requireAuth(deadResolved, true), false);
 
-  const { canInstallIntegrations, requireInstallAdmin } = await import("./authMiddleware");
+  const { canInstallIntegrations, canOrgAdmin, requireOrgAdmin } = await import("./authMiddleware");
   assert.equal(canInstallIntegrations({ orgId: "o", orgName: "O", plan: "enterprise", apiKeyId: "k1" }), true);
   assert.equal(
     canInstallIntegrations({
@@ -177,6 +177,55 @@ void (async () => {
     }),
     true
   );
+
+  assert.equal(canOrgAdmin({ orgId: "o", orgName: "O", plan: "enterprise", apiKeyId: "k1" }), true);
+  assert.equal(
+    canOrgAdmin({
+      orgId: "o",
+      orgName: "O",
+      plan: "enterprise",
+      apiKeyId: "session:u1",
+      userId: "u1",
+      role: "owner"
+    }),
+    true
+  );
+  assert.equal(
+    canOrgAdmin({
+      orgId: "o",
+      orgName: "O",
+      plan: "enterprise",
+      apiKeyId: "session:u1",
+      userId: "u1",
+      role: "member"
+    }),
+    false
+  );
+
+  const memberDenied = mockResponse();
+  const memberAuth: AuthContext = {
+    orgId: "o",
+    orgName: "O",
+    plan: "enterprise",
+    apiKeyId: "session:u1",
+    userId: "u1",
+    role: "member"
+  };
+  assert.equal(requireOrgAdmin(memberAuth, memberDenied), false);
+  assert.equal(memberDenied.statusCode, 403);
+  assert.match(memberDenied.body ?? "", /admin_required/);
+
+  const adminOk = mockResponse();
+  const adminAuth: AuthContext = {
+    orgId: "o",
+    orgName: "O",
+    plan: "enterprise",
+    apiKeyId: "session:u1",
+    userId: "u1",
+    role: "admin"
+  };
+  assert.equal(requireOrgAdmin(adminAuth, adminOk), true);
+  assert.equal(adminOk.statusCode, undefined);
 
   console.log("authMiddleware.test.ts: ok");
 })();

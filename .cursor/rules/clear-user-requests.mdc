@@ -1,0 +1,58 @@
+---
+description: Be explicit when asking the user to do something — one path, no buried asks
+alwaysApply: true
+---
+
+# Clear user requests
+
+When the user must act (setup, testing, pasting a secret, choosing a path), **lead with the ask**. Status and context come after — or not at all if they already know.
+
+## Separate status from action
+
+| Type | How to label it |
+|------|-----------------|
+| **Done / FYI** | "Status:" — no action needed |
+| **Required now** | "**Do this now:**" — numbered steps only |
+| **Optional** | "**If you want to test:**" — never mix with required steps |
+| **I'll do it** | "**I'll handle:**" — then do it; don't ask the user to create files you can create |
+
+❌ End a long build summary with "Try it when ready" buried in paragraph 4.  
+✅ Open with: **Do this now:** 1) Browser → URL 2) Paste key from step below 3) Click Sign in.
+
+## One happy path first
+
+Give **one linear sequence** (1 → 2 → 3). Put alternatives (different port, recreate key) under **Only if blocked:** — not inline with the main path.
+
+## Secrets and credentials — always say where they come from
+
+Never say "paste your admin key" without explaining:
+
+| Question | Must answer |
+|----------|-------------|
+| Where does it come from? | Terminal output, email, vendor console, file path |
+| Does the user already have one? | "You created this when you ran …" or "Run this command to generate one" |
+| Shown once? | Say so explicitly |
+| In the repo / editor? | Usually **no** — say "not in the file tree; gitignored" |
+
+Example:
+> **Your admin key** is the `coop_…` string printed as `rawKey` when you ran `create-api-key` in Terminal. It is not saved in any project file. Scroll your terminal to that command, or run the command below to create a new one.
+
+## Each step: surface + exact target
+
+Follow `.cursor/rules/user-instructions.mdc` surfaces (**File / Terminal / Extension UI / Browser**). Every step needs:
+
+- **Where** (path, URL, or UI location)
+- **What** (exact click, paste, or command)
+- **Success looks like** (one concrete signal)
+
+## When offering to do work
+
+If the user says "you do this" or the task is creating a gitignored file / running commands — **do it** instead of re-explaining both options.
+
+## Checklist before sending user-facing steps
+
+- [ ] First line states whether action is **required** or **optional**
+- [ ] Required steps are numbered; at most 3–5 for "do now"
+- [ ] Every secret/credential has a **source** (not just "your key")
+- [ ] Success criteria stated per step
+- [ ] No "if useful" / "when you're ready" without a clear default

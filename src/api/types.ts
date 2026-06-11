@@ -79,7 +79,7 @@ export type V1ChatRequestBody = {
   history?: ChatHistoryMessage[];
   context?: ChatContextPayload;
   attachments?: ChatImageAttachment[];
-  mentions?: Array<{ path: string; lines?: [number, number] }>;
+  mentions?: Array<{ repoId: string; path: string; lines?: [number, number] }>;
   model?: string;
   provider?: LlmProvider;
   useCase?: UseCase;

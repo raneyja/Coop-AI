@@ -147,7 +147,15 @@ export type SettingsDetailProps = {
   onRefreshSlackInstallation: () => void;
   onInstallAtlassianApp: () => void;
   onRefreshAtlassianInstallation: (key: "jira" | "confluence") => void;
-  onConnectIntegrationNotice?: (provider: IntegrationChatProvider) => void;
+  onInstallNotionApp: () => void;
+  onRefreshNotionInstallation: () => void;
+  onInstallGoogleDocsApp: () => void;
+  onRefreshGoogleDocsInstallation: () => void;
+  onInstallTeamsApp: () => void;
+  onRefreshTeamsInstallation: () => void;
+  collections: import("./types").SettingsCollectionSummary[];
+  collectionsError?: string;
+  onRequestCollections: () => void;
 };
 
 export function SettingsDetailView({
@@ -463,7 +471,7 @@ function AccountDetail({
         <ConfiguredSecretInput
           configured={prefs.hasApiKey}
           value={apiKeyDraft}
-          placeholder="Local dev: any value (e.g. dev) then Save"
+          placeholder={prefs.devMode ? "Local dev: any value (e.g. dev) then Save" : "coop_… from admin portal API Keys"}
           onChange={onApiKeyDraftChange}
           className="coop-settings-field"
         />
@@ -594,9 +602,9 @@ function ConnectionsListDetail({
         />
         <CoopNavRow
           title="Microsoft Teams"
-          subtitle={integrationListSubtitle(prefs, "teams")}
-          configured={integrationConfigured(prefs, "teams")}
-          onClick={() => onNavigate("integration-teams")}
+          subtitle="Coming soon"
+          trailing={<span className="coop-nav-row-badge">Coming soon</span>}
+          disabled
         />
         <CoopNavRow
           title="Confluence"
@@ -1102,68 +1110,20 @@ function JiraDetail({
   );
 }
 
-function TeamsDetail({
-  prefs,
-  teamsTokenDraft,
-  onTeamsTokenDraftChange,
-  onSaveTeamsToken,
-  onClearTeamsToken,
-  onTestIntegration,
-  onConnectIntegrationNotice,
-  savedFlashKey,
-  pendingTest,
-  testResult
-}: SettingsDetailProps): React.ReactElement {
+function TeamsDetail(): React.ReactElement {
   return (
     <SettingsSection>
-      <IntegrationConnectionShell
-        provider="teams"
-        prefs={prefs}
-        description="Search Microsoft Teams channels and messages for Trace Decision context."
-        onConnectNotice={() => onConnectIntegrationNotice?.("teams")}
-        onTest={() => onTestIntegration("teams")}
-        testKey="teams"
-        pendingTest={pendingTest}
-        testResult={testResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Microsoft Teams (Graph) token {prefs.hasTeamsToken ? "(configured)" : ""}
-              </span>
-              <ConfiguredSecretInput
-                configured={prefs.hasTeamsToken}
-                value={teamsTokenDraft}
-                placeholder="OAuth access token for Microsoft Graph"
-                onChange={onTeamsTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveTeamsToken}>
-                Save Teams token
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearTeamsToken}
-                disabled={!prefs.hasTeamsToken}
-              >
-                Clear
-              </button>
-              <TestButton
-                testKey="teams"
-                label="Test Teams"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("teams")}
-              />
-              <SaveFlashLabel show={savedFlashKey === "teams"} />
-            </div>
-          </>
-        }
-      />
+      <p className="coop-settings-card-desc">
+        Microsoft Teams Connect is coming soon. Trace Decision will search Teams channel messages once
+        org OAuth is available.
+      </p>
+      <div className="coop-health-integration">
+        <div>
+          <div className="coop-health-integration-name">Microsoft Teams</div>
+          <div className="coop-health-integration-meta">Coming soon</div>
+        </div>
+        <span className="coop-nav-row-badge">Coming soon</span>
+      </div>
     </SettingsSection>
   );
 }
@@ -1284,10 +1244,13 @@ function NotionDetail({
   onSaveNotionToken,
   onClearNotionToken,
   onTestIntegration,
-  onConnectIntegrationNotice,
+  onInstallNotionApp,
+  onRefreshNotionInstallation,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
@@ -1295,11 +1258,14 @@ function NotionDetail({
         provider="notion"
         prefs={prefs}
         description="Search Notion pages for documentation context in chat and Knowledge Gaps."
-        onConnectNotice={() => onConnectIntegrationNotice?.("notion")}
+        onConnect={onInstallNotionApp}
+        onRefresh={onRefreshNotionInstallation}
         onTest={() => onTestIntegration("notion")}
         testKey="notion"
         pendingTest={pendingTest}
         testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
         devFallback={
           <>
             <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
@@ -1350,10 +1316,13 @@ function GoogleDocsDetail({
   onSaveGoogleDocsToken,
   onClearGoogleDocsToken,
   onTestIntegration,
-  onConnectIntegrationNotice,
+  onInstallGoogleDocsApp,
+  onRefreshGoogleDocsInstallation,
   savedFlashKey,
   pendingTest,
-  testResult
+  testResult,
+  pendingRefresh,
+  refreshResult
 }: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
@@ -1361,11 +1330,14 @@ function GoogleDocsDetail({
         provider="google-docs"
         prefs={prefs}
         description="Search Google Docs for documentation context in chat."
-        onConnectNotice={() => onConnectIntegrationNotice?.("google-docs")}
+        onConnect={onInstallGoogleDocsApp}
+        onRefresh={onRefreshGoogleDocsInstallation}
         onTest={() => onTestIntegration("google-docs")}
         testKey="google-docs"
         pendingTest={pendingTest}
         testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
         devFallback={
           <>
             <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
@@ -1409,7 +1381,13 @@ function GoogleDocsDetail({
   );
 }
 
-function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactElement {
+function WorkspaceDetail({
+  prefs,
+  onUpdate,
+  collections,
+  collectionsError,
+  onRequestCollections
+}: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1429,6 +1407,10 @@ function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactE
     },
     []
   );
+
+  useEffect(() => {
+    onRequestCollections();
+  }, [onRequestCollections]);
 
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
@@ -1487,6 +1469,58 @@ function WorkspaceDetail({ prefs, onUpdate }: SettingsDetailProps): React.ReactE
           </button>
           <SaveFlashLabel show={saved} />
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Search scope">
+        <p className="coop-settings-card-desc">
+          Controls Lightning search and the chat @ file picker — active repo only, or every repo in a collection.
+        </p>
+        <label className="coop-settings-field-row">
+          <span className="coop-settings-label">Scope</span>
+          <select
+            className="coop-settings-field"
+            value={prefs.searchScopeMode}
+            onChange={(event) => {
+              const mode = event.target.value === "collection" ? "collection" : "repo";
+              onUpdate({ searchScopeMode: mode });
+            }}
+          >
+            <option value="repo">Active repo</option>
+            <option value="collection">Collection</option>
+          </select>
+        </label>
+        {prefs.searchScopeMode === "collection" ? (
+          <>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Collection</span>
+              <select
+                className="coop-settings-field"
+                value={prefs.searchCollectionId}
+                onChange={(event) => onUpdate({ searchCollectionId: event.target.value })}
+              >
+                <option value="">Select a collection…</option>
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {collection.name} ({collection.repoCount} repos)
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!collectionsError && collections.length === 0 ? (
+              <p className="coop-settings-card-desc text-xs">
+                No collections for {prefs.orgName ? `"${prefs.orgName}"` : "this org"}. Create one in
+                the admin portal (Collections), then{" "}
+                <button type="button" className="coop-text-btn" onClick={() => onRequestCollections()}>
+                  refresh
+                </button>
+                . Use the same Coop API key in Account as you use to sign into admin.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {collectionsError ? (
+          <p className="coop-settings-test-message--error text-xs">{collectionsError}</p>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Context">
