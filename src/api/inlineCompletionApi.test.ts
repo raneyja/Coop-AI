@@ -25,12 +25,7 @@ void (async () => {
       defaultProvider: "anthropic",
       allowUnapprovedProvider: false,
       mockMode: true,
-      providers: {
-        anthropic: {},
-        openai: {},
-        deepseek: {},
-        gemini: {}
-      }
+      apiKeys: {}
     }
   });
 

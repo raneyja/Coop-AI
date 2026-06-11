@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../networkResilience";
+import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
@@ -83,6 +83,10 @@ export class NotionClient {
       headers: this.headers,
       body: options?.body ? JSON.stringify(options.body) : undefined
     });
+
+    if (isFetchTimeout(response)) {
+      throw new NotionApiError(response.message);
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");

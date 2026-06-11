@@ -4,7 +4,7 @@ let capturedUrl = "";
 const originalFetch = globalThis.fetch;
 
 async function run(): Promise<void> {
-  globalThis.fetch = (async (url: RequestInfo | URL) => {
+  globalThis.fetch = (async (url: string | URL) => {
     capturedUrl = String(url);
     return new Response(JSON.stringify({ issues: [] }), {
       status: 200,

@@ -7,6 +7,7 @@ import { isRemoteTabAbsolutePath } from "./githubVfsUri";
 import {
   normalizeRelativePath,
   readWorkspaceFileFromAbsolutePath,
+  type LocalFileContextPayload
 } from "./localFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
 

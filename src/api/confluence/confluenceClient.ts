@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../networkResilience";
+import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
 import { confluenceSiteUrlError, isPlaceholderAtlassianSite } from "./resolveConfluenceBaseUrl";
 
 export type ConfluenceClientOptions = {
@@ -176,6 +176,9 @@ export class ConfluenceClient {
       method: "GET",
       headers: { Accept: "application/json" }
     });
+    if (isFetchTimeout(response)) {
+      throw new ConfluenceApiError(response.message);
+    }
     if (!response.ok) {
       throw new ConfluenceApiError(
         `Could not resolve Confluence cloud ID (${response.status}). Check the site URL.`,
@@ -244,6 +247,10 @@ export class ConfluenceClient {
         Accept: "application/json"
       }
     });
+
+    if (isFetchTimeout(response)) {
+      return { ok: false, status: 0, body: response.message };
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");

@@ -38,7 +38,7 @@ export async function handleAdminOrgRequest(
     const activeMemberCount = users.filter((user) => !user.deactivatedAt).length;
     const integrationSummary = await buildIntegrationSummary(deps, auth.orgId);
 
-    const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
+    const billing = await deps.orgStore!.getOrganizationBilling(auth.orgId);
     writeJson(response, 200, {
       id: org.id,
       name: org.name,
@@ -53,7 +53,7 @@ export async function handleAdminOrgRequest(
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/admin/billing") {
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
-    const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
+    const billing = await deps.orgStore!.getOrganizationBilling(auth.orgId);
     writeJson(response, 200, {
       plan,
       seats: billing?.seatCount ?? null,
@@ -65,7 +65,7 @@ export async function handleAdminOrgRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/admin/onboarding/complete") {
-    await deps.orgStore.markOnboardingComplete(auth.orgId);
+    await deps.orgStore!.markOnboardingComplete(auth.orgId);
     writeJson(response, 200, { ok: true });
     return true;
   }

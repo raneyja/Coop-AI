@@ -92,7 +92,7 @@ export async function handleOrgApiRequest(
   }
 
   if (parsed.pathname === "/v1/identity-directory") {
-    const store = new OrgIdentityDirectoryStore(requireDbPool());
+    const store = new OrgIdentityDirectoryStore(requireDbPool(await getDbPool()));
     if (parsed.method === "GET") {
       const directory = await store.get(auth!.orgId);
       writeJson(response, 200, { directory });

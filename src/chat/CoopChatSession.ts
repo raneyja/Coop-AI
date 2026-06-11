@@ -2112,15 +2112,15 @@ export class CoopChatSession {
         this.injectLocalFilesIntoBundle(localPayload);
       }
 
-      let contextBundle = this.lastContextBundle.map((entry) => ({
-        type: entry.type,
-        data: entry.data,
-        stale: entry.stale,
-        error: entry.error
-      }));
+      let contextBundle: ContextFetchResult[] = [...this.lastContextBundle];
       if (localPayload?.files.length && !contextBundle.some((entry) => contextResultHasLocalFiles(entry))) {
         contextBundle = [
-          { type: "chat_context", data: attachLocalFilesToData({}, localPayload) },
+          {
+            requestId: `local-${Date.now()}`,
+            type: "chat_context",
+            data: attachLocalFilesToData({}, localPayload),
+            fetchedAt: new Date()
+          },
           ...contextBundle
         ];
       }
@@ -2506,8 +2506,10 @@ export class CoopChatSession {
       return;
     }
     this.lastContextBundle.push({
+      requestId: `knowledge-gaps-${Date.now()}`,
       type: "knowledge_gaps",
-      data: { jobScan }
+      data: { jobScan },
+      fetchedAt: new Date()
     });
   }
 

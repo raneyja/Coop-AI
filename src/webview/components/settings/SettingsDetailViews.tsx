@@ -180,7 +180,7 @@ export function SettingsDetailView({
     case "integration-jira":
       return <JiraDetail {...props} />;
     case "integration-teams":
-      return <TeamsDetail {...props} />;
+      return <TeamsDetail />;
     case "integration-confluence":
       return <ConfluenceDetail {...props} />;
     case "integration-notion":
