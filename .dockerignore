@@ -1,0 +1,13 @@
+.git
+.github
+.cursor
+.vscode
+.scratch
+.local-backup
+node_modules
+admin/node_modules
+website/node_modules
+dist
+**/*.md
+.env*
+*.log

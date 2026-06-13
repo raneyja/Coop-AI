@@ -29,6 +29,7 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 - Backend/docs: `docs/`
 - Enterprise integration onboarding: `docs/enterprise-integration-onboarding.md` (operator vs org admin vs developer)
 - Production Connect checklist: `docs/connect-integrations-production.md`
+- API deploy (Railway): `docs/deploy-railway.md`
 
 ## Agent → user instructions
 

@@ -4,6 +4,8 @@ End-to-end guide for operators deploying Coop AI self-serve checkout (Stripe →
 
 **Prerequisites:** Agent P1 complete (migrations runner, auth hardening, CI). Stripe product + price created. Resend account for welcome email.
 
+**API hosting (Phase 1):** [deploy-railway.md](./deploy-railway.md) — Railway API + managed Postgres for `https://api.coopai.dev`. (Legacy VM path: [deploy-oracle-always-free.md](./deploy-oracle-always-free.md).)
+
 ---
 
 ## Goal

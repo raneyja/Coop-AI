@@ -2,6 +2,8 @@
 # Apply pending SQL migrations to an existing Postgres database.
 # Fresh Docker volumes auto-apply via docker-entrypoint-initdb.d; use this script
 # when upgrading a database that was created before newer migrations existed.
+#
+# Railway / environments without psql: use `npm run migrate` (scripts/run-migrations.mjs).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

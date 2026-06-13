@@ -1,0 +1,13 @@
+# Coop API — Railway Phase 1 (API + managed Postgres)
+# Docs: docs/deploy-railway.md
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node dist/webhookServer.js"
+releaseCommand = "node scripts/run-migrations.mjs"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"

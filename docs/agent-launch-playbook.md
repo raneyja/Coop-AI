@@ -3,6 +3,29 @@
 **Date:** June 10, 2026  
 **Repo:** `/Users/jonraney/Desktop/Coop AI`
 
+---
+
+## Launch status (updated June 11, 2026)
+
+**Phase:** Agent build + local smoke tests **complete**. Next phase is **operator production deploy** (not more feature agents).
+
+| Track | Status | Notes |
+|-------|--------|-------|
+| **P1** Phase 1 blockers | ✅ Done | Merged PR #3; CI merged PR #4 (green on `main`) |
+| **D** Telemetry + seats | ✅ Done | `usage_events`, seat limit, analytics API |
+| **C** Autocomplete T0 | ✅ Done | Toggle bug fixed; inline route works |
+| **A** @ picker + collections | ✅ Done | Smoke A1 passed (Platform Team collection) |
+| **B** Admin analytics UI | ✅ Done | Smoke B passed; Completions tab wired |
+| **P2** Deploy docs + env polish | ✅ Done (code/docs) | `docs/deploy-self-serve-pro.md` |
+| **Smoke tests A1–D** | ✅ Passed | Local Test Org `3f05b1e2-…` |
+| **Git** | ✅ Clean | `main` @ merge PR #4; feature branches deleted |
+| **Operator deploy** | ⏳ **In progress** | API: [deploy-railway.md](./deploy-railway.md); then Stripe/Resend/admin |
+| **Extension publish** | ⏳ Later | VSIX / Marketplace — outside today's playbook |
+
+**Do next:** [Operator checklist](#operator-checklist-you--not-agents) below + [deploy-self-serve-pro.md](./deploy-self-serve-pro.md).
+
+---
+
 Open **one new Cursor Agent chat per agent** below. Paste the full prompt block for that agent. Agents should run autonomously — implement, test, and report completion with verification steps.
 
 **Coordination docs:**
