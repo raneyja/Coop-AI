@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Apply pending SQL migrations (schema_migrations ledger).
- * Used by Railway releaseCommand and local/CI when psql is unavailable.
+ * Used by Railway preDeployCommand and local/CI when psql is unavailable.
  *
  * Requires: DATABASE_URL, migrations/*.sql in cwd (or MIGRATIONS_DIR).
  */

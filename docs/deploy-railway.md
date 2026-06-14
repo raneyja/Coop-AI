@@ -3,7 +3,7 @@
 Phase 1: **API + managed PostgreSQL** on [Railway](https://railway.app). Goal:
 
 ```bash
-curl -s https://api.coopai.dev/health
+curl -s https://api.coop-ai.dev/health
 # {"status":"ok",...}
 ```
 
@@ -21,7 +21,7 @@ curl -s https://api.coopai.dev/health
 |------------------|------|
 | **PostgreSQL** plugin | Managed Postgres; injects `DATABASE_URL` |
 | **coop-api** service | Dockerfile build → `node dist/webhookServer.js` |
-| **Release command** | `node scripts/run-migrations.mjs` before each deploy |
+| **Pre-deploy command** | `node scripts/run-migrations.mjs` before each deploy (`preDeployCommand` in `railway.toml`) |
 
 No Caddy, no VM SSH, no Oracle networking. Railway terminates TLS on custom domains.
 
@@ -33,7 +33,7 @@ No Caddy, no VM SSH, no Oracle networking. Railway terminates TLS on custom doma
 
 | File | Purpose |
 |------|---------|
-| `railway.toml` | Dockerfile build, start, release (migrations), `/health` check |
+| `railway.toml` | Dockerfile build, start, pre-deploy migrations, `/health` check |
 | `Dockerfile` | Production API image |
 | `scripts/run-migrations.mjs` | Applies `migrations/*.sql` using `DATABASE_URL` |
 | `.env.backend.example` | Variable names — copy values from local `.env.backend` into Railway |
@@ -89,8 +89,8 @@ Set these on the **`coop-api`** service (**Variables** tab). Source for integrat
 | `JOBS_BACKEND` | `postgres` |
 | `GRAPH_CACHE_BACKEND` | `postgres` |
 | `CREDENTIALS_ENCRYPTION_KEY` | Generate: **Terminal** `openssl rand -base64 32` — **new key for prod** if you never deployed |
-| `COOP_PUBLIC_BASE_URL` | `https://api.coopai.dev` |
-| `WEBHOOK_DOMAIN` | `https://api.coopai.dev` |
+| `COOP_PUBLIC_BASE_URL` | `https://api.coop-ai.dev` |
+| `WEBHOOK_DOMAIN` | `https://api.coop-ai.dev` |
 | `COOP_CORS_ORIGINS` | `https://admin.coop-ai.dev,https://coop-ai.dev` |
 | `COOP_ADMIN_PORTAL_URL` | `https://admin.coop-ai.dev` |
 | `COOP_MARKETING_BASE_URL` | `https://coop-ai.dev` |
@@ -142,15 +142,15 @@ curl -s "https://YOUR-SERVICE.up.railway.app/health"
 
 ---
 
-## Part D — Custom domain `api.coopai.dev`
+## Part D — Custom domain `api.coop-ai.dev`
 
 ### D1. Browser — Railway
 
 1. **coop-api** → **Settings** → **Networking** → **Custom Domain**
-2. Add **`api.coopai.dev`**
+2. Add **`api.coop-ai.dev`**
 3. Note the **CNAME target** Railway shows (e.g. `xxxx.up.railway.app`)
 
-### D2. Browser — DNS (where `coopai.dev` is managed)
+### D2. Browser — DNS (where **`coop-ai.dev`** is managed, e.g. GoDaddy)
 
 | Type | Name | Value |
 |------|------|--------|
@@ -163,7 +163,7 @@ TTL 300 while testing.
 ### D3. Terminal — verify HTTPS
 
 ```bash
-curl -s https://api.coopai.dev/health
+curl -s https://api.coop-ai.dev/health
 ```
 
 **Success:** same health JSON over HTTPS.
@@ -172,7 +172,7 @@ curl -s https://api.coopai.dev/health
 
 ## Part E — OAuth redirects (before Connect in prod)
 
-Each vendor app must allow `https://api.coopai.dev` callbacks. See [connect-integrations-production.md](./connect-integrations-production.md).
+Each vendor app must allow `https://api.coop-ai.dev` callbacks. See [connect-integrations-production.md](./connect-integrations-production.md).
 
 ---
 
@@ -194,7 +194,7 @@ Contact maintainers or follow a future doc update when you enable Phase 2.
 
 | Symptom | Fix |
 |---------|-----|
-| Release fails on migration 008 | Run `CREATE EXTENSION vector;` on Postgres (Part A4) |
+| Pre-deploy fails on migration 008 | Run `CREATE EXTENSION vector;` on Postgres (Part A4) |
 | `DATABASE_URL is required` | Add Postgres reference on coop-api service |
 | SSL / connection errors | Railway URL includes `sslmode=require`; app enables SSL automatically |
 | Build OOM / timeout | Railway Hobby: retry deploy; first Docker build is heavy (Go + Zoekt tools) |

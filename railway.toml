@@ -7,7 +7,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "node dist/webhookServer.js"
-releaseCommand = "node scripts/run-migrations.mjs"
+preDeployCommand = "node scripts/run-migrations.mjs"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
