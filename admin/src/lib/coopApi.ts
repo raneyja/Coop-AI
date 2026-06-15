@@ -96,7 +96,7 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
   };
 }
 
-const DEFAULT_API_BASE = "https://api.coopai.dev";
+const DEFAULT_API_BASE = "https://api.coop-ai.dev";
 
 export function getApiBase(): string {
   const base = process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() || DEFAULT_API_BASE;
