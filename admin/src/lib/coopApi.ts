@@ -423,11 +423,11 @@ export function planLabel(plan: string): string {
 export function planBadgeClass(plan: string): string {
   switch (plan) {
     case "enterprise":
-      return "border-coop-border bg-coop-surface text-white/80";
+      return "admin-chip admin-chip--plan-enterprise";
     case "pro":
-      return "bg-coop-index/15 text-coop-index border-coop-index/30";
+      return "admin-chip admin-chip--plan-pro";
     default:
-      return "bg-coop-border/40 text-coop-muted border-coop-border";
+      return "admin-chip admin-chip--plan-free";
   }
 }
 

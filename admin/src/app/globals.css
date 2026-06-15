@@ -26,11 +26,67 @@
   }
 
   .admin-card {
-    @apply rounded-sm border border-coop-border bg-coop-editor p-5;
+    @apply rounded-md border border-coop-border bg-coop-editor p-5;
   }
 
   .admin-panel-inset {
-    @apply rounded-sm border border-coop-border border-l-2 border-l-coop-index bg-coop-editor p-5;
+    @apply rounded-md border border-coop-border border-l-2 border-l-coop-index bg-coop-editor p-5;
+  }
+
+  .admin-list {
+    @apply divide-y divide-coop-border/60 overflow-hidden rounded-md border border-coop-border bg-coop-editor;
+  }
+
+  .admin-list-row {
+    @apply flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-white/[0.02];
+  }
+
+  .admin-list-row--connected {
+    @apply border-l-2 border-l-coop-index;
+  }
+
+  .admin-chip {
+    @apply inline-flex items-center rounded-md bg-white/[0.04] px-2 py-0.5 text-xs font-medium;
+  }
+
+  .admin-chip--muted {
+    @apply text-coop-muted;
+  }
+
+  .admin-chip--plan-pro {
+    @apply text-coop-index;
+  }
+
+  .admin-chip--plan-enterprise {
+    @apply text-white/80;
+  }
+
+  .admin-chip--plan-free {
+    @apply text-coop-muted;
+  }
+
+  .admin-status {
+    @apply inline-flex shrink-0 items-center gap-1.5 text-xs font-medium;
+  }
+
+  .admin-status--connected {
+    @apply text-coop-index;
+  }
+
+  .admin-status--available {
+    @apply text-coop-muted;
+  }
+
+  .admin-status-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  .admin-status--connected .admin-status-dot {
+    @apply bg-coop-index;
+  }
+
+  .admin-status--available .admin-status-dot {
+    @apply bg-coop-muted/50;
   }
 
   .admin-section-label {
@@ -38,7 +94,7 @@
   }
 
   .admin-btn {
-    @apply inline-flex items-center justify-center rounded-sm px-3 py-1.5 font-mono text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 font-mono text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .admin-btn-primary {
@@ -54,7 +110,7 @@
   }
 
   .admin-input {
-    @apply w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
+    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
   }
 
   .admin-label {

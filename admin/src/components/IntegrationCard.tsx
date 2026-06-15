@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { IntegrationDefinition } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
+import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
 
 type IntegrationCardProps = {
@@ -54,12 +55,10 @@ export function IntegrationCard({ definition, status, onRefresh, refreshing }: I
           <p className="mt-1 text-sm text-coop-muted">{definition.description}</p>
         </div>
         {comingSoon ? (
-          <span className="rounded-sm border border-coop-border px-2 py-0.5 font-mono text-[11px] text-coop-muted">
-            Coming soon
-          </span>
-        ) : (
-          <StatusBadge connected={installed} />
-        )}
+          <AdminChip>Coming soon</AdminChip>
+        ) : installed ? (
+          <StatusBadge connected />
+        ) : null}
       </div>
       {status?.detail && (
         <p className="text-xs text-coop-muted">Connected as {status.detail}</p>

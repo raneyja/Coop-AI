@@ -77,7 +77,7 @@ export default function BillingPage() {
             {opening ? "Opening…" : "Manage subscription"}
           </button>
         ) : (
-          <div className="rounded-sm border border-coop-border bg-coop-dark px-4 py-3 text-sm text-coop-muted">
+          <div className="rounded-md border border-coop-border bg-coop-dark px-4 py-3 text-sm text-coop-muted">
             No Stripe subscription on this org. Purchase Pro at{" "}
             <a href="https://coop-ai.dev/signup" className="admin-link">
               coop-ai.dev/signup

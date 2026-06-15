@@ -13,7 +13,7 @@ Create this file (copy from `.env.example`):
 NEXT_PUBLIC_COOP_API_BASE=http://localhost:8787
 
 # Production
-# NEXT_PUBLIC_COOP_API_BASE=https://api.coopai.dev
+# NEXT_PUBLIC_COOP_API_BASE=https://api.coop-ai.dev
 ```
 
 ### 2. Terminal — install and run

@@ -19,6 +19,7 @@ import {
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/integrations";
+import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 const TABS = [
@@ -561,30 +562,7 @@ export default function AnalyticsPage() {
                 Manage integrations →
               </Link>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {INTEGRATIONS.map((def) => {
-                const status = integrations.find((item) => item.provider === def.id);
-                return (
-                  <div key={def.id} className="admin-card flex items-center justify-between gap-3 py-4">
-                    <div>
-                      <p className="font-medium">{def.name}</p>
-                      {status?.detail && (
-                        <p className="text-xs text-coop-muted">{status.detail}</p>
-                      )}
-                    </div>
-                    <span
-                      className={`rounded-sm border px-2 py-0.5 font-mono text-xs ${
-                        status?.installed
-                          ? "border-coop-index/30 bg-coop-index/15 text-coop-index"
-                          : "border-coop-border text-coop-muted"
-                      }`}
-                    >
-                      {loading ? "…" : status?.installed ? "Connected" : "Not connected"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <IntegrationStatusList integrations={integrations} loading={loading} />
           </section>
         </div>
       )}

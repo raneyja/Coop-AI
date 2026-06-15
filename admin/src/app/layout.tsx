@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Coop AI — Admin",
-  description: "Organization admin console for Coop AI"
+  title: "CoopAI Admin",
+  description: "Organization admin console for CoopAI"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -5,9 +5,5 @@ type PlanBadgeProps = {
 };
 
 export function PlanBadge({ plan }: PlanBadgeProps) {
-  return (
-    <span className={`inline-flex rounded-sm border px-2 py-0.5 font-mono text-[11px] ${planBadgeClass(plan)}`}>
-      {planLabel(plan)}
-    </span>
-  );
+  return <span className={planBadgeClass(plan)}>{planLabel(plan)}</span>;
 }

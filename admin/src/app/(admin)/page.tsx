@@ -7,7 +7,7 @@ import { fetchIntegrations, fetchOrg, fetchUsers } from "@/lib/coopApi";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { PlanBadge } from "@/components/PlanBadge";
-import { StatusBadge } from "@/components/StatusBadge";
+import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 export default function DashboardPage() {
@@ -102,26 +102,7 @@ export default function DashboardPage() {
         {error && (
           <p className="mb-4 text-sm text-red-400">{error}</p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {INTEGRATIONS.map((def) => {
-            const status = integrations.find((s) => s.provider === def.id);
-            return (
-              <div key={def.id} className="admin-card flex items-center justify-between gap-3 py-4">
-                <div>
-                  <p className="font-medium">{def.name}</p>
-                  {status?.detail && (
-                    <p className="text-xs text-coop-muted">{status.detail}</p>
-                  )}
-                </div>
-                {loading ? (
-                  <span className="text-xs text-coop-muted">…</span>
-                ) : (
-                  <StatusBadge connected={status?.installed ?? false} />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <IntegrationStatusList integrations={integrations} loading={loading} />
       </section>
     </div>
   );
