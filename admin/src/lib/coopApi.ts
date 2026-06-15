@@ -207,17 +207,37 @@ async function fetchIntegrationStatus(provider: IntegrationProvider): Promise<In
 }
 
 export async function fetchIntegrations(): Promise<ApiResult<IntegrationStatus[]>> {
-  const bulk = await coopFetch<{ integrations?: BackendIntegrationStatus[] }>("/v1/admin/integrations");
-  if (bulk.ok && bulk.data?.integrations) {
-    return {
-      ok: true,
-      status: bulk.status,
-      data: bulk.data.integrations.map(normalizeIntegrationStatus)
-    };
+  const token = getToken();
+  if (!token) {
+    return { ok: false, status: 401, error: "Not signed in." };
   }
 
-  if (bulk.status !== 404 && bulk.status !== 503 && !bulk.ok) {
-    return { ok: false, status: bulk.status, error: bulk.error };
+  try {
+    const response = await fetch("/api/integrations", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store"
+    });
+    const body = (await response.json().catch(() => ({}))) as {
+      integrations?: BackendIntegrationStatus[];
+    } & ApiError;
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, `Request failed (${response.status}).`)
+      };
+    }
+
+    if (body.integrations) {
+      return {
+        ok: true,
+        status: response.status,
+        data: body.integrations.map(normalizeIntegrationStatus)
+      };
+    }
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
   }
 
   const statuses = await Promise.all(INTEGRATIONS.map((i) => fetchIntegrationStatus(i.id)));
