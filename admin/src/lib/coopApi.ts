@@ -225,13 +225,28 @@ export async function fetchIntegrations(): Promise<ApiResult<IntegrationStatus[]
 }
 
 export async function fetchInstallUrl(provider: IntegrationProvider): Promise<ApiResult<{ url: string }>> {
-  const result = await coopFetch<{ url: string }>(`/v1/${provider}/app/install-url`);
-  if (!result.ok) return result;
-  const url = result.data?.url?.trim();
-  if (!url) {
-    return { ok: false, status: 502, error: "Install URL was not returned by the server." };
+  const token = getToken();
+  if (!token) {
+    return { ok: false, status: 401, error: "Not signed in." };
   }
-  return { ok: true, status: result.status, data: { url } };
+
+  try {
+    const response = await fetch(`/api/install-url/${provider}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store"
+    });
+    const body = (await response.json().catch(() => ({}))) as { url?: string } & ApiError;
+    if (!response.ok || !body.url) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, `Request failed (${response.status}).`)
+      };
+    }
+    return { ok: true, status: response.status, data: { url: body.url.trim() } };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
 }
 
 export async function fetchUsers(): Promise<ApiResult<{ users: AdminUser[] }>> {
