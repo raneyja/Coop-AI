@@ -22,6 +22,7 @@ export function loadGitHubOAuthConfig(env: NodeJS.ProcessEnv = process.env): Git
   }
   const publicBaseUrl =
     env.WEBHOOK_DOMAIN?.trim() ||
+    env.COOP_PUBLIC_BASE_URL?.trim() ||
     env.COOP_PUBLIC_API_URL?.trim() ||
     `http://localhost:${env.PORT ?? "8787"}`;
   return {

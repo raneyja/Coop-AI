@@ -3,7 +3,7 @@ export type GitHubAppConfig = {
   privateKeyPem: string;
   slug: string;
   webhookSecret?: string;
-  /** Public HTTPS base for install callback (e.g. https://api.coopai.dev). */
+  /** Public HTTPS base for install callback (e.g. https://api.coop-ai.dev). */
   publicBaseUrl: string;
 };
 
@@ -16,6 +16,7 @@ export function loadGitHubAppConfig(env: NodeJS.ProcessEnv = process.env): GitHu
   }
   const publicBaseUrl =
     env.WEBHOOK_DOMAIN?.trim() ||
+    env.COOP_PUBLIC_BASE_URL?.trim() ||
     env.COOP_PUBLIC_API_URL?.trim() ||
     `http://localhost:${env.PORT ?? "8787"}`;
   return {
