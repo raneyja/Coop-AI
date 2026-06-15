@@ -103,6 +103,10 @@ export function getApiBase(): string {
   return base.replace(/\/$/, "");
 }
 
+export function normalizeApiKeyInput(value: string): string {
+  return value.trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
+}
+
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return sessionStorage.getItem("coop_admin_api_token");
@@ -158,9 +162,12 @@ export async function coopFetch<T>(
 }
 
 export async function validateApiKey(token: string): Promise<ApiResult<MeResponse>> {
+  const normalized = normalizeApiKeyInput(token);
   try {
-    const response = await fetch(`${getApiBase()}/v1/me`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const response = await fetch("/api/validate-key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: normalized })
     });
     const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {

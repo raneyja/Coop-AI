@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, isAdminRole, saveSession } from "@/lib/auth";
-import { ssoStartUrl, validateApiKey } from "@/lib/coopApi";
+import { getToken, isAdminRole, saveSession, clearSession } from "@/lib/auth";
+import { ssoStartUrl, validateApiKey, normalizeApiKeyInput } from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
 
 export default function LoginPage() {
@@ -15,22 +15,34 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (getToken()) {
-      router.replace("/");
+    const token = getToken();
+    if (!token) {
+      return;
     }
+    void validateApiKey(token).then((result) => {
+      if (result.ok) {
+        router.replace("/");
+        return;
+      }
+      clearSession();
+    });
   }, [router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
-    const token = apiKey.trim();
+    const token = normalizeApiKeyInput(apiKey);
     if (!token) {
       setError("Enter your organization admin API key.");
       return;
     }
     if (!token.startsWith("coop_")) {
       setError("API keys start with coop_. Check that you copied the full key.");
+      return;
+    }
+    if (token.length !== 69) {
+      setError(`API key should be 69 characters (yours is ${token.length}). Copy the full coop_… key with no spaces.`);
       return;
     }
 
@@ -91,12 +103,13 @@ export default function LoginPage() {
                 </label>
                 <input
                   id="apiKey"
-                  type="password"
-                  className="admin-input"
+                  type="text"
+                  className="admin-input font-mono text-sm"
                   placeholder="coop_…"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   autoComplete="off"
+                  spellCheck={false}
                   required
                 />
               </div>
