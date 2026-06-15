@@ -4,6 +4,7 @@
  * Usage:
  *   npx ts-node scripts/admin-org.ts create-org "Acme Corp" enterprise
  *   npx ts-node scripts/admin-org.ts set-plan <orgId> enterprise
+ *   npx ts-node scripts/admin-org.ts list-orgs
  *   npx ts-node scripts/admin-org.ts create-api-key <orgId> "primary"
  *   npx ts-node scripts/admin-org.ts configure-sso <orgId> okta <idpEntityId> <idpSsoUrl> <certPath>
  *   npx ts-node scripts/admin-org.ts create-user <orgId> admin@acme.com owner
@@ -46,6 +47,18 @@ async function main(): Promise<void> {
         }
         const org = await store.setOrganizationPlan(orgId, plan as OrgPlan);
         console.log(JSON.stringify(org, null, 2));
+        break;
+      }
+      case "list-orgs": {
+        const result = await pool.query(
+          `SELECT o.id, o.name, o.plan, o.created_at,
+                  COUNT(k.id)::int AS api_key_count
+           FROM organizations o
+           LEFT JOIN api_keys k ON k.org_id = o.id
+           GROUP BY o.id, o.name, o.plan, o.created_at
+           ORDER BY o.created_at DESC`
+        );
+        console.log(JSON.stringify(result.rows, null, 2));
         break;
       }
       case "create-api-key": {
@@ -96,7 +109,7 @@ async function main(): Promise<void> {
       }
       default:
         console.error(
-          "Commands: create-org, set-plan, create-api-key, configure-sso, create-user, set-user-role"
+          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role"
         );
         process.exit(1);
     }

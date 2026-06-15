@@ -150,7 +150,11 @@ export class OrgStore {
   }
 
   public async resolveAuth(rawKey: string): Promise<AuthContext | undefined> {
-    const keyHash = hashApiKey(rawKey);
+    const normalized = rawKey.trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
+    if (!normalized) {
+      return undefined;
+    }
+    const keyHash = hashApiKey(normalized);
     const result = await this.pool.query(
       `SELECT k.id AS key_id, o.id AS org_id, o.name AS org_name, o.plan
        FROM api_keys k
