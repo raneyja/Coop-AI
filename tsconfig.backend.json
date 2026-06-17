@@ -15,5 +15,8 @@
     "src/jobs/**/*.ts",
     "src/server/**/*.ts",
     "src/webhooks/**/*.ts"
+  ],
+  "exclude": [
+    "src/server/billing/adminPortalUrl.test.ts"
   ]
 }

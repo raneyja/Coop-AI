@@ -34,6 +34,10 @@ export type LightningSearchResult = {
 export type LightningSearchOptions = {
   repoId?: string;
   collectionId?: string;
+  /** Cross-repo scope: workspace = user's selected repos; indexed/org = org catalog (legacy). */
+  scope?: "workspace" | "indexed" | "org";
+  /** When set, search is limited to these repo ids (user workspace selection). */
+  userRepoIds?: string[];
   pattern: string;
   limit?: number;
   /** Path-focused search for @-mention picker (distinct files, no symbol/embedding noise). */
@@ -630,13 +634,26 @@ function normalizeSearchInput(
   return { ...repoIdOrOptions, limit: repoIdOrOptions.limit ?? limitArg };
 }
 
-async function resolveSearchRepoIds(
+export async function resolveSearchRepoIds(
   pool: Pool,
   orgId: string,
   options: LightningSearchOptions
 ): Promise<string[]> {
+  if (options.userRepoIds?.length) {
+    return options.userRepoIds;
+  }
   if (options.collectionId) {
     return new CollectionStore(pool).listCollectionRepoIds(orgId, options.collectionId);
+  }
+  if (options.scope === "workspace") {
+    return [];
+  }
+  if (options.scope === "indexed" || options.scope === "org") {
+    const result = await pool.query<{ repo_id: string }>(
+      `SELECT repo_id FROM org_repos WHERE org_id = $1 AND lightning_enabled = true ORDER BY repo_id`,
+      [orgId]
+    );
+    return result.rows.map((row) => String(row.repo_id));
   }
   if (options.repoId) {
     return [options.repoId];

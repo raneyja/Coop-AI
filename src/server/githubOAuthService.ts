@@ -22,13 +22,16 @@ export type GitHubOAuthTokenResult = {
 export class GitHubOAuthService {
   public constructor(private readonly options: GitHubOAuthServiceOptions) {}
 
-  public buildAuthorizeUrl(redirectUri: string, orgId: string): string {
+  public buildAuthorizeUrl(redirectUri: string, orgId: string, options?: { promptConsent?: boolean }): string {
     const params = new URLSearchParams({
       client_id: this.options.clientId,
       redirect_uri: redirectUri,
       scope: GITHUB_OAUTH_SCOPES,
       state: signOAuthState(orgId, this.options.stateSecret)
     });
+    if (options?.promptConsent !== false) {
+      params.set("prompt", "consent");
+    }
     return `${GITHUB_AUTHORIZE}?${params.toString()}`;
   }
 

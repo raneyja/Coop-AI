@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { GitHubAppService } from "../../server/githubAppService";
 import type { OrgStore } from "../../server/orgStore";
+import type { EstateSyncService } from "../../server/estateSyncService";
 import { WebhookMonitor } from "../webhookMonitor";
 import type {
   ChangedFile,
@@ -27,6 +28,7 @@ export type GitHubWebhookHandlerOptions = {
   queue: WebhookUpdateQueue;
   orgStore?: OrgStore;
   githubApp?: GitHubAppService;
+  estateSync?: EstateSyncService;
 };
 
 export class GitHubWebhookHandler {
@@ -100,6 +102,7 @@ export class GitHubWebhookHandler {
 
     if (action === "created" || action === "new_permissions_accepted") {
       await this.persistInstallationToken(installationId, body);
+      await this.maybeRunEstateSync(installationId);
       return this.finish(
         deliveryId,
         "installation",
@@ -144,6 +147,26 @@ export class GitHubWebhookHandler {
     }
   }
 
+  private async maybeRunEstateSync(installationId: number): Promise<void> {
+    if (!this.options.orgStore || !this.options.estateSync) {
+      return;
+    }
+    const orgId = await this.options.orgStore.findOrgIdByInstallation(installationId, "github");
+    if (!orgId) {
+      return;
+    }
+    const org = await this.options.orgStore.getOrganization(orgId);
+    if (org?.plan !== "enterprise") {
+      return;
+    }
+    try {
+      await this.options.estateSync.syncInstallation(orgId, installationId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[github] estate sync failed for org=${orgId}: ${message}`);
+    }
+  }
+
   private async handleInstallationRepositories(
     deliveryId: string,
     payload: unknown
@@ -164,6 +187,10 @@ export class GitHubWebhookHandler {
         202,
         `installation_repositories action: ${action ?? "unknown"}`
       );
+    }
+
+    if (installationId) {
+      await this.maybeRunEstateSync(installationId);
     }
 
     const receivedAt = new Date();

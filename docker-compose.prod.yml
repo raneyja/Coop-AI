@@ -1,0 +1,13 @@
+# Production overrides — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Binds API to localhost (Caddy terminates TLS). Does not publish Postgres/Zoekt publicly.
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:8787:8787"
+  postgres:
+    ports: []
+  zoekt:
+    ports: []

@@ -3,7 +3,8 @@ import { createRequestId, ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
-import { handleInlineCompletionRequest } from "./inlineCompletionApi";
+import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
+import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
 import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
 import {
   requireAuth,
@@ -16,6 +17,13 @@ import { AuditLogger, auditActor } from "../server/audit/auditLogger";
 import type { UsageTracker } from "../server/usageTracker";
 import type { UserStore } from "../server/users/userStore";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
+import {
+  createPlanQuotaService,
+  estimateChatRequestTokens,
+  PlanQuotaExceededError,
+  type PlanQuotaService,
+  writePlanQuotaExceededResponse
+} from "../server/planQuota";
 
 export type ChatApiDeps = {
   router?: ModelRouter;
@@ -25,6 +33,7 @@ export type ChatApiDeps = {
   auditLogger?: AuditLogger;
   usageTracker?: UsageTracker;
   userStore?: UserStore;
+  planQuota?: PlanQuotaService;
 };
 
 type ParsedChatRequest = {
@@ -59,22 +68,45 @@ export async function handleChatApiRequest(
     if (!org) {
       return true;
     }
+    const planQuota = resolvePlanQuota(deps);
+    const inlineBody = asRecord(parsed.body);
+    const maxTokens = typeof inlineBody.maxTokens === "number" ? Math.min(inlineBody.maxTokens, 128) : 96;
+    const provider = readProvider(inlineBody.provider, config.defaultProvider);
+    const model =
+      typeof inlineBody.model === "string" && inlineBody.model
+        ? inlineBody.model
+        : defaultInlineModelFor(provider);
+    const inlineMessage = typeof inlineBody.message === "string" ? inlineBody.message : "";
+    try {
+      await planQuota.check(
+        org.orgId,
+        org.plan,
+        estimateChatRequestTokens({
+          message: inlineMessage,
+          maxTokens,
+          provider,
+          model
+        })
+      );
+    } catch (error) {
+      if (error instanceof PlanQuotaExceededError) {
+        writePlanQuotaExceededResponse(response, error);
+        return true;
+      }
+      throw error;
+    }
     const router = createChatRouter(deps);
     try {
-      await handleInlineCompletionRequest(parsed.body, response, router, config, org);
+      await handleInlineCompletionRequest(parsed.body, response, router, config, {
+        ...org,
+        planQuota
+      });
     } finally {
       await deps.auditLogger?.record({
         orgId: org.orgId,
         userId: org.userId,
         principal: org.principal,
         action: "completion.inline"
-      });
-      await deps.usageTracker?.record({
-        orgId: org.orgId,
-        userId: org.userId,
-        principal: org.principal,
-        eventType: "completion.suggested",
-        metadata: { source: "inline" }
       });
     }
     return true;
@@ -97,9 +129,34 @@ export async function handleChatApiRequest(
     return true;
   }
 
-  const router = createChatRouter(deps);
+  const planQuota = resolvePlanQuota(deps);
+  const maxTokens = typeof body.maxTokens === "number" ? body.maxTokens : 2000;
+  const history = Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [];
+  const visionWeighted = attachments.length > 0 || history.some((entry) => (entry.attachments?.length ?? 0) > 0);
   const provider = readProvider(body.provider, config.defaultProvider);
   const model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
+  try {
+    await planQuota.check(
+      org.orgId,
+      org.plan,
+      estimateChatRequestTokens({
+        message,
+        history,
+        maxTokens,
+        imageAttachmentCount: attachments.length,
+        provider,
+        model
+      })
+    );
+  } catch (error) {
+    if (error instanceof PlanQuotaExceededError) {
+      writePlanQuotaExceededResponse(response, error);
+      return true;
+    }
+    throw error;
+  }
+
+  const router = createChatRouter(deps);
   const requestId = createRequestId();
 
   response.writeHead(200, {
@@ -111,6 +168,8 @@ export async function handleChatApiRequest(
   const abortController = new AbortController();
   bindAbort(rawRequest, abortController);
 
+  let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
+
   try {
     for await (const chunk of router.stream(
       {
@@ -118,7 +177,7 @@ export async function handleChatApiRequest(
         orgId: org.orgId,
         plan: org.plan,
         message: body.message,
-        history: Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [],
+        history,
         context: body.context,
         attachments: attachments.length ? attachments : undefined,
         useCase: readUseCase(body.useCase),
@@ -127,12 +186,18 @@ export async function handleChatApiRequest(
           provider,
           model,
           temperature: typeof body.temperature === "number" ? body.temperature : 0.5,
-          maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : 2000
+          maxTokens
         }
       },
       abortController.signal
     )) {
       writeSse(response, chunk);
+      if (chunk.type === "done") {
+        usageTokens = {
+          inputTokens: chunk.usage.inputTokens,
+          outputTokens: chunk.usage.outputTokens
+        };
+      }
       if (chunk.type === "error") {
         break;
       }
@@ -151,13 +216,19 @@ export async function handleChatApiRequest(
     action: "chat.completion",
     metadata: { provider, model, requestId }
   });
-  await deps.usageTracker?.record({
-    orgId: org.orgId,
-    userId: org.userId,
-    principal: org.principal,
-    eventType: "chat.message",
-    metadata: { provider, model, requestId }
-  });
+  if (usageTokens) {
+    await planQuota.recordTokens(org.orgId, org.plan, {
+      eventType: "chat.message",
+      inputTokens: usageTokens.inputTokens,
+      outputTokens: usageTokens.outputTokens,
+      provider,
+      model,
+      userId: org.userId,
+      principal: org.principal,
+      metadata: { requestId },
+      visionWeighted
+    });
+  }
 
   response.end();
   return true;
@@ -273,14 +344,9 @@ function readUseCase(value: unknown): UseCase {
 }
 
 function defaultModelFor(provider: LlmProvider): string {
-  switch (provider) {
-    case "openai":
-      return "gpt-5.1";
-    case "anthropic":
-      return "claude-sonnet-4-6";
-    case "deepseek":
-      return "deepseek-chat";
-    case "gemini":
-      return "gemini-2.5-flash";
-  }
+  return DEFAULT_MODEL_BY_PROVIDER[provider];
+}
+
+function resolvePlanQuota(deps: ChatApiDeps): PlanQuotaService {
+  return deps.planQuota ?? createPlanQuotaService(deps.usageTracker);
 }

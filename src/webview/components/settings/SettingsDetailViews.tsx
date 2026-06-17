@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MODELS_BY_PROVIDER, DEFAULT_MODEL_BY_PROVIDER } from "../../../config/llmModels";
+import { MODELS_BY_PROVIDER, DEFAULT_MODEL_BY_PROVIDER, formatModelOptionLabel, modelsForProvider } from "../../../config/llmModels";
 import { TestButton, type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
 import { ConfiguredSecretInput } from "../ConfiguredSecretInput";
@@ -12,13 +12,43 @@ import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
 import {
   codeHostConnectionMeta,
   codeHostListSubtitle,
+  formatQuotaRetryLabel,
   integrationListSubtitle
 } from "./connectionCopy";
 import { IdentityLinksDetail } from "./IdentityLinksDetail";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
 import type { IdentityDirectory } from "../../../identity/types";
+import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
+import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { codeHostConfigured, integrationConfigured } from "./subtitles";
+
+function isFreeDeveloperPlan(prefs: Preferences): boolean {
+  return !prefs.plan || prefs.plan === "free";
+}
+
+function CodeHostProGate({
+  prefs,
+  children
+}: {
+  prefs: Preferences;
+  children: React.ReactElement;
+}): React.ReactElement {
+  if (isFreeDeveloperPlan(prefs)) {
+    return (
+      <SettingsSection>
+        <p className="coop-settings-card-desc">
+          Code host connections require Pro. The free Developer plan uses files in your opened VS Code workspace
+          folders only.
+        </p>
+        <p className="coop-settings-card-desc mt-2">
+          Tool integrations (Slack, Jira, Notion, and more) remain unlimited on the free plan.
+        </p>
+      </SettingsSection>
+    );
+  }
+  return children;
+}
 
 /**
  * URL inputs bound directly to persisted prefs lose keystrokes: each change posts to the
@@ -156,6 +186,17 @@ export type SettingsDetailProps = {
   collections: import("./types").SettingsCollectionSummary[];
   collectionsError?: string;
   onRequestCollections: () => void;
+  onLoadWorkspaceRepos: () => void;
+  onSaveWorkspaceRepos: (repoIds: string[]) => void;
+  workspacePickerState: {
+    repos: GithubRepoOption[];
+    selectedRepoIds: string[];
+    selectedCount: number;
+    limit: number | null;
+    loading: boolean;
+    saving: boolean;
+    error?: string;
+  };
 };
 
 export function SettingsDetailView({
@@ -180,7 +221,7 @@ export function SettingsDetailView({
     case "integration-jira":
       return <JiraDetail {...props} />;
     case "integration-teams":
-      return <TeamsDetail />;
+      return <TeamsDetail {...props} />;
     case "integration-confluence":
       return <ConfluenceDetail {...props} />;
     case "integration-notion":
@@ -249,7 +290,7 @@ function ModelDetail({
     []
   );
 
-  const models = useMemo(() => MODELS_BY_PROVIDER[draft.llmProvider] ?? [], [draft.llmProvider]);
+  const models = useMemo(() => modelsForProvider(draft.llmProvider), [draft.llmProvider]);
 
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
@@ -306,12 +347,17 @@ function ModelDetail({
             className="coop-settings-field"
           >
             {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
+              <option key={model.id} value={model.id}>
+                {formatModelOptionLabel(model)}
               </option>
             ))}
           </select>
         </label>
+        {prefs.plan === "free" ? (
+          <p className="coop-settings-card-desc text-[11px] text-[var(--coop-panel-muted)]">
+            Free plan: billed credits = tokens × model weight (shown above) × 2 for image attachments.
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <label className="coop-settings-field-row">
@@ -428,6 +474,29 @@ function AccountDetail({
 
   return (
     <SettingsSection>
+      {prefs.plan === "free" && prefs.quotaCredits ? (
+        <div className="coop-settings-card-desc">
+          <p className="coop-prompt-modal-section-title">AI credits</p>
+          <p>
+            {prefs.quotaCredits.remainingCredits} of {prefs.quotaCredits.limitCredits} credits remaining
+            <span className="text-[var(--coop-panel-muted)]">
+              {" "}
+              · {prefs.quotaCredits.windowHours}-hour rolling window
+            </span>
+          </p>
+          <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
+            Heavier models use more credits per request. Switch models in Preferences.
+          </p>
+          <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
+            Developer is individual-only — one seat per account, no team invites.
+          </p>
+          {prefs.quotaCredits.remainingCredits === 0 ? (
+            <p className="mt-2 text-[11px] text-[var(--coop-panel-muted)]">
+              Limit reached. Try again {formatQuotaRetryLabel(prefs.quotaCredits.resetsAt)} or upgrade to Pro.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {prefs.hasApiKey && prefs.authMethod === "sso_session" ? (
         <p className="coop-settings-card-desc">
           Signed in to {prefs.orgName ?? "your organization"}
@@ -543,48 +612,61 @@ function ConnectionsListDetail({
   onUpdate,
   onNavigate
 }: SettingsDetailProps): React.ReactElement {
+  const freePlan = isFreeDeveloperPlan(prefs);
   return (
     <>
       <p className="coop-settings-card-desc px-0.5">
-        Connect source code and collaboration tools through browser sign-in. Credentials are stored on the Coop
-        server for production use — not pasted into VS Code.
+        {freePlan
+          ? "Connect collaboration tools through browser sign-in. Free plan uses local workspace files — code hosts require Pro."
+          : "Connect source code and collaboration tools through browser sign-in. Credentials are stored on the Coop server for production use — not pasted into VS Code."}
       </p>
 
-      <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
-      <SettingsSection>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Default code host</span>
-          <select
-            value={prefs.defaultCodeHost}
-            onChange={(e) => onUpdate({ defaultCodeHost: e.target.value as CodeHostProviderPreference })}
-            className="coop-settings-field"
-          >
-            <option value="github">GitHub</option>
-            <option value="gitlab">GitLab</option>
-            <option value="bitbucket">Bitbucket</option>
-          </select>
-        </label>
-      </SettingsSection>
-      <CoopNavList>
-        <CoopNavRow
-          title="GitHub"
-          subtitle={codeHostListSubtitle(prefs, "github")}
-          configured={codeHostConfigured(prefs, "github")}
-          onClick={() => onNavigate("code-host-github")}
-        />
-        <CoopNavRow
-          title="GitLab"
-          subtitle={codeHostListSubtitle(prefs, "gitlab")}
-          configured={codeHostConfigured(prefs, "gitlab")}
-          onClick={() => onNavigate("code-host-gitlab")}
-        />
-        <CoopNavRow
-          title="Bitbucket"
-          subtitle={codeHostListSubtitle(prefs, "bitbucket")}
-          configured={codeHostConfigured(prefs, "bitbucket")}
-          onClick={() => onNavigate("code-host-bitbucket")}
-        />
-      </CoopNavList>
+      {!freePlan ? (
+        <>
+          <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
+          <SettingsSection>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Default code host</span>
+              <select
+                value={prefs.defaultCodeHost}
+                onChange={(e) => onUpdate({ defaultCodeHost: e.target.value as CodeHostProviderPreference })}
+                className="coop-settings-field"
+              >
+                <option value="github">GitHub</option>
+                <option value="gitlab">GitLab</option>
+                <option value="bitbucket">Bitbucket</option>
+              </select>
+            </label>
+          </SettingsSection>
+          <CoopNavList>
+            <CoopNavRow
+              title="GitHub"
+              subtitle={codeHostListSubtitle(prefs, "github")}
+              configured={codeHostConfigured(prefs, "github")}
+              onClick={() => onNavigate("code-host-github")}
+            />
+            <CoopNavRow
+              title="GitLab"
+              subtitle={codeHostListSubtitle(prefs, "gitlab")}
+              configured={codeHostConfigured(prefs, "gitlab")}
+              onClick={() => onNavigate("code-host-gitlab")}
+            />
+            <CoopNavRow
+              title="Bitbucket"
+              subtitle={codeHostListSubtitle(prefs, "bitbucket")}
+              configured={codeHostConfigured(prefs, "bitbucket")}
+              onClick={() => onNavigate("code-host-bitbucket")}
+            />
+          </CoopNavList>
+        </>
+      ) : (
+        <SettingsSection title="Source code">
+          <p className="coop-settings-card-desc">
+            GitHub, GitLab, and Bitbucket connections unlock with Pro — remote repos, cross-repo search, and
+            Deep-Code Graph indexing.
+          </p>
+        </SettingsSection>
+      )}
 
       <p className="coop-prompt-modal-section-title px-0.5 mt-4">Tools</p>
       <CoopNavList>
@@ -602,9 +684,9 @@ function ConnectionsListDetail({
         />
         <CoopNavRow
           title="Microsoft Teams"
-          subtitle="Coming soon"
-          trailing={<span className="coop-nav-row-badge">Coming soon</span>}
-          disabled
+          subtitle={integrationListSubtitle(prefs, "teams")}
+          configured={integrationConfigured(prefs, "teams")}
+          onClick={() => onNavigate("integration-teams")}
         />
         <CoopNavRow
           title="Confluence"
@@ -666,9 +748,9 @@ function GitHubDetail({
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
   const cloudPath = !prefs.devMode;
-  const canInstall = prefs.canInstallIntegrations === true;
   const connected = codeHostConfigured(prefs, "github");
   return (
+    <CodeHostProGate prefs={prefs}>
     <SettingsSection>
       {cloudPath ? (
         <ConnectionCard
@@ -677,13 +759,8 @@ function GitHubDetail({
           connected={connected}
           required={!connected}
           description="Connect repositories through the Coop GitHub App. Installation credentials are stored on the server — no personal access token in VS Code."
-          adminNotice={
-            !canInstall
-              ? "GitHub is connected by your organization admin. Ask IT to connect GitHub if repositories are unavailable."
-              : undefined
-          }
           connectLabel={connected ? "Manage GitHub connection" : "Connect GitHub"}
-          onConnect={canInstall ? onInstallGithubApp : undefined}
+          onConnect={onInstallGithubApp}
           onRefresh={onRefreshGithubInstallation}
           refreshKey="github"
           pendingRefresh={pendingRefresh}
@@ -693,6 +770,13 @@ function GitHubDetail({
           testLabel="Test GitHub"
           pendingTest={pendingTest}
           testResult={testResult}
+          footer={
+            !connected ? (
+              <p className="coop-settings-card-desc coop-prompt-modal-muted">
+                Organization credentials are stored on the Coop server, not in VS Code.
+              </p>
+            ) : undefined
+          }
         />
       ) : null}
       {prefs.devMode ? (
@@ -737,6 +821,7 @@ function GitHubDetail({
         </>
       ) : null}
     </SettingsSection>
+    </CodeHostProGate>
   );
 }
 
@@ -759,6 +844,7 @@ function GitLabDetail({
   const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "gitlab");
   return (
+    <CodeHostProGate prefs={prefs}>
     <SettingsSection>
       {cloudPath ? (
         <ConnectionCard
@@ -831,6 +917,7 @@ function GitLabDetail({
         </>
       ) : null}
     </SettingsSection>
+    </CodeHostProGate>
   );
 }
 
@@ -854,6 +941,7 @@ function BitbucketDetail({
   const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "bitbucket");
   return (
+    <CodeHostProGate prefs={prefs}>
     <SettingsSection>
       {cloudPath ? (
         <ConnectionCard
@@ -929,6 +1017,7 @@ function BitbucketDetail({
         </>
       ) : null}
     </SettingsSection>
+    </CodeHostProGate>
   );
 }
 
@@ -1110,20 +1199,77 @@ function JiraDetail({
   );
 }
 
-function TeamsDetail(): React.ReactElement {
+function TeamsDetail({
+  prefs,
+  teamsTokenDraft,
+  onTeamsTokenDraftChange,
+  onSaveTeamsToken,
+  onClearTeamsToken,
+  onTestIntegration,
+  onInstallTeamsApp,
+  onRefreshTeamsInstallation,
+  savedFlashKey,
+  pendingTest,
+  testResult,
+  pendingRefresh,
+  refreshResult
+}: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <p className="coop-settings-card-desc">
-        Microsoft Teams Connect is coming soon. Trace Decision will search Teams channel messages once
-        org OAuth is available.
-      </p>
-      <div className="coop-health-integration">
-        <div>
-          <div className="coop-health-integration-name">Microsoft Teams</div>
-          <div className="coop-health-integration-meta">Coming soon</div>
-        </div>
-        <span className="coop-nav-row-badge">Coming soon</span>
-      </div>
+      <IntegrationConnectionShell
+        provider="teams"
+        prefs={prefs}
+        description="Search Teams channel messages for Trace Decision. Requires a work or school Microsoft 365 tenant with Teams channels (not personal Teams)."
+        onConnect={onInstallTeamsApp}
+        onRefresh={onRefreshTeamsInstallation}
+        onTest={() => onTestIntegration("teams")}
+        testKey="teams"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        devFallback={
+          <>
+            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">
+                Microsoft Graph access token {prefs.hasTeamsToken ? "(configured)" : ""}
+              </span>
+              <ConfiguredSecretInput
+                configured={prefs.hasTeamsToken}
+                value={teamsTokenDraft}
+                placeholder="Graph token with ChannelMessage.Read.All"
+                onChange={onTeamsTokenDraftChange}
+                className="coop-settings-field"
+              />
+            </label>
+            <div className="coop-settings-actions">
+              <button type="button" className="coop-settings-action-btn" onClick={onSaveTeamsToken}>
+                Save Teams token
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={onClearTeamsToken}
+                disabled={!prefs.hasTeamsToken}
+              >
+                Clear
+              </button>
+              <TestButton
+                testKey="teams"
+                label="Test Teams"
+                pendingTest={pendingTest}
+                testResult={testResult}
+                onClick={() => onTestIntegration("teams")}
+              />
+              <SaveFlashLabel show={savedFlashKey === "teams"} />
+            </div>
+            <p className="coop-settings-card-desc coop-prompt-modal-muted">
+              Internal use only (`coopAI.devMode`). Production users connect Microsoft Teams in the browser above.
+            </p>
+          </>
+        }
+      />
     </SettingsSection>
   );
 }
@@ -1386,11 +1532,16 @@ function WorkspaceDetail({
   onUpdate,
   collections,
   collectionsError,
-  onRequestCollections
+  onRequestCollections,
+  onLoadWorkspaceRepos,
+  onSaveWorkspaceRepos,
+  workspacePickerState
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
+  const workspaceSavePendingRef = useRef(false);
   const savedTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1412,6 +1563,25 @@ function WorkspaceDetail({
     onRequestCollections();
   }, [onRequestCollections]);
 
+  useEffect(() => {
+    if (!workspaceSavePendingRef.current || workspacePickerState.saving) {
+      return;
+    }
+    if (workspacePickerState.error) {
+      workspaceSavePendingRef.current = false;
+      return;
+    }
+    if (!workspacePickerState.loading) {
+      workspaceSavePendingRef.current = false;
+      setWorkspacePickerOpen(false);
+    }
+  }, [
+    workspacePickerState.saving,
+    workspacePickerState.loading,
+    workspacePickerState.error,
+    workspacePickerState.selectedCount
+  ]);
+
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
     setDirty(true);
@@ -1428,52 +1598,143 @@ function WorkspaceDetail({
     savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
   };
 
-  return (
-    <>
-      <SettingsSection title="Repository">
-        <p className="coop-settings-card-desc">
-          For Trace Decision. Use the same owner and repo name as on github.com, then click Save.
-        </p>
-        <div className="grid grid-cols-3 gap-3">
+  const workspaceLabels =
+    prefs.workspaceRepoIds && prefs.workspaceRepoIds.length > 0
+      ? prefs.workspaceRepoIds
+          .map((repoId) => {
+            const match = workspacePickerState.repos.find((repo) => repo.repoId === repoId);
+            return match ? `${match.owner}/${match.name}` : repoId.replace(/^github:/, "");
+          })
+          .join(", ")
+      : draft.owner && draft.repo
+        ? `${draft.owner}/${draft.repo}`
+        : "No workspace repos selected";
+
+  const workspaceCountLabel =
+    prefs.workspaceRepoLimit != null
+      ? `${prefs.workspaceRepoCount ?? prefs.workspaceRepoIds?.length ?? 0} / ${prefs.workspaceRepoLimit} repos`
+      : undefined;
+
+  if (isFreeDeveloperPlan(prefs)) {
+    return (
+      <>
+        <SettingsSection title="Local workspace">
+          <p className="coop-settings-card-desc">
+            Free plan uses files in your opened VS Code workspace folders. Use File → Open Folder to give Coop
+            context — no GitHub connection required.
+          </p>
+          <p className="coop-settings-card-desc mt-2">
+            @ mentions and chat search your local tree only. Upgrade to Pro for code-host connections, workspace
+            repos, and cross-repo search.
+          </p>
+        </SettingsSection>
+        <SettingsSection title="Primary branch">
           <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Owner</span>
-            <input
-              type="text"
-              value={draft.owner}
-              onChange={(e) => update({ owner: e.target.value })}
-              className="coop-settings-field"
-            />
-          </label>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Repo</span>
-            <input
-              type="text"
-              value={draft.repo}
-              onChange={(e) => update({ repo: e.target.value })}
-              className="coop-settings-field"
-            />
-          </label>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Branch</span>
+            <span className="coop-settings-label">Primary branch</span>
             <input
               type="text"
               value={draft.branch}
               onChange={(e) => update({ branch: e.target.value })}
               className="coop-settings-field"
+              placeholder="main"
             />
           </label>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
+              Save branch
+            </button>
+            <SaveFlashLabel show={saved} />
+          </div>
+        </SettingsSection>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SettingsSection title="Workspace repos">
+        <p className="coop-settings-card-desc">
+          Choose up to 3 indexed repos to work in. Coop-Search and the folder picker use these repos.
+          Your first selection is the primary repo for Trace Decision.
+        </p>
+        <div className="coop-settings-card space-y-3">
+          <div className="min-w-0">
+            {workspaceCountLabel ? (
+              <p className="coop-workspace-picker-count mb-2 inline-flex">{workspaceCountLabel}</p>
+            ) : null}
+            <p className="coop-settings-card-title">{workspaceLabels}</p>
+            <p className="coop-settings-card-desc mt-1">
+              {draft.branch ? `Primary branch: ${draft.branch}` : "Pick repos from your org indexed catalog."}
+            </p>
+          </div>
+          <div className="coop-settings-actions">
+            {prefs.githubNeedsReconnect ? (
+              <p className="coop-settings-test-message--error text-[11px]">
+                GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub).
+              </p>
+            ) : null}
+            {prefs.hasGitHubAppInstalled ? (
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                onClick={() => {
+                  setWorkspacePickerOpen(true);
+                  onLoadWorkspaceRepos();
+                }}
+              >
+                Choose workspace repos
+              </button>
+            ) : prefs.githubNeedsReconnect ? (
+              <p className="coop-prompt-modal-muted text-[11px]">Re-authorize GitHub first, then return here.</p>
+            ) : (
+              <p className="coop-prompt-modal-muted text-[11px]">
+                Connect GitHub in the admin portal to browse indexed repositories.
+              </p>
+            )}
+          </div>
+          {workspacePickerState.error && !workspacePickerOpen ? (
+            <p className="coop-settings-test-message--error mt-2 text-[11px]">{workspacePickerState.error}</p>
+          ) : null}
         </div>
+        <label className="coop-settings-field-row mt-3">
+          <span className="coop-settings-label">Primary branch</span>
+          <input
+            type="text"
+            value={draft.branch}
+            onChange={(e) => update({ branch: e.target.value })}
+            className="coop-settings-field"
+            placeholder="main"
+          />
+        </label>
         <div className="coop-settings-actions">
           <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
-            Save repository
+            Save branch
           </button>
           <SaveFlashLabel show={saved} />
         </div>
       </SettingsSection>
 
+      <WorkspaceReposPickerModal
+        open={workspacePickerOpen}
+        title="Choose workspace repos"
+        subtitle="Select up to 3 indexed repos from your organization catalog."
+        repos={workspacePickerState.repos}
+        selectedRepoIds={workspacePickerState.selectedRepoIds}
+        limit={workspacePickerState.limit ?? prefs.workspaceRepoLimit ?? 3}
+        loading={workspacePickerState.loading}
+        saving={workspacePickerState.saving}
+        error={workspacePickerState.error}
+        onClose={() => setWorkspacePickerOpen(false)}
+        onRefresh={onLoadWorkspaceRepos}
+        onSave={(repoIds) => {
+          workspaceSavePendingRef.current = true;
+          onSaveWorkspaceRepos(repoIds);
+        }}
+      />
+
       <SettingsSection title="Search scope">
         <p className="coop-settings-card-desc">
-          Controls Lightning search and the chat @ file picker — active repo only, or every repo in a collection.
+          Controls Coop-Search and the chat @ file picker — active repo, your workspace repos, or a collection.
         </p>
         <label className="coop-settings-field-row">
           <span className="coop-settings-label">Scope</span>
@@ -1481,12 +1742,25 @@ function WorkspaceDetail({
             className="coop-settings-field"
             value={prefs.searchScopeMode}
             onChange={(event) => {
-              const mode = event.target.value === "collection" ? "collection" : "repo";
+              const value = event.target.value;
+              const mode =
+                value === "collection"
+                  ? "collection"
+                  : value === "indexed"
+                    ? "indexed"
+                    : value === "org"
+                      ? "org"
+                      : "repo";
               onUpdate({ searchScopeMode: mode });
             }}
           >
             <option value="repo">Active repo</option>
-            <option value="collection">Collection</option>
+            {prefs.plan === "enterprise" ? (
+              <option value="org">All Deep-Indexed Repos (org)</option>
+            ) : (
+              <option value="indexed">Workspace repos</option>
+            )}
+            <option value="collection">Collection (advanced)</option>
           </select>
         </label>
         {prefs.searchScopeMode === "collection" ? (

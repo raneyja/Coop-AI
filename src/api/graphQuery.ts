@@ -32,7 +32,7 @@ export class GraphQueryApi {
 
   /**
    * Lightning Mode entry point — delegates to hybridQuery while preserving the
-   * zero-clone `queryGraph` path used by webhooks and free-tier users.
+   * Remote in-memory graph query path used when Deep-Code Graph search returns no hits.
    */
   public async queryGraphHybrid(
     request: GraphQueryRequest,

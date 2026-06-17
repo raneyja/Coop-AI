@@ -89,7 +89,7 @@ export default function ApiKeysPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">API Keys</h1>
+        <h1 className="admin-page-title">API Keys</h1>
         <p className="mt-1 text-sm text-coop-muted">
           Create keys for automation and service accounts. Raw keys are shown once at creation.
         </p>
@@ -119,7 +119,7 @@ export default function ApiKeysPage() {
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
-      <div className="admin-card overflow-x-auto p-0">
+      <div className="admin-card--table">
         <table className="admin-table">
           <thead>
             <tr>

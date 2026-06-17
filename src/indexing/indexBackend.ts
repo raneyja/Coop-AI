@@ -5,6 +5,7 @@ export type IndexBackendKind = "local" | "cloud";
 
 export type IndexSearchOptions = {
   collectionId?: string;
+  scope?: "indexed" | "org";
 };
 
 export type IndexRepoStatus = {

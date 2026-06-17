@@ -1,5 +1,5 @@
 import { getZeroRetentionConfig } from "../zeroRetentionConfig";
-import { BaseProviderClient, buildUsage, parseSseDataLine, type ParseState } from "./baseClient";
+import { BaseProviderClient, parseSseDataLine, resolveUsage, type ParseState } from "./baseClient";
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
@@ -88,7 +88,7 @@ export class AnthropicProviderClient extends BaseProviderClient {
 
     yield {
       type: "done",
-      usage: buildUsage("anthropic", options, state.text),
+      usage: resolveUsage("anthropic", options, state),
       model: options.model,
       provider: "anthropic",
       finishReason: state.finishReason ?? "stop"
@@ -101,12 +101,32 @@ function parseAnthropicLine(line: string, state: ParseState): StreamChunk | unde
   if (!data || typeof data.type !== "string") {
     return undefined;
   }
+  if (data.type === "message_start") {
+    const message = data.message as Record<string, unknown> | undefined;
+    const usage = message?.usage as Record<string, unknown> | undefined;
+    const inputTokens = readUsageInt(usage?.input_tokens);
+    if (inputTokens !== undefined) {
+      state.inputTokens = inputTokens;
+    }
+  }
   if (data.type === "content_block_delta") {
     const delta = data.delta as Record<string, unknown> | undefined;
     const text = typeof delta?.text === "string" ? delta.text : "";
     return text ? { type: "delta", text } : undefined;
   }
+  if (data.type === "message_stop") {
+    const usage = data.usage as Record<string, unknown> | undefined;
+    const outputTokens = readUsageInt(usage?.output_tokens);
+    if (outputTokens !== undefined) {
+      state.outputTokens = outputTokens;
+    }
+  }
   if (data.type === "message_delta") {
+    const usage = data.usage as Record<string, unknown> | undefined;
+    const outputTokens = readUsageInt(usage?.output_tokens);
+    if (outputTokens !== undefined) {
+      state.outputTokens = outputTokens;
+    }
     const delta = data.delta as Record<string, unknown> | undefined;
     const reason = delta?.stop_reason;
     if (typeof reason === "string") {
@@ -114,4 +134,9 @@ function parseAnthropicLine(line: string, state: ParseState): StreamChunk | unde
     }
   }
   return undefined;
+}
+
+function readUsageInt(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
 }

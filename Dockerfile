@@ -7,7 +7,8 @@ RUN npm ci
 
 COPY tsconfig.backend.json ./
 COPY src ./src
-RUN npm run build:backend && npm run build:workers
+COPY scripts/admin-org.ts ./scripts/admin-org.ts
+RUN npm run build:backend && npm run build:workers && npm run build:admin
 
 # ── Stage 2: Go tools (scip-go + Zoekt binaries) ─────────────────────────────
 FROM golang:1.25-bookworm AS gotools

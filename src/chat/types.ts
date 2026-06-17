@@ -5,7 +5,7 @@ export const CHAT_PANEL_VIEW_TYPE = "coopAI.chatEditor";
 export const SETTINGS_PANEL_VIEW_TYPE = "coopAI.settings";
 export const SECRET_KEY_API_TOKEN = "coopAI.apiToken";
 export const CACHE_TTL_MS = 5 * 60 * 1000;
-export const DEFAULT_API_BASE = "https://api.coopai.dev";
+export const DEFAULT_API_BASE = "https://api.coop-ai.dev";
 
 export type ThemeMode = "light" | "dark" | "high-contrast";
 
@@ -49,7 +49,7 @@ export type ChatFileMention = {
   snippet?: string;
 };
 
-export type SearchScopeMode = "repo" | "collection";
+export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -93,6 +93,7 @@ export type UserPreferences = {
   gitlabBaseUrl: string;
   hasGitHubToken: boolean;
   hasGitHubAppInstalled: boolean;
+  githubNeedsReconnect?: boolean;
   devMode: boolean;
   orgName?: string;
   plan?: "free" | "pro" | "enterprise";
@@ -123,6 +124,14 @@ export type UserPreferences = {
   confluenceBaseUrl: string;
   searchScopeMode: SearchScopeMode;
   searchCollectionId: string;
+  quotaCredits?: {
+    usedCredits: number;
+    limitCredits: number;
+    remainingCredits: number;
+    windowHours: number;
+    resetsAt: string;
+    retryAfterMs: number;
+  };
 };
 
 export type SettingsStatePayload = UserPreferences & {
@@ -258,12 +267,37 @@ export type WebviewInbound =
   | { type: "chat:clear" }
   | { type: "threads:switch"; payload: { threadId: string } }
   | { type: "threads:new" }
-  | { type: "repo:list"; payload: { path?: string; scope?: "repos" | "files" } }
-  | { type: "repo:search"; payload: { query: string } }
+  | {
+      type: "repo:list";
+      payload: {
+        path?: string;
+        scope?: "repos" | "files";
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        provider?: CodeHostProviderPreference;
+        /** When true, load tree without changing chat workspace context. */
+        ephemeral?: boolean;
+      };
+    }
+  | {
+      type: "repo:search";
+      payload: {
+        query: string;
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        provider?: CodeHostProviderPreference;
+        ephemeral?: boolean;
+      };
+    }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string; line?: number; focus?: boolean } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number } }
   | { type: "link:open"; payload: { url: string } }
+  | { type: "github:repos:list"; payload?: { query?: string; requestId?: string } }
+  | { type: "workspace:repos:save"; payload: { repoIds: string[] } }
+  | { type: "workspace:repos:load" }
   | { type: "settings:update"; payload: Partial<UserPreferences> }
   | { type: "settings:update-api-key"; payload: { apiKey: string } }
   | { type: "settings:clear-api-key" }
@@ -377,6 +411,8 @@ export type WebviewOutbound =
         stale?: boolean;
         provider?: CodeHostProviderPreference;
         loading?: boolean;
+        emptyHint?: "workspace";
+        listLabel?: "workspace";
       };
     }
   | {
@@ -463,7 +499,43 @@ export type WebviewOutbound =
         currentRepoId?: string;
         backend?: "local" | "cloud";
       };
+    }
+  | {
+      type: "github:repos:list-result";
+      payload: {
+        requestId?: string;
+        repos: GithubRepoOption[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
+  | {
+      type: "workspace:repos:state";
+      payload: {
+        repos: GithubRepoOption[];
+        selectedRepoIds: string[];
+        selectedCount: number;
+        limit: number | null;
+        canAddMore: boolean;
+        primaryRepoId?: string;
+        error?: string;
+        loading?: boolean;
+        saving?: boolean;
+      };
     };
+
+export type GithubRepoOption = {
+  repoId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  provider?: string;
+  isPrivate?: boolean;
+  htmlUrl?: string;
+  lightningEnabled?: boolean;
+  indexStatus?: string;
+  workspaceSelected?: boolean;
+};
 
 export type RemoteTreeNode = {
   path: string;

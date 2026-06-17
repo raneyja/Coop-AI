@@ -21,6 +21,9 @@ export type LightningModeState = {
   enabledRepos: number;
   readyRepos: number;
   indexingRepos: number;
+  indexedRepoCount?: number;
+  indexedRepoLimit?: number | null;
+  canEnableMoreRepos?: boolean;
   repos: LightningRepoState[];
   currentRepoId?: string;
   backend?: "local" | "cloud";

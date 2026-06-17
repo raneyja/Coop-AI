@@ -7,7 +7,7 @@ import type { BlameLine, CodeHostProvider, CommitInfo, PullRequestComment, RepoC
 import { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { JiraClient } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
-import { SlackClient, type SlackThread } from "../api/slack/slackClient";
+import { SlackClient, type SlackSearchHit, type SlackThread } from "../api/slack/slackClient";
 import { TeamsClient } from "../api/teams/teamsClient";
 import type {
   DecisionAlternative,
@@ -59,6 +59,8 @@ type PullRequestDetail = {
   updatedAt: string;
   htmlUrl?: string;
   labels: string[];
+  owner: string;
+  repo: string;
 };
 
 type GitHubPullDetail = PullRequestDetail;
@@ -144,9 +146,14 @@ export class DecisionArchaeologyEngine {
     let prBody = "";
     if (prNumber) {
       try {
-        const pr = await this.fetchPullRequest(coords, prNumber, file);
+        const pr = await this.fetchPullRequest(coords, prNumber, file, commit.sha);
         prBody = pr.body ?? "";
-        const comments = await this.options.codeHostRouter.getPRComments(prNumber, coords);
+        const commentCoords: RepoCoordinates = {
+          ...coords,
+          owner: pr.owner,
+          repo: pr.repo
+        };
+        const comments = await this.options.codeHostRouter.getPRComments(prNumber, commentCoords);
         const reviews = mapPrComments(comments);
         const approvers = extractApprovers(prBody, reviews);
 
@@ -198,7 +205,7 @@ export class DecisionArchaeologyEngine {
     const jira = await this.resolveJiraClient();
 
     if (slack) {
-      await this.correlateSlack(timeline, slack, prNumber, uniqueIssues, prBody);
+      await this.correlateSlack(timeline, slack, prNumber, uniqueIssues, prBody, file);
     } else {
       timeline.warnings.push("Slack integration not configured; skipping thread correlation.");
     }
@@ -229,19 +236,16 @@ export class DecisionArchaeologyEngine {
     blameLines: BlameLine[],
     lineRange?: LineRange
   ): Promise<CommitInfo | undefined> {
-    const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))];
+    const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))].slice(0, 10);
     if (uniqueShas.length === 0) {
       return undefined;
     }
 
-    const commits: CommitInfo[] = [];
-
-    for (const sha of uniqueShas) {
-      const detail = await this.fetchCommitDetail(coords, sha).catch(() => undefined);
-      if (detail) {
-        commits.push(detail);
-      }
-    }
+    const commits = (
+      await Promise.all(
+        uniqueShas.map((sha) => this.fetchCommitDetail(coords, sha).catch(() => undefined))
+      )
+    ).filter((commit): commit is CommitInfo => Boolean(commit));
 
     if (commits.length === 0) {
       return undefined;
@@ -255,7 +259,7 @@ export class DecisionArchaeologyEngine {
 
     commits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const oldest = commits[0];
-    const history = await this.options.codeHostRouter.getFileHistory(file, 100, coords).catch(() => []);
+    const history = await this.options.codeHostRouter.getFileHistory(file, 25, coords).catch(() => []);
     const oldestInHistory = history.length > 0 ? history[history.length - 1] : undefined;
 
     if (oldestInHistory && new Date(oldestInHistory.date) < new Date(oldest.date)) {
@@ -281,87 +285,94 @@ export class DecisionArchaeologyEngine {
   }
 
   private async findGithubPrForCommit(coords: RepoCoordinates, sha: string): Promise<number | undefined> {
+    const pulls = await this.options.codeHostRouter.getPullRequestsForCommit(sha, coords).catch(() => []);
+    if (pulls[0]?.number) {
+      return pulls[0].number;
+    }
     const creds = await this.options.codeHostSecrets.getCredentials();
     if (!creds.githubToken) {
-      // TODO: Cloud mode — commit→PR linking needs a backend proxy for GET /repos/{owner}/{repo}/commits/{sha}/pulls.
       return undefined;
     }
     const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/commits/${sha}/pulls`;
-    const pulls = await codeHostRequestJson<Array<{ number: number }>>(url, {
+    const legacyPulls = await codeHostRequestJson<Array<{ number: number }>>(url, {
       headers: githubHeaders(creds.githubToken),
       provider: "github"
     }).catch(() => []);
-    return pulls[0]?.number;
+    return legacyPulls[0]?.number;
   }
 
   private async fetchPullRequest(
     coords: RepoCoordinates,
     prNumber: number,
-    file: string
+    file: string,
+    commitSha?: string
   ): Promise<PullRequestDetail> {
-    if (coords.provider === "github") {
-      const creds = await this.options.codeHostSecrets.getCredentials();
-      if (creds.githubToken) {
-        return this.fetchGithubPullRequestViaRest(coords, prNumber);
+    if (commitSha) {
+      const linked = await this.options.codeHostRouter.getPullRequestsForCommit(commitSha, coords).catch(() => []);
+      const fromCommit = linked.find((pull) => pull.number === prNumber);
+      if (fromCommit) {
+        return {
+          number: fromCommit.number,
+          title: fromCommit.title,
+          body: fromCommit.body ?? "",
+          state: fromCommit.merged ? "merged" : fromCommit.state,
+          merged: fromCommit.merged,
+          author: fromCommit.author,
+          createdAt: fromCommit.createdAt,
+          updatedAt: fromCommit.updatedAt,
+          htmlUrl: fromCommit.htmlUrl,
+          labels: fromCommit.labels,
+          owner: fromCommit.owner,
+          repo: fromCommit.repo
+        };
       }
     }
 
-    const prs = await this.options.codeHostRouter.getPRsForFile(file, 50, coords);
-    const summary = prs.find((pr) => pr.number === prNumber);
-    if (!summary) {
-      throw new Error(`Pull request #${prNumber} not found.`);
+    try {
+      const pr = await this.options.codeHostRouter.getPullRequestDetail(prNumber, coords, {
+        commitSha
+      });
+      return {
+        number: pr.number,
+        title: pr.title,
+        body: pr.body ?? "",
+        state: pr.merged ? "merged" : pr.state,
+        merged: pr.merged,
+        author: pr.author,
+        createdAt: pr.createdAt,
+        updatedAt: pr.updatedAt,
+        htmlUrl: pr.htmlUrl,
+        labels: pr.labels,
+        owner: pr.owner ?? coords.owner,
+        repo: pr.repo ?? coords.repo
+      };
+    } catch {
+      try {
+        const prs = await this.options.codeHostRouter.getPRsForFile(file, 50, coords);
+        const summary = prs.find((pr) => pr.number === prNumber);
+        if (!summary) {
+          throw new Error(
+            `Pull request #${prNumber} is not on ${coords.owner}/${coords.repo}. It may refer to an upstream repository.`
+          );
+        }
+        return {
+          number: summary.number,
+          title: summary.title,
+          body: "",
+          state: summary.state,
+          merged: summary.merged,
+          author: summary.author,
+          createdAt: summary.createdAt,
+          updatedAt: summary.updatedAt,
+          htmlUrl: summary.htmlUrl,
+          labels: [],
+          owner: coords.owner,
+          repo: coords.repo
+        };
+      } catch (inner) {
+        throw inner instanceof Error ? inner : new Error(String(inner));
+      }
     }
-    return {
-      number: summary.number,
-      title: summary.title,
-      body: "",
-      state: summary.state,
-      merged: summary.merged,
-      author: summary.author,
-      createdAt: summary.createdAt,
-      updatedAt: summary.updatedAt,
-      htmlUrl: summary.htmlUrl,
-      labels: []
-    };
-  }
-
-  private async fetchGithubPullRequestViaRest(
-    coords: RepoCoordinates,
-    prNumber: number
-  ): Promise<GitHubPullDetail> {
-    const creds = await this.options.codeHostSecrets.getCredentials();
-    if (!creds.githubToken) {
-      throw new Error("GitHub token required for PR details.");
-    }
-    const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/pulls/${prNumber}`;
-    const pr = await codeHostRequestJson<{
-      number: number;
-      title: string;
-      body?: string;
-      state: string;
-      merged_at?: string | null;
-      user?: { login?: string };
-      created_at: string;
-      updated_at: string;
-      html_url?: string;
-      labels?: Array<{ name: string }>;
-    }>(url, {
-      headers: githubHeaders(creds.githubToken),
-      provider: "github"
-    });
-
-    return {
-      number: pr.number,
-      title: pr.title,
-      body: pr.body,
-      state: pr.state,
-      merged: Boolean(pr.merged_at),
-      author: pr.user?.login,
-      createdAt: pr.created_at,
-      updatedAt: pr.updated_at,
-      htmlUrl: pr.html_url,
-      labels: (pr.labels ?? []).map((label) => label.name)
-    };
   }
 
   private async correlateSlack(
@@ -369,7 +380,8 @@ export class DecisionArchaeologyEngine {
     slack: SlackClient,
     prNumber: number | undefined,
     issueKeys: string[],
-    prBody: string
+    prBody: string,
+    file: string
   ): Promise<void> {
     const slackUrl = extractSlackThreadUrl(prBody);
     if (slackUrl) {
@@ -378,7 +390,7 @@ export class DecisionArchaeologyEngine {
         try {
           const channel = await slack.getChannelInfo(parsed.channelId);
           const thread = await slack.getThread(parsed.channelId, parsed.threadTs);
-          this.applySlackThread(timeline, thread, channel.name, slackUrl);
+          this.applySlackThread(timeline, thread, channel.name, slackUrl, "direct");
           this.ingestSlackSignals(timeline, slack, thread);
           return;
         } catch (error) {
@@ -396,13 +408,19 @@ export class DecisionArchaeologyEngine {
     for (const query of queries) {
       try {
         const hits = await slack.searchMessages(query, { limit: 5 });
-        const hit = hits.find((h) => h.threadTs || h.text.length > 20);
+        const hit = hits.find((candidate) => this.isSlackSearchHitRelevant(candidate, query, prNumber, file));
         if (!hit?.channelId) {
           continue;
         }
         const threadTs = hit.threadTs ?? hit.ts;
         const thread = await slack.getThread(hit.channelId, threadTs);
-        this.applySlackThread(timeline, thread, hit.channelName, hit.permalink);
+        this.applySlackThread(
+          timeline,
+          thread,
+          hit.channelName,
+          hit.permalink,
+          this.slackRelevanceFromHit(hit, query, prNumber, file)
+        );
         this.ingestSlackSignals(timeline, slack, thread);
         return;
       } catch {
@@ -419,11 +437,54 @@ export class DecisionArchaeologyEngine {
     }
   }
 
+  private isSlackSearchHitRelevant(
+    hit: SlackSearchHit,
+    query: string,
+    prNumber: number | undefined,
+    file: string
+  ): boolean {
+    const text = hit.text.toLowerCase();
+    const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
+    if (prNumber && (text.includes(`#${prNumber}`) || text.includes(`pr #${prNumber}`) || text.includes(`pull/${prNumber}`))) {
+      return true;
+    }
+    if (fileStem && text.includes(fileStem)) {
+      return true;
+    }
+    if (/archaeology queries|dm search opt-in|test bot|coop ai test bot/i.test(hit.text) && !prNumber) {
+      return false;
+    }
+    return hit.text.trim().length >= 24;
+  }
+
+  private slackRelevanceFromHit(
+    hit: SlackSearchHit,
+    query: string,
+    prNumber: number | undefined,
+    file: string
+  ): "direct" | "linked" | "weak" {
+    const text = hit.text.toLowerCase();
+    const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
+    if (fileStem && text.includes(fileStem)) {
+      return "direct";
+    }
+    if (prNumber && text.includes(String(prNumber))) {
+      return "linked";
+    }
+    if (/archaeology queries|dm search opt-in|test bot/i.test(hit.text)) {
+      return "weak";
+    }
+    return query.toLowerCase().split(/\s+/).some((token) => token.length > 2 && text.includes(token))
+      ? "linked"
+      : "weak";
+  }
+
   private applySlackThread(
     timeline: DecisionTimeline,
     thread: SlackThread,
     channelName: string | undefined,
-    permalink?: string
+    permalink?: string,
+    relevance: "direct" | "linked" | "weak" = "linked"
   ): void {
     timeline.slackThread = {
       channelId: thread.channelId,
@@ -435,7 +496,8 @@ export class DecisionArchaeologyEngine {
         text: m.text,
         ts: m.ts
       })),
-      participants: thread.participants
+      participants: thread.participants,
+      relevance
     };
   }
 

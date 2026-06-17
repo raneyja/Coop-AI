@@ -197,7 +197,7 @@ Do these before any public traffic:
 
 2. **Production config**
    - `COOP_CORS_ORIGINS` including `https://admin.coop-ai.dev`
-   - `COOP_PUBLIC_BASE_URL=https://api.coopai.dev`
+   - `COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev`
    - All OAuth app credentials in `.env.backend`
    - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`
    - Email: `RESEND_API_KEY`, `COOP_EMAIL_MOCK=false`
@@ -261,7 +261,7 @@ From `docs/roadmap.md`:
 | `CREDENTIALS_ENCRYPTION_KEY` | Token encryption | Must be long random secret |
 | `COOP_REQUIRE_API_AUTH` | Security | Must be `true` |
 | `COOP_CORS_ORIGINS` | Admin portal | Include admin + marketing origins |
-| `COOP_PUBLIC_BASE_URL` | OAuth/SAML callbacks | `https://api.coopai.dev` |
+| `COOP_PUBLIC_BASE_URL` | OAuth/SAML callbacks | `https://api.coop-ai.dev` |
 | `STRIPE_*` | Pro billing | Secret, webhook secret, price ID |
 | `RESEND_*` | Welcome emails | Set `COOP_EMAIL_MOCK=false` |
 | OAuth vars per provider | Connect flows | See `.env.backend.example` |
@@ -270,18 +270,18 @@ From `docs/roadmap.md`:
 
 | Variable | Value |
 |----------|-------|
-| `COOP_API_BASE` | `https://api.coopai.dev` |
+| `COOP_API_BASE` | `https://api.coop-ai.dev` |
 | `NEXT_PUBLIC_ADMIN_PORTAL_URL` | `https://admin.coop-ai.dev` |
 
 ### Admin portal
 
 | Variable | Value |
 |----------|-------|
-| `NEXT_PUBLIC_COOP_API_BASE` | `https://api.coopai.dev` |
+| `NEXT_PUBLIC_COOP_API_BASE` | `https://api.coop-ai.dev` |
 
 ### Stripe dashboard
 
-- Webhook: `https://api.coopai.dev/webhooks/stripe`
+- Webhook: `https://api.coop-ai.dev/webhooks/stripe`
 - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
 
 ---

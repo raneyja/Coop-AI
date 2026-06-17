@@ -13,6 +13,7 @@ export type JobRuntime = {
   monitor: JobMonitor;
   workers: WorkerPool;
   scheduler: JobScheduler;
+  reclaimTimer?: ReturnType<typeof setInterval>;
 };
 
 import type { OrgStore } from "../server/orgStore";
@@ -62,12 +63,39 @@ export function createJobRuntime(options: {
   return { config, queue, monitor, workers, scheduler };
 }
 
-export function startJobRuntime(runtime: JobRuntime): void {
+export async function startJobRuntime(
+  runtime: JobRuntime,
+  options?: {
+    reclaimStaleJobs?: () => Promise<number>;
+    periodicReclaim?: () => Promise<number>;
+    reclaimIntervalMs?: number;
+  }
+): Promise<void> {
+  if (options?.reclaimStaleJobs) {
+    const reclaimed = await options.reclaimStaleJobs();
+    if (reclaimed > 0) {
+      console.log(`[jobs] reclaimed ${reclaimed} orphaned running job(s) on startup`);
+    }
+  }
   runtime.workers.start();
   void runtime.scheduler.start();
+
+  if (options?.periodicReclaim && options.reclaimIntervalMs) {
+    runtime.reclaimTimer = setInterval(() => {
+      void options.periodicReclaim!().then((reclaimed) => {
+        if (reclaimed > 0) {
+          console.log(`[jobs] reclaimed ${reclaimed} stale running job(s)`);
+        }
+      });
+    }, options.reclaimIntervalMs);
+  }
 }
 
 export function stopJobRuntime(runtime: JobRuntime): void {
+  if (runtime.reclaimTimer) {
+    clearInterval(runtime.reclaimTimer);
+    runtime.reclaimTimer = undefined;
+  }
   runtime.workers.stop();
   runtime.scheduler.stop();
 }

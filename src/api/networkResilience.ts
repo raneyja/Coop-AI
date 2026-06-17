@@ -84,7 +84,7 @@ export async function retryWithBackoff<T>(
       if (attempt >= merged.maxRetries || !shouldRetry(error)) {
         throw error;
       }
-      const delayMs = retryDelayMs(attempt, merged);
+      const delayMs = retryDelayMs(attempt, merged, error);
       onRetry?.(attempt + 1, delayMs, error);
       await delay(delayMs);
     }
@@ -159,10 +159,32 @@ export function statusFromError(error: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
-export function retryDelayMs(attempt: number, policy: Partial<RetryPolicy> = {}): number {
+export function parseOpenAiRetryAfterMs(message: string): number | undefined {
+  const match = message.match(/try again in (\d+(?:\.\d+)?)\s*s/i);
+  if (!match) {
+    return undefined;
+  }
+  const seconds = Number.parseFloat(match[1]);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return undefined;
+  }
+  return Math.ceil(seconds * 1000);
+}
+
+export function retryDelayMs(
+  attempt: number,
+  policy: Partial<RetryPolicy> = {},
+  error?: unknown
+): number {
   const merged = mergeRetryPolicy(policy);
   const multiplier = merged.exponentialBackoff ? 2 ** attempt : 1;
-  return merged.backoffMs * multiplier;
+  const exponential = merged.backoffMs * multiplier;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const hinted = parseOpenAiRetryAfterMs(message);
+  if (hinted !== undefined) {
+    return Math.max(exponential, hinted);
+  }
+  return exponential;
 }
 
 export function mergeRetryPolicy(policy: Partial<RetryPolicy> = {}): RetryPolicy {

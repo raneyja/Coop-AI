@@ -2,7 +2,7 @@
 
 > **Superseded for new deploys:** use [deploy-railway.md](./deploy-railway.md). Keep this doc if you later obtain Ampere capacity or prefer a VM.
 
-Phase 1 operator guide: run the full Docker Compose stack (Postgres, API, worker, Zoekt) on an **Always Free** Ampere A1 VM, terminate TLS with Caddy, and serve **`https://api.coopai.dev`**.
+Phase 1 operator guide: run the full Docker Compose stack (Postgres, API, worker, Zoekt) on an **Always Free** Ampere A1 VM, terminate TLS with Caddy, and serve **`https://api.coop-ai.dev`**.
 
 **After this works:** continue with [deploy-self-serve-pro.md](./deploy-self-serve-pro.md) (Stripe, Resend, admin, website env).
 
@@ -13,7 +13,7 @@ Phase 1 operator guide: run the full Docker Compose stack (Postgres, API, worker
 ## Goal
 
 ```bash
-curl -s https://api.coopai.dev/health
+curl -s https://api.coop-ai.dev/health
 # {"status":"ok",...}
 ```
 
@@ -156,8 +156,8 @@ COOP_DEV_MODE=false
 # Generate on server: openssl rand -base64 32
 CREDENTIALS_ENCRYPTION_KEY=
 
-COOP_PUBLIC_BASE_URL=https://api.coopai.dev
-WEBHOOK_DOMAIN=https://api.coopai.dev
+COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev
+WEBHOOK_DOMAIN=https://api.coop-ai.dev
 COOP_CORS_ORIGINS=https://admin.coop-ai.dev,https://coop-ai.dev
 COOP_ADMIN_PORTAL_URL=https://admin.coop-ai.dev
 COOP_MARKETING_BASE_URL=https://coop-ai.dev
@@ -250,7 +250,7 @@ sudo apt-get update && sudo apt-get install -y caddy
 
 ```bash
 sudo tee /etc/caddy/Caddyfile <<'EOF'
-api.coopai.dev {
+api.coop-ai.dev {
   reverse_proxy 127.0.0.1:8787
 }
 EOF
@@ -263,7 +263,7 @@ Caddy obtains Let's Encrypt certs automatically once DNS points here.
 
 ## Part F — DNS
 
-### F1. Browser — DNS for `api.coopai.dev`
+### F1. Browser — DNS for `api.coop-ai.dev`
 
 Wherever **`coopai.dev`** DNS is managed (registrar or Cloudflare):
 
@@ -273,12 +273,12 @@ Wherever **`coopai.dev`** DNS is managed (registrar or Cloudflare):
 
 TTL 300 while testing.
 
-**Success:** `dig +short api.coopai.dev` returns your VM IP.
+**Success:** `dig +short api.coop-ai.dev` returns your VM IP.
 
 ### F2. Browser — verify HTTPS
 
 ```bash
-curl -s https://api.coopai.dev/health
+curl -s https://api.coop-ai.dev/health
 ```
 
 **Success:** same health JSON over HTTPS.
@@ -287,7 +287,7 @@ curl -s https://api.coopai.dev/health
 
 ## Part G — OAuth redirect URIs (before Connect in prod)
 
-Update each vendor app to allow **`https://api.coopai.dev`** callbacks. See [connect-integrations-production.md](./connect-integrations-production.md).
+Update each vendor app to allow **`https://api.coop-ai.dev`** callbacks. See [connect-integrations-production.md](./connect-integrations-production.md).
 
 ---
 
@@ -343,7 +343,7 @@ Copy backups off the VM (OCI Object Storage free tier or your Mac).
 | Build OOM | Ensure 24 GB shape; `docker system prune` between retries |
 | `health` works locally, not HTTPS | DNS not propagated; Caddy logs: `sudo journalctl -u caddy -f` |
 | CORS errors from admin | `COOP_CORS_ORIGINS` includes `https://admin.coop-ai.dev`; restart API |
-| OAuth redirect mismatch | Vendor console must use exact `https://api.coopai.dev/v1/.../callback` |
+| OAuth redirect mismatch | Vendor console must use exact `https://api.coop-ai.dev/v1/.../callback` |
 | Disk full | `docker system df`; prune; enlarge boot volume in OCI if needed |
 
 ---

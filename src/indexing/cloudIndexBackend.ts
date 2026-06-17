@@ -1,6 +1,6 @@
 import type { CoopBackendClient } from "../api/CoopBackendClient";
 import { isLightningEnabledForRepo, type LightningConfiguration } from "../config/lightningConfig";
-import { resolveLicenseStatus, canUseLightningMode } from "../license/licenseChecker";
+import { resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 import type { IndexBackend, IndexRepoStatus } from "./indexBackend";
 import type { LocalDependentsResult, LocalSearchResult } from "./types";
 
@@ -57,6 +57,8 @@ export class CloudIndexBackend implements IndexBackend {
 
   public async listRepoStatuses(config: LightningConfiguration): Promise<IndexRepoStatus[]> {
     try {
+      const license = await resolveLicenseStatus(this.secrets, this.getBaseUrl(), () => this.client);
+      const orgManaged = usesOrgManagedDeepIndex(license.plan, config.backend);
       const { repos } = await this.client.listOrgRepos(this.getBaseUrl());
       const records = Array.isArray(repos) ? repos : [];
       return records.map((record) => {
@@ -64,7 +66,7 @@ export class CloudIndexBackend implements IndexBackend {
         const local = config.repos.find((entry) => entry.repoId === status.repoId);
         return {
           ...status,
-          enabled: local?.enabled ?? status.enabled
+          enabled: orgManaged ? status.enabled : (local?.enabled ?? status.enabled)
         };
       });
     } catch {
@@ -91,7 +93,7 @@ export class CloudIndexBackend implements IndexBackend {
         this.getBaseUrl(),
         repoId,
         pattern,
-        options?.collectionId
+        { collectionId: options?.collectionId, scope: options?.scope }
       )) as {
         data?: Array<{ path: string; size?: number }>;
         symbols?: Array<{
@@ -163,13 +165,19 @@ export class CloudIndexBackend implements IndexBackend {
     readyRepos: number;
     indexingRepos: number;
   }> {
+    const license = await resolveLicenseStatus(this.secrets, this.getBaseUrl(), () => this.client);
+    const orgManaged = usesOrgManagedDeepIndex(license.plan, config.backend);
     const statuses = await this.listRepoStatuses(config);
-    const enabled = statuses.filter((entry) => entry.enabled);
+    const enabled = orgManaged
+      ? statuses.filter((entry) => entry.enabled)
+      : statuses.filter((entry) => entry.enabled);
     return {
       enabledRepos: enabled.length,
       totalDiskBytes: 0,
       readyRepos: enabled.filter((entry) => entry.status === "ready").length,
-      indexingRepos: enabled.filter((entry) => entry.status === "indexing" || entry.status === "queued" || entry.status === "cloning").length
+      indexingRepos: enabled.filter(
+        (entry) => entry.status === "indexing" || entry.status === "queued" || entry.status === "cloning"
+      ).length
     };
   }
 

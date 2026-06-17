@@ -186,7 +186,7 @@ Lightning full-text search needs **worker** (indexes repos) + **Zoekt** (serves 
 4. Add a third service (or combined start script) for `zoekt-webserver -index /zoekt-indexes -listen 0.0.0.0:6070`
 5. On API: `ZOEKT_URL=http://<zoekt-private-host>:6070`
 
-Contact maintainers or follow a future doc update when you enable Phase 2.
+Contact maintainers or follow [deploy-railway-phase2-lightning.md](./deploy-railway-phase2-lightning.md) when you enable Phase 2.
 
 ---
 

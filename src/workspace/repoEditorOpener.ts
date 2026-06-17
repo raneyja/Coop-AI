@@ -2,7 +2,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { CodeHostProviderPreference } from "../chat/types";
-import { parseGithubRemoteFromGitConfig } from "../context/editorFileContext";
+import {
+  parseBitbucketRemoteFromGitConfig,
+  parseGitlabRemoteFromGitConfig,
+  parseGithubRemoteFromGitConfig
+} from "../context/gitRemoteConfig";
+import { findEditorForRemoteFile, focusRepoFileInEditor } from "../context/editorFileContext";
 
 export type OpenRepoInEditorMode = "preferLocal" | "remote" | "ask" | "off";
 
@@ -142,83 +147,154 @@ export async function openRemoteFileInEditor(params: {
   line?: number;
   provider?: CodeHostProviderPreference;
   branch?: string;
-  /** When false, focus the editor and do not return to the Coop sidebar (user navigation). */
+  /** When false, focus the editor (user clicked a file to view it). */
   preserveSidebarFocus?: boolean;
-}): Promise<void> {
+}): Promise<boolean> {
   const preserveSidebarFocus = params.preserveSidebarFocus ?? true;
   const openOptions: vscode.TextDocumentShowOptions = preserveSidebarFocus
     ? EDITOR_OPEN_OPTIONS
     : { viewColumn: vscode.ViewColumn.One, preview: false, preserveFocus: false };
+
   if (!params.owner || !params.repo || !params.filePath) {
-    return;
+    return false;
   }
 
   const provider = params.provider ?? "github";
   const relative = params.filePath.replace(/^\/+/, "");
 
-  await openRepoInEditor({
-    owner: params.owner,
-    repo: params.repo,
-    provider: params.provider,
-    branch: params.branch
-  });
+  const finish = async (opened: boolean): Promise<boolean> => {
+    if (opened && preserveSidebarFocus) {
+      await restoreCoopSidebar();
+    }
+    return opened;
+  };
 
-  if (readOpenRepoInNewWindow()) {
-    void vscode.window.showInformationMessage(
-      `CoopAI added ${relative} to context. The repo is in another window — use ⌘\` to switch, then pick the file in Explorer.`
-    );
+  const existing = findEditorForRemoteFile(params.owner, params.repo, relative);
+  if (existing) {
+    const editor = await vscode.window.showTextDocument(existing.document, {
+      viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
+      preview: false,
+      preserveFocus: !preserveSidebarFocus
+    });
+    revealLineInEditor(editor, params.line);
+    return finish(true);
+  }
+
+  // 1. File already on disk in the open workspace (no git-remote match required).
+  if (!preserveSidebarFocus) {
+    const openedInWorkspace = await focusRepoFileInEditor(relative, params.line);
+    if (openedInWorkspace) {
+      return finish(true);
+    }
+  }
+
+  // 2. Local clone on disk — open the file without switching the workspace folder.
+  if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
+    return finish(true);
+  }
+
+  // 3. GitHub virtual file — no openFolder; works when GitHub Repositories is installed.
+  if (provider === "github") {
+    const opened = await tryOpenGithubVfsFile(params.owner, params.repo, relative, openOptions, params.line);
+    if (opened) {
+      return finish(true);
+    }
+  }
+
+  // 4. Repo mounted in the workspace — retry local/vfs paths.
+  if (isRepoOpenInEditorWorkspace(params.owner, params.repo, provider)) {
+    if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
+      return finish(true);
+    }
+    if (provider === "github") {
+      const opened = await tryOpenGithubVfsFile(params.owner, params.repo, relative, openOptions, params.line);
+      if (opened) {
+        return finish(true);
+      }
+    }
+  }
+
+  return finish(false);
+}
+
+async function tryOpenInAllMatchingClones(
+  owner: string,
+  repo: string,
+  provider: CodeHostProviderPreference | undefined,
+  relativePath: string,
+  openOptions: vscode.TextDocumentShowOptions,
+  line?: number
+): Promise<boolean> {
+  const seen = new Set<string>();
+  for (const root of [...(await collectCandidateGitRoots()), ...collectCommonCloneRoots()]) {
+    const normalized = path.normalize(root);
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    if (!repoMatchesRemote(owner, repo, provider, normalized)) {
+      continue;
+    }
+    if (await tryOpenLocalCloneFile(normalized, relativePath, openOptions, line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function tryOpenLocalCloneFile(
+  localPath: string,
+  relativePath: string,
+  openOptions: vscode.TextDocumentShowOptions,
+  line?: number
+): Promise<boolean> {
+  const fileUri = vscode.Uri.file(path.join(localPath, relativePath));
+  if (!fs.existsSync(fileUri.fsPath)) {
+    return false;
+  }
+  try {
+    const editor = await vscode.window.showTextDocument(fileUri, openOptions);
+    revealLineInEditor(editor, line);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function tryOpenGithubVfsFile(
+  owner: string,
+  repo: string,
+  relativePath: string,
+  openOptions: vscode.TextDocumentShowOptions,
+  line?: number
+): Promise<boolean> {
+  if (!isGithubRemoteHubInstalled()) {
+    return false;
+  }
+  for (const extensionId of GITHUB_REMOTEHUB_EXTENSION_IDS) {
+    try {
+      await vscode.extensions.getExtension(extensionId)?.activate();
+    } catch {
+      // optional activation
+    }
+  }
+  try {
+    const fileUri = githubRepoFileVfsUri(owner, repo, relativePath);
+    const editor = await vscode.window.showTextDocument(fileUri, openOptions);
+    revealLineInEditor(editor, line);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function revealLineInEditor(editor: vscode.TextEditor, line?: number): void {
+  if (!line) {
     return;
   }
-
-  const ready = await waitForRepoInWorkspace(params.owner, params.repo, provider, 8000);
-  const localPath = await findLocalClone(params.owner, params.repo, provider);
-
-  if (localPath && (ready || isRepoOpenInWorkspace(localPath))) {
-    const fileUri = vscode.Uri.file(path.join(localPath, relative));
-    if (fs.existsSync(fileUri.fsPath)) {
-      const editor = await vscode.window.showTextDocument(fileUri, openOptions);
-      if (params.line) {
-        const position = new vscode.Position(Math.max(0, params.line - 1), 0);
-        editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-      }
-      if (preserveSidebarFocus) {
-        await restoreCoopSidebar();
-      }
-      return;
-    }
-  }
-
-  if (ready && provider === "github") {
-    try {
-      const fileUri = githubRepoFileVfsUri(params.owner, params.repo, relative);
-      const editor = await vscode.window.showTextDocument(fileUri, openOptions);
-      if (params.line) {
-        const position = new vscode.Position(Math.max(0, params.line - 1), 0);
-        editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-      }
-      if (preserveSidebarFocus) {
-        await restoreCoopSidebar();
-      }
-      return;
-    } catch (error) {
-      void vscode.window.showWarningMessage(
-        `CoopAI added ${relative} to chat context. Could not open the file in the editor: ${formatError(error)}`
-      );
-      if (preserveSidebarFocus) {
-        await restoreCoopSidebar();
-      }
-      return;
-    }
-  }
-
-  void vscode.window.showWarningMessage(
-    `CoopAI added ${relative} to context, but the editor is not ready yet. Wait a moment and click the file again.`
-  );
-  if (preserveSidebarFocus) {
-    await restoreCoopSidebar();
-  }
+  const position = new vscode.Position(Math.max(0, line - 1), 0);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
 }
 
 export async function openRepoInEditor(params: {
@@ -574,50 +650,4 @@ function findGitRoot(startPath: string): string | undefined {
   return undefined;
 }
 
-export function parseGitlabRemoteFromGitConfig(
-  config: string
-): { owner: string; repo: string } | undefined {
-  const originBlock = config.match(/\[remote "origin"\][\s\S]*?(?=\[|$)/i);
-  const searchText = originBlock?.[0] ?? config;
-  const urlMatch = searchText.match(/url\s*=\s*(.+)/i);
-  if (!urlMatch) {
-    return undefined;
-  }
-  const url = urlMatch[1].trim();
-  const ssh = url.match(/git@([^:]+):(.+?)(?:\.git)?$/i);
-  if (ssh) {
-    const segments = ssh[2].split("/").filter(Boolean);
-    if (segments.length >= 2) {
-      return { owner: segments[0], repo: segments[segments.length - 1] };
-    }
-  }
-  const https = url.match(/gitlab[^/]*\/(.+?)(?:\.git)?$/i);
-  if (https) {
-    const segments = https[1].split("/").filter(Boolean);
-    if (segments.length >= 2) {
-      return { owner: segments[0], repo: segments[segments.length - 1] };
-    }
-  }
-  return undefined;
-}
-
-export function parseBitbucketRemoteFromGitConfig(
-  config: string
-): { owner: string; repo: string } | undefined {
-  const originBlock = config.match(/\[remote "origin"\][\s\S]*?(?=\[|$)/i);
-  const searchText = originBlock?.[0] ?? config;
-  const urlMatch = searchText.match(/url\s*=\s*(.+)/i);
-  if (!urlMatch) {
-    return undefined;
-  }
-  const url = urlMatch[1].trim();
-  const ssh = url.match(/git@bitbucket\.org:([^/]+)\/([^/\s]+?)(?:\.git)?/i);
-  if (ssh) {
-    return { owner: ssh[1], repo: ssh[2] };
-  }
-  const https = url.match(/bitbucket\.org\/([^/]+)\/([^/\s]+?)(?:\.git)?/i);
-  if (https) {
-    return { owner: https[1], repo: https[2] };
-  }
-  return undefined;
-}
+export { parseGitlabRemoteFromGitConfig, parseBitbucketRemoteFromGitConfig } from "../context/gitRemoteConfig";

@@ -156,6 +156,34 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
     return row ? rowToJob(row) : undefined;
   }
 
+  public async findActiveIndexJob(
+    orgId: string,
+    repoId: string
+  ): Promise<{ jobId: string; status: "queued" | "running" } | undefined> {
+    await this.ensureInit();
+    const result = await this.pool!.query(
+      `SELECT id, status FROM jobs
+       WHERE type = $1
+         AND status IN ('queued', 'running')
+         AND params->>'orgId' = $2
+         AND params->>'repoId' = $3
+       ORDER BY
+         CASE status WHEN 'running' THEN 0 ELSE 1 END,
+         created_at DESC
+       LIMIT 1`,
+      [JobType.INDEX_REPOSITORY, orgId, repoId]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return undefined;
+    }
+    const status = String(row.status);
+    if (status !== "queued" && status !== "running") {
+      return undefined;
+    }
+    return { jobId: String(row.id), status };
+  }
+
   public async countJobsForUser(userId: string, jobType: string, window: "hour" | "today"): Promise<number> {
     await this.ensureInit();
     const windowType = window === "hour" ? "hour" : "day";
@@ -311,4 +339,29 @@ async function claimNextWithoutLock(pool: PgPool): Promise<Job | undefined> {
     [job.id, job.status, job.startedAt, job.progress]
   );
   return job;
+}
+
+/** Re-queue jobs left in `running` after a worker crash or restart. */
+export async function reclaimStaleRunningJobs(pool: PgPool, maxAgeMs: number): Promise<number> {
+  const result = await pool.query(
+    `UPDATE jobs
+     SET status = 'queued', started_at = NULL, progress = 0
+     WHERE status = 'running'
+       AND started_at IS NOT NULL
+       AND started_at < NOW() - ($1 * INTERVAL '1 millisecond')
+     RETURNING id`,
+    [maxAgeMs]
+  );
+  return result.rows.length;
+}
+
+/** On worker startup, any `running` row is orphaned — re-queue all of them. */
+export async function reclaimOrphanedRunningJobs(pool: PgPool): Promise<number> {
+  const result = await pool.query(
+    `UPDATE jobs
+     SET status = 'queued', started_at = NULL, progress = 0
+     WHERE status = 'running'
+     RETURNING id`
+  );
+  return result.rows.length;
 }

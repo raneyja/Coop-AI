@@ -6,6 +6,43 @@ import type { CodeHostProvider } from "../api/codeHosts/types";
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+export type GithubConnectionStatus = {
+  installed: boolean;
+  tokenValid: boolean;
+  needsReconnect: boolean;
+  hasRefreshToken: boolean;
+  tokenExpiresAt?: Date;
+};
+
+/** Whether the org has a usable GitHub token (live access token or refresh token). */
+export async function assessGithubConnection(
+  orgStore: OrgStore,
+  orgId: string
+): Promise<GithubConnectionStatus> {
+  const installation = await orgStore.getCodeHostInstallation(orgId, "github");
+  if (!installation) {
+    return {
+      installed: false,
+      tokenValid: false,
+      needsReconnect: false,
+      hasRefreshToken: false
+    };
+  }
+
+  const hasRefreshToken = Boolean(await orgStore.getCredential(orgId, "github:refresh"));
+  const accessValid =
+    installation.tokenExpiresAt.getTime() - Date.now() > TOKEN_REFRESH_BUFFER_MS;
+  const tokenValid = accessValid || hasRefreshToken;
+
+  return {
+    installed: true,
+    tokenValid,
+    needsReconnect: !tokenValid,
+    hasRefreshToken,
+    tokenExpiresAt: installation.tokenExpiresAt
+  };
+}
+
 export type CodeHostCredentialResolverDeps = {
   orgStore: OrgStore;
   githubApp?: GitHubAppService;
@@ -91,15 +128,26 @@ export async function resolveCodeHostTokenForOrg(
       }
     }
     if (deps.connector) {
-      const refreshed = await deps.connector.refreshInstallationToken(installation.installationId);
-      await deps.orgStore.upsertCodeHostInstallation(
-        orgId,
-        provider,
-        installation.installationId,
-        refreshed.token,
-        refreshed.expiresAt
-      );
-      return refreshed.token;
+      try {
+        const refreshed = await deps.connector.refreshInstallationToken(installation.installationId);
+        await deps.orgStore.upsertCodeHostInstallation(
+          orgId,
+          provider,
+          installation.installationId,
+          refreshed.token,
+          refreshed.expiresAt
+        );
+        return refreshed.token;
+      } catch {
+        // Refresh failed (missing refresh token, revoked access, etc.).
+        // Use the cached token if it has not expired yet.
+        if (expiresAt > Date.now()) {
+          const cached = await deps.orgStore.getInstallationToken(orgId, provider);
+          if (cached) {
+            return cached;
+          }
+        }
+      }
     }
   }
 

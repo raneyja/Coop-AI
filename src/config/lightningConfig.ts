@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { LicenseStatus } from "../license/licenseChecker";
-import { canUseLightningMode } from "../license/licenseChecker";
+import { canUseLightningMode, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 
 /**
  * Internal-only flag (`coopAI.devMode`, default false).
@@ -52,6 +52,9 @@ export function isLightningEnabledForRepo(
 ): boolean {
   if (!repoId || !canUseLightningMode(license)) {
     return false;
+  }
+  if (usesOrgManagedDeepIndex(license.plan, config.backend)) {
+    return true;
   }
   if (!config.globalEnabled) {
     return false;

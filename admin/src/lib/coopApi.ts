@@ -1,4 +1,4 @@
-import type { IntegrationProvider, IntegrationStatus } from "./integrations";
+import type { CodeHostProvider, IntegrationProvider, IntegrationStatus } from "./integrations";
 import { INTEGRATIONS } from "./integrations";
 import type { StoredMe } from "./auth";
 
@@ -73,6 +73,7 @@ function normalizeApiKey(key: BackendApiKey): AdminApiKey {
 type BackendIntegrationStatus = {
   provider: IntegrationProvider;
   installed: boolean;
+  needsReconnect?: boolean;
   detail?: string;
   metadata?: Record<string, unknown>;
 };
@@ -92,6 +93,7 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
   return {
     provider: raw.provider,
     installed: raw.installed,
+    needsReconnect: raw.needsReconnect,
     detail: integrationDetail(raw)
   };
 }
@@ -495,7 +497,12 @@ export type OrgRepoRecord = {
   repoId: string;
   lightningEnabled?: boolean;
   indexStatus?: string;
+  embeddingStatus?: "complete" | "failed" | "skipped" | "pending";
   lastIndexedAt?: string;
+  lastJobId?: string;
+  indexProgress?: number;
+  error?: string;
+  embeddingError?: string;
 };
 
 export type AdminCollection = {
@@ -513,6 +520,78 @@ export async function fetchOrgRepos(): Promise<ApiResult<{ repos: OrgRepoRecord[
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
   return { ok: true, status: result.status, data: { repos: result.data?.repos ?? [] } };
+}
+
+export function codeHostLabel(provider: CodeHostProvider): string {
+  return INTEGRATIONS.find((entry) => entry.id === provider)?.name ?? provider;
+}
+
+export async function syncCatalog(
+  provider: CodeHostProvider
+): Promise<ApiResult<{ provider: CodeHostProvider; discovered: number; queued: number; skipped: number }>> {
+  const result = await coopFetch<{ provider: CodeHostProvider; discovered: number; queued: number; skipped: number }>(
+    "/v1/orgs/estate/sync",
+    { method: "POST", body: JSON.stringify({ provider }) }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: result.data ?? { provider, discovered: 0, queued: 0, skipped: 0 }
+  };
+}
+
+/** @deprecated Use syncCatalog("github") */
+export async function syncEstate(): Promise<
+  ApiResult<{ discovered: number; queued: number; skipped: number }>
+> {
+  const result = await syncCatalog("github");
+  if (!result.ok) {
+    return result;
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      discovered: result.data?.discovered ?? 0,
+      queued: result.data?.queued ?? 0,
+      skipped: result.data?.skipped ?? 0
+    }
+  };
+}
+
+export async function enableLightningRepo(repoId: string): Promise<ApiResult<{ jobId?: string; status?: string }>> {
+  const result = await coopFetch<{ jobId?: string; status?: string }>(
+    `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/enable`,
+    { method: "POST", body: "{}" }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return { ok: true, status: result.status, data: result.data };
+}
+
+export async function reindexEmbeddingFailures(): Promise<
+  ApiResult<{ discovered: number; queued: number; skipped: number }>
+> {
+  const result = await coopFetch<{ discovered: number; queued: number; skipped: number }>(
+    "/v1/orgs/repos/reindex-embedding-failures",
+    { method: "POST", body: "{}" }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      discovered: result.data?.discovered ?? 0,
+      queued: result.data?.queued ?? 0,
+      skipped: result.data?.skipped ?? 0
+    }
+  };
 }
 
 export async function fetchCollections(): Promise<ApiResult<{ collections: AdminCollection[] }>> {

@@ -8,7 +8,8 @@ import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
-import type { OrgCollectionSummary, SettingsStatePayload } from "../chat/types";
+import type { OrgCollectionSummary, SettingsStatePayload, GithubRepoOption, RepoContext } from "../chat/types";
+import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
 import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 
 type PersistedSettingsState = {
@@ -35,7 +36,37 @@ type InboundMessage =
         hasWorkspace: boolean;
       };
     }
-  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } };
+  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } }
+  | {
+      type: "github:repos:list-result";
+      payload: {
+        requestId?: string;
+        repos: GithubRepoOption[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
+  | {
+      type: "repo:tree";
+      payload: {
+        path: string;
+        items: import("../chat/types").RemoteTreeNode[];
+        scope?: "repos" | "files";
+        error?: string;
+        stale?: boolean;
+        provider?: import("../chat/types").CodeHostProviderPreference;
+        loading?: boolean;
+      };
+    }
+  | {
+      type: "repo:search-results";
+      payload: {
+        query: string;
+        items: import("../chat/types").RemoteTreeNode[];
+        error?: string;
+        loading?: boolean;
+      };
+    };
 
 const DEFAULT_PREFS: Preferences = {
   model: "claude-sonnet-4-6",
@@ -47,7 +78,7 @@ const DEFAULT_PREFS: Preferences = {
   useCachedResponses: true,
   includeSelection: true,
   includeActiveFile: true,
-  apiBaseUrl: "https://api.coopai.dev",
+  apiBaseUrl: "https://api.coop-ai.dev",
   owner: "",
   repo: "",
   branch: "",
@@ -123,6 +154,22 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [collections, setCollections] = useState<OrgCollectionSummary[]>([]);
   const [collectionsError, setCollectionsError] = useState<string | undefined>();
+  const [workspacePickerState, setWorkspacePickerState] = useState<{
+    repos: GithubRepoOption[];
+    selectedRepoIds: string[];
+    selectedCount: number;
+    limit: number | null;
+    loading: boolean;
+    saving: boolean;
+    error?: string;
+  }>({
+    repos: [],
+    selectedRepoIds: [],
+    selectedCount: 0,
+    limit: 3,
+    loading: false,
+    saving: false
+  });
   const activeTestRef = useRef<SettingsTestKey | null>(null);
   const activeRefreshRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
@@ -364,6 +411,17 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         case "collections:list":
           setCollections(message.payload.collections);
           setCollectionsError(message.payload.error);
+          break;
+        case "workspace:repos:state":
+          setWorkspacePickerState({
+            repos: message.payload.repos,
+            selectedRepoIds: message.payload.selectedRepoIds,
+            selectedCount: message.payload.selectedCount,
+            limit: message.payload.limit,
+            loading: Boolean(message.payload.loading),
+            saving: Boolean(message.payload.saving),
+            error: message.payload.error
+          });
           break;
         default:
           break;
@@ -743,6 +801,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         collections={collections}
         collectionsError={collectionsError}
         onRequestCollections={requestCollections}
+        onLoadWorkspaceRepos={() => post({ type: "workspace:repos:load" })}
+        onSaveWorkspaceRepos={(repoIds) => post({ type: "workspace:repos:save", payload: { repoIds } })}
+        workspacePickerState={workspacePickerState}
       />
       </div>
       <PromptLibraryModal

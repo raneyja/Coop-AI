@@ -2,6 +2,7 @@ import type { EmailService } from "../email/emailService";
 import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { BillingConfig } from "./billingConfig";
+import { adminPortalLoginUrl } from "./adminPortalUrl";
 
 export type ProvisionInput = {
   orgName: string;
@@ -24,13 +25,21 @@ export async function provisionOrgFromCheckout(
   billingConfig: BillingConfig,
   input: ProvisionInput
 ): Promise<ProvisionResult> {
+  const loginUrl = adminPortalLoginUrl(billingConfig.adminPortalUrl);
   const existing = await orgStore.findOrganizationByStripeCustomerId(input.stripeCustomerId);
+
   if (existing) {
     const keys = await orgStore.listApiKeys(existing.id);
     if (keys.length > 0) {
       return { orgId: existing.id, orgName: existing.name, adminApiKey: "[existing org — key not re-sent]" };
     }
     const { rawKey } = await orgStore.createApiKey(existing.id, "admin portal");
+    await emailService.sendWelcome({
+      to: input.adminEmail,
+      orgName: existing.name,
+      adminPortalUrl: loginUrl,
+      apiKey: rawKey
+    });
     return { orgId: existing.id, orgName: existing.name, adminApiKey: rawKey };
   }
 
@@ -49,7 +58,7 @@ export async function provisionOrgFromCheckout(
   await emailService.sendWelcome({
     to: input.adminEmail,
     orgName: org.name,
-    adminPortalUrl: billingConfig.adminPortalUrl,
+    adminPortalUrl: loginUrl,
     apiKey: rawKey
   });
 

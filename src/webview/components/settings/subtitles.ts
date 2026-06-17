@@ -113,6 +113,9 @@ export function promptsHubSubtitle(pinnedCount: number): string {
 }
 
 export function githubIsConfigured(prefs: Preferences): boolean {
+  if (prefs.githubNeedsReconnect) {
+    return false;
+  }
   if (prefs.devMode) {
     return prefs.hasGitHubAppInstalled || prefs.hasGitHubToken;
   }

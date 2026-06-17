@@ -24,7 +24,7 @@ Think of it like electricity: you pick which appliance to plug in (Model setting
 2. **Create accounts** (or use your company’s existing accounts) at each provider you choose.
 3. **Have a secure way to send keys** to your Coop administrator — for example your company’s password manager, encrypted email, or a secrets vault. **Do not** post keys in Slack, Teams, ticket comments, or screenshots.
 4. **Know who runs your Coop server:**
-   - **Coop Cloud** (`https://api.coopai.dev`) → your Coop account team or internal admin adds keys on the server.
+   - **Coop Cloud** (`https://api.coop-ai.dev`) → your Coop account team or internal admin adds keys on the server.
    - **Self-hosted / local server** → your IT person adds keys to the server configuration (see [For IT and self-hosted teams](#for-it-and-self-hosted-teams) at the end).
 
 ---
@@ -281,7 +281,7 @@ Same variable **names**, different place to paste them:
 |----------------|------------|
 | Docker on a server | Put the same lines in `.env.backend` on the server, or in your host’s “Environment variables” UI |
 | Kubernetes | Create a Secret with these keys; mount as env vars on the Coop `api` deployment |
-| Coop Cloud (`api.coopai.dev`) | Add keys in your Coop Cloud / hosting dashboard (contact Coop support if you do not have a self-serve env UI) |
+| Coop Cloud (`api.coop-ai.dev`) | Add keys in your Coop Cloud / hosting dashboard (contact Coop support if you do not have a self-serve env UI) |
 
 Restart the service after changing env vars.
 

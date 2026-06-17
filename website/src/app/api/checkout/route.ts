@@ -18,6 +18,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "orgName and email are required" }, { status: 400 });
   }
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
+
   const response = await fetch(`${API_BASE}/v1/billing/checkout-session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

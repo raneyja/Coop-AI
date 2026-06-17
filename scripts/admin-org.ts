@@ -9,6 +9,7 @@
  *   npx ts-node scripts/admin-org.ts configure-sso <orgId> okta <idpEntityId> <idpSsoUrl> <certPath>
  *   npx ts-node scripts/admin-org.ts create-user <orgId> admin@acme.com owner
  *   npx ts-node scripts/admin-org.ts set-user-role <userId> admin
+ *   npx ts-node scripts/admin-org.ts reindex-estate <orgId> [--include-in-flight]
  */
 
 import { readFileSync } from "node:fs";
@@ -16,6 +17,9 @@ import { getDbPool, closeDbPool } from "../src/server/db";
 import { OrgStore, type OrgPlan } from "../src/server/orgStore";
 import { SsoConfigStore, type SsoProvider } from "../src/server/sso/ssoConfigStore";
 import { UserStore, type UserRole } from "../src/server/users/userStore";
+import { loadJobQueueConfig } from "../src/config/jobQueueConfig";
+import { JobQueue } from "../src/jobs/jobQueue";
+import { syncOrgCatalog } from "../src/server/catalogSyncService";
 
 async function main(): Promise<void> {
   const [, , command, ...args] = process.argv;
@@ -107,9 +111,45 @@ async function main(): Promise<void> {
         console.log(JSON.stringify(user, null, 2));
         break;
       }
+      case "reindex-estate": {
+        const [orgId, ...flags] = args;
+        if (!orgId) {
+          throw new Error("usage: reindex-estate <orgId> [--include-in-flight]");
+        }
+        const includeInFlight = flags.includes("--include-in-flight");
+        const repos = await store.listOrgRepos(orgId);
+        const repoIds = repos
+          .filter((repo) => repo.lightningEnabled)
+          .filter((repo) => {
+            if (includeInFlight) {
+              return true;
+            }
+            const status = repo.indexStatus ?? "idle";
+            return status !== "indexing" && status !== "queued" && status !== "cloning";
+          })
+          .map((repo) => repo.repoId);
+        const jobQueue = new JobQueue(loadJobQueueConfig());
+        const result = await syncOrgCatalog(orgId, repoIds, {
+          orgStore: store,
+          jobQueue,
+          force: true
+        });
+        console.log(
+          JSON.stringify(
+            {
+              orgId,
+              includeInFlight,
+              ...result
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
       default:
         console.error(
-          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role"
+          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, reindex-estate"
         );
         process.exit(1);
     }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { getToken } from "@/lib/auth";
+import { IndexingProgressBar } from "./IndexingProgressBar";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -12,7 +13,9 @@ type AdminShellProps = {
 
 export function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const showGlobalIndexingProgress = Boolean(pathname && !pathname.startsWith("/indexing"));
 
   useEffect(() => {
     if (!getToken()) {
@@ -35,7 +38,10 @@ export function AdminShell({ children }: AdminShellProps) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
+        <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

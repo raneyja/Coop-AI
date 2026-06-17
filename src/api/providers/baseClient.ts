@@ -86,7 +86,13 @@ export abstract class BaseProviderClient {
           }
         }
         if (options.signal?.aborted) {
-          yield { type: "done", usage: buildUsage(this.provider, options, state.text), model: options.model, provider: this.provider, finishReason: "cancelled" };
+          yield {
+            type: "done",
+            usage: resolveUsage(this.provider, options, state),
+            model: options.model,
+            provider: this.provider,
+            finishReason: "cancelled"
+          };
           return;
         }
       }
@@ -96,7 +102,7 @@ export abstract class BaseProviderClient {
 
     yield {
       type: "done",
-      usage: buildUsage(this.provider, options, state.text),
+      usage: resolveUsage(this.provider, options, state),
       model: options.model,
       provider: this.provider,
       finishReason: state.finishReason ?? "stop"
@@ -140,7 +146,26 @@ export abstract class BaseProviderClient {
 export type ParseState = {
   text: string;
   finishReason?: FinishReason;
+  inputTokens?: number;
+  outputTokens?: number;
 };
+
+export function resolveUsage(
+  provider: LlmProvider,
+  options: ProviderStreamOptions,
+  state: ParseState
+): TokenUsage {
+  const inputTokens = state.inputTokens ?? 0;
+  const outputTokens = state.outputTokens ?? 0;
+  if (inputTokens > 0 || outputTokens > 0) {
+    return {
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+    };
+  }
+  return buildUsage(provider, options, state.text);
+}
 
 export function buildUsage(provider: LlmProvider, options: ProviderStreamOptions, outputText: string): TokenUsage {
   const inputText = options.messages.map((message) => message.content).join("\n");

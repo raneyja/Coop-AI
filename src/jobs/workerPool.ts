@@ -89,7 +89,7 @@ export class WorkerPool extends EventEmitter {
     try {
       const result = await Promise.race([
         this.executeWithProgress(job, controller.signal),
-        timeout(this.poolConfig.maxJobDurationMs)
+        timeout(this.poolConfig.maxJobDurationMs, controller)
       ]);
       const durationMs = Date.now() - startedAt;
       const status =
@@ -155,9 +155,12 @@ export class WorkerPool extends EventEmitter {
   }
 }
 
-function timeout(ms: number): Promise<never> {
+function timeout(ms: number, controller: AbortController): Promise<never> {
   return new Promise((_, reject) => {
-    setTimeout(() => reject(new JobTimeoutError(ms)), ms);
+    setTimeout(() => {
+      controller.abort();
+      reject(new JobTimeoutError(ms));
+    }, ms);
   });
 }
 

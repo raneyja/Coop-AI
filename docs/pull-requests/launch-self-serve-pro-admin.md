@@ -1,8 +1,8 @@
 # PR: launch/self-serve-pro-admin → main
 
-**Branch:** `launch/self-serve-pro-admin`  
-**Commit:** `339e4fb`  
-**Open:** https://github.com/raneyja/Coop-AI/compare/main...launch/self-serve-pro-admin?expand=1
+**Status:** ✅ Merged (PR #3 → `8389bc2`)  
+**Follow-up CI:** ✅ Merged (PR #4 → `41323f5`)  
+**Branch:** deleted (`launch/self-serve-pro-admin`, `launch/ci-workflow`)
 
 ## Summary
 
@@ -40,9 +40,9 @@ Validated locally via Agent Launch Playbook smoke tests (Tests A1–D).
 
 - `docs/agent-launch-playbook.md`, production readiness, enterprise onboarding, deploy-self-serve-pro, connect-integrations-production
 
-### Follow-up (not in this push)
+### Follow-up (completed)
 
-- **`.github/workflows/ci.yml`** is present locally but omitted from this branch push because the git credential lacks the `workflow` OAuth scope. Add in a follow-up commit with a workflow-scoped token or via GitHub UI.
+- **`.github/workflows/ci.yml`** — merged in PR #4; GitHub Actions green on `main`
 
 ## Smoke test checklist (Local Test Org)
 
@@ -54,11 +54,20 @@ Validated locally via Agent Launch Playbook smoke tests (Tests A1–D).
 
 ## Test plan
 
-- [ ] `docker compose up -d --build api worker && ./scripts/migrate.sh`
-- [ ] `cd admin && npm install && npm run dev` — sign in with org API key; verify analytics + users
-- [ ] Extension dev host: `@` mention, autocomplete toggle, Test connection
-- [ ] `npm run lint` / CI (after workflow file lands)
-- [ ] Invite over seat cap → `seat_limit_reached`
+- [x] `docker compose up -d --build api worker && ./scripts/migrate.sh`
+- [x] `cd admin && npm install && npm run dev` — sign in with org API key; verify analytics + users
+- [x] Extension dev host: `@` mention, autocomplete toggle, Test connection
+- [x] `npm run lint` / CI (PR #4 on `main`)
+- [x] Invite over seat cap → `seat_limit_reached`
+
+## Remaining (operator — not this PR)
+
+- [ ] Production deploy per [deploy-self-serve-pro.md](../deploy-self-serve-pro.md)
+- [ ] Stripe live keys + webhook on `api.coop-ai.dev`
+- [ ] Resend + DNS on `coop-ai.dev`; `COOP_EMAIL_MOCK=false`
+- [ ] Deploy admin (`admin.coop-ai.dev`) and website (Vercel env vars)
+- [ ] Production OAuth Connect per [connect-integrations-production.md](../connect-integrations-production.md)
+- [ ] Rotate any `coop_` API keys pasted during local dev
 
 ## Migration notes
 

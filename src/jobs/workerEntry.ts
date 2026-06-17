@@ -3,6 +3,8 @@ import { loadWebhookConfig } from "../config/webhookConfig";
 import { createGraphCache } from "../cache/graphCachePostgres";
 import { GraphConsistencyManager } from "../cache/graphConsistency";
 import { createJobRuntime, startJobRuntime, stopJobRuntime } from "./jobRuntime";
+import { reclaimOrphanedRunningJobs, reclaimStaleRunningJobs } from "./backends/postgresBackend";
+import { resumeEmbeddingFailuresForAllOrgs } from "../server/queueOrgRepoIndex";
 import { getDbPool, closeDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { loadServerConfig } from "../server/serverConfig";
@@ -65,7 +67,32 @@ async function main(): Promise<void> {
     allowPatFallback: serverConfig.devMode
   });
 
-  startJobRuntime(runtime);
+  await startJobRuntime(runtime, {
+    reclaimStaleJobs:
+      pool && jobConfig.backend === "postgres"
+        ? () => reclaimOrphanedRunningJobs(pool)
+        : undefined,
+    periodicReclaim:
+      pool && jobConfig.backend === "postgres"
+        ? () => reclaimStaleRunningJobs(pool, jobConfig.maxJobDurationMs)
+        : undefined,
+    reclaimIntervalMs: 60_000
+  });
+
+  if (pool && orgStore) {
+    void resumeEmbeddingFailuresForAllOrgs({
+      pool,
+      orgStore,
+      jobQueue: runtime.queue
+    }).then((result) => {
+      if (result.queued > 0) {
+        console.log(
+          `[jobs] resumed ${result.queued} repo(s) with failed embeddings (${result.skipped} skipped)`
+        );
+      }
+    });
+  }
+
   console.log("[workers] CoopAI job workers started");
 
   const shutdown = async () => {

@@ -15,5 +15,9 @@ export interface QueueBackend {
     params: JobParams,
     maxAgeMs: number
   ): Promise<Job | undefined>;
+  findActiveIndexJob?(
+    orgId: string,
+    repoId: string
+  ): Promise<{ jobId: string; status: "queued" | "running" } | undefined>;
   claimNext?(): Promise<Job | undefined>;
 }

@@ -48,7 +48,6 @@ export function resolveLocalAbsolutePath(relativePath: string): string | undefin
 
 export { readWorkspaceFileFromAbsolutePath } from "./localFileContext";
 
-/** Read a repo-relative path from the opened workspace folders (no editor focus required). */
 export function readWorkspaceFileFromDisk(
   relativePath: string,
   lines?: { start: number; end: number }
@@ -60,4 +59,29 @@ export function readWorkspaceFileFromDisk(
   }
 
   return readWorkspaceFileFromAbsolutePath(absolute, normalized, lines);
+}
+
+/** Workspace-only @mention search for the free plan (no remote graph). */
+export async function searchLocalWorkspaceFiles(
+  pattern: string,
+  limit = 12
+): Promise<string[]> {
+  const needle = pattern.trim().toLowerCase();
+  if (!needle || !vscode.workspace.workspaceFolders?.length) {
+    return [];
+  }
+  const exclude = "**/{node_modules,.git,dist,build,.coop,.next,out}/**";
+  const uris = await vscode.workspace.findFiles("**/*", exclude, 400);
+  const matches: string[] = [];
+  for (const uri of uris) {
+    const relative = vscode.workspace.asRelativePath(uri).replace(/\\/g, "/");
+    if (!relative.toLowerCase().includes(needle)) {
+      continue;
+    }
+    matches.push(relative);
+    if (matches.length >= limit) {
+      break;
+    }
+  }
+  return matches;
 }

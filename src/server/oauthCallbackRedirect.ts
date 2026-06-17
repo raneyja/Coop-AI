@@ -11,7 +11,7 @@ export function resolveOAuthSuccessRedirectUrl(
     if (host === "localhost" || host === "127.0.0.1") {
       return undefined;
     }
-    if (host === "api.coopai.dev") {
+    if (host === "api.coop-ai.dev") {
       return `https://coop-ai.dev/docs?${query}`;
     }
     return `${publicBaseUrl.replace(/\/$/, "")}/docs?${query}`;

@@ -9,6 +9,9 @@ export type LicenseStatus = {
   seats?: number;
   expiresAt?: string;
   source: "config" | "api" | "default";
+  indexedRepoCount?: number;
+  indexedRepoLimit?: number | null;
+  canEnableMoreRepos?: boolean;
 };
 
 export const PRO_PLAN_PRICE_USD = 20;
@@ -28,6 +31,27 @@ export function readConfiguredPlan(): SubscriptionPlan {
 
 export function isProOrHigher(plan: SubscriptionPlan): boolean {
   return plan === "pro" || plan === "enterprise";
+}
+
+export function isFreePlan(plan?: SubscriptionPlan): boolean {
+  return !plan || plan === "free";
+}
+
+/** Pro+ — remote code graph, code-host connections, cross-repo search. */
+export function canUseCodeHosts(plan?: SubscriptionPlan): boolean {
+  return isProOrHigher(plan ?? "free");
+}
+
+export function canUseRemoteCodeGraph(plan?: SubscriptionPlan): boolean {
+  return canUseCodeHosts(plan);
+}
+
+/** Pro/Enterprise on cloud: org catalog indexing — no manual Lightning toggle. */
+export function usesOrgManagedDeepIndex(
+  plan: SubscriptionPlan,
+  backend: "local" | "cloud"
+): boolean {
+  return backend === "cloud" && isProOrHigher(plan);
 }
 
 export function canUseLightningMode(status: LicenseStatus): boolean {
@@ -96,7 +120,10 @@ async function resolveLicenseStatusFromApi(
     return {
       plan,
       isActive: true,
-      source: "api"
+      source: "api",
+      indexedRepoCount: me.indexedRepoCount,
+      indexedRepoLimit: me.indexedRepoLimit,
+      canEnableMoreRepos: me.canEnableMoreRepos
     };
   } catch {
     return undefined;

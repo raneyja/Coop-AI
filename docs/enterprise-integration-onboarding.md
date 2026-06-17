@@ -12,7 +12,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 
 | Role | Does what | Frequency | Touches vendor consoles? |
 |------|-----------|-----------|--------------------------|
-| **Coop platform operator** | Runs `api.coopai.dev`, registers OAuth apps *once*, sets `.env.backend` on the server | Once per Coop deployment | Yes — but **not** your customers |
+| **Coop platform operator** | Runs `api.coop-ai.dev`, registers OAuth apps *once*, sets `.env.backend` on the server | Once per Coop deployment | Yes — but **not** your customers |
 | **Customer org admin** | Signs in to Coop, clicks **Connect** per tool in VS Code Settings | Once per org per tool | No — browser OAuth only |
 | **Developer** | Installs extension, signs in (SSO or org API key), sets default repo | Once per machine | No |
 
@@ -41,9 +41,9 @@ No `.env.backend`, no Docker, no Slack/Google/Azure developer portals for the cu
 
 | Requirement | Notes |
 |-------------|--------|
-| Coop API running | `https://api.coopai.dev` (or self-hosted) with Postgres |
+| Coop API running | `https://api.coop-ai.dev` (or self-hosted) with Postgres |
 | `CREDENTIALS_ENCRYPTION_KEY` | Long random secret in server env — **required** for org token storage |
-| `WEBHOOK_DOMAIN` / `COOP_PUBLIC_BASE_URL` | Public HTTPS base for OAuth callbacks (e.g. `https://api.coopai.dev`) |
+| `WEBHOOK_DOMAIN` / `COOP_PUBLIC_BASE_URL` | Public HTTPS base for OAuth callbacks (e.g. `https://api.coop-ai.dev`) |
 | OAuth apps registered | One registration per provider below — owned by **Coop** or **customer IT**, not end developers |
 
 ### Master redirect URI pattern
@@ -51,7 +51,7 @@ No `.env.backend`, no Docker, no Slack/Google/Azure developer portals for the cu
 All org OAuth integrations use the same host; only the path changes:
 
 ```
-https://api.coopai.dev/v1/{provider}/app/callback
+https://api.coop-ai.dev/v1/{provider}/app/callback
 ```
 
 | Provider | Callback path |
@@ -88,7 +88,7 @@ After any env change: **Terminal** (on the server host):
 docker compose up -d --build api
 ```
 
-**Success:** `curl -s https://api.coopai.dev/health` returns `"ok":true`.
+**Success:** `curl -s https://api.coop-ai.dev/health` returns `"ok":true`.
 
 ---
 
@@ -219,7 +219,7 @@ What exists today vs what enterprise self-serve still needs:
 ### Recommended rollout phases
 
 **Phase A — Operator playbook (now)**  
-- Coop registers all OAuth apps for `api.coopai.dev` once.  
+- Coop registers all OAuth apps for `api.coop-ai.dev` once.  
 - Document customer admin checklist (above).  
 - Onboard new customer orgs with API key + “click Connect” session.
 

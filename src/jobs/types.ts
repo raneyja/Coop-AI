@@ -54,6 +54,8 @@ export interface CreateJobInput {
   userId?: string;
   estimatedDurationMs?: number;
   scheduled?: boolean;
+  /** Org catalog sync and other internal bulk enqueue paths bypass per-user throttles. */
+  bypassRateLimit?: boolean;
 }
 
 export interface JobSubmitResponse {

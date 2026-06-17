@@ -126,8 +126,6 @@ import { summarizeThreadTitle } from "./threadTitle";
 import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
-import type { ManifestFileEntry } from "../manifest/types";
-import { fetchZeroCloneManifestContext } from "../zeroClone/fetchManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
 import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
@@ -144,13 +142,14 @@ import {
 } from "../context/localFileContext";
 import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../context/localContextMerge";
 import {
-  focusRepoFileInEditor,
   readActiveEditorFileForChat,
   pickEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
-import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
+import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
+import { readWorkspaceFileFromDisk, resolveLocalAbsolutePath, searchLocalWorkspaceFiles } from "../context/localFileResolver";
+import { canUseCodeHosts, canUseRemoteCodeGraph, isFreePlan } from "../license/licenseChecker";
 import { readWorkspaceFileFromAbsolutePath, readWorkspaceFileFromDisk, resolveLocalAbsolutePath } from "../context/localFileResolver";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
@@ -210,11 +209,6 @@ export class CoopChatSession {
   private jobRunToken = 0;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
-  private readonly structureManifestCache = new Map<
-    string,
-    { loadedAt: number; files: ManifestFileEntry[] }
-  >();
-  private static readonly STRUCTURE_MANIFEST_CACHE_TTL_MS = 20 * 60 * 1000;
   private sessionCostUsd = 0;
   private streamAbortController?: AbortController;
   private workspacePromptWatcher?: vscode.Disposable;
@@ -723,16 +717,31 @@ export class CoopChatSession {
         return;
       case "repo:list":
         if (message.payload.scope === "repos") {
-          await this.handleRepoListRepos();
+          await this.handleRepoListRepos(source);
+        } else if (message.payload.ephemeral) {
+          await this.handleEphemeralRepoList(message.payload.path || "", message.payload, source);
         } else {
-          await this.handleRepoList(message.payload.path || "");
+          await this.handleRepoList(message.payload.path || "", source);
         }
         return;
       case "repo:search":
-        await this.handleRepoSearch(message.payload.query);
+        if (message.payload.ephemeral) {
+          await this.handleEphemeralRepoSearch(message.payload, source);
+        } else {
+          await this.handleRepoSearch(message.payload.query, source);
+        }
         return;
       case "repo:select":
         await this.handleRepoSelect(message.payload);
+        return;
+      case "github:repos:list":
+        await this.handleGithubReposList(message.payload?.query, message.payload?.requestId);
+        return;
+      case "workspace:repos:load":
+        await this.handleWorkspaceReposLoad();
+        return;
+      case "workspace:repos:save":
+        await this.handleWorkspaceReposSave(message.payload.repoIds);
         return;
       case "repo:open-repo":
         await openRepoInEditor({
@@ -1088,25 +1097,34 @@ export class CoopChatSession {
     return this.runIntentFetch(event, { quiet: true });
   }
 
-  private async handleRemoteFileIntent(intent: { path: string; line?: number; focus?: boolean }): Promise<void> {
-    const { path, line, focus } = intent;
+  private async handleRemoteFileIntent(intent: { path: string; line?: number }): Promise<void> {
+    const { path, line } = intent;
 
-    if (focus) {
-      const opened = await focusRepoFileInEditor(path, line);
-      if (opened) {
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: false
+        });
+        if (line) {
+          const position = new vscode.Position(Math.max(0, line - 1), 0);
+          editor.selection = new vscode.Selection(position, position);
+          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        }
+        this.currentContext = mergeRepoContext(this.currentContext, {
+          file: path,
+          fileSource: "local",
+          contextWarning: undefined
+        });
+        this.postContext();
         return;
       }
-      if (this.currentContext.owner && this.currentContext.repo) {
-        await openRemoteFileInEditor({
-          owner: this.currentContext.owner,
-          repo: this.currentContext.repo,
-          filePath: path,
-          line,
-          provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
-          branch: this.currentContext.branch,
-          preserveSidebarFocus: false
-        });
-      }
+      void vscode.window.showWarningMessage(
+        "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
+      );
       return;
     }
 
@@ -1118,21 +1136,24 @@ export class CoopChatSession {
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
-      void openRemoteFileInEditor({
+      let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
         filePath: path,
         line,
         provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
-        branch: this.currentContext.branch
-      }).then(() => {
-        this.currentContext = mergeRepoContext(this.currentContext, {
-          file: path,
-          fileSource: "remote",
-          contextWarning: undefined
-        });
-        this.postContext();
+        branch: this.currentContext.branch,
+        preserveSidebarFocus: false
       });
+      if (!opened) {
+        opened = await this.openRemoteFileFromApi(path, line);
+      }
+      if (!opened) {
+        const relative = path.replace(/^\/+/, "");
+        void vscode.window.showWarningMessage(
+          `CoopAI added ${relative} to context. Install GitHub Repositories or clone the repo locally to open files without reloading VS Code.`
+        );
+      }
     }
 
     const event = this.intentDetector.create(UserIntent.FILE_SWITCHED, {
@@ -1140,6 +1161,47 @@ export class CoopChatSession {
       source: "webview"
     });
     await this.runIntentFetch(event, { quiet: true });
+  }
+
+  private async openRemoteFileFromApi(filePath: string, line?: number): Promise<boolean> {
+    const { owner, repo, provider, branch } = this.currentContext;
+    if (!owner || !repo) {
+      return false;
+    }
+    try {
+      const remote = await this.options.codeHostRouter.getFileContent(filePath, {
+        provider: provider ?? this.preferences.defaultCodeHost,
+        owner,
+        repo,
+        branch
+      });
+      const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
+      const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+      const language =
+        ext === "ts" || ext === "tsx"
+          ? "typescript"
+          : ext === "js" || ext === "jsx"
+            ? "javascript"
+            : ext === "json"
+              ? "json"
+              : ext === "md"
+                ? "markdown"
+                : undefined;
+      const doc = await vscode.workspace.openTextDocument({ content: text, language });
+      const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preview: false,
+        preserveFocus: false
+      });
+      if (line) {
+        const position = new vscode.Position(Math.max(0, line - 1), 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async runIntentFetch(
@@ -1204,12 +1266,7 @@ export class CoopChatSession {
 
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
-      const zeroClone = await this.tryFetchZeroCloneManifestContext(request);
-      if (zeroClone) {
-        result = applyLocalFallbackToResult(zeroClone, localPayload);
-      } else {
-        result = await this.buildBaseContextResult(request, localPayload);
-      }
+      result = await this.buildBaseContextResult(request, localPayload);
     } else {
       result = await this.buildBaseContextResult(request);
     }
@@ -1335,72 +1392,6 @@ export class CoopChatSession {
       default:
         return {};
     }
-  }
-
-  private async tryFetchZeroCloneManifestContext(
-    request: ContextFetchRequest
-  ): Promise<ContextFetchResult | undefined> {
-    const repoId =
-      request.params.repoId ??
-      buildRepoId(this.preferences, intentContextToRepoContext(request.intent.context));
-    if (!repoId || (await this.options.indexBackend.isEnabledForRepo(repoId))) {
-      return undefined;
-    }
-
-    const query = request.intent.context.queryText?.trim() ?? "";
-    if (!query) {
-      return undefined;
-    }
-
-    const editorContext = editorContextFromRepoContext(intentContextToRepoContext(request.intent.context));
-    const coords = {
-      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
-      owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
-      repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
-      branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch
-    };
-
-    try {
-      const zeroClone = await fetchZeroCloneManifestContext({
-        query,
-        editorContext,
-        repoId,
-        coords,
-        codeHostRouter: this.options.codeHostRouter,
-        loadManifest: (id) => this.loadStructureManifest(id)
-      });
-      if (!zeroClone) {
-        return undefined;
-      }
-
-      return {
-        requestId: request.id,
-        type: request.type,
-        data: {
-          context: this.currentContext,
-          zeroClone
-        },
-        fetchedAt: new Date()
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async loadStructureManifest(repoId: string): Promise<ManifestFileEntry[]> {
-    const cached = this.structureManifestCache.get(repoId);
-    if (cached && Date.now() - cached.loadedAt < CoopChatSession.STRUCTURE_MANIFEST_CACHE_TTL_MS) {
-      return cached.files;
-    }
-
-    const baseUrl = resolveCoopBaseUrl().baseUrl;
-    const response = await this.options.api.fetchRepoManifest(baseUrl, repoId);
-    const files: ManifestFileEntry[] = (response.files ?? []).map((file) => ({
-      filePath: file.path,
-      symbols: (file.symbols ?? []) as ManifestFileEntry["symbols"]
-    }));
-    this.structureManifestCache.set(repoId, { loadedAt: Date.now(), files });
-    return files;
   }
 
   private processConflicts(event: IntentEvent, results: ContextFetchResult[]): void {
@@ -2513,33 +2504,302 @@ export class CoopChatSession {
     });
   }
 
-  private async handleRepoListRepos(): Promise<void> {
+  private postRepoExplorer(
+    message: Extract<WebviewOutbound, { type: "repo:tree" } | { type: "repo:search-results" }>,
+    audience: "chat" | "settings" | "both" = "both"
+  ): void {
+    if (audience === "chat" || audience === "both") {
+      this.postToChat(message);
+    }
+    if (audience === "settings" || audience === "both") {
+      this.postToSettings(message);
+    }
+  }
+
+  private async handleRepoListRepos(source: "chat" | "settings"): Promise<void> {
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
-    this.post({
-      type: "repo:tree",
-      payload: { path: "", items: [], loading: true, provider, scope: "repos" }
-    });
+    const audience = source === "settings" ? "settings" : "chat";
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: {
+            path: "",
+            items: [],
+            provider,
+            scope: "repos",
+            error: "Free plan uses local workspace files only. Open a folder in VS Code to browse files."
+          }
+        },
+        audience
+      );
+      return;
+    }
+    this.postRepoExplorer(
+      {
+        type: "repo:tree",
+        payload: { path: "", items: [], loading: true, provider, scope: "repos" }
+      },
+      audience
+    );
     try {
-      const repos = await this.options.codeHostRouter.listExplorerRepositories({
-        provider: this.currentContext.provider,
-        owner: this.currentContext.owner,
-        repo: this.currentContext.repo,
-        branch: this.currentContext.branch
-      });
-      const items = repos.map((entry) => ({
-        path: `${entry.provider ?? provider}:${entry.owner}/${entry.repo}`,
+      let entries: Array<{ provider: typeof provider; owner: string; repo: string; branch?: string }> = [];
+      let emptyHint: "workspace" | undefined;
+      let listLabel: "workspace" | undefined;
+
+      if (source === "chat" && (await this.options.api.hasToken())) {
+        const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+        if (workspace.repos.length === 0) {
+          emptyHint = "workspace";
+        } else {
+          listLabel = "workspace";
+          entries = workspace.repos.map((entry) => {
+            const providerToken = entry.repoId.includes(":") ? entry.repoId.split(":")[0] : "github";
+            const repoProvider =
+              providerToken === "gitlab" || providerToken === "bitbucket" ? providerToken : "github";
+            return {
+              provider: repoProvider,
+              owner: entry.owner,
+              repo: entry.name,
+              branch: entry.defaultBranch
+            };
+          });
+        }
+      } else if (provider === "github" && (await this.options.api.hasToken())) {
+        try {
+          const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+          if (workspace.repos.length > 0) {
+            entries = workspace.repos.map((entry) => ({
+              provider: "github" as const,
+              owner: entry.owner,
+              repo: entry.name,
+              branch: entry.defaultBranch
+            }));
+          }
+        } catch {
+          // Fall through to catalog list for settings flows.
+        }
+        if (entries.length === 0) {
+          const remote = await this.options.api.listGithubOrgRepos(this.preferences.apiBaseUrl);
+          entries = remote.map((entry) => ({
+            provider: "github" as const,
+            owner: entry.owner,
+            repo: entry.name,
+            branch: entry.defaultBranch
+          }));
+        }
+      }
+
+      if (entries.length === 0 && source !== "chat") {
+        const repos = await this.options.codeHostRouter.listExplorerRepositories({
+          provider: this.currentContext.provider,
+          owner: this.currentContext.owner,
+          repo: this.currentContext.repo,
+          branch: this.currentContext.branch
+        });
+        entries = repos.map((entry) => ({
+          provider: entry.provider ?? provider,
+          owner: entry.owner,
+          repo: entry.repo,
+          branch: entry.branch
+        }));
+      }
+
+      const items = entries.map((entry) => ({
+        path: `${entry.provider}:${entry.owner}/${entry.repo}`,
         name: `${entry.owner}/${entry.repo}`,
         type: "repo" as const
       }));
-      this.post({
-        type: "repo:tree",
-        payload: { path: "", items, provider, scope: "repos" }
-      });
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: {
+            path: "",
+            items,
+            provider,
+            scope: "repos",
+            emptyHint,
+            listLabel
+          }
+        },
+        audience
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load repositories.";
-      this.post({
-        type: "repo:tree",
-        payload: { path: "", items: [], error: message, provider, scope: "repos" }
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: { path: "", items: [], error: message, provider, scope: "repos" }
+        },
+        audience
+      );
+    }
+  }
+
+  private workspaceRepoIdFromContext(context: RepoContext): string | undefined {
+    if (!context.owner || !context.repo) {
+      return undefined;
+    }
+    const provider = context.provider ?? this.preferences.defaultCodeHost;
+    return `${provider}:${context.owner}/${context.repo}`;
+  }
+
+  private async isCurrentRepoInWorkspace(): Promise<boolean> {
+    const repoId = this.workspaceRepoIdFromContext(this.currentContext);
+    if (!repoId) {
+      return false;
+    }
+    if (this.preferences.workspaceRepoIds?.includes(repoId)) {
+      return true;
+    }
+    if (!(await this.options.api.hasToken())) {
+      return false;
+    }
+    try {
+      const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+      return workspace.repos.some((entry) => entry.repoId === repoId);
+    } catch {
+      return this.preferences.workspaceRepoIds?.includes(repoId) ?? false;
+    }
+  }
+
+  private async handleGithubReposList(query?: string, requestId?: string): Promise<void> {
+    const payload = { requestId, repos: [] as import("./types").GithubRepoOption[], loading: true };
+    this.postGithubReposListResult(payload);
+    try {
+      const repos = await this.options.api.listGithubOrgRepos(this.preferences.apiBaseUrl, {
+        query: query?.trim() || undefined
+      });
+      this.postGithubReposListResult({
+        requestId,
+        repos,
+        loading: false
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load GitHub repositories.";
+      this.postGithubReposListResult({
+        requestId,
+        repos: [],
+        loading: false,
+        error: message
+      });
+    }
+  }
+
+  private postGithubReposListResult(payload: {
+    requestId?: string;
+    repos: import("./types").GithubRepoOption[];
+    loading?: boolean;
+    error?: string;
+  }): void {
+    const message = { type: "github:repos:list-result" as const, payload };
+    this.post(message);
+    this.postToSettings(message);
+  }
+
+  private postWorkspaceReposState(payload: {
+    repos: import("./types").GithubRepoOption[];
+    selectedRepoIds: string[];
+    selectedCount: number;
+    limit: number | null;
+    canAddMore: boolean;
+    primaryRepoId?: string;
+    error?: string;
+    loading?: boolean;
+    saving?: boolean;
+  }): void {
+    const message = { type: "workspace:repos:state" as const, payload };
+    this.post(message);
+    this.postToSettings(message);
+  }
+
+  private async handleWorkspaceReposLoad(): Promise<void> {
+    this.postWorkspaceReposState({
+      repos: [],
+      selectedRepoIds: [],
+      selectedCount: 0,
+      limit: this.preferences.workspaceRepoLimit ?? null,
+      canAddMore: true,
+      loading: true
+    });
+    try {
+      const [catalog, workspace] = await Promise.all([
+        this.options.api.listCatalogOrgRepos(this.preferences.apiBaseUrl),
+        this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl)
+      ]);
+      const selectedRepoIds = workspace.repos.map((repo) => repo.repoId);
+      this.postWorkspaceReposState({
+        repos: catalog,
+        selectedRepoIds,
+        selectedCount: workspace.selectedCount,
+        limit: workspace.limit,
+        canAddMore: workspace.canAddMore,
+        primaryRepoId: workspace.primaryRepoId,
+        loading: false,
+        saving: false
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load workspace repos.";
+      this.postWorkspaceReposState({
+        repos: [],
+        selectedRepoIds: [],
+        selectedCount: 0,
+        limit: this.preferences.workspaceRepoLimit ?? null,
+        canAddMore: false,
+        error: message,
+        loading: false
+      });
+    }
+  }
+
+  private async handleWorkspaceReposSave(repoIds: string[]): Promise<void> {
+    this.postWorkspaceReposState({
+      repos: [],
+      selectedRepoIds: repoIds,
+      selectedCount: repoIds.length,
+      limit: this.preferences.workspaceRepoLimit ?? null,
+      canAddMore: false,
+      saving: true,
+      loading: true
+    });
+    try {
+      const workspace = await this.options.api.getBackendClient().setWorkspaceRepos(
+        this.preferences.apiBaseUrl,
+        repoIds
+      );
+      const primary = workspace.repos[0];
+      if (primary) {
+        const providerToken = primary.repoId.includes(":")
+          ? primary.repoId.split(":")[0]
+          : "github";
+        const provider =
+          providerToken === "gitlab" || providerToken === "bitbucket" ? providerToken : "github";
+        this.setRepoContext({
+          provider,
+          owner: primary.owner,
+          repo: primary.name,
+          branch: primary.defaultBranch || "main"
+        });
+        await updateConfiguration({
+          owner: primary.owner,
+          repo: primary.name,
+          branch: primary.defaultBranch || "main"
+        });
+      }
+      await this.refreshAllSessionsPreferences();
+      await this.handleWorkspaceReposLoad();
+      await this.handleRepoListRepos("chat");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save workspace repos.";
+      this.postWorkspaceReposState({
+        repos: [],
+        selectedRepoIds: repoIds,
+        selectedCount: repoIds.length,
+        limit: this.preferences.workspaceRepoLimit ?? null,
+        canAddMore: false,
+        error: message,
+        loading: false,
+        saving: false
       });
     }
   }
@@ -2550,28 +2810,54 @@ export class CoopChatSession {
     repo: string;
     branch?: string;
   }): Promise<void> {
+    const repoId = `${payload.provider ?? this.preferences.defaultCodeHost}:${payload.owner}/${payload.repo}`;
+    if (await this.options.api.hasToken()) {
+      try {
+        const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+        if (!workspace.repos.some((entry) => entry.repoId === repoId)) {
+          await this.handleRepoListRepos("chat");
+          return;
+        }
+      } catch {
+        // Continue — file tree may still work if workspace endpoint is temporarily unavailable.
+      }
+    }
     this.setRepoContext(payload);
-    await this.handleRepoList("");
+    await this.handleRepoList("", "chat");
   }
 
-  private async handleRepoSearch(query: string): Promise<void> {
+  private async handleRepoSearch(query: string, source: "chat" | "settings"): Promise<void> {
+    const audience = source === "settings" ? "settings" : "chat";
     const trimmed = query.trim();
-    this.post({
-      type: "repo:search-results",
-      payload: { query: trimmed, items: [], loading: true }
-    });
-    if (!trimmed) {
-      this.post({
+    this.postRepoExplorer(
+      {
         type: "repo:search-results",
-        payload: { query: "", items: [] }
-      });
+        payload: { query: trimmed, items: [], loading: true }
+      },
+      audience
+    );
+    if (!trimmed) {
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: "", items: [] }
+        },
+        audience
+      );
       return;
     }
     if (!this.currentContext.owner || !this.currentContext.repo) {
-      this.post({
-        type: "repo:search-results",
-        payload: { query: trimmed, items: [], error: "Select a repository to search files." }
-      });
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items: [], error: "Select a repository to search files." }
+        },
+        audience
+      );
+      return;
+    }
+    if (audience === "chat" && !(await this.isCurrentRepoInWorkspace())) {
+      await this.handleRepoListRepos("chat");
       return;
     }
     try {
@@ -2587,25 +2873,55 @@ export class CoopChatSession {
         name: hit.name,
         type: "file" as const
       }));
-      this.post({
-        type: "repo:search-results",
-        payload: { query: trimmed, items }
-      });
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items }
+        },
+        audience
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to search repository files.";
-      this.post({
-        type: "repo:search-results",
-        payload: { query: trimmed, items: [], error: message }
-      });
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items: [], error: message }
+        },
+        audience
+      );
     }
   }
 
-  private async handleRepoList(path: string): Promise<void> {
+  private async handleRepoList(path: string, source: "chat" | "settings"): Promise<void> {
+    const audience = source === "settings" ? "settings" : "chat";
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
-    this.post({
-      type: "repo:tree",
-      payload: { path, items: [], loading: true, provider, scope: "files" }
-    });
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: {
+            path,
+            items: [],
+            provider,
+            scope: "files",
+            error: "Free plan uses local workspace files only. Open a folder in VS Code to browse files."
+          }
+        },
+        audience
+      );
+      return;
+    }
+    if (audience === "chat" && !(await this.isCurrentRepoInWorkspace())) {
+      await this.handleRepoListRepos("chat");
+      return;
+    }
+    this.postRepoExplorer(
+      {
+        type: "repo:tree",
+        payload: { path, items: [], loading: true, provider, scope: "files" }
+      },
+      audience
+    );
     try {
       const tree = await this.options.codeHostRouter.getRepositoryTree(path, {
         provider,
@@ -2620,16 +2936,170 @@ export class CoopChatSession {
         size: entry.size,
         updatedAt: entry.lastModified
       }));
-      this.post({
-        type: "repo:tree",
-        payload: { path: tree.path, items, provider, scope: "files" }
-      });
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: { path: tree.path, items, provider, scope: "files" }
+        },
+        audience
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load remote tree.";
-      this.post({
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: { path, items: [], error: message, provider, scope: "files" }
+        },
+        audience
+      );
+    }
+  }
+
+  private async handleEphemeralRepoList(
+    path: string,
+    payload: Extract<WebviewInbound, { type: "repo:list" }>["payload"],
+    source: "chat" | "settings"
+  ): Promise<void> {
+    const audience = source === "settings" ? "settings" : "chat";
+    const provider = payload.provider ?? this.preferences.defaultCodeHost;
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: {
+            path,
+            items: [],
+            error: "Free plan uses local workspace files only.",
+            provider,
+            scope: "files"
+          }
+        },
+        audience
+      );
+      return;
+    }
+    const owner = payload.owner?.trim();
+    const repo = payload.repo?.trim();
+    if (!owner || !repo) {
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: {
+            path,
+            items: [],
+            error: "Select a repository to browse files.",
+            provider,
+            scope: "files"
+          }
+        },
+        audience
+      );
+      return;
+    }
+    this.postRepoExplorer(
+      {
         type: "repo:tree",
-        payload: { path, items: [], error: message, provider, scope: "files" }
+        payload: { path, items: [], loading: true, provider, scope: "files" }
+      },
+      audience
+    );
+    try {
+      const tree = await this.options.codeHostRouter.getRepositoryTree(path, {
+        provider,
+        owner,
+        repo,
+        branch: payload.branch
       });
+      const items = tree.entries.map((entry) => ({
+        path: entry.path,
+        name: entry.name,
+        type: entry.type,
+        size: entry.size,
+        updatedAt: entry.lastModified
+      }));
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: { path: tree.path, items, provider, scope: "files" }
+        },
+        audience
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load remote tree.";
+      this.postRepoExplorer(
+        {
+          type: "repo:tree",
+          payload: { path, items: [], error: message, provider, scope: "files" }
+        },
+        audience
+      );
+    }
+  }
+
+  private async handleEphemeralRepoSearch(
+    payload: Extract<WebviewInbound, { type: "repo:search" }>["payload"],
+    source: "chat" | "settings"
+  ): Promise<void> {
+    const audience = source === "settings" ? "settings" : "chat";
+    const trimmed = payload.query.trim();
+    this.postRepoExplorer(
+      {
+        type: "repo:search-results",
+        payload: { query: trimmed, items: [], loading: true }
+      },
+      audience
+    );
+    if (!trimmed) {
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: "", items: [] }
+        },
+        audience
+      );
+      return;
+    }
+    const owner = payload.owner?.trim();
+    const repo = payload.repo?.trim();
+    if (!owner || !repo) {
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items: [], error: "Select a repository to search files." }
+        },
+        audience
+      );
+      return;
+    }
+    try {
+      const provider = payload.provider ?? this.preferences.defaultCodeHost;
+      const hits = await this.options.codeHostRouter.searchRepositoryFiles(trimmed, {
+        provider,
+        owner,
+        repo,
+        branch: payload.branch
+      });
+      const items = hits.map((hit) => ({
+        path: hit.path,
+        name: hit.name,
+        type: "file" as const
+      }));
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items }
+        },
+        audience
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to search repository files.";
+      this.postRepoExplorer(
+        {
+          type: "repo:search-results",
+          payload: { query: trimmed, items: [], error: message }
+        },
+        audience
+      );
     }
   }
 
@@ -3041,8 +3511,7 @@ export class CoopChatSession {
   }
 
   public openLightningPanel(): void {
-    this.post({ type: "lightning:open" });
-    void this.pushLightningState();
+    void vscode.env.openExternal(vscode.Uri.parse(PRICING_PAGE_URL));
   }
 
   private async pushLightningState(): Promise<void> {
@@ -3065,6 +3534,12 @@ export class CoopChatSession {
   }
 
   private async handleInstallGithubApp(): Promise<void> {
+    if (!canUseCodeHosts(this.preferences.plan)) {
+      void vscode.window.showErrorMessage(
+        "GitHub connections require Pro. The free plan works on local workspace files only."
+      );
+      return;
+    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Sign in to Coop before installing the GitHub App.");
       return;
@@ -3108,6 +3583,12 @@ export class CoopChatSession {
   }
 
   private async handleInstallGitlabApp(): Promise<void> {
+    if (!canUseCodeHosts(this.preferences.plan)) {
+      void vscode.window.showErrorMessage(
+        "GitLab connections require Pro. The free plan works on local workspace files only."
+      );
+      return;
+    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Add your Coop API key before authorizing GitLab.");
       return;
@@ -3125,6 +3606,12 @@ export class CoopChatSession {
   }
 
   private async handleInstallBitbucketApp(): Promise<void> {
+    if (!canUseCodeHosts(this.preferences.plan)) {
+      void vscode.window.showErrorMessage(
+        "Bitbucket connections require Pro. The free plan works on local workspace files only."
+      );
+      return;
+    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Add your Coop API key before authorizing Bitbucket.");
       return;
@@ -3300,8 +3787,37 @@ export class CoopChatSession {
 
   private async healthForQuickAction(action: QuickActionFeatureId): Promise<IntegrationHealth[]> {
     const { required, optional } = providersForFeature(action);
-    return Promise.all(
+    const health = await Promise.all(
       [...required, ...optional].map((provider) => this.options.healthMonitor.updateHealth(provider))
+    );
+    return this.applyOrgCodeHostHealthOverrides(health);
+  }
+
+  /** Align quick-action health with Settings → Connections (org GitHub App / OAuth). */
+  private applyOrgCodeHostHealthOverrides(health: IntegrationHealth[]): IntegrationHealth[] {
+    if (isCoopDevMode() || readLightningBackend() !== "cloud") {
+      return health;
+    }
+    const provider = this.preferences.defaultCodeHost ?? "github";
+    const orgConnected =
+      provider === "github"
+        ? this.preferences.hasGitHubAppInstalled
+        : provider === "gitlab"
+          ? this.preferences.hasGitLabAppInstalled
+          : this.preferences.hasBitbucketAppInstalled;
+    if (!orgConnected) {
+      return health;
+    }
+    return health.map((entry) =>
+      entry.provider === provider && entry.status === "offline"
+        ? {
+            ...entry,
+            status: "healthy",
+            error: undefined,
+            errorRate: 0,
+            recoveryStrategy: "retry"
+          }
+        : entry
     );
   }
 
@@ -3499,6 +4015,21 @@ export class CoopChatSession {
     });
 
     try {
+      if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+        const repoId = buildRepoId(this.preferences, this.currentContext);
+        const paths = await searchLocalWorkspaceFiles(query);
+        const items: MentionSearchResult[] = paths.map((path) => ({ repoId, path }));
+        this.post({
+          type: "mention:results",
+          payload: {
+            pattern: query,
+            items: rankMentionSearchResults(dedupeMentionResults(items), query).slice(0, 12),
+            hint: items.length === 0 ? "No workspace files matched. Free plan searches local folders only." : undefined
+          }
+        });
+        return;
+      }
+
       const searchRepoIds = await this.resolveMentionSearchRepoIds();
       const repoScope = resolveMentionRepoScope(query, searchRepoIds);
       if (repoScope && !repoScope.pathQuery) {
@@ -3516,13 +4047,16 @@ export class CoopChatSession {
       const defaultRepoId = buildRepoId(this.preferences, this.currentContext);
       const searchRepoId = repoScope?.repoId ?? defaultRepoId;
       const searchPattern = repoScope?.pathQuery ?? query;
-      const collectionId = repoScope ? undefined : resolveSearchCollectionId(this.preferences);
+      const searchScope = resolveSearchScope(this.preferences);
       const remote = (await this.options.api.graphSearch(
         this.preferences.apiBaseUrl,
         searchRepoId,
         searchPattern,
-        collectionId,
-        true
+        {
+          collectionId: repoScope ? undefined : searchScope.collectionId,
+          scope: repoScope ? undefined : searchScope.scope,
+          mention: true
+        }
       )) as {
         data?: Array<{ repoId?: string; path?: string; sha?: string; score?: number }>;
       };
@@ -3558,20 +4092,46 @@ export class CoopChatSession {
   }
 
   private async resolveMentionSearchRepoIds(): Promise<string[]> {
-    const collectionId = resolveSearchCollectionId(this.preferences);
-    if (!collectionId) {
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
       return [buildRepoId(this.preferences, this.currentContext)];
     }
-    const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
-    const collection = collections.find((entry) => entry.id === collectionId);
-    const repoIds = collection?.repoIds ?? [];
-    if (repoIds.length > 0) {
-      return repoIds;
+    const scope = resolveSearchScope(this.preferences);
+    if (scope.mode === "collection" && scope.collectionId) {
+      const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
+      const collection = collections.find((entry) => entry.id === scope.collectionId);
+      const repoIds = collection?.repoIds ?? [];
+      if (repoIds.length > 0) {
+        return repoIds;
+      }
+    }
+    if (scope.mode === "indexed" || scope.mode === "org") {
+      try {
+        const workspaceIds = await this.options.api.listWorkspaceRepoIds(this.preferences.apiBaseUrl);
+        if (workspaceIds.length > 0) {
+          return workspaceIds;
+        }
+        const repos = await this.options.api.listOrgRepos(this.preferences.apiBaseUrl);
+        const indexed = repos
+          .filter((repo) => repo.lightningEnabled)
+          .map((repo) => repo.repoId)
+          .filter(Boolean);
+        if (indexed.length > 0) {
+          return indexed;
+        }
+      } catch {
+        // Fall through to active repo.
+      }
     }
     return [buildRepoId(this.preferences, this.currentContext)];
   }
 
   private async handleCollectionsListRequest(): Promise<void> {
+    if (isFreePlan(this.preferences.plan)) {
+      const empty = { type: "collections:list" as const, payload: { collections: [] as [] } };
+      this.post(empty);
+      this.postToSettings(empty);
+      return;
+    }
     try {
       const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
       this.post({
@@ -3608,19 +4168,24 @@ export class CoopChatSession {
     for (const mention of mentions.slice(0, 3)) {
       let content = mention.snippet?.trim() ?? "";
       if (!content || !mention.lines) {
-        try {
-          const file = await this.options.api
-            .getBackendClient()
-            .fetchRepoFile(
-              this.preferences.apiBaseUrl,
-              mention.repoId,
-              mention.path,
-              this.currentContext.branch ?? this.preferences.branch
-            );
-          content = file.content ?? "";
-        } catch {
-          if (!content) {
-            continue;
+        if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+          const local = readWorkspaceFileFromDisk(mention.path, mention.lines ? { start: mention.lines[0], end: mention.lines[1] } : undefined);
+          content = local?.content ?? "";
+        } else {
+          try {
+            const file = await this.options.api
+              .getBackendClient()
+              .fetchRepoFile(
+                this.preferences.apiBaseUrl,
+                mention.repoId,
+                mention.path,
+                this.currentContext.branch ?? this.preferences.branch
+              );
+            content = file.content ?? "";
+          } catch {
+            if (!content) {
+              continue;
+            }
           }
         }
       }
@@ -3646,12 +4211,23 @@ export class CoopChatSession {
   }
 }
 
-function resolveSearchCollectionId(preferences: UserPreferences): string | undefined {
-  if (preferences.searchScopeMode !== "collection") {
-    return undefined;
+function resolveSearchScope(preferences: UserPreferences): {
+  mode: import("./types").SearchScopeMode;
+  collectionId?: string;
+  scope?: "indexed" | "org";
+} {
+  if (isFreePlan(preferences.plan)) {
+    return { mode: "repo" };
   }
-  const collectionId = preferences.searchCollectionId.trim();
-  return collectionId || undefined;
+  const mode = preferences.searchScopeMode;
+  if (mode === "collection") {
+    const collectionId = preferences.searchCollectionId.trim();
+    return { mode, collectionId: collectionId || undefined };
+  }
+  if (mode === "indexed" || mode === "org") {
+    return { mode, scope: mode };
+  }
+  return { mode: "repo" };
 }
 
 function dedupeMentionResults(items: MentionSearchResult[]): MentionSearchResult[] {

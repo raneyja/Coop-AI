@@ -5,6 +5,16 @@ import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import type { ChatOrgPlan } from "./types";
 import { systemPromptForUseCase } from "../prompts/systemPrompts";
+import type { PlanQuotaService } from "../server/planQuota";
+import { INLINE_DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
+
+export type InlineCompletionOrg = {
+  orgId: string;
+  plan: ChatOrgPlan;
+  userId?: string;
+  principal?: string;
+  planQuota?: PlanQuotaService;
+};
 
 export type V1InlineCompletionBody = {
   message: string;
@@ -32,7 +42,7 @@ export async function handleInlineCompletionRequest(
   response: ServerResponse,
   router: ModelRouter,
   config: LlmServerConfig = loadLlmServerConfig(),
-  org: { orgId: string; plan: ChatOrgPlan }
+  org: InlineCompletionOrg
 ): Promise<void> {
   const record = asRecord(body);
   const message = typeof record.message === "string" ? record.message : "";
@@ -83,6 +93,17 @@ export async function handleInlineCompletionRequest(
       latencyMs: Date.now() - started,
       usage: result.usage
     });
+
+    await org.planQuota?.recordTokens(org.orgId, org.plan, {
+      eventType: "completion.suggested",
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      provider: result.provider,
+      model: result.model,
+      userId: org.userId,
+      principal: org.principal ?? "anonymous",
+      metadata: { source: "inline" }
+    });
   } catch (error) {
     writeJson(response, 502, {
       error: "provider_failure",
@@ -98,17 +119,8 @@ function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
   return fallback;
 }
 
-function defaultInlineModelFor(provider: LlmProvider): string {
-  switch (provider) {
-    case "openai":
-      return "gpt-4o-mini";
-    case "anthropic":
-      return "claude-haiku-4-5-20251001";
-    case "deepseek":
-      return "deepseek-chat";
-    case "gemini":
-      return "gemini-2.5-flash";
-  }
+export function defaultInlineModelFor(provider: LlmProvider): string {
+  return INLINE_DEFAULT_MODEL_BY_PROVIDER[provider];
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

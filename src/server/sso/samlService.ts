@@ -19,7 +19,7 @@ export type SamlAssertion = {
 };
 
 export type SamlServiceOptions = {
-  /** Public base URL of the backend, e.g. https://api.coopai.dev */
+  /** Public base URL of the backend, e.g. https://api.coop-ai.dev */
   baseUrl: string;
   /** SP entityId advertised in metadata; defaults to the metadata URL. */
   spEntityId?: string;

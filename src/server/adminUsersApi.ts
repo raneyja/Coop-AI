@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { auditActor } from "./audit/auditLogger";
+import { requireTeamPlan } from "./planGates";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { EmailService } from "./email/emailService";
 import type { AuthContext } from "./orgStore";
@@ -40,6 +41,9 @@ export async function handleAdminUsersRequest(
   if (parsed.method === "POST" && parsed.pathname === "/v1/admin/users/invite") {
     if (!deps.userStore) {
       writeJson(response, 503, { error: "user store not configured" });
+      return true;
+    }
+    if (!(await requireTeamPlan(deps.orgStore, auth, response))) {
       return true;
     }
     const body = asRecord(parsed.body);

@@ -77,7 +77,9 @@ export class JobQueue extends EventEmitter {
       }
     }
 
-    const check = await this.rateLimiter.canSubmitJob(userId, input.type);
+    const check = input.bypassRateLimit
+      ? ({ allowed: true } as const)
+      : await this.rateLimiter.canSubmitJob(userId, input.type);
     if (!check.allowed) {
       if (reuseTtlMs && this.backend.findReusableCompletedJob) {
         const cached = await this.backend.findReusableCompletedJob(userId, input.type, input.params, reuseTtlMs);

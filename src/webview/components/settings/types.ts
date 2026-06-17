@@ -36,9 +36,18 @@ export type Preferences = {
   gitlabBaseUrl: string;
   hasGitHubToken: boolean;
   hasGitHubAppInstalled: boolean;
+  githubNeedsReconnect?: boolean;
   devMode: boolean;
   orgName?: string;
   plan?: "free" | "pro" | "enterprise";
+  quotaCredits?: {
+    usedCredits: number;
+    limitCredits: number;
+    remainingCredits: number;
+    windowHours: number;
+    resetsAt: string;
+    retryAfterMs: number;
+  };
   userRole?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
@@ -66,6 +75,11 @@ export type Preferences = {
   confluenceBaseUrl: string;
   searchScopeMode: import("../../../chat/types").SearchScopeMode;
   searchCollectionId: string;
+  workspaceRepoIds?: string[];
+  workspaceRepoCount?: number;
+  workspaceRepoLimit?: number | null;
+  canAddMoreWorkspaceRepos?: boolean;
+  primaryWorkspaceRepoId?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
 };
 

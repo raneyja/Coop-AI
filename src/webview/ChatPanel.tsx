@@ -19,11 +19,12 @@ import { ThreadHeaderSwitcher, type ThreadListItem } from "./components/ThreadHe
 import { PromptLibraryPill } from "./components/PromptLibraryPill";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
+import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
 import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./AutocompleteStatus";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
-import { LightningModePanel, LightningStatusBadge } from "./LightningModePanel";
+import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
 import { useDebouncedProse } from "./hooks/useDebouncedProse";
@@ -68,6 +69,8 @@ type InboundMessage =
         stale?: boolean;
         provider?: "github" | "gitlab" | "bitbucket";
         loading?: boolean;
+        emptyHint?: "workspace";
+        listLabel?: "workspace";
       };
     }
   | {
@@ -132,6 +135,15 @@ type InboundMessage =
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "lightning:open" }
   | { type: "lightning:state"; payload: LightningModeState }
+  | {
+      type: "github:repos:list-result";
+      payload: {
+        requestId?: string;
+        repos: GithubRepoOption[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
   | {
       type: "mention:results";
       payload: {
@@ -257,7 +269,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     threads: ThreadListItem[];
   } | null>(null);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
-  const [lightningPanelOpen, setLightningPanelOpen] = useState(false);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -294,9 +305,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const launchIntroDone = chatHistorySynced && launchIntro.phase === "done";
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+
   const handleOpenFile = useCallback(
     (path: string, line?: number) => {
-      post({ type: "repo:open-file", payload: { path, line, focus: true } });
+      post({ type: "repo:open-file", payload: { path, line } });
     },
     [post]
   );
@@ -376,9 +388,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setAttachments([]);
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
-        case "lightning:open":
-          setLightningPanelOpen(true);
-          break;
         case "lightning:state":
           setLightningState(message.payload);
           break;
@@ -410,7 +419,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             error: message.payload.error,
             stale: message.payload.stale,
             provider: message.payload.provider,
-            loading: message.payload.loading
+            loading: message.payload.loading,
+            emptyHint: message.payload.emptyHint,
+            listLabel: message.payload.listLabel
           });
           break;
         case "repo:search-results":
@@ -636,17 +647,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setIsExplorerOpen((prev) => {
       const next = !prev;
       if (next) {
-        if (isActiveChat) {
-          requestRepos();
-        } else if (context.owner && context.repo) {
-          requestTree(treeState.path || "");
-        } else {
-          requestRepos();
-        }
+        requestRepos();
       }
       return next;
     });
-  }, [context.owner, context.repo, isActiveChat, requestRepos, requestTree, treeState.path]);
+  }, [requestRepos]);
 
   const handleSelectRepo = useCallback(
     (repoPath: string) => {
@@ -654,23 +659,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       if (!parsed) {
         return;
       }
-      const payload = {
-        provider: parsed.provider,
-        owner: parsed.owner,
-        repo: parsed.repo
-      };
-      const switchingRepo =
-        parsed.owner !== context.owner ||
-        parsed.repo !== context.repo ||
-        parsed.provider !== (context.provider ?? treeState.provider);
-      if (isActiveChat && switchingRepo) {
-        post({ type: "repo:open-repo", payload });
-        setIsExplorerOpen(false);
-        return;
-      }
-      post({ type: "repo:select", payload });
+      post({
+        type: "repo:select",
+        payload: {
+          provider: parsed.provider,
+          owner: parsed.owner,
+          repo: parsed.repo
+        }
+      });
     },
-    [context.owner, context.repo, context.provider, isActiveChat, post, treeState.provider]
+    [post]
   );
 
   const handleCopyOwnershipDraft = useCallback(
@@ -787,7 +785,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         {context.file ? (
           <ActiveFileLabel
             filePath={context.file}
-            onOpen={() => post({ type: "repo:open-file", payload: { path: context.file!, focus: true } })}
+            onOpen={() => post({ type: "repo:open-file", payload: { path: context.file! } })}
           />
         ) : null}
       </div>
@@ -818,8 +816,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           />
         ) : null}
         <div className={threadsState ? "ml-auto flex shrink-0 items-center gap-2" : "ml-auto flex w-full items-center justify-end gap-2"}>
-          {lightningState ? (
-            <LightningStatusBadge state={lightningState} onClick={() => setLightningPanelOpen(true)} />
+          {lightningState && !lightningState.canUseLightning ? (
+            <ProUpgradeChip onClick={() => post({ type: "lightning:upgrade" })} />
           ) : null}
           <AutocompleteStatus
             status={autocompleteStatus}
@@ -991,19 +989,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           })
         }
       />
-      {lightningState ? (
-        <LightningModePanel
-          state={lightningState}
-          open={lightningPanelOpen}
-          onClose={() => setLightningPanelOpen(false)}
-          onEnableGlobal={() => post({ type: "lightning:enable-global" })}
-          onDisableGlobal={() => post({ type: "lightning:disable-global" })}
-          onEnableRepo={(repoId) => post({ type: "lightning:enable-repo", payload: { repoId } })}
-          onDisableRepo={(repoId) => post({ type: "lightning:disable-repo", payload: { repoId } })}
-          onRefreshRepo={(repoId) => post({ type: "lightning:refresh-repo", payload: { repoId } })}
-          onUpgrade={() => post({ type: "lightning:upgrade" })}
-        />
-      ) : null}
       <PanelWidthEnforcer vscode={vscode} />
       </ChatLinkProvider>
     </div>

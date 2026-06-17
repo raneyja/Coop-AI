@@ -6,6 +6,7 @@ import { BrandMark } from "./BrandMark";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
+  { href: "/indexing", label: "Indexing" },
   { href: "/collections", label: "Collections" },
   { href: "/integrations", label: "Integrations" },
   { href: "/users", label: "Users" },

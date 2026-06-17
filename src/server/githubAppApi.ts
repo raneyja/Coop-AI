@@ -6,10 +6,15 @@ import type { GitHubAppConfig } from "./githubAppConfig";
 import type { GitHubOAuthService } from "./githubOAuthService";
 import type { GitHubOAuthConfig } from "./githubOAuthConfig";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
+import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { requireInstallAdmin } from "./authMiddleware";
+import { requireCodeHostPlan, requireCodeHostPlanForOrg } from "./planGates";
 import type { OrgStore } from "./orgStore";
 import type { AuthContext } from "./orgStore";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
+import { createEstateSyncService, type EstateSyncService } from "./estateSyncService";
+import { runCodeHostCatalogSyncAfterConnect } from "./catalogSyncService";
+import type { JobQueue } from "../jobs/jobQueue";
 
 export type GitHubAppApiDeps = {
   orgStore?: OrgStore;
@@ -17,6 +22,8 @@ export type GitHubAppApiDeps = {
   githubAppConfig?: GitHubAppConfig;
   githubOAuth?: GitHubOAuthService;
   githubOAuthConfig?: GitHubOAuthConfig;
+  jobQueue?: JobQueue;
+  estateSync?: EstateSyncService;
 };
 
 type ParsedRequest = {
@@ -55,6 +62,9 @@ async function handleInstallUrl(
     return true;
   }
   if (!requireInstallAdmin(auth, response)) {
+    return true;
+  }
+  if (!(await requireCodeHostPlan(deps.orgStore, auth, response, "github"))) {
     return true;
   }
   if (deps.githubApp && deps.githubAppConfig) {
@@ -105,6 +115,9 @@ async function handleCallback(
     writeHtml(response, 400, "Invalid or expired install state. Return to CoopAI and try again.");
     return true;
   }
+  if (!(await requireCodeHostPlanForOrg(deps.orgStore, orgId, response, "github", true))) {
+    return true;
+  }
 
   try {
     const token = await deps.githubApp.createInstallationAccessToken(installationId);
@@ -115,6 +128,7 @@ async function handleCallback(
       token.token,
       token.expiresAt
     );
+    await maybeRunCatalogSync(deps, orgId, installationId);
     const redirect =
       deps.githubAppConfig?.publicBaseUrl.replace(/\/$/, "") ??
       "https://coop-ai.dev";
@@ -155,6 +169,9 @@ async function handleOAuthCallback(
     writeHtml(response, 400, "Invalid or expired install state. Return to Coop AI and try again.");
     return true;
   }
+  if (!(await requireCodeHostPlanForOrg(deps.orgStore, orgId, response, "github", true))) {
+    return true;
+  }
 
   try {
     const redirectUri = buildOAuthRedirectUri(deps.githubOAuthConfig);
@@ -172,6 +189,11 @@ async function handleOAuthCallback(
     if (tokens.refreshToken) {
       await deps.orgStore.storeCredential(orgId, "github:refresh", tokens.refreshToken);
     }
+
+    void runCodeHostCatalogSyncAfterConnect(orgId, "github", tokens.accessToken, {
+      orgStore: deps.orgStore,
+      jobQueue: deps.jobQueue
+    });
 
     writeHtml(
       response,
@@ -204,8 +226,12 @@ async function handleInstallationStatus(
     return true;
   }
   const installation = await deps.orgStore.getCodeHostInstallation(auth.orgId, "github");
+  const connection = await assessGithubConnection(deps.orgStore, auth.orgId);
   writeJson(response, 200, {
-    installed: Boolean(installation),
+    installed: connection.installed,
+    tokenValid: connection.tokenValid,
+    needsReconnect: connection.needsReconnect,
+    hasRefreshToken: connection.hasRefreshToken,
     installationId: installation?.installationId,
     tokenExpiresAt: installation?.tokenExpiresAt.toISOString()
   });
@@ -238,4 +264,31 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+async function maybeRunCatalogSync(
+  deps: GitHubAppApiDeps,
+  orgId: string,
+  installationId: number
+): Promise<void> {
+  const org = await deps.orgStore?.getOrganization(orgId);
+  if (!org || (org.plan !== "enterprise" && org.plan !== "pro")) {
+    return;
+  }
+  const estateSync =
+    deps.estateSync ??
+    createEstateSyncService({
+      orgStore: deps.orgStore,
+      githubApp: deps.githubApp,
+      jobQueue: deps.jobQueue
+    });
+  if (!estateSync) {
+    return;
+  }
+  try {
+    await estateSync.syncInstallation(orgId, installationId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[github-app] catalog sync failed for org=${orgId}: ${message}`);
+  }
 }

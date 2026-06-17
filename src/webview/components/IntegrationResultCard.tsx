@@ -2,6 +2,8 @@ import React from "react";
 import { ChatActionLink } from "./ChatActionLink";
 import { ChatProse } from "./ChatProse";
 import { useChatLinks } from "./ChatLinkContext";
+import type { IntegrationSourceId } from "./IntegrationSourceBrand";
+import { IntegrationSourceHeading } from "./IntegrationSourceBrand";
 
 type IntegrationResultCardProps = {
   title: string;
@@ -100,6 +102,9 @@ export function IntegrationResultBadge({
 
 export function IntegrationResultCollapsible({
   title,
+  provider,
+  destination,
+  subtitle,
   open,
   onToggle,
   link,
@@ -107,6 +112,9 @@ export function IntegrationResultCollapsible({
   children
 }: {
   title: string;
+  provider?: IntegrationSourceId;
+  destination?: string;
+  subtitle?: string;
   open: boolean;
   onToggle: () => void;
   link?: string;
@@ -114,26 +122,35 @@ export function IntegrationResultCollapsible({
   children: React.ReactNode;
 }): React.ReactElement {
   const { onOpenLink } = useChatLinks();
+  const useBrandedHeader = Boolean(provider && destination);
 
   return (
     <div className="coop-result-collapsible">
       <div className="coop-result-collapsible-header">
         <button
           type="button"
-          className="coop-result-collapsible-toggle"
+          className={`coop-result-collapsible-toggle${useBrandedHeader ? " coop-result-collapsible-toggle--branded" : ""}`}
           onClick={onToggle}
           aria-expanded={open}
         >
           <span className="coop-result-collapsible-chevron" aria-hidden="true">
             {open ? "▾" : "▸"}
           </span>
-          <span className="truncate">{title}</span>
+          {useBrandedHeader ? (
+            <IntegrationSourceHeading
+              provider={provider!}
+              destination={destination!}
+              subtitle={subtitle}
+            />
+          ) : (
+            <span className="coop-result-collapsible-title">{title}</span>
+          )}
         </button>
         {link ? (
           <ChatActionLink
             kind="external"
             label={linkLabel ?? "Open"}
-            className="shrink-0 text-[10px]"
+            className="coop-result-collapsible-link shrink-0"
             onClick={() => onOpenLink?.(link)}
           />
         ) : null}

@@ -6,6 +6,7 @@ import { getStoredMe, displayOrgName } from "@/lib/auth";
 import { fetchIntegrations, fetchOrg, fetchUsers } from "@/lib/coopApi";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
+import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -51,7 +52,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="admin-page-title">Dashboard</h1>
         <p className="mt-1 text-sm text-coop-muted">
           Overview for {displayOrgName(me)}
         </p>
@@ -64,37 +65,35 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="admin-card">
-          <p className="admin-section-label">Organization</p>
-          <p className="mt-2 text-lg font-semibold">{displayOrgName(me)}</p>
+      <AdminStatRow>
+        <div className="admin-stat">
+          <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Organization</p>
+          <p className="mt-1 text-lg font-semibold text-white">{displayOrgName(me)}</p>
           <div className="mt-2">
             <PlanBadge plan={me?.plan ?? "free"} />
           </div>
         </div>
-        <div className="admin-card">
-          <p className="admin-section-label">Connected integrations</p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums">
-            {loading ? "—" : connectedCount}
-          </p>
-          <p className="mt-1 text-xs text-coop-muted">of {INTEGRATIONS.length} available</p>
-        </div>
-        <div className="admin-card">
-          <p className="admin-section-label">Users</p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums">
+        <AdminStat
+          label="Connected integrations"
+          value={loading ? "—" : connectedCount}
+          hint={`of ${INTEGRATIONS.length} available`}
+        />
+        <div className="admin-stat">
+          <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Users</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
             {loading ? "—" : userCount ?? "—"}
           </p>
-          <p className="mt-1 text-xs text-coop-muted">
+          <p className="mt-0.5 text-xs text-coop-muted">
             <Link href="/users" className="admin-link text-xs">
               Manage users →
             </Link>
           </p>
         </div>
-      </div>
+      </AdminStatRow>
 
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Integration status</h2>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="admin-section-label">Integration status</h2>
           <Link href="/integrations" className="admin-link text-sm">
             Manage integrations
           </Link>

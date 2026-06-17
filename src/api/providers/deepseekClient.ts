@@ -14,7 +14,11 @@ export class DeepSeekProviderClient extends BaseProviderClient {
       {
         method: "POST",
         headers: { ...headers, "content-type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          ...body,
+          stream: true,
+          stream_options: { include_usage: true }
+        })
       },
       options,
       parseOpenAiSseLine

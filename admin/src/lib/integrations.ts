@@ -8,6 +8,10 @@ export type IntegrationProvider =
   | "google-docs"
   | "teams";
 
+export type CodeHostProvider = Extract<IntegrationProvider, "github" | "gitlab" | "bitbucket">;
+
+export const CODE_HOST_PROVIDERS: CodeHostProvider[] = ["github", "gitlab", "bitbucket"];
+
 export type IntegrationDefinition = {
   id: IntegrationProvider;
   name: string;
@@ -71,5 +75,6 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
 export type IntegrationStatus = {
   provider: IntegrationProvider;
   installed: boolean;
+  needsReconnect?: boolean;
   detail?: string;
 };

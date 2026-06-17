@@ -210,13 +210,18 @@ export function healthArrayToRecord(
 }
 
 function classifyStatus(errorRate: number, response: HealthCheckResult, latency: number): IntegrationStatus {
-  if (!response.ok || errorRate >= 0.1) {
+  // Trust the latest successful probe — stale failure samples should not keep a
+  // provider offline after the user connects GitHub in Settings.
+  if (response.ok) {
+    if (response.degraded || latency > 5_000) {
+      return "degraded";
+    }
+    return "healthy";
+  }
+  if (errorRate >= 0.1) {
     return "offline";
   }
-  if (response.degraded || errorRate > 0.01 || latency > 5_000) {
-    return "degraded";
-  }
-  return "healthy";
+  return "offline";
 }
 
 function strategyForStatus(status: IntegrationStatus): RecoveryStrategy {

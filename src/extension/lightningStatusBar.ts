@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import type { IndexBackend } from "../indexing/indexBackend";
-import { isCoopDevMode, readLightningConfiguration } from "../config/lightningConfig";
+import { readLightningConfiguration } from "../config/lightningConfig";
 import type { LightningModeState, LightningRepoState } from "../indexing/lightningTypes";
-import { canUseLightningMode, resolveLicenseStatus } from "../license/licenseChecker";
+import { canUseLightningMode, resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 
 export class LightningStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -27,27 +27,13 @@ export class LightningStatusBar implements vscode.Disposable {
   public async refresh(): Promise<void> {
     try {
       const state = await this.buildState();
-      const showLocalIndexing = isCoopDevMode() && this.indexBackend.kind === "local";
-      if (!state.canUseLightning) {
-        this.item.text = "$(cloud) CoopAI: Zero-Clone";
-        this.item.tooltip =
-          "Zero-Clone: remote graph from code hosts; connect Slack, Jira, Notion, and more in Settings. Pro adds Lightning Mode.";
-      } else if (!state.globalEnabled) {
-        this.item.text = "$(cloud) CoopAI: Zero-Clone";
-        this.item.tooltip = showLocalIndexing
-          ? "Remote code graph. Click to enable Lightning (local graph index)."
-          : "Remote code graph. Click to enable Lightning (Coop cloud index).";
-      } else if (state.indexingRepos > 0) {
-        this.item.text = "$(zap) CoopAI: Lightning · indexing";
-        this.item.tooltip = showLocalIndexing
-          ? "Building local code graph index…"
-          : "Building cloud code graph index…";
-      } else {
-        this.item.text = `$(zap) CoopAI: Lightning · ${state.readyRepos} ready`;
-        this.item.tooltip = showLocalIndexing
-          ? "Local code graph index ready. Click to manage."
-          : "Coop cloud index ready. Click to manage.";
+      if (state.canUseLightning) {
+        this.item.hide();
+        return;
       }
+      this.item.text = "$(star-empty) Upgrade to Pro";
+      this.item.tooltip =
+        "Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $20/user/mo.";
       this.item.show();
     } catch {
       this.item.text = "$(cloud) CoopAI";
@@ -109,12 +95,16 @@ export class LightningStatusBar implements vscode.Disposable {
     return {
       plan: license.plan,
       canUseLightning: canUseLightningMode(license),
-      globalEnabled: config.globalEnabled,
+      globalEnabled:
+        usesOrgManagedDeepIndex(license.plan, config.backend) || config.globalEnabled,
       maxDiskGb: config.maxDiskGb,
       totalDiskBytes: summary.totalDiskBytes,
       enabledRepos: summary.enabledRepos,
       readyRepos: summary.readyRepos,
       indexingRepos: summary.indexingRepos,
+      indexedRepoCount: license.indexedRepoCount,
+      indexedRepoLimit: license.indexedRepoLimit,
+      canEnableMoreRepos: license.canEnableMoreRepos,
       repos,
       currentRepoId: this.currentRepoId,
       backend: config.backend

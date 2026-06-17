@@ -5,7 +5,7 @@ export type ServerConfig = {
   credentialsEncryptionKey?: string;
   jobsWorkersEnabled: boolean;
   devMode: boolean;
-  /** Public base URL of the backend (e.g. https://api.coopai.dev). Enables SAML SSO when set. */
+  /** Public base URL of the backend (e.g. https://api.coop-ai.dev). Enables SAML SSO when set. */
   ssoBaseUrl?: string;
   /** Optional SP entityId override; defaults to `${ssoBaseUrl}/v1/auth/saml/metadata`. */
   ssoSpEntityId?: string;

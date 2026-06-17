@@ -427,7 +427,7 @@
         },
         "coopAI.apiBaseUrl": {
           "type": "string",
-          "default": "https://api.coopai.dev",
+          "default": "https://api.coop-ai.dev",
           "description": "Base URL for the CoopAI cloud API (HTTPS only)."
         },
         "coopAI.jobsBaseUrl": {
@@ -727,7 +727,7 @@
         "coopAI.lightning.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable Lightning Mode (Pro plan). When false, CoopAI uses Zero-Clone remote APIs only."
+          "description": "Enable Deep-Code Graph indexing (Pro plan). When false, chat uses local file and integration context only."
         },
         "coopAI.lightning.autoIndexOnEnable": {
           "type": "boolean",
@@ -798,7 +798,21 @@
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
-    "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts"
+    "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
+    "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
+    "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
+    "test:lightning-search-scope": "npx tsx src/indexing/lightningSearchScope.test.ts",
+    "test:graph-search-scope": "npx tsx src/indexing/graphSearchScope.test.ts",
+    "test:org-api-indexing": "npx tsx src/server/orgApiIndexing.test.ts",
+    "test:org-api-index-rate-limit": "npx tsx src/server/orgApiIndexRateLimit.test.ts",
+    "test:repo-symbol-index": "npx tsx src/indexing/repoSymbolIndexStore.test.ts",
+    "test:embeddings-client": "npx tsx src/indexing/embeddingsClient.test.ts",
+    "test:embedding-rate-limiter": "npx tsx src/indexing/embeddingRateLimiter.test.ts",
+    "test:error-handling": "npx tsx src/jobs/errorHandling.test.ts",
+    "test:indexing-progress": "npx tsx admin/src/lib/indexingProgress.test.ts",
+    "test:user-facing-errors": "npx tsx src/api/userFacingErrors.test.ts",
+    "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
+    "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

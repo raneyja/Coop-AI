@@ -1,6 +1,7 @@
 import type { DependencyEdge, GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
 import { chunkAndEmbed } from "../indexing/chunkAndEmbed";
+import { SYMBOL_EDGE_BUILD_LIMIT } from "../indexing/repoSymbolIndexStore";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
 import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getConnector } from "../server/codeHostConnectors/registry";
@@ -10,7 +11,7 @@ import type { GitHubAppService } from "../server/githubAppService";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
 import { canUseLightningPlan, type OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
-import { buildPartialFailure } from "./errorHandling";
+import { buildPartialFailure, JobCancelledError } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
 import { runScipIndexer } from "./runScipIndexer";
 import { runZoektIndexer } from "./runZoektIndexer";
@@ -165,7 +166,7 @@ async function indexRepository(
   job: Job,
   ctx: JobExecutionContext,
   report: ProgressReporter,
-  _signal: AbortSignal
+  signal: AbortSignal
 ): Promise<unknown> {
   const repoId = String(job.params.repoId ?? "");
   const orgId = job.params.orgId ? String(job.params.orgId) : undefined;
@@ -174,7 +175,12 @@ async function indexRepository(
   }
 
   if (orgId && ctx.orgStore) {
-    await ctx.orgStore.upsertOrgRepo(orgId, repoId, { indexStatus: "indexing", error: undefined });
+    await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
+      indexStatus: "indexing",
+      error: undefined,
+      embeddingStatus: "pending",
+      embeddingError: undefined
+    });
   }
 
   await report(20, "Preparing repository clone");
@@ -208,6 +214,8 @@ async function indexRepository(
     let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
     let embedResult: Awaited<ReturnType<typeof chunkAndEmbed>> | undefined;
     let zoektResult: Awaited<ReturnType<typeof runZoektIndexer>> | undefined;
+    let embeddingStatus: "complete" | "failed" | "skipped" = "skipped";
+    let embeddingError: string | undefined;
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
@@ -224,7 +232,22 @@ async function indexRepository(
         }
         if (shouldEmbed) {
           await report(75, "Embedding files without symbol coverage");
-          embedResult = await chunkAndEmbed(repoId, orgId, clone.localPath, pool);
+          try {
+            embedResult = await chunkAndEmbed(repoId, orgId, clone.localPath, pool, {
+              signal,
+              onProgress: async (fraction) => {
+                await report(75 + Math.round(fraction * 4), "Embedding files without symbol coverage");
+              }
+            });
+            embeddingStatus = "complete";
+          } catch (error) {
+            if (error instanceof JobCancelledError) {
+              throw error;
+            }
+            embeddingStatus = "failed";
+            embeddingError = error instanceof Error ? error.message : String(error);
+            await report(78, "Embeddings failed — symbols and full-text search remain available");
+          }
         }
       }
     }
@@ -249,7 +272,8 @@ async function indexRepository(
       if (pool) {
         const store = new RepoSymbolIndexStore(pool);
         const symbolCount = await store.countSymbols(orgId, repoId);
-        if (symbolCount > 0) {
+        if (symbolCount > 0 && symbolCount <= SYMBOL_EDGE_BUILD_LIMIT) {
+          await report(82, "Building symbol dependency graph");
           const filePaths = new Set(graph.fileTree.map((file) => file.path));
           const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
           ctx.cache.setDependencies(
@@ -264,9 +288,11 @@ async function indexRepository(
       await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
         lightningEnabled: true,
         indexStatus: "ready",
+        embeddingStatus,
         lastIndexedAt: now,
         lastJobId: job.id,
-        error: undefined
+        error: undefined,
+        embeddingError
       });
     }
 
@@ -284,7 +310,9 @@ async function indexRepository(
       language: scipResult?.language,
       zoektAvailable: zoektResult?.zoektAvailable ?? false,
       embeddingCount: embedResult?.chunkCount ?? 0,
-      embeddedFiles: embedResult?.embeddedFiles ?? 0
+      embeddedFiles: embedResult?.embeddedFiles ?? 0,
+      embeddingStatus,
+      embeddingError
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "index failed";

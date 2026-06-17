@@ -10,14 +10,14 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="admin-page-title">Settings</h1>
         <p className="mt-1 text-sm text-coop-muted">Organization configuration.</p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="admin-card space-y-4">
+      <div className="space-y-8">
+        <section className="admin-card">
           <h2 className="admin-section-label">Organization</h2>
-          <dl className="space-y-3 text-sm">
+          <dl className="mt-4 space-y-3 text-sm">
             <div>
               <dt className="text-coop-muted">Name</dt>
               <dd className="mt-0.5 font-medium">{displayOrgName(me)}</dd>
@@ -33,30 +33,30 @@ export default function SettingsPage() {
               </dd>
             </div>
           </dl>
-        </div>
+        </section>
 
-        <div className="admin-card space-y-4">
+        <section className="admin-card">
           <h2 className="admin-section-label">Single sign-on (SSO)</h2>
-          <p className="text-sm text-coop-muted">
+          <p className="mt-3 text-sm text-coop-muted">
             Enterprise SAML SSO is configured by Coop support during onboarding.
           </p>
-          <div className="rounded-sm border border-coop-border bg-coop-dark px-4 py-3 text-sm">
-            <p className="font-medium">Status: Not configured</p>
+          <div className="admin-panel-inset mt-4 text-sm">
+            <p className="font-medium text-white/90">Status: Not configured</p>
             <p className="mt-1 text-coop-muted">
               Contact support to enable SAML for your organization. Self-serve SSO setup is planned for a future release.
             </p>
           </div>
-        </div>
+        </section>
 
-        <div className="admin-card space-y-3 lg:col-span-2">
+        <section className="admin-card">
           <h2 className="admin-section-label">API connection</h2>
-          <p className="text-sm text-coop-muted">
+          <p className="mt-3 text-sm text-coop-muted">
             This portal connects to the Coop backend API configured at build/runtime.
           </p>
-          <code className="block rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
+          <code className="mt-3 block rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
             {getApiBase()}
           </code>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -479,6 +479,18 @@
     backdrop-filter: blur(1px);
   }
 
+  .coop-prompt-modal-stack--picker {
+    z-index: 100;
+    background: color-mix(in srgb, var(--vscode-editor-background) 78%, #000 22%);
+    backdrop-filter: blur(3px);
+  }
+
+  .coop-prompt-modal--picker {
+    box-shadow:
+      0 0 0 1px var(--vscode-focusBorder, var(--coop-border)),
+      0 24px 64px color-mix(in srgb, #000 28%, transparent);
+  }
+
   .coop-prompt-editor-modal {
     @apply gap-3 p-4;
   }
@@ -1638,6 +1650,22 @@
     @apply m-0 max-h-52 list-none overflow-y-auto p-0;
   }
 
+  .coop-explorer-list--modal {
+    @apply max-h-[min(42vh,360px)];
+  }
+
+  .coop-prompt-modal-body--explorer {
+    @apply min-h-0 px-0 pb-0 pt-0;
+  }
+
+  .coop-prompt-modal-body--explorer .coop-explorer-search-wrap {
+    @apply px-4 pt-1;
+  }
+
+  .coop-prompt-modal-body--explorer .coop-explorer-body {
+    @apply px-4 pb-4;
+  }
+
   .coop-explorer-row {
     @apply flex w-full items-center gap-1.5 rounded-md px-3.5 py-2.5 text-left text-[12px] transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
@@ -1651,6 +1679,48 @@
   .coop-explorer-row--selected {
     background: var(--vscode-list-activeSelectionBackground);
     color: var(--vscode-list-activeSelectionForeground, var(--coop-panel-foreground));
+  }
+
+  .coop-workspace-picker-meta {
+    @apply flex flex-wrap items-center justify-between gap-2 px-4 pb-2;
+  }
+
+  .coop-workspace-picker-count {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium;
+    border-color: var(--coop-composer-border);
+    color: var(--coop-panel-foreground);
+    background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
+  }
+
+  .coop-workspace-picker-count--full {
+    border-color: var(--vscode-editorWarning-foreground, #cca700);
+    color: var(--vscode-editorWarning-foreground, #cca700);
+  }
+
+  .coop-workspace-picker-row {
+    @apply w-full gap-2;
+  }
+
+  .coop-workspace-picker-row--disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .coop-workspace-picker-check {
+    @apply inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold;
+    border-color: var(--coop-composer-border);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-explorer-row--selected .coop-workspace-picker-check {
+    border-color: var(--vscode-focusBorder);
+    background: var(--vscode-focusBorder);
+    color: var(--vscode-editor-background);
+  }
+
+  .coop-settings-action-btn--primary {
+    border-color: var(--vscode-focusBorder);
+    background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
   }
 
   .coop-explorer-row-chevron {
@@ -1673,6 +1743,16 @@
   .coop-explorer-empty {
     @apply px-3 py-4 text-center text-[11px] leading-relaxed;
     color: var(--coop-panel-muted);
+  }
+
+  .coop-explorer-inline-link {
+    @apply inline border-0 bg-transparent p-0 text-[11px] underline;
+    color: var(--vscode-textLink-foreground, var(--coop-accent));
+    cursor: pointer;
+  }
+
+  .coop-explorer-inline-link:hover {
+    color: var(--vscode-textLink-activeForeground, var(--coop-accent));
   }
 
   /* Integration result cards (Find Owner, Trace Decision, Jira, Teams, etc.) */
@@ -1813,9 +1893,21 @@
   }
 
   .coop-result-collapsible-toggle {
-    @apply flex min-w-0 flex-1 items-center gap-1 text-left text-[12px] font-medium transition-colors duration-150;
+    @apply flex min-w-0 flex-1 items-start gap-2 text-left text-[12px] font-medium transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-collapsible-toggle--branded {
+    @apply py-0.5;
+  }
+
+  .coop-result-collapsible-title {
+    @apply min-w-0 break-words text-left leading-snug;
+  }
+
+  .coop-result-collapsible-link {
+    @apply text-[11px];
   }
 
   .coop-result-collapsible-toggle:hover {
@@ -1862,6 +1954,92 @@
   .coop-result-timeline-dot {
     @apply absolute -left-[13px] top-1 h-2 w-2 rounded-full;
     background: color-mix(in srgb, var(--vscode-textLink-foreground) 70%, var(--coop-panel-muted) 30%);
+  }
+
+  .coop-result-timeline-evidence {
+    @apply break-words leading-relaxed;
+  }
+
+  .coop-result-message-list {
+    @apply m-0 list-none p-0;
+  }
+
+  .coop-result-message-meta {
+    @apply text-[10px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-result-message-text {
+    @apply break-words text-[12px] leading-relaxed;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-sources-bar {
+    background: color-mix(in srgb, var(--coop-panel-canvas) 70%, transparent);
+  }
+
+  .coop-source-chip-row {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .coop-source-chip {
+    @apply inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px];
+    background: var(--coop-pill-surface);
+    border-color: var(--coop-pill-border);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-chip-label {
+    @apply font-semibold;
+  }
+
+  .coop-source-chip-detail {
+    @apply truncate font-normal;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-source-chip--slack .coop-source-icon {
+    color: #e01e5a;
+  }
+
+  .coop-source-chip--github .coop-source-icon {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-chip--jira .coop-source-icon {
+    color: #2684ff;
+  }
+
+  .coop-source-chip--teams .coop-source-icon {
+    color: #6264a7;
+  }
+
+  .coop-source-heading-row {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .coop-source-heading-provider {
+    @apply text-[12px] font-semibold;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-heading-sep {
+    @apply text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-source-heading-destination {
+    @apply break-words text-[12px] font-medium leading-snug;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-heading-subtitle {
+    @apply mt-0.5 break-words text-left text-[11px] leading-snug;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-source-icon {
+    @apply shrink-0;
   }
 
   [data-theme="high-contrast"] .coop-result-card,

@@ -50,6 +50,79 @@ export type CloudCodeHostSearchFetcher = (options: {
   limit?: number;
 }) => Promise<Array<{ path: string; name: string }>>;
 
+export type CloudCodeHostRepoListFetcher = () => Promise<CodeHostRepositoryConfig[]>;
+
+export type CloudCodeHostBlameFetcher = (options: {
+  repoId: string;
+  path: string;
+  coords: RepoCoordinates;
+}) => Promise<BlameData>;
+
+export type CloudCodeHostHistoryFetcher = (options: {
+  repoId: string;
+  path: string;
+  coords: RepoCoordinates;
+  limit?: number;
+}) => Promise<CommitInfo[]>;
+
+export type CloudCodeHostCommitFetcher = (options: {
+  repoId: string;
+  sha: string;
+  coords: RepoCoordinates;
+}) => Promise<CommitInfo>;
+
+export type CloudCodeHostPullsForFileFetcher = (options: {
+  repoId: string;
+  path: string;
+  coords: RepoCoordinates;
+  limit?: number;
+}) => Promise<PullRequestSummary[]>;
+
+export type CloudCodeHostPullCommentsFetcher = (options: {
+  repoId: string;
+  prNumber: number;
+  coords: RepoCoordinates;
+}) => Promise<PullRequestComment[]>;
+
+export type CloudCodeHostPullDetailFetcher = (options: {
+  repoId: string;
+  prNumber: number;
+  coords: RepoCoordinates;
+  commitSha?: string;
+}) => Promise<{
+  number: number;
+  title: string;
+  body?: string;
+  state: string;
+  merged: boolean;
+  author?: string;
+  createdAt: string;
+  updatedAt: string;
+  htmlUrl?: string;
+  labels: string[];
+}>;
+
+export type CloudCodeHostCommitPullsFetcher = (options: {
+  repoId: string;
+  sha: string;
+  coords: RepoCoordinates;
+}) => Promise<
+  Array<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    owner: string;
+    repo: string;
+    labels: string[];
+  }>
+>;
+
 export type CodeHostRouterOptions = {
   secrets: CodeHostSecrets;
   cache: CacheManager;
@@ -59,6 +132,14 @@ export type CodeHostRouterOptions = {
   cloudCodeHostFileFetcher?: CloudCodeHostFileFetcher;
   cloudCodeHostTreeFetcher?: CloudCodeHostTreeFetcher;
   cloudCodeHostSearchFetcher?: CloudCodeHostSearchFetcher;
+  cloudCodeHostRepoListFetcher?: CloudCodeHostRepoListFetcher;
+  cloudCodeHostBlameFetcher?: CloudCodeHostBlameFetcher;
+  cloudCodeHostHistoryFetcher?: CloudCodeHostHistoryFetcher;
+  cloudCodeHostCommitFetcher?: CloudCodeHostCommitFetcher;
+  cloudCodeHostPullsForFileFetcher?: CloudCodeHostPullsForFileFetcher;
+  cloudCodeHostPullCommentsFetcher?: CloudCodeHostPullCommentsFetcher;
+  cloudCodeHostPullDetailFetcher?: CloudCodeHostPullDetailFetcher;
+  cloudCodeHostCommitPullsFetcher?: CloudCodeHostCommitPullsFetcher;
   cloudCodeHostHealthCheck?: (provider: CodeHostProvider) => Promise<{ ok: boolean; message: string }>;
 };
 
@@ -200,6 +281,17 @@ export class CodeHostRouter {
     }
 
     const listProvider = context?.provider ?? defaultProvider;
+    if (this.options.useCloudCodeHostProxy?.() && listProvider === "github" && this.options.cloudCodeHostRepoListFetcher) {
+      try {
+        const remote = await this.options.cloudCodeHostRepoListFetcher();
+        for (const repo of remote) {
+          push(repo);
+        }
+      } catch {
+        // Fall through to pinned/settings repos.
+      }
+    }
+
     const creds = await this.options.secrets.getCredentials();
     if (listProvider === "github" && creds.githubToken) {
       try {
@@ -253,6 +345,12 @@ export class CodeHostRouter {
   public async getFileHistory(filePath: string, limit = 20, coords?: Partial<RepoCoordinates>): Promise<CommitInfo[]> {
     const resolved = await this.resolveCoordinates(coords);
     const path = toRepositoryRelativePath(filePath);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostHistoryFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("fileHistory", resolved, path, limit, "cloud"), "commitHistory", async () =>
+        this.options.cloudCodeHostHistoryFetcher!({ repoId, path, coords: resolved, limit })
+      );
+    }
     return this.cached(this.key("fileHistory", resolved, path, limit), "commitHistory", async () =>
       (await this.getClient(resolved.provider)).getFileHistory(resolved, path, limit)
     );
@@ -260,6 +358,12 @@ export class CodeHostRouter {
 
   public async getCommitBySha(sha: string, coords?: Partial<RepoCoordinates>): Promise<CommitInfo> {
     const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostCommitFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("commit", resolved, sha, "cloud"), "commitHistory", async () =>
+        this.options.cloudCodeHostCommitFetcher!({ repoId, sha, coords: resolved })
+      );
+    }
     return this.cached(this.key("commit", resolved, sha), "commitHistory", async () =>
       (await this.getClient(resolved.provider)).getCommitBySha(resolved, sha)
     );
@@ -268,6 +372,12 @@ export class CodeHostRouter {
   public async getBlameData(filePath: string, coords?: Partial<RepoCoordinates>): Promise<BlameData> {
     const resolved = await this.resolveCoordinates(coords);
     const path = toRepositoryRelativePath(filePath);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostBlameFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("blame", resolved, path, "cloud"), "blame", async () =>
+        this.options.cloudCodeHostBlameFetcher!({ repoId, path, coords: resolved })
+      );
+    }
     return this.cached(this.key("blame", resolved, path), "blame", async () =>
       (await this.getClient(resolved.provider)).getBlameData(resolved, path)
     );
@@ -367,6 +477,12 @@ export class CodeHostRouter {
   ): Promise<PullRequestSummary[]> {
     const resolved = await this.resolveCoordinates(coords);
     const path = filePath.replace(/^\/+/, "");
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostPullsForFileFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("prIssue", resolved, "prs", path, "cloud"), "prIssue", async () =>
+        this.options.cloudCodeHostPullsForFileFetcher!({ repoId, path, coords: resolved, limit })
+      );
+    }
     const prs = await this.cached(this.key("prIssue", resolved, "prs", path), "prIssue", async () =>
       (await this.getClient(resolved.provider)).listPullRequests(resolved, { state: "all", limit: 50 })
     );
@@ -389,7 +505,156 @@ export class CodeHostRouter {
     coords?: Partial<RepoCoordinates>
   ): Promise<PullRequestComment[]> {
     const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostPullCommentsFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.options.cloudCodeHostPullCommentsFetcher!({ repoId, prNumber, coords: resolved });
+    }
     return (await this.getClient(resolved.provider)).getPullRequestComments(resolved, prNumber);
+  }
+
+  public async getPullRequestDetail(
+    prNumber: number,
+    coords?: Partial<RepoCoordinates>,
+    options?: { commitSha?: string }
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    labels: string[];
+  }> {
+    const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostPullDetailFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("prIssue", resolved, "detail", prNumber, "cloud"), "prIssue", async () =>
+        this.options.cloudCodeHostPullDetailFetcher!({
+          repoId,
+          prNumber,
+          coords: resolved,
+          commitSha: options?.commitSha
+        })
+      );
+    }
+    const creds = await this.options.secrets.getCredentials();
+    if (resolved.provider === "github" && creds.githubToken) {
+      const url = `https://api.github.com/repos/${encodeURIComponent(resolved.owner)}/${encodeURIComponent(resolved.repo)}/pulls/${prNumber}`;
+      const { codeHostRequestJson } = await import("./codeHostHttp");
+      const pr = await codeHostRequestJson<{
+        number: number;
+        title: string;
+        body?: string;
+        state: string;
+        merged_at?: string | null;
+        user?: { login?: string };
+        created_at: string;
+        updated_at: string;
+        html_url?: string;
+        labels?: Array<{ name: string }>;
+      }>(url, {
+        headers: {
+          Authorization: `Bearer ${creds.githubToken}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-extension"
+        },
+        provider: "github"
+      });
+      return {
+        number: pr.number,
+        title: pr.title,
+        body: pr.body,
+        state: pr.state,
+        merged: Boolean(pr.merged_at),
+        author: pr.user?.login,
+        createdAt: pr.created_at,
+        updatedAt: pr.updated_at,
+        htmlUrl: pr.html_url,
+        labels: (pr.labels ?? []).map((label) => label.name),
+        owner: resolved.owner,
+        repo: resolved.repo
+      };
+    }
+    throw new CodeHostError("Pull request details require GitHub authorization.", "auth", 401, resolved.provider);
+  }
+
+  public async getPullRequestsForCommit(
+    sha: string,
+    coords?: Partial<RepoCoordinates>
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      owner: string;
+      repo: string;
+      labels: string[];
+    }>
+  > {
+    const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostCommitPullsFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("commit", resolved, sha, "pulls", "cloud"), "commitHistory", async () =>
+        this.options.cloudCodeHostCommitPullsFetcher!({ repoId, sha, coords: resolved })
+      );
+    }
+    const creds = await this.options.secrets.getCredentials();
+    if (resolved.provider === "github" && creds.githubToken) {
+      const url = `https://api.github.com/repos/${encodeURIComponent(resolved.owner)}/${encodeURIComponent(resolved.repo)}/commits/${encodeURIComponent(sha)}/pulls`;
+      const { codeHostRequestJson } = await import("./codeHostHttp");
+      const pulls = await codeHostRequestJson<
+        Array<{
+          number: number;
+          title: string;
+          body?: string;
+          state: string;
+          merged_at?: string | null;
+          user?: { login?: string };
+          created_at: string;
+          updated_at: string;
+          html_url?: string;
+          url?: string;
+          labels?: Array<{ name: string }>;
+          base?: { repo?: { owner?: { login?: string }; name?: string } };
+        }>
+      >(url, {
+        headers: {
+          Authorization: `Bearer ${creds.githubToken}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-extension"
+        },
+        provider: "github"
+      }).catch(() => []);
+      return pulls.map((pull) => {
+        const fromApiUrl = pull.url?.match(/\/repos\/([^/]+)\/([^/]+)\/pulls\//);
+        return {
+          number: pull.number,
+          title: pull.title,
+          body: pull.body,
+          state: pull.state,
+          merged: Boolean(pull.merged_at),
+          author: pull.user?.login,
+          createdAt: pull.created_at,
+          updatedAt: pull.updated_at,
+          htmlUrl: pull.html_url,
+          owner: pull.base?.repo?.owner?.login ?? fromApiUrl?.[1] ?? resolved.owner,
+          repo: pull.base?.repo?.name ?? fromApiUrl?.[2] ?? resolved.repo,
+          labels: (pull.labels ?? []).map((label) => label.name)
+        };
+      });
+    }
+    return [];
   }
 
   public async getIssuesForFile(filePath: string, coords?: Partial<RepoCoordinates>): Promise<IssueSummary[]> {

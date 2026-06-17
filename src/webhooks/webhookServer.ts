@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, Server, ServerResponse } from "node:http
 import { URL } from "node:url";
 import { GraphQueryApi, GraphQueryName } from "../api/graphQuery";
 import { lightningSearch, type LightningSearchResult } from "../indexing/lightningSearch";
+import { parseGraphSearchScope } from "../indexing/graphSearchScope";
 import { RateLimitTracker } from "../api/rateLimitTracker";
 import { TokenPool } from "../api/tokenPool";
 import { GraphCache } from "../cache/graphCache";
@@ -22,6 +23,7 @@ import { getDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
 import { handleOrgApiRequest } from "../server/orgApi";
+import { createEstateSyncService } from "../server/estateSyncService";
 import { UserStore } from "../server/users/userStore";
 import { SsoConfigStore } from "../server/sso/ssoConfigStore";
 import { SamlService } from "../server/sso/samlService";
@@ -289,12 +291,15 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     }
   };
 
+  const estateSync = createEstateSyncService({ orgStore, githubApp, jobQueue: jobs.queue });
+
   const github = new GitHubWebhookHandler({
     secret: config.webhooks.github.secret ?? githubAppConfig?.webhookSecret,
     monitor,
     queue,
     orgStore,
-    githubApp
+    githubApp,
+    estateSync
   });
   const gitlab = new GitLabWebhookHandler({
     token: config.webhooks.gitlab.secret,
@@ -363,7 +368,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           githubApp,
           githubAppConfig,
           githubOAuth,
-          githubOAuthConfig
+          githubOAuthConfig,
+          jobQueue: jobs.queue,
+          estateSync
         }, auth)
       ) {
         return;
@@ -373,7 +380,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         await handleGitLabAppApiRequest(orgParsed, response, {
           orgStore,
           gitlabApp,
-          gitlabAppConfig
+          gitlabAppConfig,
+          jobQueue: jobs.queue
         }, auth)
       ) {
         return;
@@ -383,7 +391,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         await handleBitbucketAppApiRequest(orgParsed, response, {
           orgStore,
           bitbucketApp,
-          bitbucketAppConfig
+          bitbucketAppConfig,
+          jobQueue: jobs.queue
         }, auth)
       ) {
         return;
@@ -531,9 +540,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       if (await handleOrgApiRequest(orgParsed, response, {
         orgStore,
         jobQueue: jobs.queue,
+        githubApp,
+        estateSync,
         serverConfig,
         userStore,
-        auditLogger
+        auditLogger,
+        usageTracker
       })) {
         return;
       }
@@ -633,6 +645,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           file: parsed.query.get("file") ?? undefined,
           pattern: parsed.query.get("pattern") ?? undefined,
           collectionId: parsed.query.get("collectionId") ?? undefined,
+          scope: parseGraphSearchScope(parsed.query.get("scope")),
           mention: parsed.query.get("mention") === "true",
           days: numberParam(parsed.query.get("days")),
           forceRefresh: parsed.query.get("forceRefresh") === "true"
@@ -647,11 +660,17 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
                   pattern: filters.pattern,
                   mention: filters.mention
                 }
-              : {
-                  repoId,
-                  pattern: filters.pattern,
-                  mention: filters.mention
-                };
+              : filters.scope
+                ? {
+                    scope: filters.scope,
+                    pattern: filters.pattern,
+                    mention: filters.mention
+                  }
+                : {
+                    repoId,
+                    pattern: filters.pattern,
+                    mention: filters.mention
+                  };
             const lightning = await lightningSearch(pool, auth!.orgId, searchOptions);
             if (lightning.hits.length > 0 || lightning.symbols.length > 0) {
               result = formatLightningSearchResult(

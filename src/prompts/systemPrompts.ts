@@ -356,7 +356,6 @@ export function buildUserMessageWithContext(
     contextBundle?: unknown;
   }
 ): string {
-  const manifestSnippets = extractZeroCloneFileSnippets(context?.contextBundle);
   const repoSummarySnippets = extractRepoSummaryEntryFiles(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
   const jiraTickets = extractJiraSearchTickets(context?.contextBundle);
@@ -370,7 +369,6 @@ export function buildUserMessageWithContext(
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
-    manifestSnippets.length === 0 &&
     repoSummarySnippets.length === 0 &&
     localSnippets.length === 0 &&
     !jiraTickets &&
@@ -412,15 +410,6 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</local_files>");
-  }
-  if (manifestSnippets.length > 0) {
-    lines.push("<manifest_files>");
-    for (const file of manifestSnippets) {
-      lines.push(`<file_content path="${file.path}">`);
-      lines.push(file.content);
-      lines.push("</file_content>");
-    }
-    lines.push("</manifest_files>");
   }
   if (repoSummarySnippets.length > 0) {
     lines.push("<repo_entry_files>");
@@ -479,23 +468,6 @@ function extractRepoSummaryEntryFiles(bundle: unknown): ManifestSnippet[] {
     }
     const data = (entry as { data?: { entryFiles?: ManifestSnippet[] } }).data;
     const files = data?.entryFiles;
-    if (files?.length) {
-      return files.filter((file) => file.path && file.content);
-    }
-  }
-  return [];
-}
-
-function extractZeroCloneFileSnippets(bundle: unknown): ManifestSnippet[] {
-  if (!Array.isArray(bundle)) {
-    return [];
-  }
-  for (const entry of bundle) {
-    if (!entry || typeof entry !== "object") {
-      continue;
-    }
-    const data = (entry as { data?: { zeroClone?: { files?: ManifestSnippet[] } } }).data;
-    const files = data?.zeroClone?.files;
     if (files?.length) {
       return files.filter((file) => file.path && file.content);
     }
@@ -882,7 +854,6 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
     }
     const record = entry as {
       data?: {
-        zeroClone?: { files?: Array<{ path: string; content: string }> };
         localFiles?: { files?: Array<{ path: string; content: string; lineRange?: [number, number] }> };
         jiraSearch?: { issues: unknown[] };
         slackSearch?: { messages: unknown[] };
@@ -909,17 +880,6 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         byteLength: file.content.length,
         ...(file.truncated ? { truncated: true } : {})
       }));
-    }
-
-    if (source.zeroClone?.files?.length) {
-      mutated = true;
-      data.zeroClone = {
-        ...source.zeroClone,
-        files: source.zeroClone.files.map((file) => ({
-          path: file.path,
-          byteLength: file.content.length
-        }))
-      };
     }
 
     if (source.localFiles?.files?.length) {

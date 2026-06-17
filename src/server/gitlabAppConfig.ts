@@ -3,7 +3,7 @@ export type GitLabAppConfig = {
   clientSecret: string;
   /** Root URL of the GitLab instance — defaults to https://gitlab.com. */
   gitlabBaseUrl: string;
-  /** Public HTTPS base for the OAuth callback (e.g. https://api.coopai.dev). */
+  /** Public HTTPS base for the OAuth callback (e.g. https://api.coop-ai.dev). */
   publicBaseUrl: string;
 };
 

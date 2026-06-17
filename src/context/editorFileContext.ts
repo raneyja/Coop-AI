@@ -9,6 +9,7 @@ import {
   type LocalFileContextPayload
 } from "./localFileContext";
 import { resolveLocalAbsolutePath } from "./localFileResolver";
+import { parseGithubRemoteFromGitConfig } from "./gitRemoteConfig";
 import { toRepositoryRelativePath } from "./repoFilePath";
 
 export type EditorFileSource = "workspace" | "git" | "remote" | "external";
@@ -170,6 +171,39 @@ export function findEditorForRepoFile(
   return undefined;
 }
 
+export function findEditorForRemoteFile(
+  owner: string,
+  repo: string,
+  relativePath: string
+): vscode.TextEditor | undefined {
+  const normalized = normalizeRelativePath(relativePath.replace(/^\/+/, ""));
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    const resolved = resolveEditorFile(editor);
+    if (!resolved.file?.trim()) {
+      continue;
+    }
+    const ownerMatch =
+      !resolved.owner ||
+      resolved.owner.localeCompare(owner, undefined, { sensitivity: "accent" }) === 0;
+    const repoMatch =
+      !resolved.repo || resolved.repo.localeCompare(repo, undefined, { sensitivity: "accent" }) === 0;
+    if (!ownerMatch || !repoMatch) {
+      continue;
+    }
+    const fileNorm = normalizeRelativePath(resolved.file);
+    if (
+      fileNorm === normalized ||
+      fileNorm.endsWith(`/${normalized}`) ||
+      normalized.endsWith(`/${fileNorm}`)
+    ) {
+      return editor;
+    }
+  }
+
+  return undefined;
+}
+
 /** Prefer matching path, then any visible editor with readable content (local or GitHub remote). */
 export function pickEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
   const normalized = preferredPath?.trim() ? normalizeRelativePath(preferredPath) : undefined;
@@ -291,22 +325,4 @@ export async function focusRepoFileInEditor(path: string, line?: number): Promis
 
   return false;
 }
-
-export function parseGithubRemoteFromGitConfig(config: string): { owner: string; repo: string } | undefined {
-  const originBlock = config.match(/\[remote "origin"\][\s\S]*?(?=\[|$)/i);
-  const searchText = originBlock?.[0] ?? config;
-  const urlMatch = searchText.match(/url\s*=\s*(.+)/i);
-  if (!urlMatch) {
-    return undefined;
-  }
-  const url = urlMatch[1].trim();
-  const ssh = url.match(/git@github\.com:([^/]+)\/([^/\s]+?)(?:\.git)?/i);
-  if (ssh) {
-    return { owner: ssh[1], repo: ssh[2] };
-  }
-  const https = url.match(/github\.com\/([^/]+)\/([^/\s]+?)(?:\.git)?/i);
-  if (https) {
-    return { owner: https[1], repo: https[2] };
-  }
-  return undefined;
-}
+export { parseGithubRemoteFromGitConfig } from "./gitRemoteConfig";

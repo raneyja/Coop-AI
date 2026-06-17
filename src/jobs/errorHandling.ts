@@ -36,7 +36,9 @@ const PERMANENT_PATTERNS = [
   /bad request/i,
   /400/,
   /cancelled/i,
-  /canceled/i
+  /canceled/i,
+  /duplicate key/i,
+  /repo_symbol_index_pkey/i
 ];
 
 export function classifyError(error: unknown): ErrorClass {

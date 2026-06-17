@@ -25,6 +25,7 @@ import type {
   OrgCollectionSummary
 } from "./types";
 import { isCoopDevMode } from "../config/lightningConfig";
+import { isFreePlan } from "../license/licenseChecker";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -85,12 +86,96 @@ export class SecureApiClient {
     baseUrl: string,
     repoId: string,
     pattern: string,
-    collectionId?: string,
-    mention = false
+    options?: {
+      collectionId?: string;
+      mention?: boolean;
+      scope?: "indexed" | "org";
+    }
   ): Promise<unknown> {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
-    return this.backend.graphSearch(baseUrl, repoId, pattern, collectionId, mention);
+    return this.backend.graphSearch(baseUrl, repoId, pattern, options);
+  }
+
+  public async listOrgRepos(baseUrl: string): Promise<Array<{ repoId: string; lightningEnabled?: boolean }>> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    const response = await this.backend.listOrgRepos(baseUrl);
+    return (response.repos ?? []) as Array<{ repoId: string; lightningEnabled?: boolean }>;
+  }
+
+  public async listCatalogOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<
+    Array<{
+      repoId: string;
+      provider: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      workspaceSelected?: boolean;
+    }>
+  > {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    const response = await this.backend.listCatalogOrgRepos(baseUrl, options);
+    return response.repos ?? [];
+  }
+
+  public async listGithubOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<
+    Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate?: boolean;
+      htmlUrl?: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      workspaceSelected?: boolean;
+    }>
+  > {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    const response = await this.backend.listGithubOrgRepos(baseUrl, options);
+    return response.repos ?? [];
+  }
+
+  public async getWorkspaceRepos(baseUrl: string): Promise<{
+    repos: Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      indexStatus?: string;
+      lightningEnabled?: boolean;
+      isPrimary?: boolean;
+    }>;
+    selectedCount: number;
+    limit: number | null;
+    canAddMore: boolean;
+    primaryRepoId?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    return this.backend.getWorkspaceRepos(baseUrl);
+  }
+
+  public async setWorkspaceRepos(baseUrl: string, repoIds: string[]): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    await this.backend.setWorkspaceRepos(baseUrl, repoIds);
+  }
+
+  public async listWorkspaceRepoIds(baseUrl: string): Promise<string[]> {
+    const state = await this.getWorkspaceRepos(baseUrl);
+    return state.repos.map((repo) => repo.repoId);
   }
 
   public async listCollections(baseUrl: string): Promise<OrgCollectionSummary[]> {
@@ -261,6 +346,104 @@ export class SecureApiClient {
       branch: result.branch,
       entries: result.entries
     };
+  }
+
+  public async fetchRepoBlameViaCloud(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<import("../api/codeHosts/types").BlameData> {
+    const result = await this.backend.fetchRepoBlame(baseUrl, repoId, path, branch);
+    return result.blame;
+  }
+
+  public async fetchRepoHistoryViaCloud(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    options?: { branch?: string; limit?: number }
+  ): Promise<import("../api/codeHosts/types").CommitInfo[]> {
+    const result = await this.backend.fetchRepoHistory(baseUrl, repoId, path, options);
+    return result.commits;
+  }
+
+  public async fetchRepoCommitViaCloud(
+    baseUrl: string,
+    repoId: string,
+    sha: string,
+    branch?: string
+  ): Promise<import("../api/codeHosts/types").CommitInfo> {
+    const result = await this.backend.fetchRepoCommit(baseUrl, repoId, sha, branch);
+    return result.commit;
+  }
+
+  public async fetchRepoPullsForFileViaCloud(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    options?: { branch?: string; limit?: number }
+  ): Promise<import("../api/codeHosts/types").PullRequestSummary[]> {
+    const result = await this.backend.fetchRepoPullsForFile(baseUrl, repoId, path, options);
+    return result.pulls;
+  }
+
+  public async fetchRepoPullCommentsViaCloud(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string; pullOwner?: string; pullRepo?: string }
+  ): Promise<import("../api/codeHosts/types").PullRequestComment[]> {
+    const result = await this.backend.fetchRepoPullComments(baseUrl, repoId, prNumber, options);
+    return result.comments;
+  }
+
+  public async fetchRepoPullDetailViaCloud(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string; commitSha?: string }
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    owner?: string;
+    repo?: string;
+    labels: string[];
+  }> {
+    const result = await this.backend.fetchRepoPullDetail(baseUrl, repoId, prNumber, options);
+    return result.pull;
+  }
+
+  public async fetchRepoCommitPullsViaCloud(
+    baseUrl: string,
+    repoId: string,
+    sha: string,
+    branch?: string
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      owner: string;
+      repo: string;
+      labels: string[];
+    }>
+  > {
+    const result = await this.backend.fetchRepoCommitPulls(baseUrl, repoId, sha, branch);
+    return result.pulls;
   }
 
   public async testConnection(baseUrl: string): Promise<{ ok: boolean; message: string }> {
@@ -483,7 +666,7 @@ export function readConfiguration(): Omit<
     jiraBaseUrl: config.get<string>("jira.baseUrl", "https://your-domain.atlassian.net"),
     confluenceBaseUrl: config.get<string>("confluence.baseUrl", "https://your-domain.atlassian.net/wiki"),
     devMode: config.get<boolean>("devMode", false),
-    searchScopeMode: config.get<"repo" | "collection">("searchScope.mode", "repo"),
+    searchScopeMode: config.get<import("./types").SearchScopeMode>("searchScope.mode", "repo"),
     searchCollectionId: config.get<string>("searchScope.collectionId", ""),
     hasGitHubAppInstalled: false,
     hasGitLabAppInstalled: false,
@@ -582,6 +765,7 @@ export async function readPreferences(
   const integrationCreds = integrationSecrets ? await integrationSecrets.getCredentials() : {};
   const devMode = isCoopDevMode();
   let hasGitHubAppInstalled = false;
+  let githubNeedsReconnect = false;
   let hasGitLabAppInstalled = false;
   let hasBitbucketAppInstalled = false;
   let hasSlackInstalled = false;
@@ -599,6 +783,13 @@ export async function readPreferences(
   let userRole: string | undefined;
   let authMethod: UserPreferences["authMethod"];
   let canInstallIntegrations = false;
+  let indexedRepoCount: number | undefined;
+  let workspaceRepoCount: number | undefined;
+  let workspaceRepoLimit: number | null | undefined;
+  let canAddMoreWorkspaceRepos: boolean | undefined;
+  let primaryWorkspaceRepoId: string | undefined;
+  let workspaceRepoIds: string[] | undefined;
+  let quotaCredits: UserPreferences["quotaCredits"];
   if (await api.hasToken()) {
     try {
       const me = await api.fetchMe(base.apiBaseUrl);
@@ -607,14 +798,32 @@ export async function readPreferences(
       userRole = me.role;
       authMethod = me.authMethod;
       canInstallIntegrations = me.canInstallIntegrations ?? false;
+      indexedRepoCount = me.indexedRepoCount;
+      workspaceRepoCount = me.workspaceRepoCount;
+      workspaceRepoLimit = me.workspaceRepoLimit;
+      canAddMoreWorkspaceRepos = me.canAddMoreWorkspaceRepos;
+      primaryWorkspaceRepoId = me.primaryWorkspaceRepoId;
+      quotaCredits = me.quota;
     } catch {
       // Non-fatal — other preference fields still load.
     }
     try {
+      const workspace = await api.getWorkspaceRepos(base.apiBaseUrl);
+      workspaceRepoIds = workspace.repos.map((repo) => repo.repoId);
+      workspaceRepoCount = workspace.selectedCount;
+      workspaceRepoLimit = workspace.limit;
+      canAddMoreWorkspaceRepos = workspace.canAddMore;
+      primaryWorkspaceRepoId = workspace.primaryRepoId;
+    } catch {
+      // Non-fatal.
+    }
+    try {
       const status = await api.getGithubInstallationStatus(base.apiBaseUrl);
-      hasGitHubAppInstalled = status.installed;
+      hasGitHubAppInstalled = status.installed && status.tokenValid !== false && !status.needsReconnect;
+      githubNeedsReconnect = Boolean(status.installed && status.needsReconnect);
     } catch {
       hasGitHubAppInstalled = false;
+      githubNeedsReconnect = false;
     }
     try {
       const status = await api.getGitlabInstallationStatus(base.apiBaseUrl);
@@ -676,9 +885,15 @@ export async function readPreferences(
       Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
   return {
     ...base,
+    searchScopeMode: resolveDefaultSearchScope(
+      base.searchScopeMode,
+      plan,
+      workspaceRepoCount ?? indexedRepoCount
+    ),
     hasApiKey: await api.hasToken(),
     hasGitHubToken: Boolean(codeHostCreds.githubToken),
     hasGitHubAppInstalled,
+    githubNeedsReconnect,
     devMode,
     orgName,
     plan,
@@ -714,7 +929,13 @@ export async function readPreferences(
       ? Boolean(integrationCreds.googleDocsToken)
       : hasGoogleDocsInstalled || Boolean(integrationCreds.googleDocsToken),
     jiraBaseUrl: integrationCreds.jiraBaseUrl ?? base.jiraBaseUrl,
-    confluenceBaseUrl: integrationCreds.confluenceBaseUrl ?? base.confluenceBaseUrl
+    confluenceBaseUrl: integrationCreds.confluenceBaseUrl ?? base.confluenceBaseUrl,
+    workspaceRepoIds,
+    workspaceRepoCount,
+    workspaceRepoLimit,
+    canAddMoreWorkspaceRepos,
+    primaryWorkspaceRepoId,
+    quotaCredits
   };
 }
 
@@ -781,4 +1002,24 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   for (const [key, value] of ops) {
     await config.update(key, value, vscode.ConfigurationTarget.Global);
   }
+}
+
+function resolveDefaultSearchScope(
+  current: import("./types").SearchScopeMode,
+  plan: UserPreferences["plan"] | undefined,
+  indexedRepoCount: number | undefined
+): import("./types").SearchScopeMode {
+  if (isFreePlan(plan)) {
+    return "repo";
+  }
+  if (current !== "repo") {
+    return current;
+  }
+  if (plan === "enterprise") {
+    return "org";
+  }
+  if (plan === "pro" && (indexedRepoCount ?? 0) > 1) {
+    return "indexed";
+  }
+  return current;
 }

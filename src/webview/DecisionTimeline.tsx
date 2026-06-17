@@ -10,6 +10,10 @@ import {
   IntegrationResultStack,
   IntegrationResultText
 } from "./components/IntegrationResultCard";
+import {
+  IntegrationSourceChip,
+  type IntegrationSourceId
+} from "./components/IntegrationSourceBrand";
 
 export type DecisionTimelinePayload = DecisionTimelineData & {
   narrative?: string;
@@ -22,34 +26,29 @@ type DecisionTimelineProps = {
 
 type SectionId = "commit" | "pr" | "slack" | "teams" | "jira" | "alternatives" | "code" | "warnings";
 
-function evidenceStatusLabel(timeline: DecisionTimelineData): string {
-  const sources: string[] = [];
-  if (timeline.originalCommit || timeline.fallbackMessage) {
-    sources.push("GitHub");
-  }
-  if (timeline.linkedPR) {
-    sources.push("PR");
-  }
-  if (timeline.jiraTicket) {
-    sources.push("Jira");
+function evidenceSources(timeline: DecisionTimelineData): Array<{ provider: IntegrationSourceId; detail?: string }> {
+  const sources: Array<{ provider: IntegrationSourceId; detail?: string }> = [];
+  if (timeline.originalCommit || timeline.fallbackMessage || timeline.linkedPR) {
+    sources.push({
+      provider: "github",
+      detail: timeline.linkedPR ? `PR #${timeline.linkedPR.number}` : timeline.originalCommit?.sha.slice(0, 7)
+    });
   }
   if (timeline.slackThread) {
-    sources.push("Slack");
+    sources.push({
+      provider: "slack",
+      detail: timeline.slackThread.channelName
+        ? `#${timeline.slackThread.channelName}`
+        : timeline.slackThread.channelId
+    });
   }
   if (timeline.teamsThread) {
-    sources.push("Teams");
+    sources.push({ provider: "teams", detail: "Thread" });
   }
-
-  if (sources.length >= 3) {
-    return `${sources.length} sources`;
+  if (timeline.jiraTicket) {
+    sources.push({ provider: "jira", detail: timeline.jiraTicket.key });
   }
-  if (sources.length === 2) {
-    return sources.join(" · ");
-  }
-  if (sources.length === 1) {
-    return sources[0] === "GitHub" ? "GitHub only" : sources[0]!;
-  }
-  return "Limited evidence";
+  return sources;
 }
 
 function keyFindingLine(timeline: DecisionTimelineData): string | undefined {
@@ -89,9 +88,9 @@ export function DecisionTimeline({
   const [expanded, setExpanded] = useState<Record<SectionId, boolean>>({
     commit: true,
     pr: true,
-    slack: false,
+    slack: Boolean(timeline.slackThread),
     teams: false,
-    jira: false,
+    jira: Boolean(timeline.jiraTicket),
     alternatives: false,
     code: true,
     warnings: true
@@ -99,6 +98,7 @@ export function DecisionTimeline({
 
   const decisionMakers = useMemo(() => collectDecisionMakers(timeline), [timeline]);
   const keyFinding = useMemo(() => keyFindingLine(timeline), [timeline]);
+  const sources = useMemo(() => evidenceSources(timeline), [timeline]);
   const meta = [
     timeline.file,
     timeline.lineRange
@@ -119,12 +119,20 @@ export function DecisionTimeline({
       <IntegrationResultCard
         title="Decision trace"
         meta={meta}
-        status={evidenceStatusLabel(timeline)}
+        status={sources.length > 0 ? `${sources.length} connected source${sources.length === 1 ? "" : "s"}` : "Limited evidence"}
         statusTone={COMPLETENESS_TONE[timeline.completeness]}
         onDismiss={onDismiss}
         ariaLabel="Decision trace sources"
-        scrollable
       >
+        {sources.length > 0 ? (
+          <IntegrationResultSection label="Connected sources" className="!border-b coop-result-sources-bar">
+            <div className="coop-source-chip-row">
+              {sources.map((source) => (
+                <IntegrationSourceChip key={source.provider} provider={source.provider} detail={source.detail} />
+              ))}
+            </div>
+          </IntegrationResultSection>
+        ) : null}
         {keyFinding ? (
           <IntegrationResultSection label="Key finding">
             <IntegrationResultText muted>{keyFinding}</IntegrationResultText>
@@ -159,10 +167,13 @@ export function DecisionTimeline({
           {timeline.originalCommit ? (
             <IntegrationResultCollapsible
               title="Original commit"
+              provider="github"
+              destination={timeline.originalCommit.sha.slice(0, 7)}
+              subtitle={truncateSingleLine(timeline.originalCommit.message, 120)}
               open={expanded.commit}
               onToggle={() => toggle("commit")}
               link={timeline.originalCommit.htmlUrl}
-              linkLabel={timeline.originalCommit.sha.slice(0, 7)}
+              linkLabel="View commit"
             >
               <CommitBlock commit={timeline.originalCommit} />
             </IntegrationResultCollapsible>
@@ -172,11 +183,18 @@ export function DecisionTimeline({
 
           {timeline.linkedPR ? (
             <IntegrationResultCollapsible
-              title={`PR #${timeline.linkedPR.number}: ${timeline.linkedPR.title}`}
+              title={`PR #${timeline.linkedPR.number}`}
+              provider="github"
+              destination={`PR #${timeline.linkedPR.number}`}
+              subtitle={timeline.linkedPR.title}
               open={expanded.pr}
               onToggle={() => toggle("pr")}
               link={timeline.linkedPR.htmlUrl}
-              linkLabel={`PR #${timeline.linkedPR.number}`}
+              linkLabel={
+                timeline.linkedPR.htmlUrl?.includes("github.com/")
+                  ? `View on ${timeline.linkedPR.htmlUrl.split("github.com/")[1]?.split("/pulls/")[0] ?? "GitHub"}`
+                  : "View PR"
+              }
             >
               <PrBlock pr={timeline.linkedPR} />
             </IntegrationResultCollapsible>
@@ -184,11 +202,22 @@ export function DecisionTimeline({
 
           {timeline.slackThread ? (
             <IntegrationResultCollapsible
-              title={`Slack · #${timeline.slackThread.channelName ?? timeline.slackThread.channelId}`}
+              title="Slack thread"
+              provider="slack"
+              destination={
+                timeline.slackThread.channelName
+                  ? `#${timeline.slackThread.channelName}`
+                  : timeline.slackThread.channelId
+              }
+              subtitle={
+                timeline.slackThread.relevance === "weak"
+                  ? "Weak match — may not discuss this code"
+                  : truncateSingleLine(timeline.slackThread.messages[0]?.text ?? "Thread", 100)
+              }
               open={expanded.slack}
               onToggle={() => toggle("slack")}
               link={timeline.slackThread.permalink}
-              linkLabel="Open thread"
+              linkLabel="Open in Slack"
             >
               <MessageList
                 messages={timeline.slackThread.messages.map((m) => ({
@@ -203,6 +232,9 @@ export function DecisionTimeline({
           {timeline.teamsThread ? (
             <IntegrationResultCollapsible
               title="Microsoft Teams thread"
+              provider="teams"
+              destination="Thread"
+              subtitle={truncateSingleLine(timeline.teamsThread.messages[0]?.text ?? "Thread", 100)}
               open={expanded.teams}
               onToggle={() => toggle("teams")}
             >
@@ -219,10 +251,13 @@ export function DecisionTimeline({
           {timeline.jiraTicket ? (
             <IntegrationResultCollapsible
               title={`Jira ${timeline.jiraTicket.key}`}
+              provider="jira"
+              destination={timeline.jiraTicket.key}
+              subtitle={timeline.jiraTicket.summary}
               open={expanded.jira}
               onToggle={() => toggle("jira")}
               link={timeline.jiraTicket.htmlUrl}
-              linkLabel={timeline.jiraTicket.key}
+              linkLabel="Open in Jira"
             >
               <JiraBlock ticket={timeline.jiraTicket} />
             </IntegrationResultCollapsible>
@@ -273,8 +308,8 @@ function ChronologyView({ events }: { events: DecisionTimelineData["chronology"]
             <span className="coop-result-timeline-dot" aria-hidden="true" />
             <p className="text-[10px] text-[var(--coop-panel-muted)]">{formatDate(event.date)}</p>
             <p className="font-medium">{event.event}</p>
-            <p className="text-[11px] text-[var(--coop-panel-muted)]">
-              {event.actor} · {truncate(event.evidence, 100)}
+            <p className="text-[11px] text-[var(--coop-panel-muted)] coop-result-timeline-evidence">
+              {event.actor} · {event.evidence}
             </p>
           </li>
         ))}
@@ -307,7 +342,7 @@ function PrBlock({ pr }: { pr: NonNullable<DecisionTimelineData["linkedPR"]> }):
       {pr.approvers.length > 0 ? (
         <IntegrationResultText muted>Approvers: {pr.approvers.join(", ")}</IntegrationResultText>
       ) : null}
-      {pr.description ? <IntegrationResultCode>{truncate(pr.description, 1200)}</IntegrationResultCode> : null}
+      {pr.description ? <IntegrationResultCode>{pr.description}</IntegrationResultCode> : null}
       {pr.reviews.length > 0 ? (
         <div>
           <p className="coop-result-section-label">Review comments</p>
@@ -319,7 +354,7 @@ function PrBlock({ pr }: { pr: NonNullable<DecisionTimelineData["linkedPR"]> }):
                     @{review.author}
                     {review.path ? ` · ${review.path}:${review.line ?? "?"}` : ""} · {formatDate(review.createdAt)}
                   </p>
-                  <p className="mt-0.5 whitespace-pre-wrap">{truncate(review.body, 500)}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap coop-result-message-text">{review.body}</p>
                 </IntegrationResultNested>
               </li>
             ))}
@@ -355,9 +390,7 @@ function JiraBlock({ ticket }: { ticket: NonNullable<DecisionTimelineData["jiraT
           </ul>
         </div>
       ) : null}
-      {ticket.description ? (
-        <IntegrationResultCode>{truncate(ticket.description, 800)}</IntegrationResultCode>
-      ) : null}
+      {ticket.description ? <IntegrationResultCode>{ticket.description}</IntegrationResultCode> : null}
     </div>
   );
 }
@@ -390,14 +423,14 @@ function MessageList({
   messages: Array<{ user: string; text: string; time: string }>;
 }): React.ReactElement {
   return (
-    <ul className="max-h-48 space-y-2 overflow-y-auto">
+    <ul className="coop-result-message-list space-y-2">
       {messages.map((message, index) => (
         <li key={`${message.time}-${index}`}>
           <IntegrationResultNested>
-            <p className="text-[10px] text-[var(--coop-panel-muted)]">
+            <p className="coop-result-message-meta">
               @{message.user} · {formatDate(message.time)}
             </p>
-            <p className="mt-0.5 whitespace-pre-wrap">{truncate(message.text, 400)}</p>
+            <p className="mt-1 whitespace-pre-wrap coop-result-message-text">{message.text}</p>
           </IntegrationResultNested>
         </li>
       ))}
@@ -430,7 +463,7 @@ function formatDate(iso: string): string {
   });
 }
 
-function truncate(value: string, max: number): string {
+function truncateSingleLine(value: string, max: number): string {
   const trimmed = value.replace(/\s+/g, " ").trim();
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1)}…`;
 }

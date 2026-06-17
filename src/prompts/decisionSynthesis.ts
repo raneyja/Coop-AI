@@ -13,8 +13,9 @@ Synthesize a clear narrative explaining:
 4. Are there known limitations or future improvements noted?
 5. Who are the domain experts?
 
-Cite sources explicitly: "According to PR #123…", "As discussed in Slack thread…", "Per Jira PROJ-456…".
-Never invent URLs, ticket IDs, or PR numbers not present in the evidence.
+Cite sources explicitly: "According to PR #123…", "As discussed in Slack (#channel)…", "Per Jira PROJ-456…".
+If Slack, Jira, or Teams evidence does not discuss the code under investigation, say so in **Sources** and do not treat it as decision rationale.
+Never invent URLs, ticket IDs, PR numbers, or Slack quotes not present in the evidence.
 State confidence when evidence is thin.`;
 
 export type DecisionSynthesisInput = {
@@ -94,8 +95,9 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
 
   if (timeline.slackThread) {
     const s = timeline.slackThread;
+    const relevance = s.relevance ?? "linked";
     sections.push(
-      `### Slack thread\n- Channel: ${s.channelName ?? s.channelId}\n- Participants: ${s.participants.join(", ")}\n` +
+      `### Slack thread (${relevance})\n- Channel: ${s.channelName ?? s.channelId}\n- Participants: ${s.participants.join(", ")}\n` +
         s.messages
           .slice(0, 40)
           .map((m) => `- @${m.user}: ${truncate(m.text, 300)}`)

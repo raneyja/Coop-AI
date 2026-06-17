@@ -2,7 +2,7 @@ import React from "react";
 import type { SettingsTestKey } from "./TestButton";
 import type { SettingsSaveKey } from "./SaveFlashLabel";
 import type { PromptLibraryItem } from "./promptLibraryTypes";
-import type { CodeHostProviderPreference, IntegrationChatProvider } from "../../chat/types";
+import type { CodeHostProviderPreference, GithubRepoOption, IntegrationChatProvider } from "../../chat/types";
 import { SettingsHub, SettingsNavHeader } from "./settings/SettingsHub";
 import { SettingsDetailView } from "./settings/SettingsDetailViews";
 import type { IdentityDirectory } from "../../identity/types";
@@ -105,6 +105,17 @@ type SettingsPanelProps = {
   collections: import("./settings/types").SettingsCollectionSummary[];
   collectionsError?: string;
   onRequestCollections: () => void;
+  onLoadWorkspaceRepos: () => void;
+  onSaveWorkspaceRepos: (repoIds: string[]) => void;
+  workspacePickerState: {
+    repos: import("../../../chat/types").GithubRepoOption[];
+    selectedRepoIds: string[];
+    selectedCount: number;
+    limit: number | null;
+    loading: boolean;
+    saving: boolean;
+    error?: string;
+  };
 };
 
 export function SettingsPanel({

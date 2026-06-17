@@ -507,7 +507,7 @@ Do these while agents run. Secrets go in `.env.backend` (gitignored) and Vercel 
 | `RESEND_API_KEY` | resend.com → API Keys |
 | `COOP_EMAIL_MOCK=false` | Set after Resend key added |
 | `COOP_REQUIRE_API_AUTH=true` | Production |
-| `COOP_PUBLIC_BASE_URL=https://api.coopai.dev` | Your API host |
+| `COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev` | Your API host |
 | `COOP_CORS_ORIGINS=https://admin.coop-ai.dev,https://coop-ai.dev` | Comma-separated |
 | `COOP_ADMIN_PORTAL_URL=https://admin.coop-ai.dev` | Admin deploy URL |
 
@@ -521,12 +521,12 @@ docker compose up -d --build
 
 ### Browser — Stripe
 
-1. Webhook endpoint: `https://api.coopai.dev/webhooks/stripe`
+1. Webhook endpoint: `https://api.coop-ai.dev/webhooks/stripe`
 2. Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 
 ### Browser — Vercel (website project)
 
-- `COOP_API_BASE=https://api.coopai.dev`
+- `COOP_API_BASE=https://api.coop-ai.dev`
 - `NEXT_PUBLIC_ADMIN_PORTAL_URL=https://admin.coop-ai.dev`
 
 ---

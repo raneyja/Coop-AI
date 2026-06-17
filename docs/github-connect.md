@@ -52,7 +52,7 @@ For org-wide installation (recommended for hosted Coop):
 2. Set **Setup URL** (post-install redirect) to:
 
    ```
-   https://api.coopai.dev/v1/github/app/callback
+   https://api.coop-ai.dev/v1/github/app/callback
    ```
 
    (Use `http://localhost:8787/v1/github/app/callback` for local testing.)

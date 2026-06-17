@@ -4,6 +4,15 @@ import type { BillingConfig } from "./billingConfig";
 type StripeSession = { id: string; url: string | null };
 type StripePortal = { url: string };
 
+export type StripeCheckoutSession = {
+  id: string;
+  payment_status: string;
+  status: string;
+  customer: string | { id?: string } | null;
+  customer_email: string | null;
+  metadata?: Record<string, string>;
+};
+
 export class StripeService {
   public constructor(private readonly config: BillingConfig) {}
 
@@ -29,6 +38,25 @@ export class StripeService {
     params.set("subscription_data[metadata][org_name]", input.orgName);
 
     return this.postForm<StripeSession>("/v1/checkout/sessions", params);
+  }
+
+  public async retrieveCheckoutSession(sessionId: string): Promise<StripeCheckoutSession> {
+    if (!this.config.stripeSecretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+    const response = await fetch(
+      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+      {
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+      }
+    );
+    const json = (await response.json().catch(() => ({}))) as StripeCheckoutSession & {
+      error?: { message?: string };
+    };
+    if (!response.ok) {
+      throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
+    }
+    return json;
   }
 
   public async createBillingPortalSession(customerId: string): Promise<StripePortal> {

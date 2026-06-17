@@ -28,6 +28,9 @@ const INTEGRATION_NAMES: Record<IntegrationProvider, string> = {
 
 export function codeHostConnectionMeta(prefs: Preferences, provider: CodeHostProvider): string {
   const name = CODE_HOST_NAMES[provider];
+  if (provider === "github" && prefs.githubNeedsReconnect) {
+    return "Reconnect GitHub — access expired";
+  }
   const connected = codeHostConfigured(prefs, provider);
 
   if (!connected) {
@@ -109,7 +112,28 @@ export function connectionsHubSubtitle(prefs: Preferences): string {
   return `${connected} of ${total} connected`;
 }
 
+export function formatQuotaRetryLabel(resetsAtIso: string): string {
+  const ms = new Date(resetsAtIso).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return "soon";
+  }
+  if (ms >= 3_600_000) {
+    const hours = Math.floor(ms / 3_600_000);
+    const minutes = Math.round((ms % 3_600_000) / 60_000);
+    if (minutes <= 0) {
+      return hours === 1 ? "in 1 hour" : `in ${hours} hours`;
+    }
+    return `in ${hours}h ${minutes}m`;
+  }
+  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  return minutes === 1 ? "in 1 minute" : `in ${minutes} minutes`;
+}
+
 export function accountHubSubtitle(prefs: Preferences): string {
+  if (prefs.plan === "free" && prefs.quotaCredits) {
+    const { remainingCredits, limitCredits } = prefs.quotaCredits;
+    return `${remainingCredits} of ${limitCredits} AI credits left`;
+  }
   if (prefs.authMethod === "sso_session" && prefs.orgName) {
     return `Signed in to ${prefs.orgName}`;
   }

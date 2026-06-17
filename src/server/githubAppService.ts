@@ -72,6 +72,91 @@ export class GitHubAppService {
     };
   }
 
+  /** Paginate GET /installation/repositories — returns normalized github:owner/repo ids. */
+  public async listInstallationRepositories(installationId: number): Promise<string[]> {
+    const catalog = await this.listInstallationRepositoryCatalog(installationId);
+    return catalog.map((entry) => entry.repoId);
+  }
+
+  /** Paginate GET /installation/repositories with owner, branch, and visibility metadata. */
+  public async listInstallationRepositoryCatalog(
+    installationId: number
+  ): Promise<
+    Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate: boolean;
+      htmlUrl?: string;
+    }>
+  > {
+    const { token } = await this.createInstallationAccessToken(installationId);
+    const catalog: Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate: boolean;
+      htmlUrl?: string;
+    }> = [];
+    let page = 1;
+
+    while (true) {
+      const url = new URL(`${GITHUB_API}/installation/repositories`);
+      url.searchParams.set("per_page", "100");
+      url.searchParams.set("page", String(page));
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-backend"
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`GitHub list installation repositories failed (${response.status}): ${body}`);
+      }
+
+      const data = (await response.json()) as {
+        repositories?: Array<{
+          full_name?: string;
+          default_branch?: string;
+          private?: boolean;
+          html_url?: string;
+        }>;
+      };
+      const batch = data.repositories ?? [];
+      for (const repo of batch) {
+        if (!repo.full_name) {
+          continue;
+        }
+        const slash = repo.full_name.indexOf("/");
+        if (slash <= 0) {
+          continue;
+        }
+        catalog.push({
+          repoId: `github:${repo.full_name}`,
+          owner: repo.full_name.slice(0, slash),
+          name: repo.full_name.slice(slash + 1),
+          defaultBranch: repo.default_branch?.trim() || "main",
+          isPrivate: Boolean(repo.private),
+          htmlUrl: repo.html_url
+        });
+      }
+
+      if (batch.length < 100) {
+        break;
+      }
+      page += 1;
+    }
+
+    return catalog;
+  }
+
   public createAppJwt(): string {
     const now = Math.floor(Date.now() / 1000);
     const header = base64UrlJson({ alg: "RS256", typ: "JWT" });

@@ -1,6 +1,6 @@
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import { getZeroRetentionConfig } from "../zeroRetentionConfig";
-import { BaseProviderClient, buildUsage, type ParseState } from "./baseClient";
+import { BaseProviderClient, resolveUsage, type ParseState } from "./baseClient";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
 
@@ -73,6 +73,20 @@ export class GeminiProviderClient extends BaseProviderClient {
           }
           try {
             const data = JSON.parse(payload) as Record<string, unknown>;
+            const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
+            if (usageMetadata) {
+              const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
+              const outputTokens = readUsageInt(usageMetadata.candidatesTokenCount);
+              const totalTokens = readUsageInt(usageMetadata.totalTokenCount);
+              if (inputTokens !== undefined) {
+                state.inputTokens = inputTokens;
+              }
+              if (outputTokens !== undefined) {
+                state.outputTokens = outputTokens;
+              } else if (totalTokens !== undefined && inputTokens !== undefined) {
+                state.outputTokens = Math.max(0, totalTokens - inputTokens);
+              }
+            }
             const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
             const content = candidates?.[0]?.content as Record<string, unknown> | undefined;
             const partsOut = content?.parts as Array<Record<string, unknown>> | undefined;
@@ -92,10 +106,15 @@ export class GeminiProviderClient extends BaseProviderClient {
 
     yield {
       type: "done",
-      usage: buildUsage("gemini", options, state.text),
+      usage: resolveUsage("gemini", options, state),
       model: options.model,
       provider: "gemini",
       finishReason: "stop"
     };
   }
+}
+
+function readUsageInt(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
 }

@@ -4,7 +4,7 @@ For **org admins** and **operators**. Full enterprise motion: [enterprise-integr
 
 Production mode: `coopAI.devMode: false`. Tokens live on the **Coop server**, not in VS Code.
 
-**Callback base (production):** `https://api.coopai.dev/v1/{provider}/app/callback`
+**Callback base (production):** `https://api.coop-ai.dev/v1/{provider}/app/callback`
 
 ---
 
@@ -21,9 +21,10 @@ Production mode: `coopAI.devMode: false`. Tokens live on the **Coop server**, no
 | 5 | **Connections → Confluence** → same + set **Confluence site URL** | Connected |
 | 6 | **Connections → Notion** → same | Connected |
 | 7 | **Connections → Google Docs** → same | Connected |
-| 8 | **Workspace** → owner / repo / branch | Saved |
+| 8 | **Connections → Microsoft Teams** → same | Connected |
+| 9 | **Workspace** → owner / repo / branch | Saved |
 
-**Teams:** Coming soon in Settings UI.
+**Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator must register Azure app — see [deploy-production-handoff.md](./deploy-production-handoff.md).
 
 ---
 

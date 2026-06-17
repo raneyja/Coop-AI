@@ -63,6 +63,38 @@ export class BitbucketClient implements CodeHostClient {
     }
   }
 
+  public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
+    const repos = await paginatedCodeHostFetch<BitbucketRepo>({
+      firstUrl: `${BITBUCKET_API}/repositories?role=member&pagelen=100&sort=-updated_on`,
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker,
+      maxPages: Math.max(1, Math.ceil(limit / 100)),
+      mapPage: (payload) => {
+        const page = payload as BitbucketPaginated<BitbucketRepo>;
+        return page.values ?? [];
+      },
+      nextUrl: (payload) => {
+        const page = payload as BitbucketPaginated<BitbucketRepo>;
+        return page.next;
+      }
+    });
+    return repos.slice(0, limit).map((entry) => {
+      const fullName = entry.full_name ?? "";
+      const slash = fullName.indexOf("/");
+      const owner = slash >= 0 ? fullName.slice(0, slash) : entry.workspace?.slug ?? "unknown";
+      const name = slash >= 0 ? fullName.slice(slash + 1) : entry.name;
+      return {
+        owner,
+        name,
+        defaultBranch: entry.mainbranch?.name ?? "main",
+        isPrivate: entry.is_private,
+        provider: this.provider,
+        htmlUrl: entry.links?.html?.href
+      };
+    });
+  }
+
   public async getRepository(coords: RepoCoordinates): Promise<RemoteRepository> {
     const repo = await codeHostRequestJson<BitbucketRepo>(this.repoUrl(coords), {
       headers: this.headers,
@@ -279,7 +311,14 @@ export class BitbucketClient implements CodeHostClient {
 }
 
 type BitbucketPaginated<T> = { values?: T[]; next?: string };
-type BitbucketRepo = { mainbranch?: { name: string }; is_private: boolean; links?: { html?: { href?: string } } };
+type BitbucketRepo = {
+  name: string;
+  full_name?: string;
+  workspace?: { slug?: string };
+  mainbranch?: { name: string };
+  is_private: boolean;
+  links?: { html?: { href?: string } };
+};
 type BitbucketSrcEntry = { path: string; type: string; size?: number };
 type BitbucketCommit = {
   hash: string;

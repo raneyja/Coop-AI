@@ -4,7 +4,7 @@ End-to-end guide for operators deploying Coop AI self-serve checkout (Stripe →
 
 **Prerequisites:** Agent P1 complete (migrations runner, auth hardening, CI). Stripe product + price created. Resend account for welcome email.
 
-**API hosting (Phase 1):** [deploy-railway.md](./deploy-railway.md) — Railway API + managed Postgres for `https://api.coopai.dev`. (Legacy VM path: [deploy-oracle-always-free.md](./deploy-oracle-always-free.md).)
+**API hosting (Phase 1):** [deploy-railway.md](./deploy-railway.md) — Railway API + managed Postgres for `https://api.coop-ai.dev`. (Legacy VM path: [deploy-oracle-always-free.md](./deploy-oracle-always-free.md).)
 
 ---
 
@@ -23,7 +23,7 @@ Add or update these production values:
 ```bash
 NODE_ENV=production
 COOP_REQUIRE_API_AUTH=true
-COOP_PUBLIC_BASE_URL=https://api.coopai.dev
+COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev
 COOP_CORS_ORIGINS=https://admin.coop-ai.dev,https://coop-ai.dev
 COOP_ADMIN_PORTAL_URL=https://admin.coop-ai.dev
 COOP_MARKETING_BASE_URL=https://coop-ai.dev
@@ -75,7 +75,7 @@ curl -s http://localhost:8787/health
 ## 3. Browser — Stripe webhook
 
 1. Stripe Dashboard → **Developers** → **Webhooks** → **Add endpoint**
-2. URL: `https://api.coopai.dev/webhooks/stripe`
+2. URL: `https://api.coop-ai.dev/webhooks/stripe`
 3. Events:
    - `checkout.session.completed`
    - `customer.subscription.updated`
@@ -93,7 +93,7 @@ curl -s http://localhost:8787/health
 
 | Variable | Production value |
 |----------|------------------|
-| `COOP_API_BASE` | `https://api.coopai.dev` |
+| `COOP_API_BASE` | `https://api.coop-ai.dev` |
 | `NEXT_PUBLIC_ADMIN_PORTAL_URL` | `https://admin.coop-ai.dev` |
 
 Template: `website/.env.example`
@@ -114,7 +114,7 @@ Template: `website/.env.example`
 
 | Variable | Production value |
 |----------|------------------|
-| `NEXT_PUBLIC_COOP_API_BASE` | `https://api.coopai.dev` |
+| `NEXT_PUBLIC_COOP_API_BASE` | `https://api.coop-ai.dev` |
 
 Template: `admin/.env.example`
 

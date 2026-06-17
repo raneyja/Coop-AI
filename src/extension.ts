@@ -94,6 +94,51 @@ export function activate(context: vscode.ExtensionContext): void {
     coords,
     limit
   }) => api.fetchRepoSearchViaCloud(getApiBaseUrl(), repoId, query, coords.branch, limit);
+  const cloudCodeHostRepoListFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoListFetcher =
+    async () => {
+      const repos = await api.listGithubOrgRepos(getApiBaseUrl());
+      return repos.map((entry) => ({
+        provider: "github" as const,
+        owner: entry.owner,
+        repo: entry.name,
+        branch: entry.defaultBranch
+      }));
+    };
+  const cloudCodeHostBlameFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostBlameFetcher = async ({
+    repoId,
+    path,
+    coords
+  }) => api.fetchRepoBlameViaCloud(getApiBaseUrl(), repoId, path, coords.branch);
+  const cloudCodeHostHistoryFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostHistoryFetcher = async ({
+    repoId,
+    path,
+    coords,
+    limit
+  }) => api.fetchRepoHistoryViaCloud(getApiBaseUrl(), repoId, path, { branch: coords.branch, limit });
+  const cloudCodeHostCommitFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostCommitFetcher = async ({
+    repoId,
+    sha,
+    coords
+  }) => api.fetchRepoCommitViaCloud(getApiBaseUrl(), repoId, sha, coords.branch);
+  const cloudCodeHostPullsForFileFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostPullsForFileFetcher =
+    async ({ repoId, path, coords, limit }) =>
+      api.fetchRepoPullsForFileViaCloud(getApiBaseUrl(), repoId, path, { branch: coords.branch, limit });
+  const cloudCodeHostPullCommentsFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostPullCommentsFetcher =
+    async ({ repoId, prNumber, coords }) =>
+      api.fetchRepoPullCommentsViaCloud(getApiBaseUrl(), repoId, prNumber, {
+        branch: coords.branch,
+        pullOwner: coords.owner,
+        pullRepo: coords.repo
+      });
+  const cloudCodeHostPullDetailFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostPullDetailFetcher =
+    async ({ repoId, prNumber, coords, commitSha }) =>
+      api.fetchRepoPullDetailViaCloud(getApiBaseUrl(), repoId, prNumber, {
+        branch: coords.branch,
+        commitSha
+      });
+  const cloudCodeHostCommitPullsFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostCommitPullsFetcher =
+    async ({ repoId, sha, coords }) =>
+      api.fetchRepoCommitPullsViaCloud(getApiBaseUrl(), repoId, sha, coords.branch);
   const cloudCodeHostHealthCheck = async (
     provider: CodeHostProvider
   ): Promise<{ ok: boolean; message: string }> => {
@@ -111,6 +156,15 @@ export function activate(context: vscode.ExtensionContext): void {
       bitbucket: "Bitbucket OAuth App"
     } as const;
     const status = await statusByProvider[provider]();
+    if (!status.installed) {
+      return { ok: false, message: `Authorize ${labelByProvider[provider]} from settings.` };
+    }
+    if (provider === "github" && "needsReconnect" in status && status.needsReconnect) {
+      return {
+        ok: false,
+        message: "GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub)."
+      };
+    }
     return status.installed
       ? { ok: true, message: `${labelByProvider[provider]} is authorized for your organization.` }
       : { ok: false, message: `Authorize ${labelByProvider[provider]} from settings.` };
@@ -122,6 +176,14 @@ export function activate(context: vscode.ExtensionContext): void {
     cloudCodeHostFileFetcher,
     cloudCodeHostTreeFetcher,
     cloudCodeHostSearchFetcher,
+    cloudCodeHostRepoListFetcher,
+    cloudCodeHostBlameFetcher,
+    cloudCodeHostHistoryFetcher,
+    cloudCodeHostCommitFetcher,
+    cloudCodeHostPullsForFileFetcher,
+    cloudCodeHostPullCommentsFetcher,
+    cloudCodeHostPullDetailFetcher,
+    cloudCodeHostCommitPullsFetcher,
     cloudCodeHostHealthCheck
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
@@ -538,4 +600,6 @@ function createHealthAdapters(
   }
   return adapters;
 }
+
+
 

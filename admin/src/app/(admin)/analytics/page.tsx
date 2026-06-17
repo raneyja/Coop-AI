@@ -19,6 +19,7 @@ import {
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/integrations";
+import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
@@ -45,27 +46,17 @@ function formatQuickActionLabel(eventType: string): string {
   return suffix.replace(/_/g, " ");
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return (
-    <div className="admin-card">
-      <p className="admin-section-label">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-1 text-xs text-coop-muted">{hint}</p>}
-    </div>
-  );
-}
-
 function EventsByDayTable({ rows, emptyLabel }: { rows: Array<{ day: string; count: number }>; emptyLabel: string }) {
   if (rows.length === 0) {
     return (
-      <div className="admin-card py-8 text-center text-sm text-coop-muted">{emptyLabel}</div>
+      <div className="py-8 text-center text-sm text-coop-muted">{emptyLabel}</div>
     );
   }
 
   const maxCount = Math.max(...rows.map((row) => row.count), 1);
 
   return (
-    <div className="admin-card overflow-x-auto p-0">
+    <div className="admin-card--table">
       <table className="admin-table">
         <thead>
           <tr>
@@ -231,7 +222,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <h1 className="admin-page-title">Analytics</h1>
           <p className="mt-1 text-sm text-coop-muted">
             Usage, engagement, and impact across chat, Lightning, and integrations.
           </p>
@@ -246,7 +237,7 @@ export default function AnalyticsPage() {
                 className={`admin-btn px-3 py-1.5 text-xs ${
                   range === option
                     ? "bg-coop-index text-coop-dark"
-                    : "bg-coop-editor text-coop-muted hover:text-white"
+                    : "bg-transparent text-coop-muted hover:bg-white/[0.03] hover:text-white"
                 }`}
               >
                 {option}
@@ -289,15 +280,15 @@ export default function AnalyticsPage() {
 
       {activeTab === "overview" && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Total users"
               value={loading ? "—" : (overview?.totalUsers ?? 0)}
               hint={`${overview?.activeUsers ?? 0} active`}
             />
-            <StatCard label="DAU" value={loading ? "—" : (overview?.dau ?? 0)} hint="Last 24 hours" />
-            <StatCard label="MAU" value={loading ? "—" : (overview?.mau ?? 0)} hint={`Selected ${range}`} />
-            <StatCard
+            <AdminStat label="DAU" value={loading ? "—" : (overview?.dau ?? 0)} hint="Last 24 hours" />
+            <AdminStat label="MAU" value={loading ? "—" : (overview?.mau ?? 0)} hint={`Selected ${range}`} />
+            <AdminStat
               label="Seat utilization"
               value={loading ? "—" : formatPercent(overview?.seatUtilization ?? 0)}
               hint={
@@ -306,25 +297,25 @@ export default function AnalyticsPage() {
                   : undefined
               }
             />
-          </div>
+          </AdminStatRow>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Total events"
               value={loading ? "—" : (overview?.totalEvents ?? 0)}
               hint={`Selected ${range}`}
             />
-            <StatCard
+            <AdminStat
               label="Est. hours saved"
               value={loading ? "—" : estimatedHoursSaved}
               hint={`${CHAT_MINUTES_SAVED} min/chat + ${QUICK_ACTION_MINUTES_SAVED} min/quick action`}
             />
-          </div>
+          </AdminStatRow>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Event volume by day</h2>
+            <h2 className="admin-section-label mb-4">Event volume by day</h2>
             {loading ? (
-              <div className="admin-card py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
               <EventsByDayTable
                 rows={overview?.eventsByDay ?? []}
@@ -337,22 +328,22 @@ export default function AnalyticsPage() {
 
       {activeTab === "chat" && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Chat messages"
               value={loading ? "—" : (chat?.chatMessages ?? 0)}
               hint={`Selected ${range}`}
             />
-            <StatCard
+            <AdminStat
               label="Quick actions"
               value={loading ? "—" : quickActionTotal}
               hint={`Selected ${range}`}
             />
-          </div>
+          </AdminStatRow>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Quick actions by type</h2>
-            <div className="admin-card overflow-x-auto p-0">
+            <h2 className="admin-section-label mb-4">Quick actions by type</h2>
+            <div className="admin-card--table">
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -387,9 +378,9 @@ export default function AnalyticsPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Chat activity by day</h2>
+            <h2 className="admin-section-label mb-4">Chat activity by day</h2>
             {loading ? (
-              <div className="admin-card py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
               <EventsByDayTable
                 rows={chat?.eventsByDay ?? []}
@@ -399,8 +390,8 @@ export default function AnalyticsPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Top active users</h2>
-            <div className="admin-card overflow-x-auto p-0">
+            <h2 className="admin-section-label mb-4">Top active users</h2>
+            <div className="admin-card--table">
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -438,13 +429,13 @@ export default function AnalyticsPage() {
 
       {activeTab === "lightning" && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Total usage events"
               value={loading ? "—" : (overview?.totalEvents ?? 0)}
               hint="Includes lightning.search, chat.message, and other events"
             />
-            <StatCard
+            <AdminStat
               label="Indexed repos"
               value={loading ? "—" : `${indexedRepoCount} ready`}
               hint={
@@ -453,11 +444,11 @@ export default function AnalyticsPage() {
                   : "Enable Lightning on repos in Collections"
               }
             />
-          </div>
+          </AdminStatRow>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Repo index status</h2>
-            <div className="admin-card overflow-x-auto p-0">
+            <h2 className="admin-section-label mb-4">Repo index status</h2>
+            <div className="admin-card--table">
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -507,18 +498,18 @@ export default function AnalyticsPage() {
               body="Counts appear when Coop autocomplete is enabled and the extension calls /v1/completions/inline (suggested) and you accept with Tab (accepted). Cursor/Copilot inline suggestions do not count here."
             />
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Suggested"
               value={loading ? "—" : (completions?.suggested ?? 0)}
               hint="completion.suggested events"
             />
-            <StatCard
+            <AdminStat
               label="Accepted"
               value={loading ? "—" : (completions?.accepted ?? 0)}
               hint="completion.accepted events"
             />
-            <StatCard
+            <AdminStat
               label="CAR"
               value={
                 loading
@@ -529,11 +520,11 @@ export default function AnalyticsPage() {
               }
               hint="Accepted ÷ suggested"
             />
-          </div>
+          </AdminStatRow>
           <section>
-            <h2 className="mb-4 text-lg font-semibold">Completion volume by day</h2>
+            <h2 className="admin-section-label mb-4">Completion volume by day</h2>
             {loading ? (
-              <div className="admin-card py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
               <EventsByDayTable
                 rows={completions?.eventsByDay ?? []}
@@ -546,18 +537,18 @@ export default function AnalyticsPage() {
 
       {activeTab === "integrations" && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Connected integrations"
               value={loading ? "—" : connectedIntegrations}
               hint={`of ${INTEGRATIONS.length} available`}
             />
-            <StatCard label="Integration tests" value="—" hint="Test events not tracked yet" />
-          </div>
+            <AdminStat label="Integration tests" value="—" hint="Test events not tracked yet" />
+          </AdminStatRow>
 
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Providers</h2>
+              <h2 className="admin-section-label">Providers</h2>
               <Link href="/integrations" className="admin-link text-sm">
                 Manage integrations →
               </Link>
@@ -575,13 +566,13 @@ export default function AnalyticsPage() {
               body="This org was set up with an API key only — that does not create a user row. Invite teammates on the Users page to manage seats and see per-user activity. Extension usage via API key is tracked as apikey:… in usage events, not in this table."
             />
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
+          <AdminStatRow>
+            <AdminStat
               label="Active users"
               value={loading ? "—" : (overview?.activeUsers ?? 0)}
               hint={`${overview?.totalUsers ?? 0} total members`}
             />
-            <StatCard
+            <AdminStat
               label="Seat utilization"
               value={loading ? "—" : formatPercent(overview?.seatUtilization ?? 0)}
               hint={
@@ -590,16 +581,16 @@ export default function AnalyticsPage() {
                   : undefined
               }
             />
-          </div>
+          </AdminStatRow>
 
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">User activity</h2>
+              <h2 className="admin-section-label">User activity</h2>
               <Link href="/users" className="admin-link text-sm">
                 Manage users →
               </Link>
             </div>
-            <div className="admin-card overflow-x-auto p-0">
+            <div className="admin-card--table">
               <table className="admin-table">
                 <thead>
                   <tr>

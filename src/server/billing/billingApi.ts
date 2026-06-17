@@ -7,6 +7,7 @@ import { type AuditLogger } from "../audit/auditLogger";
 import { requireAuth, requireOrgAdmin, resolveAuthContext } from "../authMiddleware";
 import type { ServerConfig } from "../serverConfig";
 import { loadBillingConfig } from "./billingConfig";
+import { adminPortalLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
 import { provisionOrgFromCheckout } from "./provisionOrg";
 
@@ -45,6 +46,10 @@ export async function handleBillingApiRequest(
     return handleCreateCheckout(parsed, response, stripe);
   }
 
+  if (parsed.method === "GET" && parsed.pathname === "/v1/billing/checkout-status") {
+    return handleCheckoutStatus(parsed, response, deps, stripe);
+  }
+
   if (parsed.method === "POST" && parsed.pathname === "/v1/admin/billing/portal-session") {
     return handleBillingPortal(parsed, response, deps, stripe);
   }
@@ -72,6 +77,16 @@ async function handleCreateCheckout(
     return true;
   }
 
+  if (!isValidEmail(email)) {
+    writeJson(response, 400, { error: "invalid_email", message: "Enter a valid email address." });
+    return true;
+  }
+
+  if (orgName.length > 120) {
+    writeJson(response, 400, { error: "orgName too long" });
+    return true;
+  }
+
   try {
     const session = await stripe.createCheckoutSession({ orgName, email, seats });
     writeJson(response, 200, { sessionId: session.id, url: session.url });
@@ -79,6 +94,82 @@ async function handleCreateCheckout(
     writeJson(response, 502, {
       error: "stripe_error",
       message: error instanceof Error ? error.message : "Checkout failed"
+    });
+  }
+  return true;
+}
+
+async function handleCheckoutStatus(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: BillingApiDeps,
+  stripe: StripeService
+): Promise<boolean> {
+  const billingConfig = loadBillingConfig();
+  const sessionId = parsed.query?.get("session_id")?.trim() ?? "";
+  const loginUrl = adminPortalLoginUrl(billingConfig.adminPortalUrl);
+
+  if (!sessionId || !sessionId.startsWith("cs_")) {
+    writeJson(response, 400, {
+      status: "invalid",
+      message: "A valid checkout session is required."
+    });
+    return true;
+  }
+
+  if (!stripe.isConfigured()) {
+    writeJson(response, 503, { status: "invalid", message: "Billing is not configured." });
+    return true;
+  }
+
+  try {
+    const session = await stripe.retrieveCheckoutSession(sessionId);
+    const paid =
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required" ||
+      session.status === "complete";
+
+    if (!paid || session.status === "expired") {
+      writeJson(response, 200, {
+        status: "invalid",
+        message: "This checkout session is not complete.",
+        adminPortalLoginUrl: loginUrl
+      });
+      return true;
+    }
+
+    const customerId = readStripeCustomerId(session.customer);
+    const metadata = session.metadata ?? {};
+    const orgName = metadata.org_name?.trim() || undefined;
+
+    if (!customerId || !deps.orgStore) {
+      writeJson(response, 200, {
+        status: "pending",
+        orgName,
+        adminPortalLoginUrl: loginUrl
+      });
+      return true;
+    }
+
+    const org = await deps.orgStore.findOrganizationByStripeCustomerId(customerId);
+    if (!org) {
+      writeJson(response, 200, {
+        status: "pending",
+        orgName,
+        adminPortalLoginUrl: loginUrl
+      });
+      return true;
+    }
+
+    writeJson(response, 200, {
+      status: "ready",
+      orgName: org.name,
+      adminPortalLoginUrl: loginUrl
+    });
+  } catch (error) {
+    writeJson(response, 502, {
+      status: "invalid",
+      message: error instanceof Error ? error.message : "Could not verify checkout session."
     });
   }
   return true;
@@ -185,7 +276,14 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
   const adminEmail = String(metadata.admin_email ?? session.customer_email ?? "").trim();
   const seatCount = Math.max(1, Number(metadata.seat_count ?? 1) || 1);
 
-  if (!customerId || !adminEmail) return;
+  if (!customerId || !adminEmail) {
+    console.warn("[stripe] checkout.session.completed skipped: missing customer or admin email", {
+      customerId: customerId || undefined,
+      adminEmail: adminEmail || undefined,
+      sessionId: String(session.id ?? "")
+    });
+    return;
+  }
 
   const provisioned = await provisionOrgFromCheckout(
     deps.orgStore!,
@@ -279,6 +377,20 @@ function readSubscriptionQuantity(object: Record<string, unknown>): number {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function readStripeCustomerId(customer: unknown): string {
+  if (typeof customer === "string") {
+    return customer;
+  }
+  if (typeof customer === "object" && customer !== null && "id" in customer) {
+    return String((customer as { id?: unknown }).id ?? "");
+  }
+  return "";
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

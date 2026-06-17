@@ -15,22 +15,25 @@ type LightningModePanelProps = {
   onDisableRepo: (repoId: string) => void;
   onRefreshRepo: (repoId: string) => void;
   onUpgrade?: () => void;
+  onAddRepo?: () => void;
 };
 
 function ContextModePlanSummary(): React.ReactElement {
   return (
     <div className="coop-context-mode-plans space-y-2">
       <p>
-        <span className="coop-context-mode-plan-label">Developer</span>
-        {": Zero-Clone remote graph from GitHub, GitLab, or Bitbucket — no Lightning Mode."}
+        <span className="coop-context-mode-plan-label">Developer (free)</span>
+        {": Local workspace files, AI credits, and unlimited tool integrations — individual account only."}
       </p>
       <p>
         <span className="coop-context-mode-plan-label">Pro</span>
-        {": Zero-Clone plus Lightning Mode — Coop cloud code graph for faster cross-repo search."}
+        {
+          ": GitHub connection, workspace repos, and up to 3 Deep-Indexed Repos per seat — Coop-Search across your catalog."
+        }
       </p>
       <p className="coop-context-mode-plans-all">
-        <span className="font-medium text-[var(--coop-panel-foreground)]">All plans include</span> code-host graph plus
-        Slack, Jira, Notion, and more when connected in Settings.
+        <span className="font-medium text-[var(--coop-panel-foreground)]">All plans</span> include Slack, Jira, Notion,
+        and more when connected in Settings. Code hosts and Deep-Code Graph require Pro.
       </p>
     </div>
   );
@@ -69,7 +72,8 @@ export function LightningModePanel({
   onEnableRepo,
   onDisableRepo,
   onRefreshRepo,
-  onUpgrade
+  onUpgrade,
+  onAddRepo
 }: LightningModePanelProps): React.ReactElement | null {
   const [consentChecked, setConsentChecked] = useState(false);
   const [confirmEnable, setConfirmEnable] = useState(false);
@@ -117,7 +121,7 @@ export function LightningModePanel({
           wrapSubtitle
           titleElement="h2"
           titleId="lightning-mode-title"
-          title="Context mode"
+          title="Deep-Code Graph"
           subtitle={<ContextModePlanSummary />}
           onClose={onClose}
           closeAriaLabel="Close"
@@ -132,18 +136,16 @@ export function LightningModePanel({
             <>
               <div className="coop-settings-card space-y-3">
                 <div>
-                  <p className="coop-settings-card-title">
-                    {state.backend === "cloud" ? "Coop cloud code graph" : "Local code graph index"}
-                  </p>
+                  <p className="coop-settings-card-title">Deep-Code Graph indexing</p>
                   <p className="coop-settings-card-desc mt-1">
                     {state.backend === "cloud"
-                      ? "Lightning indexes your repos on Coop cloud for faster search, dependencies, and symbols across your codebase — no local indexer install."
-                      : "Lightning builds and maintains a searchable code graph on this machine — ownership, dependencies, symbols, and text search tuned for monorepos."}
+                      ? "Coop builds a searchable code graph in the cloud for faster Coop-Search, dependencies, and symbols — no local indexer install."
+                      : "Coop builds and maintains a searchable code graph on this machine — ownership, dependencies, symbols, and text search tuned for monorepos."}
                   </p>
                   <p className="coop-settings-card-desc mt-2">
                     {state.backend === "cloud"
-                      ? `${state.readyRepos} graph${state.readyRepos === 1 ? "" : "s"} ready · ${state.indexingRepos} building`
-                      : `${diskSummary} of ${diskLimit} · ${state.readyRepos} graph${state.readyRepos === 1 ? "" : "s"} ready · ${state.indexingRepos} building`}
+                      ? `${state.readyRepos} ready · ${state.indexingRepos} building`
+                      : `${diskSummary} of ${diskLimit} · ${state.readyRepos} ready · ${state.indexingRepos} building`}
                   </p>
                 </div>
                 {state.backend !== "cloud" ? (
@@ -177,13 +179,13 @@ export function LightningModePanel({
               <div className="coop-settings-card">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="coop-settings-card-title">Lightning Mode</p>
+                    <p className="coop-settings-card-title">Deep-Code Graph</p>
                     <p className="coop-settings-card-desc mt-0.5">
                       {state.globalEnabled
                         ? state.backend === "local"
                           ? "Local code graph active — fastest context for this repo"
-                          : "Coop cloud code graph active — fastest context for this repo"
-                        : "Remote code graph only (Zero-Clone)"}
+                          : "Cloud code graph active — Coop-Search across Deep-Indexed Repos"
+                        : "Deep-Code Graph is off"}
                     </p>
                   </div>
                   {state.globalEnabled ? (
@@ -198,13 +200,33 @@ export function LightningModePanel({
                 </div>
               </div>
 
+              {state.plan === "pro" && state.indexedRepoCount === 0 ? (
+                <div className="coop-notice coop-notice--info coop-notice--compact">
+                  Choose up to 3 repos for Deep-Code Graph indexing. Coop-Search works across every Deep-Indexed Repo
+                  you add.
+                </div>
+              ) : null}
+
+              {state.plan === "pro" ? (
+                <ProOnboardingChecklist
+                  githubConnected={state.repos.length > 0 || Boolean(state.currentRepoId)}
+                  indexedCount={state.indexedRepoCount ?? state.enabledRepos}
+                />
+              ) : null}
+
               <RepoList
                 repos={state.repos}
                 currentRepoId={state.currentRepoId}
                 globalEnabled={state.globalEnabled}
+                plan={state.plan}
+                indexedRepoCount={state.indexedRepoCount ?? state.enabledRepos}
+                indexedRepoLimit={state.indexedRepoLimit}
+                canEnableMoreRepos={state.canEnableMoreRepos ?? true}
                 onEnableRepo={onEnableRepo}
                 onDisableRepo={onDisableRepo}
                 onRefreshRepo={onRefreshRepo}
+                onUpgrade={onUpgrade}
+                onAddRepo={onAddRepo}
               />
             </>
           )}
@@ -234,7 +256,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
     <>
       <p className="coop-context-mode-active">
         <span className="coop-health-status coop-health-status--healthy shrink-0">Active</span>
-        Developer · Zero-Clone
+        Developer
       </p>
 
       <button
@@ -250,19 +272,21 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
       {detailsOpen ? (
         <div className="coop-context-mode-details">
           <section className="coop-context-mode-details-section">
-            <p className="coop-context-mode-details-title">Developer &amp; Pro (every plan)</p>
+            <p className="coop-context-mode-details-title">Developer (free)</p>
             <ul className="coop-context-mode-details-list">
-              <li>Remote code graph from GitHub, GitLab, or Bitbucket — connect a host and repo in Settings.</li>
-              <li>Optional: Slack, Jira, Teams, Notion, Confluence, Google Docs for tickets, threads, and docs.</li>
-              <li>Quick actions and chat — no full local clone required.</li>
+              <li>Local workspace files in VS Code — no code-host connection required.</li>
+              <li>Unlimited tool integrations: Slack, Jira, Teams, Notion, Confluence, Google Docs.</li>
+              <li>Chat and quick actions with AI credits (rolling 5-hour window).</li>
+              <li>Individual account only — no team seats on the free plan.</li>
             </ul>
           </section>
           <section className="coop-context-mode-details-section">
-            <p className="coop-context-mode-details-title">Pro only — Lightning Mode</p>
+            <p className="coop-context-mode-details-title">Pro — code hosts &amp; Lightning Mode</p>
             <ul className="coop-context-mode-details-list">
-              <li>Indexes your repos on Coop cloud for symbol-graph cross-repo search.</li>
+              <li>GitHub connection and workspace repos for cross-repo context.</li>
+              <li>Indexes repos on Coop cloud for symbol-graph cross-repo search.</li>
               <li>Faster answers on large repos (dependencies, symbols, ownership).</li>
-              <li>Backend-managed indexing — no local indexer install required.</li>
+              <li>Team seats — invite teammates.</li>
             </ul>
             {onViewPlans ? (
               <p className="mt-2">
@@ -275,7 +299,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
         </div>
       ) : (
         <p className="coop-prompt-modal-muted text-[11px] leading-relaxed">
-          Pro adds Lightning Mode — faster cross-repo search on large codebases.{" "}
+          Pro adds code-host connections, team seats, and Lightning Mode for faster cross-repo search.{" "}
           {onViewPlans ? (
             <button type="button" className="coop-text-btn !inline !px-0 !py-0 align-baseline" onClick={onViewPlans}>
               View plans
@@ -287,32 +311,93 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
   );
 }
 
+function ProOnboardingChecklist({
+  githubConnected,
+  indexedCount
+}: {
+  githubConnected: boolean;
+  indexedCount: number;
+}): React.ReactElement {
+  return (
+    <ul className="coop-context-mode-details-list text-[11px] text-[var(--coop-panel-muted)]">
+      <li>{githubConnected ? "✓" : "○"} GitHub connected</li>
+      <li>{indexedCount > 0 ? "✓" : "○"} At least 1 Deep-Indexed Repo</li>
+      <li>{indexedCount > 1 ? "✓" : "○"} Coop-Search across multiple repos</li>
+    </ul>
+  );
+}
+
 function RepoList({
   repos,
   currentRepoId,
   globalEnabled,
+  plan,
+  indexedRepoCount,
+  indexedRepoLimit,
+  canEnableMoreRepos,
   onEnableRepo,
   onDisableRepo,
-  onRefreshRepo
+  onRefreshRepo,
+  onUpgrade,
+  onAddRepo
 }: {
   repos: LightningRepoState[];
   currentRepoId?: string;
   globalEnabled: boolean;
+  plan: LightningModeState["plan"];
+  indexedRepoCount: number;
+  indexedRepoLimit?: number | null;
+  canEnableMoreRepos: boolean;
   onEnableRepo: (repoId: string) => void;
   onDisableRepo: (repoId: string) => void;
   onRefreshRepo: (repoId: string) => void;
+  onUpgrade?: () => void;
+  onAddRepo?: () => void;
 }): React.ReactElement {
+  const limitLabel =
+    plan === "pro" && indexedRepoLimit != null
+      ? `Your Deep-Indexed Repos (${indexedRepoCount}/${indexedRepoLimit})`
+      : plan === "enterprise"
+        ? `Deep-Indexed Repos (${indexedRepoCount})`
+        : "Repositories";
+
   if (repos.length === 0) {
     return (
-      <p className="coop-prompt-modal-muted">
-        Select a repo in CoopAI, then enable Lightning to build a code graph for it.
-      </p>
+      <div className="space-y-3">
+        <p className="coop-prompt-modal-muted">
+          Connect GitHub in Settings, then add up to 3 repos for Deep-Code Graph indexing.
+        </p>
+        {onAddRepo ? (
+          <button type="button" className="coop-settings-action-btn" onClick={onAddRepo}>
+            Add repository
+          </button>
+        ) : null}
+      </div>
     );
   }
 
   return (
     <section className="coop-prompt-modal-section">
-      <h3 className="coop-prompt-modal-section-title">Repositories</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="coop-prompt-modal-section-title">{limitLabel}</h3>
+        <div className="flex items-center gap-2">
+          {onAddRepo && canEnableMoreRepos ? (
+            <button type="button" className="coop-settings-action-btn" onClick={onAddRepo}>
+              Add repo
+            </button>
+          ) : null}
+          {plan === "pro" && !canEnableMoreRepos && onUpgrade ? (
+            <button type="button" className="coop-text-btn" onClick={onUpgrade}>
+              Upgrade to Enterprise
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {!canEnableMoreRepos ? (
+        <p className="coop-prompt-modal-note mt-1">
+          Pro includes up to 3 Deep-Indexed Repos per seat. Upgrade for estate-wide indexing.
+        </p>
+      ) : null}
       <ul className="space-y-2">
         {repos.map((repo) => (
           <li key={repo.repoId} className="coop-health-integration">
@@ -335,9 +420,6 @@ function RepoList({
                 {repo.error ? (
                   <p className="coop-settings-test-message--error mt-1 text-[11px]">{repo.error}</p>
                 ) : null}
-                <p className="coop-health-integration-meta mt-1">
-                  Search index {repo.zoektAvailable ? "✓" : "—"} · Symbol graph {repo.scipAvailable ? "✓" : "—"}
-                </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 {repo.enabled ? (
@@ -350,7 +432,7 @@ function RepoList({
                 ) : (
                   <button
                     type="button"
-                    disabled={!globalEnabled}
+                    disabled={!globalEnabled || (!repo.enabled && !canEnableMoreRepos)}
                     className="coop-settings-action-btn"
                     onClick={() => onEnableRepo(repo.repoId)}
                   >
@@ -393,63 +475,16 @@ function formatRelative(iso: string): string {
   return `${days}d ago`;
 }
 
-function statusDotColor(
-  state: Pick<LightningModeState, "canUseLightning" | "globalEnabled" | "indexingRepos">
-): string {
-  if (!state.canUseLightning || !state.globalEnabled) {
-    return "var(--coop-panel-muted)";
-  }
-  if (state.indexingRepos > 0) {
-    return "var(--vscode-progressBar-background, var(--vscode-inputValidation-warningBorder, #d19a66))";
-  }
-  return "var(--vscode-testing-iconPassed, #3fb950)";
-}
-
-export function LightningStatusBadge({
-  state,
-  onClick
-}: {
-  state: Pick<
-    LightningModeState,
-    "canUseLightning" | "globalEnabled" | "readyRepos" | "indexingRepos" | "backend"
-  >;
-  onClick: () => void;
-}): React.ReactElement {
-  const showLocalIndexing = state.backend === "local";
-  const label = !state.canUseLightning
-    ? "Zero-Clone"
-    : !state.globalEnabled
-      ? "Zero-Clone"
-      : state.indexingRepos > 0
-        ? "Lightning · indexing"
-        : state.readyRepos > 0
-          ? `Lightning · ${state.readyRepos} ready`
-          : "Lightning";
-
-  const tooltip = !state.canUseLightning
-    ? "Zero-Clone: GitHub/GitLab/Bitbucket + optional Slack, Jira, Notion, etc. Pro adds Lightning Mode ($20/user/mo)."
-    : !state.globalEnabled
-      ? showLocalIndexing
-        ? "Zero-Clone — remote code graph. Open to enable Lightning (local graph index)."
-        : "Zero-Clone — remote code graph. Open to enable Lightning (Coop cloud index)."
-      : showLocalIndexing
-        ? "Lightning — local code graph index active. Click to manage."
-        : "Lightning — Coop cloud code graph active. Click to manage.";
-
+export function ProUpgradeChip({ onClick }: { onClick: () => void }): React.ReactElement {
   return (
     <button
       type="button"
       className="coop-quick-action-pill"
       onClick={onClick}
-      title={tooltip}
-      aria-label={`Context mode: ${label}. Open settings.`}
+      title="Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $20/user/mo."
+      aria-label="Upgrade to Pro for Deep-Code Graph indexing"
     >
-      <span
-        className="coop-quick-action-status-dot"
-        aria-hidden
-        style={{ background: statusDotColor(state) }}
-      />
-      {label}
+      Upgrade to Pro
     </button>
   );
 }

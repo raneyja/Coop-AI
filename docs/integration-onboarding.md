@@ -39,7 +39,7 @@ Production checklist: [connect-integrations-production.md](./connect-integration
 | Field | Value |
 |-------|-------|
 | CoopAI API key | Bearer token from your Coop operator |
-| API base URL | Default `https://api.coopai.dev`; use `http://localhost:8787` for local dev |
+| API base URL | Default `https://api.coop-ai.dev`; use `http://localhost:8787` for local dev |
 
 **Local dev:** any value works (e.g. `dev`) if the server has no token configured.
 

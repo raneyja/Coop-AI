@@ -2,13 +2,14 @@
 
 ## Canonical URLs
 
-Use these domains in extension and docs — do **not** use `coopai.dev` (unrelated third-party domain).
+All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 | Purpose | URL | Config |
 |---------|-----|--------|
 | Marketing site | https://coop-ai.dev | `website/src/lib/site.config.ts`, `src/config/siteConfig.ts` |
 | Pricing | https://coop-ai.dev/pricing | `PRICING_PAGE_URL` in `src/config/siteConfig.ts` |
-| API (backend) | https://api.coopai.dev | `DEFAULT_API_BASE` in `src/chat/types.ts` |
+| API (backend) | https://api.coop-ai.dev | `DEFAULT_API_BASE` in `src/chat/types.ts` |
+| Admin portal | https://admin.coop-ai.dev | `admin/src/lib/coopApi.ts`, `COOP_ADMIN_PORTAL_URL` |
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 

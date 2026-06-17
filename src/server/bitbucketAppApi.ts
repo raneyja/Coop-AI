@@ -4,13 +4,17 @@ import type { BitbucketAppService } from "./bitbucketAppService";
 import { bitbucketSyntheticInstallationId } from "./bitbucketAppService";
 import type { BitbucketAppConfig } from "./bitbucketAppConfig";
 import { requireInstallAdmin } from "./authMiddleware";
+import { requireCodeHostPlan, requireCodeHostPlanForOrg } from "./planGates";
 import type { OrgStore, AuthContext } from "./orgStore";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
+import { runCodeHostCatalogSyncAfterConnect } from "./catalogSyncService";
+import type { JobQueue } from "../jobs/jobQueue";
 
 export type BitbucketAppApiDeps = {
   orgStore?: OrgStore;
   bitbucketApp?: BitbucketAppService;
   bitbucketAppConfig?: BitbucketAppConfig;
+  jobQueue?: JobQueue;
 };
 
 type ParsedRequest = {
@@ -49,6 +53,9 @@ async function handleInstallUrl(
     return true;
   }
   if (!requireInstallAdmin(auth, response)) {
+    return true;
+  }
+  if (!(await requireCodeHostPlan(deps.orgStore, auth, response, "bitbucket"))) {
     return true;
   }
   if (!deps.bitbucketApp || !deps.bitbucketAppConfig) {
@@ -92,6 +99,10 @@ async function handleCallback(
     return true;
   }
 
+  if (!(await requireCodeHostPlanForOrg(deps.orgStore, orgId, response, "bitbucket", true))) {
+    return true;
+  }
+
   try {
     const redirectUri = buildRedirectUri(deps.bitbucketAppConfig);
     const tokens = await deps.bitbucketApp.exchangeCode(code, redirectUri);
@@ -109,6 +120,11 @@ async function handleCallback(
     if (tokens.refreshToken) {
       await deps.orgStore.storeCredential(orgId, "bitbucket:refresh", tokens.refreshToken);
     }
+
+    void runCodeHostCatalogSyncAfterConnect(orgId, "bitbucket", tokens.accessToken, {
+      orgStore: deps.orgStore,
+      jobQueue: deps.jobQueue
+    });
 
     writeHtml(
       response,

@@ -129,7 +129,7 @@ export default function CollectionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Collections</h1>
+        <h1 className="admin-page-title">Collections</h1>
         <p className="mt-1 text-sm text-coop-muted">
           Group indexed repositories for cross-repo Lightning search and chat @ mentions.
         </p>
@@ -138,43 +138,39 @@ export default function CollectionsPage() {
       {unavailable && <UnavailableBanner />}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      <form onSubmit={handleCreate} className="admin-card space-y-3">
-        <h2 className="text-sm font-medium">Create collection</h2>
+      <form onSubmit={handleCreate} className="admin-card">
+        <h2 className="admin-section-label">Create collection</h2>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-coop-muted">Name</span>
+            <span className="admin-label !mb-1">Name</span>
             <input
-              className="mt-1 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2"
+              className="admin-input"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Platform team"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-coop-muted">Description (optional)</span>
+            <span className="admin-label !mb-1">Description (optional)</span>
             <input
-              className="mt-1 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2"
+              className="admin-input"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Core services repos"
             />
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={creating}
-          className="rounded-sm border border-coop-border px-3 py-1.5 text-sm hover:bg-white/[0.04] disabled:opacity-50"
-        >
+        <button type="submit" disabled={creating} className="admin-btn-secondary">
           {creating ? "Creating…" : "Create collection"}
         </button>
       </form>
 
-      <div className="admin-card space-y-4">
+      <section className="admin-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Collections</h2>
+          <h2 className="admin-section-label">Collections</h2>
           {collections.length > 0 ? (
             <select
-              className="rounded-sm border border-coop-border bg-coop-dark px-3 py-1.5 text-sm"
+              className="admin-input !w-auto py-1.5"
               value={selectedCollectionId}
               onChange={(event) => setSelectedCollectionId(event.target.value)}
             >
@@ -198,9 +194,9 @@ export default function CollectionsPage() {
             ) : null}
             <div className="flex flex-wrap items-end gap-2">
               <label className="block text-sm">
-                <span className="text-coop-muted">Add repository</span>
+                <span className="admin-label !mb-1">Add repository</span>
                 <select
-                  className="mt-1 min-w-[280px] rounded-sm border border-coop-border bg-coop-dark px-3 py-2"
+                  className="admin-input !w-auto min-w-[280px] py-2"
                   value={repoToAdd}
                   onChange={(event) => setRepoToAdd(event.target.value)}
                 >
@@ -216,24 +212,24 @@ export default function CollectionsPage() {
                 type="button"
                 disabled={!repoToAdd || actionId !== null}
                 onClick={() => void handleAddRepo()}
-                className="rounded-sm border border-coop-border px-3 py-2 text-sm hover:bg-white/[0.04] disabled:opacity-50"
+                className="admin-btn-secondary"
               >
                 Add repo
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div className="admin-card--table">
+              <table className="admin-table">
                 <thead>
-                  <tr className="border-b border-coop-border text-coop-muted">
-                    <th className="py-2 pr-4 font-medium">Repository</th>
-                    <th className="py-2 pr-4 font-medium">Lightning</th>
-                    <th className="py-2 font-medium" />
+                  <tr>
+                    <th>Repository</th>
+                    <th>Lightning</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {selectedCollection.repos.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-3 text-coop-muted">
+                      <td colSpan={3} className="text-coop-muted">
                         No repositories in this collection.
                       </td>
                     </tr>
@@ -241,12 +237,12 @@ export default function CollectionsPage() {
                     selectedCollection.repos.map((entry) => {
                       const repo = repos.find((item) => item.repoId === entry.repoId);
                       return (
-                        <tr key={entry.repoId} className="border-b border-coop-border/60">
-                          <td className="py-2 pr-4 font-mono text-xs">{entry.repoId}</td>
-                          <td className="py-2 pr-4 text-coop-muted">
+                        <tr key={entry.repoId}>
+                          <td className="font-mono text-xs">{entry.repoId}</td>
+                          <td className="text-coop-muted">
                             {repo ? lightningLabel(repo) : "Unknown"}
                           </td>
-                          <td className="py-2 text-right">
+                          <td className="text-right">
                             <button
                               type="button"
                               disabled={actionId !== null}
@@ -265,37 +261,37 @@ export default function CollectionsPage() {
             </div>
           </>
         ) : null}
-      </div>
+      </section>
 
-      <div className="admin-card">
-        <h2 className="mb-3 text-sm font-medium">Organization repositories</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+      <section className="admin-card">
+        <h2 className="admin-section-label">Organization repositories</h2>
+        <div className="admin-card--table mt-4 !border-b-0">
+          <table className="admin-table">
             <thead>
-              <tr className="border-b border-coop-border text-coop-muted">
-                <th className="py-2 pr-4 font-medium">Repository</th>
-                <th className="py-2 font-medium">Lightning status</th>
+              <tr>
+                <th>Repository</th>
+                <th>Lightning status</th>
               </tr>
             </thead>
             <tbody>
               {repos.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="py-3 text-coop-muted">
+                  <td colSpan={2} className="text-coop-muted">
                     No repositories registered yet. Enable Lightning from the VS Code extension.
                   </td>
                 </tr>
               ) : (
                 repos.map((repo) => (
-                  <tr key={repo.repoId} className="border-b border-coop-border/60">
-                    <td className="py-2 pr-4 font-mono text-xs">{repo.repoId}</td>
-                    <td className="py-2 text-coop-muted">{lightningLabel(repo)}</td>
+                  <tr key={repo.repoId}>
+                    <td className="font-mono text-xs">{repo.repoId}</td>
+                    <td className="text-coop-muted">{lightningLabel(repo)}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

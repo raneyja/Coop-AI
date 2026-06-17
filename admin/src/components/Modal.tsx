@@ -33,7 +33,7 @@ export function Modal({ open, title, onClose, children }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="relative z-10 w-full max-w-lg rounded-md border border-coop-border bg-coop-editor p-6"
+        className="relative z-10 w-full max-w-lg rounded-md border border-coop-border bg-coop-dark p-6"
       >
         <h2 id="modal-title" className="mb-4 text-base font-medium">
           {title}

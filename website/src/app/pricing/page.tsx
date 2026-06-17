@@ -6,7 +6,7 @@ import { Button } from "@/components/Button";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "CoopAI pricing — free Developer plan with Zero-Clone; Pro at $20/user/month adds Lightning Mode for faster cross-repo search."
+    "CoopAI pricing — free Developer plan with local workspace context and AI credits; Pro at $20/user/month adds code hosts and Lightning Mode."
 };
 
 type PricingTier = {
@@ -27,15 +27,16 @@ const tiers: PricingTier[] = [
     name: "Developer",
     price: "Free",
     period: "during beta",
-    audience: "Individual engineers on a single repo",
+    audience: "Individual engineers — one account, no team seats",
     features: [
-      "Zero-Clone remote code graph",
-      "Optional integrations (Slack, Jira, Notion, and more)",
-      "Chat, quick actions, inline complete & edit — no full clone needed",
+      "Local workspace files in VS Code (no code-host connection)",
+      "AI credits with rolling 5-hour window (model-weighted)",
+      "Unlimited tool integrations (Slack, Jira, Notion, and more)",
+      "Chat, quick actions, inline complete & edit",
       "Workspace prompt library",
       "Cloud-hosted"
     ],
-    note: "Lightning Mode available in Pro",
+    note: "Code hosts, cross-repo search, and Lightning Mode unlock in Pro",
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",
     highlighted: false
@@ -45,10 +46,10 @@ const tiers: PricingTier[] = [
     price: "$20",
     period: "per user / month",
     features: [
-      "Everything in Developer + Lightning Mode (managed cloud code graph for fast cross-repo search)",
-      "Much faster on large repos (dependencies, symbols, ownership)",
-      "Backend-managed indexing on Coop cloud — no local indexer install",
-      "Shared prompt libraries",
+      "Everything in Developer + GitHub code-host connection",
+      "Lightning Mode — managed cloud code graph for fast cross-repo search",
+      "Workspace repos and Deep-Indexed catalog (up to 3 repos per seat)",
+      "Team seats — invite teammates",
       "Usage visibility & analytics",
       "Priority support"
     ],
@@ -82,12 +83,12 @@ export default function PricingPage() {
         titleClassName="font-medium"
         title={
           <>
-            Start for free with Zero-Clone.
+            Start free with local workspace context.
             <br />
-            Go Pro for <span className="font-semibold text-coop-index">Lightning Mode</span>.
+            Go Pro for <span className="font-semibold text-coop-index">code hosts &amp; Lightning Mode</span>.
           </>
         }
-        description="Every plan comes with a remote code graph from GitHub, GitLab, or Bitbucket, along with Slack, Jira, Notion, and other key tools. Pro unlocks Lightning Mode — managed cloud code graph indexing for dramatically quicker cross-repo search."
+        description="Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode — managed cloud indexing for dramatically faster cross-repo search."
       />
 
       <section className="pb-20">

@@ -13,6 +13,11 @@ export type UsageDateRange = {
   to: Date;
 };
 
+export type TokenUsageEvent = {
+  createdAt: Date;
+  tokens: number;
+};
+
 export class UsageTracker {
   public constructor(private readonly pool?: Pool | null) {}
 
@@ -38,6 +43,63 @@ export class UsageTracker {
         `[usage] failed to record "${entry.eventType}" for org ${entry.orgId}: ${message}`
       );
     }
+  }
+
+  public async listTokenEventsForOrg(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[]
+  ): Promise<TokenUsageEvent[]> {
+    if (!this.pool || eventTypes.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT created_at,
+              CASE
+                WHEN (metadata->>'totalTokens') ~ '^\\d+$' THEN (metadata->>'totalTokens')::bigint
+                WHEN (metadata->>'inputTokens') ~ '^\\d+$' AND (metadata->>'outputTokens') ~ '^\\d+$'
+                  THEN (metadata->>'inputTokens')::bigint + (metadata->>'outputTokens')::bigint
+                ELSE 0
+              END AS tokens
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])
+       ORDER BY created_at ASC`,
+      [orgId, range.from, range.to, eventTypes]
+    );
+    return result.rows.map((row) => ({
+      createdAt: new Date(String(row.created_at)),
+      tokens: Number(row.tokens ?? 0)
+    }));
+  }
+
+  public async sumTokensForOrg(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[]
+  ): Promise<number> {
+    if (!this.pool || eventTypes.length === 0) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COALESCE(SUM(
+         CASE
+           WHEN (metadata->>'totalTokens') ~ '^\\d+$' THEN (metadata->>'totalTokens')::bigint
+           WHEN (metadata->>'inputTokens') ~ '^\\d+$' AND (metadata->>'outputTokens') ~ '^\\d+$'
+             THEN (metadata->>'inputTokens')::bigint + (metadata->>'outputTokens')::bigint
+           ELSE 0
+         END
+       ), 0)::int AS total
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])`,
+      [orgId, range.from, range.to, eventTypes]
+    );
+    return Number(result.rows[0]?.total ?? 0);
   }
 
   public async countEvents(orgId: string, range: UsageDateRange): Promise<number> {

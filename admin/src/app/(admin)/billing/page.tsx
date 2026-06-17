@@ -38,14 +38,14 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Billing</h1>
+        <h1 className="admin-page-title">Billing</h1>
         <p className="mt-1 text-sm text-coop-muted">Plan, seats, and subscription management.</p>
       </div>
 
-      <div className="admin-card max-w-lg space-y-4">
+      <section className="admin-card max-w-lg">
         <div>
           <p className="admin-section-label">Current plan</p>
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-3 flex items-center gap-3">
             <PlanBadge plan={billing?.plan ?? me?.plan ?? "free"} />
             <span className="text-sm text-coop-muted">{displayOrgName(me)}</span>
           </div>
@@ -77,7 +77,7 @@ export default function BillingPage() {
             {opening ? "Opening…" : "Manage subscription"}
           </button>
         ) : (
-          <div className="rounded-md border border-coop-border bg-coop-dark px-4 py-3 text-sm text-coop-muted">
+          <div className="admin-panel-inset text-sm text-coop-muted">
             No Stripe subscription on this org. Purchase Pro at{" "}
             <a href="https://coop-ai.dev/signup" className="admin-link">
               coop-ai.dev/signup
@@ -85,7 +85,7 @@ export default function BillingPage() {
             or contact sales for Enterprise.
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

@@ -87,7 +87,7 @@ export const siteConfig = {
     description:
       "Your code stays on your infrastructure. CoopAI builds a secure, real-time cross-repository knowledge graph so developers get rich AI context across your entire organization — whether it's a single repo or a massive monorepo.",
     footnote:
-      "Every plan includes Zero-Clone remote indexing from GitHub, GitLab, or Bitbucket. Pro adds Lightning Mode — managed cloud code graph indexing for the fastest cross-repo search.",
+      "Developer (free) uses local workspace files with AI credits and unlimited tool integrations — individual accounts only. Pro adds GitHub connections, team seats, and Lightning Mode for the fastest cross-repo search.",
     features: [
       {
         label: "Cross-repo context",

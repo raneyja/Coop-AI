@@ -5,6 +5,7 @@ import {
   generateApiKey,
   hashApiKey
 } from "./credentialCrypto";
+import { clampSeatCountForPlan } from "./planGates";
 
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type IndexStatus = "idle" | "queued" | "indexing" | "ready" | "error" | "disabled";
@@ -40,14 +41,18 @@ export type ApiKeyListItem = {
   lastUsed?: Date;
 };
 
+export type EmbeddingStatus = "complete" | "failed" | "skipped" | "pending";
+
 export type OrgRepoRecord = {
   orgId: string;
   repoId: string;
   lightningEnabled: boolean;
   indexStatus: IndexStatus;
+  embeddingStatus?: EmbeddingStatus;
   lastIndexedAt?: Date;
   lastJobId?: string;
   error?: string;
+  embeddingError?: string;
   updatedAt: Date;
 };
 
@@ -273,10 +278,25 @@ export class OrgStore {
     );
   }
 
+  public async deleteCredential(orgId: string, provider: string): Promise<void> {
+    await this.pool.query(`DELETE FROM org_credentials WHERE org_id = $1 AND provider = $2`, [orgId, provider]);
+  }
+
   public async upsertOrgRepo(
     orgId: string,
     repoId: string,
-    patch: Partial<Pick<OrgRepoRecord, "lightningEnabled" | "indexStatus" | "lastIndexedAt" | "lastJobId" | "error">>
+    patch: Partial<
+      Pick<
+        OrgRepoRecord,
+        | "lightningEnabled"
+        | "indexStatus"
+        | "embeddingStatus"
+        | "lastIndexedAt"
+        | "lastJobId"
+        | "error"
+        | "embeddingError"
+      >
+    >
   ): Promise<OrgRepoRecord> {
     const existing = await this.getOrgRepo(orgId, repoId);
     const record: OrgRepoRecord = {
@@ -284,29 +304,39 @@ export class OrgStore {
       repoId,
       lightningEnabled: patch.lightningEnabled ?? existing?.lightningEnabled ?? false,
       indexStatus: patch.indexStatus ?? existing?.indexStatus ?? "idle",
+      embeddingStatus:
+        "embeddingStatus" in patch ? patch.embeddingStatus : existing?.embeddingStatus,
       lastIndexedAt: patch.lastIndexedAt ?? existing?.lastIndexedAt,
       lastJobId: patch.lastJobId ?? existing?.lastJobId,
-      error: patch.error ?? existing?.error,
+      error: "error" in patch ? patch.error : existing?.error,
+      embeddingError: "embeddingError" in patch ? patch.embeddingError : existing?.embeddingError,
       updatedAt: new Date()
     };
     await this.pool.query(
-      `INSERT INTO org_repos (org_id, repo_id, lightning_enabled, index_status, last_indexed_at, last_job_id, error, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `INSERT INTO org_repos (
+         org_id, repo_id, lightning_enabled, index_status, embedding_status,
+         last_indexed_at, last_job_id, error, embedding_error, updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
        ON CONFLICT (org_id, repo_id) DO UPDATE SET
          lightning_enabled = EXCLUDED.lightning_enabled,
          index_status = EXCLUDED.index_status,
+         embedding_status = EXCLUDED.embedding_status,
          last_indexed_at = EXCLUDED.last_indexed_at,
          last_job_id = EXCLUDED.last_job_id,
          error = EXCLUDED.error,
+         embedding_error = EXCLUDED.embedding_error,
          updated_at = NOW()`,
       [
         record.orgId,
         record.repoId,
         record.lightningEnabled,
         record.indexStatus,
+        record.embeddingStatus ?? null,
         record.lastIndexedAt ?? null,
         record.lastJobId ?? null,
-        record.error ?? null
+        record.error ?? null,
+        record.embeddingError ?? null
       ]
     );
     return record;
@@ -314,7 +344,8 @@ export class OrgStore {
 
   public async getOrgRepo(orgId: string, repoId: string): Promise<OrgRepoRecord | undefined> {
     const result = await this.pool.query(
-      `SELECT org_id, repo_id, lightning_enabled, index_status, last_indexed_at, last_job_id, error, updated_at
+      `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
+              last_indexed_at, last_job_id, error, embedding_error, updated_at
        FROM org_repos WHERE org_id = $1 AND repo_id = $2`,
       [orgId, repoId]
     );
@@ -324,7 +355,8 @@ export class OrgStore {
 
   public async listOrgRepos(orgId: string): Promise<OrgRepoRecord[]> {
     const result = await this.pool.query(
-      `SELECT org_id, repo_id, lightning_enabled, index_status, last_indexed_at, last_job_id, error, updated_at
+      `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
+              last_indexed_at, last_job_id, error, embedding_error, updated_at
        FROM org_repos WHERE org_id = $1 ORDER BY updated_at DESC`,
       [orgId]
     );
@@ -394,8 +426,10 @@ export class OrgStore {
       values.push(patch.stripeSubscriptionId);
     }
     if (patch.seatCount !== undefined) {
+      const org = await this.getOrganization(orgId);
+      const seatCount = clampSeatCountForPlan(org?.plan ?? "free", patch.seatCount);
       fields.push(`seat_count = $${idx++}`);
-      values.push(patch.seatCount);
+      values.push(seatCount);
     }
     if (patch.billingStatus !== undefined) {
       fields.push(`billing_status = $${idx++}`);
@@ -468,9 +502,13 @@ function rowToOrgRepo(row: Record<string, unknown>): OrgRepoRecord {
     repoId: String(row.repo_id),
     lightningEnabled: Boolean(row.lightning_enabled),
     indexStatus: String(row.index_status) as IndexStatus,
+    embeddingStatus: row.embedding_status
+      ? (String(row.embedding_status) as OrgRepoRecord["embeddingStatus"])
+      : undefined,
     lastIndexedAt: row.last_indexed_at ? new Date(String(row.last_indexed_at)) : undefined,
     lastJobId: row.last_job_id ? String(row.last_job_id) : undefined,
     error: row.error ? String(row.error) : undefined,
+    embeddingError: row.embedding_error ? String(row.embedding_error) : undefined,
     updatedAt: new Date(String(row.updated_at))
   };
 }

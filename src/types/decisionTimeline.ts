@@ -32,6 +32,8 @@ export type DecisionSlackThread = {
   permalink?: string;
   messages: Array<{ user: string; text: string; ts: string }>;
   participants: string[];
+  /** How confidently this thread relates to the traced code. */
+  relevance?: "direct" | "linked" | "weak";
 };
 
 export type DecisionTeamsThread = {

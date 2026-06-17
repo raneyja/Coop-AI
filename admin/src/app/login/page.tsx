@@ -73,7 +73,7 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-coop-muted">Organization admin console</p>
         </div>
 
-        <div className="admin-card">
+        <div className="rounded-md border border-coop-border p-5">
           <div className="mb-4 flex rounded-sm border border-coop-border p-0.5">
             <button
               type="button"

@@ -56,6 +56,15 @@ export type HealthResponse = {
   };
 };
 
+export type PlanQuotaCredits = {
+  usedCredits: number;
+  limitCredits: number;
+  remainingCredits: number;
+  windowHours: number;
+  resetsAt: string;
+  retryAfterMs: number;
+};
+
 export type MeResponse = {
   orgId: string;
   orgName: string;
@@ -66,6 +75,14 @@ export type MeResponse = {
   role?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
+  indexedRepoCount?: number;
+  indexedRepoLimit?: number | null;
+  canEnableMoreRepos?: boolean;
+  workspaceRepoCount?: number;
+  workspaceRepoLimit?: number | null;
+  canAddMoreWorkspaceRepos?: boolean;
+  primaryWorkspaceRepoId?: string;
+  quota?: PlanQuotaCredits;
 };
 
 export type CoopBackendClientOptions = {
@@ -98,16 +115,23 @@ export class CoopBackendClient {
     baseUrl: string,
     repoId: string,
     pattern: string,
-    collectionId?: string,
-    mention = false
+    options?: {
+      collectionId?: string;
+      mention?: boolean;
+      scope?: "indexed" | "org";
+    }
   ): Promise<unknown> {
     assertCoopEndpoint(baseUrl);
     const encodedRepo = encodeURIComponent(repoId);
     const params: Record<string, string> = { pattern };
-    if (collectionId?.trim()) {
-      params.collectionId = collectionId.trim();
+    const collectionId = options?.collectionId?.trim();
+    if (collectionId) {
+      params.collectionId = collectionId;
     }
-    if (mention) {
+    if (options?.scope) {
+      params.scope = options.scope;
+    }
+    if (options?.mention) {
       params.mention = "true";
     }
     const response = await runResilientRequest({
@@ -195,7 +219,14 @@ export class CoopBackendClient {
 
   public async getGithubInstallationStatus(
     baseUrl: string
-  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+  ): Promise<{
+    installed: boolean;
+    tokenValid?: boolean;
+    needsReconnect?: boolean;
+    hasRefreshToken?: boolean;
+    installationId?: number;
+    tokenExpiresAt?: string;
+  }> {
     return this.getCodeHostInstallationStatus(baseUrl, "github");
   }
 
@@ -510,10 +541,20 @@ export class CoopBackendClient {
   public async getCodeHostInstallationStatus(
     baseUrl: string,
     provider: "github" | "gitlab" | "bitbucket"
-  ): Promise<{ installed: boolean; installationId?: number; tokenExpiresAt?: string }> {
+  ): Promise<{
+    installed: boolean;
+    tokenValid?: boolean;
+    needsReconnect?: boolean;
+    hasRefreshToken?: boolean;
+    installationId?: number;
+    tokenExpiresAt?: string;
+  }> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{
       installed: boolean;
+      tokenValid?: boolean;
+      needsReconnect?: boolean;
+      hasRefreshToken?: boolean;
       installationId?: number;
       tokenExpiresAt?: string;
     }>(`/v1/orgs/${provider}/installation`, {
@@ -527,7 +568,7 @@ export class CoopBackendClient {
     return response.data ?? { installed: false };
   }
 
-  /** Fetches file content via server-side GitHub App token (Zero-Clone cloud path). */
+  /** Fetches file content via server-side code-host token (org OAuth). */
   public async fetchRepoFile(
     baseUrl: string,
     repoId: string,
@@ -615,6 +656,205 @@ export class CoopBackendClient {
     return response.data;
   }
 
+  public async fetchRepoBlame(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    branch?: string
+  ): Promise<{ repoId: string; path: string; blame: import("./codeHosts/types").BlameData }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/blame`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { path, branch },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoHistory(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    options?: { branch?: string; limit?: number }
+  ): Promise<{ repoId: string; path: string; commits: import("./codeHosts/types").CommitInfo[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/history`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { path, branch: options?.branch, limit: options?.limit },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoCommit(
+    baseUrl: string,
+    repoId: string,
+    sha: string,
+    branch?: string
+  ): Promise<{ repoId: string; sha: string; commit: import("./codeHosts/types").CommitInfo }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/commits/${encodeURIComponent(sha)}`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoPullsForFile(
+    baseUrl: string,
+    repoId: string,
+    path: string,
+    options?: { branch?: string; limit?: number }
+  ): Promise<{ repoId: string; path: string; pulls: import("./codeHosts/types").PullRequestSummary[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls-for-file`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { path, branch: options?.branch, limit: options?.limit },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoPullComments(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string; pullOwner?: string; pullRepo?: string }
+  ): Promise<{ repoId: string; number: number; comments: import("./codeHosts/types").PullRequestComment[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls/${prNumber}/comments`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: {
+            branch: options?.branch,
+            pullOwner: options?.pullOwner,
+            pullRepo: options?.pullRepo
+          },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoPullDetail(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string; commitSha?: string }
+  ): Promise<{
+    repoId: string;
+    number: number;
+    pull: {
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      owner?: string;
+      repo?: string;
+      labels: string[];
+    };
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls/${prNumber}`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch: options?.branch, commitSha: options?.commitSha },
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status === 404) {
+      throw new Error(`Pull request #${prNumber} not found on this repository.`);
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data;
+  }
+
+  public async fetchRepoCommitPulls(
+    baseUrl: string,
+    repoId: string,
+    sha: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    sha: string;
+    pulls: Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      owner: string;
+      repo: string;
+      labels: string[];
+    }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 15_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/commits/${encodeURIComponent(sha)}/pulls`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch },
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status === 404) {
+      return { repoId, sha, pulls: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, sha, pulls: [] };
+  }
+
   public async listOrgRepos(baseUrl: string): Promise<{ repos: unknown[] }> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{ repos: unknown[] }>("/v1/orgs/repos", {
@@ -622,6 +862,146 @@ export class CoopBackendClient {
       headers: await this.authHeaders()
     });
     return response.data ?? { repos: [] };
+  }
+
+  public async listCatalogOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<{
+    repos: Array<{
+      repoId: string;
+      provider: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      workspaceSelected?: boolean;
+    }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<
+      {
+        repos: Array<{
+          repoId: string;
+          provider: string;
+          owner: string;
+          name: string;
+          defaultBranch: string;
+          lightningEnabled?: boolean;
+          indexStatus?: string;
+          workspaceSelected?: boolean;
+        }>;
+      } & CoopApiErrorBody
+    >("/v1/orgs/catalog/repos", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      params: options?.query ? { q: options.query } : undefined,
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repos: [] };
+  }
+
+  public async listGithubOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<{
+    repos: Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate?: boolean;
+      htmlUrl?: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+    }>;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await runResilientRequest({
+      timeoutMs: 45_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get<
+          {
+            repos: Array<{
+              repoId: string;
+              owner: string;
+              name: string;
+              defaultBranch: string;
+              isPrivate?: boolean;
+              htmlUrl?: string;
+              lightningEnabled?: boolean;
+              indexStatus?: string;
+            }>;
+          } & CoopApiErrorBody
+        >("/v1/orgs/github/repos", {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          headers: await this.authHeaders(),
+          params: options?.query ? { q: options.query } : undefined,
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repos: [] };
+  }
+
+  public async getWorkspaceRepos(baseUrl: string): Promise<{
+    repos: Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      indexStatus?: string;
+      lightningEnabled?: boolean;
+      isPrimary?: boolean;
+    }>;
+    selectedCount: number;
+    limit: number | null;
+    canAddMore: boolean;
+    primaryRepoId?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get("/v1/me/workspace-repos", {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
+  }
+
+  public async setWorkspaceRepos(
+    baseUrl: string,
+    repoIds: string[]
+  ): Promise<Awaited<ReturnType<CoopBackendClient["getWorkspaceRepos"]>>> {
+    assertCoopEndpoint(baseUrl);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.put("/v1/me/workspace-repos", { repoIds }, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
   }
 
   /** Structure manifest only (paths + symbols). Never includes file bodies. */
@@ -654,14 +1034,18 @@ export class CoopBackendClient {
   ): Promise<{ jobId?: string; status?: string }> {
     assertCoopEndpoint(baseUrl);
     const encoded = encodeURIComponent(repoId);
-    const response = await this.http.post<{ jobId?: string; status?: string }>(
+    const response = await this.http.post<{ jobId?: string; status?: string } & CoopApiErrorBody>(
       `/v1/orgs/repos/${encoded}/lightning/enable`,
       {},
       {
         baseURL: baseUrl.replace(/\/$/, ""),
-        headers: await this.authHeaders()
+        headers: await this.authHeaders(),
+        validateStatus: () => true
       }
     );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
     return response.data ?? {};
   }
 
@@ -686,6 +1070,28 @@ export class CoopBackendClient {
       headers: await this.authHeaders()
     });
     return response.data ?? {};
+  }
+
+  public async syncEstate(
+    baseUrl: string,
+    provider: "github" | "gitlab" | "bitbucket" = "github"
+  ): Promise<{ provider: string; discovered: number; queued: number; skipped: number }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<
+      { provider: string; discovered: number; queued: number; skipped: number } & CoopApiErrorBody
+    >(
+      "/v1/orgs/estate/sync",
+      { provider },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { provider, discovered: 0, queued: 0, skipped: 0 };
   }
 
   public async streamChat(
@@ -725,6 +1131,15 @@ export class CoopBackendClient {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
+      let body: { error?: string; message?: string; upgradeUrl?: string } | undefined;
+      try {
+        body = text ? (JSON.parse(text) as { error?: string; message?: string; upgradeUrl?: string }) : undefined;
+      } catch {
+        body = undefined;
+      }
+      if (response.status === 429 && body?.message) {
+        throw new Error(body.message);
+      }
       throw new Error(`Chat API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
     }
 
@@ -800,6 +1215,15 @@ export class CoopBackendClient {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
+      let body: { error?: string; message?: string } | undefined;
+      try {
+        body = text ? (JSON.parse(text) as { error?: string; message?: string }) : undefined;
+      } catch {
+        body = undefined;
+      }
+      if (response.status === 429 && body?.message) {
+        throw new Error(body.message);
+      }
       throw new Error(
         `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
       );

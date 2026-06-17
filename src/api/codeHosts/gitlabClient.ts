@@ -57,6 +57,31 @@ export class GitLabClient implements CodeHostClient {
     }
   }
 
+  public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
+    const projects = await paginatedCodeHostFetch<GitLabProjectListItem>({
+      firstUrl: `${this.apiBase}/projects?membership=true&simple=true&order_by=last_activity_at&sort=desc&per_page=100`,
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker,
+      maxPages: Math.max(1, Math.ceil(limit / 100)),
+      mapPage: (payload) => (Array.isArray(payload) ? payload : []),
+      nextUrl: (_payload, response) => parseLinkNext(response.headers.get("link"))
+    });
+    return projects.slice(0, limit).map((project) => {
+      const segments = project.path_with_namespace.split("/");
+      const owner = segments[0] ?? project.namespace?.path ?? "unknown";
+      const name = segments.length > 1 ? segments.slice(1).join("/") : project.path;
+      return {
+        owner,
+        name,
+        defaultBranch: project.default_branch ?? "main",
+        isPrivate: project.visibility === "private",
+        provider: this.provider,
+        htmlUrl: project.web_url
+      };
+    });
+  }
+
   public async getRepository(coords: RepoCoordinates): Promise<RemoteRepository> {
     const project = await this.getProject(coords);
     return {
@@ -309,6 +334,11 @@ export class GitLabClient implements CodeHostClient {
 }
 
 type GitLabProject = { default_branch: string; visibility: string; web_url?: string };
+type GitLabProjectListItem = GitLabProject & {
+  path: string;
+  path_with_namespace: string;
+  namespace?: { path?: string };
+};
 type GitLabTreeItem = { name: string; type: string; path: string };
 type GitLabCommit = {
   id: string;

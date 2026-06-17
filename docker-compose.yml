@@ -15,6 +15,7 @@ services:
 
   api:
     build: .
+    restart: unless-stopped
     ports:
       - "8787:8787"
     env_file:
@@ -22,7 +23,7 @@ services:
     environment:
       DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
       JOBS_BACKEND: postgres
-      GRAPH_CACHE_BACKEND: postgres
+      GRAPH_CACHE_BACKEND: memory
       JOBS_WORKERS: "0"
       NODE_ENV: production
       # COOP_REQUIRE_API_AUTH: set in .env.backend (must be true for production deploys)
@@ -34,13 +35,14 @@ services:
 
   worker:
     build: .
+    restart: unless-stopped
     command: ["node", "dist/workerEntry.js"]
     env_file:
       - .env.backend
     environment:
       DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
       JOBS_BACKEND: postgres
-      GRAPH_CACHE_BACKEND: postgres
+      GRAPH_CACHE_BACKEND: memory
       NODE_ENV: production
       # Path on the shared volume where Zoekt index shards are written after each repo clone
       ZOEKT_INDEX_PATH: /zoekt-indexes

@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import { auditActor } from "./audit/auditLogger";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
+import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 
 type ParsedRequest = {
@@ -63,6 +64,9 @@ export async function handleAdminIntegrationsRequest(
     }
     if (provider === "github" || provider === "gitlab" || provider === "bitbucket") {
       await deps.orgStore!.deleteCodeHostInstallation(auth.orgId, provider);
+      if (provider === "github") {
+        await deps.orgStore!.deleteCredential(auth.orgId, "github:refresh");
+      }
     } else {
       await deps.integrationStore!.delete(auth.orgId, provider);
     }
@@ -95,6 +99,23 @@ export async function handleAdminIntegrationsRequest(
 
 async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: CodeHostProvider) {
   const installation = await deps.orgStore!.getCodeHostInstallation(orgId, provider);
+  if (provider === "github") {
+    const connection = await assessGithubConnection(deps.orgStore!, orgId);
+    return {
+      provider,
+      installed: connection.installed && connection.tokenValid,
+      needsReconnect: connection.needsReconnect,
+      installUrlPath: `/v1/${provider}/app/install-url`,
+      metadata: installation
+        ? {
+            installationId: installation.installationId,
+            tokenExpiresAt: installation.tokenExpiresAt,
+            connectedAt: installation.createdAt,
+            hasRefreshToken: connection.hasRefreshToken
+          }
+        : {}
+    };
+  }
   return {
     provider,
     installed: Boolean(installation),

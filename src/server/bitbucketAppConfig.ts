@@ -1,7 +1,7 @@
 export type BitbucketAppConfig = {
   clientId: string;
   clientSecret: string;
-  /** Public HTTPS base for the OAuth callback (e.g. https://api.coopai.dev). */
+  /** Public HTTPS base for the OAuth callback (e.g. https://api.coop-ai.dev). */
   publicBaseUrl: string;
 };
 

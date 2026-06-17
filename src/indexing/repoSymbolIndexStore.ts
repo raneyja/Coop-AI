@@ -2,6 +2,9 @@ import type { Pool } from "pg";
 
 const UPSERT_BATCH_SIZE = 100;
 
+/** Above this, in-memory dependency graphs are skipped during indexing (search still uses Postgres). */
+export const SYMBOL_EDGE_BUILD_LIMIT = 5_000;
+
 export type SymbolReferenceLocation = {
   file_path: string;
   line: number;
@@ -47,12 +50,13 @@ export class RepoSymbolIndexStore {
       orgId,
       repoId
     ]);
-    if (rows.length === 0) {
+    const deduped = dedupeSymbolRows(rows);
+    if (deduped.length === 0) {
       return;
     }
 
-    for (let offset = 0; offset < rows.length; offset += UPSERT_BATCH_SIZE) {
-      const batch = rows.slice(offset, offset + UPSERT_BATCH_SIZE);
+    for (let offset = 0; offset < deduped.length; offset += UPSERT_BATCH_SIZE) {
+      const batch = deduped.slice(offset, offset + UPSERT_BATCH_SIZE);
       const values: unknown[] = [];
       const placeholders: string[] = [];
       let param = 1;
@@ -76,10 +80,25 @@ export class RepoSymbolIndexStore {
         `INSERT INTO repo_symbol_index (
            org_id, repo_id, symbol, file_path, line_start, line_end, kind, "references", indexed_at
          )
-         VALUES ${placeholders.join(", ")}`,
+         VALUES ${placeholders.join(", ")}
+         ON CONFLICT (org_id, repo_id, symbol, file_path, line_start) DO UPDATE SET
+           line_end = EXCLUDED.line_end,
+           kind = EXCLUDED.kind,
+           "references" = EXCLUDED."references",
+           indexed_at = EXCLUDED.indexed_at`,
         values
       );
     }
+  }
+
+  public async loadCoveredFilePaths(orgId: string, repoId: string): Promise<Set<string>> {
+    const result = await this.pool.query<{ file_path: string }>(
+      `SELECT DISTINCT file_path
+       FROM repo_symbol_index
+       WHERE org_id = $1 AND repo_id = $2`,
+      [orgId, repoId]
+    );
+    return new Set(result.rows.map((row) => String(row.file_path)));
   }
 
   public async loadRows(orgId: string, repoId: string): Promise<SymbolIndexRow[]> {
@@ -111,7 +130,12 @@ export class RepoSymbolIndexStore {
     const rows = await this.loadRows(orgId, repoId);
     const edges: DependencyEdge[] = [];
     const seen = new Set<string>();
-    for (const row of rows) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      if (index > 0 && index % 500 === 0) {
+        const { yieldToEventLoop } = await import("./eventLoopYield");
+        await yieldToEventLoop();
+      }
       for (const reference of row.references) {
         if (!reference.file_path || reference.file_path === row.filePath) {
           continue;
@@ -130,6 +154,51 @@ export class RepoSymbolIndexStore {
     }
     return edges;
   }
+}
+
+export function dedupeSymbolRows(rows: SymbolIndexRow[]): SymbolIndexRow[] {
+  if (rows.length <= 1) {
+    return rows;
+  }
+
+  const byKey = new Map<string, SymbolIndexRow>();
+  for (const row of rows) {
+    const key = `${row.symbol}\0${row.filePath}\0${row.lineStart}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        ...row,
+        references: mergeSymbolReferences(row.references, [])
+      });
+      continue;
+    }
+    byKey.set(key, {
+      symbol: existing.symbol,
+      filePath: existing.filePath,
+      lineStart: existing.lineStart,
+      lineEnd: Math.max(existing.lineEnd, row.lineEnd),
+      kind: existing.kind,
+      references: mergeSymbolReferences(existing.references, row.references)
+    });
+  }
+  return [...byKey.values()];
+}
+
+export function mergeSymbolReferences(
+  left: SymbolReferenceLocation[],
+  right: SymbolReferenceLocation[]
+): SymbolReferenceLocation[] {
+  const seen = new Set<string>();
+  const merged: SymbolReferenceLocation[] = [];
+  for (const reference of [...left, ...right]) {
+    const key = `${reference.file_path}\0${reference.line}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(reference);
+  }
+  return merged;
 }
 
 function normalizeReferences(value: unknown): SymbolReferenceLocation[] {

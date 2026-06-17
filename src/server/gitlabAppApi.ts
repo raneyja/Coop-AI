@@ -4,13 +4,17 @@ import type { GitLabAppService } from "./gitlabAppService";
 import { gitlabSyntheticInstallationId } from "./gitlabAppService";
 import type { GitLabAppConfig } from "./gitlabAppConfig";
 import { requireInstallAdmin } from "./authMiddleware";
+import { requireCodeHostPlan, requireCodeHostPlanForOrg } from "./planGates";
 import type { OrgStore, AuthContext } from "./orgStore";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
+import { runCodeHostCatalogSyncAfterConnect } from "./catalogSyncService";
+import type { JobQueue } from "../jobs/jobQueue";
 
 export type GitLabAppApiDeps = {
   orgStore?: OrgStore;
   gitlabApp?: GitLabAppService;
   gitlabAppConfig?: GitLabAppConfig;
+  jobQueue?: JobQueue;
 };
 
 type ParsedRequest = {
@@ -49,6 +53,9 @@ async function handleInstallUrl(
     return true;
   }
   if (!requireInstallAdmin(auth, response)) {
+    return true;
+  }
+  if (!(await requireCodeHostPlan(deps.orgStore, auth, response, "gitlab"))) {
     return true;
   }
   if (!deps.gitlabApp || !deps.gitlabAppConfig) {
@@ -92,6 +99,10 @@ async function handleCallback(
     return true;
   }
 
+  if (!(await requireCodeHostPlanForOrg(deps.orgStore, orgId, response, "gitlab", true))) {
+    return true;
+  }
+
   try {
     const redirectUri = buildRedirectUri(deps.gitlabAppConfig);
     const tokens = await deps.gitlabApp.exchangeCode(code, redirectUri);
@@ -111,6 +122,12 @@ async function handleCallback(
     if (tokens.refreshToken) {
       await deps.orgStore.storeCredential(orgId, "gitlab:refresh", tokens.refreshToken);
     }
+
+    void runCodeHostCatalogSyncAfterConnect(orgId, "gitlab", tokens.accessToken, {
+      orgStore: deps.orgStore,
+      jobQueue: deps.jobQueue,
+      gitlabHostRoot: deps.gitlabAppConfig.gitlabBaseUrl
+    });
 
     writeHtml(
       response,
