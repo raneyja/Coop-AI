@@ -9,20 +9,7 @@ export function Hero() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-center lg:gap-8 xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] xl:gap-12">
           <div className="mx-auto max-w-3xl text-center lg:mx-0 lg:max-w-none lg:text-left">
-            {siteConfig.heroMeta ? (
-              <p className="font-mono text-[11px] text-coop-muted">
-                <span className="text-coop-index">{siteConfig.heroMeta.split(" · ")[0]}</span>
-                {siteConfig.heroMeta.includes(" · ") && (
-                  <>{" · "}{siteConfig.heroMeta.split(" · ").slice(1).join(" · ")}</>
-                )}
-              </p>
-            ) : null}
-
-            <h1
-              className={`text-4xl font-semibold tracking-tight text-white md:text-5xl md:leading-[1.1] lg:text-[3.25rem] xl:text-6xl${
-                siteConfig.heroMeta ? " mt-3" : ""
-              }`}
-            >
+            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl md:leading-[1.1] lg:text-[3.25rem] xl:text-6xl">
               {siteConfig.tagline.split(",").map((part, i) => (
                 <span key={i}>
                   {i === 0 ? (
