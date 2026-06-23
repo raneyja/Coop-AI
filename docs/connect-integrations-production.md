@@ -15,13 +15,13 @@ Production mode: `coopAI.devMode: false`. Tokens live on the **Coop server**, no
 | # | Step | Success |
 |---|------|---------|
 | 1 | **Account** → sign in (SSO or org API key) → **Test connection** | Connected |
-| 2 | **Connections → GitHub** → **Connect** → browser → **Refresh** → **Test** | Connected |
-| 3 | **Connections → Slack** → same pattern | Connected |
-| 4 | **Connections → Jira** → same + set **Jira site URL** | Connected |
-| 5 | **Connections → Confluence** → same + set **Confluence site URL** | Connected |
-| 6 | **Connections → Notion** → same | Connected |
-| 7 | **Connections → Google Docs** → same | Connected |
-| 8 | **Connections → Microsoft Teams** → same | Connected |
+| 2 | **Tools → GitHub** → **Connect** → browser → **Refresh** → **Test** | Connected |
+| 3 | **Tools → Slack** → same pattern | Connected |
+| 4 | **Tools → Jira** → same + set **Jira site URL** | Connected |
+| 5 | **Tools → Confluence** → same + set **Confluence site URL** | Connected |
+| 6 | **Tools → Notion** → same | Connected |
+| 7 | **Tools → Google Docs** → same | Connected |
+| 8 | **Tools → Microsoft Teams** → same | Connected |
 | 9 | **Workspace** → owner / repo / branch | Saved |
 
 **Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator must register Azure app — see [deploy-production-handoff.md](./deploy-production-handoff.md).

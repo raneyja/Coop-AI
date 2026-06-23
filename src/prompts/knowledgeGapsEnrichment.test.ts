@@ -134,6 +134,15 @@ test("enrichKnowledgeGapsResponse linkifies file paths and Confluence title ment
   assert.ok(enriched.includes("[Coop AI — Architecture Overview](https://example.atlassian.net/wiki/spaces/COOP/pages/6)"));
 });
 
+test("buildConfluencePagesReviewedBlock uses keyword heuristics for runbook pages", () => {
+  const block = buildConfluencePagesReviewedBlock(
+    [{ title: "On-call runbook — API incidents", htmlUrl: "https://example/wiki/runbook" }],
+    "src/server/api.ts"
+  );
+  assert.ok(block.includes("Operational runbook or on-call reference"));
+  assert.ok(!block.includes("COOP-55"));
+});
+
 test("enrichKnowledgeGapsResponse numbers recommended next steps", () => {
   const enriched = enrichKnowledgeGapsResponse(SAMPLE_LLM_OUTPUT, {
     confluencePages: SAMPLE_PAGES,

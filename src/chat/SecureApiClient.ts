@@ -361,11 +361,48 @@ export class SecureApiClient {
   public async fetchRepoHistoryViaCloud(
     baseUrl: string,
     repoId: string,
-    path: string,
+    path: string | undefined,
     options?: { branch?: string; limit?: number }
   ): Promise<import("../api/codeHosts/types").CommitInfo[]> {
     const result = await this.backend.fetchRepoHistory(baseUrl, repoId, path, options);
     return result.commits;
+  }
+
+  public async fetchRepoMetadataViaCloud(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<import("../api/codeHosts/types").RemoteRepository> {
+    const result = await this.backend.fetchRepoMetadata(baseUrl, repoId, branch);
+    return result.repository;
+  }
+
+  public async fetchRepoPullsViaCloud(
+    baseUrl: string,
+    repoId: string,
+    options?: { branch?: string; state?: string; limit?: number }
+  ): Promise<import("../api/codeHosts/types").PullRequestSummary[]> {
+    const result = await this.backend.fetchRepoPulls(baseUrl, repoId, options);
+    return result.pulls;
+  }
+
+  public async fetchRepoIssuesViaCloud(
+    baseUrl: string,
+    repoId: string,
+    options?: { branch?: string; state?: string; limit?: number }
+  ): Promise<import("../api/codeHosts/types").IssueSummary[]> {
+    const result = await this.backend.fetchRepoIssues(baseUrl, repoId, options);
+    return result.issues;
+  }
+
+  public async fetchRepoPullReviewsViaCloud(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string }
+  ): Promise<import("../api/codeHosts/types").PullRequestReview[]> {
+    const result = await this.backend.fetchRepoPullReviews(baseUrl, repoId, prNumber, options);
+    return result.reviews;
   }
 
   public async fetchRepoCommitViaCloud(

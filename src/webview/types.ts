@@ -14,6 +14,7 @@ export type RepoContext = {
   owner?: string;
   repo?: string;
   branch?: string;
+  scope?: "repo" | "file";
   file?: string;
   fileSource?: RepoContextFileSource;
   contextWarning?: string;
@@ -27,6 +28,8 @@ export type IntentFeedbackState = {
   actionId?: string;
   title: string;
   message?: string;
+  /** Rotating status lines while context is loading. */
+  activityMessages?: string[];
   progress?: number;
   stale?: boolean;
 };

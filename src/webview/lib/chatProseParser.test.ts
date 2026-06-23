@@ -521,6 +521,22 @@ test("jira ticket stack parses linked tickets with metadata", () => {
   }
 });
 
+// ── Test 24: Source citation pills ─────────────────────────────────────────
+test("parses bare and backtick-wrapped source citations", () => {
+  const input = "See [Sources: GitHub commits & reviews] and `[Sources: Slack thread]` for details.";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks.length, 1);
+  const paragraph = doc.blocks[0]!;
+  assert.equal(paragraph.type, "paragraph");
+  if (paragraph.type === "paragraph") {
+    const citations = paragraph.content.filter((node) => node.type === "source-citation");
+    assert.equal(citations.length, 2);
+    if (citations[0]?.type === "source-citation") {
+      assert.match(citations[0].label, /GitHub commits/i);
+    }
+  }
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nchatProseParser: ${passed}/${total} tests passed`);

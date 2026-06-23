@@ -1,4 +1,9 @@
 import React, { useMemo } from "react";
+import {
+  isQuickActionBlocked,
+  quickActionHoverHint,
+  quickActionWorksWithoutFile
+} from "../../context/quickActionScope";
 import { quickActionModelPrompt } from "../../prompts/quickActionPrompts";
 import { QuickActionId, RepoContext } from "../types";
 
@@ -49,38 +54,25 @@ const ACTIONS: ActionConfig[] = [
   }
 ];
 
-function requiresOpenFile(action: ActionConfig): boolean {
-  return action.id !== "understand-repo";
+function requiresFileTarget(action: ActionConfig): boolean {
+  return !quickActionWorksWithoutFile(action.id);
 }
 
 function isDisabled(action: ActionConfig, context: RepoContext): boolean {
-  if (!context.file && requiresOpenFile(action)) {
-    return true;
-  }
-  return false;
+  return isQuickActionBlocked(action.id, context);
 }
 
 function isDimmed(action: ActionConfig, context: RepoContext): boolean {
   if (!context.file) {
-    return requiresOpenFile(action);
+    return requiresFileTarget(action.id);
   }
   if (action.id === "trace-decision") {
     return !context.selectedLines;
   }
-  if (action.id === "find-owner") {
+  if (action.id === "find-owner" && context.file) {
     return !/\.(ts|tsx|js|jsx|go|py|rb|java|kt|cs|rs)$/i.test(context.file);
   }
   return false;
-}
-
-function actionHint(action: ActionConfig, context: RepoContext, dimmed: boolean): string {
-  if (!context.file && requiresOpenFile(action)) {
-    return "Open a file in the editor first.";
-  }
-  if (dimmed) {
-    return "Open a file for full context.";
-  }
-  return action.description;
 }
 
 export function QuickActionGrid({
@@ -102,7 +94,7 @@ export function QuickActionGrid({
   return (
     <ul className="w-full min-w-0 list-none p-0 m-0" aria-label="Quick actions">
       {actions.map((action) => {
-        const hint = actionHint(action, context, action.dimmed);
+        const hint = quickActionHoverHint(action.id, context, action.dimmed, action.description);
         return (
           <li key={action.id}>
             <button

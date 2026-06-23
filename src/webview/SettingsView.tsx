@@ -28,6 +28,7 @@ type InboundMessage =
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | {
       type: "prompts:list";
       payload: {
@@ -127,6 +128,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   );
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
   const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const apiKeyBaselineRef = useRef<string | null>(null);
   const [githubTokenDraft, setGithubTokenDraft] = useState("");
   const [gitlabTokenDraft, setGitlabTokenDraft] = useState("");
   const [bitbucketUsernameDraft, setBitbucketUsernameDraft] = useState("");
@@ -346,6 +348,13 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   }, [navigate, screen]);
 
   useEffect(() => {
+    if (screen !== "account") {
+      setApiKeyDraft("");
+      apiKeyBaselineRef.current = null;
+    }
+  }, [screen]);
+
+  useEffect(() => {
     post({ type: "webview-ready" });
     const listener = (event: MessageEvent<InboundMessage>) => {
       const message = event.data;
@@ -389,6 +398,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             setConnectionTestOk(false);
           }
           atlassianInstalledRef.current = message.payload.hasAtlassianInstalled;
+          if (!message.payload.hasApiKey) {
+            setApiKeyDraft("");
+            apiKeyBaselineRef.current = null;
+          }
           setPrefs(message.payload);
           break;
         case "settings:navigate": {
@@ -404,6 +417,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           break;
         case "settings:refresh-result":
           completeRefresh(message.payload);
+          break;
+        case "settings:api-key-revealed":
+          apiKeyBaselineRef.current = message.payload.apiKey;
+          setApiKeyDraft(message.payload.apiKey);
           break;
         case "prompts:list":
           setPromptLibrary(message.payload);
@@ -579,13 +596,17 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
           post({ type: "settings:update-api-key", payload: { apiKey: trimmed } });
           setApiKeyDraft("");
+          apiKeyBaselineRef.current = null;
           flashSaved("apiKey");
         }}
-        onClearApiKey={() => {
-          post({ type: "settings:clear-api-key" });
-          setApiKeyDraft("");
-          setConnectionTestMessage(undefined);
-          setConnectionTestOk(undefined);
+        onCopyApiKey={() => post({ type: "settings:copy-api-key" })}
+        onRevealApiKey={() => post({ type: "settings:reveal-api-key" })}
+        onApiKeyBlurCommit={(value) => {
+          const baseline = apiKeyBaselineRef.current;
+          if (baseline !== null && value === baseline) {
+            setApiKeyDraft("");
+            apiKeyBaselineRef.current = null;
+          }
         }}
         onSignInSso={(org) => post({ type: "settings:sign-in-sso", payload: org ? { org } : undefined })}
         onSignOut={() => post({ type: "settings:sign-out" })}

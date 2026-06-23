@@ -141,10 +141,17 @@ export class CoopBackendClient {
         this.http.get(`/graph/${encodedRepo}/search`, {
           baseURL: baseUrl.replace(/\/$/, ""),
           params,
-          headers: await this.authHeaders()
+          headers: await this.authHeaders(),
+          validateStatus: () => true
         })
     });
-    return response.data;
+    if (response.status === 404) {
+      return { data: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { data: [] };
   }
 
   public async listCollections(
@@ -680,9 +687,9 @@ export class CoopBackendClient {
   public async fetchRepoHistory(
     baseUrl: string,
     repoId: string,
-    path: string,
+    path: string | undefined,
     options?: { branch?: string; limit?: number }
-  ): Promise<{ repoId: string; path: string; commits: import("./codeHosts/types").CommitInfo[] }> {
+  ): Promise<{ repoId: string; path?: string; commits: import("./codeHosts/types").CommitInfo[] }> {
     assertCoopEndpoint(baseUrl);
     const encodedRepo = encodeURIComponent(repoId);
     const response = await runResilientRequest({
@@ -691,11 +698,113 @@ export class CoopBackendClient {
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encodedRepo}/history`, {
           baseURL: baseUrl.replace(/\/$/, ""),
-          params: { path, branch: options?.branch, limit: options?.limit },
+          params: { path: path || undefined, branch: options?.branch, limit: options?.limit },
           headers: await this.authHeaders()
         })
     });
     return response.data;
+  }
+
+  public async fetchRepoMetadata(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{ repoId: string; repository: import("./codeHosts/types").RemoteRepository }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/metadata`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch },
+          headers: await this.authHeaders()
+        })
+    });
+    return response.data;
+  }
+
+  public async fetchRepoPulls(
+    baseUrl: string,
+    repoId: string,
+    options?: { branch?: string; state?: string; limit?: number }
+  ): Promise<{ repoId: string; pulls: import("./codeHosts/types").PullRequestSummary[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch: options?.branch, state: options?.state, limit: options?.limit },
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status === 404) {
+      return { repoId, pulls: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, pulls: [] };
+  }
+
+  public async fetchRepoIssues(
+    baseUrl: string,
+    repoId: string,
+    options?: { branch?: string; state?: string; limit?: number }
+  ): Promise<{ repoId: string; issues: import("./codeHosts/types").IssueSummary[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/issues`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch: options?.branch, state: options?.state, limit: options?.limit },
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status === 404) {
+      return { repoId, issues: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, issues: [] };
+  }
+
+  public async fetchRepoPullReviews(
+    baseUrl: string,
+    repoId: string,
+    prNumber: number,
+    options?: { branch?: string }
+  ): Promise<{ repoId: string; number: number; reviews: import("./codeHosts/types").PullRequestReview[] }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls/${prNumber}/reviews`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: { branch: options?.branch },
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status === 404) {
+      return { repoId, number: prNumber, reviews: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, number: prNumber, reviews: [] };
   }
 
   public async fetchRepoCommit(
@@ -734,10 +843,17 @@ export class CoopBackendClient {
         this.http.get(`/v1/orgs/repos/${encodedRepo}/pulls-for-file`, {
           baseURL: baseUrl.replace(/\/$/, ""),
           params: { path, branch: options?.branch, limit: options?.limit },
-          headers: await this.authHeaders()
+          headers: await this.authHeaders(),
+          validateStatus: () => true
         })
     });
-    return response.data;
+    if (response.status === 404) {
+      return { repoId, path, pulls: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, path, pulls: [] };
   }
 
   public async fetchRepoPullComments(
@@ -759,10 +875,17 @@ export class CoopBackendClient {
             pullOwner: options?.pullOwner,
             pullRepo: options?.pullRepo
           },
-          headers: await this.authHeaders()
+          headers: await this.authHeaders(),
+          validateStatus: () => true
         })
     });
-    return response.data;
+    if (response.status === 404) {
+      return { repoId, number: prNumber, comments: [] };
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { repoId, number: prNumber, comments: [] };
   }
 
   public async fetchRepoPullDetail(
@@ -802,6 +925,13 @@ export class CoopBackendClient {
         })
     });
     if (response.status === 404) {
+      if (options?.commitSha) {
+        const linked = await this.fetchRepoCommitPulls(baseUrl, repoId, options.commitSha, options.branch);
+        const fromCommit = linked.pulls.find((pull) => pull.number === prNumber);
+        if (fromCommit) {
+          return { repoId, number: prNumber, pull: fromCommit };
+        }
+      }
       throw new Error(`Pull request #${prNumber} not found on this repository.`);
     }
     if (response.status >= 400) {

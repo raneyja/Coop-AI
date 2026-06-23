@@ -93,11 +93,11 @@ export class JiraClient {
       } else {
         await this.request<{ accountId?: string }>("/myself");
       }
-      return { ok: true, message: "Jira connection successful." };
+      return { ok: true, message: "Jira is reachable." };
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Jira connection failed."
+        message: error instanceof Error ? error.message : "Jira test failed."
       };
     }
   }

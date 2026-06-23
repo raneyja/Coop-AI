@@ -39,7 +39,7 @@ If both are set, **GitHub App** takes precedence for the install URL.
 4. **In the extension** (Extension Host, `coopAI.devMode: false`):
 
    - **Account** → save your Coop org API key → Test connection
-   - **Connections → GitHub** → **Connect GitHub**
+   - **Tools → GitHub** → **Connect GitHub**
    - Approve in the browser → return to VS Code → **Refresh status** / **Test GitHub**
 
 Tokens are stored on the Coop server for your org — not in VS Code Secret Storage.

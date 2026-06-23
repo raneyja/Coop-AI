@@ -3,6 +3,7 @@ import { JiraClient, type JiraIssue } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
 
 export type JiraSearchTicket = {
   key: string;
@@ -61,6 +62,9 @@ export function wantsRepoLinkedJiraDiscovery(query: string): boolean {
 
 export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "jira") {
+    return true;
+  }
+  if (shouldFetchRepoWideIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

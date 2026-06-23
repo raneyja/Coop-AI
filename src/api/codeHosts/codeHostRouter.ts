@@ -102,6 +102,31 @@ export type CloudCodeHostPullDetailFetcher = (options: {
   labels: string[];
 }>;
 
+export type CloudCodeHostRepoMetadataFetcher = (options: {
+  repoId: string;
+  coords: RepoCoordinates;
+}) => Promise<RemoteRepository>;
+
+export type CloudCodeHostRepoPullsFetcher = (options: {
+  repoId: string;
+  coords: RepoCoordinates;
+  state?: string;
+  limit?: number;
+}) => Promise<PullRequestSummary[]>;
+
+export type CloudCodeHostRepoIssuesFetcher = (options: {
+  repoId: string;
+  coords: RepoCoordinates;
+  state?: string;
+  limit?: number;
+}) => Promise<IssueSummary[]>;
+
+export type CloudCodeHostPullReviewsFetcher = (options: {
+  repoId: string;
+  prNumber: number;
+  coords: RepoCoordinates;
+}) => Promise<PullRequestReview[]>;
+
 export type CloudCodeHostCommitPullsFetcher = (options: {
   repoId: string;
   sha: string;
@@ -140,6 +165,10 @@ export type CodeHostRouterOptions = {
   cloudCodeHostPullCommentsFetcher?: CloudCodeHostPullCommentsFetcher;
   cloudCodeHostPullDetailFetcher?: CloudCodeHostPullDetailFetcher;
   cloudCodeHostCommitPullsFetcher?: CloudCodeHostCommitPullsFetcher;
+  cloudCodeHostRepoMetadataFetcher?: CloudCodeHostRepoMetadataFetcher;
+  cloudCodeHostRepoPullsFetcher?: CloudCodeHostRepoPullsFetcher;
+  cloudCodeHostRepoIssuesFetcher?: CloudCodeHostRepoIssuesFetcher;
+  cloudCodeHostPullReviewsFetcher?: CloudCodeHostPullReviewsFetcher;
   cloudCodeHostHealthCheck?: (provider: CodeHostProvider) => Promise<{ ok: boolean; message: string }>;
 };
 
@@ -183,6 +212,12 @@ export class CodeHostRouter {
 
   public async getRepository(coords?: Partial<RepoCoordinates>): Promise<RemoteRepository> {
     const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostRepoMetadataFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("repoMetadata", resolved, "cloud"), "repoMetadata", async () =>
+        this.options.cloudCodeHostRepoMetadataFetcher!({ repoId, coords: resolved })
+      );
+    }
     return this.cached(
       this.key("repoMetadata", resolved),
       "repoMetadata",
@@ -334,9 +369,16 @@ export class CodeHostRouter {
   ): Promise<CommitInfo[]> {
     const resolved = await this.resolveCoordinates(options);
     const limit = options?.limit ?? 100;
-    return this.cached(this.key("commitHistory", resolved, options?.path ?? "", limit), "commitHistory", async () =>
+    const path = (options?.path ?? "").replace(/^\/+/, "");
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostHistoryFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("commitHistory", resolved, path, limit, "cloud"), "commitHistory", async () =>
+        this.options.cloudCodeHostHistoryFetcher!({ repoId, path, coords: resolved, limit })
+      );
+    }
+    return this.cached(this.key("commitHistory", resolved, path, limit), "commitHistory", async () =>
       (await this.getClient(resolved.provider)).getCommitHistory(resolved, {
-        path: options?.path,
+        path: path || undefined,
         limit
       })
     );
@@ -451,6 +493,18 @@ export class CodeHostRouter {
     const resolved = await this.resolveCoordinates(coords);
     const limit = options?.limit ?? 20;
     const state = options?.state ?? "all";
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostRepoPullsFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("prIssue", resolved, "repo-prs", state, "cloud"), "prIssue", async () => {
+        const pulls = await this.options.cloudCodeHostRepoPullsFetcher!({
+          repoId,
+          coords: resolved,
+          state,
+          limit: 50
+        });
+        return pulls.slice(0, limit);
+      });
+    }
     const prs = await this.cached(this.key("prIssue", resolved, "repo-prs", state), "prIssue", async () =>
       (await this.getClient(resolved.provider)).listPullRequests(resolved, { state, limit: 50 })
     );
@@ -464,6 +518,18 @@ export class CodeHostRouter {
     const resolved = await this.resolveCoordinates(coords);
     const limit = options?.limit ?? 20;
     const state = options?.state ?? "all";
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostRepoIssuesFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("prIssue", resolved, "repo-issues", state, "cloud"), "prIssue", async () => {
+        const issues = await this.options.cloudCodeHostRepoIssuesFetcher!({
+          repoId,
+          coords: resolved,
+          state,
+          limit: 50
+        });
+        return issues.slice(0, limit);
+      });
+    }
     const issues = await this.cached(this.key("prIssue", resolved, "repo-issues", state), "prIssue", async () =>
       (await this.getClient(resolved.provider)).listIssues(resolved, { state, limit: 50 })
     );
@@ -495,6 +561,12 @@ export class CodeHostRouter {
     coords?: Partial<RepoCoordinates>
   ): Promise<PullRequestReview[]> {
     const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostPullReviewsFetcher) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("prIssue", resolved, "reviews", prNumber, "cloud"), "prIssue", async () =>
+        this.options.cloudCodeHostPullReviewsFetcher!({ repoId, prNumber, coords: resolved })
+      );
+    }
     return this.cached(this.key("prIssue", resolved, "reviews", prNumber), "prIssue", async () =>
       (await this.getClient(resolved.provider)).getPullRequestReviews(resolved, prNumber)
     );
@@ -660,9 +732,7 @@ export class CodeHostRouter {
   public async getIssuesForFile(filePath: string, coords?: Partial<RepoCoordinates>): Promise<IssueSummary[]> {
     const resolved = await this.resolveCoordinates(coords);
     const path = filePath.replace(/^\/+/, "");
-    const issues = await this.cached(this.key("prIssue", resolved, "issues"), "prIssue", async () =>
-      (await this.getClient(resolved.provider)).listIssues(resolved, { state: "all", limit: 50 })
-    );
+    const issues = await this.listRepoIssues(resolved, { state: "all", limit: 50 });
     const needle = path.toLowerCase();
     return issues.filter(
       (issue) =>

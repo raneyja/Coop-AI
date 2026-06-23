@@ -1,4 +1,5 @@
 import type { RepoContext } from "../chat/types";
+import { isExplicitRepoScope, normalizeRepoContext } from "./contextScope";
 import { isLocalDiskFileSource } from "./localFileContext";
 
 const DISK_LINK_WARNING = "Only files on disk can be linked to GitHub";
@@ -29,6 +30,17 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
   };
 
   if (!incoming.file?.trim() && existing.file?.trim()) {
+    const preserveFile =
+      !isExplicitRepoScope(existing) ||
+      incoming.scope === "file" ||
+      Boolean(incoming.file?.trim());
+    if (!preserveFile) {
+      merged.file = undefined;
+      merged.fileSource = undefined;
+      merged.selectedLines = undefined;
+      merged.selectedSymbol = undefined;
+      merged.languageId = undefined;
+    } else {
     merged.file = existing.file;
     merged.fileSource = shouldPreserveFileSource(incoming.fileSource, existing.fileSource)
       ? existing.fileSource
@@ -51,6 +63,7 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
         ? undefined
         : existing.contextWarning;
     }
+    }
   }
 
   if (!incoming.owner?.trim() && existing.owner?.trim()) {
@@ -70,7 +83,7 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     merged.selectedLines = existing.selectedLines;
   }
 
-  return stripStaleContextWarning(merged);
+  return stripStaleContextWarning(normalizeRepoContext(merged));
 }
 
 function shouldPreserveFileSource(

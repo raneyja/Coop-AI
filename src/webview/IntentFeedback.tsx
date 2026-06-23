@@ -40,7 +40,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFeedbackProps): React.ReactElement | null {
-  if (!state || state.status === "idle") {
+  if (!state || state.status === "idle" || state.status === "loading") {
     return null;
   }
 

@@ -61,7 +61,7 @@ export async function testIntegrationChat(
             })
           : createJiraClientFromCredentials(creds);
       if (!client) {
-        return { ok: false, message: "Jira is not connected. Connect Atlassian in settings." };
+        return { ok: false, message: "Jira is not connected. Connect Atlassian in Tools." };
       }
       return client.testConnection();
     }
@@ -89,7 +89,7 @@ export async function testIntegrationChat(
         if (oauthResult.ok) {
           return {
             ok: true,
-            message: `Confluence connection successful at ${host} (organization OAuth).`
+            message: `Confluence is reachable at ${host} (organization OAuth).`
           };
         }
         return oauthResult;
@@ -106,7 +106,7 @@ export async function testIntegrationChat(
       if (!primary) {
         return {
           ok: false,
-          message: "Confluence is not connected. Connect Atlassian in settings."
+          message: "Confluence is not connected. Connect Atlassian in Tools."
         };
       }
 
@@ -127,7 +127,7 @@ export async function testIntegrationChat(
           return {
             ok: true,
             message:
-              `Confluence connection successful at ${host} using Jira credentials. ` +
+              `Confluence is reachable at ${host} using Jira credentials. ` +
               `Click "Use Jira credentials" in Confluence settings to save them here.`
           };
         }
@@ -140,7 +140,7 @@ export async function testIntegrationChat(
             : derivedFromJira
               ? " (site URL derived from Jira settings)"
               : "";
-        return { ok: true, message: `Confluence connection successful at ${host}.${via}` };
+        return { ok: true, message: `Confluence is reachable at ${host}.${via}` };
       }
 
       return {

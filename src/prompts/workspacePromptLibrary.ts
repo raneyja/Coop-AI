@@ -84,32 +84,7 @@ export function hasWorkspaceFolder(): boolean {
   return Boolean(vscode.workspace.workspaceFolders?.[0]);
 }
 
-export function applyPromptTemplate(
-  template: string,
-  variables: Record<string, string | undefined>
-): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => variables[key] ?? "");
-}
-
-export function promptVariablesFromContext(context: {
-  file?: string;
-  owner?: string;
-  repo?: string;
-  branch?: string;
-  selectedLines?: [number, number];
-}): Record<string, string | undefined> {
-  const lines =
-    context.selectedLines && context.selectedLines.length === 2
-      ? `${context.selectedLines[0]}-${context.selectedLines[1]}`
-      : undefined;
-  return {
-    file: context.file,
-    lines,
-    owner: context.owner,
-    repo: context.repo,
-    branch: context.branch
-  };
-}
+export { applyPromptTemplate, promptVariablesFromContext } from "./promptLibraryRun";
 
 export function watchWorkspacePrompts(onChange: () => void): vscode.Disposable {
   const folder = vscode.workspace.workspaceFolders?.[0];

@@ -27,8 +27,11 @@ import { resolveCodeHostTokenForOrg, assessGithubConnection } from "./codeHostCr
 import { getConnector } from "./codeHostConnectors/registry";
 import { CollectionStore } from "./collectionStore";
 import { normalizeIdentityDirectory } from "../identity/identityDirectory";
+import { mergeSelfIdentityHints } from "../identity/identityAutoSeed";
 import { canUseLightningPlan, type AuthContext, type OrgRepoRecord, type OrgStore } from "./orgStore";
 import { OrgIdentityDirectoryStore } from "./orgIdentityDirectoryStore";
+import { buildIdentityConnectionHints } from "./identityHintsService";
+import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
@@ -52,6 +55,7 @@ export type OrgApiDeps = {
   auditLogger?: AuditLogger;
   userStore?: UserStore;
   usageTracker?: UsageTracker;
+  integrationStore?: IntegrationConnectionStore;
 };
 
 /** Apply index_repository rate limits only when re-queuing a repo that already reached ready. */
@@ -230,11 +234,21 @@ export async function handleOrgApiRequest(
   if (parsed.pathname === "/v1/identity-directory") {
     const store = new OrgIdentityDirectoryStore(requireDbPool(await getDbPool()));
     if (parsed.method === "GET") {
-      const directory = await store.get(auth!.orgId);
+      const stored = await store.get(auth!.orgId);
+      const hints = await buildIdentityConnectionHints(auth!, {
+        orgStore: deps.orgStore,
+        integrationStore: deps.integrationStore,
+        userStore: deps.userStore,
+        allowPatFallback: deps.serverConfig.devMode
+      });
+      const directory = mergeSelfIdentityHints(stored, hints);
       writeJson(response, 200, { directory });
       return true;
     }
     if (parsed.method === "PUT") {
+      if (!requireOrgAdmin(auth, response)) {
+        return true;
+      }
       const body = parsed.body as { directory?: unknown };
       const directory = await store.save(auth!.orgId, normalizeIdentityDirectory(body?.directory));
       await audit(deps, auth!, "identity.directory.save", { people: directory.people.length });
@@ -385,7 +399,7 @@ export async function handleOrgApiRequest(
 
   const remoteRepoApiMatch =
     parsed.method === "GET" &&
-    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|files|tree|search|blame|history|commits|pulls)/.test(
+    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|metadata|files|tree|search|blame|history|commits|pulls|issues)/.test(
       parsed.pathname
     );
   if (remoteRepoApiMatch) {
@@ -458,12 +472,45 @@ export async function handleOrgApiRequest(
     return true;
   }
 
+  const metadataMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/metadata$/);
+  if (parsed.method === "GET" && metadataMatch) {
+    const repoId = decodeURIComponent(metadataMatch[1]);
+    await handleGetRepoMetadata(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.metadata.fetch", { repoId });
+    return true;
+  }
+
+  const repoIssuesMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/issues$/);
+  if (parsed.method === "GET" && repoIssuesMatch) {
+    const repoId = decodeURIComponent(repoIssuesMatch[1]);
+    await handleGetRepoIssues(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.issues.fetch", { repoId, state: parsed.query?.get("state") ?? undefined });
+    return true;
+  }
+
+  const repoPullsMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/pulls$/);
+  if (parsed.method === "GET" && repoPullsMatch) {
+    const repoId = decodeURIComponent(repoPullsMatch[1]);
+    await handleGetRepoPulls(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.pulls.list", { repoId, state: parsed.query?.get("state") ?? undefined });
+    return true;
+  }
+
   const pullCommentsMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/pulls\/(\d+)\/comments$/);
   if (parsed.method === "GET" && pullCommentsMatch) {
     const repoId = decodeURIComponent(pullCommentsMatch[1]);
     const prNumber = Number(pullCommentsMatch[2]);
     await handleGetRepoPullComments(repoId, prNumber, parsed, response, deps, auth!);
     await audit(deps, auth!, "repo.pull.comments.fetch", { repoId, prNumber });
+    return true;
+  }
+
+  const pullReviewsMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/pulls\/(\d+)\/reviews$/);
+  if (parsed.method === "GET" && pullReviewsMatch) {
+    const repoId = decodeURIComponent(pullReviewsMatch[1]);
+    const prNumber = Number(pullReviewsMatch[2]);
+    await handleGetRepoPullReviews(repoId, prNumber, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.pull.reviews.fetch", { repoId, prNumber });
     return true;
   }
 
@@ -1455,11 +1502,7 @@ async function handleGetRepoHistory(
   deps: OrgApiDeps,
   auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
 ): Promise<void> {
-  const filePath = parsed.query?.get("path")?.trim();
-  if (!filePath) {
-    writeJson(response, 400, { error: "path query parameter is required" });
-    return;
-  }
+  const filePath = parsed.query?.get("path")?.trim() ?? "";
   const limit = Math.min(Math.max(Number(parsed.query?.get("limit") ?? 20) || 20, 1), 100);
   const ctx = await resolveOrgRepoContext(repoId, parsed, response, deps, auth);
   if (!ctx) {
@@ -1467,9 +1510,9 @@ async function handleGetRepoHistory(
   }
   try {
     const commits = await fetchRepoHistory(ctx.coords, filePath, ctx.token, limit);
-    writeJson(response, 200, { repoId, path: filePath, commits });
+    writeJson(response, 200, { repoId, path: filePath || undefined, commits });
   } catch (error) {
-    writeCodeHostError(response, error, "failed to fetch file history");
+    writeCodeHostError(response, error, filePath ? "failed to fetch file history" : "failed to fetch commit history");
   }
 }
 
@@ -1771,13 +1814,182 @@ async function fetchRepoHistory(
   token: string,
   limit: number
 ): Promise<Awaited<ReturnType<GitHubClient["getFileHistory"]>>> {
+  const path = filePath.replace(/^\/+/, "");
+  switch (coords.provider) {
+    case "github": {
+      const client = new GitHubClient({ token });
+      return path
+        ? client.getFileHistory(coords, path, limit)
+        : client.getCommitHistory(coords, { limit });
+    }
+    case "gitlab": {
+      const client = new GitLabClient({ token });
+      return path
+        ? client.getFileHistory(coords, path, limit)
+        : client.getCommitHistory(coords, { limit });
+    }
+    case "bitbucket": {
+      const client = new BitbucketClient({ token });
+      return path
+        ? client.getFileHistory(coords, path, limit)
+        : client.getCommitHistory(coords, { limit });
+    }
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function handleGetRepoMetadata(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const ctx = await resolveOrgRepoContext(repoId, parsed, response, deps, auth);
+  if (!ctx) {
+    return;
+  }
+  try {
+    const repository = await fetchRepoMetadata(ctx.coords, ctx.token);
+    writeJson(response, 200, { repoId, repository });
+  } catch (error) {
+    writeCodeHostError(response, error, "failed to fetch repository metadata");
+  }
+}
+
+async function handleGetRepoPulls(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const state = parsed.query?.get("state")?.trim() || "all";
+  const limit = Math.min(Math.max(Number(parsed.query?.get("limit") ?? 20) || 20, 1), 50);
+  const ctx = await resolveOrgRepoContext(repoId, parsed, response, deps, auth);
+  if (!ctx) {
+    return;
+  }
+  try {
+    const pulls = await fetchRepoPulls(ctx.coords, ctx.token, { state, limit });
+    writeJson(response, 200, { repoId, pulls });
+  } catch (error) {
+    writeCodeHostError(response, error, "failed to list pull requests");
+  }
+}
+
+async function handleGetRepoIssues(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const state = parsed.query?.get("state")?.trim() || "all";
+  const limit = Math.min(Math.max(Number(parsed.query?.get("limit") ?? 20) || 20, 1), 50);
+  const ctx = await resolveOrgRepoContext(repoId, parsed, response, deps, auth);
+  if (!ctx) {
+    return;
+  }
+  try {
+    const issues = await fetchRepoIssues(ctx.coords, ctx.token, { state, limit });
+    writeJson(response, 200, { repoId, issues });
+  } catch (error) {
+    writeCodeHostError(response, error, "failed to list issues");
+  }
+}
+
+async function handleGetRepoPullReviews(
+  repoId: string,
+  prNumber: number,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  if (!Number.isFinite(prNumber) || prNumber <= 0) {
+    writeJson(response, 400, { error: "invalid pull request number" });
+    return;
+  }
+  const ctx = await resolveOrgRepoContext(repoId, parsed, response, deps, auth);
+  if (!ctx) {
+    return;
+  }
+  try {
+    const reviews = await fetchRepoPullReviews(ctx.coords, prNumber, ctx.token);
+    writeJson(response, 200, { repoId, number: prNumber, reviews });
+  } catch (error) {
+    writeCodeHostError(response, error, "failed to fetch pull request reviews");
+  }
+}
+
+async function fetchRepoMetadata(
+  coords: RepoCoordinates,
+  token: string
+): Promise<Awaited<ReturnType<GitHubClient["getRepository"]>>> {
   switch (coords.provider) {
     case "github":
-      return new GitHubClient({ token }).getFileHistory(coords, filePath, limit);
+      return new GitHubClient({ token }).getRepository(coords);
     case "gitlab":
-      return new GitLabClient({ token }).getFileHistory(coords, filePath, limit);
+      return new GitLabClient({ token }).getRepository(coords);
     case "bitbucket":
-      return new BitbucketClient({ token }).getFileHistory(coords, filePath, limit);
+      return new BitbucketClient({ token }).getRepository(coords);
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function fetchRepoPulls(
+  coords: RepoCoordinates,
+  token: string,
+  options?: { state?: string; limit?: number }
+): Promise<Awaited<ReturnType<GitHubClient["listPullRequests"]>>> {
+  const limit = options?.limit ?? 20;
+  const state = options?.state ?? "all";
+  switch (coords.provider) {
+    case "github":
+      return new GitHubClient({ token }).listPullRequests(coords, { state, limit });
+    case "gitlab":
+      return new GitLabClient({ token }).listPullRequests(coords, { state, limit });
+    case "bitbucket":
+      return new BitbucketClient({ token }).listPullRequests(coords, { state, limit });
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function fetchRepoIssues(
+  coords: RepoCoordinates,
+  token: string,
+  options?: { state?: string; limit?: number }
+): Promise<Awaited<ReturnType<GitHubClient["listIssues"]>>> {
+  const limit = options?.limit ?? 20;
+  const state = options?.state ?? "all";
+  switch (coords.provider) {
+    case "github":
+      return new GitHubClient({ token }).listIssues(coords, { state, limit });
+    case "gitlab":
+      return new GitLabClient({ token }).listIssues(coords, { state, limit });
+    case "bitbucket":
+      return new BitbucketClient({ token }).listIssues(coords, { state, limit });
+    default:
+      throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
+  }
+}
+
+async function fetchRepoPullReviews(
+  coords: RepoCoordinates,
+  prNumber: number,
+  token: string
+): Promise<Awaited<ReturnType<GitHubClient["getPullRequestReviews"]>>> {
+  switch (coords.provider) {
+    case "github":
+      return new GitHubClient({ token }).getPullRequestReviews(coords, prNumber);
+    case "gitlab":
+      return new GitLabClient({ token }).getPullRequestReviews(coords, prNumber);
+    case "bitbucket":
+      return new BitbucketClient({ token }).getPullRequestReviews(coords, prNumber);
     default:
       throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
   }

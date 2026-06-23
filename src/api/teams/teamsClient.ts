@@ -74,11 +74,11 @@ export class TeamsClient {
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
     try {
       await this.request<{ displayName?: string }>("/me");
-      return { ok: true, message: "Microsoft Teams connection successful." };
+      return { ok: true, message: "Microsoft Teams is reachable." };
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Teams connection failed."
+        message: error instanceof Error ? error.message : "Teams test failed."
       };
     }
   }

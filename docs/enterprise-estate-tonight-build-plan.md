@@ -220,7 +220,7 @@ Implement:
 ## P1.2 — Pro repo picker (extension)
 - LightningModePanel: "Your Deep-Indexed Repos (N/3)" list with enable/disable per repo
 - Flow for new Pro user:
-  1. Connect GitHub (existing Connections)
+  1. Connect GitHub (existing Tools)
   2. Set workspace default repo (existing Workspace settings)
   3. "Add repo" — browse repos you can access (GitHub) OR enter owner/repo
   4. Enable **Deep-Code Graph** indexing → show queued/indexing/ready per repo

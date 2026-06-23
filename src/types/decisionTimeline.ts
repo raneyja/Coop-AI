@@ -32,8 +32,8 @@ export type DecisionSlackThread = {
   permalink?: string;
   messages: Array<{ user: string; text: string; ts: string }>;
   participants: string[];
-  /** How confidently this thread relates to the traced code. */
-  relevance?: "direct" | "linked" | "weak";
+  /** How confidently this thread relates to the traced code (weak matches are not attached). */
+  relevance?: "direct" | "linked";
 };
 
 export type DecisionTeamsThread = {
@@ -61,11 +61,37 @@ export type ChronologyEvent = {
   evidence: string;
 };
 
+export type DecisionIntroducingDiffSummary = {
+  filesChanged: number;
+  insertions?: number;
+  deletions?: number;
+  /** Human-readable 1-2 sentence summary of the introducing change. */
+  summary: string;
+  /** Short excerpt of what was added in the introducing patch. */
+  patchExcerpt?: string;
+};
+
+export type DecisionEvolution = {
+  commitCountSinceIntroduction: number;
+  lastModifiedAt?: string;
+  lastModifiedAuthor?: string;
+};
+
+export type DecisionRationaleRank = {
+  source: string;
+  role: "rationale" | "provenance" | "background";
+  label: string;
+};
+
 export type DecisionTimeline = {
   file: string;
+  targetLabel?: string;
   lineRange?: LineRange;
   codeSnippet?: string;
   originalCommit?: DecisionCommit;
+  introducingDiffSummary?: DecisionIntroducingDiffSummary;
+  evolution?: DecisionEvolution;
+  rationaleRanking?: DecisionRationaleRank[];
   linkedPR?: {
     number: number;
     title: string;
@@ -79,7 +105,7 @@ export type DecisionTimeline = {
   alternatives: DecisionAlternative[];
   slackThread?: DecisionSlackThread;
   teamsThread?: DecisionTeamsThread;
-  jiraTicket?: DecisionJiraTicket;
+  jiraTickets?: DecisionJiraTicket[];
   chronology: ChronologyEvent[];
   warnings: string[];
   fallbackMessage?: string;

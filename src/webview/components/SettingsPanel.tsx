@@ -21,7 +21,9 @@ type SettingsPanelProps = {
   apiKeyDraft: string;
   onApiKeyDraftChange: (value: string) => void;
   onSaveApiKey: () => void;
-  onClearApiKey: () => void;
+  onCopyApiKey: () => void;
+  onRevealApiKey: () => void;
+  onApiKeyBlurCommit: (value: string) => void;
   onSignInSso: (org?: string) => void;
   onSignOut: () => void;
   onTestConnection: () => void;

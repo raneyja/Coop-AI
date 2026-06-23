@@ -49,7 +49,14 @@ import {
   buildContextRequests
 } from "../context/requestBatcher";
 import { RequestPrioritizer } from "../context/requestPrioritizer";
+import {
+  contextGatheringMessagesFor,
+  isPlainChatIntent,
+  type ContextGatheringMessageOptions
+} from "../context/contextGatheringMessages";
+import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerms";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
+import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
@@ -57,6 +64,7 @@ import type {
   ChatFileMention,
   ChatImageAttachment,
   ChatMessage,
+  ChatPersistedArtifact,
   ConflictResolutionState,
   ConflictSummary,
   DegradationNotificationPayload,
@@ -86,6 +94,23 @@ import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
 import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
+import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";
+import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
+import { buildIntegrationSynthesisUserPrompt } from "../prompts/integrationSynthesis";
+import {
+  blastRadiusFromBundle,
+  confluenceSearchFromBundle,
+  googleDocsSearchFromBundle,
+  integrationSearchFromBundle,
+  jiraSearchFromBundle,
+  knowledgeGapsFromBundle,
+  notionSearchFromBundle,
+  repoSummaryFromBundle,
+  slackSearchFromBundle,
+  teamsSearchFromBundle,
+  type RepoSummaryEvidence
+} from "../context/contextBundleEvidence";
+import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
 import { openReferencedLink } from "./openReferencedLink";
@@ -93,9 +118,29 @@ import {
   buildUserMessageWithContext,
   formatChatMessageWithLocalFiles,
   formatChatMessageWithMentionFiles,
-  useCaseFromQuickAction
+  useCaseFromQuickAction,
+  resolveChatUseCase
 } from "../prompts/systemPrompts";
-import { quickActionDisplayText, quickActionModelPrompt } from "../prompts/quickActionPrompts";
+import {
+  appendQuickActionMentionScope,
+  quickActionHistoryContent,
+  quickActionModelPrompt,
+  type QuickActionMentionRef
+} from "../prompts/quickActionPrompts";
+import {
+  filterMentionsByInScopeKeys,
+  allMentionsOutOfScopeForActiveRepo,
+  mentionAttachmentKey,
+  mentionsHaveOutOfScopeForActiveRepo,
+  plainChatHistoryContent,
+  plainChatRefersToAttachedFile,
+  partitionMentionsForQuickAction,
+  type MentionScopeQuickAction
+} from "../prompts/mentionScope";
+import {
+  buildOutOfScopeMentionOnlyResponse,
+  resolveOutOfScopeMentionLabels
+} from "../prompts/mentionResponseEnrichment";
 import {
   parseSlashCommand,
   slashCommandHistoryContent,
@@ -105,14 +150,19 @@ import type { QuickActionId } from "../webview/types";
 import type { IntegrationChatProvider } from "./types";
 import {
   applyPromptTemplate,
+  mergeComposerWithPromptTemplate,
+  promptVariablesFromContext,
+  resolvePromptLibraryRun
+} from "../prompts/promptLibraryRun";
+import {
   deleteWorkspacePrompt,
   hasWorkspaceFolder,
   loadWorkspacePrompts,
-  promptVariablesFromContext,
   replaceWorkspacePrompts,
   saveWorkspacePrompt,
   updateWorkspacePrompt,
-  watchWorkspacePrompts
+  watchWorkspacePrompts,
+  type WorkspacePromptEntry
 } from "../prompts/workspacePromptLibrary";
 import {
   loadPinnedPromptIds,
@@ -124,7 +174,18 @@ import { ChatThreadStore } from "./chatThreadStore";
 import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
 import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
+import {
+  inferContextScope,
+  isExplicitRepoScope,
+  normalizeRepoContext,
+  repoContextForFile,
+  repoContextForRepoSelect
+} from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import {
+  isQuickActionBlocked,
+  quickActionBlockedMessage
+} from "../context/quickActionScope";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
@@ -148,9 +209,23 @@ import {
 } from "../context/editorFileContext";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
-import { readWorkspaceFileFromDisk, resolveLocalAbsolutePath, searchLocalWorkspaceFiles } from "../context/localFileResolver";
+import {
+  readWorkspaceFileFromAbsolutePath,
+  readWorkspaceFileFromDisk,
+  resolveLocalAbsolutePath,
+  searchLocalWorkspaceFiles
+} from "../context/localFileResolver";
+import {
+  MENTION_SEARCH_LIMIT,
+  WORKSPACE_LOCAL_REPO_ID,
+  dedupeHybridMentionResults,
+  graphHitsToMentionResults,
+  localPathsToMentionResults,
+  mergeHybridMentionSearchResults,
+  preferMentionFileContent,
+  rankMentionSearchResults
+} from "./mentionSearchMerge";
 import { canUseCodeHosts, canUseRemoteCodeGraph, isFreePlan } from "../license/licenseChecker";
-import { readWorkspaceFileFromAbsolutePath, readWorkspaceFileFromDisk, resolveLocalAbsolutePath } from "../context/localFileResolver";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
 import { wantsJiraContext } from "../context/jiraContext";
@@ -186,6 +261,7 @@ export class CoopChatSession {
   private closeSettingsHandler?: () => void;
   private pendingSettingsScreen?: SettingsScreen;
   private readonly chatHistory: ChatMessage[] = [];
+  private threadArtifacts: ChatPersistedArtifact[] = [];
   private readonly cache = new Map<string, CachedValue>();
   private readonly contextFetchCache = new Map<string, CacheEntry>();
   private readonly intentDetector = new IntentDetector();
@@ -204,16 +280,22 @@ export class CoopChatSession {
   };
   private readonly conflictAudit = new ConflictAuditStore();
   private streamToken = 0;
+  private chatTurnStartedAt = 0;
   private readonly jobClient: JobApiClient;
   private activeJobId?: string;
   private jobRunToken = 0;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
+  private lastTraceDecisionTimeline?: DecisionTimeline;
+  private pendingEvidenceArtifactId?: string;
   private sessionCostUsd = 0;
   private streamAbortController?: AbortController;
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
+  private editorContextSuppressedUntil = 0;
+  /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
+  private pinnedContextFile?: string;
   private readonly threadStore?: ChatThreadStore;
 
   public constructor(
@@ -284,12 +366,19 @@ export class CoopChatSession {
 
   public attachWebview(webview: vscode.Webview): void {
     this.webview = webview;
-    webview.html = renderWebviewHtml(webview, this.options.extensionUri, {
+    this.reloadChatWebviewHtml();
+    this.wireWebview(webview, "chat");
+    coopSessionRegistry.setActive(this);
+  }
+
+  public reloadChatWebviewHtml(): void {
+    if (!this.webview) {
+      return;
+    }
+    this.webview.html = renderWebviewHtml(this.webview, this.options.extensionUri, {
       view: "chat",
       enforceMinWidth: this.options.enforceSidebarMinWidth
     });
-    this.wireWebview(webview, "chat");
-    coopSessionRegistry.setActive(this);
   }
 
   public attachSettingsWebview(webview: vscode.Webview, onClose?: () => void): void {
@@ -328,10 +417,17 @@ export class CoopChatSession {
     if (this.threadStore) {
       const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.chatHistory.push(...active.messages);
+      this.threadArtifacts = [...(active.artifacts ?? [])];
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
+      if (active.repoContext) {
+        this.currentContext = stripStaleContextWarning(
+          normalizeRepoContext(mergeRepoContext(this.currentContext, active.repoContext))
+        );
+      }
     }
-    this.post({ type: "chat:history", payload: this.chatHistory });
+    this.postContext();
+    this.postChatHistory();
     this.pushThreadsList();
   }
 
@@ -349,6 +445,9 @@ export class CoopChatSession {
   }
 
   public refreshEditorContext(editor: vscode.TextEditor | undefined): void {
+    if (Date.now() < this.editorContextSuppressedUntil) {
+      return;
+    }
     const intent = this.intentDetector.detectEditorIntent(editor);
     const nextContext = repoContextFromEditor(editor, this.preferences, this.currentContext);
     const event = this.intentDetector.create(intent, {
@@ -393,12 +492,13 @@ export class CoopChatSession {
   public newChat(): void {
     if (this.threadStore) {
       this.persistActiveThread();
-      const thread = this.threadStore.startNewThread();
+      const thread = this.threadStore.startNewThread(this.currentContext);
       this.activateThread(thread);
       return;
     }
     this.resetChatState();
-    this.post({ type: "chat:history", payload: [] });
+    this.post({ type: "chat:history", payload: { messages: [], artifacts: [] } });
+    this.postContext();
   }
 
   private abortActiveJob(): void {
@@ -415,7 +515,9 @@ export class CoopChatSession {
     this.streamAbortController?.abort();
     this.abortActiveJob();
     this.chatHistory.length = 0;
+    this.threadArtifacts = [];
     this.sessionCostUsd = 0;
+    this.pinnedContextFile = undefined;
     this.setThreadTitle("New Chat");
   }
 
@@ -430,7 +532,13 @@ export class CoopChatSession {
       return;
     }
     const active = this.threadStore.getActiveThread();
-    this.threadStore.setActiveThread(this.chatHistory, this.sessionCostUsd, active.title);
+    this.threadStore.setActiveThread(
+      this.chatHistory,
+      this.sessionCostUsd,
+      active.title,
+      this.threadArtifacts,
+      this.currentContext
+    );
   }
 
   private pushThreadsList(): void {
@@ -452,15 +560,24 @@ export class CoopChatSession {
     this.streamToken++;
     this.streamAbortController?.abort();
     this.abortActiveJob();
+    this.pinnedContextFile = undefined;
     this.chatHistory.length = 0;
+    this.threadArtifacts = [];
     this.chatHistory.push(...thread.messages);
+    this.threadArtifacts = [...(thread.artifacts ?? [])];
     this.sessionCostUsd = thread.sessionCostUsd;
+    if (thread.repoContext) {
+      this.currentContext = stripStaleContextWarning(
+        normalizeRepoContext(mergeRepoContext(this.currentContext, thread.repoContext))
+      );
+    }
     this.setThreadTitle(thread.title);
     this.post({
       type: "chat:thread-changed",
       payload: { threadId: thread.id, title: thread.title }
     });
-    this.post({ type: "chat:history", payload: this.chatHistory });
+    this.postContext();
+    this.postChatHistory();
   }
 
   private async switchThread(threadId: string): Promise<void> {
@@ -476,17 +593,11 @@ export class CoopChatSession {
   }
 
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
-    this.currentContext = {
-      ...this.currentContext,
-      provider: context.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost,
-      owner: context.owner,
-      repo: context.repo,
-      branch: context.branch ?? this.currentContext.branch,
-      file: undefined,
-      fileSource: undefined,
-      contextWarning: undefined,
-      selectedLines: undefined
-    };
+    this.pinnedContextFile = undefined;
+    this.currentContext = mergeRepoContext(
+      this.currentContext,
+      repoContextForRepoSelect(context) as RepoContext
+    );
     this.postContext();
   }
 
@@ -530,8 +641,58 @@ export class CoopChatSession {
     return [...this.chatHistory];
   }
 
-  public async sendUserMessage(message: string, quickAction?: string): Promise<void> {
-    await this.handleChatSend(message, quickAction);
+  public async sendUserMessage(
+    message: string,
+    quickAction?: string,
+    options?: { mentions?: ChatFileMention[]; attachments?: ChatImageAttachment[] }
+  ): Promise<void> {
+    await this.runResolvedPromptText(message, quickAction, options);
+  }
+
+  private async runResolvedPromptText(
+    template: string,
+    actionId?: string,
+    options?: {
+      mentions?: ChatFileMention[];
+      attachments?: ChatImageAttachment[];
+    }
+  ): Promise<void> {
+    const plan = resolvePromptLibraryRun(template, actionId);
+    const mentions = options?.mentions;
+    const attachments = options?.attachments;
+
+    switch (plan.kind) {
+      case "slash":
+        await this.routeSlashCommand(plan.parsed, attachments, mentions);
+        return;
+      case "quick-action":
+        await this.handleChatSend("", plan.actionId, attachments, {
+          mentions,
+          slashUserArgs: plan.slashUserArgs
+        });
+        return;
+      case "chat":
+        await this.handleChatSend(plan.message, undefined, attachments, { mentions });
+        return;
+    }
+  }
+
+  private async runPromptLibraryEntry(
+    entry: WorkspacePromptEntry,
+    options?: {
+      mentions?: ChatFileMention[];
+      attachments?: ChatImageAttachment[];
+      composerText?: string;
+    }
+  ): Promise<void> {
+    const text = mergeComposerWithPromptTemplate(
+      options?.composerText,
+      applyPromptTemplate(entry.template, promptVariablesFromContext(this.currentContext))
+    );
+    await this.runResolvedPromptText(text, entry.actionId, {
+      mentions: options?.mentions,
+      attachments: options?.attachments
+    });
   }
 
   public async submitQuickAction(actionId: QuickActionId, context?: RepoContext): Promise<void> {
@@ -539,8 +700,7 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, ...context };
       this.postContext();
     }
-    const prompt = quickActionModelPrompt(actionId, this.currentContext);
-    await this.handleChatSend(prompt, actionId);
+    await this.handleChatSend("", actionId);
   }
 
   public async traceDecisionFromSelection(editor: vscode.TextEditor | undefined): Promise<void> {
@@ -576,15 +736,23 @@ export class CoopChatSession {
         if (source === "chat") {
           this.syncAutocompleteStatus();
           this.postContext();
-          await this.pushSettingsState();
+          try {
+            await this.pushSettingsState();
+          } catch (error) {
+            console.error("[CoopAI] pushSettingsState failed on webview-ready", error);
+          }
           void this.pushLightningState();
-          this.postToChat({ type: "chat:history", payload: this.chatHistory });
+          this.postChatHistory();
           this.pushThreadsList();
           void this.pushWorkspacePrompts();
           this.workspacePromptWatcher?.dispose();
           this.workspacePromptWatcher = watchWorkspacePrompts(() => void this.pushWorkspacePrompts());
         } else {
-          await this.pushSettingsState();
+          try {
+            await this.pushSettingsState();
+          } catch (error) {
+            console.error("[CoopAI] pushSettingsState failed on settings webview-ready", error);
+          }
           void this.pushWorkspacePrompts();
           void this.handleCollectionsListRequest();
           this.flushPendingSettingsNavigation();
@@ -621,7 +789,9 @@ export class CoopChatSession {
           message.payload.attachments,
           {
             historyContent: message.payload.historyContent,
-            mentions: message.payload.mentions
+            mentions: message.payload.mentions,
+            slashUserArgs: message.payload.slashUserArgs,
+            targetFile: message.payload.targetFile
           }
         );
         return;
@@ -644,8 +814,11 @@ export class CoopChatSession {
         if (!entry) {
           return;
         }
-        const text = applyPromptTemplate(entry.template, promptVariablesFromContext(this.currentContext));
-        await this.handleChatSend(text, entry.actionId as QuickActionId | undefined);
+        await this.runPromptLibraryEntry(entry, {
+          mentions: message.payload.mentions,
+          attachments: message.payload.attachments,
+          composerText: message.payload.composerText
+        });
         return;
       }
       case "prompts:save":
@@ -777,6 +950,23 @@ export class CoopChatSession {
         await this.options.api.clearToken();
         await this.refreshAllSessionsPreferences();
         return;
+      case "settings:copy-api-key": {
+        const token = await this.options.api.getToken();
+        if (!token) {
+          void vscode.window.showWarningMessage("No API key saved.");
+          return;
+        }
+        await vscode.env.clipboard.writeText(token);
+        void vscode.window.showInformationMessage("API key copied to clipboard.");
+        return;
+      }
+      case "settings:reveal-api-key": {
+        const token = await this.options.api.getToken();
+        if (token) {
+          this.postToSettings({ type: "settings:api-key-revealed", payload: { apiKey: token } });
+        }
+        return;
+      }
       case "settings:sign-in-sso":
         await this.handleSignInSso(message.payload?.org);
         return;
@@ -948,7 +1138,7 @@ export class CoopChatSession {
         const creds = await this.options.integrationSecrets.getCredentials();
         if (!creds.jiraEmail || !creds.jiraToken) {
           void vscode.window.showWarningMessage(
-            "Configure Jira email and API token first (Settings → Connections → Jira)."
+            "Configure Jira email and API token first (Settings → Tools → Jira)."
           );
           return;
         }
@@ -989,6 +1179,12 @@ export class CoopChatSession {
         await this.refreshAllSessionsPreferences();
         return;
       case "settings:save-identity-directory":
+        if (this.preferences.canInstallIntegrations === false) {
+          void vscode.window.showWarningMessage(
+            "Only organization admins can save teammate identity links."
+          );
+          return;
+        }
         await this.options.identityDirectoryStore.save(
           message.payload.directory,
           this.preferences.apiBaseUrl
@@ -1008,6 +1204,10 @@ export class CoopChatSession {
       case "ownership:copy-draft":
         await vscode.env.clipboard.writeText(message.payload.text);
         void vscode.window.showInformationMessage("Ownership message draft copied to clipboard.");
+        return;
+      case "evidence:copy-text":
+        await vscode.env.clipboard.writeText(message.payload.text);
+        void vscode.window.showInformationMessage(message.payload.toast ?? "Copied to clipboard.");
         return;
       case "job:cancel":
         await this.handleJobCancel(message.payload.jobId);
@@ -1091,14 +1291,46 @@ export class CoopChatSession {
   }
 
   private async handleEditorIntent(event: IntentEvent): Promise<ContextFetchResult[]> {
+    if (Date.now() < this.editorContextSuppressedUntil) {
+      return [];
+    }
     const incoming = intentContextToRepoContext(event.context);
-    this.currentContext = mergeRepoContext(this.currentContext, incoming);
+    if (
+      this.pinnedContextFile &&
+      incoming.file &&
+      !pathsReferToSameFile(incoming.file, this.pinnedContextFile)
+    ) {
+      return [];
+    }
+    const toMerge =
+      isExplicitRepoScope(this.currentContext) && !incoming.file?.trim()
+        ? ({
+            provider: incoming.provider,
+            owner: incoming.owner,
+            repo: incoming.repo,
+            branch: incoming.branch,
+            scope: "repo"
+          } as RepoContext)
+        : incoming;
+    this.currentContext = mergeRepoContext(this.currentContext, toMerge);
     this.postContext();
     return this.runIntentFetch(event, { quiet: true });
   }
 
-  private async handleRemoteFileIntent(intent: { path: string; line?: number }): Promise<void> {
-    const { path, line } = intent;
+  private async handleRemoteFileIntent(intent: {
+    path: string;
+    line?: number;
+    preserveContext?: boolean;
+  }): Promise<void> {
+    const { path, line, preserveContext } = intent;
+
+    if (preserveContext) {
+      await this.openRepoFileForReview(path, line);
+      this.postContext();
+      return;
+    }
+
+    this.pinnedContextFile = undefined;
 
     if (!canUseRemoteCodeGraph(this.preferences.plan)) {
       const absolute = resolveLocalAbsolutePath(path);
@@ -1114,11 +1346,12 @@ export class CoopChatSession {
           editor.selection = new vscode.Selection(position, position);
           editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
         }
-        this.currentContext = mergeRepoContext(this.currentContext, {
-          file: path,
-          fileSource: "local",
-          contextWarning: undefined
-        });
+        this.currentContext = mergeRepoContext(
+          this.currentContext,
+          repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
+            fileSource: "local"
+          }) as RepoContext
+        );
         this.postContext();
         return;
       }
@@ -1128,11 +1361,12 @@ export class CoopChatSession {
       return;
     }
 
-    this.currentContext = mergeRepoContext(this.currentContext, {
-      file: path,
-      fileSource: "remote",
-      contextWarning: undefined
-    });
+    this.currentContext = mergeRepoContext(
+      this.currentContext,
+      repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
+        fileSource: "remote"
+      }) as RepoContext
+    );
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
@@ -1163,7 +1397,66 @@ export class CoopChatSession {
     await this.runIntentFetch(event, { quiet: true });
   }
 
-  private async openRemoteFileFromApi(filePath: string, line?: number): Promise<boolean> {
+  /** Open a repo file for manual review without changing chat context. */
+  private async openRepoFileForReview(path: string, line?: number): Promise<void> {
+    this.editorContextSuppressedUntil = Date.now() + 15_000;
+    this.intentDebouncer.cancelAll();
+
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: true,
+          preserveFocus: true
+        });
+        this.revealLineInEditor(editor, line);
+        return;
+      }
+      void vscode.window.showWarningMessage(
+        "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
+      );
+      return;
+    }
+
+    if (this.currentContext.owner && this.currentContext.repo) {
+      let opened = await openRemoteFileInEditor({
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        filePath: path,
+        line,
+        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+        branch: this.currentContext.branch,
+        preserveSidebarFocus: true,
+        reviewOpen: true
+      });
+      if (!opened) {
+        opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true });
+      }
+      if (!opened) {
+        const relative = path.replace(/^\/+/, "");
+        void vscode.window.showWarningMessage(
+          `Could not open ${relative} in the editor. Install GitHub Repositories or clone the repo locally.`
+        );
+      }
+    }
+  }
+
+  private revealLineInEditor(editor: vscode.TextEditor, line?: number): void {
+    if (!line) {
+      return;
+    }
+    const position = new vscode.Position(Math.max(0, line - 1), 0);
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+  }
+
+  private async openRemoteFileFromApi(
+    filePath: string,
+    line?: number,
+    options?: { preserveFocus?: boolean; reviewOpen?: boolean }
+  ): Promise<boolean> {
     const { owner, repo, provider, branch } = this.currentContext;
     if (!owner || !repo) {
       return false;
@@ -1188,16 +1481,18 @@ export class CoopChatSession {
                 ? "markdown"
                 : undefined;
       const doc = await vscode.workspace.openTextDocument({ content: text, language });
-      const editor = await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preview: false,
-        preserveFocus: false
-      });
-      if (line) {
-        const position = new vscode.Position(Math.max(0, line - 1), 0);
-        editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-      }
+      const editor = await vscode.window.showTextDocument(doc, options?.reviewOpen
+        ? {
+            viewColumn: vscode.ViewColumn.Beside,
+            preview: true,
+            preserveFocus: true
+          }
+        : {
+            viewColumn: vscode.ViewColumn.One,
+            preview: options?.preserveFocus ?? false,
+            preserveFocus: options?.preserveFocus ?? false
+          });
+      this.revealLineInEditor(editor, line);
       return true;
     } catch {
       return false;
@@ -1213,52 +1508,68 @@ export class CoopChatSession {
       return [];
     }
 
+    const loadingState = this.loadingFeedbackFor(event);
+
     if (!options.quiet) {
-      this.postIntentFeedback(this.loadingFeedbackFor(event));
+      this.postIntentFeedback(loadingState);
     }
 
     const requests = buildContextRequests(event, requestTypes);
-    const results = await Promise.all(
-      requests.map((request) =>
-        this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
-      )
-    );
-    this.processConflicts(event, results);
+    try {
+      const results = await Promise.all(
+        requests.map((request) =>
+          this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
+        )
+      );
+      this.processConflicts(event, results);
 
-    if (!options.quiet) {
-      const stale = results.find((result) => result.stale);
-      const error = results.find((result) => result.error);
-      if (stale) {
-        this.postIntentFeedback({
-          status: "rate-limited",
-          intent: event.intent,
-          actionId: event.context.buttonClicked,
-          title: "Using cached context",
-          message: stale.message,
-          stale: true
-        });
-      } else if (error) {
+      if (!options.quiet) {
+        const stale = results.find((result) => result.stale);
+        const error = results.find((result) => result.error);
+        if (stale) {
+          this.postIntentFeedback({
+            status: "rate-limited",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: "Using cached context",
+            message: stale.message,
+            stale: true
+          });
+        } else if (error) {
+          this.postIntentFeedback({
+            status: "error",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: "Context fetch failed",
+            message: error.error
+          });
+        } else if (!isPlainChatIntent(event) && event.context.buttonClicked !== "trace-decision") {
+          // Plain chat keeps the loading strip until the first streamed token.
+          this.postIntentFeedback({
+            status: "complete",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: "Context ready",
+            message: completionMessageFor(event)
+          });
+        }
+      }
+
+      this.lastContextBundle = mergeContextBundleResults(this.lastContextBundle, results);
+      return this.lastContextBundle;
+    } catch (error) {
+      if (!options.quiet) {
+        const message = error instanceof Error ? error.message : "Context fetch failed";
         this.postIntentFeedback({
           status: "error",
           intent: event.intent,
           actionId: event.context.buttonClicked,
           title: "Context fetch failed",
-          message: error.error
-        });
-      } else if (event.context.buttonClicked !== "trace-decision") {
-        // Trace Decision surfaces completeness on the timeline card, not a banner.
-        this.postIntentFeedback({
-          status: "complete",
-          intent: event.intent,
-          actionId: event.context.buttonClicked,
-          title: "Context ready",
-          message: completionMessageFor(event)
+          message
         });
       }
+      return this.lastContextBundle;
     }
-
-    this.lastContextBundle = results;
-    return results;
   }
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
@@ -1538,23 +1849,26 @@ export class CoopChatSession {
 
   private loadingFeedbackFor(event: IntentEvent): IntentFeedbackState {
     const action = event.context.buttonClicked;
+    const activityMessages = contextGatheringMessagesFor(event, this.contextGatheringOptions());
     if (action === "blast-radius") {
       return {
         status: "loading",
         intent: event.intent,
         actionId: action,
         title: "Analyzing dependencies...",
-        message: "Building change impact context before sending your prompt.",
+        message: activityMessages[0],
+        activityMessages,
         progress: 35
       };
     }
     if (action === "knowledge-gaps") {
       return {
-        status: "warning",
+        status: "loading",
         intent: event.intent,
         actionId: action,
         title: "Scanning for knowledge gaps",
-        message: "This may scan broad repo context and can take longer on large repositories.",
+        message: activityMessages[0],
+        activityMessages,
         progress: 15
       };
     }
@@ -1563,7 +1877,8 @@ export class CoopChatSession {
       intent: event.intent,
       actionId: action,
       title: "Fetching context...",
-      message: event.costEstimate === "expensive" ? "Gathering deeper repo context." : "Updating lightweight context."
+      message: activityMessages[0],
+      activityMessages
     };
   }
 
@@ -1769,6 +2084,10 @@ export class CoopChatSession {
       /** Bubble/history text; defaults to message (or quick-action tag prefix). */
       historyContent?: string;
       mentions?: ChatFileMention[];
+      /** Custom text after a slash command token (e.g. `/gaps focus on auth`). */
+      slashUserArgs?: string;
+      /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
+      targetFile?: string;
     }
   ): Promise<void> {
     // Slash-command routing applies only to manually typed messages — never to
@@ -1776,7 +2095,7 @@ export class CoopChatSession {
     if (!quickAction && !options?.sourceHint) {
       const parsed = parseSlashCommand(message);
       if (parsed) {
-        await this.routeSlashCommand(parsed, attachments);
+        await this.routeSlashCommand(parsed, attachments, options?.mentions);
         return;
       }
     }
@@ -1786,27 +2105,57 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
     }
+    const actionContext = quickAction
+      ? this.contextForQuickAction(this.currentContext, options?.targetFile)
+      : this.currentContext;
     if (quickAction === "understand-repo") {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
     this.pendingChatLocalFiles = quickAction === "understand-repo" ? undefined : this.loadLocalFilesSyncForChat();
 
-    if (quickAction === "find-owner" && !this.currentContext.file?.trim()) {
+    if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
         type: "chat:error",
         payload: {
-          message:
-            "Find Owner needs an open file. Open a local project file or pick one from the CoopAI remote tree."
+          message: quickActionBlockedMessage(quickAction as QuickActionId, actionContext)
         }
       });
       return;
     }
 
+    if (
+      quickAction &&
+      ["blast-radius", "find-owner", "trace-decision", "knowledge-gaps"].includes(quickAction) &&
+      actionContext.file?.trim()
+    ) {
+      this.pinnedContextFile = actionContext.file.trim();
+    }
+
+    const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
+    const intentQuickAction = quickAction ?? inheritedQuickAction;
+
+    const mentionRefs = this.quickActionMentionRefs(options?.mentions);
+    const modelMessage = quickAction
+      ? options?.slashUserArgs !== undefined
+        ? appendQuickActionMentionScope(
+            quickAction as QuickActionId,
+            options.slashUserArgs,
+            actionContext,
+            mentionRefs
+          )
+        : quickActionModelPrompt(quickAction as QuickActionId, actionContext, mentionRefs)
+      : message;
+
     const historyContent =
       options?.historyContent ??
       (quickAction
-        ? `[${quickAction}] ${quickActionDisplayText(quickAction as QuickActionId, this.currentContext)}`
-        : message);
+        ? quickActionHistoryContent(
+            quickAction as QuickActionId,
+            actionContext,
+            options?.slashUserArgs,
+            mentionRefs
+          )
+        : plainChatHistoryContent(message, mentionRefs));
     const userMessage: ChatMessage = {
       role: "user",
       content: historyContent,
@@ -1823,25 +2172,40 @@ export class CoopChatSession {
         })
       );
     }
-    this.post({ type: "chat:history", payload: this.chatHistory });
+    this.postChatHistory();
     this.persistActiveThread();
+    this.chatTurnStartedAt = Date.now();
+
+    const prefetchIntentEvent = intentQuickAction
+      ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
+      : this.intentDetector.fromManualChatSubmit(this.currentContext, message, {
+          integrationProvider:
+            options?.integrationProvider ?? this.detectChatIntegrationProvider(message)
+        });
+    this.postIntentFeedback(this.loadingFeedbackFor(prefetchIntentEvent));
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
-      const ranAsync = await this.runAsyncQuickAction(quickAction, message);
+      const ranAsync = await this.runAsyncQuickAction(quickAction, modelMessage);
       if (ranAsync) {
-        const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, message);
+        const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, modelMessage);
         await this.runIntentFetch(intentEvent, { quiet: true });
-        this.applyKnowledgeGapJobResultToBundle(quickAction);
-        await this.continueChatAfterContext(message, quickAction, attachments, {
+        this.enrichKnowledgeGapsBundle(quickAction);
+        if (quickAction === "blast-radius") {
+          this.applyBlastRadiusJobResultToBundle(quickAction);
+        }
+        await this.postEvidenceCardsFromBundle(quickAction);
+        await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
           mentions: options?.mentions
         });
         return;
       }
     }
 
-    const integrationProvider = options?.integrationProvider ?? this.detectChatIntegrationProvider(message);
-    const intentEvent = quickAction
-      ? this.intentDetector.fromQuickAction(quickAction, this.currentContext, message)
+    const integrationProvider =
+      options?.integrationProvider ??
+      (quickAction ? undefined : this.detectChatIntegrationProvider(message));
+    const intentEvent = intentQuickAction
+      ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
     if (quickAction === "trace-decision") {
       this.contextFetchCache.clear();
@@ -1849,44 +2213,65 @@ export class CoopChatSession {
       await this.options.codeHostRouter.clearDataCache();
     }
     await this.runIntentFetch(intentEvent);
-    if (quickAction === "trace-decision") {
-      this.postDecisionTimelineFromBundle();
-    }
-    if (quickAction === "find-owner") {
-      this.postOwnershipCardFromBundle();
-    }
-    await this.continueChatAfterContext(message, quickAction, attachments, {
+    this.enrichKnowledgeGapsBundle(quickAction);
+    await this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+    await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
       sourceHint: options?.sourceHint,
-      integrationProvider: options?.integrationProvider,
+      integrationProvider,
       mentions: options?.mentions
     });
   }
 
+  private quickActionMentionRefs(mentions?: ChatFileMention[]): QuickActionMentionRef[] {
+    return (mentions ?? []).slice(0, 3).map((mention) => ({
+      path: mention.path,
+      repoId: mention.repoId,
+      source:
+        mention.source ?? (mention.repoId === WORKSPACE_LOCAL_REPO_ID ? ("local" as const) : undefined)
+    }));
+  }
+
+  private contextForQuickAction(context: RepoContext, targetFile?: string): RepoContext {
+    const scoped = targetFile?.trim().replace(/^\/+/, "");
+    if (!scoped) {
+      return context;
+    }
+    return { ...context, file: scoped };
+  }
+
   private async routeSlashCommand(
     parsed: ParsedSlashCommand,
-    attachments?: ChatImageAttachment[]
+    attachments?: ChatImageAttachment[],
+    mentions?: ChatFileMention[]
   ): Promise<void> {
     const { def, args } = parsed;
-    const historyContent = slashCommandHistoryContent(def, args);
+    const mentionRefs = this.quickActionMentionRefs(mentions);
+    const slashUserArgs = args.trim() || undefined;
 
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
-      const resolved = args.length > 0 ? args : quickActionModelPrompt(actionId, this.currentContext);
-      // Heavy actions spawn a minute-long background job — confirm before running.
-      if (shouldUseAsyncJob(actionId)) {
+      if (isQuickActionBlocked(actionId, this.currentContext)) {
         this.post({
-          type: "command:confirm",
-          payload: {
-            title: confirmTitleForAction(actionId),
-            message: confirmMessageForAction(actionId),
-            run: { message: resolved, quickAction: actionId, attachments, historyContent }
-          }
+          type: "chat:error",
+          payload: { message: quickActionBlockedMessage(actionId, this.currentContext) }
         });
         return;
       }
-      await this.handleChatSend(resolved, actionId, attachments, { historyContent });
+      const historyContent = quickActionHistoryContent(
+        actionId,
+        this.currentContext,
+        slashUserArgs,
+        mentionRefs
+      );
+      await this.handleChatSend("", actionId, attachments, {
+        historyContent,
+        mentions,
+        slashUserArgs
+      });
       return;
     }
+
+    const historyContent = slashCommandHistoryContent(def, args);
 
     const provider = def.target.provider;
     if (!this.isIntegrationConnected(provider)) {
@@ -1923,7 +2308,8 @@ export class CoopChatSession {
     await this.handleChatSend(userText, undefined, attachments, {
       sourceHint,
       integrationProvider: provider,
-      historyContent
+      historyContent,
+      mentions
     });
   }
 
@@ -1969,7 +2355,11 @@ export class CoopChatSession {
   }
 
   private isCodeHostConnected(): boolean {
-    switch (this.preferences.defaultCodeHost) {
+    return this.isCodeHostProviderConnected(this.preferences.defaultCodeHost);
+  }
+
+  private isCodeHostProviderConnected(provider: CodeHostProviderPreference): boolean {
+    switch (provider) {
       case "gitlab":
         return this.preferences.hasGitLabToken || this.preferences.hasGitLabAppInstalled;
       case "bitbucket":
@@ -1980,15 +2370,217 @@ export class CoopChatSession {
     }
   }
 
+  private contextGatheringOptions(): ContextGatheringMessageOptions {
+    const codeHostProvider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    return {
+      codeHostProvider,
+      codeHostConnected: this.isCodeHostProviderConnected(codeHostProvider),
+      integrations: {
+        jira: this.isIntegrationConnected("jira"),
+        slack: this.isIntegrationConnected("slack"),
+        teams: this.isIntegrationConnected("teams"),
+        confluence: this.isIntegrationConnected("confluence"),
+        notion: this.isIntegrationConnected("notion"),
+        googleDocs: this.isIntegrationConnected("google-docs")
+      }
+    };
+  }
+
+  private postChatHistory(): void {
+    this.post({
+      type: "chat:history",
+      payload: { messages: this.chatHistory, artifacts: this.threadArtifacts }
+    });
+  }
+
+  private recordEvidenceArtifact(
+    kind: ChatPersistedArtifact["kind"],
+    artifactId: string,
+    payload: Record<string, unknown>
+  ): void {
+    this.threadArtifacts.push({
+      id: artifactId,
+      kind,
+      timestamp: Date.now(),
+      payload
+    });
+    this.persistActiveThread();
+  }
+
+  private beginEvidenceArtifact(): string {
+    const id = `evidence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.pendingEvidenceArtifactId = id;
+    return id;
+  }
+
+  private async postEvidenceCardsFromBundle(
+    quickAction?: string,
+    integrationProvider?: IntegrationChatProvider
+  ): Promise<void> {
+    if (quickAction === "trace-decision") {
+      this.postDecisionTimelineFromBundle();
+      return;
+    }
+    if (quickAction === "find-owner") {
+      this.postOwnershipCardFromBundle();
+      return;
+    }
+    if (quickAction === "understand-repo") {
+      await this.postRepoSummaryEvidenceFromBundle();
+      return;
+    }
+    if (quickAction === "blast-radius") {
+      this.postBlastRadiusEvidenceFromBundle();
+      return;
+    }
+    if (quickAction === "knowledge-gaps") {
+      this.postKnowledgeGapsEvidenceFromBundle();
+      return;
+    }
+    if (integrationProvider) {
+      this.postIntegrationEvidenceFromBundle(integrationProvider);
+    }
+  }
+
+  private async enrichRepoSummaryGraphEvidence(
+    evidence: RepoSummaryEvidence
+  ): Promise<RepoSummaryEvidence> {
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    if (!owner || !repo) {
+      return evidence;
+    }
+    const coords: RepoCoordinates = {
+      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github",
+      owner,
+      repo,
+      branch: this.currentContext.branch ?? this.preferences.branch
+    };
+    const repoId = repoIdFromCoordinates(coords);
+    const candidatePaths = [
+      ...(evidence.entryFiles?.map((file) => file.path) ?? []),
+      ...(evidence.manifest?.entryPoints ?? []),
+      "README.md",
+      "readme.md",
+      "package.json",
+      "fastify.js",
+      "src/index.ts"
+    ].filter((path, index, list) => list.indexOf(path) === index);
+
+    let bestDependents = evidence.dependencyGraph?.directDependents ?? [];
+    let bestEntry = evidence.dependencyGraph?.entryFile;
+    let source = evidence.dependencyGraph?.source;
+
+    for (const path of candidatePaths.slice(0, 6)) {
+      try {
+        const result = await this.options.indexBackend.dependents(repoId, path);
+        if (result.dependents.length > bestDependents.length) {
+          bestDependents = result.dependents;
+          bestEntry = path;
+          source = result.source;
+        }
+      } catch {
+        // try next entry path
+      }
+    }
+
+    if (bestDependents.length === 0 && !evidence.dependencyGraph?.edgeCount) {
+      return evidence;
+    }
+
+    return {
+      ...evidence,
+      dependencyGraph: {
+        ...evidence.dependencyGraph,
+        entryFile: bestEntry ?? evidence.dependencyGraph?.entryFile,
+        directDependents: bestDependents,
+        source: source ?? evidence.dependencyGraph?.source,
+        indexedFileCount: evidence.manifest?.fileCount ?? evidence.dependencyGraph?.indexedFileCount
+      }
+    };
+  }
+
+  private async postRepoSummaryEvidenceFromBundle(): Promise<void> {
+    let evidence = repoSummaryFromBundle(this.lastContextBundle);
+    if (!evidence) {
+      return;
+    }
+    evidence = await this.enrichRepoSummaryGraphEvidence(evidence);
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = {
+      artifactId,
+      evidence,
+      owner: this.currentContext.owner ?? this.preferences.owner ?? "unknown",
+      repo: this.currentContext.repo ?? this.preferences.repo ?? "unknown",
+      branch: this.currentContext.branch ?? this.preferences.branch
+    };
+    this.recordEvidenceArtifact("repo-summary", artifactId, payload);
+    this.post({ type: "repo-summary:card", payload });
+  }
+
+  private postBlastRadiusEvidenceFromBundle(): void {
+    const file = this.currentContext.file?.trim();
+    if (!file) {
+      return;
+    }
+    const evidence = blastRadiusFromBundle(this.lastContextBundle) ?? { file };
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = { artifactId, evidence, file };
+    this.recordEvidenceArtifact("blast-radius", artifactId, payload);
+    this.post({ type: "blast-radius:card", payload });
+  }
+
+  private postKnowledgeGapsEvidenceFromBundle(): void {
+    const evidence = knowledgeGapsFromBundle(this.lastContextBundle);
+    const confluence = confluenceSearchFromBundle(this.lastContextBundle);
+    const jira = jiraSearchFromBundle(this.lastContextBundle);
+    const slack = slackSearchFromBundle(this.lastContextBundle);
+    const notion = notionSearchFromBundle(this.lastContextBundle);
+    const googleDocs = googleDocsSearchFromBundle(this.lastContextBundle);
+    const teams = teamsSearchFromBundle(this.lastContextBundle);
+    if (!evidence && !confluence && !jira && !slack && !notion && !googleDocs && !teams) {
+      return;
+    }
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = {
+      artifactId,
+      evidence: evidence ?? { file: this.currentContext.file },
+      confluence,
+      jira,
+      slack,
+      notion,
+      googleDocs,
+      teams,
+      file: this.currentContext.file
+    };
+    this.recordEvidenceArtifact("knowledge-gaps", artifactId, payload);
+    this.post({ type: "knowledge-gaps:card", payload });
+  }
+
+  private postIntegrationEvidenceFromBundle(provider: IntegrationChatProvider): void {
+    const evidence = integrationSearchFromBundle(this.lastContextBundle, provider);
+    if (!evidence) {
+      return;
+    }
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = { artifactId, provider, evidence };
+    this.recordEvidenceArtifact("integration", artifactId, payload);
+    this.post({ type: "integration:card", payload });
+  }
+
   private postOwnershipCardFromBundle(): void {
     const report = this.ownershipReportFromBundle();
     if (!report) {
       return;
     }
-    this.post({
-      type: "ownership:card",
-      payload: { report }
-    });
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = {
+      artifactId,
+      report,
+      slackSearch: slackSearchFromBundle(this.lastContextBundle)
+    };
+    this.recordEvidenceArtifact("ownership", artifactId, payload);
+    this.post({ type: "ownership:card", payload });
   }
 
   private ownershipReportFromBundle(): OwnershipReport | undefined {
@@ -2010,10 +2602,9 @@ export class CoopChatSession {
   }
 
   private postDecisionTimelineFromBundle(): void {
-    const entry = this.lastContextBundle.find((result) => result.type === "decision_history");
-    const data = entry?.data as { timeline?: DecisionTimeline } | undefined;
-    const timeline = data?.timeline;
+    const timeline = this.enrichedDecisionTimelineFromBundle();
     if (!timeline) {
+      const entry = this.lastContextBundle.find((result) => result.type === "decision_history");
       this.postIntentFeedback({
         status: "error",
         intent: UserIntent.QUICK_ACTION_CLICKED,
@@ -2024,16 +2615,10 @@ export class CoopChatSession {
       return;
     }
 
-    const enriched: DecisionTimeline = {
-      ...timeline,
-      lineRange: timeline.lineRange ?? this.lineRangeFromContext(this.currentContext),
-      codeSnippet: timeline.codeSnippet ?? this.selectedCodeSnippet()
-    };
-
-    this.post({
-      type: "decision:timeline",
-      payload: { timeline: enriched }
-    });
+    const artifactId = this.beginEvidenceArtifact();
+    const payload = { artifactId, timeline };
+    this.recordEvidenceArtifact("decision", artifactId, payload);
+    this.post({ type: "decision:timeline", payload });
   }
 
   private lineRangeFromContext(context: RepoContext): { start: number; end: number } | undefined {
@@ -2054,6 +2639,18 @@ export class CoopChatSession {
   private decisionTimelineFromBundle(): DecisionTimeline | undefined {
     const entry = this.lastContextBundle.find((result) => result.type === "decision_history");
     return (entry?.data as { timeline?: DecisionTimeline } | undefined)?.timeline;
+  }
+
+  private enrichedDecisionTimelineFromBundle(): DecisionTimeline | undefined {
+    const timeline = this.decisionTimelineFromBundle();
+    if (!timeline) {
+      return undefined;
+    }
+    return {
+      ...timeline,
+      lineRange: timeline.lineRange ?? this.lineRangeFromContext(this.currentContext),
+      codeSnippet: timeline.codeSnippet ?? this.selectedCodeSnippet()
+    };
   }
 
   private async continueChatAfterContext(
@@ -2080,24 +2677,66 @@ export class CoopChatSession {
     });
     // Never replay cached chat answers — stale cache returned hallucinations when file attach failed.
     const skipResponseCache = true;
-    if (this.preferences.useCachedResponses && !skipResponseCache) {
-      const cached = this.readCache(cacheKey);
-      if (cached) {
-        this.post({ type: "chat:complete", payload: { message: cached as ChatMessage } });
-        this.chatHistory.push(cached as ChatMessage);
-        this.post({ type: "chat:history", payload: this.chatHistory });
-        return;
-      }
-    }
-
     const token = ++this.streamToken;
     this.streamAbortController?.abort();
     this.streamAbortController = new AbortController();
     const signal = this.streamAbortController.signal;
+
+    if (this.preferences.useCachedResponses && !skipResponseCache) {
+      const cached = this.readCache(cacheKey);
+      if (cached) {
+        await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+        if (token !== this.streamToken) {
+          return;
+        }
+        this.clearIntentFeedback();
+        this.post({ type: "chat:complete", payload: { message: cached as ChatMessage } });
+        this.chatHistory.push(cached as ChatMessage);
+        this.postChatHistory();
+        return;
+      }
+    }
+
     let full = "";
 
+    if (!quickAction) {
+      const synthesisMessages = appendThinkingProcessingTerms(
+        [],
+        `synthesis-${token}-${Date.now()}`,
+        8
+      );
+      this.postIntentFeedback({
+        status: "loading",
+        intent: UserIntent.MANUAL_CHAT_SUBMIT,
+        title: "Preparing answer",
+        message: synthesisMessages[0],
+        activityMessages: synthesisMessages
+      });
+    } else {
+      const synthesisMessages = appendThinkingProcessingTerms(
+        [],
+        `synthesis-${quickAction}-${token}-${Date.now()}`,
+        8
+      );
+      this.postIntentFeedback({
+        status: "loading",
+        intent: UserIntent.QUICK_ACTION_CLICKED,
+        actionId: quickAction,
+        title: "Preparing answer",
+        message: synthesisMessages[0],
+        activityMessages: synthesisMessages
+      });
+    }
+
     try {
-      const skipLocalAttach = effectiveQuickAction === "understand-repo" || Boolean(integrationProvider);
+      const mentionRefs = this.quickActionMentionRefs(options?.mentions);
+      const activeRepoId = buildRepoId(this.preferences, this.currentContext);
+      const allMentionsOutOfScope = allMentionsOutOfScopeForActiveRepo(mentionRefs, activeRepoId);
+
+      const skipLocalAttach =
+        effectiveQuickAction === "understand-repo" ||
+        Boolean(integrationProvider) ||
+        (!effectiveQuickAction && !integrationProvider && allMentionsOutOfScope);
       const localPayload = skipLocalAttach ? undefined : await this.resolveChatLocalFiles();
       if (localPayload?.files.length) {
         this.injectLocalFilesIntoBundle(localPayload);
@@ -2116,23 +2755,82 @@ export class CoopChatSession {
         ];
       }
 
-      const decisionTimeline = this.decisionTimelineFromBundle();
+      const decisionTimeline = this.enrichedDecisionTimelineFromBundle();
+      if (effectiveQuickAction === "trace-decision" && decisionTimeline) {
+        this.lastTraceDecisionTimeline = decisionTimeline;
+      }
       const ownershipReport = this.ownershipReportFromBundle();
-      const repoSummary = this.repoSummaryFromBundle();
+      const repoSummary = repoSummaryFromBundle(contextBundle);
+      const blastRadiusEvidence = blastRadiusFromBundle(contextBundle);
+      const knowledgeGapsEvidence = knowledgeGapsFromBundle(contextBundle);
+      const confluenceEvidence = confluenceSearchFromBundle(contextBundle);
+      const jiraEvidence = jiraSearchFromBundle(contextBundle);
+      const slackEvidence = slackSearchFromBundle(contextBundle);
+      const notionEvidence = notionSearchFromBundle(contextBundle);
+      const googleDocsEvidence = googleDocsSearchFromBundle(contextBundle);
+      const teamsEvidence = teamsSearchFromBundle(contextBundle);
+      const integrationEvidence = integrationProvider
+        ? integrationSearchFromBundle(contextBundle, integrationProvider)
+        : undefined;
+
+      if (
+        !effectiveQuickAction &&
+        !integrationProvider &&
+        allMentionsOutOfScope &&
+        plainChatRefersToAttachedFile(content)
+      ) {
+        const outOfScopePaths = resolveOutOfScopeMentionLabels("integration", mentionRefs, {
+          activeRepoId,
+          owner: this.currentContext.owner ?? this.preferences.owner,
+          repo: this.currentContext.repo ?? this.preferences.repo,
+          contextBundle
+        });
+        const targetLabel =
+          this.currentContext.owner && this.currentContext.repo
+            ? `${this.currentContext.owner}/${this.currentContext.repo}`
+            : "this repository";
+        const responseContent = buildOutOfScopeMentionOnlyResponse({ outOfScopePaths, targetLabel });
+        await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+        if (token !== this.streamToken) {
+          return;
+        }
+        this.clearIntentFeedback();
+        const finalMessage: ChatMessage = {
+          role: "assistant",
+          content: responseContent,
+          timestamp: Date.now()
+        };
+        this.chatHistory.push(finalMessage);
+        this.post({ type: "chat:complete", payload: { message: finalMessage } });
+        this.postChatHistory();
+        this.persistActiveThread();
+        return;
+      }
+
+      const lastUserBubble = [...this.chatHistory].reverse().find((entry) => entry.role === "user")?.content;
       const llmMessage =
         effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
               file: this.currentContext.file ?? decisionTimeline.file,
+              owner: this.currentContext.owner ?? this.preferences.owner,
+              repo: this.currentContext.repo ?? this.preferences.repo,
               lineRange: decisionTimeline.lineRange,
               codeSnippet: decisionTimeline.codeSnippet,
-              userQuestion: content
+              userQuestion: content,
+              userBubble: lastUserBubble,
+              mentionedFiles: mentionRefs,
+              activeRepoId,
+              isFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
             })
           : effectiveQuickAction === "find-owner" && ownershipReport
             ? buildOwnershipSynthesisUserPrompt({
                 report: ownershipReport,
                 file: this.currentContext.file ?? ownershipReport.path,
-                userQuestion: content
+                slackSearch: slackEvidence,
+                userQuestion: content,
+                mentionedFiles: mentionRefs,
+                activeRepoId
               })
             : effectiveQuickAction === "understand-repo" && repoSummary
               ? buildRepoSummarySynthesisUserPrompt({
@@ -2141,11 +2839,50 @@ export class CoopChatSession {
                   branch: this.currentContext.branch ?? this.preferences.branch,
                   activeFile: this.currentContext.file,
                   summary: repoSummary,
-                  userQuestion: content
+                  userQuestion: content,
+                  mentionedFiles: mentionRefs,
+                  activeRepoId
                 })
-              : sourceHint
-                ? `${sourceHint}\n\n${content}`
-                : content;
+              : effectiveQuickAction === "blast-radius" && blastRadiusEvidence
+                ? buildBlastRadiusSynthesisUserPrompt({
+                    evidence: blastRadiusEvidence,
+                    file: this.currentContext.file ?? blastRadiusEvidence.file ?? "unknown",
+                    owner: this.currentContext.owner ?? this.preferences.owner,
+                    repo: this.currentContext.repo ?? this.preferences.repo,
+                    userQuestion: content,
+                    mentionedFiles: mentionRefs,
+                    activeRepoId
+                  })
+                : effectiveQuickAction === "knowledge-gaps"
+                  ? buildKnowledgeGapsSynthesisUserPrompt({
+                      evidence: knowledgeGapsEvidence ?? { file: this.currentContext.file },
+                      confluence: confluenceEvidence,
+                      jira: jiraEvidence,
+                      slack: slackEvidence,
+                      notion: notionEvidence,
+                      googleDocs: googleDocsEvidence,
+                      teams: teamsEvidence,
+                      file: this.currentContext.file,
+                      owner: this.currentContext.owner ?? this.preferences.owner,
+                      repo: this.currentContext.repo ?? this.preferences.repo,
+                      userQuestion: content,
+                      mentionedFiles: mentionRefs,
+                      activeRepoId
+                    })
+                  : integrationProvider && integrationEvidence
+                    ? buildIntegrationSynthesisUserPrompt({
+                        provider: integrationProvider,
+                        evidence: integrationEvidence,
+                        owner: this.currentContext.owner,
+                        repo: this.currentContext.repo,
+                        file: this.currentContext.file,
+                        userQuestion: content,
+                        mentionedFiles: mentionRefs,
+                        activeRepoId
+                      })
+                    : sourceHint
+                      ? `${sourceHint}\n\n${content}`
+                      : content;
 
       const useContextBundle =
         Boolean(effectiveQuickAction) ||
@@ -2160,9 +2897,28 @@ export class CoopChatSession {
             entry.type === "knowledge_gaps"
         );
 
-      const mentionFiles = options?.mentions?.length
-        ? await this.resolveMentionFiles(options.mentions)
-        : [];
+      const scopeAction: MentionScopeQuickAction | undefined =
+        effectiveQuickAction ??
+        (integrationProvider
+          ? "integration"
+          : mentionsHaveOutOfScopeForActiveRepo(mentionRefs, activeRepoId)
+            ? "integration"
+            : undefined);
+      let mentionsToResolve = options?.mentions ?? [];
+      if (scopeAction && mentionRefs.length) {
+        const inScopeKeys = new Set(
+          partitionMentionsForQuickAction(scopeAction, mentionRefs, {
+            activeRepoId,
+            owner: this.currentContext.owner ?? this.preferences.owner,
+            repo: this.currentContext.repo ?? this.preferences.repo,
+            repoSummary: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
+          }).inRepo.map((mention) => mentionAttachmentKey(mention))
+        );
+        mentionsToResolve = filterMentionsByInScopeKeys(mentionsToResolve, inScopeKeys);
+      }
+
+      const mentionFiles =
+        mentionsToResolve.length > 0 ? await this.resolveMentionFiles(mentionsToResolve) : [];
       const apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -2180,7 +2936,9 @@ export class CoopChatSession {
                 file:
                   effectiveQuickAction === "understand-repo" || integrationProvider
                     ? undefined
-                    : this.currentContext.file,
+                    : allMentionsOutOfScope
+                      ? undefined
+                      : this.currentContext.file,
                 selectedLines: this.currentContext.selectedLines,
                 languageId: this.currentContext.languageId,
                 contextBundle
@@ -2255,6 +3013,19 @@ export class CoopChatSession {
       }
 
       const priorHistory = this.chatHistory.slice(0, -1);
+      let clearedIntentForOutput = false;
+      const outputGate = createChatOutputGate({
+        startedAt: this.chatTurnStartedAt,
+        isCancelled: () => token !== this.streamToken,
+        onChunk: (chunk) => {
+          if (!clearedIntentForOutput) {
+            clearedIntentForOutput = true;
+            this.clearIntentFeedback();
+          }
+          full += chunk;
+          this.post({ type: "chat:delta", payload: { chunk } });
+        }
+      });
 
       const result = await this.options.api.streamChat(
         {
@@ -2269,35 +3040,52 @@ export class CoopChatSession {
           mentions: options?.mentions,
           model: this.preferences.model,
           provider: this.preferences.llmProvider,
-          useCase: useCaseFromQuickAction(effectiveQuickAction),
+          useCase: resolveChatUseCase(effectiveQuickAction, integrationProvider),
           temperature: this.preferences.temperature,
           maxTokens: this.preferences.maxTokens
         },
         (chunk) => {
-          if (token !== this.streamToken) {
-            return;
-          }
-          full += chunk;
-          this.post({ type: "chat:delta", payload: { chunk } });
+          outputGate.push(chunk);
         },
         this.preferences.apiBaseUrl,
         signal
       );
 
+      await outputGate.waitUntilOpen();
+
+      if (token !== this.streamToken) {
+        return;
+      }
+
+      await delayUntilMinResponseVisible(this.chatTurnStartedAt);
       if (token !== this.streamToken) {
         return;
       }
 
       const enrichedContent = enrichChatResponseForAction({
         quickAction: effectiveQuickAction,
+        integrationProvider,
         content: full,
         contextBundle,
-        activeFile: this.currentContext.file
+        activeFile: this.currentContext.file,
+        mentions: mentionRefs,
+        activeRepoId,
+        owner: this.currentContext.owner ?? this.preferences.owner,
+        repo: this.currentContext.repo ?? this.preferences.repo,
+        userQuestion: lastUserBubble,
+        fallbackTimeline: this.lastTraceDecisionTimeline,
+        isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
       });
-      const finalMessage = { ...result.message, content: enrichedContent };
+      const finalMessage: ChatMessage = {
+        ...result.message,
+        content: enrichedContent,
+        ...(this.pendingEvidenceArtifactId ? { relatedArtifactId: this.pendingEvidenceArtifactId } : {})
+      };
+      this.pendingEvidenceArtifactId = undefined;
       this.chatHistory.push(finalMessage);
+            this.clearIntentFeedback();
       this.post({ type: "chat:complete", payload: { message: finalMessage } });
-      this.post({ type: "chat:history", payload: this.chatHistory });
+      this.postChatHistory();
       this.persistActiveThread();
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
@@ -2331,6 +3119,10 @@ export class CoopChatSession {
       return false;
     }
 
+    if (quickAction === "knowledge-gaps") {
+      this.lastJobResult = undefined;
+    }
+
     const repoId = buildRepoId(this.preferences, this.currentContext);
     const jobToken = ++this.jobRunToken;
     this.jobClient.setBaseUrl(resolveCoopBaseUrl().baseUrl);
@@ -2358,13 +3150,10 @@ export class CoopChatSession {
       this.activeJobId = submit.jobId;
 
       if (submit.cached) {
-        const ageLabel = formatCachedScanAge(submit.completedAt);
         this.postQuickActionJobActivity(quickAction, {
           jobId: submit.jobId,
           status: "running",
-          message: ageLabel
-            ? `Using scan from ${ageLabel} ago…`
-            : "Using recent scan…",
+          message: preparingAnswerMessageForAction(quickAction),
           progress: 80
         });
         const resultPayload = await this.jobClient.getJobResult(submit.jobId);
@@ -2402,16 +3191,15 @@ export class CoopChatSession {
       if (jobToken !== this.jobRunToken) {
         return false;
       }
-      const message = error instanceof Error ? error.message : "Background job failed";
-      const rateLimited = /daily limit reached|hourly limit reached|rate limit/i.test(message);
       this.postQuickActionJobActivity(quickAction, {
         jobId: this.activeJobId ?? "unknown",
         status: "running",
-        message: rateLimited
-          ? "Deep-scan limit reached — preparing answer from available context…"
-          : "Background scan unavailable — preparing answer from available context…",
+        message: preparingAnswerMessageForAction(quickAction),
         progress: 75
       });
+      if (quickAction === "knowledge-gaps") {
+        this.lastJobResult = undefined;
+      }
       return false;
     }
   }
@@ -2468,6 +3256,44 @@ export class CoopChatSession {
     });
   }
 
+  private applyBlastRadiusJobResultToBundle(quickAction: string | undefined): void {
+    if (quickAction !== "blast-radius" || !this.lastJobResult) {
+      return;
+    }
+    const result = this.lastJobResult as Record<string, unknown>;
+    const targetFile = this.currentContext.file?.trim();
+    const jobScan = {
+      source: "dependency-graph-job",
+      edgeCount: Number(result.edgeCount ?? 0),
+      lastIndexedAt: String(result.lastIndexedAt ?? ""),
+      dependentsSample: Array.isArray(result.dependentsSample) ? result.dependentsSample : []
+    };
+    const index = this.lastContextBundle.findIndex((entry) => entry.type === "dependencies");
+    if (index >= 0) {
+      const existing = this.lastContextBundle[index];
+      const data =
+        typeof existing.data === "object" && existing.data !== null
+          ? { ...(existing.data as Record<string, unknown>) }
+          : {};
+      this.lastContextBundle[index] = {
+        ...existing,
+        data: {
+          ...data,
+          ...(targetFile ? { file: targetFile } : {}),
+          jobScan,
+          graphMeta: { edgeCount: jobScan.edgeCount, lastIndexedAt: jobScan.lastIndexedAt }
+        }
+      };
+      return;
+    }
+    this.lastContextBundle.push({
+      requestId: `blast-radius-${Date.now()}`,
+      type: "dependencies",
+      data: { ...(targetFile ? { file: targetFile } : {}), jobScan },
+      fetchedAt: new Date()
+    });
+  }
+
   private applyKnowledgeGapJobResultToBundle(quickAction: string | undefined): void {
     if (quickAction !== "knowledge-gaps" || !this.lastJobResult) {
       return;
@@ -2483,6 +3309,99 @@ export class CoopChatSession {
       lowPriority: Number(result.lowPriority ?? 0),
       gaps: gaps.slice(0, 50)
     };
+    this.mergeKnowledgeGapScanIntoBundle(jobScan);
+  }
+
+  private enrichKnowledgeGapsBundle(quickAction: string | undefined): void {
+    if (quickAction !== "knowledge-gaps") {
+      return;
+    }
+    this.applyKnowledgeGapJobResultToBundle(quickAction);
+    if (!this.knowledgeGapScanInBundle()) {
+      this.applyHeuristicKnowledgeGapScan();
+    }
+  }
+
+  private knowledgeGapScanInBundle(): boolean {
+    return this.lastContextBundle.some((entry) => {
+      if (entry.type !== "knowledge_gaps") {
+        return false;
+      }
+      return Boolean(asRecord(entry.data).jobScan);
+    });
+  }
+
+  private applyHeuristicKnowledgeGapScan(): void {
+    const file = this.currentContext.file?.trim();
+    const confluence = confluenceSearchFromBundle(this.lastContextBundle);
+    const notion = notionSearchFromBundle(this.lastContextBundle);
+    const googleDocs = googleDocsSearchFromBundle(this.lastContextBundle);
+    const evidence = knowledgeGapsFromBundle(this.lastContextBundle) ?? (file ? { file } : undefined);
+    if (!evidence) {
+      return;
+    }
+
+    const gaps: Array<Record<string, unknown>> = [];
+    const target = file ?? evidence.file;
+
+    if (!evidence.ownershipReport?.scores?.length) {
+      gaps.push({
+        file: target,
+        type: "missing_owner",
+        priority: "high",
+        message: "No ownership scores attached for this path"
+      });
+    }
+    if (
+      target &&
+      !evidence.dependencyGraph?.directDependents?.length &&
+      !evidence.dependencyGraph?.edgeCount
+    ) {
+      gaps.push({
+        file: target,
+        type: "impact_unknown",
+        priority: "medium",
+        message: "No indexed dependency graph for impact context"
+      });
+    }
+    if (confluence && !confluence.error && !confluence.pages?.length) {
+      gaps.push({
+        file: target,
+        type: "missing_docs",
+        priority: "medium",
+        message: "No Confluence pages matched repo scope"
+      });
+    }
+    if (notion && !notion.error && !notion.pages?.length) {
+      gaps.push({
+        file: target,
+        type: "missing_docs",
+        priority: "medium",
+        message: "No Notion pages matched repo scope"
+      });
+    }
+    if (googleDocs && !googleDocs.error && !googleDocs.documents?.length) {
+      gaps.push({
+        file: target,
+        type: "missing_docs",
+        priority: "medium",
+        message: "No Google Docs matched repo scope"
+      });
+    }
+
+    const jobScan: Record<string, unknown> = {
+      source: "live-heuristic",
+      cached: false,
+      foundGaps: gaps.length,
+      highPriority: gaps.filter((gap) => gap.priority === "high").length,
+      mediumPriority: gaps.filter((gap) => gap.priority === "medium").length,
+      lowPriority: gaps.filter((gap) => gap.priority === "low").length,
+      gaps
+    };
+    this.mergeKnowledgeGapScanIntoBundle(jobScan);
+  }
+
+  private mergeKnowledgeGapScanIntoBundle(jobScan: Record<string, unknown>): void {
     const index = this.lastContextBundle.findIndex((entry) => entry.type === "knowledge_gaps");
     if (index >= 0) {
       const existing = this.lastContextBundle[index];
@@ -2499,7 +3418,10 @@ export class CoopChatSession {
     this.lastContextBundle.push({
       requestId: `knowledge-gaps-${Date.now()}`,
       type: "knowledge_gaps",
-      data: { jobScan },
+      data: {
+        file: this.currentContext.file,
+        jobScan
+      },
       fetchedAt: new Date()
     });
   }
@@ -2823,7 +3745,6 @@ export class CoopChatSession {
       }
     }
     this.setRepoContext(payload);
-    await this.handleRepoList("", "chat");
   }
 
   private async handleRepoSearch(query: string, source: "chat" | "settings"): Promise<void> {
@@ -3104,21 +4025,36 @@ export class CoopChatSession {
   }
 
   private applyDefaultRepoToContext(): void {
-    this.currentContext = {
-      ...this.currentContext,
-      provider: this.currentContext.provider || this.preferences.defaultCodeHost,
-      owner: this.currentContext.owner || this.preferences.owner || undefined,
-      repo: this.currentContext.repo || this.preferences.repo || undefined,
-      branch: this.currentContext.branch || this.preferences.branch || undefined
-    };
+    if (this.currentContext.owner?.trim() && this.currentContext.repo?.trim()) {
+      this.currentContext = normalizeRepoContext(this.currentContext);
+      return;
+    }
+    if (this.preferences.owner?.trim() && this.preferences.repo?.trim()) {
+      this.currentContext = mergeRepoContext(
+        this.currentContext,
+        repoContextForRepoSelect({
+          provider: this.preferences.defaultCodeHost,
+          owner: this.preferences.owner,
+          repo: this.preferences.repo,
+          branch: this.preferences.branch
+        }) as RepoContext
+      );
+    }
   }
 
   private syncDescription(): void {
-    const description = this.currentContext.file ?? "No active file";
+    const scope = inferContextScope(this.currentContext);
+    const description =
+      scope === "file" && this.currentContext.file
+        ? this.currentContext.file
+        : this.currentContext.owner && this.currentContext.repo
+          ? `${this.currentContext.owner}/${this.currentContext.repo}`
+          : "No active context";
     this.options.onDescriptionChange?.(description);
   }
 
   private postContext(): void {
+    this.currentContext = normalizeRepoContext(this.currentContext);
     this.syncDescription();
     const repoId = buildRepoId(this.preferences, this.currentContext);
     this.options.lightningStatusBar.setCurrentRepo(repoId);
@@ -3130,6 +4066,9 @@ export class CoopChatSession {
 
   /** Snap active editor file/selection into context immediately before chat send. */
   private snapEditorContextBeforeSend(): void {
+    if (isExplicitRepoScope(this.currentContext)) {
+      return;
+    }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
     const editor = pickEditorForContext(this.currentContext.file);
     this.currentContext = mergeRepoContext(
@@ -3150,6 +4089,9 @@ export class CoopChatSession {
 
   /** Synchronous capture at send time — async editor/focus state is unreliable after webview click. */
   private loadLocalFilesSyncForChat(): LocalFileContextPayload | undefined {
+    if (isExplicitRepoScope(this.currentContext)) {
+      return undefined;
+    }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
     const editor = pickEditorForContext(this.currentContext.file);
     if (editor) {
@@ -3498,7 +4440,7 @@ export class CoopChatSession {
     if (!saved) {
       return;
     }
-    this.currentContext = mergeRepoContext(this.currentContext, saved);
+    this.currentContext = normalizeRepoContext(mergeRepoContext(this.currentContext, saved));
     this.currentContext = stripStaleContextWarning(this.currentContext);
     this.post({ type: "context:update", payload: this.currentContext });
   }
@@ -3536,7 +4478,7 @@ export class CoopChatSession {
   private async handleInstallGithubApp(): Promise<void> {
     if (!canUseCodeHosts(this.preferences.plan)) {
       void vscode.window.showErrorMessage(
-        "GitHub connections require Pro. The free plan works on local workspace files only."
+        "GitHub requires Pro. The free plan works on local workspace files only."
       );
       return;
     }
@@ -3585,7 +4527,7 @@ export class CoopChatSession {
   private async handleInstallGitlabApp(): Promise<void> {
     if (!canUseCodeHosts(this.preferences.plan)) {
       void vscode.window.showErrorMessage(
-        "GitLab connections require Pro. The free plan works on local workspace files only."
+        "GitLab requires Pro. The free plan works on local workspace files only."
       );
       return;
     }
@@ -3608,7 +4550,7 @@ export class CoopChatSession {
   private async handleInstallBitbucketApp(): Promise<void> {
     if (!canUseCodeHosts(this.preferences.plan)) {
       void vscode.window.showErrorMessage(
-        "Bitbucket connections require Pro. The free plan works on local workspace files only."
+        "Bitbucket requires Pro. The free plan works on local workspace files only."
       );
       return;
     }
@@ -3781,6 +4723,13 @@ export class CoopChatSession {
     void this.options.lightningStatusBar.refresh();
   }
 
+  private clearIntentFeedback(): void {
+    this.post({
+      type: "intent:feedback",
+      payload: { status: "complete", title: "" }
+    });
+  }
+
   private postIntentFeedback(payload: IntentFeedbackState): void {
     this.post({ type: "intent:feedback", payload });
   }
@@ -3793,7 +4742,7 @@ export class CoopChatSession {
     return this.applyOrgCodeHostHealthOverrides(health);
   }
 
-  /** Align quick-action health with Settings → Connections (org GitHub App / OAuth). */
+  /** Align quick-action health with Settings → Tools (org GitHub App / OAuth). */
   private applyOrgCodeHostHealthOverrides(health: IntegrationHealth[]): IntegrationHealth[] {
     if (isCoopDevMode() || readLightningBackend() !== "cloud") {
       return health;
@@ -4015,15 +4964,24 @@ export class CoopChatSession {
     });
 
     try {
+      const owner = this.currentContext.owner?.trim();
+      const repo = this.currentContext.repo?.trim();
+      const preferRepoId =
+        owner && repo ? buildRepoId(this.preferences, this.currentContext) : undefined;
+      const mentionMergeOptions = preferRepoId ? { preferRepoId } : undefined;
+
       if (!canUseRemoteCodeGraph(this.preferences.plan)) {
         const repoId = buildRepoId(this.preferences, this.currentContext);
-        const paths = await searchLocalWorkspaceFiles(query);
-        const items: MentionSearchResult[] = paths.map((path) => ({ repoId, path }));
+        const paths = await searchLocalWorkspaceFiles(query, MENTION_SEARCH_LIMIT);
+        const items: MentionSearchResult[] = paths.map((path) => ({ repoId, path, source: "local" as const }));
         this.post({
           type: "mention:results",
           payload: {
             pattern: query,
-            items: rankMentionSearchResults(dedupeMentionResults(items), query).slice(0, 12),
+            items: rankMentionSearchResults(dedupeHybridMentionResults(items), query).slice(
+              0,
+              MENTION_SEARCH_LIMIT
+            ),
             hint: items.length === 0 ? "No workspace files matched. Free plan searches local folders only." : undefined
           }
         });
@@ -4032,52 +4990,84 @@ export class CoopChatSession {
 
       const searchRepoIds = await this.resolveMentionSearchRepoIds();
       const repoScope = resolveMentionRepoScope(query, searchRepoIds);
+      const defaultRepoId = buildRepoId(this.preferences, this.currentContext);
+      const searchRepoId = repoScope?.repoId ?? defaultRepoId;
+      const searchPattern = repoScope?.pathQuery ?? query;
+      const searchScope = resolveSearchScope(this.preferences);
+
       if (repoScope && !repoScope.pathQuery) {
+        const localPaths = await searchLocalWorkspaceFiles(query, MENTION_SEARCH_LIMIT);
+        const localItems = localPathsToMentionResults(localPaths, mentionMergeOptions);
+        const ranked = rankMentionSearchResults(
+          dedupeHybridMentionResults(localItems, mentionMergeOptions),
+          query,
+          mentionMergeOptions
+        ).slice(0, MENTION_SEARCH_LIMIT);
         this.post({
           type: "mention:results",
           payload: {
             pattern: query,
-            items: [],
-            hint: `Type a path after @${repoScope.matchedPrefix}/ — e.g. @${repoScope.matchedPrefix}/cmd/zoekt-webserver/main.go`
+            items: ranked,
+            hint:
+              ranked.length === 0
+                ? `Type a path after @${repoScope.matchedPrefix}/ — e.g. @${repoScope.matchedPrefix}/cmd/zoekt-webserver/main.go`
+                : undefined
           }
         });
         return;
       }
 
-      const defaultRepoId = buildRepoId(this.preferences, this.currentContext);
-      const searchRepoId = repoScope?.repoId ?? defaultRepoId;
-      const searchPattern = repoScope?.pathQuery ?? query;
-      const searchScope = resolveSearchScope(this.preferences);
-      const remote = (await this.options.api.graphSearch(
-        this.preferences.apiBaseUrl,
-        searchRepoId,
-        searchPattern,
-        {
-          collectionId: repoScope ? undefined : searchScope.collectionId,
-          scope: repoScope ? undefined : searchScope.scope,
-          mention: true
-        }
-      )) as {
-        data?: Array<{ repoId?: string; path?: string; sha?: string; score?: number }>;
-      };
-
-      const items: MentionSearchResult[] = [];
-      for (const hit of remote.data ?? []) {
-        if (!hit.path || isNoisyMentionPath(hit.path)) {
-          continue;
-        }
-        items.push({
-          repoId: hit.repoId ?? searchRepoId,
-          path: hit.path,
-          lineNumber: hit.sha ? Number(hit.sha) : undefined,
-          score: hit.score
-        });
+      const localPaths = await searchLocalWorkspaceFiles(searchPattern, MENTION_SEARCH_LIMIT);
+      let graphItems: MentionSearchResult[] = [];
+      let graphError: string | undefined;
+      try {
+        const remote = (await this.options.api.graphSearch(
+          this.preferences.apiBaseUrl,
+          searchRepoId,
+          searchPattern,
+          {
+            collectionId: repoScope ? undefined : searchScope.collectionId,
+            scope: repoScope ? undefined : searchScope.scope,
+            mention: true
+          }
+        )) as {
+          data?: Array<{ repoId?: string; path?: string; sha?: string; score?: number }>;
+        };
+        graphItems = graphHitsToMentionResults(remote.data ?? [], searchRepoId, isNoisyMentionPath);
+      } catch (error) {
+        graphError = error instanceof Error ? error.message : "Indexed search failed.";
       }
 
-      const ranked = rankMentionSearchResults(dedupeMentionResults(items), searchPattern).slice(0, 12);
+      if (graphItems.length === 0 && !repoScope) {
+        const fallbackItems = await this.searchMentionCodeHostFallback(searchRepoId, searchPattern);
+        if (fallbackItems.length > 0) {
+          graphItems = fallbackItems;
+          graphError = undefined;
+        }
+      }
+
+      const localItems = localPathsToMentionResults(localPaths, mentionMergeOptions);
+      const ranked = mergeHybridMentionSearchResults(
+        graphItems,
+        localItems,
+        searchPattern,
+        mentionMergeOptions
+      );
+      const hasGraphHits = graphItems.length > 0;
+      const hasLocalHits = localItems.length > 0;
+      const emptyHint =
+        ranked.length === 0
+          ? "No files matched. Check Workspace → Search scope, GitHub connection, or open the repo folder locally."
+          : undefined;
+
       this.post({
         type: "mention:results",
-        payload: { pattern: query, items: ranked }
+        payload: {
+          pattern: query,
+          items: ranked,
+          hint: ranked.length === 0 ? emptyHint : undefined,
+          error: ranked.length === 0 ? graphError : undefined
+        }
       });
     } catch (error) {
       this.post({
@@ -4088,6 +5078,55 @@ export class CoopChatSession {
           error: error instanceof Error ? error.message : "Search failed."
         }
       });
+    }
+  }
+
+  /** Coop API + code-host search when the remote graph index returns no hits. */
+  private async searchMentionCodeHostFallback(
+    repoId: string,
+    pattern: string
+  ): Promise<MentionSearchResult[]> {
+    const branch = this.currentContext.branch ?? this.preferences.branch;
+
+    if (await this.options.api.hasToken()) {
+      try {
+        const hits = await this.options.api.fetchRepoSearchViaCloud(
+          this.preferences.apiBaseUrl,
+          repoId,
+          pattern,
+          branch,
+          MENTION_SEARCH_LIMIT
+        );
+        if (hits.length > 0) {
+          return hits.map((hit) => ({
+            repoId,
+            path: hit.path,
+            source: "indexed" as const
+          }));
+        }
+      } catch {
+        // Fall through to direct code-host search.
+      }
+    }
+
+    const [owner, repo] = parseRepoIdParts(repoId);
+    if (!owner || !repo) {
+      return [];
+    }
+    try {
+      const hits = await this.options.codeHostRouter.searchRepositoryFiles(pattern, {
+        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+        owner,
+        repo,
+        branch
+      });
+      return hits.map((hit) => ({
+        repoId,
+        path: hit.path,
+        source: "indexed" as const
+      }));
+    } catch {
+      return [];
     }
   }
 
@@ -4168,24 +5207,32 @@ export class CoopChatSession {
     for (const mention of mentions.slice(0, 3)) {
       let content = mention.snippet?.trim() ?? "";
       if (!content || !mention.lines) {
+        const lineRange = mention.lines ? { start: mention.lines[0], end: mention.lines[1] } : undefined;
         if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-          const local = readWorkspaceFileFromDisk(mention.path, mention.lines ? { start: mention.lines[0], end: mention.lines[1] } : undefined);
-          content = local?.content ?? "";
+          const local = readWorkspaceFileFromDisk(mention.path, lineRange);
+          content = local?.files[0]?.content ?? "";
         } else {
-          try {
-            const file = await this.options.api
-              .getBackendClient()
-              .fetchRepoFile(
-                this.preferences.apiBaseUrl,
-                mention.repoId,
-                mention.path,
-                this.currentContext.branch ?? this.preferences.branch
-              );
-            content = file.content ?? "";
-          } catch {
-            if (!content) {
-              continue;
+          const local = readWorkspaceFileFromDisk(mention.path, lineRange);
+          const localContent = local?.files[0]?.content;
+          let remoteContent: string | undefined;
+          if (!localContent?.trim() && mention.repoId !== WORKSPACE_LOCAL_REPO_ID) {
+            try {
+              const file = await this.options.api
+                .getBackendClient()
+                .fetchRepoFile(
+                  this.preferences.apiBaseUrl,
+                  mention.repoId,
+                  mention.path,
+                  this.currentContext.branch ?? this.preferences.branch
+                );
+              remoteContent = file.content ?? "";
+            } catch {
+              remoteContent = undefined;
             }
+          }
+          content = preferMentionFileContent(localContent, remoteContent, mention.snippet);
+          if (!content.trim()) {
+            continue;
           }
         }
       }
@@ -4228,18 +5275,6 @@ function resolveSearchScope(preferences: UserPreferences): {
     return { mode, scope: mode };
   }
   return { mode: "repo" };
-}
-
-function dedupeMentionResults(items: MentionSearchResult[]): MentionSearchResult[] {
-  const byPath = new Map<string, MentionSearchResult>();
-  for (const item of items) {
-    const key = `${item.repoId}:${item.path}`;
-    const existing = byPath.get(key);
-    if (!existing || (item.score ?? 0) > (existing.score ?? 0)) {
-      byPath.set(key, item);
-    }
-  }
-  return [...byPath.values()];
 }
 
 type MentionRepoScope = {
@@ -4297,42 +5332,21 @@ function isNoisyMentionPath(path: string): boolean {
   );
 }
 
-function rankMentionSearchResults(items: MentionSearchResult[], query: string): MentionSearchResult[] {
-  const needle = query.trim().toLowerCase();
-  return [...items].sort((left, right) => scoreMentionResult(right, needle) - scoreMentionResult(left, needle));
-}
-
-function scoreMentionResult(item: MentionSearchResult, query: string): number {
-  const path = item.path.toLowerCase();
-  const base = path.split("/").pop() ?? path;
-  let score = item.score ?? 0;
-
-  if (item.content && item.content.toLowerCase().includes(query)) {
-    score += 30;
-  }
-  if (base === query) {
-    score += 50;
-  } else if (base.startsWith(query)) {
-    score += 35;
-  } else if (path.includes(`/${query}/`) || path.startsWith(`${query}/`)) {
-    score += 25;
-  } else if (path.endsWith(`/${query}`)) {
-    score += 20;
-  } else if (path.includes(query)) {
-    score += 10;
-  }
-
-  const depth = path.split("/").length;
-  score -= Math.max(0, depth - 4);
-
-  return score;
-}
-
 function sliceFileLines(content: string, startLine: number, endLine: number): string {
   const lines = content.split("\n");
   const start = Math.max(1, startLine);
   const end = Math.min(lines.length, endLine);
   return lines.slice(start - 1, end).join("\n");
+}
+
+/** Preserve evidence types missing from a lighter follow-up fetch (e.g. decision_history). */
+function mergeContextBundleResults(
+  previous: ContextFetchResult[],
+  incoming: ContextFetchResult[]
+): ContextFetchResult[] {
+  const incomingTypes = new Set(incoming.map((entry) => entry.type));
+  const preserved = previous.filter((entry) => !incomingTypes.has(entry.type));
+  return [...incoming, ...preserved];
 }
 
 function buildRepoId(preferences: UserPreferences, context: RepoContext): string {
@@ -4349,28 +5363,6 @@ function parseRepoIdParts(repoId: string): [string, string] {
   const slash = repoId.includes(":") ? repoId.split(":")[1] : repoId;
   const parts = (slash ?? repoId).split("/");
   return [parts[0] ?? "unknown", parts[1] ?? "repo"];
-}
-
-function confirmTitleForAction(actionId: QuickActionId): string {
-  switch (actionId) {
-    case "blast-radius":
-      return "Run Blast Radius?";
-    case "knowledge-gaps":
-      return "Scan for knowledge gaps?";
-    default:
-      return "Run this action?";
-  }
-}
-
-function confirmMessageForAction(actionId: QuickActionId): string {
-  switch (actionId) {
-    case "blast-radius":
-      return "This builds a dependency graph and can take a minute on large repos.";
-    case "knowledge-gaps":
-      return "This scans broad repo context and can take a minute on large repos.";
-    default:
-      return "This runs a background scan that may take a moment.";
-  }
 }
 
 function integrationLabel(provider: IntegrationChatProvider): string {
@@ -4583,20 +5575,4 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
     return "teams";
   }
   return normalized as IntegrationProvider;
-}
-
-function formatCachedScanAge(completedAt?: string): string | undefined {
-  if (!completedAt) {
-    return undefined;
-  }
-  const completedMs = Date.parse(completedAt);
-  if (!Number.isFinite(completedMs)) {
-    return undefined;
-  }
-  const minutes = Math.max(1, Math.round((Date.now() - completedMs) / 60_000));
-  if (minutes < 60) {
-    return minutes === 1 ? "1 minute" : `${minutes} minutes`;
-  }
-  const hours = Math.round(minutes / 60);
-  return hours === 1 ? "1 hour" : `${hours} hours`;
 }

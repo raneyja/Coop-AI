@@ -24,6 +24,8 @@ import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
+import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
+import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
 import { buildLiveRepoSummary, resolveRepoSummaryCoords } from "./context/buildRepoSummaryContext";
 import { registerRepoSummaryLoader } from "./context/repoSummaryRegistry";
 import type { ManifestFileEntry } from "./manifest/types";
@@ -139,6 +141,17 @@ export function activate(context: vscode.ExtensionContext): void {
   const cloudCodeHostCommitPullsFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostCommitPullsFetcher =
     async ({ repoId, sha, coords }) =>
       api.fetchRepoCommitPullsViaCloud(getApiBaseUrl(), repoId, sha, coords.branch);
+  const cloudCodeHostRepoMetadataFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoMetadataFetcher =
+    async ({ repoId, coords }) => api.fetchRepoMetadataViaCloud(getApiBaseUrl(), repoId, coords.branch);
+  const cloudCodeHostRepoPullsFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoPullsFetcher =
+    async ({ repoId, coords, state, limit }) =>
+      api.fetchRepoPullsViaCloud(getApiBaseUrl(), repoId, { branch: coords.branch, state, limit });
+  const cloudCodeHostRepoIssuesFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoIssuesFetcher =
+    async ({ repoId, coords, state, limit }) =>
+      api.fetchRepoIssuesViaCloud(getApiBaseUrl(), repoId, { branch: coords.branch, state, limit });
+  const cloudCodeHostPullReviewsFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostPullReviewsFetcher =
+    async ({ repoId, prNumber, coords }) =>
+      api.fetchRepoPullReviewsViaCloud(getApiBaseUrl(), repoId, prNumber, { branch: coords.branch });
   const cloudCodeHostHealthCheck = async (
     provider: CodeHostProvider
   ): Promise<{ ok: boolean; message: string }> => {
@@ -184,6 +197,10 @@ export function activate(context: vscode.ExtensionContext): void {
     cloudCodeHostPullCommentsFetcher,
     cloudCodeHostPullDetailFetcher,
     cloudCodeHostCommitPullsFetcher,
+    cloudCodeHostRepoMetadataFetcher,
+    cloudCodeHostRepoPullsFetcher,
+    cloudCodeHostRepoIssuesFetcher,
+    cloudCodeHostPullReviewsFetcher,
     cloudCodeHostHealthCheck
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
@@ -303,6 +320,13 @@ export function activate(context: vscode.ExtensionContext): void {
     getBaseUrl: getApiBaseUrl,
     secrets: context.secrets
   });
+  registerBlastRadiusAnalysisEngine(
+    createBlastRadiusAnalysisEngine({
+      codeHostRouter,
+      integrationSecrets,
+      indexBackend
+    })
+  );
   const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);
   const identityDirectoryStore = new IdentityDirectoryStore(context, api.getBackendClient());
   registerIdentityDirectoryProvider(() => identityDirectoryStore.load(readConfiguration().apiBaseUrl));
@@ -540,6 +564,14 @@ export function activate(context: vscode.ExtensionContext): void {
       })
     );
   }
+
+  const reloadAllChatWebviews = (): void => {
+    for (const session of coopSessionRegistry.getAll()) {
+      session.reloadChatWebviewHtml();
+    }
+  };
+  reloadAllChatWebviews();
+  setTimeout(reloadAllChatWebviews, 0);
 }
 
 export function deactivate(): void {}

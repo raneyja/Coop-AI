@@ -102,9 +102,7 @@ HTTP `429` includes `retryAfterMs`.
 
 ### Knowledge gap scan reuse
 
-Repeat **Knowledge Gaps** clicks for the same repo + file within **2 hours** reuse the last completed
-`scan_knowledge_gaps` result instead of enqueueing a new job. The API response includes `"cached": true`
-and does **not** count against the hourly/daily limits.
+Repeat **Knowledge Gaps** or **Blast Radius** for the same repo + file within the **job result retention window** (default 7 days) reuse the last completed scan instead of enqueueing a new job. The API response includes `"cached": true` and does **not** count against the hourly/daily limits. When rate limits would block a new scan, Coop returns the most recent completed result for that repo + file when one exists.
 
 ## Architecture
 

@@ -1,10 +1,41 @@
+import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
+import {
+  appendCitationKeysSection,
+  appendEvidenceEnrichmentInstructions,
+  appendEvidenceQualityInstructions,
+  appendSourcesChecklistSection,
+  EVIDENCE_CITATION_RULES
+} from "./evidenceSynthesis";
+import {
+  appendMentionScopePromptSection,
+  OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE,
+  partitionMentionsForRepoSummary,
+  type MentionScopeRef
+} from "./mentionScope";
+import {
+  listRepoSummarySourceLabels,
+  listRepoSummarySourcesChecklist,
+  repoSummarySourceLabelEntryFiles,
+  repoSummarySourceLabelManifest
+} from "./repoSummarySourceLabels";
+
+export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
+Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
+Cite file paths and use exact \`[Sources: …]\` labels when referencing evidence.
+Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
+${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
+
+${EVIDENCE_CITATION_RULES}`;
+
 export type RepoSummarySynthesisInput = {
   owner: string;
   repo: string;
   branch?: string;
   activeFile?: string;
-  summary: Record<string, unknown>;
+  summary: RepoSummaryEvidence | Record<string, unknown>;
   userQuestion?: string;
+  mentionedFiles?: MentionScopeRef[];
+  activeRepoId?: string;
 };
 
 export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisInput): string {
@@ -29,16 +60,48 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
   );
   lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
+  lines.push(
+    "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
+  );
   lines.push("Do **not** write a deep dive on only the active editor file unless it illustrates a cross-cutting pattern.");
+  appendMentionScopeSection(lines, input);
   lines.push("");
   lines.push("## Repository evidence");
   lines.push(formatRepoSummaryForPrompt(input.summary));
   lines.push("");
+  const summaryEvidence = input.summary as RepoSummaryEvidence;
+  appendCitationKeysSection(lines, listRepoSummarySourceLabels(summaryEvidence));
+  appendSourcesChecklistSection(lines, listRepoSummarySourcesChecklist(summaryEvidence));
+  appendEvidenceQualityInstructions(lines);
+  appendEvidenceEnrichmentInstructions(lines);
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
+  lines.push(
+    "Close with a one-line pointer to **Find Owner** (CODEOWNERS and commit history) and **Blast Radius** (dependency impact) for paths that need deeper follow-up."
+  );
   return lines.join("\n");
 }
 
-export function formatRepoSummaryForPrompt(summary: Record<string, unknown>): string {
+function appendMentionScopeSection(lines: string[], input: RepoSummarySynthesisInput): void {
+  if (!input.mentionedFiles?.length) {
+    return;
+  }
+
+  const summaryEvidence = input.summary as RepoSummaryEvidence;
+  const scope = partitionMentionsForRepoSummary(
+    input.mentionedFiles,
+    summaryEvidence,
+    input.activeRepoId
+  );
+  appendMentionScopePromptSection(lines, {
+    targetLabel: `${input.owner}/${input.repo}`,
+    scope,
+    inScopeInstruction: "may weight these paths",
+    excludeFromLabel: "Architecture / Key subsystems",
+    alternateActionLabel: "Understand Repo"
+  });
+}
+
+export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record<string, unknown>): string {
   const sections: string[] = [];
 
   const repository = summary.repository as Record<string, unknown> | undefined;
@@ -86,7 +149,7 @@ export function formatRepoSummaryForPrompt(summary: Record<string, unknown>): st
 
   const entryFiles = summary.entryFiles as Array<{ path: string }> | undefined;
   if (entryFiles?.length) {
-    sections.push(`### Entry files loaded\n${entryFiles.map((f) => `- ${f.path}`).join("\n")}`);
+    sections.push(`### Anchor files loaded\n${entryFiles.map((f) => `- ${f.path}`).join("\n")}`);
   }
 
   const commits = summary.recentCommits as Array<{ sha: string; author: string; message: string }> | undefined;
@@ -98,7 +161,7 @@ export function formatRepoSummaryForPrompt(summary: Record<string, unknown>): st
   }
 
   if (sections.length === 0) {
-    return "No structured repository summary was available — rely on attached entry files and graph context.";
+    return "No structured repository summary was available — rely on attached anchor files and graph context.";
   }
 
   return sections.join("\n\n");

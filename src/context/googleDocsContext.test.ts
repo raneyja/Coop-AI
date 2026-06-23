@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { wantsGoogleDocsContext } from "./googleDocsContext";
+import { shouldFetchGoogleDocsContext, wantsGoogleDocsContext } from "./googleDocsContext";
+import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -19,6 +20,14 @@ function test(name: string, fn: () => void): void {
 test("wantsGoogleDocsContext matches explicit google docs questions", () => {
   assert.equal(wantsGoogleDocsContext("any google docs for this repo?"), true);
   assert.equal(wantsGoogleDocsContext("What is the auth flow?"), false);
+});
+
+test("shouldFetchGoogleDocsContext includes knowledge-gaps quick action", () => {
+  const request = {
+    type: "knowledge_gaps",
+    params: { quickAction: "knowledge-gaps" }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchGoogleDocsContext(request), true);
 });
 
 const total = passed + failed;

@@ -79,7 +79,7 @@ function PromptDetailOverlay({
           <textarea
             value={editor.template}
             onChange={(event) => onChange({ ...editor, template: event.target.value })}
-            placeholder="Write your prompt here…"
+            placeholder="Write your prompt… Use {{file}}, {{repo}}, {{branch}}, {{lines}}, or a slash command like /understand"
             rows={6}
             className="coop-prompt-modal-textarea coop-prompt-editor-textarea"
           />

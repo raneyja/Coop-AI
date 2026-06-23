@@ -1,6 +1,7 @@
 import { NotionClient } from "../api/notion/notionClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
 import { buildRepoOrQuery } from "./docSearchQuery";
 
 export type NotionSearchPage = {
@@ -34,6 +35,9 @@ export function wantsNotionContext(query: string): boolean {
 
 export function shouldFetchNotionContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "notion") {
+    return true;
+  }
+  if (shouldFetchRepoWideIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

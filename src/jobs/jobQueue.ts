@@ -63,36 +63,18 @@ export class JobQueue extends EventEmitter {
   public async createJob(input: CreateJobInput): Promise<JobSubmitResponse> {
     const userId = input.userId ?? "anonymous";
     const reuseTtlMs = reuseTtlForJobType(input.type);
-    if (reuseTtlMs && this.backend.findReusableCompletedJob) {
-      const cached = await this.backend.findReusableCompletedJob(userId, input.type, input.params, reuseTtlMs);
-      if (cached) {
-        return {
-          jobId: cached.id,
-          status: cached.status,
-          estimatedWaitTimeMs: 0,
-          estimatedWaitTime: formatWaitTime(0),
-          cached: true,
-          completedAt: cached.completedAt?.toISOString()
-        };
-      }
+    const cached = await this.findCachedJob(userId, input.type, input.params, reuseTtlMs);
+    if (cached) {
+      return this.cachedJobResponse(cached);
     }
 
     const check = input.bypassRateLimit
       ? ({ allowed: true } as const)
       : await this.rateLimiter.canSubmitJob(userId, input.type);
     if (!check.allowed) {
-      if (reuseTtlMs && this.backend.findReusableCompletedJob) {
-        const cached = await this.backend.findReusableCompletedJob(userId, input.type, input.params, reuseTtlMs);
-        if (cached) {
-          return {
-            jobId: cached.id,
-            status: cached.status,
-            estimatedWaitTimeMs: 0,
-            estimatedWaitTime: formatWaitTime(0),
-            cached: true,
-            completedAt: cached.completedAt?.toISOString()
-          };
-        }
+      const fallback = await this.findCachedJob(userId, input.type, input.params, reuseTtlMs, true);
+      if (fallback) {
+        return this.cachedJobResponse(fallback);
       }
       throw new JobRateLimitError(check.reason, check.retryAfterMs);
     }
@@ -280,6 +262,36 @@ export class JobQueue extends EventEmitter {
     }
     const queued = memory.allJobs().filter((j) => j.status === "queued");
     this.waitTimeMs = queued.reduce((sum, j) => sum + j.estimatedDurationMs, 0);
+  }
+
+  private async findCachedJob(
+    userId: string,
+    jobType: JobType,
+    params: CreateJobInput["params"],
+    reuseTtlMs: number | undefined,
+    includeOlder = false
+  ): Promise<Job | undefined> {
+    if (reuseTtlMs && this.backend.findReusableCompletedJob) {
+      const recent = await this.backend.findReusableCompletedJob(userId, jobType, params, reuseTtlMs);
+      if (recent) {
+        return recent;
+      }
+    }
+    if (includeOlder && this.backend.findLatestCompletedJob) {
+      return this.backend.findLatestCompletedJob(userId, jobType, params);
+    }
+    return undefined;
+  }
+
+  private cachedJobResponse(cached: Job): JobSubmitResponse {
+    return {
+      jobId: cached.id,
+      status: cached.status,
+      estimatedWaitTimeMs: 0,
+      estimatedWaitTime: formatWaitTime(0),
+      cached: true,
+      completedAt: cached.completedAt?.toISOString()
+    };
   }
 }
 

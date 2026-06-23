@@ -12,6 +12,7 @@ export type UseCase =
   | "ownership"
   | "blast_radius"
   | "knowledge_gaps"
+  | "integration"
   | "chat"
   | "inline_completion";
 

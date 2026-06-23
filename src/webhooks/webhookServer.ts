@@ -545,7 +545,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         serverConfig,
         userStore,
         auditLogger,
-        usageTracker
+        usageTracker,
+        integrationStore
       })) {
         return;
       }

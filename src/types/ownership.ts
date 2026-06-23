@@ -93,6 +93,12 @@ export type OwnershipEvolution = {
   narrative: string;
 };
 
+export type OwnershipPathEvolution = {
+  recentCommitCount: number;
+  lastModifiedAt?: string;
+  lastModifiedAuthor?: string;
+};
+
 export type TeamMemberRole = {
   owner: string;
   role: "primary" | "secondary" | "backup" | "contributor";
@@ -147,6 +153,7 @@ export type OwnershipReport = {
   warnings: string[];
   completeness: OwnershipCompleteness;
   signals?: OwnershipSignals;
+  pathEvolution?: OwnershipPathEvolution;
 };
 
 export type OwnerMessageContext = {

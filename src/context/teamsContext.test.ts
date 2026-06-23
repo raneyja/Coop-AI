@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { wantsTeamsContext } from "./teamsContext";
+import { shouldFetchTeamsContext, wantsTeamsContext } from "./teamsContext";
+import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -17,12 +18,16 @@ function test(name: string, fn: () => void): void {
 }
 
 test("wantsTeamsContext matches explicit teams questions", () => {
-  assert.equal(wantsTeamsContext("any microsoft teams threads about this repo?"), true);
+  assert.equal(wantsTeamsContext("any teams threads for this repo?"), true);
   assert.equal(wantsTeamsContext("What is the auth flow?"), false);
 });
 
-test("wantsTeamsContext matches discussion + teams phrasing", () => {
-  assert.equal(wantsTeamsContext("any messages in teams related to this repository?"), true);
+test("shouldFetchTeamsContext includes knowledge-gaps quick action", () => {
+  const request = {
+    type: "knowledge_gaps",
+    params: { quickAction: "knowledge-gaps" }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchTeamsContext(request), true);
 });
 
 const total = passed + failed;

@@ -156,6 +156,33 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
     return row ? rowToJob(row) : undefined;
   }
 
+  public async findLatestCompletedJob(
+    userId: string,
+    jobType: JobType,
+    params: JobParams
+  ): Promise<Job | undefined> {
+    await this.ensureInit();
+    const repoId = params.repoId ? String(params.repoId).trim() : "";
+    if (!repoId) {
+      return undefined;
+    }
+    const file = params.file ? String(params.file).trim() : "";
+    const result = await this.pool!.query(
+      `SELECT * FROM jobs
+       WHERE type = $1
+         AND user_id = $2
+         AND status IN ('completed', 'partial')
+         AND result IS NOT NULL
+         AND params->>'repoId' = $3
+         AND COALESCE(params->>'file', '') = $4
+       ORDER BY completed_at DESC
+       LIMIT 1`,
+      [jobType, userId, repoId, file]
+    );
+    const row = result.rows[0];
+    return row ? rowToJob(row) : undefined;
+  }
+
   public async findActiveIndexJob(
     orgId: string,
     repoId: string

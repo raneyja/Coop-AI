@@ -34,7 +34,7 @@ Coop AI has moved well beyond prototype: the **core product is real** — a VS C
 
 - Sidebar chat with streaming LLM via `/v1/chat`
 - Quick actions: Trace Decision, Find Owner, Blast Radius, Knowledge Gaps, Understand Repo
-- Settings hub: Account, Connections, Workspace, Team, Preferences
+- Settings hub: Account, Tools, Workspace, Preferences
 - Org OAuth Connect flows (browser) for GitHub, GitLab, Bitbucket, Slack, Atlassian, Notion, Google Docs
 - Cloud credential overlay in production mode (`coopAI.devMode: false`)
 - Degradation matrix with health monitoring per integration

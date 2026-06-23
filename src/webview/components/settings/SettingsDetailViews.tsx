@@ -12,6 +12,7 @@ import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
 import {
   codeHostConnectionMeta,
   codeHostListSubtitle,
+  displayOrgName,
   formatQuotaRetryLabel,
   integrationListSubtitle
 } from "./connectionCopy";
@@ -21,7 +22,7 @@ import type { IdentityDirectory } from "../../../identity/types";
 import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
-import { codeHostConfigured, integrationConfigured } from "./subtitles";
+import { codeHostConfigured, identityLinksHubSubtitle, integrationConfigured } from "./subtitles";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
   return !prefs.plan || prefs.plan === "free";
@@ -38,7 +39,7 @@ function CodeHostProGate({
     return (
       <SettingsSection>
         <p className="coop-settings-card-desc">
-          Code host connections require Pro. The free Developer plan uses files in your opened VS Code workspace
+          Code host tools require Pro. The free Developer plan uses files in your opened VS Code workspace
           folders only.
         </p>
         <p className="coop-settings-card-desc mt-2">
@@ -101,7 +102,9 @@ export type SettingsDetailProps = {
   apiKeyDraft: string;
   onApiKeyDraftChange: (value: string) => void;
   onSaveApiKey: () => void;
-  onClearApiKey: () => void;
+  onCopyApiKey: () => void;
+  onRevealApiKey: () => void;
+  onApiKeyBlurCommit: (value: string) => void;
   onSignInSso: (org?: string) => void;
   onSignOut: () => void;
   onTestConnection: () => void;
@@ -208,8 +211,8 @@ export function SettingsDetailView({
       return <ModelDetail {...props} />;
     case "account":
       return <AccountDetail {...props} />;
-    case "connections":
-      return <ConnectionsListDetail {...props} />;
+    case "tools":
+      return <ToolsListDetail {...props} />;
     case "code-host-github":
       return <GitHubDetail {...props} />;
     case "code-host-gitlab":
@@ -231,7 +234,7 @@ export function SettingsDetailView({
     case "workspace":
       return <WorkspaceDetail {...props} />;
     case "team":
-      return <IdentityLinksDetail directory={props.prefs.identityDirectory} onSave={props.onSaveIdentityDirectory} />;
+      return <IdentityLinksDetail directory={props.prefs.identityDirectory} />;
     case "preferences":
       return <PreferencesListDetail {...props} />;
     case "prompts":
@@ -425,7 +428,9 @@ function AccountDetail({
   apiKeyDraft,
   onApiKeyDraftChange,
   onSaveApiKey,
-  onClearApiKey,
+  onCopyApiKey,
+  onRevealApiKey,
+  onApiKeyBlurCommit,
   onSignInSso,
   onSignOut,
   onTestConnection,
@@ -472,8 +477,20 @@ function AccountDetail({
     urlSavedTimer.current = window.setTimeout(() => setUrlSaved(false), 2000);
   };
 
+  const orgName = displayOrgName(prefs);
+
   return (
     <SettingsSection>
+      {orgName && prefs.hasApiKey ? (
+        <div className="coop-settings-card-desc">
+          <p className="coop-prompt-modal-section-title">Organization</p>
+          <p>{orgName}</p>
+          <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
+            Managed in the admin portal
+            {prefs.userRole ? ` · signed in as ${prefs.userRole}` : ""}.
+          </p>
+        </div>
+      ) : null}
       {prefs.plan === "free" && prefs.quotaCredits ? (
         <div className="coop-settings-card-desc">
           <p className="coop-prompt-modal-section-title">AI credits</p>
@@ -496,12 +513,6 @@ function AccountDetail({
             </p>
           ) : null}
         </div>
-      ) : null}
-      {prefs.hasApiKey && prefs.authMethod === "sso_session" ? (
-        <p className="coop-settings-card-desc">
-          Signed in to {prefs.orgName ?? "your organization"}
-          {prefs.userRole ? ` as ${prefs.userRole}` : ""}.
-        </p>
       ) : null}
       {prefs.plan === "enterprise" ? (
         <>
@@ -542,20 +553,23 @@ function AccountDetail({
           value={apiKeyDraft}
           placeholder={prefs.devMode ? "Local dev: any value (e.g. dev) then Save" : "coop_… from admin portal API Keys"}
           onChange={onApiKeyDraftChange}
+          onReveal={prefs.hasApiKey ? onRevealApiKey : undefined}
+          onBlurCommit={onApiKeyBlurCommit}
           className="coop-settings-field"
         />
       </label>
       <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={onSaveApiKey}>
+        <button type="button" className="coop-settings-action-btn" onMouseDown={(event) => event.preventDefault()} onClick={onSaveApiKey}>
           Save API key
         </button>
         <button
           type="button"
           className="coop-settings-action-btn"
-          onClick={onClearApiKey}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onCopyApiKey}
           disabled={!prefs.hasApiKey}
         >
-          Clear key
+          Copy API key
         </button>
         <TestButton
           testKey="connection"
@@ -607,7 +621,7 @@ function AccountDetail({
   );
 }
 
-function ConnectionsListDetail({
+function ToolsListDetail({
   prefs,
   onUpdate,
   onNavigate
@@ -668,7 +682,7 @@ function ConnectionsListDetail({
         </SettingsSection>
       )}
 
-      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Tools</p>
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Collaboration</p>
       <CoopNavList>
         <CoopNavRow
           title="Slack"
@@ -705,6 +719,16 @@ function ConnectionsListDetail({
           subtitle={integrationListSubtitle(prefs, "google-docs")}
           configured={integrationConfigured(prefs, "google-docs")}
           onClick={() => onNavigate("integration-google-docs")}
+        />
+      </CoopNavList>
+
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Identity</p>
+      <CoopNavList>
+        <CoopNavRow
+          title="Identity links"
+          subtitle={identityLinksHubSubtitle(prefs)}
+          configured={prefs.identityDirectory.people.length > 0}
+          onClick={() => onNavigate("team")}
         />
       </CoopNavList>
     </>
@@ -1598,17 +1622,21 @@ function WorkspaceDetail({
     savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
   };
 
-  const workspaceLabels =
-    prefs.workspaceRepoIds && prefs.workspaceRepoIds.length > 0
-      ? prefs.workspaceRepoIds
-          .map((repoId) => {
-            const match = workspacePickerState.repos.find((repo) => repo.repoId === repoId);
-            return match ? `${match.owner}/${match.name}` : repoId.replace(/^github:/, "");
-          })
-          .join(", ")
-      : draft.owner && draft.repo
-        ? `${draft.owner}/${draft.repo}`
-        : "No workspace repos selected";
+  const workspaceRepos = useMemo(() => {
+    if (prefs.workspaceRepoIds && prefs.workspaceRepoIds.length > 0) {
+      return prefs.workspaceRepoIds.map((repoId) => {
+        const match = workspacePickerState.repos.find((repo) => repo.repoId === repoId);
+        return {
+          repoId,
+          label: match ? `${match.owner}/${match.name}` : repoId.replace(/^github:/, "")
+        };
+      });
+    }
+    if (draft.owner && draft.repo) {
+      return [{ repoId: `${draft.owner}/${draft.repo}`, label: `${draft.owner}/${draft.repo}` }];
+    }
+    return [];
+  }, [prefs.workspaceRepoIds, workspacePickerState.repos, draft.owner, draft.repo]);
 
   const workspaceCountLabel =
     prefs.workspaceRepoLimit != null
@@ -1662,7 +1690,17 @@ function WorkspaceDetail({
             {workspaceCountLabel ? (
               <p className="coop-workspace-picker-count mb-2 inline-flex">{workspaceCountLabel}</p>
             ) : null}
-            <p className="coop-settings-card-title">{workspaceLabels}</p>
+            {workspaceRepos.length > 0 ? (
+              <div className="coop-indexed-ref-row">
+                {workspaceRepos.map((repo) => (
+                  <span key={repo.repoId} className="coop-indexed-ref" title={repo.label}>
+                    {repo.label}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="coop-settings-card-desc">No workspace repos selected</p>
+            )}
             <p className="coop-settings-card-desc mt-1">
               {draft.branch ? `Primary branch: ${draft.branch}` : "Pick repos from your org indexed catalog."}
             </p>
@@ -1735,6 +1773,7 @@ function WorkspaceDetail({
       <SettingsSection title="Search scope">
         <p className="coop-settings-card-desc">
           Controls Coop-Search and the chat @ file picker — active repo, your workspace repos, or a collection.
+          @ mentions search indexed repos and your local VS Code workspace folders.
         </p>
         <label className="coop-settings-field-row">
           <span className="coop-settings-label">Scope</span>

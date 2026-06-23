@@ -1,10 +1,18 @@
 import type { QuickActionId } from "../webview/types";
 import type { RepoContext } from "../chat/types";
+import {
+  MENTION_ATTACHMENT_BUDGET,
+  mentionAttachmentLabel,
+  mentionDisplayPaths,
+  type MentionScopeRef
+} from "./mentionScope";
 
 /**
  * Quick-action grid prompts. Slash aliases for the same actions live in slashCommands.ts;
  * response post-processing and use-case routing are shared via chatResponseEnrichment.ts.
  */
+
+export type QuickActionMentionRef = MentionScopeRef;
 
 const DIRECTIVE = "Be direct and thorough; no preamble, filler, or restating this request.";
 
@@ -51,7 +59,128 @@ function fileSourceNote(ctx: RepoContext): string {
   return "";
 }
 
-export function quickActionPromptParts(actionId: QuickActionId, ctx: RepoContext): QuickActionPromptParts {
+function mentionBasenames(mentions: QuickActionMentionRef[]): string[] {
+  return mentions.map((mention) => mentionAttachmentLabel(mention));
+}
+
+function mentionChip(mentions: QuickActionMentionRef[]): QuickActionContextChip | undefined {
+  if (!mentions.length) {
+    return undefined;
+  }
+  return { key: "attached", value: mentionBasenames(mentions).join(", ") };
+}
+
+function mentionPreamble(mentions: QuickActionMentionRef[]): string {
+  return `User @-attached files (${mentionDisplayPaths(mentions)}) appear in <mentioned_files>.`;
+}
+
+function mentionBudgetRule(mentions: QuickActionMentionRef[]): string {
+  if (mentions.length > MENTION_ATTACHMENT_BUDGET) {
+    return `With ${mentions.length} @ attachments (budget ${MENTION_ATTACHMENT_BUDGET}), prioritize the active scope — do not attempt equal depth on every path.`;
+  }
+  return "";
+}
+
+const REPO_WIDE_CROSS_ACTION_HINT =
+  "When the answer points to a specific file or subsystem, suggest the matching quick action: Trace Decision for decision history, Find Owner for escalation, Blast Radius before editing a hot path, Knowledge Gaps for documentation holes.";
+
+const FIND_OWNER_REPO_WIDE_CROSS_ACTION_HINT =
+  "When routing ownership for a subsystem, suggest cross-actions: Understand Repo for architecture context, Trace Decision for evolution history, Blast Radius before changes through a single owner, Knowledge Gaps for undocumented areas.";
+
+function mentionModelGuidance(
+  actionId: QuickActionId,
+  mentions: QuickActionMentionRef[],
+  ctx: RepoContext
+): string {
+  const repo = repoLabel(ctx);
+  const preamble = mentionPreamble(mentions);
+  const budgetRule = mentionBudgetRule(mentions);
+  switch (actionId) {
+    case "understand-repo":
+      return [
+        preamble,
+        budgetRule,
+        `Only treat paths that belong to ${repo} as in-scope subsystems — weight those while keeping a repo-wide overview.`,
+        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT describe it under Architecture or Key subsystems for ${repo}.`,
+        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+      ]
+        .filter(Boolean)
+        .join(" ");
+    case "trace-decision": {
+      const file = fileLabel(ctx);
+      return [
+        preamble,
+        budgetRule,
+        `The trace target is the primary open file (${file}) — use the decision timeline for that path only.`,
+        `In-repo @ paths in ${repo} may supplement the narrative; local workspace or foreign-repo paths are NOT part of ${repo}'s decision timeline.`,
+        `Do NOT attribute timeline commits, PRs, or tickets to out-of-scope @ files.`,
+        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    case "find-owner":
+      return [
+        preamble,
+        budgetRule,
+        ctx.file?.trim()
+          ? `Include ownership for in-repo paths alongside the active file in ${repo}.`
+          : `Map repository-wide ownership for ${repo} — top committers, CODEOWNERS teams, and escalation paths.`,
+        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT attribute ${repo} owners to it.`,
+        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+      ]
+        .filter(Boolean)
+        .join(" ");
+    case "blast-radius": {
+      const file = fileLabel(ctx);
+      return [
+        preamble,
+        budgetRule,
+        `The blast-radius target is the primary open file (${file}) — analyze impact for that path first.`,
+        `In-repo @ paths in ${repo} may add blast surfaces; local workspace or foreign-repo paths are NOT part of ${repo}'s dependency graph.`,
+        `Do NOT attribute dependents or risk from the evidence bundle to out-of-scope @ files.`,
+        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    case "knowledge-gaps": {
+      const file = fileLabel(ctx);
+      const target = ctx.file?.trim() ? `the primary open file (${file})` : `repository ${repo}`;
+      return [
+        preamble,
+        budgetRule,
+        `The knowledge-gaps audit target is ${target} unless user args say otherwise.`,
+        `In-repo @ paths in ${repo} may be audited alongside the active scope; local workspace or foreign-repo paths are outside ${repo}.`,
+        `Do NOT report ${repo} documentation or ownership gaps for out-of-scope @ files.`,
+        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+  }
+}
+
+/** Append @-attachment scope to a slash command's custom args (or follow-up text). */
+export function appendQuickActionMentionScope(
+  actionId: QuickActionId,
+  userText: string,
+  ctx: RepoContext,
+  mentions?: QuickActionMentionRef[]
+): string {
+  const trimmed = userText.trim();
+  if (!mentions?.length) {
+    return trimmed;
+  }
+  const guidance = mentionModelGuidance(actionId, mentions, ctx);
+  return trimmed ? `${trimmed}\n${guidance}` : guidance;
+}
+
+export function quickActionPromptParts(
+  actionId: QuickActionId,
+  ctx: RepoContext,
+  mentions: QuickActionMentionRef[] = []
+): QuickActionPromptParts {
   const repo = repoLabel(ctx);
   const branch = branchLabel(ctx);
   const file = fileLabel(ctx);
@@ -60,6 +189,7 @@ export function quickActionPromptParts(actionId: QuickActionId, ctx: RepoContext
 
   switch (actionId) {
     case "understand-repo": {
+      const repoWide = !ctx.file?.trim();
       const chips: QuickActionContextChip[] = [
         { key: "repo", value: repo },
         { key: "branch", value: branch }
@@ -72,11 +202,18 @@ export function quickActionPromptParts(actionId: QuickActionId, ctx: RepoContext
         model: [
           "Explain this repository for a new engineer joining the team.",
           DIRECTIVE,
-          `Context: repo ${repo}, branch ${branch}${host}, active file ${file}${ctx.languageId ? `, language ${ctx.languageId}` : ""}.`,
-          "Use attached repo entry files, graph context, and manifest metadata.",
-          "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern."
-        ].join("\n"),
-        chips
+          repoWide
+            ? `Context: repo ${repo}, branch ${branch}${host}.`
+            : `Context: repo ${repo}, branch ${branch}${host}, active file ${file}${ctx.languageId ? `, language ${ctx.languageId}` : ""}.`,
+          "Use attached repo entry files, graph context, and manifest metadata from the evidence bundle.",
+          mentions.length
+            ? mentionModelGuidance("understand-repo", mentions, ctx)
+            : "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern.",
+          repoWide ? REPO_WIDE_CROSS_ACTION_HINT : ""
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };
     }
     case "trace-decision": {
@@ -94,33 +231,53 @@ export function quickActionPromptParts(actionId: QuickActionId, ctx: RepoContext
           "Explain why this code exists and what trade-offs were accepted.",
           DIRECTIVE,
           `Context: file ${file}, lines ${lineHint}, repo ${repo}, branch ${branch}${host}${source}.`,
-          "Use attached decision timeline, blame, PR, Slack, Teams, and Jira evidence — cite sources explicitly.",
+          "Use attached decision timeline, blame, PR, Slack, Teams, and Jira evidence from the evidence bundle — cite sources explicitly.",
+          ...(mentions.length ? [mentionModelGuidance("trace-decision", mentions, ctx)] : []),
           "State confidence when evidence is thin; do not invent ticket IDs, PR numbers, or URLs."
         ].join("\n"),
-        chips
+        chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };
     }
     case "find-owner": {
-      const chips: QuickActionContextChip[] = [
-        { key: "file", value: file },
-        { key: "repo", value: repo }
-      ];
+      const repoWide = !ctx.file?.trim();
+      const chips: QuickActionContextChip[] = repoWide
+        ? [
+            { key: "repo", value: repo },
+            { key: "branch", value: branch }
+          ]
+        : [
+            { key: "file", value: file },
+            { key: "repo", value: repo }
+          ];
       return {
-        display: "Find who owns this area and how to reach them.",
+        display: repoWide
+          ? "Map repository ownership and who to contact."
+          : "Find who owns this area and how to reach them.",
         model: [
-          "Identify true owners for this path and who to contact first.",
+          repoWide
+            ? "Map repository-wide ownership: top experts, CODEOWNERS coverage, team structure, and escalation paths."
+            : "Identify true owners for this path and who to contact first.",
           DIRECTIVE,
-          `Context: file ${file}, repo ${repo}, branch ${branch}${host}${source}.`,
-          "Use ownership scores, commit/review history, Slack presence, and org identity links from attached evidence.",
-          "Include confidence, escalation path, and fallback contacts when primary experts are unavailable or offline."
-        ].join("\n"),
-        chips
+          repoWide
+            ? `Context: repo ${repo}, branch ${branch}${host}.`
+            : `Context: file ${file}, repo ${repo}, branch ${branch}${host}${source}.`,
+          "Use ownership scores, commit/review history, Slack presence, and org identity links from the evidence bundle.",
+          ...(mentions.length ? [mentionModelGuidance("find-owner", mentions, ctx)] : []),
+          repoWide
+            ? "Highlight single points of failure, cross-team boundaries, and who to ask first for unfamiliar areas — not a single-file deep dive."
+            : "Include confidence, escalation path, and fallback contacts when primary experts are unavailable or offline.",
+          repoWide ? FIND_OWNER_REPO_WIDE_CROSS_ACTION_HINT : ""
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };
     }
     case "blast-radius": {
       const chips: QuickActionContextChip[] = [
         { key: "file", value: file },
-        { key: "repo", value: repo }
+        { key: "repo", value: repo },
+        { key: "branch", value: branch }
       ];
       if (ctx.languageId) {
         chips.push({ key: "language", value: ctx.languageId });
@@ -131,38 +288,56 @@ export function quickActionPromptParts(actionId: QuickActionId, ctx: RepoContext
           "Analyze what breaks if this area is modified.",
           DIRECTIVE,
           `Context: file ${file}, repo ${repo}, branch ${branch}${host}${ctx.languageId ? `, language ${ctx.languageId}` : ""}${source}.`,
-          "Use dependency graph data and attached local file content when present.",
-          "Cover direct dependents, APIs/integrations, operational risk, and testing surfaces."
+          "Use dependency graph data, evidence bundle context, and open-file content when present.",
+          ...(mentions.length ? [mentionModelGuidance("blast-radius", mentions, ctx)] : []),
+          "Prioritize the top 5 ranked risk surfaces from dependency evidence — summarize APIs, integrations, operational risk, and testing surfaces; do not enumerate every dependent path."
         ].join("\n"),
-        chips
+        chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };
     }
     case "knowledge-gaps": {
-      const chips: QuickActionContextChip[] = [
-        { key: "file", value: file },
-        { key: "branch", value: branch }
-      ];
-      if (repo !== "unknown") {
-        chips.push({ key: "repo", value: repo });
-      }
+      const repoWide = !ctx.file?.trim();
+      const chips: QuickActionContextChip[] = repoWide
+        ? [
+            { key: "repo", value: repo },
+            { key: "branch", value: branch }
+          ]
+        : [
+            { key: "file", value: file },
+            { key: "branch", value: branch },
+            ...(repo !== "unknown" ? [{ key: "repo", value: repo }] : [])
+          ];
       return {
-        display: "Audit documentation and ownership gaps for this area.",
+        display: repoWide
+          ? "Audit documentation and ownership gaps across this repository."
+          : "Audit documentation and ownership gaps for this area.",
         model: [
-          "Audit documentation, ownership, and operational unknowns for this file or area.",
+          repoWide
+            ? "Audit documentation, ownership, and operational unknowns across this repository."
+            : "Audit documentation, ownership, and operational unknowns for this file or area.",
           DIRECTIVE,
-          `Context: file ${file}, branch ${branch}, repo ${repo}${host}${source}.`,
-          "Use attached knowledge_gap_scan findings, Confluence/Notion/Google Docs search results, and code context.",
-          "List concrete open questions and what evidence would resolve each — omit sections with no findings."
+          repoWide
+            ? `Context: repo ${repo}, branch ${branch}${host}.`
+            : `Context: file ${file}, branch ${branch}, repo ${repo}${host}${source}.`,
+          "Use attached knowledge_gap_scan findings, Confluence/Notion/Google Docs search results, and code context from the evidence bundle.",
+          ...(mentions.length ? [mentionModelGuidance("knowledge-gaps", mentions, ctx)] : []),
+          repoWide
+            ? "Prioritize repo-wide blind spots — missing docs, unclear ownership, and orphaned areas — not a single-file deep dive unless evidence points there."
+            : "List concrete open questions and what evidence would resolve each — omit sections with no findings."
         ].join("\n"),
-        chips
+        chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };
     }
   }
 }
 
 /** Compact bubble body: intent line + context chips (no format instructions). */
-export function formatQuickActionHistoryContent(actionId: QuickActionId, ctx: RepoContext): string {
-  const { display, chips } = quickActionPromptParts(actionId, ctx);
+export function formatQuickActionHistoryContent(
+  actionId: QuickActionId,
+  ctx: RepoContext,
+  mentions: QuickActionMentionRef[] = []
+): string {
+  const { display, chips } = quickActionPromptParts(actionId, ctx, mentions);
   if (chips.length === 0) {
     return display;
   }
@@ -170,12 +345,36 @@ export function formatQuickActionHistoryContent(actionId: QuickActionId, ctx: Re
   return `${display}\n${chipLine}`;
 }
 
-export function quickActionDisplayText(actionId: QuickActionId, ctx: RepoContext): string {
-  return formatQuickActionHistoryContent(actionId, ctx);
+export function quickActionDisplayText(
+  actionId: QuickActionId,
+  ctx: RepoContext,
+  mentions: QuickActionMentionRef[] = []
+): string {
+  return formatQuickActionHistoryContent(actionId, ctx, mentions);
 }
 
-export function quickActionModelPrompt(actionId: QuickActionId, ctx: RepoContext): string {
-  return quickActionPromptParts(actionId, ctx).model;
+/** Chat bubble/history text for quick actions — shared by grid buttons and action slash commands. */
+export function quickActionHistoryContent(
+  actionId: QuickActionId,
+  ctx: RepoContext,
+  userArgs?: string,
+  mentions: QuickActionMentionRef[] = []
+): string {
+  const args = userArgs?.trim();
+  if (args) {
+    const attached = mentionChip(mentions);
+    const body = attached ? `${args}\n${attached.key}: ${attached.value}` : args;
+    return `[${actionId}] ${body}`;
+  }
+  return `[${actionId}] ${quickActionDisplayText(actionId, ctx, mentions)}`;
+}
+
+export function quickActionModelPrompt(
+  actionId: QuickActionId,
+  ctx: RepoContext,
+  mentions: QuickActionMentionRef[] = []
+): string {
+  return quickActionPromptParts(actionId, ctx, mentions).model;
 }
 
 /** Model user turn — prefer quickActionModelPrompt for new call sites. */

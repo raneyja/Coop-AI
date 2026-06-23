@@ -14,6 +14,19 @@ export type OpenEditorFileRef = {
   absolutePath: string;
 };
 
+function mentionPathFromAbsolute(absolutePath: string): string {
+  const normalized = absolutePath.replace(/\\/g, "/");
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const root = folder.uri.fsPath.replace(/\\/g, "/");
+    if (normalized === root || normalized.startsWith(`${root}/`)) {
+      const suffix = normalized.slice(root.length).replace(/^\//, "");
+      return `${folder.name}/${suffix}`;
+    }
+  }
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.slice(-4).join("/");
+}
+
 /** Open text editor tabs with repo-relative paths (local disk and GitHub remote). */
 export function collectOpenEditorFileRefs(): OpenEditorFileRef[] {
   const refs: OpenEditorFileRef[] = [];
@@ -26,9 +39,10 @@ export function collectOpenEditorFileRefs(): OpenEditorFileRef[] {
       }
 
       if (input.uri.scheme === "file") {
-        const relative = vscode.workspace.asRelativePath(input.uri);
+        let relative = vscode.workspace.asRelativePath(input.uri);
+        const absolutePath = input.uri.fsPath;
         if (!relative || relative.startsWith("..")) {
-          continue;
+          relative = mentionPathFromAbsolute(absolutePath);
         }
         const relativePath = toRepositoryRelativePath(relative);
         if (seen.has(relativePath)) {

@@ -45,6 +45,12 @@ const EDITOR_OPEN_OPTIONS: vscode.TextDocumentShowOptions = {
   preserveFocus: true
 };
 
+const REVIEW_OPEN_OPTIONS: vscode.TextDocumentShowOptions = {
+  viewColumn: vscode.ViewColumn.Beside,
+  preview: true,
+  preserveFocus: true
+};
+
 export function repoMatchesRemote(
   owner: string,
   repo: string,
@@ -149,11 +155,16 @@ export async function openRemoteFileInEditor(params: {
   branch?: string;
   /** When false, focus the editor (user clicked a file to view it). */
   preserveSidebarFocus?: boolean;
+  /** Open beside the active editor without stealing context focus. */
+  reviewOpen?: boolean;
 }): Promise<boolean> {
   const preserveSidebarFocus = params.preserveSidebarFocus ?? true;
-  const openOptions: vscode.TextDocumentShowOptions = preserveSidebarFocus
-    ? EDITOR_OPEN_OPTIONS
-    : { viewColumn: vscode.ViewColumn.One, preview: false, preserveFocus: false };
+  const reviewOpen = params.reviewOpen ?? false;
+  const openOptions: vscode.TextDocumentShowOptions = reviewOpen
+    ? REVIEW_OPEN_OPTIONS
+    : preserveSidebarFocus
+      ? EDITOR_OPEN_OPTIONS
+      : { viewColumn: vscode.ViewColumn.One, preview: false, preserveFocus: false };
 
   if (!params.owner || !params.repo || !params.filePath) {
     return false;
@@ -171,11 +182,13 @@ export async function openRemoteFileInEditor(params: {
 
   const existing = findEditorForRemoteFile(params.owner, params.repo, relative);
   if (existing) {
-    const editor = await vscode.window.showTextDocument(existing.document, {
-      viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
-      preview: false,
-      preserveFocus: !preserveSidebarFocus
-    });
+    const editor = await vscode.window.showTextDocument(existing.document, reviewOpen
+      ? REVIEW_OPEN_OPTIONS
+      : {
+          viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: !preserveSidebarFocus
+        });
     revealLineInEditor(editor, params.line);
     return finish(true);
   }

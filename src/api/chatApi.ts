@@ -334,6 +334,7 @@ function readUseCase(value: unknown): UseCase {
     "ownership",
     "blast_radius",
     "knowledge_gaps",
+    "integration",
     "chat",
     "inline_completion"
   ];

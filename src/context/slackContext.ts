@@ -1,6 +1,7 @@
 import { SlackClient } from "../api/slack/slackClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 
 export type SlackSearchMessage = {
   channelName?: string;
@@ -34,6 +35,9 @@ export function wantsSlackContext(query: string): boolean {
 
 export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "slack") {
+    return true;
+  }
+  if (shouldFetchDiscussionIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

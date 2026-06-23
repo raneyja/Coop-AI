@@ -8,6 +8,7 @@ import { createConfluenceClientFromCredentials } from "../api/integrations/build
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildConfluenceCql, buildRepoOrQuery } from "./docSearchQuery";
+import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
 
 export type ConfluenceSearchPage = {
   id: string;
@@ -43,7 +44,7 @@ export function shouldFetchConfluenceContext(request: ContextFetchRequest): bool
   if (request.params.integrationProvider === "confluence") {
     return true;
   }
-  if (request.params.quickAction === "knowledge-gaps") {
+  if (shouldFetchRepoWideIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

@@ -78,33 +78,30 @@ function toMainSectionHeading(line: string): string {
   return `**${trimmed}**`;
 }
 
-function confluenceTitleHint(title: string, activeFile?: string): string {
-  const lower = title.toLowerCase();
+function confluenceTitleHint(title: string, excerpt: string | undefined, activeFile?: string): string {
+  const haystack = `${title} ${excerpt ?? ""}`.toLowerCase();
   const fileRef = activeFile ? `\`${activeFile}\`` : "the active file";
 
-  if (lower.includes("github app api") || lower.includes("githubappapi")) {
-    return `Documents GitHub App HTTP routes and env configuration; directly references ${fileRef}.`;
+  if (/\b(runbook|playbook|on-?call|oncall|incident)\b/.test(haystack)) {
+    return `Operational runbook or on-call reference; check procedures affecting ${fileRef}.`;
   }
-  if (lower.includes("architecture overview")) {
-    return `Repo architecture overview; useful system context around ${fileRef}.`;
+  if (/\b(adr|architecture decision)\b/.test(haystack) || /\badrs?\b/.test(haystack)) {
+    return `Architecture decision record; may explain design choices around ${fileRef}.`;
   }
-  if (lower.includes("backend service extraction") || lower.includes("coop-101")) {
-    return "ADR on extracting auth and indexing into coop-backend; relevant for server API routes.";
+  if (/\b(policy|compliance|security|audit)\b/.test(haystack)) {
+    return "Policy or compliance documentation; relevant for change approval gates.";
   }
-  if (lower.includes("integrations")) {
-    return "Slack, Jira, and Confluence setup — check for GitHub App and OAuth env vars.";
+  if (/\b(onboarding|getting started|developer guide)\b/.test(haystack)) {
+    return "Developer onboarding or setup documentation.";
   }
-  if (lower.includes("developer onboarding")) {
-    return "Local extension dev and integration configuration steps.";
+  if (/\b(integration|oauth|connect)\b/.test(haystack)) {
+    return "Integration setup documentation; check env and OAuth configuration.";
   }
-  if (lower.includes("enterprise deployment")) {
-    return "VPC/BYOK deployment patterns; ops-focused, not file-specific.";
+  if (/\b(deploy|deployment|ci\/cd|pipeline|release)\b/.test(haystack)) {
+    return "Deployment or CI/CD documentation; relevant for rollout verification.";
   }
-  if (lower.includes("webview") || lower.includes("coop-55")) {
-    return "ADR on webview vs native sidebar; UI architecture, not server routes.";
-  }
-  if (lower.includes("demo home")) {
-    return "Demo space index page linking to seeded documentation.";
+  if (/\b(architecture|overview|system design)\b/.test(haystack)) {
+    return `Architecture overview; useful system context around ${fileRef}.`;
   }
   return activeFile
     ? `Repo-linked page; title does not mention ${fileRef} directly.`
@@ -120,7 +117,7 @@ function confluencePageNote(page: ConfluencePageForEnrichment, activeFile?: stri
     }
     return clipped;
   }
-  return confluenceTitleHint(page.title, activeFile);
+  return confluenceTitleHint(page.title, page.excerpt, activeFile);
 }
 
 function formatConfluenceListLine(page: ConfluencePageForEnrichment, activeFile?: string): string {

@@ -7,11 +7,21 @@ import type { BlameLine, CodeHostProvider, CommitInfo, PullRequestComment, RepoC
 import { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { JiraClient } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
-import { SlackClient, type SlackSearchHit, type SlackThread } from "../api/slack/slackClient";
+import { SlackClient, type SlackThread } from "../api/slack/slackClient";
 import { TeamsClient } from "../api/teams/teamsClient";
+import {
+  buildSlackSearchQueries,
+  extractGitHubIssueNumbers,
+  integrationRelevanceFromHit,
+  isIntegrationSearchHitRelevant,
+  parseGithubPullUrl,
+  threadMeetsRelevanceBar,
+  type TraceEvidenceMatchOptions
+} from "./traceEvidenceRelevance";
 import type {
   DecisionAlternative,
   DecisionCommit,
+  DecisionRationaleRank,
   DecisionReview,
   DecisionTimeline,
   LineRange
@@ -21,7 +31,10 @@ export type {
   ChronologyEvent,
   DecisionAlternative,
   DecisionCommit,
+  DecisionEvolution,
+  DecisionIntroducingDiffSummary,
   DecisionJiraTicket,
+  DecisionRationaleRank,
   DecisionReview,
   DecisionSlackThread,
   DecisionTeamsThread,
@@ -65,6 +78,13 @@ type PullRequestDetail = {
 
 type GitHubPullDetail = PullRequestDetail;
 
+type IntroducingDiffStats = {
+  filesChanged: number;
+  insertions?: number;
+  deletions?: number;
+  patchExcerpt?: string;
+};
+
 export class DecisionArchaeologyEngine {
   public constructor(private readonly options: TraceDecisionOptions) {}
 
@@ -80,6 +100,7 @@ export class DecisionArchaeologyEngine {
 
     const timeline: DecisionTimeline = {
       file,
+      targetLabel: formatTargetLabel(file, lineRange),
       lineRange,
       codeSnippet,
       alternatives: [],
@@ -137,6 +158,14 @@ export class DecisionArchaeologyEngine {
       return timeline;
     }
 
+    await this.enrichIntroducingDiffSummary(timeline, coords, file, commit).catch((error) => {
+      timeline.warnings.push(`Introducing diff summary unavailable: ${errorMessage(error)}`);
+    });
+
+    await this.enrichEvolution(timeline, coords, file, commit).catch((error) => {
+      timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
+    });
+
     const refs = parseReferences(commit.message);
     let prNumber: number | undefined = refs.prNumbers[0];
     if (!prNumber) {
@@ -145,15 +174,26 @@ export class DecisionArchaeologyEngine {
 
     let prBody = "";
     if (prNumber) {
+      let pr: Awaited<ReturnType<DecisionArchaeologyEngine["fetchPullRequest"]>> | undefined;
       try {
-        const pr = await this.fetchPullRequest(coords, prNumber, file, commit.sha);
+        pr = await this.fetchPullRequest(coords, prNumber, file, commit.sha);
+      } catch (error) {
+        timeline.warnings.push(`PR #${prNumber} could not be loaded: ${errorMessage(error)}`);
+      }
+
+      if (pr) {
         prBody = pr.body ?? "";
         const commentCoords: RepoCoordinates = {
           ...coords,
           owner: pr.owner,
           repo: pr.repo
         };
-        const comments = await this.options.codeHostRouter.getPRComments(prNumber, commentCoords);
+        let comments: import("../api/codeHosts/types").PullRequestComment[] = [];
+        try {
+          comments = await this.options.codeHostRouter.getPRComments(prNumber, commentCoords);
+        } catch (error) {
+          timeline.warnings.push(`PR #${prNumber} comments could not be loaded: ${errorMessage(error)}`);
+        }
         const reviews = mapPrComments(comments);
         const approvers = extractApprovers(prBody, reviews);
 
@@ -186,8 +226,6 @@ export class DecisionArchaeologyEngine {
         }
 
         timeline.completeness = "partial";
-      } catch (error) {
-        timeline.warnings.push(`PR #${prNumber} could not be loaded: ${errorMessage(error)}`);
       }
     } else {
       timeline.warnings.push("No linked pull request found for the introducing commit.");
@@ -205,29 +243,206 @@ export class DecisionArchaeologyEngine {
     const jira = await this.resolveJiraClient();
 
     if (slack) {
-      await this.correlateSlack(timeline, slack, prNumber, uniqueIssues, prBody, file);
+      await this.correlateSlack(timeline, slack, prNumber, uniqueIssues, prBody, file, timeline.linkedPR);
     } else {
       timeline.warnings.push("Slack integration not configured; skipping thread correlation.");
     }
 
     if (teams && !timeline.slackThread) {
-      await this.correlateTeams(timeline, teams, prNumber, uniqueIssues);
+      await this.correlateTeams(timeline, teams, prNumber, uniqueIssues, file);
     }
 
     if (jira && uniqueIssues.length > 0) {
-      await this.correlateJira(timeline, jira, uniqueIssues[0]);
+      timeline.jiraTickets = [];
+      for (const issueKey of uniqueIssues.slice(0, 5)) {
+        await this.correlateJiraTicket(timeline, jira, issueKey);
+      }
     } else if (uniqueIssues.length > 0) {
       timeline.warnings.push("Jira integration not configured; ticket IDs found in references only.");
     }
 
-    if (timeline.linkedPR && timeline.jiraTicket) {
+    timeline.rationaleRanking = buildRationaleRanking(
+      timeline,
+      isHighSignalCommitMessage(commit.message)
+    );
+    if (!timeline.rationaleRanking.length) {
+      delete timeline.rationaleRanking;
+    }
+
+    const hasJira = (timeline.jiraTickets?.length ?? 0) > 0;
+    if (timeline.linkedPR && hasJira) {
       timeline.completeness = "full";
-    } else if (timeline.linkedPR || timeline.jiraTicket || timeline.slackThread) {
+    } else if (timeline.linkedPR || hasJira || timeline.slackThread) {
       timeline.completeness = "partial";
     }
 
     timeline.chronology.sort((a, b) => a.date.localeCompare(b.date));
     return timeline;
+  }
+
+  private async enrichIntroducingDiffSummary(
+    timeline: DecisionTimeline,
+    coords: RepoCoordinates,
+    file: string,
+    introducingCommit: DecisionCommit
+  ): Promise<void> {
+    let filesChanged = 0;
+    let insertions: number | undefined;
+    let deletions: number | undefined;
+    let patchExcerpt: string | undefined;
+
+    const commitDetail = await this.fetchCommitDetail(coords, introducingCommit.sha).catch(() => undefined);
+    if (commitDetail?.filesChanged?.length) {
+      filesChanged = commitDetail.filesChanged.length;
+    }
+
+    const providerStats =
+      coords.provider === "github"
+        ? await this.fetchGithubCommitDiffStats(coords, introducingCommit.sha, file).catch(() => undefined)
+        : coords.provider === "gitlab"
+          ? await this.fetchGitLabCommitDiffStats(coords, introducingCommit.sha, file).catch(() => undefined)
+          : undefined;
+
+    if (providerStats) {
+      filesChanged = providerStats.filesChanged || filesChanged;
+      insertions = providerStats.insertions ?? insertions;
+      deletions = providerStats.deletions ?? deletions;
+      patchExcerpt = providerStats.patchExcerpt ?? patchExcerpt;
+    }
+
+    if (!filesChanged && insertions === undefined && deletions === undefined && !patchExcerpt) {
+      return;
+    }
+
+    const resolvedFilesChanged = Math.max(1, filesChanged || 1);
+    timeline.introducingDiffSummary = {
+      filesChanged: resolvedFilesChanged,
+      insertions,
+      deletions,
+      summary: summarizeIntroducingDiff({
+        filesChanged: resolvedFilesChanged,
+        insertions,
+        deletions,
+        patchExcerpt
+      }),
+      patchExcerpt
+    };
+  }
+
+  private async enrichEvolution(
+    timeline: DecisionTimeline,
+    coords: RepoCoordinates,
+    file: string,
+    introducingCommit: DecisionCommit
+  ): Promise<void> {
+    const history = await this.options.codeHostRouter.getFileHistory(file, 250, coords);
+    if (!history.length) {
+      return;
+    }
+
+    const newest = history[0];
+    const introducingIndex = history.findIndex((entry) => entry.sha === introducingCommit.sha);
+
+    let commitCountSinceIntroduction: number;
+    if (introducingIndex >= 0) {
+      commitCountSinceIntroduction = introducingIndex + 1;
+    } else {
+      const introducingAtMs = Date.parse(introducingCommit.date);
+      if (Number.isFinite(introducingAtMs)) {
+        commitCountSinceIntroduction = history.filter((entry) => Date.parse(entry.date) >= introducingAtMs).length;
+      } else {
+        commitCountSinceIntroduction = history.length;
+      }
+    }
+
+    timeline.evolution = {
+      commitCountSinceIntroduction: Math.max(1, commitCountSinceIntroduction || 1),
+      lastModifiedAt: newest.date,
+      lastModifiedAuthor: formatCommitAuthor(newest)
+    };
+  }
+
+  private async fetchGithubCommitDiffStats(
+    coords: RepoCoordinates,
+    sha: string,
+    file: string
+  ): Promise<IntroducingDiffStats | undefined> {
+    const creds = await this.options.codeHostSecrets.getCredentials();
+    if (!creds.githubToken) {
+      return undefined;
+    }
+
+    const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/commits/${encodeURIComponent(sha)}`;
+    const commit = await codeHostRequestJson<{
+      stats?: { additions?: number; deletions?: number };
+      files?: Array<{ filename: string; patch?: string }>;
+    }>(url, {
+      headers: githubHeaders(creds.githubToken),
+      provider: "github"
+    });
+
+    const files = commit.files ?? [];
+    const targetFile = files.find((entry) => filePathMatchesTarget(file, entry.filename));
+    return {
+      filesChanged: files.length,
+      insertions: commit.stats?.additions,
+      deletions: commit.stats?.deletions,
+      patchExcerpt: targetFile?.patch ? extractPatchExcerpt(targetFile.patch) : undefined
+    };
+  }
+
+  private async fetchGitLabCommitDiffStats(
+    coords: RepoCoordinates,
+    sha: string,
+    file: string
+  ): Promise<IntroducingDiffStats | undefined> {
+    const creds = await this.options.codeHostSecrets.getCredentials();
+    if (!creds.gitlabToken) {
+      return undefined;
+    }
+
+    const apiBase = (coords.baseUrl?.trim() || "https://gitlab.com/api/v4").replace(/\/$/, "");
+    const headers = {
+      "PRIVATE-TOKEN": creds.gitlabToken,
+      "User-Agent": "coop-ai-extension"
+    };
+    const project = await codeHostRequestJson<{ id: number }>(
+      `${apiBase}/projects/${encodeURIComponent(`${coords.owner}/${coords.repo}`)}`,
+      {
+        headers,
+        provider: "gitlab"
+      }
+    );
+
+    const [commitDetail, commitDiff] = await Promise.all([
+      codeHostRequestJson<{
+        stats?: { additions?: number; deletions?: number };
+      }>(`${apiBase}/projects/${project.id}/repository/commits/${encodeURIComponent(sha)}?stats=true`, {
+        headers,
+        provider: "gitlab"
+      }),
+      codeHostRequestJson<
+        Array<{
+          old_path?: string;
+          new_path?: string;
+          diff?: string;
+        }>
+      >(`${apiBase}/projects/${project.id}/repository/commits/${encodeURIComponent(sha)}/diff`, {
+        headers,
+        provider: "gitlab"
+      })
+    ]);
+
+    const files = commitDiff ?? [];
+    const targetFile = files.find((entry) =>
+      filePathMatchesTarget(file, entry.new_path ?? entry.old_path ?? "")
+    );
+    return {
+      filesChanged: files.length,
+      insertions: commitDetail.stats?.additions,
+      deletions: commitDetail.stats?.deletions,
+      patchExcerpt: targetFile?.diff ? extractPatchExcerpt(targetFile.diff) : undefined
+    };
   }
 
   private async findOriginalIntroduction(
@@ -332,6 +547,7 @@ export class DecisionArchaeologyEngine {
       const pr = await this.options.codeHostRouter.getPullRequestDetail(prNumber, coords, {
         commitSha
       });
+      const prWithRepo = pr as typeof pr & { owner?: string; repo?: string };
       return {
         number: pr.number,
         title: pr.title,
@@ -343,8 +559,8 @@ export class DecisionArchaeologyEngine {
         updatedAt: pr.updatedAt,
         htmlUrl: pr.htmlUrl,
         labels: pr.labels,
-        owner: pr.owner ?? coords.owner,
-        repo: pr.repo ?? coords.repo
+        owner: prWithRepo.owner ?? coords.owner,
+        repo: prWithRepo.repo ?? coords.repo
       };
     } catch {
       try {
@@ -381,8 +597,18 @@ export class DecisionArchaeologyEngine {
     prNumber: number | undefined,
     issueKeys: string[],
     prBody: string,
-    file: string
+    file: string,
+    linkedPR?: DecisionTimeline["linkedPR"]
   ): Promise<void> {
+    const pullCoords = parseGithubPullUrl(linkedPR?.htmlUrl);
+    const githubIssueNumbers = extractGitHubIssueNumbers(prBody, prNumber);
+    const matchOptions: TraceEvidenceMatchOptions = {
+      prNumber,
+      file,
+      issueKeys,
+      githubIssueNumbers
+    };
+
     const slackUrl = extractSlackThreadUrl(prBody);
     if (slackUrl) {
       const parsed = slack.parseSlackThreadUrl(slackUrl);
@@ -399,33 +625,72 @@ export class DecisionArchaeologyEngine {
       }
     }
 
-    const queries = [
-      prNumber ? `PR #${prNumber}` : undefined,
-      prNumber ? `pull/${prNumber}` : undefined,
-      ...issueKeys
-    ].filter(Boolean) as string[];
+    const queries = buildSlackSearchQueries({
+      prNumber,
+      prTitle: linkedPR?.title,
+      prBody,
+      pullOwner: pullCoords.owner,
+      pullRepo: pullCoords.repo,
+      issueKeys
+    });
+
+    let lastSearchError: string | undefined;
+    let sawAnyHit = false;
 
     for (const query of queries) {
       try {
-        const hits = await slack.searchMessages(query, { limit: 5 });
-        const hit = hits.find((candidate) => this.isSlackSearchHitRelevant(candidate, query, prNumber, file));
+        const hits = await slack.searchMessages(query, { limit: 10 });
+        if (hits.length > 0) {
+          sawAnyHit = true;
+        }
+        const hit = hits.find((candidate) =>
+          isIntegrationSearchHitRelevant(candidate.text, matchOptions)
+        );
         if (!hit?.channelId) {
           continue;
         }
         const threadTs = hit.threadTs ?? hit.ts;
         const thread = await slack.getThread(hit.channelId, threadTs);
+        if (!threadMeetsRelevanceBar(thread.messages, matchOptions)) {
+          continue;
+        }
         this.applySlackThread(
           timeline,
           thread,
           hit.channelName,
           hit.permalink,
-          this.slackRelevanceFromHit(hit, query, prNumber, file)
+          integrationRelevanceFromHit(hit.text, file)
         );
         this.ingestSlackSignals(timeline, slack, thread);
         return;
-      } catch {
-        /* try next query */
+      } catch (error) {
+        lastSearchError = errorMessage(error);
       }
+    }
+
+    if (lastSearchError && /missing_scope|not_allowed|invalid_auth|token/i.test(lastSearchError)) {
+      timeline.warnings.push(
+        `Slack search unavailable (${lastSearchError}). Reconnect Slack with user token scopes: search:read, channels:history, groups:history.`
+      );
+      return;
+    }
+
+    if (prNumber) {
+      const scopeHint =
+        pullCoords.owner && pullCoords.repo
+          ? ` on ${pullCoords.owner}/${pullCoords.repo}`
+          : "";
+      if (sawAnyHit) {
+        timeline.warnings.push(
+          `Slack messages were found but none mentioned PR #${prNumber}${scopeHint} or linked issues (${githubIssueNumbers.join(", ") || "none"}).`
+        );
+      } else {
+        timeline.warnings.push(
+          `No Slack thread mentioning PR #${prNumber}${scopeHint} was found in your connected workspace.`
+        );
+      }
+    } else if (issueKeys.length > 0) {
+      timeline.warnings.push(`No Slack thread mentioning ${issueKeys[0]} was found.`);
     }
   }
 
@@ -437,54 +702,12 @@ export class DecisionArchaeologyEngine {
     }
   }
 
-  private isSlackSearchHitRelevant(
-    hit: SlackSearchHit,
-    query: string,
-    prNumber: number | undefined,
-    file: string
-  ): boolean {
-    const text = hit.text.toLowerCase();
-    const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
-    if (prNumber && (text.includes(`#${prNumber}`) || text.includes(`pr #${prNumber}`) || text.includes(`pull/${prNumber}`))) {
-      return true;
-    }
-    if (fileStem && text.includes(fileStem)) {
-      return true;
-    }
-    if (/archaeology queries|dm search opt-in|test bot|coop ai test bot/i.test(hit.text) && !prNumber) {
-      return false;
-    }
-    return hit.text.trim().length >= 24;
-  }
-
-  private slackRelevanceFromHit(
-    hit: SlackSearchHit,
-    query: string,
-    prNumber: number | undefined,
-    file: string
-  ): "direct" | "linked" | "weak" {
-    const text = hit.text.toLowerCase();
-    const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "").toLowerCase() ?? "";
-    if (fileStem && text.includes(fileStem)) {
-      return "direct";
-    }
-    if (prNumber && text.includes(String(prNumber))) {
-      return "linked";
-    }
-    if (/archaeology queries|dm search opt-in|test bot/i.test(hit.text)) {
-      return "weak";
-    }
-    return query.toLowerCase().split(/\s+/).some((token) => token.length > 2 && text.includes(token))
-      ? "linked"
-      : "weak";
-  }
-
   private applySlackThread(
     timeline: DecisionTimeline,
     thread: SlackThread,
     channelName: string | undefined,
     permalink?: string,
-    relevance: "direct" | "linked" | "weak" = "linked"
+    relevance: "direct" | "linked" = "linked"
   ): void {
     timeline.slackThread = {
       channelId: thread.channelId,
@@ -505,17 +728,26 @@ export class DecisionArchaeologyEngine {
     timeline: DecisionTimeline,
     teams: TeamsClient,
     prNumber: number | undefined,
-    issueKeys: string[]
+    issueKeys: string[],
+    file: string
   ): Promise<void> {
+    const matchOptions: TraceEvidenceMatchOptions = { prNumber, file, issueKeys };
     const queries = [prNumber ? `PR ${prNumber}` : undefined, ...issueKeys].filter(Boolean) as string[];
     for (const query of queries) {
       try {
         const hits = await teams.searchMessages(query, { limit: 5 });
-        const hit = hits[0];
+        const hit = hits.find(
+          (candidate) =>
+            candidate.body &&
+            isIntegrationSearchHitRelevant(candidate.body, matchOptions)
+        );
         if (!hit?.teamId || !hit.channelId || !hit.messageId) {
           continue;
         }
         const thread = await teams.getThread(hit.teamId, hit.channelId, hit.messageId);
+        if (!threadMeetsRelevanceBar(thread.messages.map((m) => ({ text: m.body })), matchOptions)) {
+          continue;
+        }
         timeline.teamsThread = {
           teamId: hit.teamId,
           channelId: hit.channelId,
@@ -537,12 +769,15 @@ export class DecisionArchaeologyEngine {
         /* try next */
       }
     }
+    if (prNumber) {
+      timeline.warnings.push(`No Teams thread mentioning PR #${prNumber} was found.`);
+    }
   }
 
-  private async correlateJira(timeline: DecisionTimeline, jira: JiraClient, issueKey: string): Promise<void> {
+  private async correlateJiraTicket(timeline: DecisionTimeline, jira: JiraClient, issueKey: string): Promise<void> {
     try {
       const issue = await jira.getIssue(issueKey);
-      timeline.jiraTicket = {
+      const ticket = {
         key: issue.key,
         epic: issue.epicName ?? issue.epicKey,
         summary: issue.summary,
@@ -551,6 +786,7 @@ export class DecisionArchaeologyEngine {
         technicalDebt: issue.technicalDebt,
         htmlUrl: issue.htmlUrl
       };
+      timeline.jiraTickets = [...(timeline.jiraTickets ?? []), ticket];
       pushChronology(
         timeline,
         issue.created,
@@ -680,6 +916,142 @@ function parseReferences(text: string): { prNumbers: number[]; jiraKeys: string[
   const prNumbers = [...text.matchAll(/\b(?:#|PR\s*#?|pull\/)(\d{1,6})\b/gi)].map((m) => Number(m[1]));
   const jiraKeys = JiraClient.extractIssueKeys(text);
   return { prNumbers: [...new Set(prNumbers)], jiraKeys };
+}
+
+const WEAK_DECISION_COMMIT_MESSAGE_RE = /^(wip|fix|update|changes?|misc|tmp|test|merge|refactor)\b/i;
+
+function isHighSignalCommitMessage(message: string): boolean {
+  const cleaned = message.replace(/\s+/g, " ").trim();
+  const words = cleaned.split(" ").filter(Boolean).length;
+  return words >= 6 && cleaned.length >= 30 && !WEAK_DECISION_COMMIT_MESSAGE_RE.test(cleaned);
+}
+
+function buildRationaleRanking(
+  timeline: DecisionTimeline,
+  hasHighSignalCommitMessage: boolean
+): DecisionRationaleRank[] {
+  const ranking: DecisionRationaleRank[] = [];
+
+  if (timeline.linkedPR) {
+    const pr = timeline.linkedPR;
+    const hasDetailedPrContext =
+      (pr.description?.trim().length ?? 0) >= 20 || pr.reviews.length > 0 || pr.approvers.length > 0;
+    ranking.push({
+      source: `pr:${pr.number}`,
+      role: hasDetailedPrContext ? "rationale" : "provenance",
+      label: `PR #${pr.number}`
+    });
+  }
+
+  for (const [index, ticket] of (timeline.jiraTickets ?? []).entries()) {
+    ranking.push({
+      source: `jira:${ticket.key}`,
+      role: index === 0 ? "rationale" : "provenance",
+      label: `Jira ${ticket.key}`
+    });
+  }
+
+  if (timeline.slackThread) {
+    const channel = timeline.slackThread.channelName ?? timeline.slackThread.channelId;
+    ranking.push({
+      source: `slack:${channel}`,
+      role: hasSubstantiveThreadMessages(timeline.slackThread.messages.map((message) => message.text))
+        ? "rationale"
+        : "provenance",
+      label: `Slack #${channel}`
+    });
+  }
+
+  if (timeline.teamsThread) {
+    ranking.push({
+      source: `teams:${timeline.teamsThread.channelId}`,
+      role: hasSubstantiveThreadMessages(timeline.teamsThread.messages.map((message) => message.text))
+        ? "rationale"
+        : "provenance",
+      label: "Teams thread"
+    });
+  }
+
+  if (timeline.originalCommit) {
+    const existingRicherSources = ranking.length > 0;
+    ranking.push({
+      source: `commit:${timeline.originalCommit.sha}`,
+      role: hasHighSignalCommitMessage
+        ? existingRicherSources
+          ? "provenance"
+          : "rationale"
+        : existingRicherSources
+          ? "background"
+          : "provenance",
+      label: `Commit ${timeline.originalCommit.sha.slice(0, 7)}`
+    });
+  }
+
+  const deduped: DecisionRationaleRank[] = [];
+  const seen = new Set<string>();
+  for (const entry of ranking) {
+    const key = `${entry.source}|${entry.label}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(entry);
+  }
+  return deduped;
+}
+
+function hasSubstantiveThreadMessages(messages: string[]): boolean {
+  return messages.some((message) => message.replace(/\s+/g, " ").trim().length >= 80);
+}
+
+function formatTargetLabel(file: string, lineRange?: LineRange): string {
+  if (!lineRange) {
+    return file;
+  }
+  return lineRange.start === lineRange.end
+    ? `${file}:${lineRange.start}`
+    : `${file}:${lineRange.start}-${lineRange.end}`;
+}
+
+function summarizeIntroducingDiff(stats: IntroducingDiffStats): string {
+  const filesPart = `${stats.filesChanged} file${stats.filesChanged === 1 ? "" : "s"}`;
+  const changeParts = [
+    typeof stats.insertions === "number" ? `+${stats.insertions}` : undefined,
+    typeof stats.deletions === "number" ? `-${stats.deletions}` : undefined
+  ].filter(Boolean);
+  const deltaPart = changeParts.length ? ` (${changeParts.join(" / ")})` : "";
+  const headline = `Introducing commit changed ${filesPart}${deltaPart}.`;
+  if (stats.patchExcerpt) {
+    return `${headline} Added code includes "${truncate(stats.patchExcerpt, 120)}".`;
+  }
+  return headline;
+}
+
+function filePathMatchesTarget(targetFile: string, candidatePath: string): boolean {
+  const normalizedTarget = targetFile.replace(/^\/+/, "");
+  const normalizedCandidate = candidatePath.replace(/^\/+/, "");
+  return normalizedCandidate === normalizedTarget || normalizedCandidate.endsWith(`/${normalizedTarget}`);
+}
+
+function extractPatchExcerpt(patch: string): string | undefined {
+  const addedLines = patch
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1).trim())
+    .filter(Boolean);
+
+  if (addedLines.length > 0) {
+    return truncate(addedLines.slice(0, 2).join(" "), 180);
+  }
+
+  const contextLine = patch
+    .split("\n")
+    .find((line) => line.startsWith(" ") && line.trim().length > 1);
+  return contextLine ? truncate(contextLine.trim(), 180) : undefined;
+}
+
+function formatCommitAuthor(commit: CommitInfo): string {
+  return commit.authorLogin ? `@${commit.authorLogin}` : commit.author;
 }
 
 function extractApprovers(prBody: string, reviews: DecisionReview[]): string[] {

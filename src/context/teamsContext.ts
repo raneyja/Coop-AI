@@ -2,6 +2,7 @@ import { TeamsClient } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildRepoSearchQuery } from "./slackContext";
+import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 
 export type TeamsSearchMessage = {
   fromUserName?: string;
@@ -34,6 +35,9 @@ export function wantsTeamsContext(query: string): boolean {
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "teams") {
+    return true;
+  }
+  if (shouldFetchDiscussionIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

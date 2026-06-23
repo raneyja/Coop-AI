@@ -22,6 +22,7 @@ export type RepoContext = {
   owner?: string;
   repo?: string;
   branch?: string;
+  scope?: "repo" | "file";
   file?: string;
   /** How `file` was chosen — GitHub features need workspace or git, not a loose Cmd+O path. */
   fileSource?: RepoContextFileSource;
@@ -47,6 +48,8 @@ export type ChatFileMention = {
   lines?: [number, number];
   /** Search snippet when picked from @ menu (optional). */
   snippet?: string;
+  /** Whether the mention came from local workspace search or indexed graph search. */
+  source?: "local" | "indexed";
 };
 
 export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
@@ -57,6 +60,26 @@ export type ChatMessage = {
   timestamp: number;
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
+  relatedArtifactId?: string;
+};
+
+/** Serializable evidence card stored with chat thread history. */
+export type ChatPersistedArtifact = {
+  id: string;
+  kind:
+    | "decision"
+    | "ownership"
+    | "repo-summary"
+    | "blast-radius"
+    | "knowledge-gaps"
+    | "integration";
+  timestamp: number;
+  payload: Record<string, unknown>;
+};
+
+export type ChatHistoryPayload = {
+  messages: ChatMessage[];
+  artifacts: ChatPersistedArtifact[];
 };
 
 export type ChatThreadListItem = {
@@ -166,6 +189,8 @@ export type IntentFeedbackState = {
   actionId?: string;
   title: string;
   message?: string;
+  /** Rotating status lines while context is loading. */
+  activityMessages?: string[];
   progress?: number;
   stale?: boolean;
 };
@@ -243,12 +268,22 @@ export type WebviewInbound =
         attachments?: ChatImageAttachment[];
         mentions?: ChatFileMention[];
         historyContent?: string;
+        slashUserArgs?: string;
       };
     }
   | { type: "mention:search"; payload: { pattern: string } }
   | { type: "collections:list-request" }
   | { type: "prompts:list-request" }
-  | { type: "prompts:run"; payload: { id: string } }
+  | {
+      type: "prompts:run";
+      payload: {
+        id: string;
+        mentions?: ChatFileMention[];
+        attachments?: ChatImageAttachment[];
+        /** Optional composer text to prepend to the saved template. */
+        composerText?: string;
+      };
+    }
   | { type: "prompts:save"; payload: { title: string; template: string; actionId?: string } }
   | { type: "prompts:update"; payload: { id: string; title: string; template: string; actionId?: string } }
   | { type: "prompts:delete"; payload: { id: string } }
@@ -293,7 +328,7 @@ export type WebviewInbound =
     }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string; line?: number } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number; preserveContext?: boolean } }
   | { type: "link:open"; payload: { url: string } }
   | { type: "github:repos:list"; payload?: { query?: string; requestId?: string } }
   | { type: "workspace:repos:save"; payload: { repoIds: string[] } }
@@ -301,6 +336,8 @@ export type WebviewInbound =
   | { type: "settings:update"; payload: Partial<UserPreferences> }
   | { type: "settings:update-api-key"; payload: { apiKey: string } }
   | { type: "settings:clear-api-key" }
+  | { type: "settings:copy-api-key" }
+  | { type: "settings:reveal-api-key" }
   | { type: "settings:sign-in-sso"; payload?: { org?: string } }
   | { type: "settings:sign-out" }
   | { type: "settings:test-connection" }
@@ -361,6 +398,7 @@ export type WebviewInbound =
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | { type: "ownership:copy-draft"; payload: { text: string } }
+  | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }
   | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
@@ -380,6 +418,8 @@ export type MentionSearchResult = {
   lineNumber?: number;
   content?: string;
   score?: number;
+  /** Local workspace vs indexed remote graph (Pro+ hybrid search). */
+  source?: "local" | "indexed";
 };
 
 export type OrgCollectionSummary = {
@@ -393,7 +433,7 @@ export type OrgCollectionSummary = {
 export type WebviewOutbound =
   | { type: "theme:update"; payload: ThemePayload }
   | { type: "context:update"; payload: RepoContext }
-  | { type: "chat:history"; payload: ChatMessage[] }
+  | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "threads:list"; payload: ChatThreadsListPayload }
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "chat:delta"; payload: { chunk: string } }
@@ -430,6 +470,7 @@ export type WebviewOutbound =
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | {
@@ -441,12 +482,29 @@ export type WebviewOutbound =
           message: string;
           quickAction: string;
           attachments?: ChatImageAttachment[];
-          historyContent?: string;
-        };
+        historyContent?: string;
+        mentions?: ChatFileMention[];
+        slashUserArgs?: string;
+        /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
+        targetFile?: string;
       };
+    };
     }
-  | { type: "decision:timeline"; payload: { timeline: unknown; dismissed?: boolean } }
-  | { type: "ownership:card"; payload: { report: unknown; dismissed?: boolean } }
+  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: unknown; dismissed?: boolean } }
+  | { type: "ownership:card"; payload: { artifactId?: string; report: unknown; slackSearch?: unknown; dismissed?: boolean } }
+  | {
+      type: "repo-summary:card";
+      payload: { artifactId?: string; evidence: unknown; owner: string; repo: string; branch?: string; dismissed?: boolean };
+    }
+  | { type: "blast-radius:card"; payload: { artifactId?: string; evidence: unknown; file: string; dismissed?: boolean } }
+  | {
+      type: "knowledge-gaps:card";
+      payload: { artifactId?: string; evidence: unknown; confluence?: unknown; jira?: unknown; slack?: unknown; notion?: unknown; googleDocs?: unknown; teams?: unknown; file?: string; dismissed?: boolean };
+    }
+  | {
+      type: "integration:card";
+      payload: { artifactId?: string; provider: IntegrationChatProvider; evidence: unknown; dismissed?: boolean };
+    }
   | { type: "job:progress"; payload: JobProgressPayload }
   | { type: "job:complete"; payload: JobProgressPayload & { result?: unknown } }
   | {

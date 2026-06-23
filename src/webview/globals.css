@@ -1009,6 +1009,87 @@
     animation-delay: 0.3s;
   }
 
+  .chat-message--thinking {
+    @apply w-full min-w-0;
+  }
+
+  .chat-message-inner--thinking {
+    @apply flex items-center gap-2.5 py-0.5 pl-1;
+  }
+
+  .chat-thinking-sparkle {
+    @apply inline-flex shrink-0 items-center justify-center;
+    width: 17.5px;
+    height: 17.5px;
+    color: color-mix(
+      in srgb,
+      var(--vscode-progressBar-background, #3794ff) 75%,
+      var(--coop-panel-muted) 25%
+    );
+  }
+
+  .chat-thinking-sparkle-svg {
+    width: 17.5px;
+    height: 17.5px;
+  }
+
+  .chat-thinking-sparkle-core {
+    transform-origin: 7px 7px;
+    animation: chat-thinking-sparkle-sway 2.6s ease-in-out infinite;
+  }
+
+  .chat-thinking-sparkle-ray {
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    opacity: 0.28;
+    animation: chat-thinking-ray-twinkle 1.15s ease-in-out infinite;
+  }
+
+  .chat-thinking-sparkle-ray--1 {
+    animation-delay: 0s;
+  }
+
+  .chat-thinking-sparkle-ray--2 {
+    animation-delay: 0.14s;
+  }
+
+  .chat-thinking-sparkle-ray--3 {
+    animation-delay: 0.28s;
+  }
+
+  .chat-thinking-sparkle-ray--4 {
+    animation-delay: 0.42s;
+  }
+
+  @keyframes chat-thinking-sparkle-sway {
+    0%,
+    100% {
+      transform: rotate(-7deg);
+    }
+    50% {
+      transform: rotate(7deg);
+    }
+  }
+
+  @keyframes chat-thinking-ray-twinkle {
+    0%,
+    100% {
+      opacity: 0.22;
+      stroke-width: 1.4;
+    }
+    50% {
+      opacity: 1;
+      stroke-width: 1.95;
+    }
+  }
+
+  .chat-thinking-text {
+    @apply min-w-0 text-[13px] leading-snug;
+    color: color-mix(in srgb, var(--coop-panel-muted) 92%, var(--coop-panel-foreground) 8%);
+    animation: chat-activity-whisper-fade 0.35s ease;
+  }
+
   @keyframes chat-streaming-pulse {
     0%,
     80%,
@@ -1033,11 +1114,38 @@
   }
 
   .chat-activity-strip {
-    @apply space-y-1 px-3 pt-2;
+    @apply space-y-1 px-3 pt-1.5;
   }
 
   .chat-activity-strip-row {
     @apply coop-notice coop-notice--compact flex items-center gap-2 px-2.5;
+  }
+
+  .chat-activity-strip-loading {
+    @apply flex items-center gap-2 px-0 py-0 text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .chat-activity-whisper-text {
+    @apply min-w-0 truncate;
+    animation: chat-activity-whisper-fade 0.35s ease;
+  }
+
+  @keyframes chat-activity-whisper-fade {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .chat-activity-strip-loading .chat-activity-strip-spinner {
+    @apply h-2.5 w-2.5;
+    color: var(--coop-panel-muted);
+    opacity: 0.75;
   }
 
   .chat-activity-strip-spinner {
@@ -1378,6 +1486,28 @@
     @apply flex min-w-0 flex-col gap-1.5;
   }
 
+  .coop-secret-field {
+    @apply relative min-w-0;
+  }
+
+  .coop-secret-field__input {
+    @apply pr-9;
+  }
+
+  .coop-secret-field:focus-within .coop-secret-field__input {
+    border-color: var(--coop-settings-field-border-focus);
+  }
+
+  .coop-secret-field__toggle {
+    @apply absolute right-1 top-1/2 -translate-y-1/2;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-secret-field__toggle:hover,
+  .coop-secret-field__toggle[aria-pressed="true"] {
+    color: var(--coop-panel-foreground);
+  }
+
   .coop-settings-actions {
     @apply flex flex-wrap gap-1.5;
   }
@@ -1642,6 +1772,11 @@
     @apply px-3 pb-2;
   }
 
+  .coop-explorer-search-hint {
+    @apply mt-1.5 text-[10px] leading-relaxed;
+    color: var(--coop-panel-muted);
+  }
+
   .coop-explorer-body {
     @apply min-h-0 flex-1 px-3 pb-3 pt-0.5;
   }
@@ -1679,6 +1814,18 @@
   .coop-explorer-row--selected {
     background: var(--vscode-list-activeSelectionBackground);
     color: var(--vscode-list-activeSelectionForeground, var(--coop-panel-foreground));
+  }
+
+  .coop-indexed-ref-row {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .coop-indexed-ref {
+    @apply inline-flex max-w-full items-center rounded-md border px-2 py-0.5 text-[11px];
+    background: var(--coop-pill-surface);
+    border-color: var(--coop-pill-border);
+    color: var(--vscode-textLink-foreground);
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
 
   .coop-workspace-picker-meta {
@@ -1823,6 +1970,90 @@
     color: var(--coop-panel-muted);
   }
 
+  .coop-result-evidence-body {
+    @apply !border-b-0 !py-0;
+  }
+
+  .coop-result-evidence-intro {
+    @apply mx-0 mb-2 mt-0 border-b px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide;
+    border-color: var(--coop-settings-divider);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-connection-stack {
+    @apply flex flex-col gap-2 px-3.5 pb-3 pt-1;
+  }
+
+  .coop-result-connection-group {
+    @apply rounded-md border;
+    border-color: var(--coop-settings-divider);
+    background: color-mix(in srgb, var(--coop-panel-canvas) 92%, var(--coop-panel-foreground) 8%);
+  }
+
+  .coop-result-connection-group--collapsed {
+    @apply py-0;
+  }
+
+  .coop-result-connection-group--expanded {
+    @apply py-0;
+  }
+
+  .coop-result-connection-toggle {
+    @apply flex w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2.5 text-left;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-connection-toggle:hover {
+    background: color-mix(in srgb, var(--coop-panel-canvas) 88%, var(--coop-panel-foreground) 12%);
+  }
+
+  .coop-result-connection-brief-sep {
+    @apply text-[11px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-result-connection-brief-title {
+    @apply text-[11px] font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-connection-heading {
+    @apply mb-2 flex items-center gap-2 border-b pb-2;
+    border-color: var(--coop-settings-divider);
+  }
+
+  .coop-result-connection-heading-label {
+    @apply text-[11px] font-semibold uppercase tracking-wide;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-connection-body {
+    @apply flex flex-col gap-0 border-t px-3 pb-0 pt-0;
+    border-color: var(--coop-settings-divider);
+  }
+
+  .coop-result-connection-body .coop-result-section {
+    @apply !border-b-0 !px-0 !py-2;
+  }
+
+  .coop-result-derived-group {
+    background: transparent;
+  }
+
+  .coop-result-derived-group .coop-result-derived-heading {
+    @apply mb-0 border-0 pb-0 text-[11px] font-semibold uppercase tracking-wide;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-collapsible--flat .coop-result-collapsible-body {
+    @apply px-0 pb-2 pt-2;
+  }
+
+  .coop-result-section--actions {
+    border-top: 1px solid var(--coop-settings-divider);
+    border-bottom: none;
+  }
+
   .coop-result-row {
     @apply flex items-start justify-between gap-2;
   }
@@ -1888,6 +2119,19 @@
     border-top: none;
   }
 
+  .coop-tree-layout-grid {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+
+  .coop-tree-layout-list {
+    @apply mt-1 max-h-[140px] space-y-0.5 overflow-y-auto pl-0 text-[11px];
+    list-style: none;
+  }
+
+  .coop-tree-layout-list li {
+    @apply break-all;
+  }
+
   .coop-result-collapsible-header {
     @apply flex items-center justify-between gap-2;
   }
@@ -1896,6 +2140,39 @@
     @apply flex min-w-0 flex-1 items-start gap-2 text-left text-[12px] font-medium transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-source-cite {
+    @apply shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px];
+    color: var(--coop-panel-muted);
+    background: color-mix(in srgb, var(--coop-panel-muted) 12%, transparent);
+  }
+
+  .coop-result-source-cite--link {
+    @apply cursor-pointer border-0 transition-colors duration-150;
+  }
+
+  .coop-result-source-cite--link:hover {
+    color: var(--coop-panel-foreground);
+    background: color-mix(in srgb, var(--coop-panel-muted) 22%, transparent);
+  }
+
+  .coop-result-staleness {
+    @apply shrink-0 text-[10px] italic;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-result-highlight {
+    animation: coop-result-highlight 2s ease-out;
+  }
+
+  @keyframes coop-result-highlight {
+    0% {
+      background: color-mix(in srgb, #f59e0b 35%, transparent);
+    }
+    100% {
+      background: transparent;
+    }
   }
 
   .coop-result-collapsible-toggle--branded {
@@ -1982,6 +2259,22 @@
     @apply flex flex-wrap gap-1.5;
   }
 
+  .coop-result-bullet-list {
+    @apply m-0 list-disc space-y-1 pl-4;
+  }
+
+  .coop-result-source-contribution-list {
+    @apply m-0 list-none space-y-1.5 p-0;
+  }
+
+  .coop-result-source-contribution-row {
+    @apply flex items-start gap-2;
+  }
+
+  .coop-result-source-contribution-text {
+    @apply min-w-0 flex-1;
+  }
+
   .coop-source-chip {
     @apply inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px];
     background: var(--coop-pill-surface);
@@ -2014,6 +2307,34 @@
     color: #6264a7;
   }
 
+  .coop-source-chip--confluence .coop-source-icon {
+    color: #2684ff;
+  }
+
+  .coop-source-chip--notion .coop-source-icon {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-chip--google-docs .coop-source-icon {
+    color: inherit;
+  }
+
+  .coop-result-connection-heading .coop-source-icon--confluence {
+    color: #2684ff;
+  }
+
+  .coop-result-connection-heading .coop-source-icon--slack {
+    color: #e01e5a;
+  }
+
+  .coop-result-connection-heading .coop-source-icon--teams {
+    color: #6264a7;
+  }
+
+  .coop-result-connection-heading .coop-source-icon--jira {
+    color: #2684ff;
+  }
+
   .coop-source-heading-row {
     @apply flex flex-wrap items-center gap-1.5;
   }
@@ -2034,7 +2355,9 @@
   }
 
   .coop-source-heading-subtitle {
-    @apply mt-0.5 break-words text-left text-[11px] leading-snug;
+    @apply mt-0.5 line-clamp-2 text-left text-[11px] leading-snug;
+    overflow-wrap: break-word;
+    word-break: normal;
     color: var(--coop-panel-muted);
   }
 
@@ -2183,6 +2506,10 @@
     .coop-launch-typewriter-cursor {
       animation: none;
       opacity: 1;
+    }
+
+    .chat-activity-whisper-text {
+      animation: none;
     }
 
     .coop-launch-typewriter,

@@ -3,6 +3,7 @@ import { parseRepoId } from "../server/gitCloneService";
 import { CollectionStore } from "../server/collectionStore";
 import { embedQuery } from "./embeddingsClient";
 import { RepoEmbeddingsStore, type SimilarChunkHit } from "./repoEmbeddingsStore";
+import { mentionPathMinScore, rankMentionPathHits, scoreMentionPath } from "./mentionPathScore";
 
 export type SearchHitSource = "scip" | "zoekt" | "embedding" | "fallback";
 
@@ -283,6 +284,7 @@ async function collectMentionPathHits(
   const likePrefix = `${escapeLike(trimmed)}%`;
   const likeDirPrefix = `${escapeLike(trimmed)}/%`;
   const likeDirSegment = `%/${escapeLike(trimmed)}/%`;
+  const likeAnywhere = `%${escapeLike(trimmed)}%`;
 
   const result = await pool.query<{ repo_id: string; file_path: string }>(
     isDirectoryQuery
@@ -294,6 +296,7 @@ async function collectMentionPathHits(
              file_path ILIKE $3
              OR file_path ILIKE $4
              OR file_path = $5
+             OR file_path ILIKE $6
            )`
       : `SELECT DISTINCT repo_id, file_path
          FROM repo_symbol_index
@@ -306,7 +309,7 @@ async function collectMentionPathHits(
              OR file_path ILIKE $6
            )`,
     isDirectoryQuery
-      ? [orgId, repoIds, likeDirPrefix, likeDirSegment, trimmed]
+      ? [orgId, repoIds, likeDirPrefix, likeDirSegment, trimmed, likeAnywhere]
       : [
           orgId,
           repoIds,
@@ -336,28 +339,6 @@ async function collectMentionPathHits(
     .slice(0, limit);
 }
 
-function mentionPathMinScore(query: string): number {
-  return query.includes("/") ? 50 : 70;
-}
-
-function rankMentionPathHits(hits: LightningFileHit[], query: string, limit: number): LightningFileHit[] {
-  const byPath = new Map<string, LightningFileHit>();
-  for (const hit of hits) {
-    const key = `${hit.repoId}:${hit.path}`;
-    const existing = byPath.get(key);
-    if (!existing || scoreMentionPath(hit.path, query) > scoreMentionPath(existing.path, query)) {
-      byPath.set(key, hit);
-    }
-  }
-  return [...byPath.values()]
-    .sort(
-      (left, right) =>
-        scoreMentionPath(right.path, query) - scoreMentionPath(left.path, query) ||
-        left.path.localeCompare(right.path)
-    )
-    .slice(0, limit);
-}
-
 function isNoisyMentionPath(path: string): boolean {
   const normalized = path.toLowerCase();
   return (
@@ -369,54 +350,6 @@ function isNoisyMentionPath(path: string): boolean {
     normalized.includes("/vendor/") ||
     normalized.includes("/node_modules/")
   );
-}
-
-function scoreMentionPath(filePath: string, query: string): number {
-  const path = filePath.toLowerCase();
-  const needle = query.toLowerCase();
-  if (path === needle) {
-    return 100;
-  }
-  if (path.startsWith(`${needle}/`) || path.startsWith(needle)) {
-    return 95;
-  }
-  if (path.endsWith(`/${needle}`) || path.endsWith(needle)) {
-    return 90;
-  }
-
-  const queryParts = needle.split("/").filter(Boolean);
-  const pathParts = path.split("/");
-  let pathIdx = 0;
-  let matchedSegments = 0;
-  for (const part of queryParts) {
-    while (pathIdx < pathParts.length) {
-      const segment = pathParts[pathIdx];
-      if (segment === part || segment.includes(part) || part.includes(segment)) {
-        matchedSegments += 1;
-        pathIdx += 1;
-        break;
-      }
-      pathIdx += 1;
-    }
-  }
-  if (queryParts.length > 0 && matchedSegments === queryParts.length) {
-    return 75 + matchedSegments * 5;
-  }
-
-  if (path.includes(needle)) {
-    return 50;
-  }
-
-  const queryBase = queryParts[queryParts.length - 1] ?? needle;
-  const pathBase = pathParts[pathParts.length - 1] ?? "";
-  if (pathBase === queryBase) {
-    return 60;
-  }
-  if (pathBase.startsWith(queryBase)) {
-    return 55;
-  }
-
-  return 0;
 }
 
 function zoektRepoName(repoId: string): string {

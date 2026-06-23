@@ -15,7 +15,7 @@ Label each step as one of:
 |---------|-------------|---------|
 | **File** | Edit or create a file in the editor | "Open `.env.backend` and add a line" |
 | **Terminal** | Run a command after a file is saved | `docker compose up -d --build api` |
-| **Extension UI** | VS Code Extension Host / Coop settings | "Settings → Connections → Connect GitHub" |
+| **Extension UI** | VS Code Extension Host / Coop settings | "Settings → Tools → Connect GitHub" |
 | **Browser** | External OAuth or admin console | "Approve at github.com, then return to VS Code" |
 
 Do **not** say "add these env vars" without naming the file path. Do **not** imply terminal paste for secrets unless the user explicitly asked for a one-liner.

@@ -3,6 +3,7 @@ import type { CoopChatSession } from "../chat/CoopChatSession";
 import { coopSessionRegistry } from "../chat/CoopSessionRegistry";
 import type { QuickActionId } from "../webview/types";
 import { repoContextFromEditor } from "../context/intentDetector";
+import { isQuickActionBlocked, quickActionBlockedMessage } from "../context/quickActionScope";
 import { readConfiguration } from "../chat/SecureApiClient";
 
 export function registerQuickActionCommands(
@@ -36,10 +37,8 @@ export async function runQuickActionFromEditor(
     ? repoContextFromEditor(editor, preferences, {})
     : { owner: preferences.owner, repo: preferences.repo, branch: preferences.branch };
 
-  if (actionId === "find-owner" && !repoContext.file?.trim()) {
-    void vscode.window.showWarningMessage(
-      "Find Owner needs an open file. Open a local project file or pick one from the CoopAI remote tree."
-    );
+  if (isQuickActionBlocked(actionId, repoContext)) {
+    void vscode.window.showWarningMessage(quickActionBlockedMessage(actionId, repoContext));
     return;
   }
 

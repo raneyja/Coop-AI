@@ -15,7 +15,7 @@ Open settings: Coop AI sidebar → gear icon, or Command Palette → **Coop AI: 
 
 **Enterprise onboarding plan (operators + customers):** [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md)
 
-In production, developers do **not** paste Slack, Notion, or Google tokens. Org admins use **Settings → Connections → Connect**.
+In production, developers do **not** paste Slack, Notion, or Google tokens. Org admins use **Settings → Tools → Connect**.
 
 ---
 
@@ -49,7 +49,7 @@ Production checklist: [connect-integrations-production.md](./connect-integration
 
 ## 2. Code hosts (GitHub / GitLab / Bitbucket)
 
-**Settings section:** Connections → GitHub / GitLab / Bitbucket
+**Settings section:** Tools → GitHub / GitLab / Bitbucket
 
 ### GitHub (production)
 
@@ -99,7 +99,7 @@ Set default **owner**, **repo**, and **branch** for Trace Decision and context f
 
 ## 4. Integrations (Slack / Jira / Confluence / Notion / Google Docs / Teams)
 
-**Settings section:** Connections → Tools
+**Settings section:** Tools → Collaboration (Slack, Jira, Confluence, Notion, Google Docs, Teams)
 
 Used by **Trace Decision**, **Knowledge Gaps**, and chat (`/slack`, `/jira`, `/confluence`, `/notion`, `/docs`, `/teams`).
 
@@ -130,7 +130,7 @@ Server operator must register OAuth apps once — see [enterprise-integration-on
    - `channels:read`
 3. **Reinstall to Workspace** (top of OAuth page).
 4. Copy **User OAuth Token** (`xoxp-…`) from the same page.
-5. **Settings → Slack** → paste token → **Save** → **Test Slack**.
+5. **Settings → Tools → Slack** → paste token → **Save** → **Test Slack**.
 
 #### Demo workspace note
 
@@ -204,6 +204,27 @@ Set `CONFLUENCE_DEMO_GITHUB_OWNER` (or `JIRA_DEMO_GITHUB_OWNER`) to match **Sett
 
 Production: **Connect Notion** (OAuth). Developer mode: paste token manually.
 
+#### Demo pages
+
+`scripts/populate_notion.py` creates architecture, onboarding, and ADR pages under a **Coop AI Demo** root in Notion. Page bodies include `github:owner/repo` references so Coop's Notion search finds them.
+
+```bash
+cd scripts && cp .env.example .env   # set NOTION_INTEGRATION_TOKEN
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python populate_notion.py --dry-run
+.venv/bin/python populate_notion.py
+```
+
+**Seeder token (write):** Create a separate **internal** connection at [notion.so/my-integrations](https://www.notion.so/my-integrations) → **Internal connections** → **Create** → **Configuration** tab → copy **Installation access token** into `NOTION_INTEGRATION_TOKEN` in `scripts/.env`. Enable **Read**, **Insert**, and **Update** capabilities. Grant page access via **Content access** or **⋯ → Add connection** on a page.
+
+This is **not** the OAuth **client secret** in `.env.backend` (`NOTION_APP_CLIENT_SECRET`) — that public connection is only for **Connect Notion** in the extension.
+
+**Coop read token:** **Connect Notion** in Settings (uses `NOTION_APP_*` on the server), or paste a read-capable token in dev mode.
+
+Set `NOTION_DEMO_GITHUB_OWNER` (or reuse `JIRA_DEMO_GITHUB_OWNER`) to match **Settings → Repository → owner**.
+
+**In chat:** `/notion` or ask *"any notion pages for this repo?"* after connecting credentials.
+
 ### Google Docs (developer mode only)
 
 | Field | Value |
@@ -211,6 +232,25 @@ Production: **Connect Notion** (OAuth). Developer mode: paste token manually.
 | Google Drive access token | OAuth token with `drive.readonly` |
 
 Production: **Connect Google Docs** (OAuth). Developer mode: paste token manually.
+
+#### Demo documents
+
+`scripts/populate_google_docs.py` creates architecture, onboarding, and ADR documents in a **Coop AI Demo** Drive folder. Document bodies include `github:owner/repo` references so Coop's Drive fullText search finds them.
+
+```bash
+cd scripts && cp .env.example .env   # set GOOGLE_DOCS_ACCESS_TOKEN (write scopes)
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python populate_google_docs.py --dry-run
+.venv/bin/python populate_google_docs.py
+```
+
+**Seeder token (write):** [Google OAuth Playground](https://developers.google.com/oauthplayground) → enable **Drive API v3** and **Google Docs API** → select scopes `https://www.googleapis.com/auth/documents` and `https://www.googleapis.com/auth/drive.file` → Authorize → Exchange → copy **Access token** into `GOOGLE_DOCS_ACCESS_TOKEN`. This token is only for seeding; it is not saved in the repo.
+
+**Coop read token:** `drive.readonly` via **Connect Google Docs** or a separate Playground token pasted in Settings.
+
+Set `GOOGLE_DOCS_DEMO_GITHUB_OWNER` (or reuse `JIRA_DEMO_GITHUB_OWNER`) to match **Settings → Repository → owner**, and use a repo name that appears in the seeded documents (default suffix `coop-ai-core`) or edit `scripts/demo_doc_pages.py`.
+
+**In chat:** `/google-docs` or ask *"any google docs for this repo?"* after connecting credentials.
 
 ### Microsoft Teams
 

@@ -24,7 +24,7 @@ export function writeCodeHostPlanForbidden(
   response.end(
     JSON.stringify({
       error: "code_host_plan_required",
-      message: `Code host connections are not available on the free plan. ${upgrade}`,
+      message: `Code host tools are not available on the free plan. ${upgrade}`,
       requiredPlans: required,
       provider,
       upgradeUrl: PRICING_PAGE_URL
@@ -78,7 +78,7 @@ export function writeCodeHostPlanForbiddenHtml(
   const required = codeHostPlansForProvider(provider);
   const message =
     provider === "github"
-      ? "GitHub connections require a Pro plan. The free plan is limited to local workspace files."
+      ? "GitHub requires a Pro plan. The free plan is limited to local workspace files."
       : "This code host requires an Enterprise plan.";
   response.writeHead(403, { "content-type": "text/html; charset=utf-8" });
   response.end(`<!DOCTYPE html><html><body><p>${message}</p><p>Required plan: ${required.join(" or ")}.</p></body></html>`);

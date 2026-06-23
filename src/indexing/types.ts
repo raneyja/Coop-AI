@@ -47,8 +47,10 @@ export type LocalSearchResult = {
   stale: boolean;
 };
 
+export type GraphDependentsSource = "scip" | "zoekt" | "heuristic" | "remote";
+
 export type LocalDependentsResult = {
   file: string;
   dependents: string[];
-  source: "scip" | "remote";
+  source: GraphDependentsSource;
 };

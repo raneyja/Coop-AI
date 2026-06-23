@@ -3,6 +3,7 @@ export type ChatInlineNode =
   | { type: "strong"; text: string }
   | { type: "em"; text: string }
   | { type: "inline-code"; code: string }
+  | { type: "source-citation"; label: string; id: string }
   | { type: "file-link"; path: string; line?: number; label: string }
   | { type: "external-link"; label: string; url: string };
 

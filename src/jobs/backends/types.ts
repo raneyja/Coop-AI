@@ -15,6 +15,11 @@ export interface QueueBackend {
     params: JobParams,
     maxAgeMs: number
   ): Promise<Job | undefined>;
+  findLatestCompletedJob?(
+    userId: string,
+    jobType: JobType,
+    params: JobParams
+  ): Promise<Job | undefined>;
   findActiveIndexJob?(
     orgId: string,
     repoId: string

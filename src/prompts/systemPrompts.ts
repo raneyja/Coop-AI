@@ -1,6 +1,13 @@
 import type { UseCase } from "../api/types";
+import type { IntegrationChatProvider } from "../chat/types";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
+import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
+import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
+import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
+import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
+import { GENERAL_CHAT_EVIDENCE_RULES } from "./evidenceSynthesis";
+import { USER_IMAGE_ATTACHMENTS_SYSTEM_RULE } from "./userImageAttachments";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
 // soften the fluency bullet or make it conditional — keep the block, don't remove it.
@@ -64,36 +71,47 @@ Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
 **Risks & unknowns**
 Concrete risks tied to paths or missing evidence.
 
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
+
 **Suggested next steps**
-Numbered list of 2-4 onboarding or investigation actions.`,
+Numbered list of 2-4 onboarding or investigation actions.
+
+**Sources**
+Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`. Include Confluence/Jira/scan items when present in the bundle.`,
 
   decision_archaeology: `
 ## Required response structure
 Use these sections in order (**Title** on its own line; blank line before each):
 
 **Summary**
-Direct answer in 1-2 sentences.
+Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin.
 
 **Business context**
-Why this code exists.
+Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
 
 **Technical decision**
-What was chosen and why.
+What was chosen and why. Omit on follow-ups that did not ask for this when already covered.
 
 **Alternatives considered**
-Bullets for rejected options (omit if unknown).
+One line or short bullets from evidence only. If unknown, write "Unknown — not recorded in attached sources." and omit speculative lists.
 
 **Trade-offs**
-Costs and benefits accepted.
+One line from evidence only. If undocumented, write "Not documented in attached sources." Never invent generic trade-offs.
 
 **Known limitations**
-Future work or caveats from evidence.
+Future work or caveats from evidence. Omit if none.
 
 **Domain experts**
-Who to ask; cite sources.
+Who to ask; cite sources. Omit if none named in evidence.
+
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-Bullets citing PR, Jira, or Slack — only from attached evidence.`,
+Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`. Omit integrations that failed or returned no results — those are not listed in the checklist.
+
+Follow-up turns: keep this structure but stay compact — often 4-8 sentences total when evidence is limited. Omit empty sections except **Summary** and **Sources**.`,
 
   ownership: `
 ## Required response structure
@@ -103,7 +121,7 @@ Use these sections in order (**Title** on its own line; blank line before each):
 Who to contact first and why, in 1-2 sentences.
 
 **True experts**
-Bullets per person: role, evidence (commits, reviews), confidence.
+Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
 
 **Availability**
 Current reachability or response expectations from evidence.
@@ -117,30 +135,42 @@ Who to ask if primary experts are unavailable.
 **Knowledge transfer**
 Who should learn this area next.
 
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
+
 **Recommended next step**
-One concrete outreach or review action.`,
+One concrete outreach or review action.
+
+**Sources**
+Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`.`,
 
   blast_radius: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer concise — the Sources card already lists files.
 
 **Summary**
-What breaks if this area changes, in 1-2 sentences.
+2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact.
 
 **Direct impact**
-Files, modules, or symbols that change with this edit.
+Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
 
 **Transitive dependents**
-Downstream callers, imports, or services (when dependency data exists).
+One short paragraph, or **None identified**. No file dump.
 
 **APIs & integrations**
-External contracts, webhooks, auth, or cross-service calls at risk.
+Only when public API or integration evidence exists. One short paragraph. Omit if no evidence.
 
 **Operational risk**
-Deploy, config, migrations, feature flags, or runtime failure modes.
+Only CI, deploy, or runtime evidence from the bundle. Omit if no evidence. Do not speculate about PR oversight.
 
 **Testing surfaces**
-What to regression-test; note gaps if coverage is unknown.`,
+Name test files or suites to run (from evidence). Bullet list, max 6 items.
+
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
+
+**Sources**
+One short bullet per checklist item — one sentence each on what the source contributed. Never repeat file paths already shown in the Sources card.`,
 
   knowledge_gaps: `
 ## Required response structure
@@ -150,6 +180,10 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case.
 
 **Documentation gaps**
+When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
+
+When \`<knowledge_gap_scan>\` contains \`<gap>\` entries: add one subsection per scan gap using the two-bullet pattern below (title from gap type/message).
+
 When \`<confluence_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
 
 **Confluence pages reviewed**
@@ -160,17 +194,12 @@ List exactly N bullets — one per \`<page>\` title, in the same order as the XM
 
 Do not use **Documentation coverage**, "Relevant pages include", or any synonym. Do not summarize pages you skip. If count is 7, list 7 titled bullets.
 
-Then add documentation gap subsections below using this shape (blank line between gaps):
+For scan-backed or Confluence-backed gaps only, use this shape (blank line between gaps):
 
-**Dependency configuration**
+**{Gap title from evidence}**
 
 - **Open question:** one concrete uncertainty about this area
 - **What to check:** doc, code path, ticket, or person that would resolve it
-
-**Error handling for createInstallationAccessToken**
-
-- **Open question:** ...
-- **What to check:** ...
 
 Rules:
 - Subsection title on its own line (**Title**). Never bullet the title.
@@ -186,7 +215,13 @@ Same subsection + two-bullet pattern for config, deploy, and ops unknowns (omit 
 Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**.
 
 **Recommended next steps**
-Numbered list of 2-4 concrete actions.`,
+Numbered list of 2-4 concrete actions.
+
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
+
+**Sources**
+Include one bullet per checklist item — one sentence each. Each \`[Sources: …]\` label at most once. Include Confluence scan and job-scan items when present.`,
 
   chat: `
 ## Required response structure
@@ -197,7 +232,26 @@ Direct 1-2 sentence answer first.
 
 Then add focused topic sections as needed. Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list.
 
-For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.`
+For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.`,
+
+  integration: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each):
+
+**Answer**
+Direct 1-2 sentence answer from the attached integration search results.
+
+**Key findings**
+Bullets citing specific messages, tickets, or pages by title/key.
+
+**Gaps**
+What the integration search did not cover or returned empty.
+
+**Out-of-scope @ attachments**
+Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
+
+**Sources**
+Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`.`
 };
 
 function withOutputContract(
@@ -205,29 +259,30 @@ function withOutputContract(
   useCase: Exclude<UseCase, "inline_completion">
 ): string {
   const structure = USE_CASE_STRUCTURE[useCase] ?? "";
-  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_IMAGE_ATTACHMENTS_SYSTEM_RULE}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
-export const COMPREHENSION_SYSTEM = withOutputContract(`You are an expert code architect helping engineers understand a repository.
-Summarize architecture, key systems, boundaries, and risks. Prefer evidence from supplied context over speculation.
-Cite file paths when referencing code. If context is stale or partial, say so explicitly.`, "comprehension");
+export const COMPREHENSION_SYSTEM = withOutputContract(REPO_SUMMARY_EVIDENCE_SYSTEM, "comprehension");
 
 export const DECISION_ARCHAEOLOGY_SYSTEM = withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology");
 
 export const OWNERSHIP_SYSTEM = withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM, "ownership");
 
-export const BLAST_RADIUS_SYSTEM = withOutputContract(`You analyze change impact: dependents, APIs, integrations, and operational risk.
-Be explicit about transitive effects and testing surfaces when dependency data is available.`, "blast_radius");
+export const BLAST_RADIUS_SYSTEM = withOutputContract(BLAST_RADIUS_EVIDENCE_SYSTEM, "blast_radius");
 
-export const KNOWLEDGE_GAPS_SYSTEM = withOutputContract(`You audit engineering health: missing docs, orphaned code, unclear ownership, and open questions.
-List what is unknown and what evidence would reduce risk.
-When <knowledge_gap_scan> is attached, cite concrete findings (file, gap type, priority) from that scan alongside documentation and code context.
-When <confluence_pages count="N"> is attached, list all N page titles under **Confluence pages reviewed** (exact heading) before any other documentation gaps — match the XML count; never use **Documentation coverage** or partial lists like "Relevant pages include".`, "knowledge_gaps");
+export const KNOWLEDGE_GAPS_SYSTEM = withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps");
+
+export const INTEGRATION_SYSTEM = withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration");
 
 export const GENERAL_CHAT_SYSTEM = withOutputContract(`You are CoopAI, an enterprise code intelligence assistant.
-Answer clearly using supplied repository and organizational context. Cite paths; do not fabricate external links.
+Answer clearly using supplied repository and organizational context. Cite concrete paths when evidence is attached; do not fabricate external links, ticket keys, or PR numbers.
+When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
+When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
+For decision questions, weight pull requests and commit history above Slack/Teams chat when sources conflict.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
-When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.`, "chat");
+When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
+
+${GENERAL_CHAT_EVIDENCE_RULES}`, "chat");
 
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
@@ -235,6 +290,7 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   ownership: OWNERSHIP_SYSTEM,
   blast_radius: BLAST_RADIUS_SYSTEM,
   knowledge_gaps: KNOWLEDGE_GAPS_SYSTEM,
+  integration: INTEGRATION_SYSTEM,
   chat: GENERAL_CHAT_SYSTEM,
   inline_completion: `You are a code completion engine. The user is typing code.
 
@@ -269,6 +325,16 @@ export function useCaseFromQuickAction(quickAction: string | undefined): UseCase
     default:
       return "chat";
   }
+}
+
+export function resolveChatUseCase(
+  quickAction: string | undefined,
+  integrationProvider?: IntegrationChatProvider
+): UseCase {
+  if (integrationProvider) {
+    return "integration";
+  }
+  return useCaseFromQuickAction(quickAction);
 }
 
 type ManifestSnippet = { path: string; content: string; lineRange?: [number, number] };
@@ -330,7 +396,9 @@ export function formatChatMessageWithMentionFiles(options: {
     lines.push(`branch: ${options.branch}`);
   }
   lines.push("<mentioned_files>");
-  lines.push("The file_content blocks below are authoritative source from indexed repositories.");
+  lines.push(
+    "The file_content blocks below are user @-attachments. Use only in-scope paths listed in the message ## @ attachments section; do not treat out-of-scope paths as part of the primary analysis."
+  );
   for (const file of options.files) {
     const range =
       file.lineRange && file.lineRange.length === 2
@@ -397,6 +465,13 @@ export function buildUserMessageWithContext(
         : "";
     lines.push(`<file path="${context.file}"${range} />`);
   }
+  const treeOverview = extractTreeOverview(context?.contextBundle);
+  if (treeOverview) {
+    const monorepoNote = buildMonorepoContextNote(treeOverview, context?.file);
+    if (monorepoNote) {
+      lines.push(monorepoNote);
+    }
+  }
   if (localSnippets.length > 0) {
     lines.push("<local_files>");
     lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
@@ -458,6 +533,46 @@ export function buildUserMessageWithContext(
   return lines.join("\n");
 }
 
+type TreeOverviewSnippet = {
+  topLevelDirs?: string[];
+  topLevelFiles?: string[];
+};
+
+function extractTreeOverview(bundle: unknown): TreeOverviewSnippet | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const treeOverview = (entry as { data?: { treeOverview?: TreeOverviewSnippet } }).data?.treeOverview;
+    if (treeOverview?.topLevelDirs?.length) {
+      return treeOverview;
+    }
+  }
+  return undefined;
+}
+
+function buildMonorepoContextNote(treeOverview: TreeOverviewSnippet, activeFile?: string): string | undefined {
+  const dirs = (treeOverview.topLevelDirs ?? []).map((dir) => dir.replace(/\/$/, ""));
+  if (dirs.length <= 1) {
+    return undefined;
+  }
+  const dirsList = dirs.map((dir) => `\`${dir}/\``).join(", ");
+  let scopeLine =
+    "Scope general answers to the whole monorepo unless the user names a specific top-level package.";
+  if (activeFile) {
+    const normalized = activeFile.replace(/\\/g, "/").replace(/^\.?\//, "");
+    const top = normalized.split("/")[0];
+    const matchingDir = dirs.find((dir) => dir === top || normalized.startsWith(`${dir}/`));
+    if (matchingDir) {
+      scopeLine = `Active editor context applies to the \`${matchingDir}/\` package (active file: \`${normalized}\`). Prefer paths under this package unless the user asks about another top-level package.`;
+    }
+  }
+  return `<monorepo_context>Monorepo with top-level packages: ${dirsList}. ${scopeLine}</monorepo_context>`;
+}
+
 function extractRepoSummaryEntryFiles(bundle: unknown): ManifestSnippet[] {
   if (!Array.isArray(bundle)) {
     return [];
@@ -512,7 +627,8 @@ function extractJiraSearchTickets(bundle: unknown): JiraSearchSnippet | undefine
 }
 
 function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
-  const match = jira.matchStrategy ?? (jira.issues.length > 0 ? "text" : "none");
+  const issues = jira.issues ?? [];
+  const match = jira.matchStrategy ?? (issues.length > 0 ? "text" : "none");
   const lines: string[] = [`<jira_tickets match="${escapeXml(match)}">`];
   if (jira.error) {
     lines.push(`<error>${escapeXml(jira.error)}</error>`);
@@ -526,10 +642,10 @@ function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
       `<search jql="${escapeXml(jira.jql)}"${jira.repoQuery ? ` repo="${escapeXml(jira.repoQuery)}"` : ""}${repoKeys} />`
     );
   }
-  if (jira.issues.length === 0 && !jira.error) {
+  if (issues.length === 0 && !jira.error) {
     lines.push("<empty>No matching Jira tickets found.</empty>");
   }
-  for (const issue of jira.issues) {
+  for (const issue of issues) {
     const labels = issue.labels?.length ? ` labels="${escapeXml(issue.labels.join(", "))}"` : "";
     lines.push(
       `<ticket key="${escapeXml(issue.key)}" status="${escapeXml(issue.status)}" type="${escapeXml(issue.issueType)}" updated="${escapeXml(issue.updated)}" url="${escapeXml(issue.htmlUrl)}"${labels}>${escapeXml(issue.summary)}</ticket>`
@@ -645,6 +761,7 @@ function extractIntegrationSearch<T>(bundle: unknown, key: string): T | undefine
 }
 
 function formatSlackMessagesForLlm(slack: SlackSearchSnippet): string[] {
+  const messages = slack.messages ?? [];
   const lines: string[] = ["<slack_messages>"];
   if (slack.error) {
     lines.push(`<error>${escapeXml(slack.error)}</error>`);
@@ -652,10 +769,10 @@ function formatSlackMessagesForLlm(slack: SlackSearchSnippet): string[] {
   if (slack.query) {
     lines.push(`<search query="${escapeXml(slack.query)}"${slack.repoQuery ? ` repo="${escapeXml(slack.repoQuery)}"` : ""} />`);
   }
-  if (slack.messages.length === 0 && !slack.error) {
+  if (messages.length === 0 && !slack.error) {
     lines.push("<empty>No matching Slack messages found.</empty>");
   }
-  for (const msg of slack.messages) {
+  for (const msg of messages) {
     const channel = msg.channelName ? ` channel="${escapeXml(msg.channelName)}"` : "";
     const user = msg.userName ? ` user="${escapeXml(msg.userName)}"` : "";
     const url = msg.permalink ? ` url="${escapeXml(msg.permalink)}"` : "";
@@ -666,6 +783,7 @@ function formatSlackMessagesForLlm(slack: SlackSearchSnippet): string[] {
 }
 
 function formatTeamsMessagesForLlm(teams: TeamsSearchSnippet): string[] {
+  const messages = teams.messages ?? [];
   const lines: string[] = ["<teams_messages>"];
   if (teams.error) {
     lines.push(`<error>${escapeXml(teams.error)}</error>`);
@@ -673,10 +791,10 @@ function formatTeamsMessagesForLlm(teams: TeamsSearchSnippet): string[] {
   if (teams.query) {
     lines.push(`<search query="${escapeXml(teams.query)}"${teams.repoQuery ? ` repo="${escapeXml(teams.repoQuery)}"` : ""} />`);
   }
-  if (teams.messages.length === 0 && !teams.error) {
+  if (messages.length === 0 && !teams.error) {
     lines.push("<empty>No matching Teams messages found.</empty>");
   }
-  for (const msg of teams.messages) {
+  for (const msg of messages) {
     const user = msg.fromUserName ? ` user="${escapeXml(msg.fromUserName)}"` : "";
     const url = msg.webUrl ? ` url="${escapeXml(msg.webUrl)}"` : "";
     lines.push(
@@ -688,13 +806,14 @@ function formatTeamsMessagesForLlm(teams: TeamsSearchSnippet): string[] {
 }
 
 function formatKnowledgeGapJobScanForLlm(scan: KnowledgeGapJobScanSnippet): string[] {
+  const gaps = scan.gaps ?? [];
   const lines: string[] = [
     `<knowledge_gap_scan cached="${scan.cached ? "true" : "false"}" found="${scan.foundGaps}" high="${scan.highPriority}" medium="${scan.mediumPriority}" low="${scan.lowPriority}">`
   ];
-  if (scan.gaps.length === 0) {
+  if (gaps.length === 0) {
     lines.push("<empty>No structured repo gaps from background scan.</empty>");
   }
-  for (const gap of scan.gaps) {
+  for (const gap of gaps) {
     const file = gap.file ? ` file="${escapeXml(gap.file)}"` : "";
     const type = gap.type ? ` type="${escapeXml(gap.type)}"` : "";
     const priority = gap.priority ? ` priority="${escapeXml(gap.priority)}"` : "";
@@ -705,7 +824,8 @@ function formatKnowledgeGapJobScanForLlm(scan: KnowledgeGapJobScanSnippet): stri
 }
 
 function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): string[] {
-  const pageCount = confluence.pages.length;
+  const pages = confluence.pages ?? [];
+  const pageCount = pages.length;
   const lines: string[] = [`<confluence_pages count="${pageCount}">`];
   if (confluence.error) {
     lines.push(`<error>${escapeXml(confluence.error)}</error>`);
@@ -723,7 +843,7 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
       `<instruction>List all ${pageCount} page titles under **Confluence pages reviewed** in Knowledge Gaps responses.</instruction>`
     );
   }
-  for (const page of confluence.pages) {
+  for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
     const excerpt = page.excerpt ? ` excerpt="${escapeXml(page.excerpt)}"` : "";
     lines.push(
@@ -735,6 +855,7 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
 }
 
 function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
+  const pages = notion.pages ?? [];
   const lines: string[] = ["<notion_pages>"];
   if (notion.error) {
     lines.push(`<error>${escapeXml(notion.error)}</error>`);
@@ -744,10 +865,10 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
       `<search query="${escapeXml(notion.query)}"${notion.repoQuery ? ` repo="${escapeXml(notion.repoQuery)}"` : ""} />`
     );
   }
-  if (notion.pages.length === 0 && !notion.error) {
+  if (pages.length === 0 && !notion.error) {
     lines.push("<empty>No matching Notion pages found.</empty>");
   }
-  for (const page of notion.pages) {
+  for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
     lines.push(
       `<page id="${escapeXml(page.id)}" updated="${escapeXml(page.updated)}"${url}>${escapeXml(page.title)}</page>`
@@ -758,6 +879,7 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
 }
 
 function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
+  const documents = googleDocs.documents ?? [];
   const lines: string[] = ["<google_docs>"];
   if (googleDocs.error) {
     lines.push(`<error>${escapeXml(googleDocs.error)}</error>`);
@@ -767,10 +889,10 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
       `<search query="${escapeXml(googleDocs.query)}"${googleDocs.repoQuery ? ` repo="${escapeXml(googleDocs.repoQuery)}"` : ""} />`
     );
   }
-  if (googleDocs.documents.length === 0 && !googleDocs.error) {
+  if (documents.length === 0 && !googleDocs.error) {
     lines.push("<empty>No matching Google Docs found.</empty>");
   }
-  for (const doc of googleDocs.documents) {
+  for (const doc of documents) {
     const url = doc.htmlUrl ? ` url="${escapeXml(doc.htmlUrl)}"` : "";
     lines.push(
       `<document id="${escapeXml(doc.id)}" updated="${escapeXml(doc.updated)}"${url}>${escapeXml(doc.title)}</document>`
@@ -781,6 +903,8 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
 }
 
 function formatCodeHostActivityForLlm(codeHost: CodeHostSearchSnippet): string[] {
+  const pullRequests = codeHost.pullRequests ?? [];
+  const issues = codeHost.issues ?? [];
   const lines: string[] = ["<code_host_activity>"];
   if (codeHost.error) {
     lines.push(`<error>${escapeXml(codeHost.error)}</error>`);
@@ -789,17 +913,17 @@ function formatCodeHostActivityForLlm(codeHost: CodeHostSearchSnippet): string[]
   if (codeHost.repoQuery) {
     lines.push(`<repo>${escapeXml(codeHost.repoQuery)}</repo>`);
   }
-  if (codeHost.pullRequests.length === 0 && codeHost.issues.length === 0 && !codeHost.error) {
+  if (pullRequests.length === 0 && issues.length === 0 && !codeHost.error) {
     lines.push("<empty>No pull requests or issues found.</empty>");
   }
-  for (const pr of codeHost.pullRequests) {
+  for (const pr of pullRequests) {
     const author = pr.author ? ` author="${escapeXml(pr.author)}"` : "";
     const url = pr.htmlUrl ? ` url="${escapeXml(pr.htmlUrl)}"` : "";
     lines.push(
       `<pull_request number="${pr.number}" state="${escapeXml(pr.state)}" merged="${pr.merged}" updated="${escapeXml(pr.updatedAt)}"${author}${url}>${escapeXml(pr.title)}</pull_request>`
     );
   }
-  for (const issue of codeHost.issues) {
+  for (const issue of issues) {
     const author = issue.author ? ` author="${escapeXml(issue.author)}"` : "";
     const url = issue.htmlUrl ? ` url="${escapeXml(issue.htmlUrl)}"` : "";
     lines.push(
@@ -877,7 +1001,7 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
       mutated = true;
       data.entryFiles = source.entryFiles.map((file) => ({
         path: file.path,
-        byteLength: file.content.length,
+        byteLength: file.content?.length ?? 0,
         ...(file.truncated ? { truncated: true } : {})
       }));
     }
@@ -888,7 +1012,7 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         ...source.localFiles,
         files: source.localFiles.files.map((file) => ({
           path: file.path,
-          byteLength: file.content.length,
+          byteLength: file.content?.length ?? 0,
           ...(file.lineRange ? { lineRange: file.lineRange } : {})
         }))
       };

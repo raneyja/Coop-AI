@@ -53,7 +53,7 @@ export class GitHubClient implements CodeHostClient {
       });
       return { ok: true, message: "GitHub token is valid." };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "GitHub connection failed.";
+      const message = error instanceof Error ? error.message : "GitHub test failed.";
       return { ok: false, message };
     }
   }

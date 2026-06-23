@@ -59,6 +59,28 @@ async function run(): Promise<void> {
     assert.equal(merged.contextWarning, undefined);
   });
 
+  await test("mergeRepoContext promotes file when editor provides file under explicit repo scope", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", scope: "repo" },
+      { file: "src/a.ts", fileSource: "workspace", scope: "file" }
+    );
+    assert.equal(merged.scope, "file");
+    assert.equal(merged.file, "src/a.ts");
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "coop-ai");
+  });
+
+  await test("mergeRepoContext clears file when repo scope is active", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", scope: "repo", file: undefined },
+      { owner: "acme", repo: "coop-ai", fileSource: "external", contextWarning: "focus loss" }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "coop-ai");
+  });
+
   const total = passed + failed;
   console.log(`\nrepoContextMerge: ${passed}/${total} tests passed`);
   if (failed > 0) {

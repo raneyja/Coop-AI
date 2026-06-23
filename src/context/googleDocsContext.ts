@@ -2,6 +2,7 @@ import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildRepoOrQuery } from "./docSearchQuery";
+import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -34,6 +35,9 @@ export function wantsGoogleDocsContext(query: string): boolean {
 
 export function shouldFetchGoogleDocsContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "google-docs") {
+    return true;
+  }
+  if (shouldFetchRepoWideIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {

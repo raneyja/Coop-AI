@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { isChatSessionIdle, resolveLastActiveAt, shouldStartFreshThreadOnRestore } from "./chatThreadRestore";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ChatPersistedArtifact, RepoContext } from "./types";
 
 export type ChatThreadSummary = {
   id: string;
@@ -12,7 +12,10 @@ export type ChatThreadSummary = {
 
 export type ChatThreadRecord = ChatThreadSummary & {
   messages: ChatMessage[];
+  artifacts: ChatPersistedArtifact[];
   sessionCostUsd: number;
+  /** Repo/file scope last used in this thread (restored on switch). */
+  repoContext?: RepoContext;
 };
 
 type ThreadStoreSnapshot = {
@@ -34,10 +37,30 @@ function emptyThread(id = createThreadId()): ChatThreadRecord {
     id,
     title: "New Chat",
     messages: [],
+    artifacts: [],
     sessionCostUsd: 0,
     createdAt: now,
     updatedAt: now,
     messageCount: 0
+  };
+}
+
+function snapshotThreadRepoContext(ctx: RepoContext): RepoContext | undefined {
+  const owner = ctx.owner?.trim();
+  const repo = ctx.repo?.trim();
+  const file = ctx.file?.trim();
+  if (!owner && !repo && !file) {
+    return undefined;
+  }
+  return {
+    provider: ctx.provider,
+    owner,
+    repo,
+    branch: ctx.branch?.trim() || undefined,
+    scope: ctx.scope,
+    file,
+    fileSource: ctx.fileSource,
+    languageId: ctx.languageId
   };
 }
 
@@ -112,17 +135,23 @@ export class ChatThreadStore {
   public setActiveThread(
     messages: ChatMessage[],
     sessionCostUsd: number,
-    title: string
+    title: string,
+    artifacts: ChatPersistedArtifact[] = [],
+    repoContext?: RepoContext
   ): void {
     const thread = this.getThread(this.snapshot.activeThreadId);
     if (!thread) {
       return;
     }
     thread.messages = [...messages];
+    thread.artifacts = [...artifacts];
     thread.sessionCostUsd = sessionCostUsd;
     thread.title = title;
     thread.messageCount = messages.length;
     thread.updatedAt = Date.now();
+    if (repoContext) {
+      thread.repoContext = snapshotThreadRepoContext(repoContext);
+    }
     this.snapshot.lastActiveAt = Date.now();
     this.writeSnapshot();
   }
@@ -147,8 +176,12 @@ export class ChatThreadStore {
     return this.getActiveThread();
   }
 
-  public startNewThread(): ChatThreadRecord {
+  public startNewThread(inheritContext?: RepoContext): ChatThreadRecord {
     const thread = emptyThread();
+    const inherited = inheritContext ? snapshotThreadRepoContext(inheritContext) : undefined;
+    if (inherited) {
+      thread.repoContext = inherited;
+    }
     this.snapshot.threads.unshift(thread);
     this.snapshot.activeThreadId = thread.id;
     this.pruneThreads();
@@ -159,6 +192,7 @@ export class ChatThreadStore {
   public clearActiveThread(): ChatThreadRecord {
     const thread = this.getActiveThread();
     thread.messages = [];
+    thread.artifacts = [];
     thread.sessionCostUsd = 0;
     thread.title = "New Chat";
     thread.messageCount = 0;
@@ -216,6 +250,7 @@ export class ChatThreadStore {
       ...thread,
       messageCount: thread.messageCount ?? thread.messages?.length ?? 0,
       messages: Array.isArray(thread.messages) ? thread.messages : [],
+      artifacts: Array.isArray(thread.artifacts) ? thread.artifacts : [],
       sessionCostUsd: thread.sessionCostUsd ?? 0
     }));
     return {

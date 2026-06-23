@@ -27,7 +27,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 After the platform operator has configured the server, a **customer org admin** should complete onboarding in ~15 minutes:
 
 1. **Extension UI** — Install Coop AI → **Settings → Account** → sign in (SSO or org API key) → **Test connection**
-2. **Extension UI** — **Settings → Connections** → for each tool: **Connect** → approve in browser → **Refresh status** → **Test**
+2. **Extension UI** — **Settings → Tools** → for each tool: **Connect** → approve in browser → **Refresh status** → **Test**
 3. **Extension UI** — **Settings → Workspace** → set default **owner / repo / branch**
 4. **Extension UI** — run a quick action or chat query to validate context
 
@@ -153,7 +153,7 @@ Give this checklist to the customer's **owner/admin** user (`canInstallIntegrati
 
 ### 2. Connect tools
 
-**Extension UI** — **Settings → Connections**
+**Extension UI** — **Settings → Tools**
 
 For each row, same pattern:
 
@@ -182,7 +182,7 @@ For each row, same pattern:
 | Test | Extension UI action |
 |------|---------------------|
 | API + auth | **Account** → Test connection |
-| Each integration | **Connections** → **Test {name}** |
+| Each integration | **Tools** → **Test {name}** |
 | Chat context | Ask e.g. *any notion pages for this repo?* or run **Knowledge Gaps** |
 
 ---
@@ -224,7 +224,7 @@ What exists today vs what enterprise self-serve still needs:
 - Onboard new customer orgs with API key + “click Connect” session.
 
 **Phase B — In-product onboarding (next)**  
-- First-run wizard: Account → Connections checklist with green/red status.  
+- First-run wizard: Account → Tools checklist with green/red status.  
 - Disable or hide PAT fields unless `coopAI.devMode: true`.  
 - Link from each Connect card to admin-only setup doc.
 

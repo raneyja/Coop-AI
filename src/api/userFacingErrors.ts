@@ -75,7 +75,7 @@ const API_ERROR_MESSAGES: Record<string, string> = {
     "You've reached the Pro limit of 3 Deep-Indexed Repos per seat. Upgrade to Enterprise for estate-wide indexing.",
   plan_required: "This feature requires an Enterprise plan.",
   code_host_plan_required:
-    "Code host connections require Pro. The free plan uses local workspace files only. See https://coop-ai.dev/pricing",
+    "Code host tools require Pro. The free plan uses local workspace files only. See https://coop-ai.dev/pricing",
   remote_code_plan_required:
     "Remote code graph requires Pro. The free plan is limited to local workspace files.",
   team_not_available:

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import {
   buildRepoJql,
   collectJiraKeysFromText,
+  shouldFetchJiraContext,
   wantsJiraContext,
   wantsRepoLinkedJiraDiscovery
 } from "./jiraContext";
+import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -57,6 +59,14 @@ test("collectJiraKeysFromText deduplicates keys from commit messages", () => {
     "Follow-up for coop-101 and COOP-118"
   );
   assert.deepEqual(keys.sort(), ["COOP-101", "COOP-118"]);
+});
+
+test("shouldFetchJiraContext includes knowledge-gaps quick action", () => {
+  const request = {
+    type: "knowledge_gaps",
+    params: { quickAction: "knowledge-gaps" }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchJiraContext(request), true);
 });
 
 const total = passed + failed;

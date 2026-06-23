@@ -5,6 +5,8 @@ import {
   shouldShowViewResultsButton
 } from "../../jobs/jobActivityPolicy";
 import type { IntentFeedbackState, JobProgressState } from "../types";
+import { shouldSuppressActivityStripLoading } from "../chatInlineThinking";
+import type { ChatInlineThinkingOptions } from "../chatInlineThinking";
 
 type ChatActivityStripProps = {
   error?: string;
@@ -18,6 +20,9 @@ type ChatActivityStripProps = {
   intentFeedback?: IntentFeedbackState;
   onDismissIntent?: () => void;
   conflictCount?: number;
+  /** When true, in-thread loading replaces strip rows for intent/job progress. */
+  hideInlineActivity?: boolean;
+  inlineThinkingOptions?: ChatInlineThinkingOptions;
 };
 
 /**
@@ -34,21 +39,37 @@ export function ChatActivityStrip({
   onViewJobResults,
   intentFeedback,
   onDismissIntent,
-  conflictCount = 0
+  conflictCount = 0,
+  hideInlineActivity = false,
+  inlineThinkingOptions
 }: ChatActivityStripProps): React.ReactElement | null {
-  const intentLine =
-    intentFeedback && intentFeedback.status !== "idle"
-      ? intentFeedback.message || intentFeedback.title
-      : undefined;
-
   const jobActive = jobProgress ? isActiveJobStatus(jobProgress.status) : false;
   const showJobLine = jobProgress ? shouldShowJobActivityLine(jobProgress) : false;
+  const suppress = shouldSuppressActivityStripLoading(
+    hideInlineActivity,
+    intentFeedback,
+    jobProgress,
+    inlineThinkingOptions
+  );
   const jobLine =
-    jobProgress && showJobLine ? jobProgress.message || jobProgress.title : undefined;
+    jobProgress && showJobLine && !suppress.job
+      ? jobProgress.message || jobProgress.title
+      : undefined;
 
-  const line = error || intentLine || jobLine;
+  const intentLine =
+    intentFeedback &&
+    !suppress.intent &&
+    intentFeedback.status !== "idle" &&
+    intentFeedback.status !== "loading" &&
+    intentFeedback.status !== "complete"
+      ? intentFeedback.message || intentFeedback.title
+      : undefined;
+  const intentLoading = !suppress.intent && intentFeedback?.status === "loading" && !jobLine;
+  const loadingMessage = intentFeedback?.message || "Fetching context…";
 
-  if (!line && conflictCount === 0 && !contextWarning) {
+  const line = error || (!intentLoading ? intentLine : undefined) || jobLine;
+
+  if (!line && !intentLoading && conflictCount === 0 && !contextWarning) {
     return null;
   }
 
@@ -76,15 +97,19 @@ export function ChatActivityStrip({
           ) : null}
         </div>
       ) : null}
-      {!error && (intentLine || jobLine) ? (
+      {!error && intentLoading ? (
+        <div className="chat-activity-strip-loading">
+          <span className="chat-activity-strip-spinner" aria-hidden="true" />
+          <span className="chat-activity-whisper-text">{loadingMessage}</span>
+        </div>
+      ) : null}
+      {!error && !intentLoading && (intentLine || jobLine) ? (
         <div
           className={`chat-activity-strip-row${
             jobProgress?.status === "failed" ? " chat-activity-strip-row--error" : ""
           }`}
         >
-          {jobActive || (intentFeedback?.status === "loading" && !jobLine) ? (
-            <span className="chat-activity-strip-spinner" aria-hidden="true" />
-          ) : null}
+          {jobActive ? <span className="chat-activity-strip-spinner" aria-hidden="true" /> : null}
           <span className="min-w-0 truncate">{line}</span>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {canCancelJob ? (
@@ -105,7 +130,7 @@ export function ChatActivityStrip({
                 View results
               </button>
             ) : null}
-            {intentFeedback && intentFeedback.status !== "loading" && onDismissIntent ? (
+            {intentFeedback && onDismissIntent && !suppress.intent ? (
               <button type="button" className="chat-activity-strip-action" onClick={onDismissIntent}>
                 Dismiss
               </button>

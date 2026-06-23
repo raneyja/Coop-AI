@@ -1,4 +1,4 @@
-import type { GraphQueryApi, GraphQueryRequest } from "../api/graphQuery";
+import { normalizeGraphRepoId } from "../engines/blastRadiusDependentsFallback";
 import type { ContextFetchRequest, ContextFetchResult } from "../context/requestBatcher";
 import type { IndexBackend } from "./indexBackend";
 
@@ -114,7 +114,7 @@ export class HybridQueryLayer {
   private async localContextEnrichment(
     request: ContextFetchRequest
   ): Promise<Record<string, unknown> | undefined> {
-    const repoId = request.params.repoId;
+    const repoId = request.params.repoId ? normalizeGraphRepoId(request.params.repoId) : undefined;
     const file = request.params.file;
     if (!repoId) {
       return undefined;

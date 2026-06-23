@@ -7,6 +7,7 @@ import type { CompletionRequest, CompletionResponse, LlmAuditEvent, StreamChunk 
 import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type LlmServerConfig } from "./llmServerConfig";
 import { createProviderClient } from "./providers";
 import { buildUserMessageWithContext, systemPromptForUseCase } from "../prompts/systemPrompts";
+import { appendUserImageAttachmentsPrompt } from "../prompts/userImageAttachments";
 import { ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT } from "./requestFormatter";
 
 export type ModelRouterOptions = {
@@ -32,7 +33,10 @@ export class ModelRouter {
   public async *stream(request: CompletionRequest, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
     const started = Date.now();
     const provider = this.resolveProvider(request);
-    const userContent = buildUserMessageWithContext(request.message, request.context);
+    const userContent = appendUserImageAttachmentsPrompt(
+      buildUserMessageWithContext(request.message, request.context),
+      request.attachments
+    );
 
     const messages: ChatRequestMessage[] = [
       {
@@ -41,7 +45,7 @@ export class ModelRouter {
       },
       ...request.history.map((entry) => ({
         role: entry.role,
-        content: entry.content,
+        content: appendUserImageAttachmentsPrompt(entry.content, entry.attachments),
         attachments: entry.attachments
       })),
       { role: "user", content: userContent, attachments: request.attachments }

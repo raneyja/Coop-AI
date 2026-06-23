@@ -1,7 +1,23 @@
+import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { activeThemeMode } from "./themeMode";
 
 export type WebviewViewMode = "chat" | "settings";
+
+function webviewAssetUri(
+  webview: vscode.Webview,
+  extensionUri: vscode.Uri,
+  ...pathSegments: string[]
+): vscode.Uri {
+  const fileUri = vscode.Uri.joinPath(extensionUri, ...pathSegments);
+  let version = Date.now().toString(36);
+  try {
+    version = String(fs.statSync(fileUri.fsPath).mtimeMs);
+  } catch {
+    /* dist asset may be missing during partial builds */
+  }
+  return webview.asWebviewUri(fileUri).with({ query: `v=${version}` });
+}
 
 export function renderWebviewHtml(
   webview: vscode.Webview,
@@ -11,8 +27,8 @@ export function renderWebviewHtml(
   const view = options?.view ?? "chat";
   const enforceMinWidth = options?.enforceMinWidth ?? false;
   const themeMode = activeThemeMode();
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.js"));
-  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.css"));
+  const scriptUri = webviewAssetUri(webview, extensionUri, "dist", "webview.js");
+  const styleUri = webviewAssetUri(webview, extensionUri, "dist", "webview.css");
   const nonce = createNonce();
   return `<!doctype html>
 <html lang="en" data-theme="${themeMode}">

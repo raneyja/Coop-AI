@@ -58,7 +58,7 @@ export class BitbucketClient implements CodeHostClient {
       });
       return { ok: true, message: "Bitbucket credentials are valid." };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Bitbucket connection failed.";
+      const message = error instanceof Error ? error.message : "Bitbucket test failed.";
       return { ok: false, message };
     }
   }

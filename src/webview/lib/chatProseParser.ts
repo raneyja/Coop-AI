@@ -12,6 +12,11 @@ import {
   normalizeCoopChatProse,
   normalizeKgFieldLabel
 } from "./normalizeKnowledgeGapProse";
+import {
+  isSourceCitationLabel,
+  normalizeSourceCitationLabel,
+  sourceCitationSlug
+} from "../../prompts/sourceCitationRegistry";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+.+/;
@@ -20,6 +25,7 @@ const LIST_ITEM_RE = /^(\s*)(- |\* |(\d+)\.\s)(.*)$/;
 const CITATION_HEADER_RE = /^(\d+):(\d+):(.+)$/;
 const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
 const INLINE_URL_RE = /^https?:\/\/[^\s)]+/;
+const INLINE_SOURCE_CITATION_RE = /^\[Sources:\s*.+?\]/i;
 const INLINE_CODE_RE = /^`([^`\n]+)`/;
 const INLINE_STRONG_RE = /^\*\*([^*\n]+)\*\*/;
 const INLINE_EM_RE = /^\*([^*\n]+)\*/;
@@ -348,6 +354,15 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
       continue;
     }
 
+    const sourceMatch = remaining.match(INLINE_SOURCE_CITATION_RE);
+    if (sourceMatch) {
+      flushText();
+      const label = normalizeSourceCitationLabel(sourceMatch[0]);
+      nodes.push({ type: "source-citation", label, id: sourceCitationSlug(label) });
+      cursor += sourceMatch[0].length;
+      continue;
+    }
+
     const codeMatch = remaining.match(INLINE_CODE_RE);
     if (codeMatch) {
       flushText();
@@ -382,6 +397,10 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
 
 function asCodeOrFileLink(code: string): ChatInlineNode {
   const trimmed = code.trim();
+  if (isSourceCitationLabel(trimmed)) {
+    const label = normalizeSourceCitationLabel(trimmed);
+    return { type: "source-citation", label, id: sourceCitationSlug(label) };
+  }
   const fileLineMatch = trimmed.match(FILE_LINE_RE);
   if (fileLineMatch && looksLikeFilePath(fileLineMatch[1])) {
     return {

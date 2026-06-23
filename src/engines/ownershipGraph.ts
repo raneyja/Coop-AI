@@ -65,11 +65,13 @@ export class OwnershipGraphEngine {
     const historyPath = params.isDirectory ? `${path}/` : path;
     let commits: CommitInfo[] = [];
     try {
-      commits = await this.options.codeHostRouter.getCommitHistory({
-        ...resolved,
-        path: historyPath.replace(/\/$/, "") || undefined,
-        limit: COMMIT_LIMIT
-      });
+      commits = params.isDirectory
+        ? await this.options.codeHostRouter.getCommitHistory({
+            ...resolved,
+            path: historyPath.replace(/\/$/, "") || undefined,
+            limit: COMMIT_LIMIT
+          })
+        : await this.options.codeHostRouter.getFileHistory(historyPath, COMMIT_LIMIT, resolved);
       if (commits.length >= COMMIT_LIMIT) {
         warnings.push(`Commit history truncated at ${COMMIT_LIMIT} commits.`);
       }
@@ -151,6 +153,15 @@ export class OwnershipGraphEngine {
     const risk = computeOwnershipRisk(scores, commits, activity);
     const history = buildOwnershipEvolution(commits);
     const completeness = this.assessCompleteness(warnings, scores, commits);
+    const latestCommit = commits[0];
+    const pathEvolution =
+      commits.length > 0
+        ? {
+            recentCommitCount: commits.length,
+            lastModifiedAt: latestCommit?.date,
+            lastModifiedAuthor: latestCommit?.authorLogin ? `@${latestCommit.authorLogin}` : latestCommit?.author
+          }
+        : undefined;
 
     const report: OwnershipReport = {
       path,
@@ -178,7 +189,8 @@ export class OwnershipGraphEngine {
       ),
       warnings,
       completeness,
-      signals
+      signals,
+      pathEvolution
     };
 
     report.messageDraft = draftOwnerMessage(report);

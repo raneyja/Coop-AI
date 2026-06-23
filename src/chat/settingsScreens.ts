@@ -1,7 +1,7 @@
 export type SettingsScreen =
   | "hub"
   | "account"
-  | "connections"
+  | "tools"
   | "code-host-github"
   | "code-host-gitlab"
   | "code-host-bitbucket"
@@ -22,13 +22,14 @@ export type LegacySettingsScreen =
   | "api"
   | "code-hosts"
   | "integrations"
+  | "connections"
   | "identity-links";
 
 export type SettingsDetailScreen = Exclude<SettingsScreen, "hub">;
 
 export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   account: "Account",
-  connections: "Connections",
+  tools: "Tools",
   "code-host-github": "GitHub",
   "code-host-gitlab": "GitLab",
   "code-host-bitbucket": "Bitbucket",
@@ -38,7 +39,7 @@ export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   "integration-confluence": "Confluence",
   "integration-notion": "Notion",
   "integration-google-docs": "Google Docs",
-  team: "Team",
+  team: "Identity links",
   workspace: "Workspace",
   preferences: "Preferences",
   model: "Model & chat",
@@ -47,8 +48,9 @@ export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
 
 const LEGACY_SCREEN_MAP: Record<string, SettingsScreen> = {
   api: "account",
-  "code-hosts": "connections",
-  integrations: "connections",
+  "code-hosts": "tools",
+  integrations: "tools",
+  connections: "tools",
   "identity-links": "team"
 };
 
@@ -75,7 +77,7 @@ export function settingsScreenForProvider(provider: string): SettingsScreen | un
 
 export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
   if (screen === "code-host-github" || screen === "code-host-gitlab" || screen === "code-host-bitbucket") {
-    return "connections";
+    return "tools";
   }
   if (
     screen === "integration-slack" ||
@@ -83,9 +85,10 @@ export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
     screen === "integration-teams" ||
     screen === "integration-confluence" ||
     screen === "integration-notion" ||
-    screen === "integration-google-docs"
+    screen === "integration-google-docs" ||
+    screen === "team"
   ) {
-    return "connections";
+    return "tools";
   }
   if (screen === "model" || screen === "prompts") {
     return "preferences";
@@ -105,7 +108,7 @@ export function isSettingsScreen(value: string): value is SettingsScreen {
   return (
     value === "hub" ||
     value in SETTINGS_SCREEN_TITLES ||
-    value === "connections" ||
+    value === "tools" ||
     value === "preferences"
   );
 }

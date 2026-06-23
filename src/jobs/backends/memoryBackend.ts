@@ -1,5 +1,5 @@
 import type { Job, JobParams, JobStatus, JobType } from "../types";
-import { pickNewestReusableJob } from "../jobReuse";
+import { pickNewestMatchingCompletedJob, pickNewestReusableJob } from "../jobReuse";
 import type { QueueBackend } from "./types";
 
 type RateLimitEntry = {
@@ -47,6 +47,17 @@ export class MemoryQueueBackend implements QueueBackend {
     return pickNewestReusableJob(
       this.allJobs().filter((job) => job.userId === userId && job.type === jobType),
       maxAgeMs,
+      params
+    );
+  }
+
+  public async findLatestCompletedJob(
+    userId: string,
+    jobType: JobType,
+    params: JobParams
+  ): Promise<Job | undefined> {
+    return pickNewestMatchingCompletedJob(
+      this.allJobs().filter((job) => job.userId === userId && job.type === jobType),
       params
     );
   }

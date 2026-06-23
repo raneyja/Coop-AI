@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { settingsScreenForProvider } from "../chat/settingsScreens";
+import React, { useEffect, useMemo } from "react";
 import type { SettingsScreen } from "../chat/settingsScreens";
 import { CoopPanelHeader } from "./components/CoopPanelHeader";
 import { RefreshButton } from "./components/RefreshButton";
@@ -10,7 +9,7 @@ import {
   type ExplorerSearchState,
   type ExplorerTreeState
 } from "./components/RemoteExplorerTree";
-import type { CodeHostProviderPreference, RepoContext } from "../chat/types";
+import type { RepoContext } from "../chat/types";
 
 export { parseRepoNodePath } from "./components/RemoteExplorerTree";
 
@@ -27,7 +26,8 @@ type RemoteExplorerProps = {
   onExpand: (path: string) => void;
   onSearch: (query: string) => void;
   onSelectFile: (path: string) => void;
-  onSelectRepo: (path: string) => void;
+  onBrowseRepo: (path: string) => void;
+  onUseRepo: (path: string) => void;
   onOpenSettings?: (screen?: SettingsScreen) => void;
 };
 
@@ -44,10 +44,10 @@ export function RemoteExplorer({
   onExpand,
   onSearch,
   onSelectFile,
-  onSelectRepo,
+  onBrowseRepo,
+  onUseRepo,
   onOpenSettings
 }: RemoteExplorerProps): React.ReactElement | null {
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const isRepoList = treeState.scope === "repos";
 
   const breadcrumb = useMemo(
@@ -59,11 +59,14 @@ export function RemoteExplorer({
     if (!open) {
       return;
     }
-    const frame = window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [open]);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
   if (!open) {
     return null;
@@ -91,18 +94,26 @@ export function RemoteExplorer({
         treeState={treeState}
         searchState={searchState}
         context={context}
+        repoBrowseMode
         onRefreshRepos={onRefreshRepos}
         onRefreshPath={onRefresh}
         onBrowseRepos={onBrowseRepos}
         onExpand={onExpand}
         onSearch={onSearch}
-        onOpenRepo={onSelectRepo}
+        onOpenRepo={onBrowseRepo}
         onOpenFile={(path) => {
           onSelectFile(path);
           onClose();
         }}
+        onUseRepo={onUseRepo}
         onOpenSettings={onOpenSettings}
       />
     </div>
   );
+}
+
+export function repoSelectPayloadFromNodePath(path: string):
+  | { provider: import("../chat/types").CodeHostProviderPreference; owner: string; repo: string }
+  | undefined {
+  return parseRepoNodePath(path);
 }

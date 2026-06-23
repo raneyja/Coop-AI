@@ -6,9 +6,13 @@ import { ChatCodeBlock } from "./ChatCodeBlock";
 import { ChatCodeCitation } from "./ChatCodeCitation";
 import { ChatJiraTicketStack } from "./ChatJiraTicketStack";
 import { useChatLinks } from "./ChatLinkContext";
+import { useCitationNavigation } from "./CitationNavigationContext";
+
+import { sourceCitationAnchor } from "../../prompts/sourceCitationRegistry";
 
 type ChatProseProps = {
   content: string;
+  relatedArtifactId?: string;
   onOpenFile?: (path: string, line?: number) => void;
   onOpenLink?: (url: string) => void;
   className?: string;
@@ -16,6 +20,7 @@ type ChatProseProps = {
 
 export function ChatProse({
   content,
+  relatedArtifactId,
   onOpenFile,
   onOpenLink,
   className
@@ -27,7 +32,9 @@ export function ChatProse({
 
   return (
     <div className={className ? `coop-chat-prose ${className}` : "coop-chat-prose"}>
-      {document.blocks.map((block, index) => renderBlock(block, index, openFile, openLink))}
+      {document.blocks.map((block, index) =>
+        renderBlock(block, index, openFile, openLink, relatedArtifactId)
+      )}
     </div>
   );
 }
@@ -36,7 +43,8 @@ function renderBlock(
   block: ChatProseBlock,
   index: number,
   onOpenFile?: (path: string, line?: number) => void,
-  onOpenLink?: (url: string) => void
+  onOpenLink?: (url: string) => void,
+  relatedArtifactId?: string
 ): React.ReactElement {
   switch (block.type) {
     case "section-heading":
@@ -70,7 +78,7 @@ function renderBlock(
         <ListTag key={`list-${index}`} className="coop-chat-list">
           {block.items.map((item, itemIndex) => (
             <li key={`list-${index}-${itemIndex}`}>
-              {renderInlineNodes(item.content, onOpenFile, onOpenLink)}
+              {renderInlineNodes(item.content, onOpenFile, onOpenLink, relatedArtifactId)}
             </li>
           ))}
         </ListTag>
@@ -87,7 +95,7 @@ function renderBlock(
     case "paragraph":
       return (
         <p key={`paragraph-${index}`} className="coop-chat-paragraph">
-          {renderInlineNodes(block.content, onOpenFile, onOpenLink)}
+          {renderInlineNodes(block.content, onOpenFile, onOpenLink, relatedArtifactId)}
         </p>
       );
     default:
@@ -102,7 +110,8 @@ function renderBlock(
 function renderInlineNodes(
   nodes: ChatInlineNode[],
   onOpenFile?: (path: string, line?: number) => void,
-  onOpenLink?: (url: string) => void
+  onOpenLink?: (url: string) => void,
+  relatedArtifactId?: string
 ): React.ReactNode[] {
   return nodes.map((node, index) => {
     switch (node.type) {
@@ -127,6 +136,14 @@ function renderInlineNodes(
             onClick={() => onOpenFile?.(node.path, node.line)}
           />
         );
+      case "source-citation": {
+        const anchorId = relatedArtifactId
+          ? sourceCitationAnchor(relatedArtifactId, node.label)
+          : node.id;
+        return (
+          <SourceCitationPill key={`source-${index}`} label={node.label} id={anchorId} />
+        );
+      }
       case "external-link":
         return (
           <ChatActionLink
@@ -140,4 +157,19 @@ function renderInlineNodes(
         return null;
     }
   });
+}
+
+function SourceCitationPill({ label, id }: { label: string; id: string }): React.ReactElement {
+  const { registerCitationAnchor, scrollToEvidence } = useCitationNavigation();
+  return (
+    <button
+      type="button"
+      className="coop-result-source-cite coop-result-source-cite--link"
+      ref={(element) => registerCitationAnchor(id, element)}
+      onClick={() => scrollToEvidence(id)}
+      title={`Jump to evidence: ${label}`}
+    >
+      {label}
+    </button>
+  );
 }

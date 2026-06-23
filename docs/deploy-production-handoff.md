@@ -111,7 +111,7 @@ Open agent chats from [enterprise-estate-tonight-build-plan.md](./enterprise-est
 After P1+E2+E4 merge and `npm run build:webview`:
 
 1. **Extension Development Host** → sign in Test 3 `coop_…` key
-2. **Connections → GitHub** → connected
+2. **Tools → GitHub** → connected
 3. Open **Deep-Code Graph** panel (Lightning panel — new copy)
 4. Add repo 1 → enable indexing → wait **Ready**
 5. Add repos 2 and 3 → enable → **Ready**

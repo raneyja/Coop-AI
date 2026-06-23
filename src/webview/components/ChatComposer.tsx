@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../../chat/types";
+import {
+  INDEXED_REPOS_MENTION_TITLE,
+  LOCAL_WORKSPACE_MENTION_TITLE,
+  WORKSPACE_LOCAL_REPO_ID
+} from "../../chat/mentionSearchMerge";
 import { LaunchTypewriter } from "./LaunchTypewriter";
 import type { LaunchIntroPhase } from "../hooks/useLaunchTypewriter";
 import {
@@ -16,6 +21,7 @@ import {
   mergeAttachments,
   readImageFiles
 } from "../attachmentUtils";
+import { MentionAttachmentChip } from "./MentionAttachmentChip";
 
 type ChatComposerProps = {
   value: string;
@@ -46,10 +52,31 @@ type ChatComposerProps = {
 
 const MAX_MENTIONS = 3;
 
+function isLocalMentionResult(item: MentionSearchResult): boolean {
+  return item.source === "local" || item.repoId === WORKSPACE_LOCAL_REPO_ID;
+}
+
+function groupMentionResults(items: MentionSearchResult[]): {
+  sections: Array<{ title: string; items: MentionSearchResult[] }>;
+  flat: MentionSearchResult[];
+} {
+  const indexed = items.filter((item) => !isLocalMentionResult(item));
+  const local = items.filter((item) => isLocalMentionResult(item));
+  const sections: Array<{ title: string; items: MentionSearchResult[] }> = [];
+  if (indexed.length > 0) {
+    sections.push({ title: INDEXED_REPOS_MENTION_TITLE, items: indexed });
+  }
+  if (local.length > 0) {
+    sections.push({ title: LOCAL_WORKSPACE_MENTION_TITLE, items: local });
+  }
+  return { sections, flat: [...indexed, ...local] };
+}
+
 function mentionMenuQuery(value: string, cursor: number): string | null {
   const before = value.slice(0, cursor);
   const match = /(?:^|\s)@([^\s@]{0,80})$/.exec(before);
-  return match ? match[1] : null;
+  const query = match?.[1];
+  return query && query.length > 0 ? query : null;
 }
 
 function mentionMenuRange(value: string, cursor: number): { start: number; end: number } | null {
@@ -133,7 +160,7 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const canSend = Boolean(value.trim() || attachments.length);
+  const canSend = Boolean(value.trim() || attachments.length || mentions.length);
   const highlightSegments = useMemo(() => segmentComposerSlashHighlights(value), [value]);
 
   const [slashDismissed, setSlashDismissed] = useState(false);
@@ -148,6 +175,8 @@ export function ChatComposer({
   }, [slashQuery]);
   const showSlashMenu = !isStreaming && !slashDismissed && slashMatches.length > 0;
   const mentionQuery = mentionMenuQuery(value, cursorPosition);
+  const mentionSections = useMemo(() => groupMentionResults(mentionResults), [mentionResults]);
+  const groupedMentionResults = mentionSections.flat;
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const showMentionMenu =
@@ -306,21 +335,20 @@ export function ChatComposer({
       const el = textareaRef.current;
       const cursor = el?.selectionStart ?? cursorPosition;
       const range = mentionMenuRange(value, cursor);
-      const label = item.path.split("/").pop() ?? item.path;
       const nextMention: ChatFileMention = {
         repoId: item.repoId,
         path: item.path,
-        snippet: item.content
+        snippet: item.content,
+        source: item.source
       };
       onMentionsChange([...mentions, nextMention]);
       if (range) {
-        const next = `${value.slice(0, range.start)}@${label} ${value.slice(range.end)}`;
+        const next = `${value.slice(0, range.start)}${value.slice(range.end)}`;
         onChange(next);
-        const newCursor = range.start + label.length + 2;
         requestAnimationFrame(() => {
           el?.focus();
-          el?.setSelectionRange(newCursor, newCursor);
-          setCursorPosition(newCursor);
+          el?.setSelectionRange(range.start, range.start);
+          setCursorPosition(range.start);
         });
       }
       setMentionDismissed(true);
@@ -330,20 +358,22 @@ export function ChatComposer({
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     skipLaunchIntroIfNeeded();
-    if (showMentionMenu && mentionResults.length > 0) {
+    if (showMentionMenu && groupedMentionResults.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setMentionActiveIndex((index) => (index + 1) % mentionResults.length);
+        setMentionActiveIndex((index) => (index + 1) % groupedMentionResults.length);
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setMentionActiveIndex((index) => (index - 1 + mentionResults.length) % mentionResults.length);
+        setMentionActiveIndex(
+          (index) => (index - 1 + groupedMentionResults.length) % groupedMentionResults.length
+        );
         return;
       }
       if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
-        applyMention(mentionResults[mentionActiveIndex] ?? mentionResults[0]);
+        applyMention(groupedMentionResults[mentionActiveIndex] ?? groupedMentionResults[0]);
         return;
       }
       if (event.key === "Escape") {
@@ -404,39 +434,55 @@ export function ChatComposer({
           <div className="coop-prompt-menu" role="listbox" aria-label="File mentions">
             <div className="coop-prompt-menu-panel">
               {mentionLoading ? (
-                <p className="coop-prompt-modal-muted px-3 py-2 text-xs">Searching indexed files…</p>
-              ) : mentionError ? (
-                <p className="coop-settings-test-message--error px-3 py-2 text-xs">{mentionError}</p>
-              ) : mentionResults.length === 0 ? (
-                <p className="coop-prompt-modal-muted px-3 py-2 text-xs">
-                  {mentionHint ??
-                    `No indexed files match "${mentionQuery}". Check Workspace → Search scope is set to your collection and wait for repo indexing to finish.`}
-                </p>
+                <p className="coop-prompt-modal-muted px-3 py-2 text-xs">Searching files…</p>
+              ) : groupedMentionResults.length === 0 ? (
+                mentionError ? (
+                  <p className="coop-settings-test-message--error px-3 py-2 text-xs">{mentionError}</p>
+                ) : (
+                  <p className="coop-prompt-modal-muted px-3 py-2 text-xs">
+                    {(mentionHint && mentionHint.trim()) ||
+                      `No files match "${mentionQuery}". Check Workspace → Search scope, or open the repo folder locally.`}
+                  </p>
+                )
               ) : (
-                <ul className="coop-prompt-menu-list">
-                  {mentionResults.map((item, index) => (
-                    <li key={`${item.repoId}:${item.path}:${item.lineNumber ?? 0}`}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={index === mentionActiveIndex}
-                        className={`coop-prompt-menu-row${
-                          index === mentionActiveIndex ? " coop-prompt-menu-row--active" : ""
-                        }`}
-                        onMouseEnter={() => setMentionActiveIndex(index)}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyMention(item);
-                        }}
-                      >
-                        <span className="coop-prompt-menu-row-label">
-                          <span className="font-medium">{item.path}</span>
-                          <span className="ml-2 text-[var(--coop-panel-muted)]">{item.repoId}</span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  {mentionSections.sections.map((section, sectionIndex) => {
+                    const sectionStart = mentionSections.sections
+                      .slice(0, sectionIndex)
+                      .reduce((count, entry) => count + entry.items.length, 0);
+                    return (
+                      <div key={section.title}>
+                        <p className="coop-prompt-modal-section-title px-3 pt-2 pb-1">{section.title}</p>
+                        <ul className="coop-prompt-menu-list">
+                          {section.items.map((item, indexInSection) => {
+                            const index = sectionStart + indexInSection;
+                            return (
+                              <li key={`${item.repoId}:${item.path}:${item.lineNumber ?? 0}`}>
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={index === mentionActiveIndex}
+                                  className={`coop-prompt-menu-row${
+                                    index === mentionActiveIndex ? " coop-prompt-menu-row--active" : ""
+                                  }`}
+                                  onMouseEnter={() => setMentionActiveIndex(index)}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    applyMention(item);
+                                  }}
+                                >
+                                  <span className="coop-prompt-menu-row-label">
+                                    <span className="font-medium">{item.path}</span>
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </>
               )}
             </div>
           </div>
@@ -478,26 +524,27 @@ export function ChatComposer({
             className="flex flex-wrap gap-1.5 border-b px-3 py-2"
             style={{ borderColor: "var(--coop-composer-border)" }}
           >
-            {mentions.map((mention) => (
-              <span
-                key={`${mention.repoId}:${mention.path}`}
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--coop-pill-border)] bg-[var(--coop-pill-surface)] px-2 py-0.5 text-[11px]"
-                title={`${mention.repoId} · ${mention.path}`}
-              >
-                <span className="truncate max-w-[180px]">{mention.path.split("/").pop() ?? mention.path}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${mention.path}`}
+            {mentions.map((mention) => {
+              const isLocal =
+                mention.source === "local" || mention.repoId === WORKSPACE_LOCAL_REPO_ID;
+              const basename = mention.path.split("/").pop() ?? mention.path;
+              return (
+                <MentionAttachmentChip
+                  key={`${mention.repoId}:${mention.path}`}
+                  basename={basename}
+                  isLocal={isLocal}
+                  title={isLocal ? `${mention.path} · local workspace` : `${mention.repoId} · ${mention.path}`}
                   disabled={isStreaming}
-                  className="text-[var(--coop-panel-muted)] hover:text-[var(--coop-panel-foreground)]"
-                  onClick={() =>
-                    onMentionsChange?.(mentions.filter((entry) => entry.path !== mention.path || entry.repoId !== mention.repoId))
+                  onRemove={() =>
+                    onMentionsChange?.(
+                      mentions.filter(
+                        (entry) => entry.path !== mention.path || entry.repoId !== mention.repoId
+                      )
+                    )
                   }
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+                />
+              );
+            })}
           </div>
         ) : null}
         {attachments.length > 0 ? (

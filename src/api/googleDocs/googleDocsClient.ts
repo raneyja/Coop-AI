@@ -41,12 +41,12 @@ export class GoogleDocsClient {
       const name = result.user?.displayName;
       return {
         ok: true,
-        message: name ? `Google Docs connection successful (${name}).` : "Google Docs connection successful."
+        message: name ? `Google Docs is reachable (${name}).` : "Google Docs is reachable."
       };
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Google Docs connection failed."
+        message: error instanceof Error ? error.message : "Google Docs test failed."
       };
     }
   }

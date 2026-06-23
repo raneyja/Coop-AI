@@ -95,19 +95,19 @@ export function integrationListSubtitle(prefs: Preferences, provider: Integratio
   return integrationConnectionMeta(prefs, provider);
 }
 
-export function connectionsHubSubtitle(prefs: Preferences): string {
+export function toolsHubSubtitle(prefs: Preferences): string {
   const codeHosts = [githubIsConfigured(prefs), gitlabIsConfigured(prefs), bitbucketIsConfigured(prefs)];
-  const tools = [
+  const collaborationTools = [
     integrationConfigured(prefs, "slack"),
     integrationConfigured(prefs, "jira"),
     integrationConfigured(prefs, "confluence"),
     integrationConfigured(prefs, "notion"),
     integrationConfigured(prefs, "google-docs")
   ];
-  const connected = [...codeHosts, ...tools].filter(Boolean).length;
-  const total = codeHosts.length + tools.length;
+  const connected = [...codeHosts, ...collaborationTools].filter(Boolean).length;
+  const total = codeHosts.length + collaborationTools.length;
   if (connected === 0) {
-    return "No connections yet";
+    return "No tools connected yet";
   }
   return `${connected} of ${total} connected`;
 }
@@ -129,22 +129,32 @@ export function formatQuotaRetryLabel(resetsAtIso: string): string {
   return minutes === 1 ? "in 1 minute" : `in ${minutes} minutes`;
 }
 
+export function displayOrgName(prefs: Pick<Preferences, "orgName">): string | undefined {
+  const name = prefs.orgName?.trim();
+  if (!name || name === "Legacy") {
+    return undefined;
+  }
+  return name;
+}
+
 export function accountHubSubtitle(prefs: Preferences): string {
+  const orgName = displayOrgName(prefs);
+  if (!prefs.hasApiKey) {
+    return "Not signed in";
+  }
   if (prefs.plan === "free" && prefs.quotaCredits) {
     const { remainingCredits, limitCredits } = prefs.quotaCredits;
-    return `${remainingCredits} of ${limitCredits} AI credits left`;
+    const credits = `${remainingCredits} of ${limitCredits} AI credits left`;
+    return orgName ? `${orgName} · ${credits}` : credits;
   }
-  if (prefs.authMethod === "sso_session" && prefs.orgName) {
-    return `Signed in to ${prefs.orgName}`;
+  if (orgName) {
+    return orgName;
   }
-  if (prefs.hasApiKey) {
-    try {
-      return `Signed in · ${new URL(prefs.apiBaseUrl).host}`;
-    } catch {
-      return "Signed in";
-    }
+  try {
+    return `Signed in · ${new URL(prefs.apiBaseUrl).host}`;
+  } catch {
+    return "Signed in";
   }
-  return "Not signed in";
 }
 
 export function preferencesHubSubtitle(prefs: Preferences, pinnedCount: number): string {

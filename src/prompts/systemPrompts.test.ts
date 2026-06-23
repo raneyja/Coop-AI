@@ -28,7 +28,17 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("Do NOT use: # headings"));
   assert.ok(prompt.includes("*italics* for uncertainty"));
   assert.ok(prompt.includes("Uniform response template"));
+  assert.ok(prompt.includes("## User-attached images (paperclip)"));
   assert.ok(prompt.includes("## Required response structure"));
+});
+
+test("chat use case includes enterprise evidence rules", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("strong / medium / weak / limited"));
+  assert.ok(prompt.includes("integration blocks show <empty>"));
+  assert.ok(prompt.includes("pull requests and commit history above Slack/Teams"));
+  assert.ok(prompt.includes("Never invent ticket IDs, PR numbers"));
+  assert.ok(prompt.includes("Weight sources by reliability for decisions"));
 });
 
 test("comprehension use case includes audience block via withOutputContract", () => {
@@ -234,6 +244,31 @@ test("buildUserMessageWithContext renders local_files from context bundle", () =
   assert.ok(message.includes("bindSession"));
 });
 
+test("buildUserMessageWithContext tolerates partial integration payloads in blast-radius bundle", () => {
+  const message = buildUserMessageWithContext("Estimate blast radius.", {
+    file: "fastify.js",
+    owner: "coop-demo-lab",
+    repo: "fastify",
+    contextBundle: [
+      {
+        type: "dependencies",
+        data: {
+          file: "fastify.js",
+          directDependents: [],
+          ownersByFile: [{ file: "fastify.js", owner: "climba03003", source: "codeowners" }],
+          slackSearch: { query: "coop-demo-lab/fastify OR fastify" },
+          codeHostSearch: { provider: "github", repoQuery: "coop-demo-lab/fastify" }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<graph_context>"));
+  assert.ok(message.includes("<slack_messages>"));
+  assert.ok(message.includes("<empty>No matching Slack messages found.</empty>"));
+  assert.ok(message.includes("<code_host_activity>"));
+});
+
 test("buildUserMessageWithContext renders repo entry files from context bundle", () => {
   const message = buildUserMessageWithContext("Understand this repository.", {
     owner: "raneyja",
@@ -258,6 +293,47 @@ test("buildUserMessageWithContext renders repo entry files from context bundle",
   assert.ok(message.includes("Representative repository entry points"));
   assert.ok(message.includes("package.json"));
   assert.ok(message.includes("activate()"));
+});
+
+test("buildUserMessageWithContext adds monorepo note when treeOverview has multiple top-level dirs", () => {
+  const message = buildUserMessageWithContext("How is auth wired?", {
+    owner: "acme",
+    repo: "platform",
+    file: "services/auth/src/login.ts",
+    contextBundle: [
+      {
+        type: "file_metadata",
+        data: {
+          treeOverview: {
+            topLevelDirs: ["services/", "packages/", "docs/"],
+            topLevelFiles: ["package.json", "turbo.json"]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<monorepo_context>"));
+  assert.ok(message.includes("services/"));
+  assert.ok(message.includes("packages/"));
+  assert.ok(message.includes("Active editor context applies to the `services/` package"));
+  assert.ok(message.includes("services/auth/src/login.ts"));
+});
+
+test("buildUserMessageWithContext omits monorepo note for single top-level dir", () => {
+  const message = buildUserMessageWithContext("How is auth wired?", {
+    file: "src/login.ts",
+    contextBundle: [
+      {
+        type: "file_metadata",
+        data: {
+          treeOverview: { topLevelDirs: ["src/"], topLevelFiles: ["package.json"] }
+        }
+      }
+    ]
+  });
+
+  assert.equal(message.includes("<monorepo_context>"), false);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

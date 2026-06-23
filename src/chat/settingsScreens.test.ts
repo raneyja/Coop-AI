@@ -18,14 +18,16 @@ function test(name: string, fn: () => void): void {
 
 test("migrateSettingsScreen maps legacy hub screens", () => {
   assert.equal(migrateSettingsScreen("api"), "account");
-  assert.equal(migrateSettingsScreen("code-hosts"), "connections");
-  assert.equal(migrateSettingsScreen("integrations"), "connections");
+  assert.equal(migrateSettingsScreen("code-hosts"), "tools");
+  assert.equal(migrateSettingsScreen("integrations"), "tools");
+  assert.equal(migrateSettingsScreen("connections"), "tools");
   assert.equal(migrateSettingsScreen("identity-links"), "team");
 });
 
-test("settingsScreenParent routes provider screens to connections", () => {
-  assert.equal(settingsScreenParent("code-host-github"), "connections");
-  assert.equal(settingsScreenParent("integration-slack"), "connections");
+test("settingsScreenParent routes provider screens to tools", () => {
+  assert.equal(settingsScreenParent("code-host-github"), "tools");
+  assert.equal(settingsScreenParent("integration-slack"), "tools");
+  assert.equal(settingsScreenParent("team"), "tools");
 });
 
 test("settingsScreenParent routes preferences children", () => {

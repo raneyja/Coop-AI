@@ -25,7 +25,7 @@ export type ParsedSlashCommand = {
 
 /** Display tokens for the five quick-action slash commands (empty-state hint). */
 export const QUICK_ACTION_SLASH_HINTS = [
-  "understandrepo",
+  "understand",
   "trace",
   "owner",
   "blast",
@@ -33,7 +33,7 @@ export const QUICK_ACTION_SLASH_HINTS = [
 ] as const;
 
 const QUICK_ACTION_DISPLAY: Record<QuickActionId, (typeof QUICK_ACTION_SLASH_HINTS)[number]> = {
-  "understand-repo": "understandrepo",
+  "understand-repo": "understand",
   "trace-decision": "trace",
   "find-owner": "owner",
   "blast-radius": "blast",
@@ -60,10 +60,10 @@ export function slashCommandHistoryContent(def: SlashCommandDef, args: string): 
 }
 
 /**
- * Action slash commands (/gaps, /blast, …) resolve to the same `actionId` as QuickActionGrid
- * buttons. Shared behavior (use-case prompts, context fetch, response enrichment) lives in
- * CoopChatSession via resolveEffectiveQuickAction() and chatResponseEnrichment.ts — update
- * those when adding or changing quick-action behavior.
+ * Action slash commands (/understand, /gaps, …) resolve to the same `actionId` as QuickActionGrid
+ * buttons, including @-mentioned file attachments. Shared behavior (use-case prompts, context fetch,
+ * response enrichment) lives in CoopChatSession via resolveEffectiveQuickAction() and
+ * chatResponseEnrichment.ts — update those when adding or changing quick-action behavior.
  */
 export const SLASH_COMMANDS: SlashCommandDef[] = [
   {
@@ -78,21 +78,21 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     aliases: ["why", "decision", "history"],
     target: { kind: "action", actionId: "trace-decision" },
     label: "Trace decision",
-    description: "Why this code exists — rationale and tradeoffs"
+    description: "Why this code exists — rationale and tradeoffs (file level only)"
   },
   {
     name: "owner",
     aliases: ["who", "find-owner"],
     target: { kind: "action", actionId: "find-owner" },
     label: "Find owner",
-    description: "Who truly owns this area (needs an open file)"
+    description: "Repo ownership map or file-level experts"
   },
   {
     name: "blast",
     aliases: ["impact", "blast-radius"],
     target: { kind: "action", actionId: "blast-radius" },
     label: "Blast radius",
-    description: "Change impact: dependents, APIs, operational risk"
+    description: "Change impact for an open file (file level only)"
   },
   {
     name: "gaps",

@@ -117,11 +117,11 @@ export class ConfluenceClient {
       } else {
         await this.request<{ displayName?: string }>("/user/current");
       }
-      return { ok: true, message: "Confluence connection successful." };
+      return { ok: true, message: "Confluence is reachable." };
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Confluence connection failed."
+        message: error instanceof Error ? error.message : "Confluence test failed."
       };
     }
   }

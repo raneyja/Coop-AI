@@ -1,17 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SettingsScreen } from "../chat/settingsScreens";
-import { ActiveFileLabel } from "./components/ActiveFileLabel";
+import { ContextScopeLabel } from "./components/ContextScopeLabel";
 import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { CoopNotice } from "./components/CoopNotice";
 import { ChatComposer } from "./components/ChatComposer";
-import { ChatStream, ChatMessage, type ChatInlineArtifact } from "./components/ChatStream";
+import { ChatStream, ChatMessage, type ChatInlineArtifact, renderInlineArtifact } from "./components/ChatStream";
+import { ChatThinkingIndicator } from "./components/ChatThinkingIndicator";
 import { ChatProse } from "./components/ChatProse";
+import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
+import type { ChatHistoryPayload } from "../chat/types";
+import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
+import {
+  buildThinkingMessageSequence,
+  pickRotatingThinkingMessage,
+  shouldShowThinkingIndicator,
+  THINKING_ROTATION_STEP_MS
+} from "./thinkingMessageRotation";
 import { QuickActionId } from "./types";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import { PanelWidthEnforcer } from "./components/PanelWidthEnforcer";
@@ -24,8 +34,11 @@ import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./Autocomplete
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
+import type { EvidenceActionContext } from "./evidenceCardActionHandler";
+import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
+import { appendFileMention } from "./lib/fileMentionUtils";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
 import { useDebouncedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
@@ -55,7 +68,7 @@ type RemoteTreeNode = {
 type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
   | { type: "context:update"; payload: RepoContext }
-  | { type: "chat:history"; payload: ChatMessage[] }
+  | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "chat:delta"; payload: { chunk: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage } }
   | { type: "chat:error"; payload: { message: string } }
@@ -91,7 +104,7 @@ type InboundMessage =
       payload: {
         title: string;
         message: string;
-        run: { message: string; quickAction: string; attachments?: ChatImageAttachment[] };
+        run: { message: string; quickAction: string; attachments?: ChatImageAttachment[]; historyContent?: string; mentions?: ChatFileMention[]; slashUserArgs?: string };
       };
     }
   | { type: "job:progress"; payload: JobProgressState }
@@ -126,8 +139,51 @@ type InboundMessage =
         previewText?: string;
       };
     }
-  | { type: "decision:timeline"; payload: { timeline: DecisionTimelinePayload } }
-  | { type: "ownership:card"; payload: { report: OwnershipCardPayload } }
+  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: DecisionTimelinePayload } }
+  | {
+      type: "ownership:card";
+      payload: { artifactId?: string; report: OwnershipCardPayload; slackSearch?: import("../context/contextBundleEvidence").SlackSearchEvidence };
+    }
+  | {
+      type: "repo-summary:card";
+      payload: {
+        artifactId?: string;
+        evidence: import("../context/contextBundleEvidence").RepoSummaryEvidence;
+        owner: string;
+        repo: string;
+        branch?: string;
+      };
+    }
+  | {
+      type: "blast-radius:card";
+      payload: {
+        artifactId?: string;
+        evidence: import("../context/contextBundleEvidence").BlastRadiusEvidence;
+        file: string;
+      };
+    }
+  | {
+      type: "knowledge-gaps:card";
+      payload: {
+        artifactId?: string;
+        evidence: import("../context/contextBundleEvidence").KnowledgeGapsEvidence;
+        confluence?: import("../context/contextBundleEvidence").ConfluenceSearchEvidence;
+        jira?: import("../context/contextBundleEvidence").JiraSearchEvidence;
+        slack?: import("../context/contextBundleEvidence").SlackSearchEvidence;
+        notion?: import("../context/contextBundleEvidence").NotionSearchEvidence;
+        googleDocs?: import("../context/contextBundleEvidence").GoogleDocsSearchEvidence;
+        teams?: import("../context/contextBundleEvidence").TeamsSearchEvidence;
+        file?: string;
+      };
+    }
+  | {
+      type: "integration:card";
+      payload: {
+        artifactId?: string;
+        provider: import("../chat/types").IntegrationChatProvider;
+        evidence: Record<string, unknown>;
+      };
+    }
   | {
       type: "threads:list";
       payload: { activeId: string; activeTitle: string; threads: ThreadListItem[] };
@@ -177,6 +233,8 @@ function ChatFooter({
   onCancelJob,
   onViewJobResults,
   conflictCount,
+  hideInlineActivity,
+  inlineThinkingOptions,
   children
 }: {
   error: string;
@@ -190,6 +248,8 @@ function ChatFooter({
   onCancelJob?: (jobId: string) => void;
   onViewJobResults?: (jobId: string) => void;
   conflictCount: number;
+  hideInlineActivity?: boolean;
+  inlineThinkingOptions?: { awaitingResponse?: boolean };
   children: React.ReactNode;
 }): React.ReactElement {
   return (
@@ -206,6 +266,8 @@ function ChatFooter({
         onCancelJob={onCancelJob}
         onViewJobResults={onViewJobResults}
         conflictCount={conflictCount}
+        hideInlineActivity={hideInlineActivity}
+        inlineThinkingOptions={inlineThinkingOptions}
       />
       <div className="chat-footer-inner">{children}</div>
     </footer>
@@ -228,6 +290,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+  const explorerRepoRef = useRef<{
+    provider: import("../chat/types").CodeHostProviderPreference;
+    owner: string;
+    repo: string;
+  } | null>(null);
   const [treeState, setTreeState] = useState<{
     path: string;
     items: RemoteTreeNode[];
@@ -248,7 +315,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [commandConfirm, setCommandConfirm] = useState<{
     title: string;
     message: string;
-    run: { message: string; quickAction: string; attachments?: ChatImageAttachment[] };
+    run: { message: string; quickAction: string; attachments?: ChatImageAttachment[]; historyContent?: string; mentions?: ChatFileMention[]; slashUserArgs?: string };
   } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
@@ -271,6 +338,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
+  const [scrollEpoch, setScrollEpoch] = useState(0);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const debouncedStream = useDebouncedProse(streamingBuffer, 75);
 
@@ -278,7 +346,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setStreamingBuffer("");
     setIsStreaming(false);
     setError("");
-    setInlineArtifacts([]);
     setUsageLabel(undefined);
     setIntentFeedback(undefined);
     setJobProgress(undefined);
@@ -298,17 +365,59 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     };
   }, [debouncedStream]);
 
+  const inlineThinkingOptions = useMemo(
+    () => ({ awaitingResponse: isStreaming && !streamMessage }),
+    [isStreaming, streamMessage]
+  );
+
+  const [thinkingRotationStep, setThinkingRotationStep] = useState(0);
+  const thinkingSequence = useMemo(
+    () => buildThinkingMessageSequence(intentFeedback, jobProgress, inlineThinkingOptions),
+    [intentFeedback, jobProgress, inlineThinkingOptions]
+  );
+  const thinkingSequenceKey = thinkingSequence.join("\u0001");
+
+  useEffect(() => {
+    setThinkingRotationStep(0);
+  }, [thinkingSequenceKey]);
+
+  const thinkingMessage = useMemo(
+    () => pickRotatingThinkingMessage(thinkingSequence, thinkingRotationStep),
+    [thinkingSequence, thinkingRotationStep]
+  );
+
+  const visibleThinkingMessage = useMemo(
+    () =>
+      shouldShowThinkingIndicator(thinkingMessage, messages, streamMessage)
+        ? thinkingMessage
+        : undefined,
+    [thinkingMessage, messages, streamMessage]
+  );
+
+  useEffect(() => {
+    if (thinkingSequence.length <= 1 || !visibleThinkingMessage) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setThinkingRotationStep((step) => step + 1);
+    }, THINKING_ROTATION_STEP_MS);
+    return () => window.clearInterval(timer);
+  }, [thinkingSequence.length, thinkingSequenceKey, visibleThinkingMessage]);
+
   const isActiveChat = messages.length > 0 || Boolean(streamMessage) || isStreaming;
   const handleLaunchIntroComplete = useCallback(() => setLaunchIntroConsumed(true), []);
   const showLaunchIntro = chatHistorySynced && !isActiveChat && !launchIntroConsumed;
   const launchIntro = useLaunchTypewriter(showLaunchIntro, handleLaunchIntroComplete);
-  const launchIntroDone = chatHistorySynced && launchIntro.phase === "done";
+  const launchIntroDone = !chatHistorySynced || launchIntro.phase === "done";
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
 
   const handleOpenFile = useCallback(
-    (path: string, line?: number) => {
-      post({ type: "repo:open-file", payload: { path, line } });
+    (path: string, line?: number, options?: { preserveContext?: boolean }) => {
+      post({
+        type: "repo:open-file",
+        payload: { path, line, preserveContext: options?.preserveContext ?? true }
+      });
     },
     [post]
   );
@@ -321,8 +430,111 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const renderBody = useCallback(
-    (content: string) => [<ChatProse key="chat-prose" content={content} />],
+    (content: string, relatedArtifactId?: string) => [
+      <ChatProse key="chat-prose" content={content} relatedArtifactId={relatedArtifactId} />
+    ],
     []
+  );
+
+  const handleCopyEvidenceText = useCallback(
+    (text: string, toast?: string) => {
+      post({ type: "evidence:copy-text", payload: { text, toast } });
+    },
+    [post]
+  );
+
+  const handleComposerFollowup = useCallback((text: string) => {
+    const prompt = text.trim();
+    if (!prompt) {
+      return;
+    }
+    setInput((current) => {
+      const existing = current.trim();
+      return existing ? `${existing}\n\n${prompt}` : prompt;
+    });
+  }, []);
+
+  const handleEvidenceComposerFollowup = useCallback(
+    (text: string) => {
+      const prompt = text.trim();
+      if (!prompt) {
+        return;
+      }
+      setError("");
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      post({
+        type: "chat:send",
+        payload: { message: prompt }
+      });
+      setInput("");
+      setAttachments([]);
+      setMentions([]);
+      setMentionResults([]);
+      setMentionError("");
+    },
+    [post]
+  );
+
+  const handleEvidenceQuickAction = useCallback(
+    (actionId: QuickActionId, targetPath?: string) => {
+      const scopedPath = targetPath?.trim();
+      const slashDef = SLASH_COMMANDS.find(
+        (entry) => entry.target.kind === "action" && entry.target.actionId === actionId
+      );
+      const historyContent = slashDef
+        ? slashCommandHistoryContent(slashDef, scopedPath ?? "")
+        : scopedPath
+          ? `/${actionId} ${scopedPath}`
+          : `/${actionId}`;
+
+      setError("");
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      post({
+        type: "chat:send",
+        payload: {
+          message: "",
+          quickAction: actionId,
+          historyContent,
+          targetFile: scopedPath
+        }
+      });
+      setInput("");
+      setAttachments([]);
+      setMentions([]);
+      setMentionResults([]);
+      setMentionError("");
+    },
+    [post]
+  );
+
+  const evidenceActionContext = useMemo<EvidenceActionContext>(
+    () => ({
+      onOpenFile: handleOpenFile,
+      onOpenLink: handleOpenLink,
+      onComposerFollowup: handleEvidenceComposerFollowup,
+      onQuickAction: handleEvidenceQuickAction,
+      onOpenLightning: () => post({ type: "lightning:open" }),
+      onCopyText: handleCopyEvidenceText,
+      repoContext: {
+        owner: context.owner,
+        repo: context.repo,
+        branch: context.branch,
+        file: context.file
+      }
+    }),
+    [
+      context.branch,
+      context.file,
+      context.owner,
+      context.repo,
+      handleEvidenceComposerFollowup,
+      handleEvidenceQuickAction,
+      handleCopyEvidenceText,
+      handleOpenFile,
+      handleOpenLink
+    ]
   );
 
   useEffect(() => {
@@ -367,23 +579,31 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "context:update":
           setContext(message.payload);
           break;
-        case "chat:history":
-          setMessages(message.payload);
+        case "chat:history": {
+          const payload = message.payload;
+          const historyMessages = Array.isArray(payload) ? payload : (payload.messages ?? []);
+          const historyArtifacts = Array.isArray(payload)
+            ? []
+            : inlineArtifactsFromHistory(payload.artifacts);
+          setMessages(historyMessages);
+          setInlineArtifacts(historyArtifacts);
           setChatHistorySynced(true);
           setStreamingBuffer("");
           setIsStreaming(false);
-          if (message.payload.length === 0) {
+          if (historyMessages.length === 0) {
             setInput("");
             setAttachments([]);
             resetEphemeralChatState();
             vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           }
           break;
+        }
         case "threads:list":
           setThreadsState(message.payload);
           break;
         case "chat:thread-changed":
           resetEphemeralChatState();
+          setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
@@ -392,11 +612,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setLightningState(message.payload);
           break;
         case "chat:delta":
+          setIntentFeedback(undefined);
           setIsStreaming(true);
           setStreamingBuffer((prev) => prev + message.payload.chunk);
           break;
         case "chat:complete":
           setMessages((prev) => [...prev, message.payload.message]);
+          setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
           );
@@ -404,6 +626,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           break;
         case "chat:error":
+          setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
           );
@@ -434,23 +657,22 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "mention:results":
           setMentionLoading(Boolean(message.payload.loading));
-          setMentionError(message.payload.error ?? "");
           if (message.payload.loading) {
+            setMentionError("");
             setMentionHint("");
+            setMentionResults([]);
           } else {
+            setMentionError(message.payload.error ?? "");
             setMentionHint(message.payload.hint ?? "");
-          }
-          if (!message.payload.loading) {
             setMentionResults(message.payload.items);
           }
           break;
         case "intent:feedback":
-          setIntentFeedback(message.payload);
           if (message.payload.status === "complete") {
-            window.setTimeout(() => {
-              setIntentFeedback((current) => current === message.payload ? undefined : current);
-            }, 2500);
+            setIntentFeedback(undefined);
+            break;
           }
+          setIntentFeedback(message.payload);
           break;
         case "conflict:update":
           setConflictState(message.payload);
@@ -471,7 +693,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setInlineArtifacts((current) => [
             ...current,
             {
-              id: `decision-${Date.now()}-${current.length}`,
+              id: message.payload.artifactId ?? `decision-${Date.now()}-${current.length}`,
               kind: "decision",
               timestamp: Date.now(),
               timeline: message.payload.timeline
@@ -482,10 +704,67 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setInlineArtifacts((current) => [
             ...current,
             {
-              id: `ownership-${Date.now()}-${current.length}`,
+              id: message.payload.artifactId ?? `ownership-${Date.now()}-${current.length}`,
               kind: "ownership",
               timestamp: Date.now(),
-              report: message.payload.report
+              report: message.payload.report,
+              slackSearch: message.payload.slackSearch
+            }
+          ]);
+          break;
+        case "repo-summary:card":
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: message.payload.artifactId ?? `repo-summary-${Date.now()}-${current.length}`,
+              kind: "repo-summary",
+              timestamp: Date.now(),
+              evidence: message.payload.evidence,
+              owner: message.payload.owner,
+              repo: message.payload.repo,
+              branch: message.payload.branch
+            }
+          ]);
+          break;
+        case "blast-radius:card":
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: message.payload.artifactId ?? `blast-radius-${Date.now()}-${current.length}`,
+              kind: "blast-radius",
+              timestamp: Date.now(),
+              evidence: message.payload.evidence,
+              file: message.payload.file
+            }
+          ]);
+          break;
+        case "knowledge-gaps:card":
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: message.payload.artifactId ?? `knowledge-gaps-${Date.now()}-${current.length}`,
+              kind: "knowledge-gaps",
+              timestamp: Date.now(),
+              evidence: message.payload.evidence,
+              confluence: message.payload.confluence,
+              jira: message.payload.jira,
+              slack: message.payload.slack,
+              notion: message.payload.notion,
+              googleDocs: message.payload.googleDocs,
+              teams: message.payload.teams,
+              file: message.payload.file
+            }
+          ]);
+          break;
+        case "integration:card":
+          setInlineArtifacts((current) => [
+            ...current,
+            {
+              id: message.payload.artifactId ?? `integration-${Date.now()}-${current.length}`,
+              kind: "integration",
+              timestamp: Date.now(),
+              provider: message.payload.provider,
+              evidence: message.payload.evidence as Record<string, unknown>
             }
           ]);
           break;
@@ -518,12 +797,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     post({ type: "lightning:ready" });
     return () => window.removeEventListener("message", listener);
   }, [post]);
-
-  useEffect(() => {
-    if (isActiveChat) {
-      messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-  }, [messages, streamMessage, isActiveChat]);
 
   useEffect(() => {
     vscode.setState({ draftInput: input } satisfies PersistedWebviewState);
@@ -576,6 +849,30 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const handleSend = useCallback(() => submitPrompt(input), [input, submitPrompt]);
+
+  const runPromptLibraryEntry = useCallback(
+    (id: string) => {
+      setError("");
+      setAttachmentError("");
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      post({
+        type: "prompts:run",
+        payload: {
+          id,
+          mentions: mentions.length ? mentions.slice(0, 3) : undefined,
+          attachments: attachments.length ? attachments : undefined,
+          composerText: input.trim() || undefined
+        }
+      });
+      setInput("");
+      setAttachments([]);
+      setMentions([]);
+      setMentionResults([]);
+      setMentionError("");
+    },
+    [attachments, input, mentions, post]
+  );
 
   const handlePanelDrop = useCallback(
     async (event: React.DragEvent<HTMLDivElement>) => {
@@ -643,21 +940,67 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setStreamingBuffer("");
   }, [post]);
 
+  const syncExplorerRepoFromContext = useCallback(() => {
+    const owner = context.owner?.trim();
+    const repo = context.repo?.trim();
+    if (!owner || !repo) {
+      explorerRepoRef.current = null;
+      return;
+    }
+    explorerRepoRef.current = {
+      provider: context.provider ?? "github",
+      owner,
+      repo
+    };
+  }, [context.owner, context.provider, context.repo]);
+
   const toggleExplorer = useCallback(() => {
     setIsExplorerOpen((prev) => {
       const next = !prev;
       if (next) {
-        requestRepos();
+        if (context.owner && context.repo) {
+          syncExplorerRepoFromContext();
+          requestTree("");
+        } else {
+          explorerRepoRef.current = null;
+          requestRepos();
+        }
       }
       return next;
     });
-  }, [requestRepos]);
+  }, [context.owner, context.repo, requestRepos, requestTree, syncExplorerRepoFromContext]);
 
-  const handleSelectRepo = useCallback(
+  const openExplorer = useCallback(() => {
+    setIsExplorerOpen(true);
+    if (context.owner && context.repo) {
+      syncExplorerRepoFromContext();
+      requestTree("");
+    } else {
+      explorerRepoRef.current = null;
+      requestRepos();
+    }
+  }, [context.owner, context.repo, requestRepos, requestTree, syncExplorerRepoFromContext]);
+
+  const closeExplorer = useCallback(() => {
+    explorerRepoRef.current = null;
+    setIsExplorerOpen(false);
+    setSearchState({ query: "", items: [] });
+  }, []);
+
+  const rememberExplorerRepo = useCallback((repoPath: string): boolean => {
+    const parsed = parseRepoNodePath(repoPath);
+    if (!parsed) {
+      return false;
+    }
+    explorerRepoRef.current = parsed;
+    return true;
+  }, []);
+
+  const postRepoSelect = useCallback(
     (repoPath: string) => {
       const parsed = parseRepoNodePath(repoPath);
       if (!parsed) {
-        return;
+        return false;
       }
       post({
         type: "repo:select",
@@ -667,16 +1010,56 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           repo: parsed.repo
         }
       });
+      return true;
     },
     [post]
   );
 
-  const handleCopyOwnershipDraft = useCallback(
-    (text: string) => {
-      post({ type: "ownership:copy-draft", payload: { text } });
+  const handleBrowseRepo = useCallback(
+    (repoPath: string) => {
+      if (!rememberExplorerRepo(repoPath) || !postRepoSelect(repoPath)) {
+        return;
+      }
+      setSearchState({ query: "", items: [] });
+      requestTree("");
     },
-    [post]
+    [postRepoSelect, rememberExplorerRepo, requestTree]
   );
+
+  const handleUseRepo = useCallback(
+    (repoPath: string) => {
+      if (!rememberExplorerRepo(repoPath) || !postRepoSelect(repoPath)) {
+        return;
+      }
+      closeExplorer();
+    },
+    [closeExplorer, postRepoSelect, rememberExplorerRepo]
+  );
+
+  const addFileMention = useCallback((filePath: string, repoId: string) => {
+    setMentions((current) =>
+      appendFileMention(current, { repoId, path: filePath, source: "indexed" })
+    );
+  }, []);
+
+  const handleSelectFileFromExplorer = useCallback(
+    (filePath: string) => {
+      const browse = explorerRepoRef.current;
+      const provider = browse?.provider ?? context.provider ?? "github";
+      const owner = (browse?.owner ?? context.owner)?.trim();
+      const repo = (browse?.repo ?? context.repo)?.trim();
+      if (owner && repo) {
+        addFileMention(filePath, `${provider}:${owner}/${repo}`);
+      }
+      handleOpenFile(filePath, undefined, { preserveContext: false });
+    },
+    [addFileMention, context.owner, context.provider, context.repo, handleOpenFile]
+  );
+
+  const requestReposForExplorer = useCallback(() => {
+    explorerRepoRef.current = null;
+    requestRepos();
+  }, [requestRepos]);
 
   const handleConflictAction = useCallback(
     (conflictId: string, action: ConflictActionId) => {
@@ -710,17 +1093,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           context={context}
           treeState={treeState}
           searchState={searchState}
-          onClose={() => {
-            setIsExplorerOpen(false);
-            setSearchState({ query: "", items: [] });
-          }}
+          onClose={closeExplorer}
           onRefresh={(path) => requestTree(path)}
-          onRefreshRepos={requestRepos}
-          onBrowseRepos={requestRepos}
+          onRefreshRepos={requestReposForExplorer}
+          onBrowseRepos={requestReposForExplorer}
           onExpand={(path) => requestTree(path)}
           onSearch={requestFileSearch}
-          onSelectFile={(path) => post({ type: "repo:open-file", payload: { path } })}
-          onSelectRepo={handleSelectRepo}
+          onSelectFile={handleSelectFileFromExplorer}
+          onBrowseRepo={handleBrowseRepo}
+          onUseRepo={handleUseRepo}
           onOpenSettings={openSettings}
         />
       ) : null}
@@ -779,13 +1160,22 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           disabled={isStreaming}
           open={promptMenuOpen}
           onOpenChange={setPromptMenuOpen}
-          onRun={(id) => post({ type: "prompts:run", payload: { id } })}
+          onRun={runPromptLibraryEntry}
           onSeeAll={openPromptLibrary}
         />
-        {context.file ? (
-          <ActiveFileLabel
-            filePath={context.file}
-            onOpen={() => post({ type: "repo:open-file", payload: { path: context.file! } })}
+        {context.file || (context.owner && context.repo) ? (
+          <ContextScopeLabel
+            context={context}
+            onOpenExplorer={openExplorer}
+            onOpenFile={
+              context.file
+                ? () => {
+                    if (context.file) {
+                      handleOpenFile(context.file, undefined, { preserveContext: false });
+                    }
+                  }
+                : undefined
+            }
           />
         ) : null}
       </div>
@@ -803,6 +1193,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         void handlePanelDrop(event);
       }}
     >
+      <CitationNavigationProvider>
       <ChatLinkProvider onOpenFile={handleOpenFile} onOpenLink={handleOpenLink}>
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
         {threadsState ? (
@@ -840,12 +1231,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             messages={messages}
             artifacts={inlineArtifacts}
             streamingMessage={streamMessage}
+            thinkingMessage={visibleThinkingMessage}
             endRef={messageEndRef}
             renderBody={renderBody}
-            onDismissArtifact={(id) =>
-              setInlineArtifacts((current) => current.filter((artifact) => artifact.id !== id))
-            }
-            onCopyOwnershipDraft={handleCopyOwnershipDraft}
+            actionContext={evidenceActionContext}
+            conflicts={conflictState?.conflicts}
+            scrollEpoch={scrollEpoch}
           />
           <DegradationNotification
             compact
@@ -878,6 +1269,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onCancelJob={cancelJob}
             onViewJobResults={viewJobResults}
             conflictCount={conflictCount}
+            hideInlineActivity
+            inlineThinkingOptions={inlineThinkingOptions}
           >
             {composerStack}
           </ChatFooter>
@@ -903,17 +1296,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           />
           {inlineArtifacts.length > 0 ? (
             <div className="no-scrollbar mx-3 mb-2 max-h-[45vh] shrink-0 space-y-2 overflow-y-auto">
-              {inlineArtifacts.map((artifact) =>
-                artifact.kind === "decision" ? (
-                  <DecisionTimeline
-                    key={artifact.id}
-                    timeline={artifact.timeline}
-                    onDismiss={() =>
-                      setInlineArtifacts((current) => current.filter((entry) => entry.id !== artifact.id))
-                    }
-                  />
-                ) : null
-              )}
+              {inlineArtifacts.map((artifact) => (
+                <div key={artifact.id}>
+                  {renderInlineArtifact(
+                    artifact,
+                    () => setInlineArtifacts((current) => current.filter((entry) => entry.id !== artifact.id)),
+                    evidenceActionContext,
+                    conflictState?.conflicts
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {visibleThinkingMessage && !isActiveChat ? (
+            <div className="mx-3 mb-2">
+              <ChatThinkingIndicator message={visibleThinkingMessage} />
             </div>
           ) : null}
           <IntentFeedback
@@ -959,6 +1356,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               onViewJobResults={viewJobResults}
               intentFeedback={intentFeedback}
               onDismissIntent={() => setIntentFeedback(undefined)}
+              hideInlineActivity={Boolean(visibleThinkingMessage)}
+              inlineThinkingOptions={inlineThinkingOptions}
             />
             <div className="px-3">{composerStack}</div>
           </div>
@@ -972,7 +1371,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         onClose={() => setPromptModalOpen(false)}
         onRun={(id) => {
           setPromptModalOpen(false);
-          post({ type: "prompts:run", payload: { id } });
+          runPromptLibraryEntry(id);
         }}
         onCommit={(payload) =>
           post({
@@ -991,6 +1390,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       />
       <PanelWidthEnforcer vscode={vscode} />
       </ChatLinkProvider>
+      </CitationNavigationProvider>
     </div>
   );
 }

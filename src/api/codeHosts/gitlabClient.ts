@@ -52,7 +52,7 @@ export class GitLabClient implements CodeHostClient {
       });
       return { ok: true, message: "GitLab token is valid." };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "GitLab connection failed.";
+      const message = error instanceof Error ? error.message : "GitLab test failed.";
       return { ok: false, message };
     }
   }

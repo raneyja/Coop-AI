@@ -49,8 +49,11 @@ export function wantsCodeHostContext(query: string): boolean {
 }
 
 export function shouldFetchCodeHostContext(request: ContextFetchRequest): boolean {
-  if (request.type !== "chat_context") {
+  if (request.type !== "chat_context" && request.type !== "dependencies") {
     return false;
+  }
+  if (request.params.quickAction === "blast-radius") {
+    return true;
   }
   return wantsCodeHostContext(request.intent.context.queryText ?? "");
 }

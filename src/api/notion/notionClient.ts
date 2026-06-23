@@ -41,12 +41,12 @@ export class NotionClient {
       const name = result.bot?.owner?.user?.name;
       return {
         ok: true,
-        message: name ? `Notion connection successful (${name}).` : "Notion connection successful."
+        message: name ? `Notion is reachable (${name}).` : "Notion is reachable."
       };
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Notion connection failed."
+        message: error instanceof Error ? error.message : "Notion test failed."
       };
     }
   }

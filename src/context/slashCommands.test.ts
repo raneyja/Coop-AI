@@ -43,6 +43,14 @@ test("captures args after the command token", () => {
 });
 
 // ── parseSlashCommand: aliases ───────────────────────────────────────────────
+test("resolves understand canonical token to understand-repo action", () => {
+  const parsed = parseSlashCommand("/understand");
+  assert.ok(parsed);
+  if (parsed!.def.target.kind === "action") {
+    assert.equal(parsed!.def.target.actionId, "understand-repo");
+  }
+});
+
 test("resolves understandrepo alias to understand-repo action", () => {
   const parsed = parseSlashCommand("/understandrepo");
   assert.ok(parsed);
@@ -57,6 +65,26 @@ test("resolves aliases to the same action", () => {
     assert.ok(parsed, `expected ${token} to parse`);
     if (parsed!.def.target.kind === "action") {
       assert.equal(parsed!.def.target.actionId, "find-owner");
+    }
+  }
+});
+
+test("resolves blast-radius aliases", () => {
+  for (const token of ["/impact", "/blast-radius"]) {
+    const parsed = parseSlashCommand(token);
+    assert.ok(parsed, `expected ${token} to parse`);
+    if (parsed!.def.target.kind === "action") {
+      assert.equal(parsed!.def.target.actionId, "blast-radius");
+    }
+  }
+});
+
+test("resolves trace-decision aliases", () => {
+  for (const token of ["/trace", "/why", "/decision", "/history"]) {
+    const parsed = parseSlashCommand(token);
+    assert.ok(parsed, `expected ${token} to parse`);
+    if (parsed!.def.target.kind === "action") {
+      assert.equal(parsed!.def.target.actionId, "trace-decision");
     }
   }
 });

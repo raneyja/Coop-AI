@@ -1,11 +1,8 @@
 import type { DegradationCache } from "../../cache/degradationCache";
 import type { ContextFetchRequest, ContextFetchResult } from "../../context/requestBatcher";
-import type { ContextRequestType } from "../../context/intentDetector";
 import type { IntegrationHealth } from "../../integrations/healthMonitor";
 import {
   fallbackStatusForFeature,
-  normalizeFeatureId,
-  type FeatureId,
   type QuickActionFeatureId
 } from "../fallbackMatrix";
 import { blastRadius } from "./blastRadius";
@@ -13,6 +10,9 @@ import { knowledgeGaps } from "./knowledgeGaps";
 import { ownershipMap } from "./ownershipMap";
 import { repoSummary } from "./repoSummary";
 import { traceDecision } from "./traceDecision";
+import { resolveFeatureForRequest } from "./resolveFeatureForRequest";
+
+export { resolveFeatureForRequest } from "./resolveFeatureForRequest";
 
 export type FeatureDegradationOptions = {
   request: ContextFetchRequest;
@@ -40,28 +40,5 @@ export async function runFeatureFallback(options: FeatureDegradationOptions): Pr
       return knowledgeGaps(context);
     case "repo_summary":
       return repoSummary(context);
-  }
-}
-
-function resolveFeatureForRequest(action: QuickActionFeatureId, requestType: ContextRequestType): FeatureId {
-  switch (action) {
-    case "understand-repo":
-      if (requestType === "ownership") {
-        return "ownership_map";
-      }
-      if (requestType === "dependencies") {
-        return "blast_radius";
-      }
-      return "repo_summary";
-    case "find-owner":
-      return "ownership_map";
-    case "trace-decision":
-      return "trace_why";
-    case "blast-radius":
-      return "blast_radius";
-    case "knowledge-gaps":
-      return "knowledge_gaps";
-    default:
-      return normalizeFeatureId(action);
   }
 }

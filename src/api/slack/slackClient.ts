@@ -88,7 +88,7 @@ export class SlackClient {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : "Slack connection failed."
+        message: error instanceof Error ? error.message : "Slack test failed."
       };
     }
   }

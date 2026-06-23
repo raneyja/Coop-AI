@@ -5,8 +5,8 @@ import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./types"
 import { SETTINGS_SCREEN_TITLES, settingsScreenParentLabel } from "./types";
 import {
   accountHubSubtitle,
-  connectionsHubSubtitle,
-  identityLinksHubSubtitle,
+  toolsHubSubtitle,
+  displayOrgName,
   preferencesHubSubtitle,
   workspaceHubSubtitle
 } from "./subtitles";
@@ -25,11 +25,10 @@ const HUB_ROWS: Array<{
 }> = [
   { screen: "account", title: "Account", subtitle: (p) => accountHubSubtitle(p), configured: (p) => p.hasApiKey },
   {
-    screen: "connections",
-    title: "Connections",
-    subtitle: (p) => connectionsHubSubtitle(p)
+    screen: "tools",
+    title: "Tools",
+    subtitle: (p) => toolsHubSubtitle(p)
   },
-  { screen: "team", title: "Team", subtitle: (p) => identityLinksHubSubtitle(p) },
   { screen: "workspace", title: "Workspace", subtitle: (p) => workspaceHubSubtitle(p) },
   {
     screen: "preferences",
@@ -69,10 +68,12 @@ export function SettingsNavHeader({
 }: SettingsNavHeaderProps): React.ReactElement {
   const isHub = screen === "hub";
   const title = isHub ? "Settings" : SETTINGS_SCREEN_TITLES[screen];
+  const orgName = isHub ? displayOrgName(prefs) : undefined;
 
   return (
     <CoopPanelHeader
       title={title}
+      subtitle={orgName}
       backLabel={isHub ? undefined : settingsScreenParentLabel(screen)}
       onBack={isHub ? undefined : onBack}
       onClose={onClose}

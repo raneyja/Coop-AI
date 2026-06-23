@@ -2,10 +2,11 @@ import type { Job, JobParams, JobType } from "./types";
 import { JobType as JobTypeEnum } from "./types";
 
 /** Reuse a completed scan when the user re-runs the same action within this window. */
-export const KNOWLEDGE_GAPS_REUSE_TTL_MS = 2 * 60 * 60 * 1000;
+export const KNOWLEDGE_GAPS_REUSE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const JOB_REUSE_TTL_MS: Partial<Record<JobType, number>> = {
-  [JobTypeEnum.SCAN_KNOWLEDGE_GAPS]: KNOWLEDGE_GAPS_REUSE_TTL_MS
+  [JobTypeEnum.SCAN_KNOWLEDGE_GAPS]: KNOWLEDGE_GAPS_REUSE_TTL_MS,
+  [JobTypeEnum.BUILD_DEPENDENCY_GRAPH]: KNOWLEDGE_GAPS_REUSE_TTL_MS
 };
 
 export function reuseTtlForJobType(jobType: JobType): number | undefined {
@@ -42,6 +43,13 @@ export function pickNewestReusableJob(
   return jobs
     .filter((job) => isReusableJob(job, maxAgeMs, requestedParams))
     .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))[0];
+}
+
+export function pickNewestMatchingCompletedJob(
+  jobs: Job[],
+  requestedParams: JobParams
+): Job | undefined {
+  return pickNewestReusableJob(jobs, Number.MAX_SAFE_INTEGER, requestedParams);
 }
 
 function normalizeJobParam(value: unknown): string {

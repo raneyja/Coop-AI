@@ -67,17 +67,33 @@ export async function traceDecision(context: FeatureExecutionContext) {
         file,
         lines: params.lines,
         timeline,
+        targetLabel: timeline.targetLabel,
         commitHistory: timeline.originalCommit ?? null,
+        introducingDiffSummary: timeline.introducingDiffSummary,
+        evolution: timeline.evolution,
+        rationaleRanking: timeline.rationaleRanking ?? [],
         linkedPR: timeline.linkedPR ?? null,
         slackContext: timeline.slackThread ?? null,
-        jiraContext: timeline.jiraTicket ?? null,
+        jiraContext: timeline.jiraTickets?.[0] ?? null,
         teamsContext: timeline.teamsThread ?? null,
         alternatives: timeline.alternatives,
         chronology: timeline.chronology,
         warnings: timeline.warnings,
         completeness: timeline.completeness,
         fallbackLevel: context.status.level,
-        partial: context.status.level !== "full" || timeline.completeness !== "full"
+        partial: context.status.level !== "full" || timeline.completeness !== "full",
+        slackDecision: timeline.slackThread?.messages[0]?.text,
+        slackLastUpdated: timeline.slackThread?.messages[0]?.ts
+          ? new Date(Number(timeline.slackThread.messages[0].ts) * 1000)
+          : undefined,
+        teamsDecision: timeline.teamsThread?.messages[0]?.text,
+        teamsLastUpdated: timeline.teamsThread?.messages[0]?.createdAt
+          ? new Date(timeline.teamsThread.messages[0].createdAt)
+          : undefined,
+        prDecision: timeline.linkedPR?.title,
+        prLastUpdated: timeline.linkedPR?.updatedAt ? new Date(timeline.linkedPR.updatedAt) : undefined,
+        codePattern: timeline.codeSnippet?.slice(0, 240) ?? timeline.originalCommit?.message,
+        codeLastModified: timeline.originalCommit?.date ? new Date(timeline.originalCommit.date) : undefined
       };
 
       await context.cache.set(key, data, { provider: codeHost.provider, feature: "trace_why" });
@@ -178,8 +194,8 @@ function timelineSummaryMessage(timeline: DecisionTimeline): string {
   if (timeline.linkedPR) {
     parts.push(`PR #${timeline.linkedPR.number}`);
   }
-  if (timeline.jiraTicket) {
-    parts.push(timeline.jiraTicket.key);
+  for (const ticket of timeline.jiraTickets ?? []) {
+    parts.push(ticket.key);
   }
   if (timeline.slackThread) {
     parts.push("Slack thread linked");
