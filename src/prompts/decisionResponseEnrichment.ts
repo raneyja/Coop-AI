@@ -2,8 +2,11 @@ import { decisionTimelineFromBundle } from "../context/contextBundleEvidence";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
   decisionSourceLabelCommit,
+  decisionSourceLabelJira,
+  decisionSourceLabelSlack,
   listDecisionSourcesChecklist
 } from "./decisionSourceLabels";
+import { stripDisallowedNarrativeSourceCitations } from "./evidenceSynthesis";
 
 export function asksAboutAlternativesOrTradeoffs(question: string | undefined): boolean {
   if (!question?.trim()) {
@@ -41,6 +44,163 @@ const SPECULATIVE_TRADEOFF_PATTERNS = [
 
 export function responseHasSpeculativeTradeoffs(content: string): boolean {
   return SPECULATIVE_TRADEOFF_PATTERNS.some((pattern) => pattern.test(content));
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max)}…`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractSectionBody(content: string, heading: string): string | undefined {
+  const pattern = new RegExp(
+    `\\n\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\*\\*[^*]|$)`,
+    "i"
+  );
+  const match = pattern.exec(content);
+  return match?.[1]?.trim();
+}
+
+function replaceSectionBody(content: string, heading: string, body: string): string {
+  const pattern = new RegExp(
+    `(\\n\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n)([\\s\\S]*?)(?=\\n\\*\\*[^*]|$)`,
+    "i"
+  );
+  if (!pattern.test(content)) {
+    return `${content.trimEnd()}\n\n**${heading}**\n${body}`;
+  }
+  return content.replace(pattern, `$1${body.trim()}\n`);
+}
+
+function discussionGroundingTokens(timeline: DecisionTimeline): string[] {
+  const tokens: string[] = [];
+  if (timeline.slackThread) {
+    const channel = timeline.slackThread.channelName ?? timeline.slackThread.channelId;
+    tokens.push(channel, `#${channel.replace(/^#/, "")}`);
+    for (const message of timeline.slackThread.messages) {
+      tokens.push(message.user);
+    }
+  }
+  for (const ticket of timeline.jiraTickets ?? []) {
+    tokens.push(ticket.key);
+  }
+  for (const alt of timeline.alternatives) {
+    tokens.push(alt.option);
+  }
+  if (timeline.linkedPR) {
+    tokens.push(`PR #${timeline.linkedPR.number}`, `#${timeline.linkedPR.number}`);
+  }
+  return tokens.filter(Boolean);
+}
+
+/** True when discussion exists but Alternatives / Trade-offs sections lack quotes or source anchors. */
+export function alternativesSectionsLackGrounding(content: string, timeline: DecisionTimeline): boolean {
+  const alternatives = extractSectionBody(content, "Alternatives considered");
+  const tradeoffs = extractSectionBody(content, "Trade-offs");
+  const combined = `${alternatives ?? ""}\n${tradeoffs ?? ""}`.trim();
+  if (!combined) {
+    return true;
+  }
+  if (/["“][^"”]{8,}["”]/.test(combined)) {
+    return false;
+  }
+  const tokens = discussionGroundingTokens(timeline);
+  if (tokens.some((token) => combined.includes(token))) {
+    return false;
+  }
+  return responseHasSpeculativeTradeoffs(combined) || /\b(inferred|likely|may have|typical|common practice)\b/i.test(combined);
+}
+
+function slackDecisionExcerpts(timeline: DecisionTimeline): string[] {
+  const thread = timeline.slackThread;
+  if (!thread) {
+    return [];
+  }
+  const label = decisionSourceLabelSlack(thread.channelName ?? thread.channelId);
+  return thread.messages
+    .filter((message) =>
+      /\b(alternative|rejected|trade-?off|instead|chose|decided|vs\.?|rather than|went with)\b/i.test(
+        message.text
+      )
+    )
+    .slice(0, 3)
+    .map((message) => `- @${message.user}: "${truncate(message.text, 220)}" (${label})`);
+}
+
+function jiraDecisionExcerpts(timeline: DecisionTimeline): string[] {
+  const lines: string[] = [];
+  for (const ticket of timeline.jiraTickets ?? []) {
+    const label = decisionSourceLabelJira(ticket.key);
+    const haystack = `${ticket.summary}\n${ticket.description}\n${ticket.acceptanceCriteria.join("\n")}`;
+    if (!/\b(alternative|rejected|trade-?off|decision|chose|instead)\b/i.test(haystack)) {
+      continue;
+    }
+    const excerpt = truncate(ticket.description || ticket.summary, 220);
+    lines.push(`- ${ticket.key}: "${excerpt}" (${label})`);
+  }
+  return lines.slice(0, 3);
+}
+
+/** Quote-grounded Alternatives / Trade-offs built only from attached discussion sources. */
+export function buildGroundedAlternativesTradeOffsSections(timeline: DecisionTimeline): {
+  alternatives: string;
+  tradeoffs: string;
+} {
+  const alternativeLines: string[] = [];
+  for (const alt of timeline.alternatives) {
+    alternativeLines.push(
+      `- **${alt.option}** — rejected because ${alt.reason_rejected} (proposed by ${alt.proposed_by}; ${alt.source})`
+    );
+  }
+  alternativeLines.push(...slackDecisionExcerpts(timeline));
+  alternativeLines.push(...jiraDecisionExcerpts(timeline));
+
+  const alternatives =
+    alternativeLines.length > 0
+      ? alternativeLines.join("\n")
+      : "Not explicitly recorded in attached Slack/Jira excerpts — see **Sources** for linked threads and tickets.";
+
+  const tradeoffLines = [
+    ...slackDecisionExcerpts(timeline).filter((line) => /\btrade-?off|vs\.?|instead\b/i.test(line)),
+    ...jiraDecisionExcerpts(timeline).filter((line) => /\btrade-?off|vs\.?|instead\b/i.test(line))
+  ];
+  const tradeoffs =
+    tradeoffLines.length > 0
+      ? [...new Set(tradeoffLines)].join("\n")
+      : alternativeLines.length > 0
+        ? "See quoted discussion excerpts above — trade-offs are implied in those messages, not listed separately."
+        : "Not documented in the available Slack/Jira excerpts.";
+
+  return { alternatives, tradeoffs };
+}
+
+export function injectGroundedAlternativesSections(content: string, timeline: DecisionTimeline): string {
+  const { alternatives, tradeoffs } = buildGroundedAlternativesTradeOffsSections(timeline);
+  let result = replaceSectionBody(content, "Alternatives considered", alternatives);
+  result = replaceSectionBody(result, "Trade-offs", tradeoffs);
+  return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function shouldReplaceWithGroundedAlternatives(
+  content: string,
+  timeline: DecisionTimeline,
+  userQuestion?: string
+): boolean {
+  if (!timelineHasDiscussionEvidence(timeline)) {
+    return false;
+  }
+  if (responseHasSpeculativeTradeoffs(content)) {
+    return true;
+  }
+  if (asksAboutAlternativesOrTradeoffs(userQuestion) && alternativesSectionsLackGrounding(content, timeline)) {
+    return true;
+  }
+  return alternativesSectionsLackGrounding(content, timeline);
 }
 
 /** Compact, evidence-honest answer when only an introducing commit is available. */
@@ -101,19 +261,24 @@ export function enrichTraceDecisionResponse(options: {
   }
 
   const thin = !timelineHasDiscussionEvidence(timeline);
-  if (!thin) {
-    return options.content;
-  }
 
-  const asksAlternatives = asksAboutAlternativesOrTradeoffs(options.userQuestion);
-  const speculative = responseHasSpeculativeTradeoffs(options.content);
+  if (thin) {
+    const asksAlternatives = asksAboutAlternativesOrTradeoffs(options.userQuestion);
+    const speculative = responseHasSpeculativeTradeoffs(options.content);
 
-  if (asksAlternatives || speculative) {
-    return buildThinAlternativesTradeOffsResponse(
-      timeline,
-      options.activeFile?.trim() || timeline.file
+    if (asksAlternatives || speculative) {
+      return stripDisallowedNarrativeSourceCitations(
+        buildThinAlternativesTradeOffsResponse(
+          timeline,
+          options.activeFile?.trim() || timeline.file
+        )
+      );
+    }
+  } else if (shouldReplaceWithGroundedAlternatives(options.content, timeline, options.userQuestion)) {
+    return stripDisallowedNarrativeSourceCitations(
+      injectGroundedAlternativesSections(options.content, timeline)
     );
   }
 
-  return options.content;
+  return stripDisallowedNarrativeSourceCitations(options.content);
 }

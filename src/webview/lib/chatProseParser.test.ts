@@ -537,6 +537,19 @@ test("parses bare and backtick-wrapped source citations", () => {
   }
 });
 
+test("parses coop-evidence card jump links", () => {
+  const doc = parseChatProse("[View all sources ↑](coop-evidence:)");
+  const paragraph = doc.blocks[0]!;
+  assert.equal(paragraph.type, "paragraph");
+  if (paragraph.type === "paragraph") {
+    const link = paragraph.content.find((node) => node.type === "evidence-link");
+    assert.equal(link?.type, "evidence-link");
+    if (link?.type === "evidence-link") {
+      assert.equal(link.label, "View all sources ↑");
+    }
+  }
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nchatProseParser: ${passed}/${total} tests passed`);

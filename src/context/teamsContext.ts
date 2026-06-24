@@ -1,7 +1,7 @@
 import { TeamsClient } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
-import { buildRepoSearchQuery } from "./slackContext";
+import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 
 export type TeamsSearchMessage = {
@@ -16,6 +16,8 @@ export type TeamsSearchContext = {
   query: string;
   repoQuery?: string;
   messages: TeamsSearchMessage[];
+  /** Queries merged when multiple search strategies were used. */
+  queries?: string[];
   error?: string;
 };
 
@@ -46,11 +48,27 @@ export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
   return wantsTeamsContext(request.intent.context.queryText ?? "");
 }
 
+export function buildTeamsSearchQueries(options: {
+  owner?: string;
+  repo?: string;
+  queryText?: string;
+  activeFile?: string;
+  contextText?: string[];
+  crossToolText?: string[];
+  jiraIssueKeys?: string[];
+}): string[] {
+  return buildDiscussionSearchQueries(options);
+}
+
 export async function fetchTeamsSearchContext(options: {
   secrets: IntegrationSecrets;
   owner?: string;
   repo?: string;
   queryText?: string;
+  activeFile?: string;
+  contextText?: string[];
+  crossToolText?: string[];
+  jiraIssueKeys?: string[];
   limit?: number;
 }): Promise<TeamsSearchContext> {
   const creds = await options.secrets.getCredentials();
@@ -63,7 +81,8 @@ export async function fetchTeamsSearchContext(options: {
     };
   }
 
-  const query = buildRepoSearchQuery(options.owner, options.repo);
+  const queries = buildTeamsSearchQueries(options);
+  const query = queries[0] ?? "";
   if (!query) {
     return {
       source: "teams-search",
@@ -74,32 +93,49 @@ export async function fetchTeamsSearchContext(options: {
   }
 
   const client = new TeamsClient({ accessToken: creds.teamsToken });
-  try {
-    const hits = await client.searchMessages(query, { limit: options.limit ?? 20 });
-    const repoQuery =
-      options.owner?.trim() && options.repo?.trim()
-        ? `${options.owner.trim()}/${options.repo.trim()}`
-        : options.repo?.trim();
+  const limit = options.limit ?? 20;
+  const seen = new Map<string, TeamsSearchMessage>();
+  const errors: string[] = [];
 
-    return {
-      source: "teams-search",
-      query,
-      repoQuery,
-      messages: hits.map((hit) => ({
-        fromUserName: hit.fromUserName,
-        body: truncate(hit.body, 500),
-        createdAt: hit.createdAt,
-        webUrl: hit.webUrl
-      }))
-    };
-  } catch (error) {
-    return {
-      source: "teams-search",
-      query,
-      messages: [],
-      error: error instanceof Error ? error.message : "Teams search failed."
-    };
+  for (const searchQuery of queries.slice(0, 16)) {
+    if (seen.size >= limit) {
+      break;
+    }
+    try {
+      const hits = await client.searchMessages(searchQuery, { limit: limit - seen.size });
+      for (const hit of hits) {
+        const key = `${hit.teamId}:${hit.channelId}:${hit.messageId}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.set(key, {
+          fromUserName: hit.fromUserName,
+          body: truncate(hit.body, 500),
+          createdAt: hit.createdAt,
+          webUrl: hit.webUrl
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Teams search failed.";
+      if (!errors.includes(message)) {
+        errors.push(message);
+      }
+    }
   }
+
+  const repoQuery =
+    options.owner?.trim() && options.repo?.trim()
+      ? `${options.owner.trim()}/${options.repo.trim()}`
+      : options.repo?.trim();
+
+  return {
+    source: "teams-search",
+    query,
+    queries: queries.length > 1 ? queries : undefined,
+    repoQuery,
+    messages: [...seen.values()].slice(0, limit),
+    error: seen.size === 0 && errors.length > 0 ? errors[0] : undefined
+  };
 }
 
 function truncate(value: string, max: number): string {

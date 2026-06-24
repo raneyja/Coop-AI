@@ -83,7 +83,7 @@ export function listRepoSummarySourceLabels(summary: RepoSummaryEvidence): strin
   if ((summary.ownershipReport?.scores?.length ?? 0) > 0) {
     labels.push(repoSummarySourceLabelOwnership());
   }
-  if (summary.dependencyGraph?.directDependents?.length || summary.dependencyGraph?.edgeCount) {
+  if ((summary.dependencyGraph?.directDependents?.length ?? 0) > 0) {
     labels.push(repoSummarySourceLabelDependencies());
   }
   return labels;

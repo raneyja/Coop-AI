@@ -3,6 +3,7 @@ import {
   buildConfluencePagesReviewedBlock,
   buildNotionPagesReviewedBlock,
   buildScanGapSubsection,
+  enrichIntegrationDocsResponse,
   enrichKnowledgeGapsResponse,
   extractConfluencePagesFromBundle,
   extractJobScanGapsFromBundle,
@@ -104,7 +105,8 @@ test("buildConfluencePagesReviewedBlock links titles when htmlUrl is present", (
 test("enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation gaps", () => {
   const enriched = enrichKnowledgeGapsResponse(SAMPLE_LLM_OUTPUT, {
     confluencePages: SAMPLE_PAGES,
-    activeFile: "src/server/githubAppApi.ts"
+    activeFile: "src/server/githubAppApi.ts",
+    jobScanGaps: []
   });
   const docGapsIdx = enriched.indexOf("**Documentation gaps**");
   const confluenceIdx = enriched.indexOf("**Confluence pages reviewed**");
@@ -112,6 +114,7 @@ test("enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation
   assert.ok(confluenceIdx > docGapsIdx);
   assert.equal(enriched.includes("**Documentation Coverage**"), false);
   assert.equal(enriched.includes("Is there comprehensive documentation"), false);
+  assert.ok(enriched.includes("Automated scan found no structured gaps in this pass; attached Confluence doc review"));
   for (const page of SAMPLE_PAGES) {
     assert.ok(enriched.includes(`[${page.title}](${page.htmlUrl})`));
   }
@@ -284,6 +287,25 @@ test("extractConfluencePagesFromBundle reads pages and urls from context bundle"
       htmlUrl: "https://example/wiki/demo"
     }
   ]);
+});
+
+test("enrichIntegrationDocsResponse linkifies attached page titles", () => {
+  const enriched = enrichIntegrationDocsResponse(
+    'See the "Coop AI — Architecture Overview" page for deployment context.',
+    {
+      confluencePages: [
+        {
+          title: "Coop AI — Architecture Overview",
+          htmlUrl: "https://example.atlassian.net/wiki/spaces/COOP/pages/6"
+        }
+      ]
+    }
+  );
+  assert.ok(
+    enriched.includes(
+      "[Coop AI — Architecture Overview](https://example.atlassian.net/wiki/spaces/COOP/pages/6)"
+    )
+  );
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

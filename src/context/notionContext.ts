@@ -1,8 +1,8 @@
 import { NotionClient } from "../api/notion/notionClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
-import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
-import { buildRepoOrQuery } from "./docSearchQuery";
+import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 
 export type NotionSearchPage = {
   id: string;
@@ -37,7 +37,7 @@ export function shouldFetchNotionContext(request: ContextFetchRequest): boolean 
   if (request.params.integrationProvider === "notion") {
     return true;
   }
-  if (shouldFetchRepoWideIntegrations(request)) {
+  if (shouldFetchTraceDecisionDocIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {
@@ -51,6 +51,7 @@ export async function fetchNotionSearchContext(options: {
   owner?: string;
   repo?: string;
   limit?: number;
+  extraTerms?: string[];
 }): Promise<NotionSearchContext> {
   const creds = await options.secrets.getCredentials();
   if (!creds.notionToken) {
@@ -62,8 +63,12 @@ export async function fetchNotionSearchContext(options: {
     };
   }
 
-  const query = buildRepoOrQuery(options.owner, options.repo);
-  if (!query) {
+  const terms = buildIntegrationSearchTermList({
+    owner: options.owner,
+    repo: options.repo,
+    extraTerms: options.extraTerms
+  });
+  if (terms.length === 0) {
     return {
       source: "notion-search",
       query: "",
@@ -72,9 +77,10 @@ export async function fetchNotionSearchContext(options: {
     };
   }
 
+  const query = terms.join(" OR ");
   const client = new NotionClient({ token: creds.notionToken });
   try {
-    const pages = await client.searchPages(query, options.limit ?? 20);
+    const pages = await searchNotionPagesForTerms(client, terms, options.limit ?? 20);
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -94,4 +100,22 @@ export async function fetchNotionSearchContext(options: {
       error: error instanceof Error ? error.message : "Notion search failed."
     };
   }
+}
+
+async function searchNotionPagesForTerms(
+  client: NotionClient,
+  terms: string[],
+  limit: number
+): Promise<NotionSearchPage[]> {
+  const seen = new Map<string, NotionSearchPage>();
+  for (const term of terms) {
+    if (seen.size >= limit) {
+      break;
+    }
+    const pages = await client.searchPages(term, limit - seen.size);
+    for (const page of pages) {
+      seen.set(page.id, page);
+    }
+  }
+  return [...seen.values()].slice(0, limit);
 }

@@ -10,12 +10,15 @@ export type KnowledgeGapScanGap = {
   file?: string;
 };
 
-export type KnowledgeGapsEnrichmentContext = {
+export type IntegrationDocsEnrichmentContext = {
   confluencePages?: IntegrationPageForEnrichment[];
   notionPages?: IntegrationPageForEnrichment[];
   googleDocs?: IntegrationPageForEnrichment[];
-  jobScanGaps?: KnowledgeGapScanGap[];
   activeFile?: string;
+};
+
+export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & {
+  jobScanGaps?: KnowledgeGapScanGap[];
 };
 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
@@ -162,7 +165,7 @@ function integrationPageNote(page: IntegrationPageForEnrichment, activeFile?: st
   return confluenceTitleHint(page.title, page.excerpt, activeFile);
 }
 
-function formatReviewedPageLine(page: IntegrationPageForEnrichment, activeFile?: string): string {
+export function formatReviewedPageLine(page: IntegrationPageForEnrichment, activeFile?: string): string {
   const note = linkifyFilePaths(integrationPageNote(page, activeFile));
   if (page.htmlUrl) {
     return `- [${page.title}](${page.htmlUrl}) — ${note}`;
@@ -236,6 +239,54 @@ export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: st
           : `What risk does this scan gap create for ${target}?`;
   const whatToCheck = gap.message?.trim() || "Review the attached Sources card evidence.";
   return `**${title}**\n\n- **Open question:** ${openQuestion}\n- **What to check:** ${whatToCheck}`;
+}
+
+function attachedDocPageCount(context?: KnowledgeGapsEnrichmentContext): number {
+  return (
+    (context?.confluencePages?.length ?? 0) +
+    (context?.notionPages?.length ?? 0) +
+    (context?.googleDocs?.length ?? 0)
+  );
+}
+
+function attachedDocSourceLabel(context?: KnowledgeGapsEnrichmentContext): string {
+  if (context?.notionPages?.length) {
+    return "Notion";
+  }
+  if (context?.confluencePages?.length) {
+    return "Confluence";
+  }
+  if (context?.googleDocs?.length) {
+    return "Google Docs";
+  }
+  return "attached doc";
+}
+
+function rebuildSummaryForZeroScanGaps(content: string, context?: KnowledgeGapsEnrichmentContext): string {
+  const pageCount = attachedDocPageCount(context);
+  const scanGaps = context?.jobScanGaps ?? [];
+  if (pageCount === 0 || scanGaps.length > 0) {
+    return content;
+  }
+
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const summaryIdx = lines.findIndex((line) => stripBoldHeading(line.trim()) === "summary");
+  if (summaryIdx < 0) {
+    return content;
+  }
+
+  let end = summaryIdx + 1;
+  while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
+    end += 1;
+  }
+
+  const docLabel = attachedDocSourceLabel(context);
+  const summaryBody = `Automated scan found no structured gaps in this pass; attached ${docLabel} doc review (${pageCount} page(s)) suggests follow-up areas under **Documentation gaps** below.`;
+
+  return [...lines.slice(0, summaryIdx + 1), "", summaryBody, "", ...lines.slice(end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
@@ -423,12 +474,23 @@ export function enrichKnowledgeGapsResponse(
 
   let result = normalizeFieldLines(content);
   result = stripStrayReviewSubsectionHeadings(result);
+  result = rebuildSummaryForZeroScanGaps(result, context);
   result = stripMainSection(result, "ownership & maintenance");
   result = stripMainSection(result, "integration & operations");
   result = rebuildDocumentationGapsSection(result, documentationBlocks);
   result = rebuildMainSection(result, "**Ownership & maintenance**", ownershipBlocks);
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
+  result = normalizeRecommendedNextSteps(result);
+  return enrichIntegrationDocsResponse(result, context);
+}
+
+/** Linkify attached Confluence/Notion/Google Docs titles and file paths in narrative responses. */
+export function enrichIntegrationDocsResponse(
+  content: string,
+  context?: IntegrationDocsEnrichmentContext
+): string {
+  let result = content;
   if (context?.confluencePages?.length) {
     result = linkifyPageTitles(result, context.confluencePages);
   }
@@ -438,10 +500,7 @@ export function enrichKnowledgeGapsResponse(
   if (context?.googleDocs?.length) {
     result = linkifyPageTitles(result, context.googleDocs);
   }
-
-  result = normalizeRecommendedNextSteps(result);
   result = linkifyFilePaths(result);
-
   return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 

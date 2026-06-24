@@ -1,8 +1,8 @@
 import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
-import { buildRepoOrQuery } from "./docSearchQuery";
-import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
+import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
+import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -37,7 +37,7 @@ export function shouldFetchGoogleDocsContext(request: ContextFetchRequest): bool
   if (request.params.integrationProvider === "google-docs") {
     return true;
   }
-  if (shouldFetchRepoWideIntegrations(request)) {
+  if (shouldFetchTraceDecisionDocIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {
@@ -50,7 +50,12 @@ export async function fetchGoogleDocsSearchContext(options: {
   secrets: IntegrationSecrets;
   owner?: string;
   repo?: string;
+  queryText?: string;
+  activeFile?: string;
+  contextText?: string[];
+  crossToolText?: string[];
   limit?: number;
+  extraTerms?: string[];
 }): Promise<GoogleDocsSearchContext> {
   const creds = await options.secrets.getCredentials();
   if (!creds.googleDocsToken) {
@@ -62,8 +67,15 @@ export async function fetchGoogleDocsSearchContext(options: {
     };
   }
 
-  const query = buildRepoOrQuery(options.owner, options.repo);
-  if (!query) {
+  const terms = buildIntegrationSearchTermList({
+    owner: options.owner,
+    repo: options.repo,
+    queryText: options.queryText,
+    activeFile: options.activeFile,
+    contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
+    extraTerms: options.extraTerms
+  });
+  if (terms.length === 0) {
     return {
       source: "google-docs-search",
       query: "",
@@ -72,9 +84,10 @@ export async function fetchGoogleDocsSearchContext(options: {
     };
   }
 
+  const query = terms.join(" OR ");
   const client = new GoogleDocsClient({ accessToken: creds.googleDocsToken });
   try {
-    const documents = await client.searchDocuments(query, options.limit ?? 20);
+    const documents = await client.searchDocumentsForTerms(terms, options.limit ?? 20);
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`

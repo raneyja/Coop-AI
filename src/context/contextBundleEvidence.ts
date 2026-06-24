@@ -188,7 +188,8 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     if (data.jiraSearch) {
       merged.jira = {
         issues: (asRecord(data.jiraSearch).issues as JiraSearchEvidence["issues"]) ?? [],
-        error: asRecord(data.jiraSearch).error as string | undefined
+        error: asRecord(data.jiraSearch).error as string | undefined,
+        matchStrategy: asRecord(data.jiraSearch).matchStrategy as string | undefined
       };
     }
     if (data.slackSearch) {

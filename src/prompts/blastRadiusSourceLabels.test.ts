@@ -25,5 +25,25 @@ assert.ok(
   partialChecklist.some((line) => line.includes("Index coverage is partial")),
   "expected partial index coverage checklist guidance"
 );
+assert.equal(
+  partialChecklist.filter((line) => line.startsWith(blastRadiusSourceLabelDependencies())).length,
+  1,
+  "expected a single Dependency graph checklist line"
+);
+
+const partialAndUnverified = {
+  file: "src/handler.ts",
+  graphMeta: { edgeCount: 0, lightningEnabled: false },
+  directDependents: [],
+  transitiveDependents: []
+};
+const combinedChecklist = listBlastRadiusSourcesChecklist(partialAndUnverified);
+assert.equal(
+  combinedChecklist.filter((line) => line.startsWith(blastRadiusSourceLabelDependencies())).length,
+  1,
+  "expected combined partial/unverified guidance on one Dependency graph line"
+);
+assert.ok(combinedChecklist[0].includes("Index coverage is partial"));
+assert.ok(combinedChecklist[0].includes("Impact unverified"));
 
 console.log("blastRadiusSourceLabels: ok");

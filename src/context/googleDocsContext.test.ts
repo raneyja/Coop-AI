@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { shouldFetchGoogleDocsContext, wantsGoogleDocsContext } from "./googleDocsContext";
+import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
@@ -28,6 +29,19 @@ test("shouldFetchGoogleDocsContext includes knowledge-gaps quick action", () => 
     params: { quickAction: "knowledge-gaps" }
   } as ContextFetchRequest;
   assert.equal(shouldFetchGoogleDocsContext(request), true);
+});
+
+test("buildIntegrationSearchTermList aligns google docs search with repo and jira keys", () => {
+  const terms = buildIntegrationSearchTermList({
+    owner: "raneyja",
+    repo: "Coop-AI",
+    activeFile: "src/server/githubAppApi.ts",
+    contextText: ["// COOP-101 trace validation"],
+    crossToolText: ["ADR: COOP-55 rollout"]
+  });
+  assert.ok(terms.includes("github:raneyja/coop-ai"));
+  assert.ok(terms.includes("githubAppApi"));
+  assert.ok(terms.includes("COOP-101"));
 });
 
 const total = passed + failed;

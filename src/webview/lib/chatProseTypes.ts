@@ -4,6 +4,7 @@ export type ChatInlineNode =
   | { type: "em"; text: string }
   | { type: "inline-code"; code: string }
   | { type: "source-citation"; label: string; id: string }
+  | { type: "evidence-link"; label: string }
   | { type: "file-link"; path: string; line?: number; label: string }
   | { type: "external-link"; label: string; url: string };
 

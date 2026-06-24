@@ -24,6 +24,7 @@ import type {
 } from "../../context/contextBundleEvidence";
 import { ChatMessageActions } from "./ChatMessageActions";
 import { ChatThinkingIndicator } from "./ChatThinkingIndicator";
+import { EvidenceArtifactAnchor } from "./EvidenceArtifactAnchor";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import {
   parseContextLineAttachments,
@@ -554,13 +555,15 @@ export function ChatStream({
             <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
           ) : (
             <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
-              <div className="chat-message-inner">
-                <div className="chat-message-meta">
-                  <span className="chat-message-label chat-message-label--evidence">Sources</span>
-                  <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
+              <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
+                <div className="chat-message-inner">
+                  <div className="chat-message-meta">
+                    <span className="chat-message-label chat-message-label--evidence">Sources</span>
+                    <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
+                  </div>
+                  {renderArtifact(entry.artifact, actionContext, conflicts)}
                 </div>
-                {renderArtifact(entry.artifact, actionContext, conflicts)}
-              </div>
+              </EvidenceArtifactAnchor>
             </article>
           )
         )}

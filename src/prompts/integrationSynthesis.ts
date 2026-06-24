@@ -12,8 +12,12 @@ import {
 } from "./integrationSourceLabels";
 import {
   appendCitationKeysSection,
+  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  appendSupplementarySourceCitationGuardrails,
+  appendNarrativeCitationInstructions,
+  supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 
@@ -60,9 +64,14 @@ export function buildIntegrationSynthesisUserPrompt(input: IntegrationSynthesisI
   const error = input.evidence.error as string | undefined;
   const resultCount = countIntegrationResults(input.provider, input.evidence);
   appendCitationKeysSection(lines, listIntegrationSourceLabels(input.provider));
-  appendSourcesChecklistSection(
+  const citationKeys = listIntegrationSourceLabels(input.provider);
+  const sourcesChecklist = listIntegrationSourcesChecklist(input.provider, { error, resultCount });
+  appendSourcesChecklistSection(lines, sourcesChecklist);
+  appendNarrativeCitationInstructions(lines);
+  appendSupplementarySourceCitationGuardrails(
     lines,
-    listIntegrationSourcesChecklist(input.provider, { error, resultCount })
+    sourcesChecklist,
+    supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   );
   appendEvidenceQualityInstructions(lines);
   lines.push("Synthesize from integration evidence only. Out-of-scope @ paths must not replace the integration search results.");

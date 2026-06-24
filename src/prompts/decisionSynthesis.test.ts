@@ -70,7 +70,7 @@ test("decision synthesis requires out-of-scope callout for local workspace @ att
   assert.ok(prompt.includes("primary trace target only"));
 });
 
-test("decision synthesis omits alternatives guidance on initial trace when model prompt mentions trade-offs", () => {
+test("decision synthesis includes alternatives guidance on initial trace", () => {
   const prompt = buildDecisionSynthesisUserPrompt({
     timeline,
     file: "fastify.js",
@@ -81,7 +81,9 @@ test("decision synthesis omits alternatives guidance on initial trace when model
     userBubble: "[trace-decision] Trace the engineering decision behind this code.",
     isFollowUp: false
   });
-  assert.ok(!prompt.includes("## Alternatives / trade-offs guidance"));
+  assert.ok(prompt.includes("## Alternatives / trade-offs guidance"));
+  assert.ok(prompt.includes("not documented"));
+  assert.ok(prompt.includes("Do not infer generic trade-offs"));
   assert.ok(prompt.includes("full trace narrative"));
 });
 
@@ -100,6 +102,28 @@ test("decision synthesis follow-up steers compact alternatives answer when evide
   assert.ok(prompt.includes("not documented"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
   assert.ok(prompt.includes("What trade-offs were rejected?"));
+});
+
+test("decision synthesis requires quote before alternatives when PR is attached", () => {
+  const withPr: DecisionTimeline = {
+    ...timeline,
+    linkedPR: {
+      number: 1506,
+      title: "Add logger factory",
+      state: "merged",
+      description: "Centralize logging",
+      approvers: ["alice"],
+      reviews: [{ author: "alice", body: "We rejected the singleton approach.", createdAt: "2016-10-04" }]
+    }
+  };
+  const prompt = buildDecisionSynthesisUserPrompt({
+    timeline: withPr,
+    file: "fastify.js",
+    owner: "coop-demo-lab",
+    repo: "fastify"
+  });
+  assert.ok(prompt.includes("quote or paraphrase"));
+  assert.ok(prompt.includes("PR #1506"));
 });
 
 test("decision synthesis includes enriched evidence fields and enrichment instructions", () => {
@@ -172,6 +196,33 @@ test("formatTimelineForPrompt surfaces technical debt on jira tickets", () => {
   const formatted = formatTimelineForPrompt(withDebt);
   assert.ok(formatted.includes("Technical debt: flagged in ticket metadata"));
   assert.ok(formatted.includes("Technical debt flagged: WID-99"));
+});
+
+test("formatTimelineForPrompt includes integration search evidence", () => {
+  const withSearch: DecisionTimeline = {
+    ...timeline,
+    integrationSearch: {
+      seedJiraKeys: ["COOP-101"],
+      seedSearchTerms: ["githubAppApi"],
+      confluence: {
+        pages: [
+          {
+            id: "1",
+            title: "ADR: GitHub App API",
+            excerpt: "Centralize app auth validation",
+            htmlUrl: "https://confluence/adr"
+          }
+        ]
+      },
+      jira: {
+        issues: [{ key: "COOP-101", summary: "Trace validation", status: "Done", htmlUrl: "https://jira/COOP-101" }]
+      }
+    }
+  };
+  const formatted = formatTimelineForPrompt(withSearch);
+  assert.ok(formatted.includes("Cross-tool search seeds"));
+  assert.ok(formatted.includes("COOP-101"));
+  assert.ok(formatted.includes("ADR: GitHub App API"));
 });
 
 console.log(`\ndecisionSynthesis: ${passed}/${passed + failed} tests passed`);

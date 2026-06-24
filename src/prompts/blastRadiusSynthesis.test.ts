@@ -111,6 +111,51 @@ test("blast-radius synthesis includes CI rollout guidance when workflows present
   assert.ok(prompt.includes("CODEOWNERS"));
 });
 
+test("blast-radius synthesis leads Summary with partial index caveat when graph is partial", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({
+    evidence: {
+      file: "src/server/githubAppApi.ts",
+      directDependents: ["src/server/routes.ts"],
+      graphMeta: { edgeCount: 12, lightningEnabled: false, source: "zoekt" },
+      completeness: "partial"
+    },
+    file: "src/server/githubAppApi.ts",
+    owner: "raneyja",
+    repo: "Coop-AI"
+  });
+  assert.ok(prompt.includes("## Summary guidance"));
+  assert.ok(prompt.includes("partial index coverage caveat"));
+  assert.ok(prompt.includes("Index coverage is partial"));
+  const checklistStart = prompt.indexOf("## Required **Sources** bullets");
+  const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
+  const checklistSection = prompt.slice(checklistStart, checklistEnd);
+  assert.equal(
+    (checklistSection.match(/\[Sources: Dependency graph\]/g) ?? []).length,
+    1,
+    "expected one Dependency graph checklist bullet"
+  );
+});
+
+test("blast-radius synthesis requires attached documentation titles", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({
+    evidence: {
+      file: "fastify.js",
+      directDependents: ["lib/plugin.js"],
+      confluenceSearch: {
+        pages: [{ id: "1", title: "Fastify rollout runbook", updated: "2026-01-01", htmlUrl: "https://wiki/1" }]
+      },
+      notionSearch: {
+        pages: [{ id: "2", title: "Fastify architecture notes", updated: "2026-01-02", url: "https://notion/2" }]
+      }
+    },
+    file: "fastify.js"
+  });
+  assert.ok(prompt.includes("## Attached documentation (required in response)"));
+  assert.ok(prompt.includes("APIs & integrations"));
+  assert.ok(prompt.includes("Fastify rollout runbook"));
+  assert.ok(prompt.includes("Fastify architecture notes"));
+});
+
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

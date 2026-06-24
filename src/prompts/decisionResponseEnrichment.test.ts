@@ -4,7 +4,8 @@ import {
   asksAboutAlternativesOrTradeoffs,
   buildThinAlternativesTradeOffsResponse,
   enrichTraceDecisionResponse,
-  responseHasSpeculativeTradeoffs
+  responseHasSpeculativeTradeoffs,
+  timelineHasDiscussionEvidence
 } from "./decisionResponseEnrichment";
 
 const thinTimeline: DecisionTimeline = {
@@ -147,6 +148,98 @@ test("enrichTraceDecisionResponse uses fallback timeline when bundle lost decisi
   });
   assert.ok(enriched.includes("**Trade-offs**"));
   assert.ok(!enriched.includes("Robustness vs"));
+});
+
+test("timelineHasDiscussionEvidence requires PR Slack Jira or extracted alternatives", () => {
+  const withDocs: DecisionTimeline = {
+    ...thinTimeline,
+    integrationSearch: {
+      confluence: {
+        pages: [{ id: "1", title: "ADR", htmlUrl: "https://confluence/1" }]
+      }
+    }
+  };
+  assert.equal(timelineHasDiscussionEvidence(withDocs), false);
+});
+
+test("enrichTraceDecisionResponse replaces speculative trace when Slack/Jira attached but sections lack quotes", () => {
+  const richTimeline: DecisionTimeline = {
+    ...thinTimeline,
+    completeness: "partial",
+    slackThread: {
+      channelId: "C1",
+      channelName: "epd",
+      threadTs: "1",
+      participants: ["alice"],
+      messages: [
+        {
+          user: "alice",
+          text: "We rejected rolling our own JWT middleware — chose GitHub App tokens instead for trade-off on ops burden.",
+          ts: "1"
+        }
+      ]
+    },
+    jiraTickets: [
+      {
+        key: "COOP-101",
+        summary: "GitHub App API rollout",
+        description: "Decision: use installation tokens instead of PATs.",
+        acceptanceCriteria: [],
+        technicalDebt: false,
+        htmlUrl: "https://jira/COOP-101"
+      }
+    ]
+  };
+  const bundleWithDiscussion = [{ type: "decision_history", data: { timeline: richTimeline } }];
+  const speculative = [
+    "**Summary**",
+    "GitHub App API uses installation tokens.",
+    "",
+    "**Alternatives considered**",
+    "Custom JWT middleware was likely rejected for simplicity vs robustness.",
+    "",
+    "**Trade-offs**",
+    "However, based on common practices, we can infer Performance vs. Development Speed."
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: speculative,
+    userQuestion: "[trace-decision] Trace the engineering decision behind this code.",
+    contextBundle: bundleWithDiscussion,
+    activeFile: "src/server/githubAppApi.ts",
+    fallbackTimeline: richTimeline,
+    isFollowUp: false
+  });
+
+  assert.ok(enriched.includes("@alice"));
+  assert.ok(enriched.includes("COOP-101"));
+  assert.ok(!enriched.includes("we can infer"));
+  assert.ok(!enriched.includes("likely rejected"));
+});
+
+test("enrichTraceDecisionResponse strips narrative source pills on thin evidence", () => {
+  const withPills = [
+    "**Summary**",
+    "Introduced in dd2bb73 [Sources: GitHub commit dd2bb73].",
+    "",
+    "**Architecture**",
+    "Pattern from [Sources: Ownership signals].",
+    "",
+    "**Sources**",
+    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: withPills,
+    userQuestion: "[trace-decision] Trace the engineering decision behind this code.",
+    contextBundle: bundle,
+    activeFile: "fastify.js",
+    fallbackTimeline: thinTimeline,
+    isFollowUp: false
+  });
+
+  assert.ok(!enriched.includes("[Sources: Ownership signals]"));
+  assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73] — introducing commit"));
 });
 
 console.log(`\ndecisionResponseEnrichment: ${passed}/${passed + failed} tests passed`);

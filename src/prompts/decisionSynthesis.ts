@@ -4,6 +4,9 @@ import {
   appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  appendSupplementarySourceCitationGuardrails,
+  appendNarrativeCitationInstructions,
+  supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES,
   EVIDENCE_ENRICHMENT_RULES
 } from "./evidenceSynthesis";
@@ -13,10 +16,12 @@ import {
   partitionMentionsForTraceDecision,
   type MentionScopeRef
 } from "./mentionScope";
-import { asksAboutAlternativesOrTradeoffs } from "./decisionResponseEnrichment";
 import {
   decisionSourceLabelCommit,
+  decisionSourceLabelConfluence,
+  decisionSourceLabelGoogleDocs,
   decisionSourceLabelJira,
+  decisionSourceLabelNotion,
   decisionSourceLabelPr,
   decisionSourceLabelSlack,
   decisionSourceLabelTeams,
@@ -45,6 +50,7 @@ ${EVIDENCE_CITATION_RULES}
 ${EVIDENCE_ENRICHMENT_RULES}
 State confidence when evidence is thin. Keep answers concise — limited evidence warrants short sections, not speculative essays.
 Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
+For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
 When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
 When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking), use them per the Evidence enrichment section in the user prompt.`;
 
@@ -101,16 +107,17 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   const sourcesChecklist = listDecisionSourcesChecklist(timeline);
   appendCitationKeysSection(lines, citationKeys);
   appendSourcesChecklistSection(lines, sourcesChecklist);
+  appendNarrativeCitationInstructions(lines);
+  appendSupplementarySourceCitationGuardrails(
+    lines,
+    sourcesChecklist,
+    supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
+  );
   appendEvidenceQualityInstructions(lines);
   appendEvidenceEnrichmentInstructions(lines);
+  appendAlternativesTradeOffGuidance(lines, timeline);
   if (input.isFollowUp) {
     appendFollowUpInstructions(lines, input.userBubble ?? userQuestion);
-  }
-  if (
-    input.isFollowUp &&
-    asksAboutAlternativesOrTradeoffs(input.userBubble ?? userQuestion)
-  ) {
-    appendAlternativesTradeOffGuidance(lines, timeline);
   }
   lines.push(
     "Synthesize the decision for the primary trace target only. Use the timeline evidence for that file — do not rewrite the narrative around out-of-scope @ attachments."
@@ -148,12 +155,15 @@ function appendAlternativesTradeOffGuidance(lines: string[], timeline: DecisionT
     timeline.alternatives.length > 0;
   lines.push("## Alternatives / trade-offs guidance");
   if (hasDiscussion) {
-    lines.push("- Cite PR, Slack, Teams, Jira, or extracted alternatives for rejected options and trade-offs.");
+    lines.push(
+      "- Before stating any alternative or trade-off, quote or paraphrase the PR review, Slack/Jira/Teams message, or extracted alternative — use plain provenance in narrative (e.g. PR #1506 review by @alice); reserve `[Sources: …]` labels for **Sources**."
+    );
+    lines.push("- Do not list options or trade-offs that no attached discussion source mentions.");
   } else {
     lines.push(
       "- Bundle has no PR, Slack, Teams, Jira, or extracted alternatives — **Alternatives considered** and **Trade-offs** must say unknown or not documented (one line each)."
     );
-    lines.push("- Do not infer generic trade-offs from software best practices.");
+    lines.push("- Do not infer generic trade-offs from software best practices or the introducing commit alone.");
   }
   if (timeline.warnings.length) {
     lines.push(`- Warnings in bundle: ${timeline.warnings.join("; ")}`);
@@ -300,6 +310,8 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
     }
   }
 
+  appendIntegrationSearchSections(sections, timeline);
+
   if (timeline.chronology.length > 0) {
     sections.push(
       "### Chronology\n" +
@@ -314,6 +326,82 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
   }
 
   return sections.join("\n\n");
+}
+
+function appendIntegrationSearchSections(sections: string[], timeline: DecisionTimeline): void {
+  const search = timeline.integrationSearch;
+  if (!search) {
+    return;
+  }
+
+  if (search.seedJiraKeys?.length || search.seedSearchTerms?.length) {
+    sections.push(
+      "### Cross-tool search seeds\n" +
+        [
+          search.seedJiraKeys?.length ? `- Jira keys from code/commits: ${search.seedJiraKeys.join(", ")}` : undefined,
+          search.seedSearchTerms?.length ? `- File/doc search terms: ${search.seedSearchTerms.join(", ")}` : undefined
+        ]
+          .filter(Boolean)
+          .join("\n")
+    );
+  }
+
+  for (const issue of search.jira?.issues ?? []) {
+    if (timeline.jiraTickets?.some((ticket) => ticket.key === issue.key)) {
+      continue;
+    }
+    sections.push(
+      `### ${decisionSourceLabelJira(issue.key)} (integration search)\n- Summary: ${issue.summary}\n- Status: ${issue.status}`
+    );
+  }
+
+  for (const page of search.confluence?.pages ?? []) {
+    sections.push(
+      `### ${decisionSourceLabelConfluence(page.title)}\n- Excerpt: ${truncate(page.excerpt ?? "(none)", 300)}`
+    );
+  }
+
+  for (const page of search.notion?.pages ?? []) {
+    sections.push(`### ${decisionSourceLabelNotion(page.title)}\n- Notion page from targeted search`);
+  }
+
+  for (const doc of search.googleDocs?.documents ?? []) {
+    sections.push(`### ${decisionSourceLabelGoogleDocs(doc.title)}\n- Google Doc from targeted search`);
+  }
+
+  if ((search.slack?.messages.length ?? 0) > 0 && !timeline.slackThread) {
+    sections.push(
+      `### ${decisionSourceLabelSlack("search")} (integration search)\n` +
+        (search.slack?.messages ?? [])
+          .slice(0, 10)
+          .map((message) =>
+            `- ${message.userName ?? "unknown"}${message.channelName ? ` in #${message.channelName}` : ""}: ${truncate(message.text, 250)}`
+          )
+          .join("\n")
+    );
+  }
+
+  if ((search.teams?.messages.length ?? 0) > 0 && !timeline.teamsThread) {
+    sections.push(
+      `### ${decisionSourceLabelTeams()} (integration search)\n` +
+        (search.teams?.messages ?? [])
+          .slice(0, 10)
+          .map((message) => `- ${message.fromUserName ?? "unknown"}: ${truncate(message.text, 250)}`)
+          .join("\n")
+    );
+  }
+
+  const integrationErrors = [
+    search.jira?.error ? `Jira search: ${search.jira.error}` : undefined,
+    search.confluence?.error ? `Confluence search: ${search.confluence.error}` : undefined,
+    search.notion?.error ? `Notion search: ${search.notion.error}` : undefined,
+    search.googleDocs?.error ? `Google Docs search: ${search.googleDocs.error}` : undefined,
+    search.slack?.error ? `Slack search: ${search.slack.error}` : undefined,
+    search.teams?.error ? `Teams search: ${search.teams.error}` : undefined
+  ].filter(Boolean);
+  if (integrationErrors.length > 0) {
+    sections.push("### Integration search notes\n" + integrationErrors.map((line) => `- ${line}`).join("\n"));
+  }
 }
 
 function formatTraceCompletenessSection(timeline: DecisionTimeline): string | undefined {

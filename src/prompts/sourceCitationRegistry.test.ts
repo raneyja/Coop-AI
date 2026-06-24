@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  evidenceArtifactAnchor,
   extractSourceCitationInner,
   isSourceCitationLabel,
   matchSourceCitationLabel,
@@ -14,6 +15,7 @@ assert.equal(
   sourceCitationAnchor("abc123", "[Sources: Dependency graph]"),
   "artifact-abc123--dependency-graph"
 );
+assert.equal(evidenceArtifactAnchor("abc123"), "artifact-abc123");
 assert.equal(extractSourceCitationInner("`[Sources: Slack search]`"), "Slack search");
 assert.equal(isSourceCitationLabel("[Sources: Jira search]"), true);
 assert.equal(normalizeSourceCitationLabel("Sources: GitHub"), "[Sources: GitHub]");

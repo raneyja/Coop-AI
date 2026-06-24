@@ -28,7 +28,10 @@ import {
 } from "../prompts/blastRadiusSourceLabels";
 import {
   decisionSourceLabelCommit,
+  decisionSourceLabelConfluence,
+  decisionSourceLabelGoogleDocs,
   decisionSourceLabelJira,
+  decisionSourceLabelNotion,
   decisionSourceLabelPr,
   decisionSourceLabelSlack,
   decisionSourceLabelTeams
@@ -56,11 +59,16 @@ import {
   repoSummarySourceLabelConfluence,
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelEntryFiles,
+  repoSummarySourceLabelGoogleDocs,
   repoSummarySourceLabelJira,
   repoSummarySourceLabelManifest,
-  repoSummarySourceLabelOwnership
+  repoSummarySourceLabelNotion,
+  repoSummarySourceLabelOwnership,
+  repoSummarySourceLabelSlack,
+  repoSummarySourceLabelTeams
 } from "../prompts/repoSummarySourceLabels";
 import type { DecisionTimeline } from "../types/decisionTimeline";
+import { timelineHasIntegrationDocEvidence } from "../context/traceDecisionSearch";
 import type { OwnershipReport, OwnershipRisk } from "../types/ownership";
 import {
   capEvidenceActions,
@@ -134,6 +142,13 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
     !teamsThread &&
     !timeline.fallbackMessage;
 
+  const integrationSearch = timeline.integrationSearch;
+  const integrationDocHits = timelineHasIntegrationDocEvidence(timeline);
+  const linkedJiraSearchHits =
+    (integrationSearch?.jira?.issues.length ?? 0) > 0 && jiraTickets.length === 0
+      ? integrationSearch?.jira?.issues.length ?? 0
+      : 0;
+
   let quality: EvidenceQuality;
   let qualityReason: string;
   if (hasFallbackOnly) {
@@ -144,18 +159,18 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
     quality = "strong";
     qualityReason =
       "Linked decision artifacts include explicit rationale from PR, issue, or discussion evidence.";
-  } else if (
-    !!linkedPr ||
-    (commit && hasGoodCommitMessage) ||
-    (commit && timeline.chronology.length > 1)
-  ) {
+  } else if (integrationDocHits || linkedJiraSearchHits > 0) {
     quality = "medium";
     qualityReason =
-      "The trace links commit history to adjacent context, but rationale details are still partial.";
+      "Cross-tool search surfaced supporting documentation or issue context beyond the introducing commit.";
   } else if (isWeakCommitOnly) {
     quality = "weak";
     qualityReason =
       "This trace is mostly a single introducing commit with limited surrounding decision context.";
+  } else if (!!linkedPr || (commit && timeline.chronology.length > 1)) {
+    quality = "medium";
+    qualityReason =
+      "The trace links commit history to adjacent context, but rationale details are still partial.";
   } else {
     quality = "limited";
     qualityReason = "Evidence is sparse and does not clearly explain why this change was made.";
@@ -181,7 +196,10 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
               .slice(0, 3)
               .map((ticket) => ticket.key)
               .join(", ")}`
-          : undefined,
+          : linkedJiraSearchHits > 0
+            ? `${linkedJiraSearchHits} related Jira hit(s) from search`
+            : undefined,
+        integrationDocHits ? "documentation search adds supporting context" : undefined,
         threadMessageCount > 0 ? `${threadMessageCount} team discussion message(s) add context` : undefined,
         evolutionOneLiner
       ]
@@ -190,7 +208,9 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
 
   const limitations = dedupeLimitations([
     !linkedPr ? "No linked pull request was found for this decision trace." : undefined,
-    jiraTickets.length === 0 ? "No linked Jira issue was found for this change." : undefined,
+    jiraTickets.length === 0 && linkedJiraSearchHits === 0
+      ? "No linked Jira issue was found for this change."
+      : undefined,
     commit && !hasGoodCommitMessage ? "Commit message is terse, so rationale may be underspecified." : undefined,
     commitOnlyRationale
       ? "Rationale is inferred only from commit metadata; no PR, ticket, or discussion evidence was linked."
@@ -276,6 +296,7 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
       )
     });
   }
+  appendDecisionIntegrationContributions(sourceContributions, timeline, rationaleRanking);
 
   const recommendedActions: EvidenceRecommendedAction[] = dedupeActions([
     commit?.htmlUrl
@@ -806,20 +827,47 @@ export function summarizeRepoSummary(
   const entryCount = evidence.entryFiles?.length ?? 0;
   const confluenceCount = evidence.confluence?.pages.length ?? 0;
   const jiraCount = evidence.jira?.issues.length ?? 0;
+  const notionCount = evidence.notion?.pages.length ?? 0;
+  const googleDocsCount = evidence.googleDocs?.documents.length ?? 0;
+  const slackCount = evidence.slack?.messages.length ?? 0;
+  const teamsCount = evidence.teams?.messages.length ?? 0;
   const ownershipCount = evidence.ownershipReport?.scores.length ?? 0;
-  const hasOwnership = ownershipCount > 0 || !!evidence.relatedOwnership?.owner;
+  const hasOwnershipScores = ownershipCount > 0;
+  const hasOwnershipContext = hasOwnershipScores || !!evidence.relatedOwnership?.owner;
   const dependencyCount = evidence.dependencyGraph?.directDependents?.length ?? 0;
-  const externalDocs = confluenceCount + jiraCount;
+  const docHitCount = confluenceCount + notionCount + googleDocsCount;
+  const externalSignalCount = [
+    confluenceCount > 0,
+    jiraCount > 0,
+    slackCount > 0,
+    teamsCount > 0,
+    notionCount > 0,
+    googleDocsCount > 0
+  ].filter(Boolean).length;
 
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (hasManifestSignal && entryCount > 0 && (externalDocs > 0 || hasOwnership)) {
+  if (
+    entryCount > 0 &&
+    (docHitCount > 0 || hasOwnershipContext) &&
+    (externalSignalCount >= 2 || docHitCount > 0)
+  ) {
     quality = "strong";
-    qualityReason = "Repository structure is grounded in anchor files plus documentation or ownership context.";
-  } else if ((hasManifestSignal && entryCount > 0) || (hasManifestSignal && (externalDocs > 0 || hasOwnership))) {
+    qualityReason =
+      "Anchor files are grounded with attached documentation, ownership, or cross-tool context.";
+  } else if (
+    entryCount > 0 &&
+    (docHitCount > 0 || hasOwnershipContext || externalSignalCount > 0)
+  ) {
     quality = "medium";
-    qualityReason = "Core repository structure is available, but supporting context is partial.";
-  } else if (hasManifestSignal || entryCount > 0 || externalDocs > 0 || hasOwnership || dependencyCount > 0) {
+    qualityReason = "Anchor files provide structure, but supporting context is partial.";
+  } else if (
+    (hasManifestSignal && entryCount > 0) ||
+    docHitCount > 0 ||
+    hasOwnershipContext ||
+    dependencyCount > 0 ||
+    externalSignalCount > 0
+  ) {
     quality = "weak";
     qualityReason = "Only partial repository evidence is available for this summary.";
   } else {
@@ -832,15 +880,21 @@ export function summarizeRepoSummary(
     `${owner}/${repo}`,
     manifest?.fileCount !== undefined ? `${manifest.fileCount} indexed file(s)` : undefined,
     entryCount > 0 ? `${entryCount} anchor file(s)` : undefined,
-    entryNames.length ? `entry points include ${entryNames.join(", ")}` : undefined
+    entryNames.length ? `entry points include ${entryNames.join(", ")}` : undefined,
+    docHitCount > 0 ? `${docHitCount} documentation hit(s)` : undefined,
+    externalSignalCount > 0 ? `${externalSignalCount} external integration signal(s)` : undefined
   ]
     .filter(Boolean)
     .join(" · ");
 
   const limitations = dedupeLimitations([
     entryCount === 0 ? "No anchor files were attached for architectural grounding." : undefined,
-    externalDocs === 0 ? "Confluence and Jira architecture context were not attached." : undefined,
-    !hasOwnership ? "Ownership signals are missing for the currently scoped area." : undefined,
+    docHitCount === 0 && jiraCount === 0 && externalSignalCount === 0
+      ? "No attached documentation or work-tracking integrations returned hits for this repository."
+      : docHitCount === 0 && jiraCount === 0
+        ? "No documentation pages or Jira issues were attached, though other integrations may add context."
+        : undefined,
+    !hasOwnershipContext ? "Ownership signals are missing for the currently scoped area." : undefined,
     ...evidence.warnings ?? []
   ]);
 
@@ -886,23 +940,62 @@ export function summarizeRepoSummary(
       url: evidence.jira?.issues[0]?.htmlUrl
     });
   }
-  if (hasOwnership) {
+  if (notionCount > 0 || evidence.notion?.error) {
+    sourceContributions.push({
+      provider: "notion",
+      label: repoSummarySourceLabelNotion(),
+      contribution: evidence.notion?.error
+        ? `Notion lookup returned an error: ${cleanLine(evidence.notion.error)}`
+        : `Notion search added ${notionCount} architecture page(s).`,
+      relevance: notionCount > 0 ? "supporting" : "background",
+      url: evidence.notion?.pages[0]?.url
+    });
+  }
+  if (googleDocsCount > 0 || evidence.googleDocs?.error) {
+    sourceContributions.push({
+      provider: "google-docs",
+      label: repoSummarySourceLabelGoogleDocs(),
+      contribution: evidence.googleDocs?.error
+        ? `Google Docs lookup returned an error: ${cleanLine(evidence.googleDocs.error)}`
+        : `Google Docs search added ${googleDocsCount} document(s) for architecture context.`,
+      relevance: googleDocsCount > 0 ? "supporting" : "background",
+      url: evidence.googleDocs?.documents[0]?.url
+    });
+  }
+  if (slackCount > 0 || evidence.slack?.error) {
+    sourceContributions.push({
+      provider: "slack",
+      label: repoSummarySourceLabelSlack(),
+      contribution: evidence.slack?.error
+        ? `Slack lookup returned an error: ${cleanLine(evidence.slack.error)}`
+        : `Slack search added ${slackCount} discussion message(s) about this repository.`,
+      relevance: slackCount > 0 ? "supporting" : "background",
+      url: evidence.slack?.messages[0]?.permalink
+    });
+  }
+  if (teamsCount > 0 || evidence.teams?.error) {
+    sourceContributions.push({
+      provider: "teams",
+      label: repoSummarySourceLabelTeams(),
+      contribution: evidence.teams?.error
+        ? `Teams lookup returned an error: ${cleanLine(evidence.teams.error)}`
+        : `Teams search added ${teamsCount} discussion message(s) about this repository.`,
+      relevance: teamsCount > 0 ? "supporting" : "background"
+    });
+  }
+  if (hasOwnershipScores) {
     sourceContributions.push({
       provider: "github",
       label: repoSummarySourceLabelOwnership(),
-      contribution: evidence.relatedOwnership?.owner
-        ? `Ownership context points to @${evidence.relatedOwnership.owner} for a key scoped path.`
-        : `Ownership scoring includes ${ownershipCount} contributor signal(s).`,
+      contribution: `Ownership scoring includes ${ownershipCount} contributor signal(s).`,
       relevance: "supporting"
     });
   }
-  if (dependencyCount > 0 || evidence.dependencyGraph?.edgeCount) {
+  if (dependencyCount > 0) {
     sourceContributions.push({
       provider: "github",
       label: repoSummarySourceLabelDependencies(),
-      contribution: dependencyCount
-        ? `Dependency graph found ${dependencyCount} direct dependent(s) from the scoped entry file.`
-        : `Dependency graph contains ${evidence.dependencyGraph?.edgeCount ?? 0} indexed edge(s).`,
+      contribution: `Dependency graph found ${dependencyCount} direct dependent(s) from the scoped entry file.`,
       relevance: "background"
     });
   }
@@ -911,8 +1004,17 @@ export function summarizeRepoSummary(
     evidence.entryFiles?.[0]?.path
       ? { label: "Open anchor file", kind: "open-file", path: evidence.entryFiles[0].path }
       : undefined,
-    evidence.confluence?.pages[0]?.htmlUrl
-      ? { label: "Open architecture page", kind: "open-url", url: evidence.confluence.pages[0].htmlUrl }
+    evidence.confluence?.pages[0]?.htmlUrl ??
+      evidence.notion?.pages[0]?.url ??
+      evidence.googleDocs?.documents[0]?.url
+      ? {
+          label: "Open architecture page",
+          kind: "open-url",
+          url:
+            evidence.confluence?.pages[0]?.htmlUrl ??
+            evidence.notion?.pages[0]?.url ??
+            evidence.googleDocs?.documents[0]?.url
+        }
       : undefined,
     evidence.entryFiles?.[0]?.path
       ? {
@@ -1105,6 +1207,70 @@ function asRecordArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
     : [];
+}
+
+function appendDecisionIntegrationContributions(
+  sourceContributions: EvidenceSourceContribution[],
+  timeline: DecisionTimeline,
+  rationaleRanking: NonNullable<DecisionTimeline["rationaleRanking"]>
+): void {
+  const search = timeline.integrationSearch;
+  if (!search) {
+    return;
+  }
+
+  for (const issue of search.jira?.issues ?? []) {
+    if (timeline.jiraTickets?.some((ticket) => ticket.key === issue.key)) {
+      continue;
+    }
+    const jiraLabel = decisionSourceLabelJira(issue.key);
+    sourceContributions.push({
+      provider: "jira",
+      label: jiraLabel,
+      contribution: `Jira search surfaced ${issue.key}: "${cleanLine(issue.summary)}".`,
+      relevance: relevanceFromRationaleRanking(
+        rationaleRanking,
+        { sourcePrefix: "jira:", label: jiraLabel },
+        "supporting"
+      ),
+      url: issue.htmlUrl
+    });
+  }
+
+  for (const page of search.confluence?.pages ?? []) {
+    const label = decisionSourceLabelConfluence(page.title);
+    sourceContributions.push({
+      provider: "confluence",
+      label,
+      contribution: page.excerpt
+        ? `Confluence search matched "${cleanLine(page.title)}" — ${truncate(cleanLine(page.excerpt), 120)}.`
+        : `Confluence search matched "${cleanLine(page.title)}".`,
+      relevance: "supporting",
+      url: page.htmlUrl
+    });
+  }
+
+  for (const page of search.notion?.pages ?? []) {
+    const label = decisionSourceLabelNotion(page.title);
+    sourceContributions.push({
+      provider: "notion",
+      label,
+      contribution: `Notion search matched "${cleanLine(page.title)}".`,
+      relevance: "supporting",
+      url: page.url
+    });
+  }
+
+  for (const doc of search.googleDocs?.documents ?? []) {
+    const label = decisionSourceLabelGoogleDocs(doc.title);
+    sourceContributions.push({
+      provider: "google-docs",
+      label,
+      contribution: `Google Docs search matched "${cleanLine(doc.title)}".`,
+      relevance: "supporting",
+      url: doc.url
+    });
+  }
 }
 
 function hasLongMessage(messages?: Array<string | undefined>): boolean {

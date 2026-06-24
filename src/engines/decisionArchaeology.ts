@@ -18,6 +18,7 @@ import {
   threadMeetsRelevanceBar,
   type TraceEvidenceMatchOptions
 } from "./traceEvidenceRelevance";
+import { collectJiraKeysFromText } from "../context/jiraContext";
 import type {
   DecisionAlternative,
   DecisionCommit,
@@ -59,6 +60,8 @@ export type TraceDecisionParams = {
   lineRange?: LineRange;
   branch?: string;
   codeSnippet?: string;
+  /** Optional doc/integration excerpts to mine for Jira keys and decision context. */
+  seedTexts?: string[];
 };
 
 type PullRequestDetail = {
@@ -89,7 +92,7 @@ export class DecisionArchaeologyEngine {
   public constructor(private readonly options: TraceDecisionOptions) {}
 
   public async traceDecision(params: TraceDecisionParams): Promise<DecisionTimeline> {
-    const { owner, repo, lineRange, branch, codeSnippet } = params;
+    const { owner, repo, lineRange, branch, codeSnippet, seedTexts } = params;
     const file = toRepositoryRelativePath(params.file);
     const coords = await this.options.codeHostRouter.resolveCoordinates({
       provider: params.provider,
@@ -110,6 +113,7 @@ export class DecisionArchaeologyEngine {
     };
 
     let blameLines: BlameLine[] = [];
+    let blameCommitMessages: string[] = [];
     try {
       const blame = await this.options.codeHostRouter.getBlameData(file, coords);
       blameLines = filterBlameForRange(blame.lines, lineRange);
@@ -117,6 +121,7 @@ export class DecisionArchaeologyEngine {
         timeline.warnings.push("No blame data for the selected line range; using full file blame.");
         blameLines = blame.lines;
       }
+      blameCommitMessages = await this.collectBlameCommitMessages(coords, blameLines).catch(() => []);
     } catch (error) {
       timeline.warnings.push(`Blame unavailable: ${errorMessage(error)}`);
       timeline.fallbackMessage = "Could not load git blame. Showing commit search only.";
@@ -231,11 +236,14 @@ export class DecisionArchaeologyEngine {
       timeline.warnings.push("No linked pull request found for the introducing commit.");
     }
 
-    const issueKeys = [
-      ...refs.jiraKeys,
-      ...JiraClient.extractIssueKeys(commit.message),
-      ...JiraClient.extractIssueKeys(prBody)
-    ];
+    const issueKeys = collectTraceJiraKeys({
+      commitMessage: commit.message,
+      prBody,
+      codeSnippet,
+      patchExcerpt: timeline.introducingDiffSummary?.patchExcerpt,
+      blameCommitMessages,
+      seedTexts
+    });
     const uniqueIssues = [...new Set(issueKeys)];
 
     const slack = await this.resolveSlackClient();
@@ -812,6 +820,24 @@ export class DecisionArchaeologyEngine {
     }
   }
 
+  private async collectBlameCommitMessages(
+    coords: RepoCoordinates,
+    blameLines: BlameLine[]
+  ): Promise<string[]> {
+    const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))].slice(0, 8);
+    const messages = await Promise.all(
+      uniqueShas.map(async (sha) => {
+        try {
+          const detail = await this.fetchCommitDetail(coords, sha);
+          return detail.message;
+        } catch {
+          return undefined;
+        }
+      })
+    );
+    return messages.filter((message): message is string => Boolean(message?.trim()));
+  }
+
   private async resolveSlackClient(): Promise<SlackClient | undefined> {
     if (this.options.slackClient) {
       return this.options.slackClient;
@@ -910,6 +936,24 @@ function mapPrComments(comments: PullRequestComment[]): DecisionReview[] {
     createdAt: comment.createdAt,
     kind: comment.path ? "review" : "conversation"
   }));
+}
+
+function collectTraceJiraKeys(options: {
+  commitMessage?: string;
+  prBody?: string;
+  codeSnippet?: string;
+  patchExcerpt?: string;
+  blameCommitMessages?: string[];
+  seedTexts?: string[];
+}): string[] {
+  return collectJiraKeysFromText(
+    options.commitMessage,
+    options.prBody,
+    options.codeSnippet,
+    options.patchExcerpt,
+    ...(options.blameCommitMessages ?? []),
+    ...(options.seedTexts ?? [])
+  );
 }
 
 function parseReferences(text: string): { prNumbers: number[]; jiraKeys: string[] } {

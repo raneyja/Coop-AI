@@ -3,7 +3,8 @@ import { JiraClient, type JiraIssue } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
-import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
+import { buildRepoSearchTerms } from "./docSearchQuery";
+import { shouldFetchRepoWideIntegrations, shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
 export type JiraSearchTicket = {
   key: string;
@@ -23,8 +24,8 @@ export type JiraSearchContext = {
   issueKeyHits?: string[];
   /** Issue keys discovered in recent commit messages or PR titles for this repo. */
   repoKeyHits?: string[];
-  /** How issues were matched: text (Jira mentions repo), git (keys in commits/PRs), key (user-supplied), none. */
-  matchStrategy?: "text" | "git" | "key" | "none";
+  /** How issues were matched: text (Jira mentions repo), git (keys in commits/PRs), key (user-supplied), cross-tool, none. */
+  matchStrategy?: "text" | "git" | "key" | "cross-tool" | "none";
   /** Human-readable note when fallback search strategies were used. */
   searchNote?: string;
   error?: string;
@@ -64,7 +65,7 @@ export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
   if (request.params.integrationProvider === "jira") {
     return true;
   }
-  if (shouldFetchRepoWideIntegrations(request)) {
+  if (shouldFetchTraceDecisionDocIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {
@@ -74,25 +75,25 @@ export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
 }
 
 export function buildRepoJql(owner: string | undefined, repo: string | undefined): string | undefined {
-  const repoName = repo?.trim();
-  if (!repoName) {
+  const terms = buildRepoSearchTerms(owner, repo);
+  if (terms.length === 0) {
     return undefined;
   }
-  const clauses: string[] = [];
-  const ownerName = owner?.trim();
-  if (ownerName) {
-    const full = `${ownerName}/${repoName}`;
-    clauses.push(`text ~ "${escapeJqlString(full)}"`);
-    clauses.push(`text ~ "${escapeJqlString(`github:${full}`)}"`);
+  const clauses = new Set<string>();
+  for (const term of terms) {
+    clauses.add(`text ~ "${escapeJqlString(term)}"`);
+    clauses.add(`summary ~ "${escapeJqlString(term)}"`);
   }
-  clauses.push(`text ~ "${escapeJqlString(repoName)}"`);
-  clauses.push(`summary ~ "${escapeJqlString(repoName)}"`);
-  const repoSlug = repoName.replace(/_/g, "-");
-  if (repoSlug.toLowerCase() !== repoName.toLowerCase()) {
-    clauses.push(`text ~ "${escapeJqlString(repoSlug)}"`);
-    clauses.push(`summary ~ "${escapeJqlString(repoSlug)}"`);
+  return `(${[...clauses].join(" OR ")}) ORDER BY updated DESC`;
+}
+
+export function buildIssueKeysJql(keys: string[]): string | undefined {
+  const normalized = [...new Set(keys.map((key) => key.toUpperCase()))];
+  if (normalized.length === 0) {
+    return undefined;
   }
-  return `(${clauses.join(" OR ")}) ORDER BY updated DESC`;
+  const list = normalized.map((key) => `"${key}"`).join(", ");
+  return `key in (${list}) ORDER BY updated DESC`;
 }
 
 export function collectJiraKeysFromText(...chunks: Array<string | undefined>): string[] {
@@ -145,6 +146,10 @@ export async function fetchJiraSearchContext(options: {
   owner?: string;
   repo?: string;
   queryText?: string;
+  activeFile?: string;
+  contextText?: string[];
+  /** Titles/excerpts from Confluence, Notion, or other doc integrations for cross-tool key discovery. */
+  crossToolText?: string[];
   limit?: number;
   codeHostRouter?: CodeHostRouter;
   codeHostConnected?: boolean;
@@ -161,11 +166,14 @@ export async function fetchJiraSearchContext(options: {
   }
 
   const queryText = options.queryText ?? "";
-  const issueKeys = JiraClient.extractIssueKeys(queryText);
+  const contextKeys = collectJiraKeysFromText(...(options.contextText ?? []), options.activeFile);
+  const crossToolKeys = collectJiraKeysFromText(...(options.crossToolText ?? []));
+  const queryKeys = JiraClient.extractIssueKeys(queryText);
+  const discoveredKeys = new Set([...queryKeys, ...contextKeys, ...crossToolKeys]);
   const issuesByKey = new Map<string, JiraIssue>();
   const limit = options.limit ?? 20;
 
-  for (const key of issueKeys) {
+  for (const key of discoveredKeys) {
     await addIssueByKey(client, issuesByKey, key);
   }
 
@@ -184,13 +192,12 @@ export async function fetchJiraSearchContext(options: {
     }
   }
 
-  let repoKeyHits: string[] | undefined;
   const owner = options.owner?.trim();
   const repo = options.repo?.trim();
+  let repoKeyHits: string[] | undefined;
   const shouldScanGit =
-    Boolean(owner && repo && options.codeHostRouter && options.codeHostConnected) &&
-    issueKeys.length === 0 &&
-    (textSearchCount === 0 || wantsRepoLinkedJiraDiscovery(queryText));
+    textSearchCount === 0 &&
+    Boolean(owner && repo && options.codeHostRouter && options.codeHostConnected);
 
   if (shouldScanGit && owner && repo && options.codeHostRouter) {
     repoKeyHits = await collectJiraKeysFromRepoActivity({
@@ -199,7 +206,23 @@ export async function fetchJiraSearchContext(options: {
       repo
     });
     for (const key of repoKeyHits) {
+      discoveredKeys.add(key);
       await addIssueByKey(client, issuesByKey, key);
+    }
+  }
+
+  const issueKeys = [...discoveredKeys];
+  const keysJql = buildIssueKeysJql(issueKeys);
+  if (keysJql && textSearchCount === 0 && issuesByKey.size < limit) {
+    try {
+      const keyHits = await client.searchIssues(keysJql, limit);
+      for (const issue of keyHits) {
+        issuesByKey.set(issue.key, issue);
+      }
+    } catch (error) {
+      if (!searchError) {
+        searchError = error instanceof Error ? error.message : "Jira search failed.";
+      }
     }
   }
 
@@ -213,12 +236,20 @@ export async function fetchJiraSearchContext(options: {
     matchStrategy = "git";
     searchNote =
       "Tickets below were found via Jira issue keys referenced in recent commits or pull requests for this repository.";
+  } else if (crossToolKeys.length > 0 && issuesByKey.size > 0) {
+    matchStrategy = "cross-tool";
+    searchNote =
+      "Tickets below were found via Jira issue keys referenced in attached Confluence or Notion pages.";
+  } else if (contextKeys.length > 0 && issuesByKey.size > 0) {
+    matchStrategy = "key";
+    searchNote =
+      "Tickets below were found via Jira issue keys referenced in the active file or editor context.";
   } else if (issueKeys.length > 0 && issuesByKey.size > 0) {
     matchStrategy = "key";
   } else if (textSearchCount === 0 && issuesByKey.size === 0 && jql && !searchError) {
     searchNote =
       `No Jira tickets mention ${repoQuery ?? "this repository"} in summary or description, ` +
-      "and no issue keys were found in recent git history. " +
+      "and no issue keys were found in recent git history or open files. " +
       "Link work by adding the repo slug to ticket text (e.g. github:owner/repo) or reference keys in commits (e.g. COOP-101). " +
       "Ask about a specific key with `/jira COOP-101`.";
   }

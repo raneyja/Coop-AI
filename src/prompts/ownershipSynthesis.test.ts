@@ -133,6 +133,41 @@ test("ownership synthesis omits outreach draft and includes pathEvolution guidan
   assert.ok(!prompt.includes("Suggested outreach draft"));
 });
 
+test("ownership synthesis cites Slack presence when discussions are empty", () => {
+  const reportWithPresence: OwnershipReport = {
+    ...report,
+    scores: [
+      {
+        owner: "alice",
+        score: 85,
+        tier: "primary",
+        commitCount: 12,
+        presence: { label: "Active" }
+      }
+    ]
+  };
+  const formatted = formatOwnershipReportForPrompt(reportWithPresence, { messages: [] });
+  assert.ok(formatted.includes("[Sources: Slack presence]"));
+  assert.ok(!formatted.includes("[Sources: Slack discussions]"));
+
+  const prompt = buildOwnershipSynthesisUserPrompt({
+    report: reportWithPresence,
+    file: report.path,
+    slackSearch: { messages: [] }
+  });
+  assert.ok(prompt.includes("## Slack citation guidance"));
+  assert.ok(prompt.includes("[Sources: Slack presence]"));
+  assert.ok(prompt.includes("do not cite `[Sources: Slack discussions]`"));
+  const checklistStart = prompt.indexOf("## Required **Sources** bullets");
+  const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
+  const checklistSection = prompt.slice(checklistStart, checklistEnd);
+  assert.equal(
+    (checklistSection.match(/\[Sources: Slack presence\]/g) ?? []).length,
+    1,
+    "expected one Slack presence checklist bullet"
+  );
+});
+
 console.log(`\nownershipSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

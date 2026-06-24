@@ -6,6 +6,9 @@ import {
   appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  appendSupplementarySourceCitationGuardrails,
+  appendNarrativeCitationInstructions,
+  supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES,
   EVIDENCE_ENRICHMENT_RULES
 } from "./evidenceSynthesis";
@@ -20,6 +23,7 @@ import {
   listOwnershipSourcesChecklist,
   ownershipSourceLabelCodeowners,
   ownershipSourceLabelGitHub,
+  ownershipSourceLabelSlack,
   ownershipSourceLabelSlackDiscussions,
   ownershipTierLabel
 } from "./ownershipSourceLabels";
@@ -38,7 +42,7 @@ Synthesize a response that:
 5. Recommends knowledge transfer targets (who should learn this)
 
 Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
-Distinguish code authors from reviewers. Cite evidence using exact \`[Sources: …]\` labels.
+Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -80,8 +84,16 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push(formatOwnershipReportForPrompt(report, input.slackSearch));
   lines.push("");
   appendCitationKeysSection(lines, listOwnershipSourceLabels(report, input.slackSearch));
-  appendSourcesChecklistSection(lines, listOwnershipSourcesChecklist(report, input.slackSearch));
+  const sourcesChecklist = listOwnershipSourcesChecklist(report, input.slackSearch);
+  const citationKeys = listOwnershipSourceLabels(report, input.slackSearch);
+  appendSourcesChecklistSection(lines, sourcesChecklist);
+  appendNarrativeCitationInstructions(lines);
+  appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
+    ownershipSourceLabelSlackDiscussions(),
+    ...supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
+  ]);
   appendEvidenceQualityInstructions(lines);
+  appendOwnershipSlackCitationGuidance(lines, report, input.slackSearch);
   appendEvidenceEnrichmentInstructions(lines);
   appendPathEvolutionGuidance(lines, report.pathEvolution);
   if (repoWide) {
@@ -97,6 +109,23 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+function appendOwnershipSlackCitationGuidance(
+  lines: string[],
+  report: OwnershipReport,
+  slackSearch?: SlackSearchEvidence
+): void {
+  const hasPresence = report.scores.some((score) => score.presence);
+  const hasDiscussions = (slackSearch?.messages?.length ?? 0) > 0;
+  if (!hasPresence || hasDiscussions) {
+    return;
+  }
+  lines.push("## Slack citation guidance");
+  lines.push(
+    `- Cite \`${ownershipSourceLabelSlack()}\` for owner availability/active status — do not cite \`${ownershipSourceLabelSlackDiscussions()}\` when no discussion messages were returned.`
+  );
+  lines.push("");
 }
 
 function appendMentionScopeSection(lines: string[], input: OwnershipSynthesisInput): void {
@@ -153,6 +182,17 @@ export function formatOwnershipReportForPrompt(
     );
   } else {
     sections.push("### Ownership scores\nNo scored owners identified.");
+  }
+
+  const presenceScores = report.scores.filter((score) => score.presence);
+  if (presenceScores.length > 0 && !slackSearch?.messages?.length) {
+    sections.push(
+      `### ${ownershipSourceLabelSlack()}\n` +
+        presenceScores
+          .slice(0, 10)
+          .map((score) => `- @${score.owner}: ${score.presence!.label}`)
+          .join("\n")
+    );
   }
 
   const riskFlags = Object.entries(report.risk)

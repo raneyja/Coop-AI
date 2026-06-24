@@ -41,7 +41,9 @@ export class ModelRouter {
     const messages: ChatRequestMessage[] = [
       {
         role: "system",
-        content: `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase)}`
+        content: `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
+          activeFile: request.context?.file
+        })}`
       },
       ...request.history.map((entry) => ({
         role: entry.role,
@@ -117,7 +119,9 @@ export class ModelRouter {
     const userContent = buildUserMessageWithContext(request.message, request.context);
     const systemContent = extraSystemPrompt
       ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${extraSystemPrompt}`
-      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase)}`;
+      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
+          activeFile: request.context?.file
+        })}`;
 
     const messages: ChatRequestMessage[] = [
       { role: "system", content: systemContent },

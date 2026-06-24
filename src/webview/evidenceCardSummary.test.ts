@@ -9,7 +9,8 @@ import {
   summarizeBlastRadius,
   summarizeDecisionTimeline,
   summarizeIntegrationSearch,
-  summarizeOwnershipReport
+  summarizeOwnershipReport,
+  summarizeRepoSummary
 } from "./evidenceCardSummary";
 
 let passed = 0;
@@ -127,6 +128,25 @@ test("decision summary uses evolution and rationale ranking", () => {
   assert.equal(commitSource?.relevance, "supporting");
   assert.equal(prSource?.relevance, "direct");
   assert.match(commitSource?.contribution ?? "", /Introducing commit changed 3 files/i);
+});
+
+test("commit-only trace with good message stays weak without cross-tool evidence", () => {
+  const timeline: DecisionTimeline = {
+    file: "src/server/githubAppApi.ts",
+    originalCommit: {
+      sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      author: "eve",
+      date: "2026-05-01T10:00:00Z",
+      message: "Add robust GitHub App API validation helpers for trace decision tests"
+    },
+    alternatives: [],
+    chronology: [{ date: "2026-05-01", actor: "eve", event: "Code originally introduced", evidence: "commit" }],
+    warnings: ["No linked pull request found for the introducing commit."],
+    completeness: "minimal"
+  };
+
+  const summary = summarizeDecisionTimeline(timeline);
+  assert.equal(summary.quality, "weak");
 });
 
 test("commit-only rationale adds limitation", () => {
@@ -290,6 +310,58 @@ test("weak trace dedupes timeline warning into limitations", () => {
 
   const summary = summarizeDecisionTimeline(timeline);
   assert.equal(summary.limitations.filter((line) => /pull request/i.test(line)).length, 1);
+});
+
+test("repo summary reaches strong without manifest when anchors and Notion hits exist", () => {
+  const summary = summarizeRepoSummary(
+    {
+      entryFiles: [{ path: "src/extension.ts" }],
+      notion: {
+        pages: [{ id: "1", title: "Architecture Overview", url: "https://notion.example/arch" }]
+      }
+    },
+    "coop-ai",
+    "extension"
+  );
+  assert.equal(summary.quality, "strong");
+  assert.ok(
+    !summary.limitations.some((line) => /Confluence and Jira architecture context were not attached/i.test(line))
+  );
+  assert.ok(summary.sourceContributions.some((entry) => entry.provider === "notion"));
+});
+
+test("repo summary counts Slack and Teams in external integration signals", () => {
+  const summary = summarizeRepoSummary(
+    {
+      entryFiles: [{ path: "package.json" }],
+      slack: {
+        messages: [{ ts: "1", text: "Discussed rollout", channelId: "C1", channelName: "eng" }]
+      },
+      teams: {
+        messages: [{ id: "1", body: "Teams rollout thread", createdAt: "2026-01-01T00:00:00Z" }]
+      }
+    },
+    "coop-ai",
+    "extension"
+  );
+  assert.match(summary.primaryFinding ?? "", /2 external integration signal/i);
+  assert.ok(summary.sourceContributions.some((entry) => entry.provider === "slack"));
+  assert.ok(summary.sourceContributions.some((entry) => entry.provider === "teams"));
+});
+
+test("repo summary omits ownership and dependency card rows when not checklist-backed", () => {
+  const summary = summarizeRepoSummary(
+    {
+      entryFiles: [{ path: "src/extension.ts" }],
+      relatedOwnership: { owner: "alice", path: "src/extension.ts" },
+      dependencyGraph: { edgeCount: 42 }
+    },
+    "coop-ai",
+    "extension"
+  );
+  assert.ok(
+    !summary.sourceContributions.some((entry) => /Ownership signals|Dependency graph/i.test(entry.label))
+  );
 });
 
 const total = passed + failed;

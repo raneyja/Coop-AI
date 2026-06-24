@@ -54,5 +54,13 @@ export function listOwnershipSourcesChecklist(
   report: OwnershipReport,
   slackSearch?: { messages?: unknown[]; error?: string }
 ): string[] {
-  return buildSourcesChecklistFromKeys(listOwnershipSourceLabels(report, slackSearch));
+  const extra: string[] = [];
+  const hasPresence = report.scores.some((score) => score.presence);
+  const hasDiscussions = (slackSearch?.messages?.length ?? 0) > 0;
+  if (hasPresence && !hasDiscussions) {
+    extra.push(
+      `${ownershipSourceLabelSlack()} — Slack presence signals show owner availability; cite this label for active/away status (no Slack discussion messages were found).`
+    );
+  }
+  return buildSourcesChecklistFromKeys(listOwnershipSourceLabels(report, slackSearch), extra);
 }

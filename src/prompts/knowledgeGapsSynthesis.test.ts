@@ -111,6 +111,20 @@ test("knowledge-gaps synthesis flags limited evidence when scan missing", () => 
   assert.ok(prompt.includes("No automated scan attached"));
 });
 
+test("knowledge-gaps synthesis frames zero-gap scan with attached docs in response contract", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [], foundGaps: 0 } },
+    confluence: {
+      pages: [{ id: "1", title: "Coop AI — Architecture Overview", updated: "2026-01-01" }]
+    },
+    file: "src/server/githubAppApi.ts",
+    owner: "raneyja",
+    repo: "Coop-AI"
+  });
+  assert.ok(prompt.includes("Automated scan found no structured gaps in this pass; attached doc review suggests"));
+  assert.ok(prompt.includes("do not contradict the zero-gap scan"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

@@ -11,6 +11,9 @@ import {
   appendCitationKeysSection,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  appendSupplementarySourceCitationGuardrails,
+  appendNarrativeCitationInstructions,
+  supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import {
@@ -112,18 +115,31 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
       input.teams
     )
   );
-  appendSourcesChecklistSection(
-    lines,
-    listKnowledgeGapsSourcesChecklist(
-      input.evidence,
-      input.confluence,
-      input.jira,
-      input.slack,
-      input.notion,
-      input.googleDocs,
-      input.teams
-    )
+  const citationKeys = listKnowledgeGapsSourceLabels(
+    input.evidence,
+    input.confluence,
+    input.jira,
+    input.slack,
+    input.notion,
+    input.googleDocs,
+    input.teams
   );
+  const sourcesChecklist = listKnowledgeGapsSourcesChecklist(
+    input.evidence,
+    input.confluence,
+    input.jira,
+    input.slack,
+    input.notion,
+    input.googleDocs,
+    input.teams
+  );
+  appendSourcesChecklistSection(lines, sourcesChecklist);
+  appendNarrativeCitationInstructions(lines);
+  appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
+    knowledgeGapsSourceLabelOwnership(),
+    knowledgeGapsSourceLabelDependencies(),
+    ...supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
+  ]);
   appendEvidenceQualityInstructions(lines);
   appendKnowledgeGapsResponseContract(lines, input);
   lines.push(
@@ -200,9 +216,24 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
     );
   }
 
-  lines.push(
-    "- Summary must acknowledge Notion/Confluence/Google Docs hits when present and cite scan gaps verbatim — never claim zero documentation when Notion pages are attached."
-  );
+  const scanGapCount = scanGaps.length;
+  const hasDocHits =
+    Boolean(input.notion?.pages?.length) ||
+    Boolean(input.confluence?.pages?.length) ||
+    Boolean(input.googleDocs?.documents?.length);
+  if (scanGapCount === 0 && hasDocHits) {
+    lines.push(
+      '- **Summary** must open: "Automated scan found no structured gaps in this pass; attached doc review suggests…" — summarize doc-review follow-ups; do not contradict the zero-gap scan or claim the scan reported documentation gaps.'
+    );
+  } else if (scanGapCount === 0) {
+    lines.push(
+      "- **Summary** should note the scan found no structured gaps in this pass when no doc pages are attached."
+    );
+  } else {
+    lines.push(
+      "- Summary must acknowledge Notion/Confluence/Google Docs hits when present and cite scan gaps verbatim — never claim zero documentation when Notion pages are attached."
+    );
+  }
   lines.push("");
 }
 

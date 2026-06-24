@@ -122,7 +122,7 @@ export function listBlastRadiusSourceLabels(evidence: BlastRadiusEvidence): stri
   return labels;
 }
 
-function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean {
+export function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean {
   if (evidence.graphMeta?.lightningEnabled === false) {
     return true;
   }
@@ -135,16 +135,18 @@ function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean {
 }
 
 export function listBlastRadiusSourcesChecklist(evidence: BlastRadiusEvidence): string[] {
-  const extra: string[] = [];
+  const dependencyNotes: string[] = [];
   if (hasPartialIndexCoverage(evidence)) {
-    extra.push(
-      `${blastRadiusSourceLabelDependencies()} — Index coverage is partial; dependency impact may be incomplete.`
-    );
+    dependencyNotes.push("Index coverage is partial; dependency impact may be incomplete.");
   }
   if (!evidence.directDependents?.length && !evidence.transitiveDependents?.length) {
-    extra.push(
-      `${blastRadiusSourceLabelDependencies()} — Impact unverified: no dependents found in index. Do not claim zero impact; state evidence is missing.`
+    dependencyNotes.push(
+      "Impact unverified: no dependents found in index. Do not claim zero impact; state evidence is missing."
     );
+  }
+  const extra: string[] = [];
+  if (dependencyNotes.length > 0) {
+    extra.push(`${blastRadiusSourceLabelDependencies()} — ${dependencyNotes.join(" ")}`);
   }
   return buildSourcesChecklistFromKeys(listBlastRadiusSourceLabels(evidence), extra);
 }

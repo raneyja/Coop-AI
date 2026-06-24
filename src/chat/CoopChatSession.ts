@@ -183,6 +183,10 @@ import {
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import {
+  buildTraceDecisionSearchSeeds,
+  mergeTraceDecisionIntegrationEvidence
+} from "../context/traceDecisionSearch";
+import {
   isQuickActionBlocked,
   quickActionBlockedMessage
 } from "../context/quickActionScope";
@@ -202,6 +206,7 @@ import {
   type LocalFileContextPayload
 } from "../context/localFileContext";
 import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../context/localContextMerge";
+import { localFilesFromContextData } from "../context/localFileContext";
 import {
   readActiveEditorFileForChat,
   pickEditorForContext,
@@ -1622,6 +1627,7 @@ export class CoopChatSession {
     result: ContextFetchResult,
     request: ContextFetchRequest
   ): Promise<ContextFetchResult> {
+    const contextText = await this.integrationContextText(result, request);
     return mergeIntegrationChatContext({
       result,
       request,
@@ -1629,9 +1635,37 @@ export class CoopChatSession {
       codeHostRouter: this.options.codeHostRouter,
       owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
       repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
+      activeFile: request.params.file,
+      contextText,
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected()
     });
+  }
+
+  private async integrationContextText(
+    result: ContextFetchResult,
+    request: ContextFetchRequest
+  ): Promise<string[]> {
+    const fromBundle = localFilesFromContextData(result.data).map((file) => file.content);
+    if (fromBundle.length > 0) {
+      return fromBundle;
+    }
+
+    const params = request.params;
+    if (!hasLocalDiskContext(params) || !params.file) {
+      return [];
+    }
+
+    const local = await readLocalWorkspaceFiles({
+      file: params.file,
+      fileSource: params.fileSource,
+      openEditors: request.intent.context.openEditors,
+      lines: params.lines,
+      resolveAbsolutePath: resolveLocalAbsolutePath,
+      maxFiles: 1,
+      maxBytesPerFile: 20_000
+    });
+    return local?.files.map((file) => file.content) ?? [];
   }
 
   private async tryFetchLocalFileContext(
@@ -2358,7 +2392,7 @@ export class CoopChatSession {
     return this.isCodeHostProviderConnected(this.preferences.defaultCodeHost);
   }
 
-  private isCodeHostProviderConnected(provider: CodeHostProviderPreference): boolean {
+  private isCodeHostProviderConnected(provider: import("./types").CodeHostProviderPreference): boolean {
     switch (provider) {
       case "gitlab":
         return this.preferences.hasGitLabToken || this.preferences.hasGitLabAppInstalled;
@@ -2458,6 +2492,7 @@ export class CoopChatSession {
     };
     const repoId = repoIdFromCoordinates(coords);
     const candidatePaths = [
+      this.currentContext.file?.trim(),
       ...(evidence.entryFiles?.map((file) => file.path) ?? []),
       ...(evidence.manifest?.entryPoints ?? []),
       "README.md",
@@ -2465,15 +2500,23 @@ export class CoopChatSession {
       "package.json",
       "fastify.js",
       "src/index.ts"
-    ].filter((path, index, list) => list.indexOf(path) === index);
+    ].filter((path): path is string => Boolean(path?.trim()))
+      .filter((path, index, list) => list.indexOf(path) === index);
 
+    const activeFile = this.currentContext.file?.trim();
     let bestDependents = evidence.dependencyGraph?.directDependents ?? [];
     let bestEntry = evidence.dependencyGraph?.entryFile;
     let source = evidence.dependencyGraph?.source;
+    let activeFileDependents: string[] | undefined;
+    let activeFileSource: string | undefined;
 
     for (const path of candidatePaths.slice(0, 6)) {
       try {
         const result = await this.options.indexBackend.dependents(repoId, path);
+        if (activeFile && path === activeFile) {
+          activeFileDependents = result.dependents;
+          activeFileSource = result.source;
+        }
         if (result.dependents.length > bestDependents.length) {
           bestDependents = result.dependents;
           bestEntry = path;
@@ -2482,6 +2525,12 @@ export class CoopChatSession {
       } catch {
         // try next entry path
       }
+    }
+
+    if (activeFile && activeFileDependents) {
+      bestDependents = activeFileDependents;
+      bestEntry = activeFile;
+      source = activeFileSource ?? source;
     }
 
     if (bestDependents.length === 0 && !evidence.dependencyGraph?.edgeCount) {
@@ -2646,11 +2695,19 @@ export class CoopChatSession {
     if (!timeline) {
       return undefined;
     }
-    return {
+    const lineRange = timeline.lineRange ?? this.lineRangeFromContext(this.currentContext);
+    const codeSnippet = timeline.codeSnippet ?? this.selectedCodeSnippet();
+    const withContext = {
       ...timeline,
-      lineRange: timeline.lineRange ?? this.lineRangeFromContext(this.currentContext),
-      codeSnippet: timeline.codeSnippet ?? this.selectedCodeSnippet()
+      lineRange,
+      codeSnippet
     };
+    const seeds = buildTraceDecisionSearchSeeds(
+      withContext,
+      this.currentContext.file ?? timeline.file,
+      codeSnippet
+    );
+    return mergeTraceDecisionIntegrationEvidence(withContext, this.lastContextBundle, seeds);
   }
 
   private async continueChatAfterContext(
@@ -3033,7 +3090,9 @@ export class CoopChatSession {
           context: {
             owner: this.currentContext.owner,
             repo: this.currentContext.repo,
-            branch: this.currentContext.branch
+            branch: this.currentContext.branch,
+            file:
+              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined
           },
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,

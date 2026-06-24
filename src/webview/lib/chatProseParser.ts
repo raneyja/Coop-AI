@@ -24,6 +24,7 @@ const CODE_FENCE_OPEN_RE = /^```/;
 const LIST_ITEM_RE = /^(\s*)(- |\* |(\d+)\.\s)(.*)$/;
 const CITATION_HEADER_RE = /^(\d+):(\d+):(.+)$/;
 const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
+const COOP_EVIDENCE_LINK_RE = /^\[([^\]]+)\]\(coop-evidence:\)/;
 const INLINE_URL_RE = /^https?:\/\/[^\s)]+/;
 const INLINE_SOURCE_CITATION_RE = /^\[Sources:\s*.+?\]/i;
 const INLINE_CODE_RE = /^`([^`\n]+)`/;
@@ -328,6 +329,17 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
 
   while (cursor < input.length) {
     const remaining = input.slice(cursor);
+
+    const evidenceLinkMatch = remaining.match(COOP_EVIDENCE_LINK_RE);
+    if (evidenceLinkMatch) {
+      flushText();
+      nodes.push({
+        type: "evidence-link",
+        label: evidenceLinkMatch[1]
+      });
+      cursor += evidenceLinkMatch[0].length;
+      continue;
+    }
 
     const mdLinkMatch = remaining.match(INLINE_LINK_RE);
     if (mdLinkMatch) {

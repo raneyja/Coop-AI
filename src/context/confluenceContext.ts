@@ -8,7 +8,7 @@ import { createConfluenceClientFromCredentials } from "../api/integrations/build
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildConfluenceCql, buildRepoOrQuery } from "./docSearchQuery";
-import { shouldFetchRepoWideIntegrations } from "./integrationFetchPolicy";
+import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
 export type ConfluenceSearchPage = {
   id: string;
@@ -44,7 +44,7 @@ export function shouldFetchConfluenceContext(request: ContextFetchRequest): bool
   if (request.params.integrationProvider === "confluence") {
     return true;
   }
-  if (shouldFetchRepoWideIntegrations(request)) {
+  if (shouldFetchTraceDecisionDocIntegrations(request)) {
     return true;
   }
   if (request.type !== "chat_context") {
@@ -58,6 +58,7 @@ export async function fetchConfluenceSearchContext(options: {
   owner?: string;
   repo?: string;
   limit?: number;
+  extraTerms?: string[];
 }): Promise<ConfluenceSearchContext> {
   const creds = await options.secrets.getCredentials();
   const auth = resolveConfluenceAuth(creds);
@@ -70,7 +71,7 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const cql = buildConfluenceCql(options.owner, options.repo);
+  const cql = buildConfluenceCql(options.owner, options.repo, options.extraTerms);
   if (!cql) {
     return {
       source: "confluence-search",

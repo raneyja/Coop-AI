@@ -47,6 +47,16 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("## Required response structure"));
   assert.ok(prompt.includes("**Architecture**"));
+  assert.ok(prompt.includes("**How the open file fits**"));
+  assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
+});
+
+test("comprehension use case requires active file section when activeFile is set", () => {
+  const prompt = systemPromptForUseCase("comprehension", { activeFile: "src/server/githubAppApi.ts" });
+  assert.ok(prompt.includes("**How the open file fits**"));
+  assert.ok(prompt.includes("Required for this response"));
+  assert.ok(prompt.includes("`src/server/githubAppApi.ts`"));
+  assert.ok(!prompt.includes("Omit entirely for repo-wide runs with no open file"));
 });
 
 test("knowledge_gaps use case requires grouped subsection structure", () => {

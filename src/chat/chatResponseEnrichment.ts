@@ -2,12 +2,14 @@ import type { QuickActionId } from "../webview/types";
 import type { IntegrationChatProvider } from "../chat/types";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
+  enrichIntegrationDocsResponse,
   enrichKnowledgeGapsResponse,
   extractConfluencePagesFromBundle,
   extractGoogleDocsFromBundle,
   extractJobScanGapsFromBundle,
   extractNotionPagesFromBundle
 } from "../prompts/knowledgeGapsEnrichment";
+import { enrichSourcesFooter, hasSourcesFooterSection } from "../prompts/sourcesFooterEnrichment";
 import {
   enrichOutOfScopeMentionsInResponse,
   resolveOutOfScopeMentionLabels
@@ -15,6 +17,8 @@ import {
 import {
   enrichTraceDecisionResponse
 } from "../prompts/decisionResponseEnrichment";
+import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
+import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
 import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
@@ -71,9 +75,11 @@ export function enrichChatResponseForAction(options: {
     });
   }
 
+  enriched = stripDisallowedNarrativeSourceCitations(enriched);
+
   switch (quickAction) {
     case "trace-decision":
-      return enrichTraceDecisionResponse({
+      enriched = enrichTraceDecisionResponse({
         content: enriched,
         userQuestion: options.userQuestion,
         contextBundle,
@@ -81,18 +87,51 @@ export function enrichChatResponseForAction(options: {
         fallbackTimeline: options.fallbackTimeline,
         isFollowUp: options.isTraceFollowUp
       });
+      break;
     case "knowledge-gaps": {
-      return enrichKnowledgeGapsResponse(enriched, {
+      enriched = enrichKnowledgeGapsResponse(enriched, {
         confluencePages: extractConfluencePagesFromBundle(contextBundle),
         notionPages: extractNotionPagesFromBundle(contextBundle),
         googleDocs: extractGoogleDocsFromBundle(contextBundle),
         jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
         activeFile
       });
+      break;
+    }
+    case "understand-repo":
+    case "blast-radius": {
+      const docContext = {
+        confluencePages: extractConfluencePagesFromBundle(contextBundle),
+        notionPages: extractNotionPagesFromBundle(contextBundle),
+        googleDocs: extractGoogleDocsFromBundle(contextBundle),
+        activeFile
+      };
+      enriched = enrichIntegrationDocsResponse(enriched, docContext);
+      enriched = enrichCompactIntegrationDocs(enriched, docContext, {
+        mode: quickAction === "understand-repo" ? "understand-repo" : "blast-radius"
+      });
+      break;
     }
     default:
-      return enriched;
+      break;
   }
+
+  if (shouldEnrichSourcesFooter(options.quickAction, options.integrationProvider, enriched)) {
+    enriched = enrichSourcesFooter(enriched);
+  }
+
+  return enriched;
+}
+
+function shouldEnrichSourcesFooter(
+  quickAction: QuickActionId | undefined,
+  integrationProvider: IntegrationChatProvider | undefined,
+  content: string
+): boolean {
+  if (!quickAction && !integrationProvider) {
+    return false;
+  }
+  return hasSourcesFooterSection(content);
 }
 
 /** Plain-chat post-processing hook — out-of-scope @ attachments handled above. */

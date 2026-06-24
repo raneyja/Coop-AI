@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildIssueKeysJql,
   buildRepoJql,
   collectJiraKeysFromText,
   shouldFetchJiraContext,
@@ -44,6 +45,18 @@ test("buildRepoJql searches owner/repo and github prefix", () => {
   assert.ok(jql?.includes("ORDER BY updated DESC"));
 });
 
+test("buildRepoJql includes repo slug case variants", () => {
+  const jql = buildRepoJql("raneyja", "Coop-AI");
+  assert.ok(jql?.includes('text ~ "raneyja/Coop-AI"'));
+  assert.ok(jql?.includes('text ~ "raneyja/coop-ai"'));
+  assert.ok(jql?.includes('summary ~ "coop-ai"'));
+});
+
+test("buildIssueKeysJql searches by issue key", () => {
+  const jql = buildIssueKeysJql(["COOP-101", "coop-55"]);
+  assert.equal(jql, 'key in ("COOP-101", "COOP-55") ORDER BY updated DESC');
+});
+
 test("buildRepoJql returns undefined without repo", () => {
   assert.equal(buildRepoJql("acme", undefined), undefined);
 });
@@ -59,6 +72,19 @@ test("collectJiraKeysFromText deduplicates keys from commit messages", () => {
     "Follow-up for coop-101 and COOP-118"
   );
   assert.deepEqual(keys.sort(), ["COOP-101", "COOP-118"]);
+});
+
+test("collectJiraKeysFromText reads keys from confluence-style excerpts", () => {
+  const keys = collectJiraKeysFromText(
+    "ADR: GitHub App API (COOP-101)",
+    "See also COOP-55 for rollout plan"
+  );
+  assert.deepEqual(keys.sort(), ["COOP-101", "COOP-55"]);
+});
+
+test("buildIssueKeysJql deduplicates mixed-case keys", () => {
+  const jql = buildIssueKeysJql(["COOP-101", "coop-101", "COOP-55"]);
+  assert.equal(jql, 'key in ("COOP-101", "COOP-55") ORDER BY updated DESC');
 });
 
 test("shouldFetchJiraContext includes knowledge-gaps quick action", () => {

@@ -23,6 +23,7 @@ import {
   blastRadiusSourceLabelGoogleDocs,
   blastRadiusSourceLabelTeams,
   blastRadiusSourceLabelTests,
+  hasPartialIndexCoverage,
   listBlastRadiusSourceLabels,
   listBlastRadiusSourcesChecklist
 } from "./blastRadiusSourceLabels";
@@ -31,8 +32,12 @@ import {
   appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  appendSupplementarySourceCitationGuardrails,
+  appendNarrativeCitationInstructions,
+  supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
+import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
 
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
@@ -78,8 +83,23 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   lines.push("");
 
   appendCitationKeysSection(lines, listBlastRadiusSourceLabels(evidence));
-  appendSourcesChecklistSection(lines, listBlastRadiusSourcesChecklist(evidence));
+  const sourcesChecklist = listBlastRadiusSourcesChecklist(evidence);
+  const citationKeys = listBlastRadiusSourceLabels(evidence);
+  appendSourcesChecklistSection(lines, sourcesChecklist);
+  appendIntegrationDocsResponseContract(lines, {
+    confluencePages: evidence.confluenceSearch?.pages,
+    notionPages: evidence.notionSearch?.pages,
+    googleDocs: evidence.googleDocsSearch?.documents,
+    targetSection: "APIs & integrations"
+  });
+  appendNarrativeCitationInstructions(lines);
+  appendSupplementarySourceCitationGuardrails(
+    lines,
+    sourcesChecklist,
+    supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
+  );
   appendEvidenceQualityInstructions(lines);
+  appendBlastRadiusSummaryGuidance(lines, evidence);
   appendEvidenceEnrichmentInstructions(lines);
   if (evidence.ciWorkflows?.length) {
     lines.push(
@@ -100,6 +120,20 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
+  if (!hasPartialIndexCoverage(evidence)) {
+    return;
+  }
+  lines.push("## Summary guidance");
+  lines.push(
+    "- Open **Summary** with the partial index coverage caveat from `[Sources: Dependency graph]` before impact conclusions or **Top risk surfaces**."
+  );
+  lines.push(
+    "- Lower evidence strength when the dependency graph notes partial index coverage; do not treat listed dependents as exhaustive."
+  );
+  lines.push("");
 }
 
 function appendMentionScopeSection(lines: string[], input: BlastRadiusSynthesisInput): void {

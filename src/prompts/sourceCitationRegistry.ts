@@ -13,6 +13,11 @@ export function sourceCitationAnchor(artifactId: string, label: string): string 
   return `artifact-${artifactId}--${sourceCitationSlug(label)}`;
 }
 
+/** DOM id for the evidence Sources card shell (not a subsection). */
+export function evidenceArtifactAnchor(artifactId: string): string {
+  return `artifact-${artifactId}`;
+}
+
 export function extractSourceCitationInner(label: string): string {
   let trimmed = label.trim();
   if (trimmed.startsWith("`") && trimmed.endsWith("`")) {

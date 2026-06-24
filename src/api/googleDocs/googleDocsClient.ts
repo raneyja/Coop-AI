@@ -51,9 +51,35 @@ export class GoogleDocsClient {
     }
   }
 
+  public async searchDocumentsForTerms(terms: string[], limit = 20): Promise<GoogleDoc[]> {
+    return this.searchDocuments(terms.join(" OR "), limit);
+  }
+
   public async searchDocuments(query: string, limit = 20): Promise<GoogleDoc[]> {
+    const terms = splitDriveSearchTerms(query);
+    if (terms.length === 0) {
+      return [];
+    }
+    if (terms.length === 1) {
+      return this.searchDocumentsForTerm(terms[0]!, limit);
+    }
+
+    const seen = new Map<string, GoogleDoc>();
+    for (const term of terms) {
+      if (seen.size >= limit) {
+        break;
+      }
+      const hits = await this.searchDocumentsForTerm(term, limit - seen.size);
+      for (const doc of hits) {
+        seen.set(doc.id, doc);
+      }
+    }
+    return [...seen.values()].slice(0, limit);
+  }
+
+  private async searchDocumentsForTerm(term: string, limit: number): Promise<GoogleDoc[]> {
     const q = [
-      `fullText contains '${escapeDriveQuery(query)}'`,
+      `fullText contains '${escapeDriveQuery(term)}'`,
       "mimeType='application/vnd.google-apps.document'",
       "trashed=false"
     ].join(" and ");
@@ -113,4 +139,9 @@ export class GoogleDocsClient {
 
 function escapeDriveQuery(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+/** Drive fullText does not treat OR as boolean logic — search each term separately. */
+function splitDriveSearchTerms(query: string): string[] {
+  return [...new Set(query.split(/\s+OR\s+/i).map((term) => term.trim()).filter(Boolean))];
 }

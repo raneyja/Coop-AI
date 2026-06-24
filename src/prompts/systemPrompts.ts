@@ -6,7 +6,7 @@ import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
 import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
 import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
-import { GENERAL_CHAT_EVIDENCE_RULES } from "./evidenceSynthesis";
+import { GENERAL_CHAT_EVIDENCE_RULES, SOURCES_FOOTER_OUTPUT_RULE } from "./evidenceSynthesis";
 import { USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE } from "../chat/paperclipAttachments";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
@@ -51,8 +51,26 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Never alternate **Open question:** and **What to check:** as peer bullets without the subsection title directly above them.
 `;
 
-const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, string>> = {
-  comprehension: `
+const COMPREHENSION_ACTIVE_FILE_SECTION = `
+**How the open file fits**
+Keep this section brief (4-6 bullets max) — contextualize the open editor file within the repository. Do **not** replace repository-wide **Architecture** / **Key subsystems** with a file-only deep dive.
+- **Role** — what the file does in the overall architecture (1-2 sentences)
+- **Depends on** — direct imports or internal dependencies from ## Active file context or anchor content (max 5 paths)
+- **Used by** — direct dependents from dependency graph evidence (max 5 paths)
+- **Integration surface** — routes, HTTP handlers, or external APIs visible in anchor file content (omit if none)
+- **Owners** — primary owner when ownership evidence is scoped to this path (omit if none)`;
+
+function comprehensionResponseStructure(activeFile?: string): string {
+  const trimmed = activeFile?.trim();
+  const activeFileSection = trimmed
+    ? `${COMPREHENSION_ACTIVE_FILE_SECTION}
+
+Required for this response — the user has \`${trimmed}\` open in the editor.`
+    : `${COMPREHENSION_ACTIVE_FILE_SECTION}
+
+Include **only** when the user message ## Scope lists an active editor file. Omit entirely for repo-wide runs with no open file.`;
+
+  return `
 ## Required response structure
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
@@ -64,6 +82,7 @@ How major pieces connect; boundaries and data flow.
 
 **Key subsystems**
 One bullet per subsystem with supporting file paths.
+${activeFileSection}
 
 **Entry points**
 Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
@@ -78,7 +97,11 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 Numbered list of 2-4 onboarding or investigation actions.
 
 **Sources**
-Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`. Include Confluence/Jira/scan items when present in the bundle.`,
+${SOURCES_FOOTER_OUTPUT_RULE}`;
+}
+
+const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, string>> = {
+  comprehension: comprehensionResponseStructure(),
 
   decision_archaeology: `
 ## Required response structure
@@ -109,7 +132,7 @@ Who to ask; cite sources. Omit if none named in evidence.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`. Omit integrations that failed or returned no results — those are not listed in the checklist.
+${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed or returned no results.
 
 Follow-up turns: keep this structure but stay compact — often 4-8 sentences total when evidence is limited. Omit empty sections except **Summary** and **Sources**.`,
 
@@ -142,7 +165,7 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 One concrete outreach or review action.
 
 **Sources**
-Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`.`,
+${SOURCES_FOOTER_OUTPUT_RULE}`,
 
   blast_radius: `
 ## Required response structure
@@ -170,7 +193,7 @@ Name test files or suites to run (from evidence). Bullet list, max 6 items.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-One short bullet per checklist item — one sentence each on what the source contributed. Never repeat file paths already shown in the Sources card.`,
+${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
 
   knowledge_gaps: `
 ## Required response structure
@@ -224,7 +247,7 @@ Numbered list of 2-4 concrete actions.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-Include one bullet per checklist item — one sentence each. Each \`[Sources: …]\` label at most once. Include Confluence scan and job-scan items when present.`,
+${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when present.`,
 
   chat: `
 ## Required response structure
@@ -254,18 +277,23 @@ What the integration search did not cover or returned empty.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-Include one bullet for every item in the required checklist attached to the user message. Format: \`[Sources: …] — one sentence on what that source contributed\`.`
+${SOURCES_FOOTER_OUTPUT_RULE}`
 };
 
 function withOutputContract(
   prompt: string,
-  useCase: Exclude<UseCase, "inline_completion">
+  useCase: Exclude<UseCase, "inline_completion">,
+  structureOverride?: string
 ): string {
-  const structure = USE_CASE_STRUCTURE[useCase] ?? "";
+  const structure = structureOverride ?? USE_CASE_STRUCTURE[useCase] ?? "";
   return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
-export const COMPREHENSION_SYSTEM = withOutputContract(REPO_SUMMARY_EVIDENCE_SYSTEM, "comprehension");
+export function buildComprehensionSystem(activeFile?: string): string {
+  return withOutputContract(REPO_SUMMARY_EVIDENCE_SYSTEM, "comprehension", comprehensionResponseStructure(activeFile));
+}
+
+export const COMPREHENSION_SYSTEM = buildComprehensionSystem();
 
 export const DECISION_ARCHAEOLOGY_SYSTEM = withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology");
 
@@ -309,7 +337,14 @@ RULES:
 - Return ONLY the completion text. No markdown fences, no explanations.`
 };
 
-export function systemPromptForUseCase(useCase: UseCase): string {
+export type SystemPromptOptions = {
+  activeFile?: string;
+};
+
+export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
+  if (useCase === "comprehension" && options?.activeFile?.trim()) {
+    return buildComprehensionSystem(options.activeFile);
+  }
   return USE_CASE_PROMPTS[useCase] ?? GENERAL_CHAT_SYSTEM;
 }
 

@@ -4,6 +4,12 @@ import type { DecisionTimeline } from "../../types/decisionTimeline";
 import { getDecisionArchaeologyEngine } from "../../engines/decisionArchaeologyRegistry";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import {
+  hasLocalDiskContext,
+  readLocalWorkspaceFiles,
+  sliceFileContent
+} from "../../context/localFileContext";
+import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function traceDecision(context: FeatureExecutionContext) {
@@ -52,6 +58,7 @@ export async function traceDecision(context: FeatureExecutionContext) {
 
   if (engine && codeHost && file) {
     try {
+      const codeSnippet = await readTraceFileSnippet(context, file);
       const timeline = await engine.traceDecision({
         provider: codeHost.provider,
         owner: codeHost.owner,
@@ -60,7 +67,8 @@ export async function traceDecision(context: FeatureExecutionContext) {
         lineRange: params.lines
           ? { start: params.lines.start, end: params.lines.end }
           : undefined,
-        branch: params.branch
+        branch: params.branch,
+        codeSnippet
       });
 
       const data = {
@@ -204,4 +212,31 @@ function timelineSummaryMessage(timeline: DecisionTimeline): string {
     parts.push(`${timeline.warnings.length} warning(s)`);
   }
   return parts.length > 0 ? `Traced decision: ${parts.join(" · ")}` : "Decision trace complete with limited evidence.";
+}
+
+async function readTraceFileSnippet(
+  context: FeatureExecutionContext,
+  file: string
+): Promise<string | undefined> {
+  const params = context.request.params;
+  if (!hasLocalDiskContext(params)) {
+    return undefined;
+  }
+  try {
+    const local = await readLocalWorkspaceFiles({
+      file,
+      fileSource: params.fileSource,
+      openEditors: context.request.intent.context.openEditors,
+      lines: params.lines,
+      resolveAbsolutePath: resolveLocalAbsolutePath
+    });
+    const content = local?.files[0]?.content;
+    if (!content) {
+      return undefined;
+    }
+    const sliced = sliceFileContent(content, params.lines);
+    return sliced.content.slice(0, 4000);
+  } catch {
+    return undefined;
+  }
 }

@@ -9,7 +9,8 @@ import { shouldFetchTeamsContext } from "./teamsContext";
 import {
   REPO_WIDE_INTEGRATION_QUICK_ACTIONS,
   shouldFetchDiscussionIntegrations,
-  shouldFetchRepoWideIntegrations
+  shouldFetchRepoWideIntegrations,
+  shouldFetchTraceDecisionIntegrations
 } from "./integrationFetchPolicy";
 
 let passed = 0;
@@ -89,10 +90,10 @@ test("doc integrations do not auto-fetch on find-owner", () => {
   }
 });
 
-test("integrations do not auto-fetch on trace-decision without chat keywords", () => {
+test("integrations auto-fetch on trace-decision", () => {
   const traceRequest = request("trace-decision", "decision_history");
   for (const [, shouldFetch] of [...DOC_INTEGRATIONS, ...DISCUSSION_INTEGRATIONS]) {
-    assert.equal(shouldFetch(traceRequest), false);
+    assert.equal(shouldFetch(traceRequest), true);
   }
 });
 

@@ -83,6 +83,37 @@ export type DecisionRationaleRank = {
   label: string;
 };
 
+export type DecisionIntegrationSearch = {
+  jira?: {
+    issues: Array<{ key: string; summary: string; status: string; htmlUrl?: string }>;
+    error?: string;
+    matchStrategy?: string;
+  };
+  confluence?: {
+    pages: Array<{ id: string; title: string; excerpt?: string; htmlUrl: string }>;
+    error?: string;
+  };
+  notion?: {
+    pages: Array<{ id: string; title: string; url?: string }>;
+    error?: string;
+  };
+  googleDocs?: {
+    documents: Array<{ id: string; title: string; url?: string }>;
+    error?: string;
+  };
+  slack?: {
+    messages: Array<{ channelName?: string; userName?: string; text: string; permalink?: string }>;
+    error?: string;
+    query?: string;
+  };
+  teams?: {
+    messages: Array<{ text: string; fromUserName?: string }>;
+    error?: string;
+  };
+  seedJiraKeys?: string[];
+  seedSearchTerms?: string[];
+};
+
 export type DecisionTimeline = {
   file: string;
   targetLabel?: string;
@@ -106,6 +137,7 @@ export type DecisionTimeline = {
   slackThread?: DecisionSlackThread;
   teamsThread?: DecisionTeamsThread;
   jiraTickets?: DecisionJiraTicket[];
+  integrationSearch?: DecisionIntegrationSearch;
   chronology: ChronologyEvent[];
   warnings: string[];
   fallbackMessage?: string;
