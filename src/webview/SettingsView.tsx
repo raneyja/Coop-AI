@@ -67,6 +67,18 @@ type InboundMessage =
         error?: string;
         loading?: boolean;
       };
+    }
+  | {
+      type: "workspace:repos:state";
+      payload: {
+        repos: GithubRepoOption[];
+        selectedRepoIds: string[];
+        selectedCount: number;
+        limit: number | null;
+        loading?: boolean;
+        saving?: boolean;
+        error?: string;
+      };
     };
 
 const DEFAULT_PREFS: Preferences = {

@@ -335,10 +335,10 @@ test("repo summary counts Slack and Teams in external integration signals", () =
     {
       entryFiles: [{ path: "package.json" }],
       slack: {
-        messages: [{ ts: "1", text: "Discussed rollout", channelId: "C1", channelName: "eng" }]
+        messages: [{ text: "Discussed rollout", channelName: "eng" }]
       },
       teams: {
-        messages: [{ id: "1", body: "Teams rollout thread", createdAt: "2026-01-01T00:00:00Z" }]
+        messages: [{ text: "Teams rollout thread", fromUserName: "Alex" }]
       }
     },
     "coop-ai",

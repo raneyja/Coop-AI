@@ -3,6 +3,13 @@ import type { LocalSearchResult } from "../indexing/types";
 
 export type GraphEdgeSource = "scip" | "zoekt" | "heuristic" | "remote";
 
+export function asGraphEdgeSource(source: string | undefined): GraphEdgeSource {
+  if (source === "scip" || source === "zoekt" || source === "heuristic" || source === "remote") {
+    return source;
+  }
+  return "remote";
+}
+
 export type BlastRadiusDependentDetail = {
   path: string;
   depth: number;

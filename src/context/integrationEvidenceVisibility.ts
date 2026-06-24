@@ -10,7 +10,7 @@ export type IntegrationSearchEvidenceLike = {
 /** True when this integration was fetched and is connected (not a missing-credentials stub). */
 export function isIntegrationConnectedForSources(
   evidence: IntegrationSearchEvidenceLike | undefined | null
-): boolean {
+): evidence is IntegrationSearchEvidenceLike {
   if (!evidence) {
     return false;
   }
@@ -42,7 +42,7 @@ function integrationResultCount(evidence: IntegrationSearchEvidenceLike): number
 export function shouldIncludeIntegrationInSourcesChecklist(
   evidence: IntegrationSearchEvidenceLike | undefined | null
 ): boolean {
-  if (!isIntegrationConnectedForSources(evidence) || evidence?.error?.trim()) {
+  if (!evidence || !isIntegrationConnectedForSources(evidence) || evidence.error?.trim()) {
     return false;
   }
   return integrationResultCount(evidence) > 0;

@@ -8,7 +8,7 @@ import {
 import { clampSeatCountForPlan } from "./planGates";
 
 export type OrgPlan = "free" | "pro" | "enterprise";
-export type IndexStatus = "idle" | "queued" | "indexing" | "ready" | "error" | "disabled";
+export type IndexStatus = "idle" | "queued" | "indexing" | "cloning" | "ready" | "error" | "disabled";
 
 export type Organization = {
   id: string;

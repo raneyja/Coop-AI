@@ -1,8 +1,8 @@
 import type { ServerResponse } from "node:http";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
-import type { OrgPlan, OrgStore } from "./orgStore";
-import { isPlanAllowed, requireOrgPlan, resolveOrgPlanFromDb, type AuthContext } from "./authMiddleware";
+import type { OrgPlan, OrgStore, AuthContext } from "./orgStore";
+import { isPlanAllowed, requireOrgPlan, resolveOrgPlanFromDb } from "./authMiddleware";
 
 export const CODE_HOST_GITHUB_PLANS: OrgPlan[] = ["pro", "enterprise"];
 export const CODE_HOST_GITLAB_BITBUCKET_PLANS: OrgPlan[] = ["enterprise"];

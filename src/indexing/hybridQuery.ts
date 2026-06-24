@@ -1,4 +1,5 @@
 import { normalizeGraphRepoId } from "../engines/blastRadiusDependentsFallback";
+import type { GraphQueryApi, GraphQueryRequest } from "../api/graphQuery";
 import type { ContextFetchRequest, ContextFetchResult } from "../context/requestBatcher";
 import type { IndexBackend } from "./indexBackend";
 

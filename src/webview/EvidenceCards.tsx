@@ -39,7 +39,7 @@ import {
   knowledgeGapsSourceLabelSlack,
   knowledgeGapsSourceLabelTeams
 } from "../prompts/knowledgeGapsSourceLabels";
-import { groupDependentsByTopLevelFolder } from "../engines/blastRadiusDependentsFallback";
+import { groupDependentsByTopLevelFolder, asGraphEdgeSource } from "../engines/blastRadiusDependentsFallback";
 import {
   filterRepoSummaryInfraWarnings,
   repoSummarySourceLabelConfluence,
@@ -347,7 +347,7 @@ export function RepoSummaryEvidenceCard({
                 <ul className="space-y-1">
                   {evidence.teams.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.body.slice(0, 160)}
+                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 160)}
                     </li>
                   ))}
                 </ul>
@@ -556,24 +556,32 @@ export function BlastRadiusEvidenceCard({
   const codeDirectDetails = useMemo(() => {
     const fromDetails = detailEntries.filter((entry) => entry.depth === 1);
     if (fromDetails.length > 0) {
-      return fromDetails;
+      return fromDetails.map((entry) => ({
+        path: entry.path,
+        depth: entry.depth,
+        source: asGraphEdgeSource(entry.source)
+      }));
     }
     return (evidence.directDependents ?? []).map((path) => ({
       path,
       depth: 1,
-      source: evidence.graphMeta?.source ?? "remote"
+      source: asGraphEdgeSource(evidence.graphMeta?.source)
     }));
   }, [detailEntries, evidence.directDependents, evidence.graphMeta?.source]);
 
   const codeTransitiveDetails = useMemo(() => {
     const fromDetails = detailEntries.filter((entry) => entry.depth > 1);
     if (fromDetails.length > 0) {
-      return fromDetails;
+      return fromDetails.map((entry) => ({
+        path: entry.path,
+        depth: entry.depth,
+        source: asGraphEdgeSource(entry.source)
+      }));
     }
     return (evidence.transitiveDependents ?? []).map((path) => ({
       path,
       depth: 2,
-      source: evidence.graphMeta?.source ?? "remote"
+      source: asGraphEdgeSource(evidence.graphMeta?.source)
     }));
   }, [detailEntries, evidence.transitiveDependents, evidence.graphMeta?.source]);
 
@@ -988,7 +996,7 @@ export function BlastRadiusEvidenceCard({
                 <ul className="space-y-1">
                   {evidence.teamsSearch.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.body.slice(0, 200)}
+                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 200)}
                     </li>
                   ))}
                 </ul>
@@ -1384,7 +1392,7 @@ export function KnowledgeGapsEvidenceCard({
                 <ul className="space-y-2">
                   {teams.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.body.slice(0, 200)}
+                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 200)}
                     </li>
                   ))}
                 </ul>

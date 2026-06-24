@@ -1,5 +1,9 @@
 import type { BlastRadiusEvidence } from "../context/contextBundleEvidence";
-import { rankCodeDependentsByRisk } from "../engines/blastRadiusDependentsFallback";
+import {
+  rankCodeDependentsByRisk,
+  asGraphEdgeSource,
+  type BlastRadiusDependentDetail
+} from "../engines/blastRadiusDependentsFallback";
 import {
   appendMentionScopePromptSection,
   OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE,
@@ -349,7 +353,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
           : evidence.teamsSearch.messages?.length
             ? evidence.teamsSearch.messages
                 .slice(0, 8)
-                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.body.slice(0, 160)}`)
+                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
                 .join("\n")
             : "- No matching Teams messages")
     );
@@ -369,13 +373,14 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   return sections.join("\n\n");
 }
 
-function codeDependentDetailsFromEvidence(
-  evidence: BlastRadiusEvidence
-): Array<{ path: string; depth: number; source: string }> {
+function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastRadiusDependentDetail[] {
   if (evidence.dependentDetails?.length) {
-    return evidence.dependentDetails;
+    return evidence.dependentDetails.map((entry) => ({
+      ...entry,
+      source: asGraphEdgeSource(entry.source)
+    }));
   }
-  const source = evidence.graphMeta?.source ?? "remote";
+  const source = asGraphEdgeSource(evidence.graphMeta?.source);
   return [
     ...(evidence.directDependents ?? []).map((path) => ({ path, depth: 1, source })),
     ...(evidence.transitiveDependents ?? []).map((path) => ({ path, depth: 2, source }))

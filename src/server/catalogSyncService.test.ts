@@ -3,8 +3,8 @@ import { discoverCatalogRepoIds } from "./catalogSyncService";
 
 async function testDiscoverGitLabRepoIdsShape() {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (input: RequestInfo | URL) => {
-    const url = String(input);
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.includes("/projects?")) {
       return new Response(
         JSON.stringify([

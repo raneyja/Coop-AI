@@ -20,7 +20,8 @@ import type {
   KnowledgeGapsEvidence,
   NotionSearchEvidence,
   RepoSummaryEvidence,
-  SlackSearchEvidence
+  SlackSearchEvidence,
+  TeamsSearchEvidence
 } from "../../context/contextBundleEvidence";
 import { ChatMessageActions } from "./ChatMessageActions";
 import { ChatThinkingIndicator } from "./ChatThinkingIndicator";
@@ -318,7 +319,7 @@ export function renderInlineArtifact(
   _onDismiss: () => void,
   actionContext: EvidenceActionContext,
   conflicts?: ConflictSummary[]
-): React.ReactElement {
+): React.ReactElement | null {
   return renderArtifact(artifact, actionContext, conflicts);
 }
 

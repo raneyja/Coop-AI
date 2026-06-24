@@ -64,7 +64,7 @@ function isDisabled(action: ActionConfig, context: RepoContext): boolean {
 
 function isDimmed(action: ActionConfig, context: RepoContext): boolean {
   if (!context.file) {
-    return requiresFileTarget(action.id);
+    return requiresFileTarget(action);
   }
   if (action.id === "trace-decision") {
     return !context.selectedLines;

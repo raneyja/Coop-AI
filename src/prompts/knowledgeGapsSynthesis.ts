@@ -368,7 +368,7 @@ function formatKnowledgeGapsForPrompt(
           : teams.messages?.length
             ? teams.messages
                 .slice(0, 10)
-                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.body.slice(0, 160)}`)
+                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
                 .join("\n")
             : "- No matching Teams discussions")
     );

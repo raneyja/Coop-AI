@@ -110,7 +110,7 @@ type SettingsPanelProps = {
   onLoadWorkspaceRepos: () => void;
   onSaveWorkspaceRepos: (repoIds: string[]) => void;
   workspacePickerState: {
-    repos: import("../../../chat/types").GithubRepoOption[];
+    repos: import("../../chat/types").GithubRepoOption[];
     selectedRepoIds: string[];
     selectedCount: number;
     limit: number | null;

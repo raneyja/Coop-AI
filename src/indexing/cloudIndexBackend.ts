@@ -1,6 +1,6 @@
 import type { CoopBackendClient } from "../api/CoopBackendClient";
 import { isLightningEnabledForRepo, type LightningConfiguration } from "../config/lightningConfig";
-import { resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
+import { canUseLightningMode, resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 import type { IndexBackend, IndexRepoStatus } from "./indexBackend";
 import type { LocalDependentsResult, LocalSearchResult } from "./types";
 

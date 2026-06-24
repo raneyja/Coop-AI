@@ -1354,7 +1354,7 @@ export class CoopChatSession {
         this.currentContext = mergeRepoContext(
           this.currentContext,
           repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
-            fileSource: "local"
+            fileSource: "workspace"
           }) as RepoContext
         );
         this.postContext();

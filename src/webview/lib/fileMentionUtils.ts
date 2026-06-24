@@ -1,4 +1,4 @@
-import type { ChatFileMention } from "../chat/types";
+import type { ChatFileMention } from "../../chat/types";
 
 const DEFAULT_MENTION_LIMIT = 3;
 

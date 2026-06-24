@@ -35,6 +35,8 @@ import type { ConflictSummary } from "./types";
 
 export type DecisionTimelinePayload = DecisionTimelineData & {
   narrative?: string;
+  owner?: string;
+  repo?: string;
 };
 
 type DecisionTimelineProps = {

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import type { Pool } from "pg";
+import { loadJobQueueConfig } from "../config/jobQueueConfig";
 import { MemoryQueueBackend } from "../jobs/backends/memoryBackend";
 import { JobQueue } from "../jobs/jobQueue";
 import { JobType } from "../jobs/types";
@@ -6,14 +8,10 @@ import type { OrgRepoRecord } from "./orgStore";
 import { OrgStore } from "./orgStore";
 import { findActiveIndexJob, queueOrgRepoIndex } from "./queueOrgRepoIndex";
 
-type PgPool = {
-  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
-};
-
 function createOrgStoreStub(records: Map<string, OrgRepoRecord>): OrgStore {
   const pool = {
     query: async () => ({ rows: [] })
-  } as PgPool;
+  } as unknown as Pool;
   const store = new OrgStore(pool);
   store.getOrgRepo = async (orgId, repoId) => records.get(`${orgId}:${repoId}`);
   store.upsertOrgRepo = async (orgId, repoId, patch) => {
@@ -50,19 +48,14 @@ async function testSkipsDuplicateActiveJob() {
         lightningEnabled: true,
         indexStatus: "queued",
         embeddingStatus: "complete",
-        lastJobId: "job-1"
+        lastJobId: "job-1",
+        updatedAt: new Date()
       }
     ]
   ]);
   const orgStore = createOrgStoreStub(records);
   const queue = new JobQueue(
-    {
-      backend: "memory",
-      redisUrl: "",
-      postgresUrl: "",
-      resultTtlMs: 60_000,
-      maxConcurrentJobs: 2
-    },
+    { ...loadJobQueueConfig(), backend: "memory" },
     new MemoryQueueBackend()
   );
 
@@ -102,19 +95,14 @@ async function testQueuesFreshJobAndClearsEmbeddings() {
         lightningEnabled: true,
         indexStatus: "ready",
         embeddingStatus: "complete",
-        lastJobId: "old-job"
+        lastJobId: "old-job",
+        updatedAt: new Date()
       }
     ]
   ]);
   const orgStore = createOrgStoreStub(records);
   const queue = new JobQueue(
-    {
-      backend: "memory",
-      redisUrl: "",
-      postgresUrl: "",
-      resultTtlMs: 60_000,
-      maxConcurrentJobs: 2
-    },
+    { ...loadJobQueueConfig(), backend: "memory" },
     new MemoryQueueBackend()
   );
 

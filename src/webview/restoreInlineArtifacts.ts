@@ -1,5 +1,5 @@
-import type { ChatPersistedArtifact } from "../../chat/types";
-import type { IntegrationChatProvider } from "../../chat/types";
+import type { ChatPersistedArtifact } from "../chat/types";
+import type { IntegrationChatProvider } from "../chat/types";
 import type {
   BlastRadiusEvidence,
   ConfluenceSearchEvidence,
@@ -8,8 +8,9 @@ import type {
   KnowledgeGapsEvidence,
   NotionSearchEvidence,
   RepoSummaryEvidence,
-  SlackSearchEvidence
-} from "../../context/contextBundleEvidence";
+  SlackSearchEvidence,
+  TeamsSearchEvidence
+} from "../context/contextBundleEvidence";
 import type { ChatInlineArtifact } from "./components/ChatStream";
 import type { DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";

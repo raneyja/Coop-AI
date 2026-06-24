@@ -147,6 +147,11 @@ export type UserPreferences = {
   confluenceBaseUrl: string;
   searchScopeMode: SearchScopeMode;
   searchCollectionId: string;
+  workspaceRepoIds?: string[];
+  workspaceRepoCount?: number;
+  workspaceRepoLimit?: number | null;
+  canAddMoreWorkspaceRepos?: boolean;
+  primaryWorkspaceRepoId?: string;
   quotaCredits?: {
     usedCredits: number;
     limitCredits: number;
@@ -269,6 +274,8 @@ export type WebviewInbound =
         mentions?: ChatFileMention[];
         historyContent?: string;
         slashUserArgs?: string;
+        /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
+        targetFile?: string;
       };
     }
   | { type: "mention:search"; payload: { pattern: string } }

@@ -7,6 +7,7 @@ export type RepoSummaryEvidence = {
   repository?: Record<string, unknown>;
   manifest?: { fileCount?: number; languages?: string[]; entryPoints?: string[] };
   entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
+  recentCommits?: Array<{ sha: string; author: string; message: string }>;
   treeOverview?: unknown;
   confluence?: ConfluenceSearchEvidence;
   jira?: JiraSearchEvidence;
@@ -130,7 +131,9 @@ export type GoogleDocsSearchEvidence = {
 import {
   codePathsFromDependentDetails,
   filterJobDependentsForFile,
-  splitBlastRadiusDependents
+  splitBlastRadiusDependents,
+  asGraphEdgeSource,
+  type BlastRadiusDependentDetail
 } from "../engines/blastRadiusDependentsFallback";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -432,8 +435,12 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
 }
 
 function finalizeBlastRadiusDependents(merged: BlastRadiusEvidence): void {
-  const source = merged.graphMeta?.source ?? "remote";
-  let details = merged.dependentDetails;
+  const source = asGraphEdgeSource(merged.graphMeta?.source);
+  let details: BlastRadiusDependentDetail[] | undefined = merged.dependentDetails?.map((entry) => ({
+    path: entry.path,
+    depth: entry.depth,
+    source: asGraphEdgeSource(entry.source)
+  }));
   if (!details?.length && (merged.directDependents?.length || merged.transitiveDependents?.length)) {
     details = [
       ...(merged.directDependents ?? []).map((path) => ({ path, depth: 1, source })),
@@ -448,7 +455,11 @@ function finalizeBlastRadiusDependents(merged: BlastRadiusEvidence): void {
     const seen = new Set(details.map((entry) => entry.path));
     for (const entry of merged.docsReferences) {
       if (!seen.has(entry.path)) {
-        details.push(entry);
+        details.push({
+          path: entry.path,
+          depth: entry.depth,
+          source: asGraphEdgeSource(entry.source)
+        });
       }
     }
   }

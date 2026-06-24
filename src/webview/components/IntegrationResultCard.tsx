@@ -226,21 +226,29 @@ export function IntegrationResultNested({
 
 export function IntegrationResultText({
   children,
-  muted
+  muted,
+  className
 }: {
   children: React.ReactNode;
   muted?: boolean;
+  className?: string;
 }): React.ReactElement {
+  const textClassName = [
+    muted ? "coop-result-text coop-result-text--muted" : "coop-result-text",
+    className
+  ]
+    .filter(Boolean)
+    .join(" ");
   if (typeof children === "string") {
     return (
       <ChatProse
         content={children}
-        className={muted ? "coop-result-text coop-result-text--muted" : "coop-result-text"}
+        className={textClassName}
       />
     );
   }
 
-  return <p className={muted ? "coop-result-text coop-result-text--muted" : "coop-result-text"}>{children}</p>;
+  return <p className={textClassName}>{children}</p>;
 }
 
 export function IntegrationResultActions({ children }: { children: React.ReactNode }): React.ReactElement {

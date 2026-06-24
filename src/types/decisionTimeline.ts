@@ -132,6 +132,7 @@ export type DecisionTimeline = {
     htmlUrl?: string;
     reviews: DecisionReview[];
     approvers: string[];
+    updatedAt?: string;
   };
   alternatives: DecisionAlternative[];
   slackThread?: DecisionSlackThread;

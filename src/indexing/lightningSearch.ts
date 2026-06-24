@@ -100,7 +100,10 @@ export async function lightningSearch(
               : "zoekt"
           : "fallback",
       symbols: [],
-      hits,
+      hits: hits.map((hit) => ({
+        ...hit,
+        source: hit.source as SearchHitSource
+      })),
       zoektAvailable: zoektHits.length > 0 || Boolean(process.env.ZOEKT_URL)
     };
   }

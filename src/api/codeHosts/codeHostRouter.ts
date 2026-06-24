@@ -609,6 +609,8 @@ export class CodeHostRouter {
     updatedAt: string;
     htmlUrl?: string;
     labels: string[];
+    owner?: string;
+    repo?: string;
   }> {
     const resolved = await this.resolveCoordinates(coords);
     if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostPullDetailFetcher) {

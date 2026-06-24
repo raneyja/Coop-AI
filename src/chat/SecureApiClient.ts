@@ -218,7 +218,9 @@ export class SecureApiClient {
     return this.backend.getGithubAppInstallUrl(baseUrl);
   }
 
-  public async getGithubInstallationStatus(baseUrl: string): Promise<{ installed: boolean }> {
+  public async getGithubInstallationStatus(
+    baseUrl: string
+  ): Promise<Awaited<ReturnType<CoopBackendClient["getGithubInstallationStatus"]>>> {
     return this.backend.getGithubInstallationStatus(baseUrl);
   }
 

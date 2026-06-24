@@ -1732,7 +1732,7 @@ async function fetchRepoCommitPulls(
     const fromBase = pull.base?.repo;
     const fromApiUrl = parseGithubPullApiUrl(pull.url);
     const owner = fromBase?.owner?.login ?? fromApiUrl?.owner ?? coords.owner;
-    const repo = fromBase?.repo?.name ?? fromApiUrl?.repo ?? coords.repo;
+    const repo = fromBase?.name ?? fromApiUrl?.repo ?? coords.repo;
     return {
       number: pull.number,
       title: pull.title,

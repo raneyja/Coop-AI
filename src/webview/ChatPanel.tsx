@@ -13,7 +13,7 @@ import { EmptyState } from "./components/EmptyState";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
-import type { ChatHistoryPayload } from "../chat/types";
+import type { ChatHistoryPayload, GithubRepoOption } from "../chat/types";
 import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
@@ -295,15 +295,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     owner: string;
     repo: string;
   } | null>(null);
-  const [treeState, setTreeState] = useState<{
-    path: string;
-    items: RemoteTreeNode[];
-    scope?: "repos" | "files";
-    error?: string;
-    stale?: boolean;
-    provider?: "github" | "gitlab" | "bitbucket";
-    loading?: boolean;
-  }>({ path: "", items: [], scope: "files" });
+  const [treeState, setTreeState] = useState<ExplorerTreeState>({ path: "", items: [], scope: "files" });
   const [searchState, setSearchState] = useState<{
     query: string;
     items: RemoteTreeNode[];

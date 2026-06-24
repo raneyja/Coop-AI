@@ -95,11 +95,13 @@ export async function traceDecision(context: FeatureExecutionContext) {
           ? new Date(Number(timeline.slackThread.messages[0].ts) * 1000)
           : undefined,
         teamsDecision: timeline.teamsThread?.messages[0]?.text,
-        teamsLastUpdated: timeline.teamsThread?.messages[0]?.createdAt
-          ? new Date(timeline.teamsThread.messages[0].createdAt)
+        teamsLastUpdated: timeline.teamsThread?.messages[0]?.date
+          ? new Date(timeline.teamsThread.messages[0].date)
           : undefined,
         prDecision: timeline.linkedPR?.title,
-        prLastUpdated: timeline.linkedPR?.updatedAt ? new Date(timeline.linkedPR.updatedAt) : undefined,
+        prLastUpdated: timeline.linkedPR?.updatedAt
+          ? new Date(timeline.linkedPR.updatedAt)
+          : undefined,
         codePattern: timeline.codeSnippet?.slice(0, 240) ?? timeline.originalCommit?.message,
         codeLastModified: timeline.originalCommit?.date ? new Date(timeline.originalCommit.date) : undefined
       };

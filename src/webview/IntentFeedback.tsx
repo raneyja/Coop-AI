@@ -47,7 +47,7 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
   const accent = ACCENTS[state.status];
   const progress = normalizeProgress(state.progress, state.status);
   const details = buildDetails(state);
-  const canDismiss = state.status !== "loading" && Boolean(onDismiss);
+  const canDismiss = Boolean(onDismiss);
   const canRefresh =
     Boolean(onRefreshContext) &&
     (state.status === "rate-limited" || state.status === "warning" || state.status === "error");
@@ -56,7 +56,7 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
     <section
       className={`mx-3 mb-2 ${coopNoticeClass(noticeToneForStatus(state.status))}`}
       role={state.status === "error" ? "alert" : "status"}
-      aria-live={state.status === "loading" ? "polite" : "assertive"}
+      aria-live="assertive"
     >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <StatusGlyph status={state.status} accent={accent} />
@@ -91,7 +91,7 @@ export function IntentFeedback({ state, onDismiss, onRefreshContext }: IntentFee
             <p className="mt-1 leading-relaxed opacity-90">{state.message}</p>
           ) : null}
 
-          {state.status === "loading" || state.status === "warning" ? (
+          {state.status === "warning" ? (
             <ProgressBar progress={progress} accent={accent} indeterminate={state.progress === undefined} />
           ) : null}
 
