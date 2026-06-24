@@ -1,45 +1,49 @@
 import type { ChatImageAttachment } from "../chat/types";
+import {
+  isAcceptedPaperclipMimeType,
+  MAX_PAPERCLIP_ATTACHMENTS,
+  MAX_PAPERCLIP_BYTES
+} from "../chat/paperclipAttachments";
 
-export const MAX_IMAGE_ATTACHMENTS = 5;
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
-const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+export { MAX_PAPERCLIP_ATTACHMENTS as MAX_IMAGE_ATTACHMENTS, MAX_PAPERCLIP_BYTES as MAX_IMAGE_BYTES };
 
 export function createAttachmentId(): string {
-  return `img-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return `file-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function isAcceptedImageType(mimeType: string): boolean {
-  return ACCEPTED_IMAGE_TYPES.has(mimeType);
-}
-
-export async function readImageFile(file: File): Promise<ChatImageAttachment> {
-  if (!isAcceptedImageType(file.type)) {
-    throw new Error("Only PNG, JPEG, GIF, and WebP images are supported.");
+export async function readAttachmentFile(file: File): Promise<ChatImageAttachment> {
+  if (!isAcceptedPaperclipMimeType(file.type, file.name)) {
+    throw new Error("Unsupported file type. Attach images, PDFs, or text files (e.g. .md, .txt, .json).");
   }
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Each image must be 5 MB or smaller.");
+  if (file.size > MAX_PAPERCLIP_BYTES) {
+    throw new Error("Each file must be 5 MB or smaller.");
   }
 
   const dataUrl = await readFileAsDataUrl(file);
   return {
     id: createAttachmentId(),
-    name: file.name || "image",
-    mimeType: file.type,
+    name: file.name || "attachment",
+    mimeType: file.type || "application/octet-stream",
     dataUrl
   };
 }
 
-export async function readImageFiles(files: FileList | File[]): Promise<ChatImageAttachment[]> {
+export async function readAttachmentFiles(files: FileList | File[]): Promise<ChatImageAttachment[]> {
   const attachments: ChatImageAttachment[] = [];
   for (const file of Array.from(files)) {
-    if (!file.type.startsWith("image/")) {
+    if (!isAcceptedPaperclipMimeType(file.type, file.name)) {
       continue;
     }
-    attachments.push(await readImageFile(file));
+    attachments.push(await readAttachmentFile(file));
   }
   return attachments;
 }
+
+/** @deprecated Use readAttachmentFile */
+export const readImageFile = readAttachmentFile;
+
+/** @deprecated Use readAttachmentFiles */
+export const readImageFiles = readAttachmentFiles;
 
 export function mergeAttachments(
   current: ChatImageAttachment[],
@@ -48,8 +52,8 @@ export function mergeAttachments(
 ): ChatImageAttachment[] {
   const next = [...current];
   for (const attachment of incoming) {
-    if (next.length >= MAX_IMAGE_ATTACHMENTS) {
-      onError?.(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images per message.`);
+    if (next.length >= MAX_PAPERCLIP_ATTACHMENTS) {
+      onError?.(`You can attach up to ${MAX_PAPERCLIP_ATTACHMENTS} files per message.`);
       break;
     }
     next.push(attachment);
@@ -66,19 +70,19 @@ export async function attachmentsFromClipboard(
 
   const files = clipboardData.files;
   if (files.length > 0) {
-    return readImageFiles(files);
+    return readAttachmentFiles(files);
   }
 
   const attachments: ChatImageAttachment[] = [];
   for (const item of Array.from(clipboardData.items)) {
-    if (item.kind !== "file" || !item.type.startsWith("image/")) {
+    if (item.kind !== "file") {
       continue;
     }
     const file = item.getAsFile();
-    if (!file) {
+    if (!file || !isAcceptedPaperclipMimeType(file.type, file.name)) {
       continue;
     }
-    attachments.push(await readImageFile(file));
+    attachments.push(await readAttachmentFile(file));
   }
   return attachments;
 }
@@ -87,7 +91,7 @@ export async function attachmentsFromDataTransfer(dataTransfer: DataTransfer | n
   if (!dataTransfer) {
     return [];
   }
-  return readImageFiles(dataTransfer.files);
+  return readAttachmentFiles(dataTransfer.files);
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -98,9 +102,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
         resolve(reader.result);
         return;
       }
-      reject(new Error("Could not read image file."));
+      reject(new Error("Could not read file."));
     };
-    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.onerror = () => reject(new Error("Could not read file."));
     reader.readAsDataURL(file);
   });
 }

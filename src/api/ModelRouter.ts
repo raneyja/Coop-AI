@@ -7,7 +7,7 @@ import type { CompletionRequest, CompletionResponse, LlmAuditEvent, StreamChunk 
 import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type LlmServerConfig } from "./llmServerConfig";
 import { createProviderClient } from "./providers";
 import { buildUserMessageWithContext, systemPromptForUseCase } from "../prompts/systemPrompts";
-import { appendUserImageAttachmentsPrompt } from "../prompts/userImageAttachments";
+import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT } from "./requestFormatter";
 
 export type ModelRouterOptions = {
@@ -33,7 +33,7 @@ export class ModelRouter {
   public async *stream(request: CompletionRequest, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
     const started = Date.now();
     const provider = this.resolveProvider(request);
-    const userContent = appendUserImageAttachmentsPrompt(
+    const userContent = appendUserPaperclipAttachmentsPrompt(
       buildUserMessageWithContext(request.message, request.context),
       request.attachments
     );
@@ -45,7 +45,7 @@ export class ModelRouter {
       },
       ...request.history.map((entry) => ({
         role: entry.role,
-        content: appendUserImageAttachmentsPrompt(entry.content, entry.attachments),
+        content: appendUserPaperclipAttachmentsPrompt(entry.content, entry.attachments),
         attachments: entry.attachments
       })),
       { role: "user", content: userContent, attachments: request.attachments }

@@ -21,6 +21,8 @@ import type {
   RemoteTreeEntry,
   RepoCoordinates
 } from "./types";
+import { formatGithubRepoSearchClause } from "./explorerSearch";
+import { rankExplorerFilePaths } from "./explorerFileTreeSearch";
 import { CodeHostError, repoIdFromCoordinates } from "./types";
 
 const GITHUB_API = "https://api.github.com";
@@ -386,8 +388,34 @@ export class GitHubClient implements CodeHostClient {
     if (repos.length === 0) {
       return [];
     }
+    try {
+      return await this.searchCodeViaGithubApi(repos, query, limit);
+    } catch (error) {
+      if (!isGithubCodeSearchUnavailable(error)) {
+        throw error;
+      }
+      const results: Array<{ repoId: string; path: string; snippet?: string }> = [];
+      for (const coords of repos) {
+        if (results.length >= limit) {
+          break;
+        }
+        const remaining = limit - results.length;
+        const treeHits = await this.searchFilesViaTree(coords, query, remaining);
+        for (const path of treeHits) {
+          results.push({ repoId: repoIdFromCoordinates(coords), path, snippet: query });
+        }
+      }
+      return results;
+    }
+  }
+
+  private async searchCodeViaGithubApi(
+    repos: RepoCoordinates[],
+    query: string,
+    limit: number
+  ): Promise<Array<{ repoId: string; path: string; snippet?: string }>> {
     const repoClauses = repos
-      .map((coords) => `repo:${coords.owner}/${coords.repo}`)
+      .map((coords) => formatGithubRepoSearchClause(coords.owner, coords.repo))
       .join(" OR ");
     const q = encodeURIComponent(`${query} (${repoClauses})`);
     const result = await codeHostRequestJson<{
@@ -409,6 +437,36 @@ export class GitHubClient implements CodeHostClient {
         snippet: query
       };
     });
+  }
+
+  /** Fallback when GitHub /search/code returns 403/422 (common for GitHub App installation tokens). */
+  public async searchFilesViaTree(
+    coords: RepoCoordinates,
+    query: string,
+    limit = 20
+  ): Promise<string[]> {
+    const branch = await this.resolveBranch(coords);
+    const ref = await codeHostRequestJson<{ object: { sha: string } }>(
+      `${this.repoUrl(coords)}/git/ref/heads/${encodeURIComponent(branch)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const tree = await codeHostRequestJson<{
+      tree?: Array<{ path?: string; type?: string }>;
+      truncated?: boolean;
+    }>(`${this.repoUrl(coords)}/git/trees/${ref.object.sha}?recursive=1`, {
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker
+    });
+    const filePaths =
+      tree.tree
+        ?.filter((entry) => entry.type === "blob" && entry.path?.trim())
+        .map((entry) => entry.path as string) ?? [];
+    return rankExplorerFilePaths(filePaths, query, limit);
   }
 
   private repoUrl(coords: RepoCoordinates): string {
@@ -525,6 +583,16 @@ function mapGitHubPull(pull: GitHubPull): PullRequestSummary {
     updatedAt: pull.updated_at,
     htmlUrl: pull.html_url
   };
+}
+
+function isGithubCodeSearchUnavailable(error: unknown): boolean {
+  if (error instanceof CodeHostError) {
+    return error.status === 403 || error.status === 422;
+  }
+  if (error instanceof Error) {
+    return /\b(403|422)\b/.test(error.message) || /status code 403/i.test(error.message);
+  }
+  return false;
 }
 
 function normalizePath(value: string): string {

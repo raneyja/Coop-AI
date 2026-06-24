@@ -28,6 +28,7 @@ import type {
   RemoteTreeEntry,
   RepoCoordinates
 } from "./types";
+import { isRemoteFileSearchFallbackCandidate } from "./cloudRepoFileSearchFallback";
 import { buildExplorerFileSearchQuery } from "./explorerSearch";
 import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates, coordinatesFromRepoId } from "./types";
 
@@ -250,10 +251,19 @@ export class CodeHostRouter {
     }
     const resolved = await this.resolveCoordinates(coords);
     if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostSearchFetcher) {
-      const repoId = repoIdFromCoordinates(resolved);
-      return this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () =>
-        this.options.cloudCodeHostSearchFetcher!({ repoId, query: trimmed, coords: resolved, limit })
-      );
+      try {
+        const repoId = repoIdFromCoordinates(resolved);
+        return await this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () =>
+          this.options.cloudCodeHostSearchFetcher!({ repoId, query: trimmed, coords: resolved, limit })
+        );
+      } catch (error) {
+        if (!isRemoteFileSearchFallbackCandidate(error)) {
+          throw error;
+        }
+        if (this.options.useCloudCodeHostProxy?.()) {
+          throw error;
+        }
+      }
     }
     const client = await this.getClient(resolved.provider);
     if (!client.searchCode) {
@@ -796,7 +806,7 @@ export class CodeHostRouter {
       case "github": {
         if (this.options.useCloudCodeHostProxy?.()) {
           throw new CodeHostError(
-            "GitHub file access uses the CoopAI cloud backend. Install the GitHub App in settings.",
+            "GitHub file access is routed through the Coop cloud backend.",
             "auth",
             401,
             provider

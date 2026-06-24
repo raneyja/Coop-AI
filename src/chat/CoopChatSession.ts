@@ -2166,7 +2166,7 @@ export class CoopChatSession {
     if (this.chatHistory.length === 1) {
       this.setThreadTitle(
         summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "Image attachment",
+          content: historyContent || attachments?.[0]?.name || "File attachment",
           quickAction,
           context: this.currentContext
         })
@@ -3802,7 +3802,7 @@ export class CoopChatSession {
         audience
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to search repository files.";
+      const message = formatRemoteFileSearchError(error);
       this.postRepoExplorer(
         {
           type: "repo:search-results",
@@ -4013,7 +4013,7 @@ export class CoopChatSession {
         audience
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to search repository files.";
+      const message = formatRemoteFileSearchError(error);
       this.postRepoExplorer(
         {
           type: "repo:search-results",
@@ -5256,6 +5256,17 @@ export class CoopChatSession {
 
     return resolved;
   }
+}
+
+function formatRemoteFileSearchError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "Failed to search repository files.";
+  if (raw.includes("422") || raw.includes("403")) {
+    return (
+      "GitHub code search is unavailable for this repository. Browse folders from the repo root " +
+      "(Repos → your repo → src → server), or try a path search like src/server/githubAppApi."
+    );
+  }
+  return raw;
 }
 
 function resolveSearchScope(preferences: UserPreferences): {

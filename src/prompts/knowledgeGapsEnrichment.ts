@@ -1,31 +1,46 @@
-export type ConfluencePageForEnrichment = {
+export type IntegrationPageForEnrichment = {
   title: string;
   excerpt?: string;
   htmlUrl?: string;
 };
 
+export type KnowledgeGapScanGap = {
+  type?: string;
+  message?: string;
+  file?: string;
+};
+
 export type KnowledgeGapsEnrichmentContext = {
-  confluencePages?: ConfluencePageForEnrichment[];
+  confluencePages?: IntegrationPageForEnrichment[];
+  notionPages?: IntegrationPageForEnrichment[];
+  googleDocs?: IntegrationPageForEnrichment[];
+  jobScanGaps?: KnowledgeGapScanGap[];
   activeFile?: string;
 };
 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
+const NOTION_REVIEWED_HEADING = "**Notion pages reviewed**";
+const GOOGLE_DOCS_REVIEWED_HEADING = "**Google Docs reviewed**";
+
+const DOCUMENTATION_SCAN_GAP_TYPES = new Set(["missing_docs", "impact_unknown"]);
+const INTEGRATION_SCAN_GAP_TYPES = new Set([
+  "integration_unknown",
+  "ops_unknown",
+  "missing_runbook",
+  "missing_ops"
+]);
 
 const FORBIDDEN_SUBSECTION_HEADERS = new Set([
   "documentation coverage",
-  "confluence pages reviewed"
+  "confluence pages reviewed",
+  "notion pages reviewed",
+  "google docs reviewed"
 ]);
-
-const PROMOTED_MAIN_SECTIONS: Record<string, string> = {
-  ownership: "**Ownership & maintenance**",
-  "ownership clarity": "**Ownership & maintenance**",
-  "operational unknowns": "**Integration & operations**"
-};
 
 const FIELD_LINE_RE = /^(?:[-*]\s+)?(?:\*\*)?(Open question|What to check)(?:\*\*)?:\s*(.*)$/gim;
 
 const FILE_PATH_RE =
-  /\b((?:src|docs)\/[\w./-]+|[A-Za-z][\w.-]*\.(?:ts|tsx|js|jsx|py|md|json|yml|yaml))\b/g;
+  /\b((?:src|docs|examples|test|integration|lib)\/[\w./-]+|[A-Za-z][\w.-]*\.(?:ts|tsx|js|jsx|py|md|json|yml|yaml))\b/g;
 
 function normalizeFieldLines(content: string): string {
   return content.replace(FIELD_LINE_RE, (_, label, body) => {
@@ -33,6 +48,11 @@ function normalizeFieldLines(content: string): string {
     const cleaned = body.replace(/^\*\*\s*/, "").trim();
     return cleaned ? `- **${normalized}:** ${cleaned}` : `- **${normalized}:**`;
   });
+}
+
+function stripBoldHeading(line: string): string {
+  const match = line.trim().match(/^\*\*([^*]+)\*\*$/);
+  return match ? match[1].trim().toLowerCase() : line.trim().toLowerCase();
 }
 
 function isMainSectionLine(line: string): boolean {
@@ -47,35 +67,69 @@ function isMainSectionLine(line: string): boolean {
     title === "ownership & maintenance" ||
     title === "integration & operations" ||
     title === "recommended next steps" ||
+    title === "out-of-scope @ attachments" ||
+    title === "sources" ||
     title === "open questions" ||
     title === "key unknowns"
   );
-}
-
-function isConfluenceReviewedHeading(line: string): boolean {
-  const match = line.trim().match(/^\*\*([^*]+)\*\*$/);
-  return Boolean(match && match[1].trim().toLowerCase() === "confluence pages reviewed");
-}
-
-function isPromotableOwnershipOrOpsHeading(line: string): string | undefined {
-  const match = line.trim().match(/^\*\*([^*]+)\*\*$/);
-  if (!match) {
-    return undefined;
-  }
-  return PROMOTED_MAIN_SECTIONS[match[1].trim().toLowerCase()];
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function toMainSectionHeading(line: string): string {
-  const trimmed = line.trim();
-  const bold = trimmed.match(/^\*\*([^*]+)\*\*$/);
-  if (bold) {
-    return trimmed;
+function isInsideMarkdown(text: string, index: number): boolean {
+  const before = text.slice(0, index);
+  if ((before.match(/`/g) ?? []).length % 2 === 1) {
+    return true;
   }
-  return `**${trimmed}**`;
+  const lastOpenBracket = before.lastIndexOf("[");
+  const lastCloseBracket = before.lastIndexOf("]");
+  if (lastOpenBracket > lastCloseBracket) {
+    return true;
+  }
+  const lastOpenParen = before.lastIndexOf("(");
+  const lastCloseParen = before.lastIndexOf(")");
+  if (lastOpenParen > lastCloseParen) {
+    return true;
+  }
+  return false;
+}
+
+function linkifyFilePaths(text: string): string {
+  return text.replace(FILE_PATH_RE, (match, _group, offset, full) => {
+    if (isInsideMarkdown(full, offset)) {
+      return match;
+    }
+    return `\`${match}\``;
+  });
+}
+
+function linkifyPageTitles(text: string, pages: IntegrationPageForEnrichment[]): string {
+  let result = text;
+  const sorted = [...pages].sort((a, b) => b.title.length - a.title.length);
+
+  for (const page of sorted) {
+    if (!page.htmlUrl) {
+      continue;
+    }
+    const quoted = new RegExp(`"(${escapeRegExp(page.title)})"`, "g");
+    result = result.replace(quoted, (_match, _title, offset, full) => {
+      if (isInsideMarkdown(full, offset)) {
+        return _match;
+      }
+      return `[${page.title}](${page.htmlUrl})`;
+    });
+    const titled = new RegExp(`(?<!\\[)${escapeRegExp(page.title)}(?!\\])`, "g");
+    result = result.replace(titled, (match, offset, full) => {
+      if (isInsideMarkdown(full, offset)) {
+        return match;
+      }
+      return `[${page.title}](${page.htmlUrl})`;
+    });
+  }
+
+  return result;
 }
 
 function confluenceTitleHint(title: string, excerpt: string | undefined, activeFile?: string): string {
@@ -88,27 +142,15 @@ function confluenceTitleHint(title: string, excerpt: string | undefined, activeF
   if (/\b(adr|architecture decision)\b/.test(haystack) || /\badrs?\b/.test(haystack)) {
     return `Architecture decision record; may explain design choices around ${fileRef}.`;
   }
-  if (/\b(policy|compliance|security|audit)\b/.test(haystack)) {
-    return "Policy or compliance documentation; relevant for change approval gates.";
-  }
-  if (/\b(onboarding|getting started|developer guide)\b/.test(haystack)) {
-    return "Developer onboarding or setup documentation.";
-  }
-  if (/\b(integration|oauth|connect)\b/.test(haystack)) {
-    return "Integration setup documentation; check env and OAuth configuration.";
-  }
-  if (/\b(deploy|deployment|ci\/cd|pipeline|release)\b/.test(haystack)) {
-    return "Deployment or CI/CD documentation; relevant for rollout verification.";
-  }
   if (/\b(architecture|overview|system design)\b/.test(haystack)) {
     return `Architecture overview; useful system context around ${fileRef}.`;
   }
   return activeFile
     ? `Repo-linked page; title does not mention ${fileRef} directly.`
-    : "Repo-linked Confluence page; relevance to the active file is unclear.";
+    : "Repo-linked documentation page; relevance to the primary target is unclear.";
 }
 
-function confluencePageNote(page: ConfluencePageForEnrichment, activeFile?: string): string {
+function integrationPageNote(page: IntegrationPageForEnrichment, activeFile?: string): string {
   const excerpt = page.excerpt?.replace(/\s+/g, " ").trim();
   if (excerpt) {
     const clipped = excerpt.length > 220 ? `${excerpt.slice(0, 217)}...` : excerpt;
@@ -120,8 +162,8 @@ function confluencePageNote(page: ConfluencePageForEnrichment, activeFile?: stri
   return confluenceTitleHint(page.title, page.excerpt, activeFile);
 }
 
-function formatConfluenceListLine(page: ConfluencePageForEnrichment, activeFile?: string): string {
-  const note = linkifyFilePaths(confluencePageNote(page, activeFile));
+function formatReviewedPageLine(page: IntegrationPageForEnrichment, activeFile?: string): string {
+  const note = linkifyFilePaths(integrationPageNote(page, activeFile));
   if (page.htmlUrl) {
     return `- [${page.title}](${page.htmlUrl}) — ${note}`;
   }
@@ -129,128 +171,202 @@ function formatConfluenceListLine(page: ConfluencePageForEnrichment, activeFile?
 }
 
 export function buildConfluencePagesReviewedBlock(
-  pages: ConfluencePageForEnrichment[],
+  pages: IntegrationPageForEnrichment[],
   activeFile?: string
 ): string {
   const lines = [CONFLUENCE_REVIEWED_HEADING, ""];
   for (const page of pages) {
-    lines.push(formatConfluenceListLine(page, activeFile));
+    lines.push(formatReviewedPageLine(page, activeFile));
   }
   return lines.join("\n");
 }
 
-function stripConfluencePagesSection(content: string): string {
+export function buildNotionPagesReviewedBlock(
+  pages: IntegrationPageForEnrichment[],
+  activeFile?: string
+): string {
+  const lines = [NOTION_REVIEWED_HEADING, ""];
+  for (const page of pages) {
+    lines.push(formatReviewedPageLine(page, activeFile));
+  }
+  return lines.join("\n");
+}
+
+export function buildGoogleDocsReviewedBlock(
+  documents: IntegrationPageForEnrichment[],
+  activeFile?: string
+): string {
+  const lines = [GOOGLE_DOCS_REVIEWED_HEADING, ""];
+  for (const doc of documents) {
+    lines.push(formatReviewedPageLine(doc, activeFile));
+  }
+  return lines.join("\n");
+}
+
+function scanGapSubsectionTitle(gap: KnowledgeGapScanGap): string {
+  const message = gap.message?.toLowerCase() ?? "";
+  if (message.includes("confluence")) {
+    return "Confluence documentation coverage";
+  }
+  if (message.includes("google docs")) {
+    return "Google Docs documentation coverage";
+  }
+  if (message.includes("notion")) {
+    return "Notion documentation coverage";
+  }
+  if (gap.type === "impact_unknown") {
+    return "Dependency graph evidence";
+  }
+  if (gap.type === "missing_owner") {
+    return "Ownership clarity";
+  }
+  return (gap.message ?? "Knowledge gap").replace(/\.$/, "");
+}
+
+export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: string): string {
+  const title = scanGapSubsectionTitle(gap);
+  const target = activeFile ? `\`${activeFile}\`` : "the primary target";
+  const openQuestion =
+    gap.type === "missing_docs"
+      ? `What documentation should cover ${target} in this repository?`
+      : gap.type === "impact_unknown"
+        ? `What change-impact context is missing for ${target}?`
+        : gap.type === "missing_owner"
+          ? `Who owns maintenance and review for ${target}?`
+          : `What risk does this scan gap create for ${target}?`;
+  const whatToCheck = gap.message?.trim() || "Review the attached Sources card evidence.";
+  return `**${title}**\n\n- **Open question:** ${openQuestion}\n- **What to check:** ${whatToCheck}`;
+}
+
+function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
+  const blocks: string[] = [];
+  if (context?.notionPages?.length) {
+    blocks.push(buildNotionPagesReviewedBlock(context.notionPages, context.activeFile));
+  }
+  if (context?.confluencePages?.length) {
+    blocks.push(buildConfluencePagesReviewedBlock(context.confluencePages, context.activeFile));
+  }
+  if (context?.googleDocs?.length) {
+    blocks.push(buildGoogleDocsReviewedBlock(context.googleDocs, context.activeFile));
+  }
+  for (const gap of context?.jobScanGaps ?? []) {
+    if (!gap.type || !DOCUMENTATION_SCAN_GAP_TYPES.has(gap.type)) {
+      continue;
+    }
+    blocks.push(buildScanGapSubsection(gap, context?.activeFile));
+  }
+  return blocks;
+}
+
+function ownershipBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
+  return (context?.jobScanGaps ?? [])
+    .filter((gap) => gap.type === "missing_owner")
+    .map((gap) => buildScanGapSubsection(gap, context?.activeFile));
+}
+
+function integrationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
+  return (context?.jobScanGaps ?? [])
+    .filter((gap) => gap.type && INTEGRATION_SCAN_GAP_TYPES.has(gap.type))
+    .map((gap) => buildScanGapSubsection(gap, context?.activeFile));
+}
+
+function rebuildDocumentationGapsSection(content: string, blocks: string[]): string {
+  if (blocks.length === 0) {
+    return content;
+  }
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
+  const sectionLines = ["**Documentation gaps**", "", ...blocks.flatMap((block) => [block, ""])];
+
+  if (docIdx === -1) {
+    const summaryIdx = lines.findIndex((line) => stripBoldHeading(line) === "summary");
+    let insertAt = lines.length;
+    if (summaryIdx >= 0) {
+      insertAt = summaryIdx + 1;
+      while (insertAt < lines.length && lines[insertAt].trim() !== "" && !isMainSectionLine(lines[insertAt].trim())) {
+        insertAt += 1;
+      }
+    }
+    return [...lines.slice(0, insertAt), "", ...sectionLines, ...lines.slice(insertAt)]
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  let end = docIdx + 1;
+  while (end < lines.length && lines[end].trim() === "") {
+    end += 1;
+  }
+  while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
+    end += 1;
+  }
+
+  return [...lines.slice(0, docIdx), ...sectionLines, ...lines.slice(end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function rebuildMainSection(content: string, heading: string, blocks: string[]): string {
+  if (blocks.length === 0) {
+    return content;
+  }
+
+  const normalizedHeading = heading.toLowerCase();
+  let result = stripMainSection(content, normalizedHeading);
+
+  const lines = result.replace(/\r\n/g, "\n").split("\n");
+  const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
+  const recIdx = lines.findIndex((line) => stripBoldHeading(line) === "recommended next steps");
+  const sectionLines = [heading, "", ...blocks.flatMap((block) => [block, ""])];
+
+  let insertAt = recIdx >= 0 ? recIdx : lines.length;
+  if (docIdx >= 0 && recIdx === -1) {
+    insertAt = lines.length;
+  }
+
+  return [...lines.slice(0, insertAt), ...sectionLines, ...lines.slice(insertAt)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripStrayReviewSubsectionHeadings(content: string): string {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+
+  for (const line of lines) {
+    if (FORBIDDEN_SUBSECTION_HEADERS.has(stripBoldHeading(line.trim()))) {
+      continue;
+    }
+    out.push(line);
+  }
+
+  return out.join("\n");
+}
+
+function stripMainSection(content: string, sectionTitle: string): string {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
   let skipping = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-
-    if (!skipping && isConfluenceReviewedHeading(trimmed)) {
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!skipping && stripBoldHeading(trimmed) === sectionTitle) {
       skipping = true;
       continue;
     }
-
     if (skipping) {
       if (isMainSectionLine(trimmed)) {
         skipping = false;
-        out.push(lines[i]);
+        out.push(line);
       }
       continue;
     }
-
-    if (FORBIDDEN_SUBSECTION_HEADERS.has(stripBoldHeading(trimmed))) {
-      continue;
-    }
-
-    out.push(lines[i]);
+    out.push(line);
   }
 
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function stripBoldHeading(line: string): string {
-  const match = line.trim().match(/^\*\*([^*]+)\*\*$/);
-  return match ? match[1].trim().toLowerCase() : line.trim().toLowerCase();
-}
-
-function insertConfluenceAfterDocumentationGaps(content: string, block: string): string {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
-  const docGapsIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
-  if (docGapsIdx === -1) {
-    return `${content}\n\n**Documentation gaps**\n\n${block}`;
-  }
-
-  let insertAt = docGapsIdx + 1;
-  while (insertAt < lines.length && lines[insertAt].trim() === "") {
-    insertAt += 1;
-  }
-
-  const alreadyPresent = lines
-    .slice(docGapsIdx, Math.min(docGapsIdx + 24, lines.length))
-    .some((line) => isConfluenceReviewedHeading(line.trim()));
-  if (alreadyPresent) {
-    return replaceConfluenceBlockInDocumentationGaps(lines, docGapsIdx, block);
-  }
-
-  const next = [...lines.slice(0, insertAt), "", block, "", ...lines.slice(insertAt)];
-  return next.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function replaceConfluenceBlockInDocumentationGaps(
-  lines: string[],
-  docGapsIdx: number,
-  block: string
-): string {
-  const out = [...lines];
-  const start = out.findIndex((line, index) => index > docGapsIdx && isConfluenceReviewedHeading(line.trim()));
-  if (start === -1) {
-    return out.join("\n");
-  }
-
-  let end = start + 1;
-  while (end < out.length) {
-    const trimmed = out[end].trim();
-    if (trimmed === "") {
-      end += 1;
-      continue;
-    }
-    if (isMainSectionLine(trimmed) || isPromotableOwnershipOrOpsHeading(trimmed)) {
-      break;
-    }
-    if (
-      trimmed.match(/^\*\*[^*]+\*\*$/) &&
-      !trimmed.match(/^- /) &&
-      stripBoldHeading(trimmed) !== "confluence pages reviewed"
-    ) {
-      break;
-    }
-    end += 1;
-  }
-
-  out.splice(start, end - start, ...block.split("\n"), "");
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function promoteOwnershipAndOpsSections(content: string): string {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
-  const out: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const promoted = isPromotableOwnershipOrOpsHeading(lines[i]);
-    if (promoted) {
-      if (out.length > 0 && out[out.length - 1] !== "") {
-        out.push("");
-      }
-      out.push(promoted);
-      out.push("");
-      continue;
-    }
-    out.push(lines[i]);
-  }
-
-  return out.join("\n");
 }
 
 function normalizeRecommendedNextSteps(content: string): string {
@@ -265,7 +381,7 @@ function normalizeRecommendedNextSteps(content: string): string {
     if (stripBoldHeading(trimmed) === "recommended next steps") {
       inSection = true;
       stepNumber = 0;
-      out.push(toMainSectionHeading(trimmed));
+      out.push("**Recommended next steps**");
       continue;
     }
 
@@ -297,75 +413,30 @@ function normalizeRecommendedNextSteps(content: string): string {
   return out.join("\n");
 }
 
-function isInsideMarkdown(text: string, index: number): boolean {
-  const before = text.slice(0, index);
-  if ((before.match(/`/g) ?? []).length % 2 === 1) {
-    return true;
-  }
-  const lastOpenBracket = before.lastIndexOf("[");
-  const lastCloseBracket = before.lastIndexOf("]");
-  if (lastOpenBracket > lastCloseBracket) {
-    return true;
-  }
-  const lastOpenParen = before.lastIndexOf("(");
-  const lastCloseParen = before.lastIndexOf(")");
-  if (lastOpenParen > lastCloseParen) {
-    return true;
-  }
-  return false;
-}
-
-function linkifyFilePaths(text: string): string {
-  return text.replace(FILE_PATH_RE, (match, _group, offset, full) => {
-    if (isInsideMarkdown(full, offset)) {
-      return match;
-    }
-    return `\`${match}\``;
-  });
-}
-
-function linkifyConfluenceTitles(text: string, pages: ConfluencePageForEnrichment[]): string {
-  let result = text;
-  const sorted = [...pages].sort((a, b) => b.title.length - a.title.length);
-
-  for (const page of sorted) {
-    if (!page.htmlUrl) {
-      continue;
-    }
-    const quoted = new RegExp(`"(${escapeRegExp(page.title)})"`, "g");
-    result = result.replace(quoted, (_match, _title, offset, full) => {
-      if (isInsideMarkdown(full, offset)) {
-        return _match;
-      }
-      return `[${page.title}](${page.htmlUrl})`;
-    });
-    const titled = new RegExp(`(?<!\\[)${escapeRegExp(page.title)}(?!\\])`, "g");
-    result = result.replace(titled, (match, offset, full) => {
-      if (isInsideMarkdown(full, offset)) {
-        return match;
-      }
-      return `[${page.title}](${page.htmlUrl})`;
-    });
-  }
-
-  return result;
-}
-
 export function enrichKnowledgeGapsResponse(
   content: string,
   context?: KnowledgeGapsEnrichmentContext
 ): string {
-  const confluencePages = context?.confluencePages;
-  const activeFile = context?.activeFile;
+  const documentationBlocks = documentationBlocksFromContext(context);
+  const ownershipBlocks = ownershipBlocksFromContext(context);
+  const integrationBlocks = integrationBlocksFromContext(context);
 
   let result = normalizeFieldLines(content);
-  result = promoteOwnershipAndOpsSections(result);
-  result = stripConfluencePagesSection(result);
+  result = stripStrayReviewSubsectionHeadings(result);
+  result = stripMainSection(result, "ownership & maintenance");
+  result = stripMainSection(result, "integration & operations");
+  result = rebuildDocumentationGapsSection(result, documentationBlocks);
+  result = rebuildMainSection(result, "**Ownership & maintenance**", ownershipBlocks);
+  result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
-  if (confluencePages && confluencePages.length > 0) {
-    result = linkifyConfluenceTitles(result, confluencePages);
-    const block = buildConfluencePagesReviewedBlock(confluencePages, activeFile);
-    result = insertConfluenceAfterDocumentationGaps(result, block);
+  if (context?.confluencePages?.length) {
+    result = linkifyPageTitles(result, context.confluencePages);
+  }
+  if (context?.notionPages?.length) {
+    result = linkifyPageTitles(result, context.notionPages);
+  }
+  if (context?.googleDocs?.length) {
+    result = linkifyPageTitles(result, context.googleDocs);
   }
 
   result = normalizeRecommendedNextSteps(result);
@@ -374,44 +445,85 @@ export function enrichKnowledgeGapsResponse(
   return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export function extractConfluencePagesFromBundle(
-  bundle: unknown
-): ConfluencePageForEnrichment[] | undefined {
-  if (!Array.isArray(bundle)) {
+type BundleEntry = { data?: Record<string, unknown> };
+
+function readBundleEntries(bundle: unknown): BundleEntry[] {
+  return Array.isArray(bundle) ? (bundle as BundleEntry[]) : [];
+}
+
+function mapIntegrationPages(
+  pages: unknown[] | undefined,
+  urlKey: "htmlUrl" | "url" = "htmlUrl"
+): IntegrationPageForEnrichment[] | undefined {
+  if (!Array.isArray(pages) || pages.length === 0) {
     return undefined;
   }
 
-  for (const entry of bundle) {
-    if (!entry || typeof entry !== "object") {
-      continue;
-    }
-    const data = (entry as { data?: { confluenceSearch?: { pages?: unknown[] } } }).data;
-    const pages = data?.confluenceSearch?.pages;
-    if (!Array.isArray(pages) || pages.length === 0) {
-      continue;
-    }
+  const mapped = pages
+    .map((page) => {
+      if (!page || typeof page !== "object") {
+        return undefined;
+      }
+      const record = page as { title?: string; excerpt?: string; htmlUrl?: string; url?: string };
+      const title = record.title?.trim();
+      if (!title) {
+        return undefined;
+      }
+      const excerpt = record.excerpt?.trim();
+      const htmlUrl = (record[urlKey] ?? record.htmlUrl ?? record.url)?.trim();
+      return {
+        title,
+        ...(excerpt ? { excerpt } : {}),
+        ...(htmlUrl ? { htmlUrl } : {})
+      };
+    })
+    .filter((page): page is IntegrationPageForEnrichment => Boolean(page));
 
-    const mapped = pages
-      .map((page) => {
-        if (!page || typeof page !== "object") {
-          return undefined;
-        }
-        const title = (page as { title?: string }).title?.trim();
-        if (!title) {
-          return undefined;
-        }
-        const excerpt = (page as { excerpt?: string }).excerpt?.trim();
-        const htmlUrl = (page as { htmlUrl?: string }).htmlUrl?.trim();
-        return {
-          title,
-          ...(excerpt ? { excerpt } : {}),
-          ...(htmlUrl ? { htmlUrl } : {})
-        };
-      })
-      .filter((page): page is ConfluencePageForEnrichment => Boolean(page));
+  return mapped.length > 0 ? mapped : undefined;
+}
 
-    return mapped.length > 0 ? mapped : undefined;
+export function extractConfluencePagesFromBundle(
+  bundle: unknown
+): IntegrationPageForEnrichment[] | undefined {
+  for (const entry of readBundleEntries(bundle)) {
+    const search = entry.data?.confluenceSearch as { pages?: unknown[] } | undefined;
+    const pages = mapIntegrationPages(search?.pages);
+    if (pages) {
+      return pages;
+    }
   }
+  return undefined;
+}
 
+export function extractNotionPagesFromBundle(bundle: unknown): IntegrationPageForEnrichment[] | undefined {
+  for (const entry of readBundleEntries(bundle)) {
+    const search = entry.data?.notionSearch as { pages?: unknown[] } | undefined;
+    const pages = mapIntegrationPages(search?.pages, "url");
+    if (pages) {
+      return pages;
+    }
+  }
+  return undefined;
+}
+
+export function extractGoogleDocsFromBundle(bundle: unknown): IntegrationPageForEnrichment[] | undefined {
+  for (const entry of readBundleEntries(bundle)) {
+    const search = entry.data?.googleDocsSearch as { documents?: unknown[] } | undefined;
+    const pages = mapIntegrationPages(search?.documents, "url");
+    if (pages) {
+      return pages;
+    }
+  }
+  return undefined;
+}
+
+export function extractJobScanGapsFromBundle(bundle: unknown): KnowledgeGapScanGap[] | undefined {
+  for (const entry of readBundleEntries(bundle)) {
+    const data = entry.data;
+    const jobScan = data?.jobScan as { gaps?: KnowledgeGapScanGap[] } | undefined;
+    if (Array.isArray(jobScan?.gaps) && jobScan.gaps.length > 0) {
+      return jobScan.gaps;
+    }
+  }
   return undefined;
 }

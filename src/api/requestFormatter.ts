@@ -8,6 +8,11 @@ import {
 } from "./zeroRetentionConfig";
 import { sanitizeLlmRequestPayload, SanitizationReport } from "./dataSanitization";
 import type { ChatImageAttachment } from "./types";
+import {
+  base64FromDataUrl,
+  isMultimodalPaperclipAttachment,
+  paperclipAttachmentKind
+} from "../chat/paperclipAttachments";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -166,43 +171,78 @@ function openAiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
 }
 
 function formatOpenAiContent(message: ChatRequestMessage): string | Array<Record<string, unknown>> {
-  if (!message.attachments?.length) {
-    return message.content;
+  const multimodal = message.attachments?.filter(isMultimodalPaperclipAttachment) ?? [];
+  const textContent = message.content.trim();
+  if (!multimodal.length) {
+    return textContent;
   }
   const parts: Array<Record<string, unknown>> = [
-    { type: "text", text: message.content.trim() || "See attached image(s)." }
+    { type: "text", text: textContent || "See attached file(s)." }
   ];
-  for (const attachment of message.attachments) {
-    parts.push({
-      type: "image_url",
-      image_url: { url: attachment.dataUrl }
-    });
+  for (const attachment of multimodal) {
+    const kind = paperclipAttachmentKind(attachment.mimeType, attachment.name);
+    if (kind === "image") {
+      parts.push({
+        type: "image_url",
+        image_url: { url: attachment.dataUrl }
+      });
+      continue;
+    }
+    if (kind === "pdf") {
+      parts.push({
+        type: "file",
+        file: {
+          filename: attachment.name,
+          file_data: attachment.dataUrl
+        }
+      });
+    }
   }
   return parts;
 }
 
 function formatAnthropicContent(message: ChatRequestMessage): string | Array<Record<string, unknown>> {
-  if (!message.attachments?.length) {
-    return message.content;
+  const multimodal = message.attachments?.filter(isMultimodalPaperclipAttachment) ?? [];
+  const textContent = message.content.trim();
+  if (!multimodal.length) {
+    return textContent;
   }
   const parts: Array<Record<string, unknown>> = [];
-  for (const attachment of message.attachments) {
-    parts.push({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: attachment.mimeType,
-        data: base64FromDataUrl(attachment.dataUrl)
-      }
-    });
+  for (const attachment of multimodal) {
+    const kind = paperclipAttachmentKind(attachment.mimeType, attachment.name);
+    if (kind === "image") {
+      parts.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: attachment.mimeType,
+          data: base64FromDataUrl(attachment.dataUrl)
+        }
+      });
+      continue;
+    }
+    if (kind === "pdf") {
+      parts.push({
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: base64FromDataUrl(attachment.dataUrl)
+        }
+      });
+    }
   }
-  parts.push({ type: "text", text: message.content.trim() || "See attached image(s)." });
+  parts.push({ type: "text", text: textContent || "See attached file(s)." });
   return parts;
 }
 
 function formatGeminiParts(message: ChatRequestMessage): Array<Record<string, unknown>> {
-  const parts: Array<Record<string, unknown>> = [{ text: message.content.trim() || "See attached image(s)." }];
-  for (const attachment of message.attachments ?? []) {
+  const multimodal = message.attachments?.filter(isMultimodalPaperclipAttachment) ?? [];
+  const textContent = message.content.trim();
+  const parts: Array<Record<string, unknown>> = [
+    { text: textContent || (multimodal.length ? "See attached file(s)." : "") }
+  ];
+  for (const attachment of multimodal) {
     parts.push({
       inlineData: {
         mimeType: attachment.mimeType,
@@ -211,11 +251,6 @@ function formatGeminiParts(message: ChatRequestMessage): Array<Record<string, un
     });
   }
   return parts;
-}
-
-function base64FromDataUrl(dataUrl: string): string {
-  const comma = dataUrl.indexOf(",");
-  return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 }
 
 function anthropicBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {

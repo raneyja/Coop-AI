@@ -24,6 +24,7 @@ import {
   type PlanQuotaService,
   writePlanQuotaExceededResponse
 } from "../server/planQuota";
+import { isValidPaperclipDataUrl, isAcceptedPaperclipMimeType, isVisionWeightedPaperclipAttachment } from "../chat/paperclipAttachments";
 
 export type ChatApiDeps = {
   router?: ModelRouter;
@@ -123,7 +124,7 @@ export async function handleChatApiRequest(
 
   const body = asRecord(parsed.body) as V1ChatRequestBody;
   const message = typeof body.message === "string" ? body.message : "";
-  const attachments = Array.isArray(body.attachments) ? body.attachments.filter(isImageAttachment) : [];
+  const attachments = Array.isArray(body.attachments) ? body.attachments.filter(isPaperclipAttachment) : [];
   if (!message.trim() && attachments.length === 0) {
     writeJson(response, 400, { error: "invalid_request", message: "message or attachments required" });
     return true;
@@ -132,7 +133,10 @@ export async function handleChatApiRequest(
   const planQuota = resolvePlanQuota(deps);
   const maxTokens = typeof body.maxTokens === "number" ? body.maxTokens : 2000;
   const history = Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [];
-  const visionWeighted = attachments.length > 0 || history.some((entry) => (entry.attachments?.length ?? 0) > 0);
+  const visionAttachmentCount = countVisionWeightedAttachments(attachments);
+  const visionWeighted =
+    visionAttachmentCount > 0 ||
+    history.some((entry) => countVisionWeightedAttachments(entry.attachments) > 0);
   const provider = readProvider(body.provider, config.defaultProvider);
   const model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
   try {
@@ -143,7 +147,7 @@ export async function handleChatApiRequest(
         message,
         history,
         maxTokens,
-        imageAttachmentCount: attachments.length,
+        imageAttachmentCount: visionAttachmentCount,
         provider,
         model
       })
@@ -303,10 +307,10 @@ function isHistoryMessage(
   if (entry.attachments === undefined) {
     return true;
   }
-  return Array.isArray(entry.attachments) && entry.attachments.every(isImageAttachment);
+  return Array.isArray(entry.attachments) && entry.attachments.every(isPaperclipAttachment);
 }
 
-function isImageAttachment(value: unknown): value is { id: string; name: string; mimeType: string; dataUrl: string } {
+function isPaperclipAttachment(value: unknown): value is { id: string; name: string; mimeType: string; dataUrl: string } {
   if (typeof value !== "object" || !value) {
     return false;
   }
@@ -316,8 +320,19 @@ function isImageAttachment(value: unknown): value is { id: string; name: string;
     typeof entry.name === "string" &&
     typeof entry.mimeType === "string" &&
     typeof entry.dataUrl === "string" &&
-    entry.dataUrl.startsWith("data:image/")
+    isValidPaperclipDataUrl(entry.dataUrl) &&
+    isAcceptedPaperclipMimeType(entry.mimeType, entry.name)
   );
+}
+
+function countVisionWeightedAttachments(attachments: unknown[] | undefined): number {
+  if (!Array.isArray(attachments)) {
+    return 0;
+  }
+  return attachments.filter(
+    (attachment): attachment is { id: string; name: string; mimeType: string; dataUrl: string } =>
+      isPaperclipAttachment(attachment) && isVisionWeightedPaperclipAttachment(attachment)
+  ).length;
 }
 
 function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {

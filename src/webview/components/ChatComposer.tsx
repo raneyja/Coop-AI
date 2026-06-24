@@ -19,8 +19,9 @@ import {
   attachmentsFromClipboard,
   attachmentsFromDataTransfer,
   mergeAttachments,
-  readImageFiles
+  readAttachmentFiles
 } from "../attachmentUtils";
+import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 
 type ChatComposerProps = {
@@ -275,15 +276,15 @@ export function ChatComposer({
   const addAttachments = useCallback(
     async (files: FileList | File[]) => {
       try {
-        const incoming = await readImageFiles(files);
+        const incoming = await readAttachmentFiles(files);
         if (!incoming.length) {
-          onAttachmentError("Only PNG, JPEG, GIF, and WebP images are supported.");
+          onAttachmentError("Unsupported file type. Attach images, PDFs, or text files (e.g. .md, .txt, .json).");
           return;
         }
         onAttachmentError("");
         onAttachmentsChange(mergeAttachments(attachments, incoming, onAttachmentError));
       } catch (error) {
-        onAttachmentError(error instanceof Error ? error.message : "Could not attach image.");
+        onAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
     [attachments, onAttachmentError, onAttachmentsChange]
@@ -300,7 +301,7 @@ export function ChatComposer({
         onAttachmentError("");
         onAttachmentsChange(mergeAttachments(attachments, incoming, onAttachmentError));
       } catch (error) {
-        onAttachmentError(error instanceof Error ? error.message : "Could not attach image.");
+        onAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
     [attachments, onAttachmentError, onAttachmentsChange]
@@ -321,7 +322,7 @@ export function ChatComposer({
         onAttachmentError("");
         onAttachmentsChange(mergeAttachments(attachments, incoming, onAttachmentError));
       } catch (error) {
-        onAttachmentError(error instanceof Error ? error.message : "Could not attach image.");
+        onAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
     [attachments, isStreaming, onAttachmentError, onAttachmentsChange]
@@ -552,13 +553,21 @@ export function ChatComposer({
             className="flex flex-wrap gap-2 border-b px-3 py-2"
             style={{ borderColor: "var(--coop-composer-border)" }}
           >
-            {attachments.map((attachment) => (
+            {attachments.map((attachment) => {
+              const isImage = paperclipAttachmentKind(attachment.mimeType, attachment.name) === "image";
+              return (
               <div
                 key={attachment.id}
                 className="group relative h-14 w-14 overflow-hidden rounded-md border border-[var(--coop-border)] bg-[var(--coop-composer-surface)]"
                 title={attachment.name}
               >
-                <img src={attachment.dataUrl} alt={attachment.name} className="h-full w-full object-cover" />
+                {isImage ? (
+                  <img src={attachment.dataUrl} alt={attachment.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center px-1 text-center text-[9px] leading-tight text-[var(--coop-panel-muted)]">
+                    {attachment.name.split("/").pop() ?? attachment.name}
+                  </div>
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${attachment.name}`}
@@ -569,7 +578,8 @@ export function ChatComposer({
                   ×
                 </button>
               </div>
-            ))}
+            );
+            })}
           </div>
         ) : null}
 
@@ -642,8 +652,8 @@ export function ChatComposer({
               </button>
               <button
                 type="button"
-                title="Attach image"
-                aria-label="Attach image"
+                title="Attach file"
+                aria-label="Attach file"
                 disabled={isStreaming}
                 onClick={() => fileInputRef.current?.click()}
                 className="coop-icon-btn"
@@ -653,7 +663,7 @@ export function ChatComposer({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
+                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/*,.md,.markdown,.txt,.json,.yaml,.yml,.csv,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.rb,.sql,.sh,.toml,.env"
                 multiple
                 className="hidden"
                 onChange={(event) => {

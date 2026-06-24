@@ -7,7 +7,7 @@ import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
 import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
 import { GENERAL_CHAT_EVIDENCE_RULES } from "./evidenceSynthesis";
-import { USER_IMAGE_ATTACHMENTS_SYSTEM_RULE } from "./userImageAttachments";
+import { USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE } from "../chat/paperclipAttachments";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
 // soften the fluency bullet or make it conditional — keep the block, don't remove it.
@@ -182,19 +182,21 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
 
-When \`<knowledge_gap_scan>\` contains \`<gap>\` entries: add one subsection per scan gap using the two-bullet pattern below (title from gap type/message).
+When \`<notion_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
 
-When \`<confluence_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
-
-**Confluence pages reviewed**
+**Notion pages reviewed**
 
 List exactly N bullets — one per \`<page>\` title, in the same order as the XML:
 
 - **{exact <page> title}:** one sentence on whether it documents the active file/area and what it covers or omits
 
-Do not use **Documentation coverage**, "Relevant pages include", or any synonym. Do not summarize pages you skip. If count is 7, list 7 titled bullets.
+When \`<confluence_pages count="N">\` has \`count\` > 0, add **Confluence pages reviewed** with exactly N titled bullets in XML order (after Notion when both exist).
 
-For scan-backed or Confluence-backed gaps only, use this shape (blank line between gaps):
+When \`<google_docs count="N">\` has \`count\` > 0, add **Google Docs reviewed** with exactly N titled bullets in XML order.
+
+When \`<knowledge_gap_scan>\` contains \`<gap>\` entries with type \`missing_docs\` or \`impact_unknown\`: add one subsection per scan gap using the two-bullet pattern below (title from gap message).
+
+For scan-backed or integration-page-backed gaps only, use this shape (blank line between gaps):
 
 **{Gap title from evidence}**
 
@@ -205,12 +207,13 @@ Rules:
 - Subsection title on its own line (**Title**). Never bullet the title.
 - Exactly two bullets under each title: **Open question:** then **What to check:**
 - Never put those field lines as top-level bullets without the subsection title directly above.
+- Never leave **Documentation gaps** empty when scan gaps or Notion/Confluence/Google Docs pages are attached.
 
 **Ownership & maintenance**
-Same subsection + two-bullet pattern (omit if none).
+Include only when \`<knowledge_gap_scan>\` contains a \`<gap type="missing_owner">\` entry — one subsection per such gap using the two-bullet pattern. **Omit the entire section** when no missing_owner gap exists (even if ownership signals are attached).
 
 **Integration & operations**
-Same subsection + two-bullet pattern for config, deploy, and ops unknowns (omit if none). Never bundle multiple open questions under one **Operational unknowns** header.
+Include only when \`<knowledge_gap_scan>\` contains an integration/operations gap type (\`integration_unknown\`, \`ops_unknown\`, \`missing_runbook\`, \`missing_ops\`). **Omit the entire section** otherwise. Never invent plugin, deploy, or third-party configuration questions.
 
 Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**.
 
@@ -259,7 +262,7 @@ function withOutputContract(
   useCase: Exclude<UseCase, "inline_completion">
 ): string {
   const structure = USE_CASE_STRUCTURE[useCase] ?? "";
-  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_IMAGE_ATTACHMENTS_SYSTEM_RULE}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
 export const COMPREHENSION_SYSTEM = withOutputContract(REPO_SUMMARY_EVIDENCE_SYSTEM, "comprehension");
@@ -856,7 +859,8 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
 
 function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
   const pages = notion.pages ?? [];
-  const lines: string[] = ["<notion_pages>"];
+  const pageCount = pages.length;
+  const lines: string[] = [`<notion_pages count="${pageCount}">`];
   if (notion.error) {
     lines.push(`<error>${escapeXml(notion.error)}</error>`);
   }
@@ -865,8 +869,13 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
       `<search query="${escapeXml(notion.query)}"${notion.repoQuery ? ` repo="${escapeXml(notion.repoQuery)}"` : ""} />`
     );
   }
-  if (pages.length === 0 && !notion.error) {
+  if (pageCount === 0 && !notion.error) {
     lines.push("<empty>No matching Notion pages found.</empty>");
+  }
+  if (pageCount > 0) {
+    lines.push(
+      `<instruction>List all ${pageCount} page titles under **Notion pages reviewed** in Knowledge Gaps responses.</instruction>`
+    );
   }
   for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
@@ -880,7 +889,8 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
 
 function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
   const documents = googleDocs.documents ?? [];
-  const lines: string[] = ["<google_docs>"];
+  const docCount = documents.length;
+  const lines: string[] = [`<google_docs count="${docCount}">`];
   if (googleDocs.error) {
     lines.push(`<error>${escapeXml(googleDocs.error)}</error>`);
   }
@@ -889,8 +899,13 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
       `<search query="${escapeXml(googleDocs.query)}"${googleDocs.repoQuery ? ` repo="${escapeXml(googleDocs.repoQuery)}"` : ""} />`
     );
   }
-  if (documents.length === 0 && !googleDocs.error) {
+  if (docCount === 0 && !googleDocs.error) {
     lines.push("<empty>No matching Google Docs found.</empty>");
+  }
+  if (docCount > 0) {
+    lines.push(
+      `<instruction>List all ${docCount} document titles under **Google Docs reviewed** in Knowledge Gaps responses.</instruction>`
+    );
   }
   for (const doc of documents) {
     const url = doc.htmlUrl ? ` url="${escapeXml(doc.htmlUrl)}"` : "";

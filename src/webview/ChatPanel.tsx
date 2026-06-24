@@ -892,7 +892,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setAttachmentError("");
         setAttachments((current) => mergeAttachments(current, incoming, setAttachmentError));
       } catch (error) {
-        setAttachmentError(error instanceof Error ? error.message : "Could not attach image.");
+        setAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
     [isStreaming]

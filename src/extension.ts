@@ -15,6 +15,10 @@ import { readAutocompleteSettings } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
+import {
+  isRemoteFileSearchFallbackCandidate,
+  searchFilesViaCloudTree
+} from "./api/codeHosts/cloudRepoFileSearchFallback";
 import { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
 import { linesFromText } from "./api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "./api/codeHosts/types";
@@ -95,7 +99,52 @@ export function activate(context: vscode.ExtensionContext): void {
     query,
     coords,
     limit
-  }) => api.fetchRepoSearchViaCloud(getApiBaseUrl(), repoId, query, coords.branch, limit);
+  }) => {
+    const baseUrl = getApiBaseUrl();
+    try {
+      return await api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit);
+    } catch (primaryError) {
+      if (!isRemoteFileSearchFallbackCandidate(primaryError)) {
+        throw primaryError;
+      }
+
+      try {
+        const remote = (await api.graphSearch(baseUrl, repoId, query, {
+          mention: true,
+          scope: "indexed"
+        })) as { data?: Array<{ path?: string }> };
+        const graphHits = (remote.data ?? [])
+          .map((hit) => hit.path?.trim())
+          .filter((path): path is string => Boolean(path))
+          .map((path) => ({ path, name: path.split("/").pop() ?? path }));
+        if (graphHits.length > 0) {
+          return graphHits.slice(0, limit);
+        }
+      } catch {
+        // Fall through to directory walk.
+      }
+
+      const treeHits = await searchFilesViaCloudTree(
+        async (path) => {
+          const tree = await api.fetchRepoTreeViaCloud(baseUrl, repoId, path, coords.branch);
+          return {
+            entries: tree.entries.map((entry) => ({
+              path: entry.path,
+              name: entry.name,
+              type: entry.type
+            }))
+          };
+        },
+        query,
+        limit
+      );
+      if (treeHits.length > 0) {
+        return treeHits;
+      }
+
+      throw primaryError;
+    }
+  };
   const cloudCodeHostRepoListFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoListFetcher =
     async () => {
       const repos = await api.listGithubOrgRepos(getApiBaseUrl());

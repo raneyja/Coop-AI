@@ -3,7 +3,10 @@ import type { IntegrationChatProvider } from "../chat/types";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
   enrichKnowledgeGapsResponse,
-  extractConfluencePagesFromBundle
+  extractConfluencePagesFromBundle,
+  extractGoogleDocsFromBundle,
+  extractJobScanGapsFromBundle,
+  extractNotionPagesFromBundle
 } from "../prompts/knowledgeGapsEnrichment";
 import {
   enrichOutOfScopeMentionsInResponse,
@@ -79,8 +82,13 @@ export function enrichChatResponseForAction(options: {
         isFollowUp: options.isTraceFollowUp
       });
     case "knowledge-gaps": {
-      const pages = extractConfluencePagesFromBundle(contextBundle);
-      return enrichKnowledgeGapsResponse(enriched, { confluencePages: pages, activeFile });
+      return enrichKnowledgeGapsResponse(enriched, {
+        confluencePages: extractConfluencePagesFromBundle(contextBundle),
+        notionPages: extractNotionPagesFromBundle(contextBundle),
+        googleDocs: extractGoogleDocsFromBundle(contextBundle),
+        jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
+        activeFile
+      });
     }
     default:
       return enriched;

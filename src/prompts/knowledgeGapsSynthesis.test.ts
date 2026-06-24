@@ -62,17 +62,46 @@ test("knowledge-gaps synthesis forbids invented gaps when scan is missing", () =
   assert.match(prompt, /No matching Jira issues/);
 });
 
-test("knowledge-gaps synthesis uses knowledge-gaps enrichment instead of decision archaeology", () => {
+test("knowledge-gaps synthesis uses response contract instead of invented enrichment", () => {
   const prompt = buildKnowledgeGapsSynthesisUserPrompt({
     evidence: { jobScan: { gaps: [] } },
     file: "fastify.js"
   });
-  assert.ok(prompt.includes("## Knowledge gaps enrichment"));
-  assert.ok(prompt.includes("missing runbooks"));
+  assert.ok(prompt.includes("## Response contract (required)"));
+  assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));
+  assert.ok(prompt.includes("Omit Integration & operations entirely"));
+  assert.ok(!prompt.includes("missing runbooks"));
   assert.ok(!prompt.includes("introducingDiffSummary"));
 });
 
-test("knowledge-gaps synthesis includes enterprise audit rubric when scan missing", () => {
+test("knowledge-gaps synthesis requires Notion pages and scan gaps in response contract", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: {
+      file: "fastify.js",
+      jobScan: {
+        gaps: [
+          { type: "missing_docs", message: "No Confluence pages matched repo scope", file: "fastify.js" },
+          { type: "missing_docs", message: "No Google Docs matched repo scope", file: "fastify.js" }
+        ]
+      }
+    },
+    notion: {
+      pages: [
+        { id: "1", title: "ADR: Webview vs native sidebar (COOP-55)", updated: "2026-01-01" },
+        { id: "2", title: "Coop AI Demo", updated: "2026-01-01" }
+      ]
+    },
+    file: "fastify.js",
+    owner: "coop-demo-lab",
+    repo: "fastify"
+  });
+  assert.ok(prompt.includes("**Notion pages reviewed** with exactly 2 titled bullets"));
+  assert.ok(prompt.includes("No Confluence pages matched repo scope"));
+  assert.ok(prompt.includes("No Google Docs matched repo scope"));
+  assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));
+});
+
+test("knowledge-gaps synthesis flags limited evidence when scan missing", () => {
   const prompt = buildKnowledgeGapsSynthesisUserPrompt({
     evidence: {},
     owner: "coop-demo-lab",

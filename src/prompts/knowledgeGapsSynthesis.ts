@@ -34,12 +34,13 @@ import {
 } from "./knowledgeGapsSourceLabels";
 import { ownershipTierLabel } from "./ownershipSourceLabels";
 
-export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health: missing docs, orphaned code, unclear ownership, and open questions.
-List what is unknown and what evidence would reduce risk.
-Only cite documentation gaps that appear in the knowledge gap scan bundle or Confluence/Jira/Slack evidence — never invent gap titles from reading source code.
-When no knowledge gap scan is attached, say scan evidence is unavailable and omit invented Documentation gaps subsections.
-The primary audit target is stated in ## Task (a file path or repository-wide scope) — do not center the audit on out-of-scope @ attachments.
-For enterprise readiness, evaluate: runbooks/on-call docs for operational areas, ownership clarity for change approval (CODEOWNERS + commit history), integration configuration documentation, and deployment/CI coverage — cite only what appears in the bundle.
+export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
+List scan-backed gaps and integration hits — never invent gap subsections from code inspection or generic framework knowledge.
+Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, or explicit integration errors in the bundle.
+Omit **Ownership & maintenance** unless the scan contains a missing_owner gap. Ownership signals in the card are context only — not a reason to invent owner questions.
+Omit **Integration & operations** unless the scan contains an integration or operations gap type. Never invent plugin, deploy, or third-party configuration questions.
+When Notion or Confluence pages are attached with count > 0, review those exact titles under **Documentation gaps** before scan gap subsections.
+The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -124,7 +125,7 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     )
   );
   appendEvidenceQualityInstructions(lines);
-  appendKnowledgeGapsEnrichmentInstructions(lines);
+  appendKnowledgeGapsResponseContract(lines, input);
   lines.push(
     repoWide
       ? "Synthesize repository-wide blind spots from the evidence bundle — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
@@ -134,19 +135,73 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
   return lines.join("\n");
 }
 
-function appendKnowledgeGapsEnrichmentInstructions(lines: string[]): void {
-  lines.push("## Knowledge gaps enrichment");
-  lines.push(
-    "- Prioritize gaps that block safe changes: missing runbooks, unclear ownership for change approval, undocumented integration config."
+function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGapsSynthesisInput): void {
+  const scanGaps = input.evidence.jobScan?.gaps ?? [];
+  const documentationGaps = scanGaps.filter(
+    (gap) => gap.type === "missing_docs" || gap.type === "impact_unknown"
   );
-  lines.push(
-    "- When Confluence/Jira evidence is present, cross-reference page titles and ticket statuses to scan gaps — do not duplicate or invent gap titles."
+  const ownerGaps = scanGaps.filter((gap) => gap.type === "missing_owner");
+  const integrationGaps = scanGaps.filter(
+    (gap) =>
+      gap.type === "integration_unknown" ||
+      gap.type === "ops_unknown" ||
+      gap.type === "missing_runbook" ||
+      gap.type === "missing_ops"
   );
+
+  lines.push("## Response contract (required)");
+  lines.push("**Documentation gaps** must include, in order:");
+  if (input.notion?.pages?.length) {
+    lines.push(
+      `- **Notion pages reviewed** with exactly ${input.notion.pages.length} titled bullets in this order: ${input.notion.pages
+        .map((page) => page.title)
+        .join("; ")}`
+    );
+  }
+  if (input.confluence?.pages?.length) {
+    lines.push(
+      `- **Confluence pages reviewed** with exactly ${input.confluence.pages.length} titled bullets in this order: ${input.confluence.pages
+        .map((page) => page.title)
+        .join("; ")}`
+    );
+  }
+  if (input.googleDocs?.documents?.length) {
+    lines.push(
+      `- **Google Docs reviewed** with exactly ${input.googleDocs.documents.length} titled bullets in this order: ${input.googleDocs.documents
+        .map((doc) => doc.title)
+        .join("; ")}`
+    );
+  }
+  for (const gap of documentationGaps) {
+    lines.push(`- Scan gap subsection from [Sources: Knowledge gap scan]: ${String(gap.message ?? gap.type ?? "gap")}`);
+  }
+  if (
+    !input.notion?.pages?.length &&
+    !input.confluence?.pages?.length &&
+    !input.googleDocs?.documents?.length &&
+    documentationGaps.length === 0
+  ) {
+    lines.push("- State that no documentation integration hits or scan gaps were attached.");
+  }
+
+  if (ownerGaps.length > 0) {
+    lines.push("**Ownership & maintenance** — include one subsection per missing_owner scan gap only.");
+  } else {
+    lines.push(
+      "- **Omit Ownership & maintenance entirely** — scan has no missing_owner gaps; do not invent owner or maintainer questions from ownership signals."
+    );
+  }
+
+  if (integrationGaps.length > 0) {
+    lines.push("**Integration & operations** — include one subsection per integration/ops scan gap only.");
+  } else {
+    lines.push(
+      "- **Omit Integration & operations entirely** — scan has no integration/ops gaps; do not invent plugin, deploy, or configuration questions."
+    );
+  }
+
   lines.push(
-    "- When ownershipReport is present, flag paths with no primary owner or stale commit activity as maintenance risks."
-  );
-  lines.push(
-    "- When jobScan is missing, state scan evidence is unavailable — do not infer Documentation gaps from code inspection."
+    "- Summary must acknowledge Notion/Confluence/Google Docs hits when present and cite scan gaps verbatim — never claim zero documentation when Notion pages are attached."
   );
   lines.push("");
 }

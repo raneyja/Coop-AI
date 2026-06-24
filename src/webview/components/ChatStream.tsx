@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { ChatImageAttachment } from "../../chat/types";
+import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import type { ConflictSummary } from "../types";
 import type { EvidenceActionContext } from "../evidenceCardActionHandler";
 import { DecisionTimeline, type DecisionTimelinePayload } from "../DecisionTimeline";
@@ -276,14 +277,24 @@ function MessageBlock({
 
         {message.attachments?.length ? (
           <div className="chat-message-attachments">
-            {message.attachments.map((attachment) => (
-              <img
-                key={attachment.id}
-                src={attachment.dataUrl}
-                alt={attachment.name}
-                title={attachment.name}
-              />
-            ))}
+            {message.attachments.map((attachment) =>
+              paperclipAttachmentKind(attachment.mimeType, attachment.name) === "image" ? (
+                <img
+                  key={attachment.id}
+                  src={attachment.dataUrl}
+                  alt={attachment.name}
+                  title={attachment.name}
+                />
+              ) : (
+                <span
+                  key={attachment.id}
+                  className="chat-message-attachment-file"
+                  title={attachment.name}
+                >
+                  {attachment.name.split("/").pop() ?? attachment.name}
+                </span>
+              )
+            )}
           </div>
         ) : null}
 

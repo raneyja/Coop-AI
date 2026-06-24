@@ -982,6 +982,13 @@
     border-color: var(--coop-border);
   }
 
+  .chat-message-attachment-file {
+    @apply inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs;
+    border-color: var(--coop-border);
+    color: var(--coop-panel-muted);
+    background: var(--coop-composer-surface);
+  }
+
   .chat-message-links {
     @apply mt-2 flex flex-wrap gap-2;
   }

@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import {
   buildConfluencePagesReviewedBlock,
+  buildNotionPagesReviewedBlock,
+  buildScanGapSubsection,
   enrichKnowledgeGapsResponse,
-  extractConfluencePagesFromBundle
+  extractConfluencePagesFromBundle,
+  extractJobScanGapsFromBundle,
+  extractNotionPagesFromBundle
 } from "./knowledgeGapsEnrichment";
 
 let passed = 0;
@@ -106,22 +110,22 @@ test("enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation
   const confluenceIdx = enriched.indexOf("**Confluence pages reviewed**");
   assert.ok(docGapsIdx >= 0);
   assert.ok(confluenceIdx > docGapsIdx);
-  assert.ok(
-    confluenceIdx < enriched.indexOf("- **Open question:** Is there comprehensive documentation")
-  );
+  assert.equal(enriched.includes("**Documentation Coverage**"), false);
+  assert.equal(enriched.includes("Is there comprehensive documentation"), false);
   for (const page of SAMPLE_PAGES) {
     assert.ok(enriched.includes(`[${page.title}](${page.htmlUrl})`));
   }
 });
 
-test("enrichKnowledgeGapsResponse promotes Ownership and Operational Unknowns to main sections", () => {
+test("enrichKnowledgeGapsResponse strips invented Ownership and Integration sections", () => {
   const enriched = enrichKnowledgeGapsResponse(SAMPLE_LLM_OUTPUT, {
     confluencePages: SAMPLE_PAGES,
     activeFile: "src/server/githubAppApi.ts"
   });
-  assert.ok(enriched.includes("**Ownership & maintenance**"));
-  assert.ok(enriched.includes("**Integration & operations**"));
+  assert.equal(enriched.includes("**Ownership & maintenance**"), false);
+  assert.equal(enriched.includes("**Integration & operations**"), false);
   assert.equal(enriched.includes("**Operational Unknowns**"), false);
+  assert.equal(enriched.includes("**Ownership**"), false);
 });
 
 test("enrichKnowledgeGapsResponse linkifies file paths and Confluence title mentions", () => {
@@ -130,8 +134,8 @@ test("enrichKnowledgeGapsResponse linkifies file paths and Confluence title ment
     activeFile: "src/server/githubAppApi.ts"
   });
   assert.ok(enriched.includes("`src/server/githubAppApi.ts`"));
-  assert.ok(enriched.includes("`githubAppService.ts`"));
   assert.ok(enriched.includes("[Coop AI — Architecture Overview](https://example.atlassian.net/wiki/spaces/COOP/pages/6)"));
+  assert.ok(enriched.includes("**Confluence pages reviewed**"));
 });
 
 test("buildConfluencePagesReviewedBlock uses keyword heuristics for runbook pages", () => {
@@ -150,6 +154,108 @@ test("enrichKnowledgeGapsResponse numbers recommended next steps", () => {
   });
   assert.ok(enriched.includes("1. Verify the configuration documentation"));
   assert.ok(enriched.includes("2. Consult the [Coop AI — Architecture Overview]"));
+});
+
+test("enrichKnowledgeGapsResponse rebuilds fastify.js scenario with Notion pages and scan gaps", () => {
+  const notionPages = [
+    { title: "ADR: Webview vs native sidebar (COOP-55)", url: "https://notion.so/1" },
+    { title: "Coop AI Demo", url: "https://notion.so/2" },
+    { title: "ADR: Backend service extraction (COOP-101)", url: "https://notion.so/3" },
+    { title: "Coop AI — Architecture Overview", url: "https://notion.so/4" },
+    { title: "GitHub App API — server routes", url: "https://notion.so/5" },
+    { title: "Coop AI — Architecture & integration notes", url: "https://notion.so/6" }
+  ].map((page) => ({ title: page.title, htmlUrl: page.url }));
+
+  const jobScanGaps = [
+    { type: "missing_docs", message: "No Confluence pages matched repo scope", file: "fastify.js" },
+    { type: "missing_docs", message: "No Google Docs matched repo scope", file: "fastify.js" }
+  ];
+
+  const llmOutput = `**Summary**
+
+No documentation resources were found for fastify.js.
+
+**Documentation gaps**
+
+**Ownership & maintenance**
+
+**Who maintains fastify.js**
+
+- **Open question:** Who owns this file?
+- **What to check:** CODEOWNERS and commit history.
+
+**Integration & operations**
+
+**Third-party plugins**
+
+- **Open question:** What plugins are configured?
+- **What to check:** package.json and plugin registration.
+
+**Recommended next steps**
+
+1. Add documentation for fastify.js.`;
+
+  const enriched = enrichKnowledgeGapsResponse(llmOutput, {
+    notionPages,
+    jobScanGaps,
+    activeFile: "fastify.js"
+  });
+
+  assert.ok(enriched.includes("**Notion pages reviewed**"));
+  for (const page of notionPages) {
+    assert.ok(enriched.includes(`[${page.title}](${page.htmlUrl})`));
+  }
+  assert.ok(enriched.includes("No Confluence pages matched repo scope"));
+  assert.ok(enriched.includes("No Google Docs matched repo scope"));
+  assert.equal(enriched.includes("**Ownership & maintenance**"), false);
+  assert.equal(enriched.includes("**Integration & operations**"), false);
+  assert.equal(enriched.includes("Third-party plugins"), false);
+  assert.ok(enriched.includes("`fastify.js`"));
+});
+
+test("buildScanGapSubsection uses scan message for What to check", () => {
+  const block = buildScanGapSubsection(
+    { type: "missing_docs", message: "No Confluence pages matched repo scope", file: "fastify.js" },
+    "fastify.js"
+  );
+  assert.ok(block.includes("No Confluence pages matched repo scope"));
+  assert.ok(block.includes("**Open question:**"));
+});
+
+test("extractNotionPagesFromBundle and extractJobScanGapsFromBundle read bundle entries", () => {
+  const notion = extractNotionPagesFromBundle([
+    {
+      type: "chat_context",
+      data: {
+        notionSearch: {
+          pages: [{ id: "n1", title: "Coop AI Demo", updated: "2026-01-01", url: "https://notion.so/demo" }]
+        }
+      }
+    }
+  ]);
+  assert.deepEqual(notion, [{ title: "Coop AI Demo", htmlUrl: "https://notion.so/demo" }]);
+
+  const gaps = extractJobScanGapsFromBundle([
+    {
+      type: "chat_context",
+      data: {
+        jobScan: {
+          gaps: [{ type: "missing_docs", message: "No Google Docs matched repo scope", file: "fastify.js" }]
+        }
+      }
+    }
+  ]);
+  assert.deepEqual(gaps, [
+    { type: "missing_docs", message: "No Google Docs matched repo scope", file: "fastify.js" }
+  ]);
+});
+
+test("buildNotionPagesReviewedBlock links titles when htmlUrl is present", () => {
+  const block = buildNotionPagesReviewedBlock(
+    [{ title: "Coop AI Demo", htmlUrl: "https://notion.so/demo" }],
+    "fastify.js"
+  );
+  assert.ok(block.includes("[Coop AI Demo](https://notion.so/demo)"));
 });
 
 test("extractConfluencePagesFromBundle reads pages and urls from context bundle", () => {

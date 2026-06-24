@@ -444,11 +444,17 @@ export function RemoteExplorerTreePanel({
   );
 
   const authHint = treeState.error?.toLowerCase().includes("token") || treeState.error?.toLowerCase().includes("auth");
+  const searchError = searchState.error?.toLowerCase() ?? "";
   const searchSettingsHint =
-    searchState.error?.toLowerCase().includes("github app") ||
-    searchState.error?.toLowerCase().includes("install") ||
-    searchState.error?.toLowerCase().includes("authorize") ||
-    searchState.error?.toLowerCase().includes("not installed");
+    Boolean(searchState.error) &&
+    !searchError.includes("403") &&
+    !searchError.includes("422") &&
+    !searchError.includes("code search") &&
+    (searchError.includes("not installed") ||
+      searchError.includes("not connected") ||
+      searchError.includes("token is missing") ||
+      searchError.includes("authentication failed") ||
+      searchError.includes("authorize"));
 
   const handlePickRepo = useCallback(
     (path: string) => {
