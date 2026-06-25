@@ -80,14 +80,7 @@ export default function PricingPage() {
     <>
       <PageHeader
         eyebrow="Pricing"
-        titleClassName="font-medium"
-        title={
-          <>
-            Context is king.
-            <br />
-            Connect every tool to your <span className="font-semibold text-coop-index">codebases</span>.
-          </>
-        }
+        title="Every tool. Total context"
         description="Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode — managed cloud indexing for dramatically faster cross-repo search."
       />
 
