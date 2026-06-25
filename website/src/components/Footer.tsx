@@ -12,7 +12,7 @@ export function Footer() {
               <BrandMark size="sm" />
             </Link>
             <p className="mt-4 text-sm leading-relaxed text-coop-muted">
-              Zero-clone code intelligence for VS Code.
+              Your codebase, finally explained
             </p>
           </div>
 

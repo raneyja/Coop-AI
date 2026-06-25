@@ -54,8 +54,8 @@ const tiers: PricingTier[] = [
       "Priority support"
     ],
     recommended: true,
-    cta: "Start Pro",
-    href: "/signup",
+    cta: "Join waitlist",
+    href: "/demo?intent=waitlist",
     highlighted: true
   },
   {
@@ -83,9 +83,9 @@ export default function PricingPage() {
         titleClassName="font-medium"
         title={
           <>
-            Start free with local workspace context.
+            Context is king.
             <br />
-            Go Pro for <span className="font-semibold text-coop-index">code hosts &amp; Lightning Mode</span>.
+            Connect every tool to your <span className="font-semibold text-coop-index">codebases</span>.
           </>
         }
         description="Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode — managed cloud indexing for dramatically faster cross-repo search."
