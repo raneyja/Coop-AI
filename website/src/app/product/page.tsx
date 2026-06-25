@@ -54,8 +54,8 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="Understand deeply. Write in place."
-        description="CoopAI connects your code graph, Slack, and tickets for deep questions — and graph-grounded inline completions and in-file edits while you stay in the open file."
+        title="Code with your team's full context."
+        description="Bring your team's knowledge and your entire stack into your editor. Code faster with real context."
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">
