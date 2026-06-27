@@ -23,10 +23,12 @@ export const metadata: Metadata = {
     default: `${siteConfig.name} — ${siteConfig.tagline}`,
     template: `%s · ${siteConfig.name}`
   },
-  description: siteConfig.description,
+  description:
+    "CoopAI: Organizational context for code intelligence. Zero-clone. Enterprise-ready. For teams.",
   openGraph: {
     title: siteConfig.name,
-    description: siteConfig.description,
+    description:
+      "Your codebase, finally explained. Context from Slack, Jira, code graph—for teams.",
     url: siteConfig.url,
     siteName: siteConfig.name,
     type: "website"
@@ -34,7 +36,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,
-    description: siteConfig.description
+    description:
+      "Your codebase, finally explained. Context from Slack, Jira, code graph—for teams."
   }
 };
 

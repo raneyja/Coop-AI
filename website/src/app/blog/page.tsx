@@ -6,7 +6,16 @@ import { getAllPosts, getFeaturedPosts, getHighlightedQuote } from "@/lib/blog";
 
 export const metadata: Metadata = {
   title: "Blog",
-  description: "Product updates, engineering notes, and perspectives on code intelligence from the CoopAI team."
+  description:
+    "Latest thinking from CoopAI on code intelligence, context aggregation, and SDLC tooling.",
+  openGraph: {
+    description:
+      "Read CoopAI's latest perspectives on team code intelligence and organizational context."
+  },
+  twitter: {
+    description:
+      "Read CoopAI's latest perspectives on team code intelligence and organizational context."
+  }
 };
 
 export default function BlogPage() {

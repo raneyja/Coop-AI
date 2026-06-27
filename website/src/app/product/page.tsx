@@ -11,7 +11,15 @@ import { siteConfig } from "@/lib/site.config";
 export const metadata: Metadata = {
   title: "Product",
   description:
-    "Graph-grounded code intelligence, inline completions, and in-file edits inside VS Code — zero-clone indexing included."
+    "CoopAI features: understand-repo, trace-decision, find-owner, blast-radius, knowledge-gaps. Deep codebase context.",
+  openGraph: {
+    description:
+      "Explore CoopAI's capabilities: graph-grounded code understanding without monorepo clones."
+  },
+  twitter: {
+    description:
+      "Explore CoopAI's capabilities: graph-grounded code understanding without monorepo clones."
+  }
 };
 
 const capabilities = [

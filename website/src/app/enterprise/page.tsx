@@ -7,7 +7,16 @@ import { SectionHeading } from "@/components/SectionHeading";
 
 export const metadata: Metadata = {
   title: "Enterprise",
-  description: "Zero-retention LLM routing, BYOK, and enterprise-grade code intelligence for your organization."
+  description:
+    "CoopAI Enterprise: Zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment.",
+  openGraph: {
+    description:
+      "Enterprise code intelligence. Zero-clone architecture. BYOK. SOC 2. Self-hosted or cloud."
+  },
+  twitter: {
+    description:
+      "Enterprise code intelligence. Zero-clone architecture. BYOK. SOC 2. Self-hosted or cloud."
+  }
 };
 
 const enterpriseFeatures = [

@@ -5,7 +5,16 @@ import { CTASection } from "@/components/CTASection";
 
 export const metadata: Metadata = {
   title: "Security",
-  description: "CoopAI security practices — zero-retention LLM routing, BYOK, and data handling."
+  description:
+    "CoopAI security: Zero-retention routing, BYOK, audit-ready logging, data residency.",
+  openGraph: {
+    description:
+      "How CoopAI protects your code and context. Enterprise-grade security architecture."
+  },
+  twitter: {
+    description:
+      "How CoopAI protects your code and context. Enterprise-grade security architecture."
+  }
 };
 
 export default function SecurityPage() {

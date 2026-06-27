@@ -6,7 +6,13 @@ import { Button } from "@/components/Button";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "CoopAI pricing — free Developer plan with local workspace context and AI credits; Pro at $20/user/month adds code hosts and Lightning Mode."
+    "CoopAI pricing: Developer free, Pro ($20/user), Enterprise. Org-wide context for code teams.",
+  openGraph: {
+    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
+  },
+  twitter: {
+    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
+  }
 };
 
 type PricingTier = {
