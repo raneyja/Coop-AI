@@ -14,6 +14,24 @@ const COMMANDS: Record<string, string> = {
   "completion-routing": "coop complete --graph"
 };
 
+const HOMEPAGE_QUICK_ACTIONS = [
+  {
+    id: "understand-repo",
+    title: "Understand any codebase",
+    description: "Architecture, ownership, key files — instantly."
+  },
+  {
+    id: "trace-decision",
+    title: "Trace decisions",
+    description: "Why code exists, based on commits, PRs, team context."
+  },
+  {
+    id: "find-owner",
+    title: "Find owners",
+    description: "Who maintains this. Escalation paths. One graph."
+  }
+] as const;
+
 export default function HomePage() {
   return (
     <>
@@ -21,17 +39,18 @@ export default function HomePage() {
 
       <section className="border-t border-coop-border py-20">
         <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading
-            label="quick_actions"
-            title="Understand and write where you work"
-            description="Deep questions grounded in your graph — plus inline completions and in-file edits that match how your team actually writes code."
-          />
+          <SectionHeading label="quick_actions" title="What you'll ask CoopAI" />
 
-          <QuickActionList className="mt-10" />
+          <QuickActionList
+            className="mt-10"
+            features={HOMEPAGE_QUICK_ACTIONS}
+            includeCodeCreation={false}
+            showChat={false}
+          />
 
           <p className="mt-10">
             <Link href="/product" className="text-sm font-medium text-coop-index hover:text-white">
-              Explore all features →
+              Explore all 8 capabilities on the product page →
             </Link>
           </p>
 

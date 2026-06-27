@@ -16,6 +16,7 @@ type FeatureRow = { id: string; title: string; description: string };
 type QuickActionListProps = {
   features?: readonly FeatureRow[];
   includeCodeCreation?: boolean;
+  showChat?: boolean;
   className?: string;
 };
 
@@ -25,6 +26,7 @@ const rowGrid =
 export function QuickActionList({
   features = siteConfig.features,
   includeCodeCreation = true,
+  showChat = true,
   className = ""
 }: QuickActionListProps) {
   const codeCreationFeatures = includeCodeCreation ? siteConfig.codeCreation.features : [];
@@ -43,16 +45,18 @@ export function QuickActionList({
           </div>
         </li>
       ))}
-      <li className={`${rowGrid} border-t border-dashed border-coop-border`}>
-        <code className="font-mono text-xs leading-5 text-coop-muted/60 sm:pt-0.5">coop chat</code>
-        <div className="min-w-0">
-          <p className="font-mono text-sm text-white">Chat</p>
-          <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-            Free-form questions with repo context, saved prompts, and streaming responses from your
-            choice of model.
-          </p>
-        </div>
-      </li>
+      {showChat ? (
+        <li className={`${rowGrid} border-t border-dashed border-coop-border`}>
+          <code className="font-mono text-xs leading-5 text-coop-muted/60 sm:pt-0.5">coop chat</code>
+          <div className="min-w-0">
+            <p className="font-mono text-sm text-white">Chat</p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              Free-form questions with repo context, saved prompts, and streaming responses from your
+              choice of model.
+            </p>
+          </div>
+        </li>
+      ) : null}
     </ul>
   );
 }

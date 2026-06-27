@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { HeroExampleCarousel } from "@/components/HeroExampleCarousel";
@@ -62,8 +63,8 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="Understand deeply. Write in place."
-        description="CoopAI connects your code graph, Slack, and tickets for deep questions — and graph-grounded inline completions and in-file edits while you stay in the open file."
+        title="CoopAI: Instance-wide code intelligence for teams"
+        description="CoopAI indexes your entire instance and connects that with team context—Slack, Jira, decisions. Teams get instant answers across all repositories."
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">
@@ -78,13 +79,45 @@ export default function ProductPage() {
           <SectionHeading
             label="quick_actions"
             title="Quick actions & code creation"
-            description="One-click intelligence workflows plus inline complete and in-file edit — each grounded in file, branch, selection, and graph context."
+            description="Code with your team's full context — one-click intelligence workflows plus inline complete and in-file edit."
             className="mt-2"
           />
           <QuickActionList className="mt-10" />
 
           <div className="mx-auto mt-14 max-w-4xl md:mt-16">
             <HeroExampleCarousel compact />
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-coop-border bg-coop-surface/20 py-16" id="lightning-mode">
+        <div className="mx-auto max-w-6xl px-6">
+          <SectionHeading
+            label="lightning_mode"
+            title="Lightning Mode: Instance-wide indexed search"
+            description="For teams with many interconnected repositories, Lightning Mode provides instant cross-repo context through instance-wide indexing."
+          />
+          <div className="mt-10 grid gap-8 md:grid-cols-2">
+            <div>
+              <h3 className="font-semibold text-white">What it includes:</h3>
+              <ul className="mt-4 space-y-2 text-sm text-coop-muted">
+                <li>Search across your entire codebase instantly</li>
+                <li>Instance-wide symbol and content indexing</li>
+                <li>Instant context without repository cloning</li>
+                <li>Smart caching and incremental updates</li>
+                <li>Works offline (falls back to local index)</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">Who needs it:</h3>
+              <p className="mt-4 text-sm leading-relaxed text-coop-muted">
+                Teams with 5+ connected services, microservice architectures, or teams where cloning
+                monorepos isn&apos;t practical.
+              </p>
+              <p className="mt-6 text-sm text-coop-muted">
+                <span className="font-medium text-white">Available in:</span> Pro and Enterprise plans
+              </p>
+            </div>
           </div>
         </div>
       </section>

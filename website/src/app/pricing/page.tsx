@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { Button } from "@/components/Button";
@@ -36,7 +37,7 @@ const tiers: PricingTier[] = [
     audience: "Individual engineers — one account, no team seats",
     features: [
       "Local workspace files in VS Code (no code-host connection)",
-      "AI credits with rolling 5-hour window (model-weighted)",
+      "AI credits — monthly requests reset every 5 hours, unlimited usage within plan limits",
       "Unlimited tool integrations (Slack, Jira, Notion, and more)",
       "Chat, quick actions, inline complete & edit",
       "Workspace prompt library",
@@ -53,12 +54,13 @@ const tiers: PricingTier[] = [
     period: "per user / month",
     features: [
       "Everything in Developer + GitHub code-host connection",
-      "Lightning Mode — managed cloud code graph for fast cross-repo search",
+      "Lightning Mode — instance-wide indexing for instant search across all repos in your organization",
       "Workspace repos and Deep-Indexed catalog (up to 3 repos per seat)",
       "Team seats — invite teammates",
       "Usage visibility & analytics",
       "Priority support"
     ],
+    note: "See Lightning Mode details →",
     recommended: true,
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",
@@ -69,8 +71,8 @@ const tiers: PricingTier[] = [
     price: "Custom",
     features: [
       "Everything in Pro",
-      "Zero-retention LLM routing",
-      "Bring Your Own Key (BYOK)",
+      "Zero-retention LLM routing — your code never trains models; enterprise-grade data privacy",
+      "Bring Your Own Key (BYOK) — connect your own LLM provider (AWS Bedrock, Azure, Vertex AI) or use your API key",
       "Self-hosted deployment",
       "Compliance attestation & DPA support",
       "Dedicated onboarding"
@@ -86,8 +88,8 @@ export default function PricingPage() {
     <>
       <PageHeader
         eyebrow="Pricing"
-        title="Every tool. Total context"
-        description="Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode — managed cloud indexing for dramatically faster cross-repo search."
+        title="Your codebase, finally explained"
+        description="Code with your team's full context. Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode."
       />
 
       <section className="pb-20">
@@ -133,7 +135,15 @@ export default function PricingPage() {
 
                 {tier.note ? (
                   <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">
-                    {tier.note}
+                    {tier.name === "Pro" ? (
+                      <>
+                        <Link href="/product#lightning-mode" className="font-medium text-coop-index hover:text-white">
+                          {tier.note}
+                        </Link>
+                      </>
+                    ) : (
+                      tier.note
+                    )}
                   </p>
                 ) : (
                   <div className="mt-5 border-t border-transparent pt-4" aria-hidden />

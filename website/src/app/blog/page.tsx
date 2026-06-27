@@ -5,7 +5,7 @@ import { CTASection } from "@/components/CTASection";
 import { getAllPosts, getFeaturedPosts, getHighlightedQuote } from "@/lib/blog";
 
 export const metadata: Metadata = {
-  title: "Blog",
+  title: "Latest thinking",
   description:
     "Latest thinking from CoopAI on code intelligence, context aggregation, and SDLC tooling.",
   openGraph: {

@@ -19,30 +19,25 @@ export const metadata: Metadata = {
   }
 };
 
-const enterpriseFeatures = [
+const securityFeatures = [
+  {
+    title: "Instance-wide indexing",
+    body: "Your entire codebase is indexed at the instance level. Users access organizational knowledge without managing individual repository clones."
+  },
   {
     title: "Zero-retention LLM routing",
-    body: "Every inference request passes through a configuration layer that sets retention flags, no-training headers, and enterprise-confidential system instructions before reaching any provider."
+    body: "Your code and context never train models. Every request uses enterprise-confidential headers and no-training flags.",
+    link: { href: "/security", label: "Learn how this works →" }
   },
   {
     title: "Bring Your Own Key (BYOK)",
-    body: "Route inference through your organization's provider accounts. CoopAI stores only encrypted key material and a hash — decrypted keys exist only for the duration of the outbound request."
-  },
-  {
-    title: "Server-side key management",
-    body: "LLM provider API keys never leave your CoopAI server. Developers authenticate with a CoopAI API token; provider secrets are not stored in VS Code settings or on laptops."
-  },
-  {
-    title: "Multi-provider router",
-    body: "Use Anthropic, OpenAI, Gemini, and approved providers from a single server-side router with per-use-case model selection and cost visibility."
+    body: "Connect your own LLM provider (AWS Bedrock, Azure, Vertex AI) or use Anthropic/OpenAI with your API key.",
+    link: { href: "/pricing", label: "See deployment options →" }
   },
   {
     title: "Audit-ready logging",
-    body: "BYOK audit logs capture customer ID, provider, model, timestamp, and status — never prompts, responses, API keys, or raw code context. Retention: 90 days."
-  },
-  {
-    title: "Compliance attestation",
-    body: "Generate retention reports and signed attestation payloads documenting zero-retention flag usage, BYOK request counts, and provider policy verification dates."
+    body: "Every context query is logged for compliance and debugging.",
+    link: { href: "/security", label: "Security details →" }
   }
 ];
 
@@ -52,8 +47,8 @@ export default function EnterprisePage() {
       <PageHeader
         tight
         eyebrow="Enterprise"
-        title="Teams need context, too"
-        description="CoopAI gives engineering teams deep code intelligence and graph-grounded code creation across their entire stack"
+        title="Your codebase, finally explained"
+        description="Zero-clone code intelligence for VS Code. CoopAI gives engineering teams deep code intelligence and graph-grounded context across their entire stack."
       />
 
       <section className="border-b border-coop-border pb-6 md:pb-8">
@@ -67,11 +62,19 @@ export default function EnterprisePage() {
 
       <section className="pt-6 pb-16 md:pt-8">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            {enterpriseFeatures.map((feature) => (
+          <SectionHeading label="security" title="Security & Compliance Built In" />
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {securityFeatures.map((feature) => (
               <div key={feature.title} className="coop-card">
                 <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-coop-muted">{feature.body}</p>
+                {feature.link ? (
+                  <p className="mt-4">
+                    <Link href={feature.link.href} className="text-sm font-medium text-coop-index hover:text-white">
+                      {feature.link.label}
+                    </Link>
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>

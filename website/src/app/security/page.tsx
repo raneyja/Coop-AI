@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LegalLayout } from "@/components/LegalLayout";
 import { TrustBadges } from "@/components/TrustBadges";
 import { CTASection } from "@/components/CTASection";
@@ -26,6 +27,12 @@ export default function SecurityPage() {
           <p className="mt-4 text-lg text-coop-muted">
             How CoopAI protects your code, credentials, and inference data.
           </p>
+          <p className="mt-4 text-sm text-coop-muted">
+            Enterprise benefits and business considerations?{" "}
+            <Link href="/enterprise" className="font-medium text-coop-index hover:text-white">
+              See Enterprise page →
+            </Link>
+          </p>
           <div className="mt-8">
             <TrustBadges compact />
           </div>
@@ -33,13 +40,6 @@ export default function SecurityPage() {
       </div>
 
       <LegalLayout title="Security Overview" lastUpdated="May 29, 2026">
-        <p>
-          CoopAI is a code intelligence platform consisting of a VS Code extension, a backend
-          server (graph, jobs, webhooks, and LLM routing), and optional integrations with code
-          hosts and chat systems. This page describes our security architecture and data handling
-          practices as implemented in the current product.
-        </p>
-
         <h2>Architecture</h2>
         <p>
           CoopAI uses a <strong>zero-clone</strong> architecture. Repository metadata, ownership

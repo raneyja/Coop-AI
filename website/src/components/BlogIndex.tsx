@@ -81,7 +81,13 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
       <section className="py-12 md:py-16">
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">Blog</h1>
+            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
+              Latest thinking on code intelligence
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-coop-muted md:text-base">
+              We share occasional perspectives on code context, team productivity, and how teams
+              scale organizational knowledge.
+            </p>
 
             <div className="flex flex-wrap gap-2">
               {filters.map((filter) => {
