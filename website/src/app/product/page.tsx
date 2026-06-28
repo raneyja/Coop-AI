@@ -91,37 +91,6 @@ export default function ProductPage() {
 
       <section className="border-y border-coop-border bg-coop-surface/20 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading label="setup" title="How it works" />
-          <ol className="mt-10 grid gap-8 md:grid-cols-3">
-            {[
-              {
-                step: "01",
-                title: "Connect repos",
-                body: "GitHub or GitLab webhooks on your Coop server; Pro adds Lightning per repo. No laptop clones."
-              },
-              {
-                step: "02",
-                title: "Install in VS Code",
-                body: "API key, pick a repo, ask questions—no local clone."
-              },
-              {
-                step: "03",
-                title: "Ask & write",
-                body: "Quick actions, chat, inline complete, and in-file edit — grounded in your graph, Slack, and tickets."
-              }
-            ].map((item) => (
-              <li key={item.step} className="coop-card">
-                <span className="font-mono text-sm text-coop-index">{item.step}</span>
-                <h3 className="mt-2 text-lg font-semibold text-white">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-coop-muted">{item.body}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
-        <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="write"
             title={siteConfig.codeCreation.title}
