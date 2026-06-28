@@ -37,7 +37,7 @@ const tiers: PricingTier[] = [
     audience: "Individual engineers — one account, no team seats",
     features: [
       "Local workspace files in VS Code (no code-host connection)",
-      "AI credits — monthly requests reset every 5 hours, unlimited usage within plan limits",
+      "AI credits with rolling 5-hour window (model-weighted)",
       "Unlimited tool integrations (Slack, Jira, Notion, and more)",
       "Chat, quick actions, inline complete & edit",
       "Workspace prompt library",
