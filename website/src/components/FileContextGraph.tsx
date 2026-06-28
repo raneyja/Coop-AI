@@ -153,8 +153,8 @@ export function FileContextGraph({
 
       {/* Desktop graph */}
       <div
-        className={`file-context-graph-stage relative overflow-hidden border border-coop-border bg-[#0f1117] ${
-          compact ? "h-full min-h-[18rem] flex-1 rounded-sm" : "hidden rounded-sm md:block"
+        className={`file-context-graph-stage relative overflow-hidden bg-[#0f1117] ${
+          compact ? "h-full min-h-[18rem] flex-1" : "hidden rounded-sm border border-coop-border md:block"
         } ${
           transitioning ? "opacity-60" : "opacity-100"
         } transition-opacity duration-200`}
