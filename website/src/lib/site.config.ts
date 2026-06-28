@@ -21,11 +21,25 @@ export const siteConfig = {
     { label: "Security", href: "/security" },
     { label: "Blog", href: "/blog" }
   ] as const,
-  quote: {
-    text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
-    author: "Senior Engineer",
-    company: "Row Labs"
-  },
+  quotes: [
+    {
+      text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
+      author: "Senior Engineer",
+      company: "Row Labs"
+    },
+    {
+      text: "New engineers used to spend weeks asking senior people basic questions about the codebase. Now they can find that context themselves in minutes. It's completely changed how fast we onboard.",
+      author: "Engineering Manager"
+    },
+    {
+      text: "Our team was losing 15+ hours a week answering 'why did we build it this way?' questions across Slack, emails, and in-person. CoopAI gives us one place to find that context instantly.",
+      author: "Tech Lead"
+    },
+    {
+      text: "Before CoopAI, making changes felt risky because you never knew the full context. Now I can trace decisions back to commits, PRs, and team discussions. I make better calls faster.",
+      author: "Senior Engineer"
+    }
+  ] as const,
   features: [
     {
       id: "understand-repo",
