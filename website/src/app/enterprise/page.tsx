@@ -48,15 +48,12 @@ export default function EnterprisePage() {
         tight
         eyebrow="Enterprise"
         title="Your codebase, finally explained"
-        description="Zero-clone code intelligence for VS Code. CoopAI gives engineering teams deep code intelligence and graph-grounded context across their entire stack."
+        description="CoopAI gives engineering teams deep code intelligence and graph-grounded context across their entire stack."
       />
 
       <section className="border-b border-coop-border pb-6 md:pb-8">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <EnterpriseIntegrationGraph />
-          <p className="mt-2 font-mono text-[10px] text-coop-muted">
-            symbol graph (scip) · full-text (zoekt) · edges from webhook index jobs
-          </p>
         </div>
       </section>
 

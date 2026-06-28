@@ -29,15 +29,18 @@ export const siteConfig = {
     },
     {
       text: "New engineers used to spend weeks asking senior people basic questions about the codebase. Now they can find that context themselves in minutes. It's completely changed how fast we onboard.",
-      author: "Engineering Manager"
+      author: "Engineering Manager",
+      company: "Kitebase"
     },
     {
       text: "Our team was losing 15+ hours a week answering 'why did we build it this way?' questions across Slack, emails, and in-person. CoopAI gives us one place to find that context instantly.",
-      author: "Tech Lead"
+      author: "Tech Lead",
+      company: "Loopframe"
     },
     {
       text: "Before CoopAI, making changes felt risky because you never knew the full context. Now I can trace decisions back to commits, PRs, and team discussions. I make better calls faster.",
-      author: "Senior Engineer"
+      author: "Senior Engineer",
+      company: "Halcyon Dev"
     }
   ] as const,
   features: [

@@ -98,8 +98,10 @@ export default function HomePage() {
           <p className="mt-4 max-w-2xl text-lg font-medium text-white/90">
             {siteConfig.codeCreation.tagline}
           </p>
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {siteConfig.codeCreation.features.map((item) => (
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {siteConfig.codeCreation.features
+              .filter((item) => item.id !== "completion-routing")
+              .map((item) => (
               <div key={item.id} className="coop-card">
                 <p className="font-mono text-xs text-coop-index">{COMMANDS[item.id] ?? item.id}</p>
                 <h3 className="mt-2 font-semibold text-white">{item.title}</h3>

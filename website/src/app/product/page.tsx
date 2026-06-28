@@ -6,8 +6,10 @@ import { HeroExampleCarousel } from "@/components/HeroExampleCarousel";
 import { ModelProviderLogos } from "@/components/ModelProviderLogos";
 import { ProductShowcaseCarousel } from "@/components/ProductShowcaseCarousel";
 import { QuickActionList } from "@/components/QuickActionList";
+import { CapabilitiesMatrix } from "@/components/CapabilitiesMatrix";
 import { SectionHeading } from "@/components/SectionHeading";
 import { siteConfig } from "@/lib/site.config";
+import { productCapabilityGroups } from "@/lib/productCapabilities";
 
 export const metadata: Metadata = {
   title: "Product",
@@ -23,48 +25,13 @@ export const metadata: Metadata = {
   }
 };
 
-const capabilities = [
-  {
-    title: "Remote knowledge graph",
-    body: "CoopAI indexes repositories via webhooks and background jobs. The extension queries ownership, dependents, and decision signals without requiring a full local clone."
-  },
-  {
-    title: "Inline complete & edit",
-    body: "Ghost-text completions and selection-based edits in the open file. Graph-informed suggestions match team patterns — craftsmanship in the editor, not autonomous agents."
-  },
-  {
-    title: "Multi-model chat",
-    body: "Stream responses from Anthropic, OpenAI, Gemini, and more. Provider keys live on your CoopAI server — never in the IDE or on developer laptops."
-  },
-  {
-    title: "Workspace prompt library",
-    body: "Save and share team prompts in `.coop/prompts.json`. Run common workflows from the sidebar or context menu with one click."
-  },
-  {
-    title: "Editor context menu",
-    body: "Right-click any selection to Trace Decision, Find Owner, Blast Radius, Understand Repo, or surface Knowledge Gaps."
-  },
-  {
-    title: "Slack & ticket context",
-    body: "CoopAI connects organizational context — Slack threads, tickets, and PR history — so answers reflect how decisions were actually made."
-  },
-  {
-    title: "Completion-only routing",
-    body: "Inline requests use a dedicated zero-retention path (`x-use-case: code-completion-only`) — separate from chat, with keys on your server."
-  },
-  {
-    title: "Graceful degradation",
-    body: "When graph data is unavailable, CoopAI falls back transparently and tells you what context is missing instead of hallucinating."
-  }
-];
-
 export default function ProductPage() {
   return (
     <>
       <PageHeader
         eyebrow="Product"
         title="CoopAI: Instance-wide code intelligence for teams"
-        description="CoopAI indexes your entire instance and connects that with team context—Slack, Jira, decisions. Teams get instant answers across all repositories."
+        description="CoopAI indexes your entire codebase and the tools that your team uses. Providing context from tools like GitHub, GitLab, Slack, Jira, Notion, and more."
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">
@@ -174,14 +141,7 @@ export default function ProductPage() {
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading label="features" title="Capabilities" />
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            {capabilities.map((cap) => (
-              <div key={cap.title} className="coop-card">
-                <h3 className="font-semibold text-white">{cap.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-coop-muted">{cap.body}</p>
-              </div>
-            ))}
-          </div>
+          <CapabilitiesMatrix groups={productCapabilityGroups} />
           <p className="mt-8 text-sm text-coop-muted">
             Graph-backed completion context and file @-mentions in chat are rolling out next.{" "}
             <span className="text-white/70">Inline complete and edit selection are in active development.</span>
