@@ -238,27 +238,27 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
               <span className="font-medium text-coop-index">Copied to clipboard</span>
             ) : (
               <>
-                <span className="text-white/50">Click to copy</span>
+                <span className="text-gray-400">Click to copy</span>
                 {!compact ? (
                   <>
-                    <span className="mx-2 text-white/20" aria-hidden>
+                    <span className="mx-2 text-gray-300" aria-hidden>
                       ·
                     </span>
                     <Link
                       href={demoHref}
-                      className="font-medium text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+                      className="font-medium text-gray-600 underline-offset-4 transition hover:text-gray-900 hover:underline"
                     >
                       Book a demo with this example
                     </Link>
                   </>
                 ) : (
                   <>
-                    <span className="mx-1.5 text-white/20" aria-hidden>
+                    <span className="mx-1.5 text-gray-300" aria-hidden>
                       ·
                     </span>
                     <Link
                       href={demoHref}
-                      className="font-medium text-white/70 underline-offset-2 transition hover:text-white hover:underline"
+                      className="font-medium text-gray-600 underline-offset-2 transition hover:text-gray-900 hover:underline"
                     >
                       Demo
                     </Link>
@@ -296,15 +296,15 @@ function HeroSlideBody({
 }) {
   const question = (
     <p
-      className={`text-left font-normal leading-relaxed text-white ${
+      className={`text-left font-normal leading-relaxed text-gray-900 ${
         compact ? "text-[13px] md:text-sm" : "text-base md:text-lg lg:text-xl"
       }`}
     >
-      <span className="text-white/25" aria-hidden>
+      <span className="text-gray-300" aria-hidden>
         &ldquo;
       </span>
       <QuestionText text={item.question} />
-      <span className="text-white/25" aria-hidden>
+      <span className="text-gray-300" aria-hidden>
         &rdquo;
       </span>
     </p>
@@ -317,7 +317,7 @@ function HeroSlideBody({
           type="button"
           onClick={onActivate}
           tabIndex={isActive ? 0 : -1}
-          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-index/50 focus-visible:ring-offset-2 focus-visible:ring-offset-coop-dark"
+          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           aria-label={`Example question: ${item.question}. Click to copy.`}
         >
           {question}
@@ -332,7 +332,7 @@ function HeroSlideBody({
         }`}
       >
         <HighlightPill compact={compact}>{item.highlights[0]}</HighlightPill>
-        <span className="text-[10px] font-medium uppercase tracking-widest text-white/20" aria-hidden>
+        <span className="text-[10px] font-medium uppercase tracking-widest text-gray-300" aria-hidden>
           +
         </span>
         <HighlightPill compact={compact} variant="muted">
@@ -352,7 +352,7 @@ function QuestionText({ text }: { text: string }) {
         part.startsWith("`") && part.endsWith("`") ? (
           <code
             key={i}
-            className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[0.92em] text-coop-index/95"
+            className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.92em] text-gray-800"
           >
             {part.slice(1, -1)}
           </code>
@@ -379,8 +379,8 @@ function HighlightPill({
     <span
       className={
         variant === "default"
-          ? `inline-flex items-center rounded-sm border border-coop-border bg-coop-surface font-mono text-coop-index ${size}`
-          : `inline-flex items-center rounded-sm border border-coop-border bg-coop-editor font-mono text-white/70 ${size}`
+          ? `inline-flex items-center rounded-sm border border-coop-border bg-gray-100 font-mono text-gray-700 ${size}`
+          : `inline-flex items-center rounded-sm border border-coop-border bg-white font-mono text-gray-600 ${size}`
       }
     >
       {children}

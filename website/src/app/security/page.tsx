@@ -21,15 +21,15 @@ export const metadata: Metadata = {
 export default function SecurityPage() {
   return (
     <>
-      <div className="border-b border-coop-border bg-coop-surface/20 py-12">
+      <div className="border-b border-coop-border bg-gray-50 py-12">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <h1 className="text-4xl font-semibold tracking-tight text-white">Security</h1>
+          <h1 className="text-4xl font-semibold tracking-tight text-gray-900">Security</h1>
           <p className="mt-4 text-lg text-coop-muted">
             How CoopAI protects your code, credentials, and inference data.
           </p>
           <p className="mt-4 text-sm text-coop-muted">
             Enterprise benefits and business considerations?{" "}
-            <Link href="/enterprise" className="font-medium text-coop-index hover:text-white">
+            <Link href="/enterprise" className="font-medium text-gray-900 hover:underline">
               See Enterprise page →
             </Link>
           </p>

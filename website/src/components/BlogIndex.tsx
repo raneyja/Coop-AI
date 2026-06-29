@@ -57,10 +57,10 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
           <div className="coop-panel flex flex-col gap-4 px-6 py-8 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="coop-section-label">
-                <span className="text-coop-muted">{"// "}</span>
+                <span className="text-gray-400">{"// "}</span>
                 stay in the loop
               </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">
                 Product updates from the CoopAI team
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-coop-muted">
@@ -70,7 +70,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
             </div>
             <a
               href="mailto:hello@coop-ai.dev?subject=CoopAI%20blog%20updates"
-              className="inline-flex shrink-0 items-center justify-center rounded-sm border border-coop-border bg-coop-surface px-5 py-2.5 font-mono text-sm text-white/90 transition hover:border-coop-muted/50"
+              className="inline-flex shrink-0 items-center justify-center rounded border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-50"
             >
               Get updates →
             </a>
@@ -81,7 +81,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
       <section className="py-12 md:py-16">
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
+            <h1 className="text-4xl font-semibold tracking-tight text-gray-900 md:text-5xl">
               Latest thinking on code intelligence
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-coop-muted md:text-base">
@@ -102,10 +102,10 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
                       setActiveFilter(filter);
                       setVisibleCount(12);
                     }}
-                    className={`rounded-sm px-4 py-1.5 font-mono text-sm transition ${
+                    className={`rounded px-4 py-1.5 text-sm font-medium transition ${
                       isActive
-                        ? "bg-coop-index text-coop-dark"
-                        : "border border-coop-border text-coop-muted hover:border-coop-muted/50 hover:text-white"
+                        ? "bg-black text-white"
+                        : "border border-gray-300 text-coop-muted hover:border-gray-400 hover:text-gray-900"
                     }`}
                   >
                     {label}
@@ -130,7 +130,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
               <button
                 type="button"
                 onClick={() => setVisibleCount((count) => count + 12)}
-                className="text-sm font-medium text-coop-index transition hover:text-white"
+                className="text-sm font-medium text-gray-900 transition hover:underline"
               >
                 View more ↓
               </button>

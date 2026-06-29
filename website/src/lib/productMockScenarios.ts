@@ -1,3 +1,5 @@
+import type { StorySearchStep } from "@/lib/fileContextStoryScenarios";
+
 export type CodeToken = {
   t: "keyword" | "fn" | "type" | "string" | "comment" | "plain";
   v: string;
@@ -13,6 +15,7 @@ export type ProductMockScenarioBase = {
 export type InquiryProductMockScenario = ProductMockScenarioBase & {
   variant?: "inquiry";
   question: string;
+  searchSteps: StorySearchStep[];
   answer: {
     content: string;
   };
@@ -41,6 +44,12 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     feature: "Find Owner",
     question:
       "Who owns this token validation block, and who should review a change to empty-payload handling?",
+    searchSteps: [
+      { id: "graph", label: "Symbol graph", detail: "validateSession() · 23 dependents", kind: "graph" },
+      { id: "github", label: "GitHub · token_validator.ts", detail: "90% blame · Jessica Dawson", kind: "github" },
+      { id: "owners", label: "CODEOWNERS", detail: "@marcus_vance · auth routing", kind: "graph" },
+      { id: "slack", label: "Slack · #billing-auth", detail: "Empty-payload thread · Sep", kind: "slack" }
+    ],
     ariaLabel:
       "CoopAI identifying code ownership and suggested reviewers for token validation",
     tabs: { active: "token_validator.ts", inactive: "auth_routes.go" },
@@ -115,6 +124,13 @@ High blast radius on empty-payload handling. Slack \`#billing-auth\` discussed t
     id: "blast-radius",
     feature: "Blast Radius",
     question: "What's the blast radius if we change the retry backoff in payments_queue.go?",
+    searchSteps: [
+      { id: "graph", label: "Symbol graph", detail: "ProcessRetryBackoff() · 14 refs", kind: "graph" },
+      { id: "github-api", label: "GitHub · api-gateway", detail: "runtime dependency", kind: "github" },
+      { id: "github-billing", label: "GitHub · billing-worker", detail: "batch retries", kind: "github" },
+      { id: "github-ledger", label: "GitHub · ledger-svc", detail: "settlement hooks", kind: "github" },
+      { id: "jira", label: "Jira · PR #8821", detail: "Shared backoff tuning", kind: "jira" }
+    ],
     ariaLabel: "CoopAI analyzing blast radius and dependent services for a payments change",
     tabs: { active: "payments_queue.go", inactive: "ledger_client.ts" },
     answer: {
@@ -167,6 +183,12 @@ Treat as a **breaking change risk** — staged rollout recommended. Tuned in PR 
     id: "reviewers",
     feature: "PR reviewers",
     question: "Who should review this PR for the OAuth token refresh changes?",
+    searchSteps: [
+      { id: "github-pr", label: "GitHub · PR #1247", detail: "3 files · auth/oauth", kind: "github" },
+      { id: "graph", label: "Symbol graph", detail: "refreshOAuthToken() · 9 refs", kind: "graph" },
+      { id: "owners", label: "CODEOWNERS", detail: "61% blame · Jessica Dawson", kind: "graph" },
+      { id: "slack", label: "Slack · #platform-auth", detail: "Security review thread", kind: "slack" }
+    ],
     ariaLabel: "CoopAI suggesting reviewers for an OAuth token refresh pull request",
     tabs: { active: "oauth_refresh.ts", inactive: "session_store.go" },
     answer: {
@@ -231,6 +253,12 @@ Security-sensitive OAuth refresh path — include a security reviewer before mer
     id: "understand-repo",
     feature: "Understand Repo",
     question: "Help me understand how auth flows through this repo.",
+    searchSteps: [
+      { id: "graph", label: "Symbol graph", detail: "12k symbols · 4 auth packages", kind: "graph" },
+      { id: "github-cmd", label: "GitHub · cmd/api", detail: "HTTP entry & routes", kind: "github" },
+      { id: "github-mw", label: "GitHub · middleware/auth", detail: "session + JWT gate", kind: "github" },
+      { id: "docs", label: "Confluence · Auth overview", detail: "Architecture diagram", kind: "graph" }
+    ],
     ariaLabel: "CoopAI explaining repository architecture and auth flow",
     tabs: { active: "cmd/api/main.go", inactive: "middleware/auth.go" },
     answer: {
@@ -275,6 +303,12 @@ Auth entry at \`cmd/api\` → \`middleware/auth\` → \`internal/session\`. Toke
     id: "knowledge-gaps",
     feature: "Knowledge Gaps",
     question: "What knowledge gaps exist around the legacy billing adapter?",
+    searchSteps: [
+      { id: "github", label: "GitHub · billing_adapter.ts", detail: "No commits · 14 months", kind: "github" },
+      { id: "jira", label: "Jira · 2 open tickets", detail: "No resolution notes", kind: "jira" },
+      { id: "docs", label: "Confluence · runbook", detail: "Link 404 · missing ADR", kind: "graph" },
+      { id: "slack", label: "Slack · #platform-payments", detail: "Lost incident thread", kind: "slack" }
+    ],
     ariaLabel: "CoopAI surfacing knowledge gaps and missing context for legacy billing code",
     tabs: { active: "billing_adapter.ts", inactive: "README.md" },
     answer: {
@@ -322,6 +356,12 @@ No commits in 14 months; primary owner left the team. Runbook link 404s. Two rel
     id: "integrations",
     feature: "Slack & tickets",
     question: "Show me how this connects to Slack and tickets.",
+    searchSteps: [
+      { id: "slack", label: "Slack · #incidents", detail: "14 messages · Feb 12 thread", kind: "slack" },
+      { id: "jira", label: "Jira · BILL-4421", detail: "P1 billing outage · resolved", kind: "jira" },
+      { id: "github", label: "GitHub · PR #1198", detail: "Fix merged 2 days after thread", kind: "github" },
+      { id: "graph", label: "Symbol graph", detail: "HandleBillingIncident() · 6 refs", kind: "graph" }
+    ],
     ariaLabel: "CoopAI linking code to Slack threads and Jira tickets",
     tabs: { active: "incident_handler.go", inactive: "BILL-4421" },
     answer: {

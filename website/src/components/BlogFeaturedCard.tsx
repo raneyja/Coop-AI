@@ -13,7 +13,7 @@ export function BlogFeaturedCard({ post, large = false }: BlogFeaturedCardProps)
   return (
     <article className="group relative flex flex-col">
       <div
-        className={`relative overflow-hidden border border-coop-border bg-coop-surface/40 transition group-hover:border-coop-muted/50 group-hover:bg-coop-surface/60 ${aspectClass}`}
+        className={`relative overflow-hidden border border-coop-border bg-gray-50 transition group-hover:border-gray-300 group-hover:bg-gray-100 ${aspectClass}`}
       >
         {post.heroImage ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -28,11 +28,11 @@ export function BlogFeaturedCard({ post, large = false }: BlogFeaturedCardProps)
       <div className="mt-4">
         <p className="text-sm text-coop-muted">
           <span>{formatPostDateShort(post.publishedAt)}</span>
-          <span className="mx-2 text-white/20">·</span>
-          <span className="text-coop-index">{formatCategoryLabel(post.category)}</span>
+          <span className="mx-2 text-gray-300">·</span>
+          <span className="text-gray-700">{formatCategoryLabel(post.category)}</span>
         </p>
         <h2
-          className={`mt-2 font-semibold leading-snug tracking-tight text-white transition-colors group-hover:text-coop-index ${
+          className={`mt-2 font-semibold leading-snug tracking-tight text-gray-900 transition-colors group-hover:text-gray-600 ${
             large ? "text-3xl md:text-4xl" : "text-xl"
           }`}
         >
@@ -49,7 +49,7 @@ export function BlogFeaturedCard({ post, large = false }: BlogFeaturedCardProps)
         </p>
         <p className="relative mt-4 text-sm text-coop-muted">
           {post.author}
-          <span className="mx-2 text-white/20">·</span>
+          <span className="mx-2 text-gray-300">·</span>
           {post.readTimeMinutes} min read
         </p>
       </div>

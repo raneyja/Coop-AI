@@ -18,7 +18,7 @@ export const MODEL_PROVIDER_LOGOS: BrandLogoItem[] = [
   { name: "Anthropic", Icon: AnthropicIcon },
   { name: "OpenAI", Icon: OpenAIIcon },
   { name: "Google", Icon: GoogleIcon, colored: true },
-  { name: "Fireworks.ai", Icon: FireworksIcon }
+  { name: "Fireworks.ai", Icon: FireworksIcon, wide: true }
 ];
 
 export const INTEGRATION_LOGOS: BrandLogoItem[] = [

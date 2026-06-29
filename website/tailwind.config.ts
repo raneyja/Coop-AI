@@ -11,28 +11,33 @@ const config: Config = {
           accent: "#58A6FF",
           index: "#3FB950",
           warn: "#D29922",
-          dark: "#0D1117",
-          surface: "#161B22",
-          border: "#30363D",
-          muted: "#9CA4AD",
-          editor: "#1e1e1e"
+          dark: "#ffffff",
+          surface: "#f9fafb",
+          border: "#e5e7eb",
+          muted: "#6b7280",
+          editor: "#ffffff",
+          foreground: "#1f2937",
+          "foreground-secondary": "#6b7280"
         }
       },
       fontFamily: {
         sans: [
-          "var(--font-geist-sans)",
+          "var(--font-inter)",
+          "Inter",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
           "ui-sans-serif",
           "system-ui",
-          "-apple-system",
           "sans-serif"
         ],
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"]
       },
       backgroundImage: {
         "hero-glow":
-          "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(31, 111, 235, 0.18), transparent 70%)",
+          "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(31, 111, 235, 0.08), transparent 70%)",
         "hero-grid":
-          "linear-gradient(to right, rgba(48, 54, 61, 0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(48, 54, 61, 0.35) 1px, transparent 1px)"
+          "linear-gradient(to right, rgba(229, 231, 235, 0.8) 1px, transparent 1px), linear-gradient(to bottom, rgba(229, 231, 235, 0.8) 1px, transparent 1px)"
       },
       backgroundSize: {
         grid: "64px 64px"

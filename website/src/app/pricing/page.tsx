@@ -86,11 +86,7 @@ const tiers: PricingTier[] = [
 export default function PricingPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="Pricing"
-        title="Your codebase, finally explained"
-        description="Code with your team's full context. Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode."
-      />
+      <PageHeader eyebrow="Pricing" title="Your codebase, finally explained" />
 
       <section className="pb-20">
         <div className="mx-auto max-w-6xl px-6">
@@ -100,21 +96,21 @@ export default function PricingPage() {
                 key={tier.name}
                 className={`relative flex flex-col rounded-sm border p-8 ${
                   tier.highlighted
-                    ? "border-coop-index/40 bg-coop-surface/50"
-                    : "border-coop-border bg-coop-editor"
+                    ? "border-gray-900 bg-gray-50"
+                    : "border-coop-border bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-white">{tier.name}</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">{tier.name}</h2>
                   {tier.recommended ? (
-                    <span className="shrink-0 rounded-sm border border-coop-index/40 bg-coop-index/10 px-2.5 py-0.5 font-mono text-[11px] text-coop-index">
+                    <span className="shrink-0 rounded-sm border border-gray-300 bg-gray-100 px-2.5 py-0.5 font-mono text-[11px] text-gray-700">
                       default
                     </span>
                   ) : null}
                 </div>
 
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="text-4xl font-semibold text-white">{tier.price}</span>
+                  <span className="text-4xl font-semibold text-gray-900">{tier.price}</span>
                   {tier.period ? <span className="text-sm text-coop-muted">{tier.period}</span> : null}
                 </div>
 
@@ -125,7 +121,7 @@ export default function PricingPage() {
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex gap-2 text-sm leading-snug text-coop-muted">
-                      <span className="mt-0.5 shrink-0 text-coop-index" aria-hidden>
+                      <span className="mt-0.5 shrink-0 text-gray-900" aria-hidden>
                         ✓
                       </span>
                       <span>{feature}</span>
@@ -137,7 +133,7 @@ export default function PricingPage() {
                   <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">
                     {tier.name === "Pro" ? (
                       <>
-                        <Link href="/product#lightning-mode" className="font-medium text-coop-index hover:text-white">
+                        <Link href="/product#lightning-mode" className="font-medium text-gray-900 hover:underline">
                           {tier.note}
                         </Link>
                       </>

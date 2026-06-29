@@ -52,7 +52,7 @@ export default async function DemoPage({ searchParams }: DemoPageProps) {
           />
           {!waitlistFirst && (
             <div className="coop-panel p-8 lg:col-span-2">
-              <h3 className="text-lg font-semibold text-white">Prefer to try it yourself?</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Prefer to try it yourself?</h3>
               <p className="mt-2 text-sm text-coop-muted">
                 The free developer extension will be available on the VS Code Marketplace at launch.
                 Until then, join the waitlist or book a demo for early access.

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SiteAnalytics } from "@/components/SiteAnalytics";
@@ -7,9 +7,10 @@ import { TawkChat } from "@/components/TawkChat";
 import { siteConfig } from "@/lib/site.config";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"]
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"]
 });
 
 const geistMono = Geist_Mono({
@@ -43,8 +44,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-coop-dark font-sans antialiased`}>
+    <html lang="en">
+      <body
+        className={`${inter.variable} ${geistMono.variable} min-h-screen bg-white font-sans text-coop-foreground antialiased`}
+      >
         <Header />
         <main>{children}</main>
         <Footer />
