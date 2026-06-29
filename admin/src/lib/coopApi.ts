@@ -3,6 +3,9 @@ import { INTEGRATIONS } from "./integrations";
 import type {
   IntegrationResource,
   IntegrationScopeResponse,
+  AtlassianScopePolicy,
+  GoogleDocsScopePolicy,
+  NotionScopePolicy,
   SlackScopePolicy
 } from "./integrations";
 import type { StoredMe } from "./auth";
@@ -79,6 +82,7 @@ type BackendIntegrationStatus = {
   provider: IntegrationProvider;
   installed: boolean;
   needsReconnect?: boolean;
+  scopeNeedsReconnect?: boolean;
   detail?: string;
   scopeStatus?: IntegrationStatus["scopeStatus"];
   scopeSummary?: string;
@@ -101,6 +105,7 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
     provider: raw.provider,
     installed: raw.installed,
     needsReconnect: raw.needsReconnect,
+    scopeNeedsReconnect: raw.scopeNeedsReconnect,
     detail: integrationDetail(raw),
     scopeStatus: raw.scopeStatus,
     scopeSummary: raw.scopeSummary
@@ -373,6 +378,39 @@ export async function completeOnboarding(): Promise<ApiResult<{ ok: boolean }>> 
   return coopFetch<{ ok: boolean }>("/v1/admin/onboarding/complete", { method: "POST" });
 }
 
+export type IntegrationHealthValue =
+  | "not_connected"
+  | "not_configured"
+  | "scope_required"
+  | "degraded"
+  | "healthy";
+
+export type IntegrationHealthEntry = {
+  provider: IntegrationProvider;
+  installed: boolean;
+  health: IntegrationHealthValue;
+  message?: string;
+  scopeStatus?: IntegrationStatus["scopeStatus"];
+  configured: boolean;
+};
+
+export type IntegrationsHealthResponse = {
+  orgPlan: string;
+  onboardingGates: {
+    githubOrToolConnected: boolean;
+    slackScopeActive: boolean;
+    canCompleteOnboarding: boolean;
+  };
+  integrations: IntegrationHealthEntry[];
+};
+
+export async function fetchIntegrationsHealth(
+  refresh = false
+): Promise<ApiResult<IntegrationsHealthResponse>> {
+  const suffix = refresh ? "?refresh=true" : "";
+  return coopFetch<IntegrationsHealthResponse>(`/v1/admin/integrations/health${suffix}`);
+}
+
 export async function disconnectIntegration(provider: string): Promise<ApiResult<{ ok: boolean }>> {
   return coopFetch<{ ok: boolean }>(`/v1/admin/integrations/${encodeURIComponent(provider)}`, {
     method: "DELETE"
@@ -389,7 +427,7 @@ export async function fetchIntegrationScope(
 
 export async function saveIntegrationScope(
   provider: IntegrationProvider,
-  policy: SlackScopePolicy
+  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy
 ): Promise<ApiResult<IntegrationScopeResponse>> {
   return coopFetch<IntegrationScopeResponse>(
     `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`,
@@ -402,11 +440,15 @@ export async function saveIntegrationScope(
 
 export async function fetchIntegrationResources(
   provider: IntegrationProvider,
-  query?: string
+  query?: string,
+  product?: "jira" | "confluence"
 ): Promise<ApiResult<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>> {
   const params = new URLSearchParams();
   if (query?.trim()) {
     params.set("q", query.trim());
+  }
+  if (product) {
+    params.set("product", product);
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return coopFetch<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>(
