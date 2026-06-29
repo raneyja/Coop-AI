@@ -76,9 +76,6 @@ export default function HomePage() {
                 </div>
               ))}
             </dl>
-            <p className="mt-8 text-sm leading-relaxed text-coop-muted">
-              {siteConfig.contextIntelligence.footnote}
-            </p>
           </div>
           <div className="mt-10 w-full lg:mt-0">
             <div className="aspect-[920/580] w-full min-h-[22rem] sm:min-h-[26rem] lg:aspect-auto lg:h-[34rem] xl:h-[38rem]">

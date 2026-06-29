@@ -100,29 +100,27 @@ export const siteConfig = {
     title: "Lightning Intelligence",
     tagline: "Understand any codebase instantly — without cloning monorepos.",
     description:
-      "Your code stays on your infrastructure. CoopAI builds a secure, real-time cross-repository knowledge graph so developers get rich AI context across your entire organization — whether it's a single repo or a massive monorepo.",
-    footnote:
-      "Developer (free) uses local workspace files with AI credits and unlimited tool integrations — individual accounts only. Pro adds GitHub connections, team seats, and Lightning Mode for the fastest cross-repo search.",
+      "CoopAI builds a secure cross-repo knowledge graph so developers get rich AI context across your entire organization.",
     features: [
       {
         label: "Cross-repo context",
         description:
-          "Ask questions that span services, libraries, and teams. Reason across repos from one VS Code sidebar instead of hunting through dozens of clones."
+          "Reason across services, libraries, and teams from one VS Code sidebar."
       },
       {
         label: "Cross-tool context",
         description:
-          "Slack threads, Jira issues, and tickets sit alongside your code graph — so ownership, incidents, and decisions aren’t trapped in tribal knowledge."
+          "Slack, Jira, and tickets alongside your code graph — not trapped in tribal knowledge."
       },
       {
         label: "Secure by design",
         description:
-          "Your source stays on your infrastructure. Context is built from webhooks and index jobs — not full monorepo copies on every laptop."
+          "Context from webhooks and index jobs — not full monorepo copies on every laptop."
       },
       {
         label: "Lightning-fast when you need it",
         description:
-          "Lightning Mode indexes your repos on Coop cloud with symbol-graph precision — faster retrieval for the code paths you touch every day."
+          "Lightning Mode indexes with symbol-graph precision for the code paths you touch every day."
       }
     ]
   },
