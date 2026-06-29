@@ -7,7 +7,7 @@ Manual checklist for admin-controlled Slack channel scoping on Enterprise orgs.
 | Requirement | Notes |
 |-------------|--------|
 | API + Postgres | `docker compose up -d --build api postgres` |
-| Migration 018 | `npm run migrate` (creates `org_integration_policies`) |
+| Migration 018 | `npm run migrate` (auto-syncs ledger if Docker init already applied older migrations) |
 | Slack OAuth env | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` in `.env.backend` |
 | Enterprise org | Org `plan = enterprise` with admin API key |
 | Admin portal | `./scripts/dev-admin-portal.sh` → http://localhost:3002 |

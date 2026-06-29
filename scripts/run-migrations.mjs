@@ -13,11 +13,11 @@ import pg from "pg";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const migrationsDir = process.env.MIGRATIONS_DIR ?? path.join(root, "migrations");
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  process.env.DATABASE_URL ?? "postgres://coop:coop@127.0.0.1:5432/coopai";
 
-if (!databaseUrl) {
-  console.error("DATABASE_URL is required");
-  process.exit(1);
+if (!process.env.DATABASE_URL) {
+  console.log("DATABASE_URL not set — using local Docker Compose default (coop@127.0.0.1:5432/coopai)");
 }
 
 function poolConfig(connectionString) {
@@ -27,6 +27,51 @@ function poolConfig(connectionString) {
   return needsSsl
     ? { connectionString, ssl: { rejectUnauthorized: false } }
     : { connectionString };
+}
+
+/** Docker Compose mounts migrations into initdb.d — schema exists but ledger may only list 001. */
+async function syncDockerInitLedger(client, filenames) {
+  const probe = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'organizations'
+    ) AS has_orgs
+  `);
+  if (!probe.rows[0]?.has_orgs) {
+    return;
+  }
+
+  for (const filename of filenames) {
+    const recorded = await client.query("SELECT 1 FROM schema_migrations WHERE filename = $1", [
+      filename
+    ]);
+    if (recorded.rowCount > 0) {
+      continue;
+    }
+
+    const version = Number.parseInt(filename.slice(0, 3), 10);
+    if (!Number.isFinite(version) || version < 2) {
+      continue;
+    }
+
+    if (filename === "018_org_integration_policies.sql") {
+      const table = await client.query(`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'org_integration_policies'
+        ) AS ok
+      `);
+      if (!table.rows[0]?.ok) {
+        continue;
+      }
+    }
+
+    await client.query(
+      "INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING",
+      [filename]
+    );
+    console.log(`sync  ${filename} (docker-init ledger backfill)`);
+  }
 }
 
 async function main() {
@@ -48,6 +93,8 @@ async function main() {
 
     console.log(`Using DATABASE_URL (host redacted)`);
     console.log(`Migrations directory: ${migrationsDir}`);
+
+    await syncDockerInitLedger(client, files);
 
     for (const filename of files) {
       const applied = await client.query(
