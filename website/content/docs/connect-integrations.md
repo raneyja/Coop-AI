@@ -17,6 +17,10 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 
 **Admin portal** → [Integrations](https://admin.coop-ai.dev/integrations)
 
+![Admin portal Integrations page listing GitHub, Slack, Jira, Notion, and other providers with Connect and Test actions](/screenshots/docs/admin-integrations-light.svg)
+
+*Each card shows connection status. Click **Connect** to start OAuth, **Test** to verify, and **Manage access** (Enterprise) to set scope.*
+
 | # | Integration | Success |
 | --- | --- | --- |
 | 1 | **GitHub** → Connect → browser OAuth → Test | Connected |
