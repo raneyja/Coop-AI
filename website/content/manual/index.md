@@ -73,10 +73,6 @@ If the extension is not yet published, join the waitlist from the [demo page](/d
 
 ### Connect your API key
 
-![Coop extension Settings — Account tab with API key, API base URL, and Test connection](/screenshots/docs/settings-account-light.svg)
-
-*Settings → Account: paste your CoopAI API key, set the API base URL, then click **Test connection**.*
-
 1. **Extension UI** — Open the Coop sidebar → gear icon, or run **Coop AI: Open Settings** from the Command Palette.
 2. **Extension UI** — Go to **Account** and paste your API key (`coop_…`).
 3. **Extension UI** — Set **API base URL** to `https://api.coop-ai.dev` (default) or your self-hosted URL.
@@ -108,10 +104,6 @@ If integrations are not connected, Coop still works for code-only questions. Ask
 ### Open the Coop sidebar
 
 The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **Quick Action** grid and a hint to type `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps`.
-
-![Coop VS Code sidebar — activity bar icon, quick action grid, and chat composer with slash command hints](/screenshots/docs/extension-sidebar-light.svg)
-
-*The Coop sidebar in VS Code (light theme): select the activity bar icon, use quick actions, or type slash commands in the composer.*
 
 ### Chat composer
 
@@ -163,12 +155,6 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 **Completion-only routing** — Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat.
 
 ## Quick Actions
-
-Right-click any selection in the editor to run a quick action without opening the sidebar.
-
-![Coop quick actions in the VS Code editor context menu — Trace Decision, Find Owner, Blast Radius, Understand Repo, Knowledge Gaps](/screenshots/docs/context-menu-quick-actions-light.svg)
-
-*Right-click a selection in VS Code (light theme) to open Coop quick actions from the editor context menu.*
 
 ### When to use each action
 

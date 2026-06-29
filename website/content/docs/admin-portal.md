@@ -28,10 +28,6 @@ The dashboard shows:
 
 Go to **Integrations** to connect tools org-wide. See [Connect integrations](/docs/connect-integrations) for the full checklist.
 
-![Admin portal Integrations page with GitHub, Slack, and Jira cards showing Connect, Test, and Manage access actions](/screenshots/docs/admin-integrations-light.svg)
-
-*Integrations at [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations) — connect tools org-wide, test connections, and manage access scopes (Enterprise).*
-
 In production mode, developers **cannot** paste OAuth tokens in VS Code — admins connect once here.
 
 ## Integration scope
