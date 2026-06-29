@@ -11,9 +11,9 @@ type ContextItem = {
 type Scenario = {
   question: string;
   context: ContextItem[];
-  response?: {
+  response: {
     summary: string;
-    code: string;
+    code?: string;
   };
 };
 
@@ -26,7 +26,11 @@ const SCENARIOS: Scenario[] = [
       { label: "GitHub · webhook-processor", desc: "2 importers · auth middleware chain", status: "done" },
       { label: "GitLab · billing-worker", desc: "batch retry path imports validate()", status: "loading" },
       { label: "Slack · #platform-auth", desc: "Thread on auth refactor · Sep 18", status: "done" }
-    ]
+    ],
+    response: {
+      summary:
+        "23 dependents across 6 repos. Highest risk: api-gateway and webhook-processor in the auth chain."
+    }
   },
   {
     question: "Can you fix this bug by looking at the Jira ticket?",
@@ -49,7 +53,11 @@ const SCENARIOS: Scenario[] = [
       { label: "Confluence · Auth ADR", desc: "Centralized middleware over per-route checks", status: "done" },
       { label: "Slack · #architecture", desc: "Decision thread · Mar 2024", status: "done" },
       { label: "Symbol graph", desc: "AuthMiddleware.validate() · 23 dependents", status: "done" }
-    ]
+    ],
+    response: {
+      summary:
+        "Centralized in PR #412 per the Auth ADR — one middleware wrapper instead of per-route checks."
+    }
   },
   {
     question: "What breaks if I refactor this?",
@@ -58,7 +66,11 @@ const SCENARIOS: Scenario[] = [
       { label: "GitHub · billing-worker", desc: "batch retry imports validate()", status: "done" },
       { label: "GitHub · webhook-processor", desc: "auth middleware chain", status: "done" },
       { label: "Jira · PLATFORM-1102", desc: "Open ticket · refactor blocked on auth", status: "done" }
-    ]
+    ],
+    response: {
+      summary:
+        "6 services break on signature change. billing-worker batch retry and webhook-processor auth chain fail first."
+    }
   }
 ];
 
@@ -171,14 +183,18 @@ export function HeroDemoArtifact() {
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [stage, setStage] = useState<Stage>(1);
   const [typedQuestion, setTypedQuestion] = useState("");
-  const queryRef = useRef<HTMLSpanElement>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const typeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scenario = SCENARIOS[scenarioIndex];
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
+    if (typeIntervalRef.current) {
+      clearInterval(typeIntervalRef.current);
+      typeIntervalRef.current = null;
+    }
   }, []);
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
@@ -186,55 +202,30 @@ export function HeroDemoArtifact() {
     timersRef.current.push(id);
   }, []);
 
-  const advanceScenario = useCallback(() => {
-    clearTimers();
-    setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
-    setTypedQuestion("");
-    setStage(1);
-  }, [clearTimers]);
-
-  const showResponse = useCallback(() => {
-    setStage(4);
-    addTimer(advanceScenario, 3500);
-  }, [addTimer, advanceScenario]);
-
-  const showContext = useCallback(() => {
-    setStage(3);
-    const current = SCENARIOS[scenarioIndex];
-    if (current.response) {
-      addTimer(showResponse, 2500);
-    } else {
-      addTimer(advanceScenario, 3000);
-    }
-  }, [addTimer, advanceScenario, scenarioIndex, showResponse]);
-
-  const showTools = useCallback(() => {
-    setStage(2);
-    addTimer(showContext, 2000);
-  }, [addTimer, showContext]);
-
-  const typeQuery = useCallback(() => {
+  useEffect(() => {
     const query = SCENARIOS[scenarioIndex].question;
+    setStage(1);
     setTypedQuestion("");
-    let index = 0;
 
-    const typeInterval = setInterval(() => {
-      if (index < query.length) {
-        setTypedQuestion((prev) => prev + query[index]);
-        index++;
-      } else {
-        clearInterval(typeInterval);
-        addTimer(showTools, 500);
+    let charIndex = 0;
+
+    typeIntervalRef.current = setInterval(() => {
+      charIndex += 1;
+      setTypedQuestion(query.slice(0, charIndex));
+      if (charIndex >= query.length) {
+        if (typeIntervalRef.current) {
+          clearInterval(typeIntervalRef.current);
+          typeIntervalRef.current = null;
+        }
+        addTimer(() => setStage(2), 500);
+        addTimer(() => setStage(3), 2500);
+        addTimer(() => setStage(4), 5000);
+        addTimer(() => setScenarioIndex((i) => (i + 1) % SCENARIOS.length), 8500);
       }
     }, 30);
-  }, [addTimer, scenarioIndex, showTools]);
 
-  useEffect(() => {
-    if (stage !== 1 || typedQuestion !== "") return;
-    typeQuery();
-  }, [scenarioIndex, stage, typedQuestion, typeQuery]);
-
-  useEffect(() => clearTimers, [clearTimers]);
+    return clearTimers;
+  }, [scenarioIndex, addTimer, clearTimers]);
 
   return (
     <div className="hero-demo-artifact">
@@ -242,9 +233,7 @@ export function HeroDemoArtifact() {
         <div className={`hero-demo-stage ${stageClass(stage === 1)} space-y-6`}>
           <div className="font-mono text-sm text-gray-500">// question</div>
           <div className="text-lg text-gray-900">
-            <span ref={queryRef} className="font-mono">
-              {typedQuestion}
-            </span>
+            <span className="font-mono">{typedQuestion}</span>
             {stage === 1 ? <span className="text-blue-500">|</span> : null}
           </div>
         </div>
@@ -290,17 +279,17 @@ export function HeroDemoArtifact() {
           </div>
         </div>
 
-        {scenario.response ? (
-          <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
-            <div className="mb-4 font-mono text-sm text-gray-500">// response</div>
-            <div className="hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm leading-relaxed text-gray-700">{scenario.response.summary}</p>
+        <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
+          <div className="mb-4 font-mono text-sm text-gray-500">// response</div>
+          <div className="hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm leading-relaxed text-gray-700">{scenario.response.summary}</p>
+            {scenario.response.code ? (
               <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
                 {scenario.response.code}
               </pre>
-            </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
 
       <div className="mt-4 text-center text-sm text-gray-600">
