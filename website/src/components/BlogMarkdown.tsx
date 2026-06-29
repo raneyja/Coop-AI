@@ -19,7 +19,7 @@ export function BlogMarkdown({ content }: BlogMarkdownProps) {
             return (
               <Link
                 href={href ?? "/demo?intent=waitlist"}
-                className="not-prose mt-6 inline-flex items-center justify-center rounded-sm bg-coop-index px-6 py-3 font-mono text-sm font-medium text-coop-dark no-underline transition hover:bg-[#46c35a]"
+                className="not-prose mt-6 inline-flex items-center justify-center rounded bg-black px-6 py-3 text-sm font-medium text-white no-underline transition hover:bg-gray-900"
               >
                 {children}
               </Link>

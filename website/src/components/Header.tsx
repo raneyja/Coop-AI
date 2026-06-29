@@ -12,7 +12,7 @@ export function Header() {
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-coop-border bg-coop-dark/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-coop-border bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2.5" onClick={closeMobileMenu}>
           <BrandMark />
@@ -23,7 +23,7 @@ export function Header() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-sm text-coop-muted transition-colors hover:text-white"
+              className="text-sm text-coop-muted transition-colors hover:text-gray-900"
             >
               {item.label}
             </Link>
@@ -33,13 +33,13 @@ export function Header() {
         <div className="flex items-center gap-3">
           <Link
             href="/demo"
-            className="hidden rounded-sm border border-coop-border bg-coop-surface px-3 py-1.5 font-mono text-xs text-white/90 transition hover:border-coop-muted/50 hover:bg-[#1c2128] sm:inline-flex"
+            className="hidden rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-gray-50 sm:inline-flex"
           >
             Book a demo
           </Link>
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40 md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-900 transition hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 md:hidden"
             aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-controls="mobile-site-menu"
             aria-expanded={isMobileMenuOpen}
@@ -54,13 +54,13 @@ export function Header() {
         </div>
       </div>
       {isMobileMenuOpen ? (
-        <div id="mobile-site-menu" className="border-t border-white/5 bg-coop-dark/95 px-6 py-5 shadow-2xl md:hidden">
+        <div id="mobile-site-menu" className="border-t border-coop-border bg-white px-6 py-5 shadow-lg md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1" aria-label="Mobile navigation">
             {siteConfig.nav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-2xl px-4 py-3 text-base font-medium text-coop-muted transition hover:bg-white/5 hover:text-white"
+                className="rounded-2xl px-4 py-3 text-base font-medium text-coop-muted transition hover:bg-gray-50 hover:text-gray-900"
                 onClick={closeMobileMenu}
               >
                 {item.label}
@@ -68,7 +68,7 @@ export function Header() {
             ))}
             <Link
               href="/demo"
-              className="mt-3 inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-medium text-coop-dark transition hover:bg-white/90"
+              className="mt-3 inline-flex items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-900"
               onClick={closeMobileMenu}
             >
               Book a demo

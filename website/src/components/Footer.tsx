@@ -4,7 +4,7 @@ import { siteConfig } from "@/lib/site.config";
 
 export function Footer() {
   return (
-    <footer className="border-t border-coop-border bg-coop-dark">
+    <footer className="border-t border-coop-border bg-white">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-4">
           <div className="md:col-span-1">
@@ -17,20 +17,20 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-white">Product</h3>
+            <h3 className="text-sm font-medium text-gray-900">Product</h3>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/product" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/product" className="text-sm text-coop-muted hover:text-gray-900">
                   Features
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/pricing" className="text-sm text-coop-muted hover:text-gray-900">
                   Pricing
                 </Link>
               </li>
               <li>
-                <Link href="/demo" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/demo" className="text-sm text-coop-muted hover:text-gray-900">
                   Book a demo
                 </Link>
               </li>
@@ -38,27 +38,27 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-white">Company</h3>
+            <h3 className="text-sm font-medium text-gray-900">Company</h3>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/enterprise" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/enterprise" className="text-sm text-coop-muted hover:text-gray-900">
                   Enterprise
                 </Link>
               </li>
               <li>
-                <Link href="/security" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/security" className="text-sm text-coop-muted hover:text-gray-900">
                   Security
                 </Link>
               </li>
               <li>
-                <Link href="/blog" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/blog" className="text-sm text-coop-muted hover:text-gray-900">
                   Blog
                 </Link>
               </li>
               <li>
                 <a
                   href={`mailto:${siteConfig.contactEmail}`}
-                  className="text-sm text-coop-muted hover:text-white"
+                  className="text-sm text-coop-muted hover:text-gray-900"
                 >
                   Contact
                 </a>
@@ -67,15 +67,15 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-white">Legal</h3>
+            <h3 className="text-sm font-medium text-gray-900">Legal</h3>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/privacy" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/privacy" className="text-sm text-coop-muted hover:text-gray-900">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/terms" className="text-sm text-coop-muted hover:text-gray-900">
                   Terms of Service
                 </Link>
               </li>

@@ -63,11 +63,11 @@ export default function EnterprisePage() {
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {securityFeatures.map((feature) => (
               <div key={feature.title} className="coop-card">
-                <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-coop-muted">{feature.body}</p>
                 {feature.link ? (
                   <p className="mt-4">
-                    <Link href={feature.link.href} className="text-sm font-medium text-coop-index hover:text-white">
+                    <Link href={feature.link.href} className="text-sm font-medium text-gray-900 hover:underline">
                       {feature.link.label}
                     </Link>
                   </p>
@@ -78,7 +78,7 @@ export default function EnterprisePage() {
         </div>
       </section>
 
-      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
+      <section className="border-y border-coop-border bg-gray-50 py-16">
         <div className="mx-auto max-w-3xl px-6">
           <SectionHeading
             label="leadership"
@@ -87,19 +87,19 @@ export default function EnterprisePage() {
           />
           <ul className="mt-8 space-y-3 text-sm text-coop-muted">
             <li className="flex gap-3">
-              <span className="text-coop-index">✓</span>
+              <span className="text-gray-900">✓</span>
               Deploy CoopAI on infrastructure you control
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-index">✓</span>
+              <span className="text-gray-900">✓</span>
               Integrate with GitHub, GitLab, and Bitbucket webhooks
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-index">✓</span>
+              <span className="text-gray-900">✓</span>
               Zero-clone architecture — no full repo copies on every laptop
             </li>
             <li className="flex gap-3">
-              <span className="text-coop-index">✓</span>
+              <span className="text-gray-900">✓</span>
               DPA-ready zero-retention addendum template available
             </li>
           </ul>
@@ -110,7 +110,7 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-6xl px-6 text-center">
           <p className="text-coop-muted">
             Read our full security posture on the{" "}
-            <Link href="/security" className="font-medium text-coop-index hover:text-white">
+            <Link href="/security" className="font-medium text-gray-900 hover:underline">
               Security page
             </Link>
             .

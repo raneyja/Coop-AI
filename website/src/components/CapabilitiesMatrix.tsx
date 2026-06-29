@@ -17,7 +17,7 @@ export function CapabilitiesMatrix({ groups }: CapabilitiesMatrixProps) {
             }`}
           >
             <p className="coop-section-label">
-              <span className="text-coop-muted">{"// "}</span>
+              <span className="text-gray-400">{"// "}</span>
               {group.label}
             </p>
           </div>
@@ -32,7 +32,7 @@ export function CapabilitiesMatrix({ groups }: CapabilitiesMatrixProps) {
                   <span className="font-mono text-xs leading-5 text-coop-index sm:pt-0.5">
                     {String(itemCounter).padStart(2, "0")}
                   </span>
-                  <h3 className="font-semibold text-white">{item.title}</h3>
+                  <h3 className="font-semibold text-gray-900">{item.title}</h3>
                   <p className="text-sm leading-relaxed text-coop-muted">{item.body}</p>
                 </li>
               );

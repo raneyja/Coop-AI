@@ -105,8 +105,8 @@ export function ProductShowcaseCarousel() {
               onClick={() => selectSlide(i)}
               className={`rounded-sm border px-3 py-1.5 font-mono text-xs transition ${
                 i === index
-                  ? "border-coop-index/50 bg-coop-index/10 text-white"
-                  : "border-coop-border bg-coop-editor text-coop-muted hover:border-coop-muted/50 hover:text-white"
+                  ? "border-gray-900 bg-gray-100 text-gray-900"
+                  : "border-coop-border bg-white text-coop-muted hover:border-gray-300 hover:text-gray-900"
               }`}
             >
               {item.feature}
@@ -119,7 +119,7 @@ export function ProductShowcaseCarousel() {
             <span
               key={i}
               className={`h-1 rounded-full transition-all duration-300 ${
-                i === index ? "w-6 bg-coop-index" : "w-1.5 bg-white/20"
+                i === index ? "w-6 bg-gray-900" : "w-1.5 bg-gray-200"
               }`}
             />
           ))}

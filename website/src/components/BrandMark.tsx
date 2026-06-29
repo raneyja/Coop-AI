@@ -14,11 +14,11 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
         alt=""
         width={logoHeight}
         height={logoHeight}
-        className="h-auto w-auto invert mix-blend-screen opacity-90"
+        className="h-auto w-auto"
         style={{ height: logoHeight }}
       />
       <span
-        className={`font-semibold tracking-tight text-white ${size === "sm" ? "text-base" : "text-lg"}`}
+        className={`font-semibold tracking-tight text-gray-900 ${size === "sm" ? "text-base" : "text-lg"}`}
       >
         CoopAI
       </span>

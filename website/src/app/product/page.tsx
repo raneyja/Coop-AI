@@ -56,7 +56,7 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <section className="border-y border-coop-border bg-coop-surface/20 py-16" id="lightning-mode">
+      <section className="border-y border-coop-border bg-gray-50 py-16" id="lightning-mode">
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="lightning_mode"
@@ -65,7 +65,7 @@ export default function ProductPage() {
           />
           <div className="mt-10 grid gap-8 md:grid-cols-2">
             <div>
-              <h3 className="font-semibold text-white">What it includes:</h3>
+              <h3 className="font-semibold text-gray-900">What it includes:</h3>
               <ul className="mt-4 space-y-2 text-sm text-coop-muted">
                 <li>Search across your entire codebase instantly</li>
                 <li>Instance-wide symbol and content indexing</li>
@@ -75,20 +75,20 @@ export default function ProductPage() {
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold text-white">Who needs it:</h3>
+              <h3 className="font-semibold text-gray-900">Who needs it:</h3>
               <p className="mt-4 text-sm leading-relaxed text-coop-muted">
                 Teams with 5+ connected services, microservice architectures, or teams where cloning
                 monorepos isn&apos;t practical.
               </p>
               <p className="mt-6 text-sm text-coop-muted">
-                <span className="font-medium text-white">Available in:</span> Pro and Enterprise plans
+                <span className="font-medium text-gray-900">Available in:</span> Pro and Enterprise plans
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-y border-coop-border bg-coop-surface/20 py-16">
+      <section className="border-y border-coop-border bg-gray-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="write"
@@ -98,7 +98,7 @@ export default function ProductPage() {
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             {siteConfig.codeCreation.features.map((item) => (
               <div key={item.id} className="coop-card">
-                <h3 className="font-semibold text-white">{item.title}</h3>
+                <h3 className="font-semibold text-gray-900">{item.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">{item.description}</p>
               </div>
             ))}
@@ -112,7 +112,7 @@ export default function ProductPage() {
           <CapabilitiesMatrix groups={productCapabilityGroups} />
           <p className="mt-8 text-sm text-coop-muted">
             Graph-backed completion context and file @-mentions in chat are rolling out next.{" "}
-            <span className="text-white/70">Inline complete and edit selection are in active development.</span>
+            <span className="text-gray-600">Inline complete and edit selection are in active development.</span>
           </p>
         </div>
       </section>

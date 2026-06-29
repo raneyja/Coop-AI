@@ -62,7 +62,7 @@ export function ContactForm({
   if (status === "success") {
     return (
       <div className="coop-panel p-8 text-center">
-        <p className="text-lg font-medium text-white">Thanks — we&apos;ll be in touch soon.</p>
+        <p className="text-lg font-medium text-gray-900">Thanks — we&apos;ll be in touch soon.</p>
         <p className="mt-2 text-sm text-coop-muted">
           {type === "demo"
             ? "Our team will reach out to schedule your demo."
@@ -74,7 +74,7 @@ export function ContactForm({
 
   return (
     <div className="coop-panel p-8">
-      <h2 className="text-xl font-semibold text-white">{title}</h2>
+      <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
       <p className="mt-2 text-sm text-coop-muted">{description}</p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -88,7 +88,7 @@ export function ContactForm({
         </div>
         {type === "demo" && (
           <div>
-            <label htmlFor="message" className="block text-sm font-medium text-white/90">
+            <label htmlFor="message" className="block text-sm font-medium text-gray-900">
               What would you like to explore?
             </label>
             <textarea
@@ -97,14 +97,14 @@ export function ContactForm({
               rows={3}
               defaultValue={defaultMessage}
               key={defaultMessage ?? "message-empty"}
-              className="mt-1.5 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30"
+              className="mt-1.5 w-full rounded-sm border border-coop-border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               placeholder="Team size, repos, security requirements..."
             />
           </div>
         )}
 
         {status === "error" && (
-          <p className="text-sm text-red-400" role="alert">
+          <p className="text-sm text-red-600" role="alert">
             {errorMessage}
           </p>
         )}
@@ -112,7 +112,7 @@ export function ContactForm({
         <button
           type="submit"
           disabled={status === "loading"}
-          className="w-full rounded-sm bg-coop-index py-2.5 font-mono text-sm font-medium text-coop-dark transition hover:bg-[#46c35a] disabled:opacity-60 sm:w-auto sm:px-8"
+          className="w-full rounded bg-black py-2.5 text-sm font-medium text-white transition hover:bg-gray-900 disabled:opacity-60 sm:w-auto sm:px-8"
         >
           {status === "loading" ? "Submitting…" : submitLabel}
         </button>
@@ -136,7 +136,7 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="block text-sm font-medium text-white/90">
+      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
         {label}
         {required && <span className="text-coop-muted"> *</span>}
       </label>
@@ -146,7 +146,7 @@ function Field({
         type={type}
         required={required}
         placeholder={placeholder}
-        className="mt-1.5 w-full rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30"
+        className="mt-1.5 w-full rounded-sm border border-coop-border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
       />
     </div>
   );
