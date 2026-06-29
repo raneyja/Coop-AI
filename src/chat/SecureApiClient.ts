@@ -299,6 +299,13 @@ export class SecureApiClient {
     return { accessToken: response.accessToken, metadata: response.metadata };
   }
 
+  public async getIntegrationScope(
+    baseUrl: string,
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
+  ): Promise<import("../integrationScope/types").ResolvedIntegrationScope> {
+    return this.backend.getIntegrationScope(baseUrl, provider);
+  }
+
   public async fetchRepoFileViaCloud(
     baseUrl: string,
     repoId: string,

@@ -238,6 +238,8 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import { shouldFetchSlackContext } from "../context/slackContext";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -1628,6 +1630,7 @@ export class CoopChatSession {
     request: ContextFetchRequest
   ): Promise<ContextFetchResult> {
     const contextText = await this.integrationContextText(result, request);
+    const integrationScopes = await this.resolveIntegrationScopes(request);
     return mergeIntegrationChatContext({
       result,
       request,
@@ -1638,8 +1641,23 @@ export class CoopChatSession {
       activeFile: request.params.file,
       contextText,
       codeHostProvider: this.preferences.defaultCodeHost,
-      codeHostConnected: this.isCodeHostConnected()
+      codeHostConnected: this.isCodeHostConnected(),
+      integrationScopes
     });
+  }
+
+  private async resolveIntegrationScopes(
+    request: ContextFetchRequest
+  ): Promise<Partial<Record<"slack", ResolvedIntegrationScope>> | undefined> {
+    if (isCoopDevMode() || !shouldFetchSlackContext(request)) {
+      return undefined;
+    }
+    try {
+      const scope = await this.options.api.getIntegrationScope(this.preferences.apiBaseUrl, "slack");
+      return { slack: scope };
+    } catch {
+      return undefined;
+    }
   }
 
   private async integrationContextText(

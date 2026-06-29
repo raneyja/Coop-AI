@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { AuditLogger } from "./audit/auditLogger";
 import type { UsageTracker } from "./usageTracker";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
+import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
 import type { OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
@@ -10,6 +11,7 @@ export type AdminApiDeps = {
   orgStore?: OrgStore;
   userStore?: UserStore;
   integrationStore?: IntegrationConnectionStore;
+  scopePolicyStore?: IntegrationScopePolicyStore;
   serverConfig: ServerConfig;
   auditLogger?: AuditLogger;
   usageTracker?: UsageTracker;

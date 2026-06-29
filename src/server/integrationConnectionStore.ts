@@ -16,6 +16,8 @@ export type IntegrationConnectionMetadata = {
   botId?: string;
   displayName?: string;
   tenantId?: string;
+  /** AES-GCM encrypted Slack bot token (channels:read for admin scope picker). */
+  encryptedBotToken?: string;
 };
 
 export type IntegrationConnectionRecord = {
@@ -39,6 +41,7 @@ export class IntegrationConnectionStore {
       refreshToken?: string;
       expiresAt?: Date;
       metadata?: IntegrationConnectionMetadata;
+      botAccessToken?: string;
     }
   ): Promise<void> {
     if (!this.credentialsEncryptionKey) {
@@ -48,6 +51,13 @@ export class IntegrationConnectionStore {
     const encryptedRefresh = options?.refreshToken
       ? encryptCredential(options.refreshToken.trim(), this.credentialsEncryptionKey)
       : null;
+    const metadata: IntegrationConnectionMetadata = { ...(options?.metadata ?? {}) };
+    if (options?.botAccessToken?.trim()) {
+      metadata.encryptedBotToken = encryptCredential(
+        options.botAccessToken.trim(),
+        this.credentialsEncryptionKey
+      );
+    }
     await this.pool.query(
       `INSERT INTO org_integration_connections
          (org_id, provider, encrypted_access_token, encrypted_refresh_token, token_expires_at, metadata, updated_at)
@@ -64,7 +74,7 @@ export class IntegrationConnectionStore {
         encryptedAccess,
         encryptedRefresh,
         options?.expiresAt ?? null,
-        JSON.stringify(options?.metadata ?? {})
+        JSON.stringify(metadata)
       ]
     );
   }
@@ -123,6 +133,21 @@ export class IntegrationConnectionStore {
       [orgId, provider]
     );
   }
+
+  public async getBotAccessToken(
+    orgId: string,
+    provider: IntegrationProvider
+  ): Promise<string | undefined> {
+    if (!this.credentialsEncryptionKey) {
+      return undefined;
+    }
+    const connection = await this.get(orgId, provider);
+    const encrypted = connection?.metadata.encryptedBotToken;
+    if (!encrypted) {
+      return undefined;
+    }
+    return decryptCredential(encrypted, this.credentialsEncryptionKey);
+  }
 }
 
 function parseMetadata(raw: unknown): IntegrationConnectionMetadata {
@@ -142,6 +167,8 @@ function parseMetadata(raw: unknown): IntegrationConnectionMetadata {
     workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : undefined,
     botId: typeof record.botId === "string" ? record.botId : undefined,
     displayName: typeof record.displayName === "string" ? record.displayName : undefined,
-    tenantId: typeof record.tenantId === "string" ? record.tenantId : undefined
+    tenantId: typeof record.tenantId === "string" ? record.tenantId : undefined,
+    encryptedBotToken:
+      typeof record.encryptedBotToken === "string" ? record.encryptedBotToken : undefined
   };
 }

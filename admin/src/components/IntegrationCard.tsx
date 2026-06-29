@@ -7,6 +7,7 @@ import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
 import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
+import { IntegrationScopePanel } from "./IntegrationScopePanel";
 
 type IntegrationCardProps = {
   definition: IntegrationDefinition;
@@ -56,6 +57,9 @@ export function IntegrationCard({
   const installed = status?.installed ?? false;
   const needsReconnect = status?.needsReconnect ?? false;
   const connected = installed && !needsReconnect;
+  const scopeStatus = status?.scopeStatus;
+  const scopeActive = scopeStatus === "active";
+  const scopeRequired = scopeStatus === "required";
 
   async function handleDisconnect() {
     if (!confirm(`Disconnect ${definition.name} for your entire organization?`)) return;
@@ -70,26 +74,44 @@ export function IntegrationCard({
     onRefresh();
   }
 
+  function connectionBadge() {
+    if (comingSoon) {
+      return <AdminChip>Coming soon</AdminChip>;
+    }
+    if (requiresPro) {
+      return <AdminChip variant="plan-pro">Pro</AdminChip>;
+    }
+    if (requiresEnterprise) {
+      return <AdminChip variant="plan-enterprise">Enterprise</AdminChip>;
+    }
+    if (needsReconnect) {
+      return <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />;
+    }
+    if (connected && scopeRequired) {
+      return <StatusBadge connected={false} label="Scope required" showWhenDisconnected />;
+    }
+    if (connected && scopeActive) {
+      return <StatusBadge connected label="Active" />;
+    }
+    if (connected) {
+      return <StatusBadge connected />;
+    }
+    return null;
+  }
+
   return (
     <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-medium text-white">{definition.name}</h3>
-          {comingSoon ? (
-            <AdminChip>Coming soon</AdminChip>
-          ) : requiresPro ? (
-            <AdminChip variant="plan-pro">Pro</AdminChip>
-          ) : requiresEnterprise ? (
-            <AdminChip variant="plan-enterprise">Enterprise</AdminChip>
-          ) : needsReconnect ? (
-            <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />
-          ) : connected ? (
-            <StatusBadge connected />
-          ) : null}
+          {connectionBadge()}
         </div>
         <p className="mt-1 text-sm text-coop-muted">{definition.description}</p>
         {status?.detail ? (
           <p className="mt-1 text-xs text-coop-muted">Connected as {status.detail}</p>
+        ) : null}
+        {status?.scopeSummary ? (
+          <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
         ) : null}
         {requiresPro && !connected ? (
           <p className="mt-1 text-xs text-coop-muted">
@@ -101,6 +123,12 @@ export function IntegrationCard({
           </p>
         ) : null}
         {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
+        <IntegrationScopePanel
+          provider={definition.id}
+          orgPlan={orgPlan}
+          connected={connected}
+          onSaved={onRefresh}
+        />
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
         {!comingSoon && (!connected || needsReconnect) && (

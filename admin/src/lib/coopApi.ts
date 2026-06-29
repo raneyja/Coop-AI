@@ -1,5 +1,10 @@
 import type { CodeHostProvider, IntegrationProvider, IntegrationStatus } from "./integrations";
 import { INTEGRATIONS } from "./integrations";
+import type {
+  IntegrationResource,
+  IntegrationScopeResponse,
+  SlackScopePolicy
+} from "./integrations";
 import type { StoredMe } from "./auth";
 
 export type ApiError = {
@@ -75,6 +80,8 @@ type BackendIntegrationStatus = {
   installed: boolean;
   needsReconnect?: boolean;
   detail?: string;
+  scopeStatus?: IntegrationStatus["scopeStatus"];
+  scopeSummary?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -94,7 +101,9 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
     provider: raw.provider,
     installed: raw.installed,
     needsReconnect: raw.needsReconnect,
-    detail: integrationDetail(raw)
+    detail: integrationDetail(raw),
+    scopeStatus: raw.scopeStatus,
+    scopeSummary: raw.scopeSummary
   };
 }
 
@@ -368,6 +377,50 @@ export async function disconnectIntegration(provider: string): Promise<ApiResult
   return coopFetch<{ ok: boolean }>(`/v1/admin/integrations/${encodeURIComponent(provider)}`, {
     method: "DELETE"
   });
+}
+
+export async function fetchIntegrationScope(
+  provider: IntegrationProvider
+): Promise<ApiResult<IntegrationScopeResponse>> {
+  return coopFetch<IntegrationScopeResponse>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`
+  );
+}
+
+export async function saveIntegrationScope(
+  provider: IntegrationProvider,
+  policy: SlackScopePolicy
+): Promise<ApiResult<IntegrationScopeResponse>> {
+  return coopFetch<IntegrationScopeResponse>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ policy })
+    }
+  );
+}
+
+export async function fetchIntegrationResources(
+  provider: IntegrationProvider,
+  query?: string
+): Promise<ApiResult<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>> {
+  const params = new URLSearchParams();
+  if (query?.trim()) {
+    params.set("q", query.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return coopFetch<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/resources${suffix}`
+  );
+}
+
+export async function testIntegrationScope(
+  provider: IntegrationProvider
+): Promise<ApiResult<{ ok: boolean; message: string }>> {
+  return coopFetch<{ ok: boolean; message: string }>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/test`,
+    { method: "POST", body: "{}" }
+  );
 }
 
 export type BillingInfo = {

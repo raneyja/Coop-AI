@@ -280,6 +280,58 @@ export class SlackClient {
     return match?.id;
   }
 
+  public async listChannels(options?: { limit?: number }): Promise<SlackChannelInfo[]> {
+    const limit = Math.min(options?.limit ?? 200, 1000);
+    const channels: SlackChannelInfo[] = [];
+    let cursor: string | undefined;
+
+    while (channels.length < limit) {
+      const query: Record<string, string> = {
+        types: "public_channel,private_channel",
+        exclude_archived: "true",
+        limit: String(Math.min(200, limit - channels.length))
+      };
+      if (cursor) {
+        query.cursor = cursor;
+      }
+
+      const result = await this.api<{
+        ok: boolean;
+        channels?: Array<{
+          id: string;
+          name: string;
+          topic?: { value?: string };
+          purpose?: { value?: string };
+          is_private?: boolean;
+        }>;
+        response_metadata?: { next_cursor?: string };
+        error?: string;
+      }>("conversations.list", { method: "GET", query });
+
+      if (!result.ok) {
+        throw new SlackApiError(result.error ?? "conversations.list failed", result.error);
+      }
+
+      for (const channel of result.channels ?? []) {
+        channels.push({
+          id: channel.id,
+          name: channel.name,
+          topic: channel.topic?.value,
+          description: channel.purpose?.value,
+          isPrivate: Boolean(channel.is_private)
+        });
+      }
+
+      const next = result.response_metadata?.next_cursor?.trim();
+      if (!next) {
+        break;
+      }
+      cursor = next;
+    }
+
+    return channels;
+  }
+
   public async getChannelInfo(channelId: string): Promise<SlackChannelInfo> {
     const result = await this.api<{
       ok: boolean;

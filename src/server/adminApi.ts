@@ -4,6 +4,7 @@ import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { handleAdminUsersRequest } from "./adminUsersApi";
 import { handleAdminApiKeysRequest } from "./adminApiKeysApi";
 import { handleAdminIntegrationsRequest } from "./adminIntegrationsApi";
+import { handleAdminIntegrationScopeRequest } from "./adminIntegrationScopeApi";
 import { handleAdminOrgRequest } from "./adminOrgApi";
 import { handleAdminAuditRequest } from "./adminAuditApi";
 import { handleAdminAnalyticsRequest } from "./adminAnalyticsApi";
@@ -57,6 +58,9 @@ export async function handleAdminApiRequest(
     return true;
   }
   if (await handleAdminIntegrationsRequest(parsed, response, deps, auth)) {
+    return true;
+  }
+  if (await handleAdminIntegrationScopeRequest(parsed, response, deps, auth)) {
     return true;
   }
   if (await handleAdminOrgRequest(parsed, response, deps, auth)) {

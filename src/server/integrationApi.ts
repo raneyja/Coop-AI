@@ -1,11 +1,14 @@
 import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationConnectionStore, IntegrationProvider } from "./integrationConnectionStore";
+import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
+import type { OrgStore } from "./orgStore";
 import type { AtlassianAppService } from "./atlassianAppService";
 import type { NotionAppService } from "./notionAppService";
 import type { GoogleDocsAppService } from "./googleDocsAppService";
 import type { SlackAppService } from "./slackAppService";
 import type { TeamsAppService } from "./teamsAppService";
+import { resolveIntegrationScope } from "./resolveIntegrationScope";
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
@@ -19,6 +22,8 @@ const CREDENTIAL_PROVIDERS: IntegrationProvider[] = [
 
 export type IntegrationApiDeps = {
   integrationStore?: IntegrationConnectionStore;
+  scopePolicyStore?: IntegrationScopePolicyStore;
+  orgStore?: OrgStore;
   atlassianApp?: AtlassianAppService;
   notionApp?: NotionAppService;
   googleDocsApp?: GoogleDocsAppService;
@@ -42,6 +47,9 @@ export async function handleIntegrationApiRequest(
 ): Promise<boolean> {
   if (parsed.method === "GET" && parsed.pathname === "/v1/orgs/integrations/credentials") {
     return handleIntegrationCredentials(parsed, response, deps, auth);
+  }
+  if (parsed.method === "GET" && parsed.pathname === "/v1/orgs/integrations/scope") {
+    return handleIntegrationScope(parsed, response, deps, auth);
   }
   return false;
 }
@@ -82,10 +90,48 @@ async function handleIntegrationCredentials(
   writeJson(response, 200, {
     provider,
     accessToken,
-    metadata: connection.metadata,
+    metadata: sanitizeMetadata(connection.metadata as Record<string, unknown>),
     tokenExpiresAt: connection.tokenExpiresAt?.toISOString()
   });
   return true;
+}
+
+async function handleIntegrationScope(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: IntegrationApiDeps,
+  auth?: AuthContext
+): Promise<boolean> {
+  if (!auth || auth.orgId === "legacy") {
+    writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+
+  const provider = parsed.query.get("provider") as IntegrationProvider | null;
+  if (!provider || !CREDENTIAL_PROVIDERS.includes(provider)) {
+    writeJson(response, 400, { error: "invalid provider" });
+    return true;
+  }
+
+  const org = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
+  const connection = deps.integrationStore
+    ? await deps.integrationStore.get(auth.orgId, provider)
+    : undefined;
+  const resolved = await resolveIntegrationScope({
+    orgId: auth.orgId,
+    provider,
+    orgPlan: org?.plan ?? auth.plan ?? "free",
+    connected: Boolean(connection),
+    scopePolicyStore: deps.scopePolicyStore
+  });
+
+  writeJson(response, 200, resolved);
+  return true;
+}
+
+function sanitizeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const { encryptedBotToken: _bot, ...rest } = metadata;
+  return rest;
 }
 
 async function resolveAccessToken(

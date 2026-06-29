@@ -1,5 +1,6 @@
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -93,6 +94,7 @@ export type BlastRadiusAnalysisOptions = {
   codeHostRouter: CodeHostRouter;
   integrationSecrets: IntegrationSecrets;
   indexBackend?: IndexBackend;
+  resolveSlackScope?: () => Promise<ResolvedIntegrationScope | undefined>;
 };
 
 export type BlastRadiusAnalysisParams = {
@@ -227,11 +229,13 @@ export class BlastRadiusAnalysisEngine {
       const query = [repoQuery, fileStem, ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)]
         .filter(Boolean)
         .join(" OR ");
+      const slackScope = await this.options.resolveSlackScope?.();
       const slack = await fetchSlackSearchContext({
         secrets: this.options.integrationSecrets,
         owner: resolved.owner,
         repo: resolved.repo,
-        queryText: query
+        queryText: query,
+        integrationScope: slackScope
       });
       slackSearch = {
         query: slack.query,

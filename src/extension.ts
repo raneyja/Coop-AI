@@ -373,7 +373,17 @@ export function activate(context: vscode.ExtensionContext): void {
     createBlastRadiusAnalysisEngine({
       codeHostRouter,
       integrationSecrets,
-      indexBackend
+      indexBackend,
+      resolveSlackScope: async () => {
+        if (isCoopDevMode() || !(await api.hasToken())) {
+          return undefined;
+        }
+        try {
+          return await api.getIntegrationScope(getApiBaseUrl(), "slack");
+        } catch {
+          return undefined;
+        }
+      }
     })
   );
   const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);

@@ -68,6 +68,7 @@ import { loadTeamsAppConfig } from "../server/teamsAppConfig";
 import { createTeamsAppService } from "../server/teamsAppService";
 import { handleTeamsAppApiRequest } from "../server/teamsAppApi";
 import { IntegrationConnectionStore } from "../server/integrationConnectionStore";
+import { IntegrationScopePolicyStore } from "../server/integrationScopePolicyStore";
 import { handleIntegrationApiRequest } from "../server/integrationApi";
 import { handleAdminApiRequest } from "../server/adminApi";
 import { handleBillingApiRequest } from "../server/billing/billingApi";
@@ -201,6 +202,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       : pool
         ? new IntegrationConnectionStore(pool)
         : undefined;
+
+  const scopePolicyStore = pool ? new IntegrationScopePolicyStore(pool) : undefined;
 
   const slackAppConfig = loadSlackAppConfig();
   const slackApp =
@@ -504,6 +507,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       if (
         await handleIntegrationApiRequest(orgParsed, response, {
           integrationStore,
+          scopePolicyStore,
+          orgStore,
           atlassianApp,
           notionApp,
           googleDocsApp,
@@ -529,6 +534,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           orgStore,
           userStore,
           integrationStore,
+          scopePolicyStore,
           serverConfig,
           auditLogger,
           usageTracker

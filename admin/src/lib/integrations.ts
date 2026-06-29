@@ -77,4 +77,35 @@ export type IntegrationStatus = {
   installed: boolean;
   needsReconnect?: boolean;
   detail?: string;
+  scopeStatus?: "none" | "required" | "active";
+  scopeSummary?: string;
+};
+
+export type SlackScopeChannel = {
+  id: string;
+  name: string;
+};
+
+export type SlackScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  channels: SlackScopeChannel[];
+};
+
+export type IntegrationScopeResponse = {
+  provider: IntegrationProvider;
+  installed: boolean;
+  scopeStatus: "none" | "required" | "active";
+  enforced: boolean;
+  allowed: boolean;
+  policy: SlackScopePolicy | Record<string, unknown>;
+  summary?: string;
+  updatedAt?: string;
+};
+
+export type IntegrationResource = {
+  id: string;
+  name: string;
+  isPrivate?: boolean;
+  topic?: string;
 };

@@ -403,6 +403,26 @@ export class CoopBackendClient {
     };
   }
 
+  public async getIntegrationScope(
+    baseUrl: string,
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
+  ): Promise<import("../integrationScope/types").ResolvedIntegrationScope> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<import("../integrationScope/types").ResolvedIntegrationScope & CoopApiErrorBody>(
+      "/v1/orgs/integrations/scope",
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        params: { provider },
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data;
+  }
+
   private async getOrgIntegrationInstallationStatus(
     baseUrl: string,
     provider: "notion" | "google-docs" | "teams"

@@ -4,6 +4,7 @@ import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
+import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 
 type ParsedRequest = {
   method: string;
@@ -69,6 +70,7 @@ export async function handleAdminIntegrationsRequest(
       }
     } else {
       await deps.integrationStore!.delete(auth.orgId, provider);
+      await deps.scopePolicyStore?.delete(auth.orgId, provider as IntegrationProvider);
     }
     const actor = auditActor(auth);
     await deps.auditLogger?.record({
@@ -86,15 +88,24 @@ export async function handleAdminIntegrationsRequest(
     return false;
   }
 
+  const orgPlan = await loadOrgPlan(deps, auth.orgId);
+
   const integrations = [
     ...(await Promise.all(CODE_HOST_PROVIDERS.map((provider) => loadCodeHostStatus(deps, auth.orgId, provider)))),
     ...(await Promise.all(
-      INTEGRATION_PROVIDERS.map((provider) => loadIntegrationStatus(deps, auth.orgId, provider))
+      INTEGRATION_PROVIDERS.map((provider) =>
+        loadIntegrationStatus(deps, auth.orgId, provider, orgPlan)
+      )
     ))
   ];
 
   writeJson(response, 200, { integrations });
   return true;
+}
+
+async function loadOrgPlan(deps: AdminApiDeps, orgId: string): Promise<string> {
+  const org = deps.orgStore ? await deps.orgStore.getOrganization(orgId) : undefined;
+  return org?.plan ?? "free";
 }
 
 async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: CodeHostProvider) {
@@ -130,20 +141,37 @@ async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: C
   };
 }
 
-async function loadIntegrationStatus(deps: AdminApiDeps, orgId: string, provider: IntegrationProvider) {
+async function loadIntegrationStatus(
+  deps: AdminApiDeps,
+  orgId: string,
+  provider: IntegrationProvider,
+  orgPlan: string
+) {
   const connection = deps.integrationStore
     ? await deps.integrationStore.get(orgId, provider)
     : undefined;
+  const installed = Boolean(connection);
+  const scope = await resolveScopeStatusForIntegration(deps, orgId, orgPlan, provider, installed);
+  const metadata = connection
+    ? sanitizeIntegrationMetadata({
+        ...connection.metadata,
+        tokenExpiresAt: connection.tokenExpiresAt,
+        updatedAt: connection.updatedAt
+      })
+    : {};
   return {
     provider,
-    installed: Boolean(connection),
+    installed,
     installUrlPath: `/v1/${provider}/app/install-url`,
-    metadata: connection
-      ? {
-          ...connection.metadata,
-          tokenExpiresAt: connection.tokenExpiresAt,
-          updatedAt: connection.updatedAt
-        }
-      : {}
+    scopeStatus: scope.scopeStatus,
+    scopeSummary: scope.scopeSummary,
+    metadata
   };
+}
+
+function sanitizeIntegrationMetadata(
+  metadata: Record<string, unknown>
+): Record<string, unknown> {
+  const { encryptedBotToken: _bot, ...rest } = metadata;
+  return rest;
 }
