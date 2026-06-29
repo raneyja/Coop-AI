@@ -58,12 +58,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {showWizard && (
-        <OnboardingWizard
-          integrations={integrations}
-          onComplete={() => setShowWizard(false)}
-        />
-      )}
+      {showWizard && <OnboardingWizard onComplete={() => setShowWizard(false)} />}
 
       <AdminStatRow>
         <div className="admin-stat">

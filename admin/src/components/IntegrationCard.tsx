@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import type { IntegrationDefinition, CodeHostProvider } from "@/lib/integrations";
-import { CODE_HOST_PROVIDERS } from "@/lib/integrations";
+import { CODE_HOST_PROVIDERS, SCOPABLE_PROVIDERS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
+import { formatIntegrationError } from "@/lib/integrationErrors";
 import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
 import { IntegrationScopePanel } from "./IntegrationScopePanel";
@@ -15,6 +16,9 @@ type IntegrationCardProps = {
   orgPlan?: string;
   onRefresh: () => void;
   refreshing?: boolean;
+  refreshSuccess?: boolean;
+  initialLoading?: boolean;
+  compact?: boolean;
 };
 
 export function IntegrationCard({
@@ -22,10 +26,14 @@ export function IntegrationCard({
   status,
   orgPlan = "free",
   onRefresh,
-  refreshing
+  refreshing,
+  refreshSuccess,
+  initialLoading,
+  compact
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const comingSoon = definition.comingSoon;
   const isCodeHost = CODE_HOST_PROVIDERS.includes(definition.id as CodeHostProvider);
@@ -33,6 +41,10 @@ export function IntegrationCard({
   const requiresEnterprise =
     isCodeHost && definition.id !== "github" && orgPlan !== "enterprise" && orgPlan !== "free";
   const planBlocked = requiresPro || requiresEnterprise;
+  const isScopable = SCOPABLE_PROVIDERS.includes(
+    definition.id as (typeof SCOPABLE_PROVIDERS)[number]
+  );
+  const enterprise = orgPlan === "enterprise";
 
   async function handleConnect() {
     if (planBlocked) {
@@ -48,7 +60,7 @@ export function IntegrationCard({
     const result = await fetchInstallUrl(definition.id);
     setConnecting(false);
     if (!result.ok || !result.data?.url) {
-      setError(result.error ?? "Could not get install URL.");
+      setError(formatIntegrationError(definition.id, result.status, result.error));
       return;
     }
     window.open(result.data.url, "_blank", "noopener,noreferrer");
@@ -60,6 +72,7 @@ export function IntegrationCard({
   const scopeStatus = status?.scopeStatus;
   const scopeActive = scopeStatus === "active";
   const scopeRequired = scopeStatus === "required";
+  const showManageAccess = enterprise && connected && isScopable;
 
   async function handleDisconnect() {
     if (!confirm(`Disconnect ${definition.name} for your entire organization?`)) return;
@@ -71,6 +84,7 @@ export function IntegrationCard({
       setError(result.error ?? "Disconnect failed.");
       return;
     }
+    setScopeOpen(false);
     onRefresh();
   }
 
@@ -100,68 +114,119 @@ export function IntegrationCard({
   }
 
   return (
-    <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-medium text-white">{definition.name}</h3>
-          {connectionBadge()}
+    <>
+      <div
+        className={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${
+          compact ? "py-3" : "py-5"
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-medium text-white">{definition.name}</h3>
+            {connectionBadge()}
+          </div>
+          <p className="mt-1 text-sm text-coop-muted">{definition.description}</p>
+          {status?.detail ? (
+            <p className="mt-1 text-xs text-coop-muted">Connected as {status.detail}</p>
+          ) : null}
+          {status?.scopeSummary ? (
+            <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
+          ) : null}
+          {requiresPro && !connected ? (
+            <p className="mt-1 text-xs text-coop-muted">
+              Code host connections require Pro. The free plan is individual-only and uses local
+              workspace files.
+            </p>
+          ) : requiresEnterprise && !connected ? (
+            <p className="mt-1 text-xs text-coop-muted">
+              Multi-code-host estate indexing is available on Enterprise. Upgrade to connect{" "}
+              {definition.name}.
+            </p>
+          ) : null}
+          {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
         </div>
-        <p className="mt-1 text-sm text-coop-muted">{definition.description}</p>
-        {status?.detail ? (
-          <p className="mt-1 text-xs text-coop-muted">Connected as {status.detail}</p>
-        ) : null}
-        {status?.scopeSummary ? (
-          <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
-        ) : null}
-        {requiresPro && !connected ? (
-          <p className="mt-1 text-xs text-coop-muted">
-            Code host connections require Pro. The free plan is individual-only and uses local workspace files.
-          </p>
-        ) : requiresEnterprise && !connected ? (
-          <p className="mt-1 text-xs text-coop-muted">
-            Multi-code-host estate indexing is available on Enterprise. Upgrade to connect {definition.name}.
-          </p>
-        ) : null}
-        {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
-        <IntegrationScopePanel
-          provider={definition.id}
-          orgPlan={orgPlan}
-          connected={connected}
-          onSaved={onRefresh}
-        />
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {!comingSoon && (!connected || needsReconnect) && (
+            <button
+              type="button"
+              className="admin-btn-primary"
+              onClick={handleConnect}
+              disabled={connecting || planBlocked}
+            >
+              {connecting ? "Opening…" : needsReconnect ? "Reconnect" : "Connect"}
+            </button>
+          )}
+          {showManageAccess ? (
+            <button
+              type="button"
+              className="admin-btn-secondary"
+              onClick={() => setScopeOpen(true)}
+            >
+              Manage access
+            </button>
+          ) : null}
+          {!comingSoon && (connected || needsReconnect) && (
+            <button
+              type="button"
+              className="admin-btn-danger"
+              onClick={() => void handleDisconnect()}
+              disabled={disconnecting}
+            >
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          )}
+          {!comingSoon && (
+            <button
+              type="button"
+              className={`admin-btn-secondary inline-flex min-w-[5.5rem] items-center justify-center gap-1.5 ${
+                refreshing ? "pointer-events-none opacity-60" : ""
+              }`}
+              onClick={onRefresh}
+              disabled={refreshing || initialLoading}
+              aria-busy={refreshing}
+              aria-label={
+                refreshing ? "Refreshing integration status" : refreshSuccess ? "Refreshed" : "Refresh"
+              }
+            >
+              {refreshing ? (
+                <span
+                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-coop-muted/30 border-t-coop-index"
+                  aria-hidden
+                />
+              ) : refreshSuccess ? (
+                <svg
+                  className="h-3.5 w-3.5 text-coop-index"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M3.5 8.5L6.5 11.5L12.5 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                "Refresh"
+              )}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        {!comingSoon && (!connected || needsReconnect) && (
-          <button
-            type="button"
-            className="admin-btn-primary"
-            onClick={handleConnect}
-            disabled={connecting || planBlocked}
-          >
-            {connecting ? "Opening…" : needsReconnect ? "Reconnect" : "Connect"}
-          </button>
-        )}
-        {!comingSoon && (connected || needsReconnect) && (
-          <button
-            type="button"
-            className="admin-btn-danger"
-            onClick={() => void handleDisconnect()}
-            disabled={disconnecting}
-          >
-            {disconnecting ? "Disconnecting…" : "Disconnect"}
-          </button>
-        )}
-        {!comingSoon && (
-          <button
-            type="button"
-            className="admin-btn-secondary"
-            onClick={onRefresh}
-            disabled={refreshing}
-          >
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-        )}
-      </div>
-    </div>
+
+      <IntegrationScopePanel
+        provider={definition.id}
+        providerName={definition.name}
+        orgPlan={orgPlan}
+        connected={connected}
+        open={scopeOpen}
+        onClose={() => setScopeOpen(false)}
+        onSaved={onRefresh}
+        onReconnect={() => void handleConnect()}
+        scopeNeedsReconnect={status?.scopeNeedsReconnect}
+      />
+    </>
   );
 }
