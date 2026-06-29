@@ -150,10 +150,16 @@ export function HeroDemoArtifact() {
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [stage, setStage] = useState<Stage>(1);
   const [typedQuestion, setTypedQuestion] = useState("");
+  const [paused, setPaused] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const typeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pausedRef = useRef(false);
 
   const scenario = SCENARIOS[scenarioIndex];
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -168,6 +174,15 @@ export function HeroDemoArtifact() {
     const id = setTimeout(fn, ms);
     timersRef.current.push(id);
   }, []);
+
+  const selectScenario = useCallback(
+    (index: number) => {
+      if (index === scenarioIndex) return;
+      clearTimers();
+      setScenarioIndex(index);
+    },
+    [scenarioIndex, clearTimers]
+  );
 
   useEffect(() => {
     const query = SCENARIOS[scenarioIndex].question;
@@ -187,7 +202,11 @@ export function HeroDemoArtifact() {
         addTimer(() => setStage(2), 500);
         addTimer(() => setStage(3), 2500);
         addTimer(() => setStage(4), 5000);
-        addTimer(() => setScenarioIndex((i) => (i + 1) % SCENARIOS.length), 8500);
+        addTimer(() => {
+          if (!pausedRef.current) {
+            setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
+          }
+        }, 8500);
       }
     }, 30);
 
@@ -195,7 +214,17 @@ export function HeroDemoArtifact() {
   }, [scenarioIndex, addTimer, clearTimers]);
 
   return (
-    <div className="hero-demo-artifact">
+    <div
+      className="hero-demo-artifact"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setPaused(false);
+        }
+      }}
+    >
       <div className="hero-demo-section">
         <div className={`hero-demo-stage ${stageClass(stage === 1)} space-y-6`}>
           <div className="font-mono text-sm text-gray-500">// question</div>
@@ -259,8 +288,25 @@ export function HeroDemoArtifact() {
         </div>
       </div>
 
-      <div className="mt-4 text-center text-sm text-gray-600">
-        Scenario {scenarioIndex + 1} of {SCENARIOS.length}
+      <div className="mt-6 flex flex-col items-center gap-3">
+        <div className="flex items-center gap-2" role="tablist" aria-label="Demo scenarios">
+          {SCENARIOS.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              aria-selected={i === scenarioIndex}
+              aria-label={`Show demo scenario ${i + 1}`}
+              onClick={() => selectScenario(i)}
+              className={`h-1 rounded-full transition-all duration-300 ${
+                i === scenarioIndex ? "w-6 bg-gray-900" : "w-1.5 bg-gray-200 hover:bg-gray-300"
+              }`}
+            />
+          ))}
+        </div>
+        <p className="text-center text-xs text-coop-muted">
+          Plays prompt → context → outcome · advances when complete · hover to pause
+        </p>
       </div>
     </div>
   );
