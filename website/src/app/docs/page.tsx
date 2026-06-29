@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { DocsSearch } from "@/components/DocsSearch";
 import { DocsSidebar } from "@/components/DocsSidebar";
+import { docsInlineLinkClassName } from "@/lib/docsStyles";
 import { getDocNav, getDocsSections } from "@/lib/docs";
 
 export const metadata: Metadata = {
@@ -54,15 +55,16 @@ export default function DocsHubPage() {
         eyebrow="Documentation"
         title="Coop AI docs"
         description="Everything you need to install, configure, and run Coop AI — from your first chat to enterprise deployment."
+        tight
       />
 
-      <section className="pb-24">
+      <section className="border-t border-coop-border pb-24 pt-8">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-10 max-w-md">
             <DocsSearch pages={navPages} />
           </div>
 
-          <div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-12">
+          <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-14">
             <aside className="mb-8 lg:sticky lg:top-24 lg:self-start">
               <DocsSidebar sections={sections} />
             </aside>
@@ -73,34 +75,34 @@ export default function DocsHubPage() {
                   <Link
                     key={card.href}
                     href={card.href}
-                    className="coop-panel block p-6 transition hover:border-coop-index/40"
+                    className="coop-panel block p-6 transition hover:border-coop-index/50 hover:shadow-sm"
                   >
-                    <h2 className="text-base font-semibold text-white">{card.title}</h2>
+                    <h2 className="text-base font-semibold text-gray-900">{card.title}</h2>
                     <p className="mt-2 text-sm leading-relaxed text-coop-muted">{card.description}</p>
                   </Link>
                 ))}
               </div>
 
               <div className="coop-panel mt-8 p-6">
-                <h2 className="text-base font-semibold text-white">Quick links</h2>
-                <ul className="mt-4 space-y-2 text-sm text-coop-muted">
+                <h2 className="text-base font-semibold text-gray-900">Quick links</h2>
+                <ul className="mt-4 space-y-2 text-sm">
                   <li>
-                    <Link href="/manual#get-started" className="text-coop-index hover:text-white">
+                    <Link href="/manual#get-started" className={docsInlineLinkClassName}>
                       Install guide (Owner&apos;s Manual)
                     </Link>
                   </li>
                   <li>
-                    <Link href="/pricing" className="text-coop-index hover:text-white">
+                    <Link href="/pricing" className={docsInlineLinkClassName}>
                       Plans & pricing
                     </Link>
                   </li>
                   <li>
-                    <Link href="/security" className="text-coop-index hover:text-white">
+                    <Link href="/security" className={docsInlineLinkClassName}>
                       Security architecture
                     </Link>
                   </li>
                   <li>
-                    <Link href="/signup/free" className="text-coop-index hover:text-white">
+                    <Link href="/signup/free" className={docsInlineLinkClassName}>
                       Free developer signup
                     </Link>
                   </li>

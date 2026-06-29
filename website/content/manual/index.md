@@ -12,7 +12,7 @@ Congratulations on choosing Coop AI. This manual helps you get the most out of i
 
 Most AI coding tools only see the file you have open. Coop AI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software — not just the current buffer.
 
-> "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions… I spend at least 6 hours each week answering questions and cut that in half this past week."
+> By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions… I spend at least 6 hours each week answering questions and cut that in half this past week.
 > — Senior Engineer, Row Labs
 
 ### Zero-clone graph intelligence
