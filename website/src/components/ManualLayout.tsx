@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { DocsMarkdown } from "@/components/DocsMarkdown";
 import { ManualToc } from "@/components/ManualToc";
+import { docsProseClassName } from "@/lib/docsStyles";
 import type { ManualContent } from "@/lib/manual.shared";
 
 type ManualLayoutProps = {
@@ -14,19 +15,18 @@ export function ManualLayout({ manual }: ManualLayoutProps) {
         eyebrow="Owner's Manual"
         title={manual.title}
         description={manual.description}
+        tight
       />
 
-      <section className="pb-24">
+      <section className="border-t border-coop-border pb-24 pt-8">
         <div className="mx-auto max-w-6xl px-6">
           {manual.lastUpdated ? (
-            <p className="mb-8 text-center text-sm text-coop-muted lg:text-left">
-              Last updated: {manual.lastUpdated}
-            </p>
+            <p className="mb-8 text-sm text-coop-muted lg:mb-6">Last updated: {manual.lastUpdated}</p>
           ) : null}
 
-          <div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-12">
+          <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-14">
             <ManualToc entries={manual.toc} />
-            <article className="prose prose-lg prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-coop-index prose-code:text-coop-index prose-p:text-coop-muted prose-li:text-coop-muted prose-strong:text-white max-w-none min-w-0">
+            <article className={`min-w-0 ${docsProseClassName}`}>
               <DocsMarkdown content={manual.content} />
             </article>
           </div>

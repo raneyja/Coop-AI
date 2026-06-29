@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { docsNavLinkClass, docsSectionLabelClassName } from "@/lib/docsStyles";
 import type { ManualTocEntry } from "@/lib/manual.shared";
 
 type ManualTocProps = {
@@ -46,6 +47,13 @@ export function ManualToc({ entries }: ManualTocProps) {
 
   const h2Sections = entries.filter((entry) => entry.depth === 2);
 
+  function isLinkActive(entry: ManualTocEntry): boolean {
+    return (
+      activeId === entry.id ||
+      (entry.depth === 2 && !activeId && entry.id === h2Sections[0]?.id)
+    );
+  }
+
   function renderLinks(compact = false) {
     return (
       <ul className={compact ? "space-y-2" : "space-y-1"}>
@@ -62,11 +70,7 @@ export function ManualToc({ entries }: ManualTocProps) {
                 window.history.replaceState(null, "", `#${entry.id}`);
                 setActiveId(entry.id);
               }}
-              className={`block py-1 text-sm leading-snug transition-colors ${
-                activeId === entry.id || (entry.depth === 2 && !activeId && entry.id === h2Sections[0]?.id)
-                  ? "font-medium text-coop-index"
-                  : "text-coop-muted hover:text-white"
-              }`}
+              className={`block py-1 text-sm leading-snug ${docsNavLinkClass(isLinkActive(entry))}`}
             >
               {entry.title}
             </a>
@@ -79,7 +83,7 @@ export function ManualToc({ entries }: ManualTocProps) {
   return (
     <>
       <details className="coop-panel mb-8 lg:hidden">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-900">
           Table of contents
         </summary>
         <nav aria-label="Table of contents" className="border-t border-coop-border px-4 py-4">
@@ -91,7 +95,7 @@ export function ManualToc({ entries }: ManualTocProps) {
         aria-label="Table of contents"
         className="hidden lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"
       >
-        <p className="coop-section-label mb-4">Contents</p>
+        <p className={docsSectionLabelClassName}>Contents</p>
         {renderLinks()}
       </nav>
     </>
