@@ -829,6 +829,9 @@ export async function readPreferences(
   let userRole: string | undefined;
   let authMethod: UserPreferences["authMethod"];
   let canInstallIntegrations = false;
+  let onboardingCompleted = false;
+  let adminPortalUrl: string | undefined;
+  let integrationHealthSummary: UserPreferences["integrationHealthSummary"];
   let indexedRepoCount: number | undefined;
   let workspaceRepoCount: number | undefined;
   let workspaceRepoLimit: number | null | undefined;
@@ -844,6 +847,9 @@ export async function readPreferences(
       userRole = me.role;
       authMethod = me.authMethod;
       canInstallIntegrations = me.canInstallIntegrations ?? false;
+      onboardingCompleted = me.onboardingCompleted ?? false;
+      adminPortalUrl = me.adminPortalUrl;
+      integrationHealthSummary = me.integrationHealthSummary;
       indexedRepoCount = me.indexedRepoCount;
       workspaceRepoCount = me.workspaceRepoCount;
       workspaceRepoLimit = me.workspaceRepoLimit;
@@ -946,6 +952,9 @@ export async function readPreferences(
     userRole,
     authMethod,
     canInstallIntegrations,
+    onboardingCompleted,
+    adminPortalUrl,
+    integrationHealthSummary,
     hasGitLabToken: Boolean(codeHostCreds.gitlabToken),
     hasGitLabAppInstalled,
     hasBitbucketCredentials: Boolean(

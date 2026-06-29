@@ -75,6 +75,12 @@ export type MeResponse = {
   role?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
+  onboardingCompleted?: boolean;
+  adminPortalUrl?: string;
+  integrationHealthSummary?: {
+    connected: number;
+    scopeRequired: number;
+  };
   indexedRepoCount?: number;
   indexedRepoLimit?: number | null;
   canEnableMoreRepos?: boolean;

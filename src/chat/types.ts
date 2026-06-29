@@ -123,6 +123,12 @@ export type UserPreferences = {
   userRole?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
+  onboardingCompleted?: boolean;
+  adminPortalUrl?: string;
+  integrationHealthSummary?: {
+    connected: number;
+    scopeRequired: number;
+  };
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;

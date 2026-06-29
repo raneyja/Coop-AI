@@ -1,6 +1,7 @@
 import React from "react";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { CoopPanelHeader } from "../CoopPanelHeader";
+import { AdminOnboardingBanner } from "./AdminOnboardingBanner";
 import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./types";
 import { SETTINGS_SCREEN_TITLES, settingsScreenParentLabel } from "./types";
 import {
@@ -39,7 +40,9 @@ const HUB_ROWS: Array<{
 
 export function SettingsHub({ prefs, pinnedCount, onNavigate }: SettingsHubProps): React.ReactElement {
   return (
-    <CoopNavList>
+    <>
+      <AdminOnboardingBanner prefs={prefs} />
+      <CoopNavList>
       {HUB_ROWS.map((row) => (
         <CoopNavRow
           key={row.screen}
@@ -50,6 +53,7 @@ export function SettingsHub({ prefs, pinnedCount, onNavigate }: SettingsHubProps
         />
       ))}
     </CoopNavList>
+    </>
   );
 }
 
