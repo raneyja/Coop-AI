@@ -34,6 +34,16 @@ export function Footer() {
                   Book a demo
                 </Link>
               </li>
+              <li>
+                <Link href="/manual" className="text-sm text-coop-muted hover:text-white">
+                  Owner&apos;s Manual
+                </Link>
+              </li>
+              <li>
+                <Link href="/docs" className="text-sm text-coop-muted hover:text-white">
+                  Documentation
+                </Link>
+              </li>
             </ul>
           </div>
 

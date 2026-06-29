@@ -1,0 +1,73 @@
+---
+title: FAQ
+description: Frequently asked questions about Coop AI plans, privacy, and features.
+section: help
+order: 2
+lastUpdated: "2026-06-29"
+---
+
+## General
+
+### What is Coop AI?
+
+Coop AI is a VS Code extension that connects your code graph, Slack, Jira, and docs to answer deep engineering questions and write graph-grounded completions — without cloning entire monorepos.
+
+### How is Coop different from GitHub Copilot or Cursor?
+
+Coop focuses on **understanding existing codebases** — ownership, decision history, blast radius, knowledge gaps — with cross-tool context from Slack and tickets. Inline complete and edit selection are craftsmanship tools, not autonomous agents rewriting your tree.
+
+### Is my code used to train models?
+
+No. Your code and prompts are never used to train foundation models. See [Security architecture](/docs/security-architecture).
+
+## Plans
+
+### What's included in the free Developer plan?
+
+Local workspace context, AI credits, unlimited personal tool integrations (dev mode), and a personal admin portal account. No org-wide GitHub connection or Lightning Mode.
+
+### How do I upgrade to Pro?
+
+[Pricing](/pricing) → Stripe checkout → admin portal setup. See [Plans & billing](/docs/plans-billing).
+
+### Do you offer Enterprise self-hosting?
+
+Yes. Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev). See [Enterprise deployment](/docs/enterprise-deployment).
+
+## Setup
+
+### Where do I get an API key?
+
+[Free signup](/signup/free) or from your org admin after Pro/Enterprise checkout.
+
+### Who connects Slack and GitHub?
+
+In production mode, **org admins** connect integrations once in the [admin portal](/docs/admin-portal). Developers do not paste OAuth tokens.
+
+### What is dev mode?
+
+`coopAI.devMode: true` lets individual developers paste PATs locally for testing. Disable for production orgs.
+
+## Features
+
+### What are quick actions?
+
+Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. See the [Owner's Manual](/manual#quick-actions).
+
+### What is Lightning Mode?
+
+Pro/Enterprise feature that indexes repos on Coop infrastructure for faster cross-repo symbol-graph search.
+
+### Can I share prompts with my team?
+
+Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Library](/manual#prompt-library).
+
+## Support
+
+### How do I contact support?
+
+Email [hello@coop-ai.dev](mailto:hello@coop-ai.dev) or [book a demo](/demo).
+
+### Where is the install guide?
+
+[Owner's Manual — Get Started](/manual#get-started) or [Getting started docs](/docs/getting-started).

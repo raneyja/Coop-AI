@@ -12,12 +12,15 @@ export const siteConfig = {
   links: {
     github: "https://github.com/coop-ai",
     vscodeMarketplace: process.env.NEXT_PUBLIC_VSCODE_MARKETPLACE_URL || "",
+    manual: "/manual",
     docs: "/docs"
   },
   nav: [
     { label: "Product", href: "/product" },
     { label: "Enterprise", href: "/enterprise" },
     { label: "Pricing", href: "/pricing" },
+    { label: "Manual", href: "/manual" },
+    { label: "Docs", href: "/docs" },
     { label: "Security", href: "/security" },
     { label: "Blog", href: "/blog" }
   ] as const,
