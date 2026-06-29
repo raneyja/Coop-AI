@@ -35,12 +35,12 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/manual" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/manual" className="text-sm text-coop-muted hover:text-gray-900">
                   Owner&apos;s Manual
                 </Link>
               </li>
               <li>
-                <Link href="/docs" className="text-sm text-coop-muted hover:text-white">
+                <Link href="/docs" className="text-sm text-coop-muted hover:text-gray-900">
                   Documentation
                 </Link>
               </li>
