@@ -37,6 +37,12 @@ export default function HomePage() {
     <>
       <Hero />
 
+      <section className="border-t border-coop-border py-12 md:py-14">
+        <div className="mx-auto max-w-6xl px-6">
+          <HomePartnerLogos />
+        </div>
+      </section>
+
       <section className="border-t border-coop-border py-20">
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading label="quick_actions" title="What you'll ask CoopAI" />
@@ -53,8 +59,6 @@ export default function HomePage() {
               Explore all 8 capabilities on the product page →
             </Link>
           </p>
-
-          <HomePartnerLogos />
         </div>
       </section>
 
