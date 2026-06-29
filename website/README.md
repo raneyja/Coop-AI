@@ -403,6 +403,12 @@ NEXT_PUBLIC_VSCODE_MARKETPLACE_URL=https://marketplace.visualstudio.com/items?it
 
 ---
 
-## Docs (future)
+## Docs
 
-The `/docs` route is a placeholder. When ready, we can build a full docs site (Sourcegraph Cody-style) with getting started, API reference, and enterprise guides — likely as a nested route group or separate `website/docs` content layer.
+| Route | Content |
+|------|---------|
+| `/manual` | Owner's Manual — single-scroll guide (markdown in `content/manual/`) |
+| `/docs` | Documentation hub with search and sidebar |
+| `/docs/[slug]` | Individual doc pages (markdown in `content/docs/`) |
+
+Content is loaded via `src/lib/manual.ts` and `src/lib/docs.ts` (gray-matter + react-markdown). Nav links in `site.config.ts`, Header, and Footer.

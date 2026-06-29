@@ -153,8 +153,8 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
               contact support
             </Link>
             .{" "}
-            <Link href="/docs" className="text-coop-index hover:text-white">
-              Install guide
+            <Link href="/manual#get-started" className="text-coop-index hover:text-white">
+              Owner&apos;s Manual
             </Link>
           </p>
         </div>
