@@ -44,25 +44,6 @@ export default function HomePage() {
       </section>
 
       <section className="border-t border-coop-border py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading label="quick_actions" title="What you'll ask CoopAI" />
-
-          <QuickActionList
-            className="mt-10"
-            features={HOMEPAGE_QUICK_ACTIONS}
-            includeCodeCreation={false}
-            showChat={false}
-          />
-
-          <p className="mt-10">
-            <Link href="/product" className="text-sm font-medium text-gray-900 hover:underline">
-              Explore all 8 capabilities on the product page →
-            </Link>
-          </p>
-        </div>
-      </section>
-
-      <section className="border-y border-coop-border py-20">
         <div className="mx-auto max-w-7xl px-6 lg:grid lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] lg:items-center lg:gap-10 xl:grid-cols-[minmax(0,30rem)_1fr] xl:gap-12">
           <div>
             <SectionHeading label="indexing" title={siteConfig.contextIntelligence.title} />
@@ -89,7 +70,28 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-b border-coop-border bg-gray-50 py-20">
+      <Testimonial />
+
+      <section className="border-t border-coop-border py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <SectionHeading label="quick_actions" title="What you'll ask CoopAI" />
+
+          <QuickActionList
+            className="mt-10"
+            features={HOMEPAGE_QUICK_ACTIONS}
+            includeCodeCreation={false}
+            showChat={false}
+          />
+
+          <p className="mt-10">
+            <Link href="/product" className="text-sm font-medium text-gray-900 hover:underline">
+              Explore all 8 capabilities on the product page →
+            </Link>
+          </p>
+        </div>
+      </section>
+
+      <section className="border-t border-coop-border bg-gray-50 py-20">
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="write"
@@ -113,7 +115,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <Testimonial />
       <CTASection />
     </>
   );
