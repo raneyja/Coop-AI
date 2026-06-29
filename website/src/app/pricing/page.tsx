@@ -86,11 +86,7 @@ const tiers: PricingTier[] = [
 export default function PricingPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="Pricing"
-        title="Your codebase, finally explained"
-        description="Code with your team's full context. Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode."
-      />
+      <PageHeader eyebrow="Pricing" title="Your codebase, finally explained" />
 
       <section className="pb-20">
         <div className="mx-auto max-w-6xl px-6">

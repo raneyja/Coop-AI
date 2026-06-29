@@ -29,7 +29,7 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="CoopAI: Instance-wide code intelligence for teams"
+        title="Instance-wide code intelligence for teams"
         description="CoopAI indexes your entire codebase and the tools that your team uses. Providing context from tools like GitHub, GitLab, Slack, Jira, Notion, and more."
       />
 

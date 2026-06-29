@@ -6,7 +6,7 @@ export const siteConfig = {
     "Understand and refine code in place. CoopAI connects your code graph, Slack, and tickets to answer deep questions and write graph-grounded completions inside VS Code.",
   tagline: "Your codebase, finally explained.",
   subheadline:
-    "Instantly understand any codebase with team-wide context — deep indexing across all codebases, cross-repo search, symbols, Slack, Jira, Notion, and more.",
+    "Instantly understand any codebase with team-wide context from the entire stack.",
   contactEmail: "hello@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   links: {

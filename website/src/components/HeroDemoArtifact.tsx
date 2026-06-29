@@ -1,12 +1,65 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const SCENARIOS = [
-  "What's the impact of changing the auth middleware?",
-  "Who owns the payment system?",
-  "Why was this pattern chosen?",
-  "What breaks if I refactor this?"
+type ContextItem = {
+  label: string;
+  desc: string;
+  status: "done" | "loading";
+};
+
+type Scenario = {
+  question: string;
+  context: ContextItem[];
+  response?: {
+    summary: string;
+    code: string;
+  };
+};
+
+const SCENARIOS: Scenario[] = [
+  {
+    question: "What's the impact of changing the auth middleware?",
+    context: [
+      { label: "Symbol graph", desc: "AuthMiddleware.validate() · 23 dependents", status: "done" },
+      { label: "GitHub · api-gateway", desc: "4 importers · runtime dependency", status: "done" },
+      { label: "GitHub · webhook-processor", desc: "2 importers · auth middleware chain", status: "done" },
+      { label: "GitLab · billing-worker", desc: "batch retry path imports validate()", status: "loading" },
+      { label: "Slack · #platform-auth", desc: "Thread on auth refactor · Sep 18", status: "done" }
+    ]
+  },
+  {
+    question: "Can you fix this bug by looking at the Jira ticket?",
+    context: [
+      { label: "Jira · PLATFORM-2847", desc: "Null check missing in webhook auth path", status: "done" },
+      { label: "GitHub · webhook-processor", desc: "validate() called before payload parse", status: "done" },
+      { label: "Symbol graph", desc: "AuthMiddleware.validate() · 4 importers", status: "done" },
+      { label: "Slack · #platform-bugs", desc: "Reported in thread · Oct 3", status: "done" }
+    ],
+    response: {
+      summary:
+        "PLATFORM-2847: add a null guard before validate() in the webhook path — same pattern as api-gateway PR #891.",
+      code: "if (payload == null) return unauthorized();\nawait AuthMiddleware.validate(req);"
+    }
+  },
+  {
+    question: "Why was this pattern chosen?",
+    context: [
+      { label: "GitHub · api-gateway", desc: "PR #412 · introduced validate() wrapper", status: "done" },
+      { label: "Confluence · Auth ADR", desc: "Centralized middleware over per-route checks", status: "done" },
+      { label: "Slack · #architecture", desc: "Decision thread · Mar 2024", status: "done" },
+      { label: "Symbol graph", desc: "AuthMiddleware.validate() · 23 dependents", status: "done" }
+    ]
+  },
+  {
+    question: "What breaks if I refactor this?",
+    context: [
+      { label: "Symbol graph", desc: "23 dependents across 6 repos", status: "done" },
+      { label: "GitHub · billing-worker", desc: "batch retry imports validate()", status: "done" },
+      { label: "GitHub · webhook-processor", desc: "auth middleware chain", status: "done" },
+      { label: "Jira · PLATFORM-1102", desc: "Open ticket · refactor blocked on auth", status: "done" }
+    ]
+  }
 ];
 
 const TOOLS = [
@@ -108,104 +161,95 @@ const TOOLS = [
   }
 ];
 
-const CONTEXT_ITEMS = [
-  { label: "Symbol graph", desc: "AuthMiddleware.validate() · 23 dependents", status: "done" as const },
-  { label: "GitHub · api-gateway", desc: "4 importers · runtime dependency", status: "done" as const },
-  { label: "GitHub · webhook-processor", desc: "2 importers · auth middleware chain", status: "done" as const },
-  { label: "GitLab · billing-worker", desc: "batch retry path imports validate()", status: "loading" as const },
-  { label: "Slack · #platform-auth", desc: "Thread on auth refactor · Sep 18", status: "done" as const }
-];
+type Stage = 1 | 2 | 3 | 4;
 
-type Stage = 1 | 2 | 3;
+function stageClass(active: boolean) {
+  return active ? "hero-demo-stage-visible" : "hero-demo-stage-hidden";
+}
 
 export function HeroDemoArtifact() {
+  const [scenarioIndex, setScenarioIndex] = useState(0);
+  const [stage, setStage] = useState<Stage>(1);
+  const [typedQuestion, setTypedQuestion] = useState("");
   const queryRef = useRef<HTMLSpanElement>(null);
-  const scenarioRef = useRef<HTMLSpanElement>(null);
-  const stage1Ref = useRef<HTMLDivElement>(null);
-  const stage2Ref = useRef<HTMLDivElement>(null);
-  const stage3Ref = useRef<HTMLDivElement>(null);
-  const scenarioIndexRef = useRef(0);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const clearTimers = () => {
+  const scenario = SCENARIOS[scenarioIndex];
+
+  const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
-  };
+  }, []);
 
-  const addTimer = (fn: () => void, ms: number) => {
+  const addTimer = useCallback((fn: () => void, ms: number) => {
     const id = setTimeout(fn, ms);
     timersRef.current.push(id);
-  };
+  }, []);
 
-  const setStage = (stage: Stage) => {
-    const stages = [stage1Ref, stage2Ref, stage3Ref];
-    stages.forEach((ref, i) => {
-      if (!ref.current) return;
-      const active = i + 1 === stage;
-      ref.current.classList.toggle("hero-demo-stage-hidden", !active);
-      ref.current.classList.toggle("hero-demo-stage-visible", active);
-    });
-  };
+  const advanceScenario = useCallback(() => {
+    clearTimers();
+    setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
+    setTypedQuestion("");
+    setStage(1);
+  }, [clearTimers]);
 
-  const typeQuery = () => {
-    const query = SCENARIOS[scenarioIndexRef.current];
-    const queryEl = queryRef.current;
-    if (!queryEl) return;
+  const showResponse = useCallback(() => {
+    setStage(4);
+    addTimer(advanceScenario, 3500);
+  }, [addTimer, advanceScenario]);
 
-    queryEl.textContent = "";
+  const showContext = useCallback(() => {
+    setStage(3);
+    const current = SCENARIOS[scenarioIndex];
+    if (current.response) {
+      addTimer(showResponse, 2500);
+    } else {
+      addTimer(advanceScenario, 3000);
+    }
+  }, [addTimer, advanceScenario, scenarioIndex, showResponse]);
+
+  const showTools = useCallback(() => {
+    setStage(2);
+    addTimer(showContext, 2000);
+  }, [addTimer, showContext]);
+
+  const typeQuery = useCallback(() => {
+    const query = SCENARIOS[scenarioIndex].question;
+    setTypedQuestion("");
     let index = 0;
 
     const typeInterval = setInterval(() => {
       if (index < query.length) {
-        queryEl.textContent += query[index];
+        setTypedQuestion((prev) => prev + query[index]);
         index++;
       } else {
         clearInterval(typeInterval);
         addTimer(showTools, 500);
       }
     }, 30);
-  };
-
-  const showTools = () => {
-    setStage(2);
-    addTimer(showContext, 2000);
-  };
-
-  const showContext = () => {
-    setStage(3);
-    addTimer(nextScenario, 3000);
-  };
-
-  const nextScenario = () => {
-    scenarioIndexRef.current = (scenarioIndexRef.current + 1) % SCENARIOS.length;
-    if (scenarioRef.current) {
-      scenarioRef.current.textContent = String(scenarioIndexRef.current + 1);
-    }
-    if (queryRef.current) {
-      queryRef.current.textContent = "";
-    }
-    setStage(1);
-    addTimer(typeQuery, 100);
-  };
+  }, [addTimer, scenarioIndex, showTools]);
 
   useEffect(() => {
+    if (stage !== 1 || typedQuestion !== "") return;
     typeQuery();
-    return clearTimers;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scenarioIndex, stage, typedQuestion, typeQuery]);
+
+  useEffect(() => clearTimers, [clearTimers]);
 
   return (
     <div className="hero-demo-artifact">
       <div className="hero-demo-section">
-        <div ref={stage1Ref} className="hero-demo-stage hero-demo-stage-visible space-y-6">
+        <div className={`hero-demo-stage ${stageClass(stage === 1)} space-y-6`}>
           <div className="font-mono text-sm text-gray-500">// question</div>
           <div className="text-lg text-gray-900">
-            <span ref={queryRef} className="font-mono" />
-            <span className="text-blue-500">|</span>
+            <span ref={queryRef} className="font-mono">
+              {typedQuestion}
+            </span>
+            {stage === 1 ? <span className="text-blue-500">|</span> : null}
           </div>
         </div>
 
-        <div ref={stage2Ref} className="hero-demo-stage hero-demo-stage-hidden">
+        <div className={`hero-demo-stage ${stageClass(stage === 2)}`}>
           <div className="mb-6 font-mono text-sm text-gray-500">// pulling context from</div>
           <div className="grid grid-cols-3 gap-6">
             {TOOLS.map((tool) => (
@@ -221,12 +265,12 @@ export function HeroDemoArtifact() {
           </div>
         </div>
 
-        <div ref={stage3Ref} className="hero-demo-stage hero-demo-stage-hidden">
+        <div className={`hero-demo-stage ${stageClass(stage === 3)}`}>
           <div className="mb-4 font-mono text-sm text-gray-500">// context found</div>
           <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            {CONTEXT_ITEMS.map((item, i) => (
+            {scenario.context.map((item, i) => (
               <div
-                key={item.label}
+                key={`${scenarioIndex}-${item.label}`}
                 className="hero-demo-context-item hero-demo-context-card"
                 style={{ animationDelay: `${i * 0.1}s` }}
               >
@@ -245,10 +289,22 @@ export function HeroDemoArtifact() {
             ))}
           </div>
         </div>
+
+        {scenario.response ? (
+          <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
+            <div className="mb-4 font-mono text-sm text-gray-500">// response</div>
+            <div className="hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm leading-relaxed text-gray-700">{scenario.response.summary}</p>
+              <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
+                {scenario.response.code}
+              </pre>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 text-center text-sm text-gray-600">
-        Scenario <span ref={scenarioRef}>1</span> of 4
+        Scenario {scenarioIndex + 1} of {SCENARIOS.length}
       </div>
     </div>
   );

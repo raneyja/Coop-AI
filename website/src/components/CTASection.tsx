@@ -10,7 +10,7 @@ type CTASectionProps = {
 
 export function CTASection({
   title = "See CoopAI on your codebase",
-  description = "Book a demo with our team or join the waitlist for the free VS Code extension — graph-grounded questions and code creation in one sidebar.",
+  description = "Book a demo with our team or join the waitlist for the free VS Code extension.",
   primaryLabel = "Book a demo",
   primaryHref = "/demo",
   showInstall = true
@@ -19,9 +19,11 @@ export function CTASection({
     <section className="py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="coop-panel overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-coop-border bg-gray-100 px-4 py-2 font-mono text-[11px] text-coop-muted">
-            <span className="text-gray-400">session</span>
-            <span className="text-gray-700">coop-ai — zsh</span>
+          <div className="flex items-center gap-2 border-b border-coop-border bg-gray-100 px-4 py-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" aria-hidden />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" aria-hidden />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" aria-hidden />
+            <span className="ml-2 font-mono text-[11px] text-gray-500">coop — zsh</span>
           </div>
 
           <div className="px-6 py-10 md:px-10 md:py-12">
@@ -32,9 +34,7 @@ export function CTASection({
               <Button href={primaryHref}>{primaryLabel}</Button>
               {showInstall && <InstallExtensionButton />}
             </div>
-            <p className="mt-6 font-mono text-[11px] text-gray-500">
-              indexed via zoekt + scip · zero-clone
-            </p>
+            <p className="mt-6 text-xs text-gray-500">code intelligence from your entire stack</p>
           </div>
         </div>
       </div>
