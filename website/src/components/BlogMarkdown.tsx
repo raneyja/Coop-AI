@@ -28,7 +28,7 @@ export function BlogMarkdown({ content }: BlogMarkdownProps) {
 
           if (href?.startsWith("/")) {
             return (
-              <Link href={href} className="text-coop-index no-underline hover:text-white">
+              <Link href={href} className="text-gray-900 no-underline hover:underline">
                 {children}
               </Link>
             );
