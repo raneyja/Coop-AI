@@ -34,10 +34,6 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 
 ## Step 4 — Ask your first question
 
-![Coop VS Code sidebar — activity bar icon, quick action grid, and chat composer with slash command hints](/screenshots/docs/extension-sidebar-light.svg)
-
-*The Coop sidebar in VS Code (light theme): select the activity bar icon, use quick actions, or type slash commands in the composer.*
-
 1. Open a file in your workspace.
 2. **Extension UI** — Type in the chat composer or click **Understand Repo**.
 3. Try: `Explain this codebase. What are the main entry points?`
@@ -45,10 +41,6 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 Coop streams an answer grounded in your workspace files and any connected integrations.
 
 ## Step 5 — Try a quick action
-
-![Coop quick actions in the VS Code editor context menu — Trace Decision, Find Owner, Blast Radius, Understand Repo, Knowledge Gaps](/screenshots/docs/context-menu-quick-actions-light.svg)
-
-*Right-click a selection in VS Code to open Coop quick actions from the editor context menu.*
 
 With a file open, right-click the selection and choose **Trace Decision** or type `/trace` in chat.
 

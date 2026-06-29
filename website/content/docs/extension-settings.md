@@ -10,10 +10,6 @@ Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Ope
 
 ## Account
 
-![Coop extension Settings — Account tab with API key, API base URL, and Test connection](/screenshots/docs/settings-account-light.svg)
-
-*Settings → Account: paste your CoopAI API key, set the API base URL, then click **Test connection**.*
-
 | Field | Value |
 | --- | --- |
 | **Coop AI API key** | Bearer token from free signup or org admin |
