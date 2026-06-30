@@ -93,7 +93,7 @@ Batch or streaming completion for editor ghost text (`useCase: inline_completion
 | `file` | string? | File path (metadata only) |
 | `provider` | string? | `anthropic` \| `openai` \| `deepseek` \| `gemini` \| `mistral` |
 | `model` | string? | Fast model recommended (e.g. Haiku, `codestral-latest`) |
-| `maxTokens` | number? | Default 96, cap 128 |
+| `maxTokens` | number? | Default 96, cap 200 (multi-line) |
 | `temperature` | number? | Default 0.15 |
 
 **Validation:** require `message` **or** `segments.prefix` (non-empty after trim).
