@@ -104,7 +104,8 @@ const autocompleteSettings: AutocompleteSettings = {
   copilotPolicy: "warn",
   showMultipleSuggestions: false,
   requestTimeoutMs: 5_000,
-  useFim: true
+  useFim: true,
+  useGraphContext: false
 };
 
 async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
@@ -148,6 +149,27 @@ async function runAsyncTests(): Promise<void> {
     await Promise.all([first, second]);
 
     assert.equal(requestCount, 1);
+  });
+
+  await asyncTest("uses higher maxTokens for multi-line brace context", async () => {
+    let capturedMaxTokens = 0;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: { maxTokens: number }) => {
+        capturedMaxTokens = body.maxTokens;
+        return { text: "  return 1;\n}", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const braceContext: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-brace",
+      currentLinePrefix: "function foo() {"
+    };
+
+    await router.fetchCompletions(braceContext, autocompleteSettings);
+    assert.equal(capturedMaxTokens, 200);
   });
 
   await asyncTest("starts new request when prefix is not compatible", async () => {

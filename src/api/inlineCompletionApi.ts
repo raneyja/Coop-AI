@@ -8,6 +8,10 @@ import { systemPromptForUseCase } from "../prompts/systemPrompts";
 import type { PlanQuotaService } from "../server/planQuota";
 import { defaultInlineModelForProvider } from "../config/inlineModelPresets";
 import { selectFimProvider } from "./fimRouter";
+import {
+  fetchInlineGraphSlice,
+  type InlineGraphContextDeps
+} from "./inlineGraphContext";
 
 export type InlineCompletionOrg = {
   orgId: string;
@@ -22,6 +26,7 @@ export type V1InlineCompletionBody = {
   segments?: { prefix: string; suffix: string };
   stream?: boolean;
   repoId?: string;
+  useGraphContext?: boolean;
   languageId?: string;
   file?: string;
   provider?: LlmProvider;
@@ -32,6 +37,8 @@ export type V1InlineCompletionBody = {
 
 const MAX_PREFIX_CHARS = 4_000;
 const MAX_SUFFIX_CHARS = 2_000;
+const DEFAULT_MAX_TOKENS = 96;
+const MAX_INLINE_TOKENS = 200;
 
 const INLINE_SYSTEM = `${systemPromptForUseCase("inline_completion")}
 
@@ -50,7 +57,8 @@ export async function handleInlineCompletionRequest(
   router: ModelRouter,
   config: LlmServerConfig = loadLlmServerConfig(),
   org: InlineCompletionOrg,
-  rawRequest?: IncomingMessage
+  rawRequest?: IncomingMessage,
+  graphDeps: InlineGraphContextDeps = {}
 ): Promise<void> {
   const parsed = parseInlineBody(body);
   if (!parsed.ok) {
@@ -58,7 +66,27 @@ export async function handleInlineCompletionRequest(
     return;
   }
 
-  const { record, message, segments } = parsed;
+  const { record, segments } = parsed;
+  let message = parsed.message;
+  let graphContextHeader: string | undefined;
+
+  if (
+    record.useGraphContext === true &&
+    typeof record.repoId === "string" &&
+    typeof record.file === "string"
+  ) {
+    const slice = await fetchInlineGraphSlice(graphDeps, {
+      repoId: record.repoId,
+      file: record.file,
+      plan: org.plan
+    });
+    if (slice.status === "ok") {
+      message = `${message}\n\n${slice.block}`;
+    } else if (slice.status === "degraded") {
+      graphContextHeader = "degraded";
+    }
+  }
+
   const provider = readProvider(record.provider, config.defaultProvider);
   const route = selectFimProvider(config, {
     segments,
@@ -72,7 +100,10 @@ export async function handleInlineCompletionRequest(
         ? record.model
         : defaultInlineModelFor(route.provider);
   const resolvedProvider = route.mode === "fim" ? route.provider : route.provider;
-  const maxTokens = typeof record.maxTokens === "number" ? Math.min(record.maxTokens, 128) : 96;
+  const maxTokens =
+    typeof record.maxTokens === "number"
+      ? Math.min(record.maxTokens, MAX_INLINE_TOKENS)
+      : DEFAULT_MAX_TOKENS;
   const temperature = typeof record.temperature === "number" ? record.temperature : 0.15;
   const requestId = createRequestId();
   const stream = record.stream === true;
@@ -100,12 +131,16 @@ export async function handleInlineCompletionRequest(
   };
 
   const started = Date.now();
+  const responseHeaders = graphContextHeader
+    ? { "x-graph-context": graphContextHeader }
+    : undefined;
 
   if (stream) {
     response.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache",
-      connection: "keep-alive"
+      connection: "keep-alive",
+      ...responseHeaders
     });
 
     const abortController = new AbortController();
@@ -157,15 +192,20 @@ export async function handleInlineCompletionRequest(
   try {
     const result = await router.completeInline(completionRequest, INLINE_SYSTEM);
 
-    writeJson(response, 200, {
-      text: result.text,
-      alternatives: [],
-      model: result.model,
-      provider: result.provider,
-      latencyMs: Date.now() - started,
-      usage: result.usage,
-      fim: route.mode === "fim"
-    });
+    writeJson(
+      response,
+      200,
+      {
+        text: result.text,
+        alternatives: [],
+        model: result.model,
+        provider: result.provider,
+        latencyMs: Date.now() - started,
+        usage: result.usage,
+        fim: route.mode === "fim"
+      },
+      responseHeaders
+    );
 
     await org.planQuota?.recordTokens(org.orgId, org.plan, {
       eventType: "completion.suggested",
@@ -248,8 +288,16 @@ function writeSse(response: ServerResponse, payload: unknown): void {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+function writeJson(
+  response: ServerResponse,
+  statusCode: number,
+  body: unknown,
+  headers?: Record<string, string>
+): void {
+  response.writeHead(statusCode, {
+    "content-type": "application/json; charset=utf-8",
+    ...headers
+  });
   response.end(JSON.stringify(body));
 }
 

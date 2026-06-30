@@ -36,6 +36,7 @@ export type InlineCompletionBody = {
   segments?: { prefix: string; suffix: string };
   stream?: boolean;
   repoId?: string;
+  useGraphContext?: boolean;
   languageId?: string;
   file?: string;
   provider: LlmProvider;

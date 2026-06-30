@@ -17,6 +17,7 @@ export type AutocompleteSettings = {
   showMultipleSuggestions: boolean;
   requestTimeoutMs: number;
   useFim: boolean;
+  useGraphContext: boolean;
 };
 
 export type TriggerKind = "auto" | "manual" | "paste" | "immediate";

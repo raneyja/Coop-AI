@@ -494,7 +494,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker },
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker, graphQuery },
           request
         )
       ) {

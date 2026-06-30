@@ -20,7 +20,8 @@ export function readAutocompleteSettings(): AutocompleteSettings {
     copilotPolicy: config.get<CopilotPolicy>("copilotPolicy", "warn"),
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
     requestTimeoutMs: config.get<number>("requestTimeoutMs", 400),
-    useFim: config.get<boolean>("useFim", true)
+    useFim: config.get<boolean>("useFim", true),
+    useGraphContext: config.get<boolean>("useGraphContext", false)
   };
 }
 

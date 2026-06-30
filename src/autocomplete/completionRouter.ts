@@ -1,5 +1,7 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import { readConfiguration } from "../chat/SecureApiClient";
+import { buildRepoId } from "../chat/buildRepoId";
+import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveInlineModelPreset } from "../config/inlineModelPresets";
 import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
@@ -119,7 +121,17 @@ export class CompletionRouter {
     try {
       const timeoutMs = settings.requestTimeoutMs;
       const result = await raceWithTimeout(
-        this.requestWithFallback(prompt, safeContext, segments, preset, prefs.apiBaseUrl, linked, maxTokens),
+        this.requestWithFallback(
+          prompt,
+          safeContext,
+          segments,
+          preset,
+          prefs.apiBaseUrl,
+          linked,
+          maxTokens,
+          settings,
+          prefs
+        ),
         timeoutMs,
         linked
       );
@@ -184,7 +196,9 @@ export class CompletionRouter {
     preset: { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } },
     baseUrl: string,
     signal: AbortSignal,
-    maxTokens: number
+    maxTokens: number,
+    settings: AutocompleteSettings,
+    prefs: ReturnType<typeof readConfiguration>
   ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
     const chatMessage = segments
       ? synthesizeMessageFromSegments(segments, context, prompt)
@@ -197,7 +211,14 @@ export class CompletionRouter {
       provider: preset.provider,
       model: preset.model,
       maxTokens,
-      temperature: 0.15
+      temperature: 0.15,
+      ...(settings.useGraphContext
+        ? {
+            useGraphContext: true,
+            repoId: buildRepoId(prefs),
+            file: toRepositoryRelativePath(context.filePath)
+          }
+        : {})
     };
 
     try {
@@ -224,6 +245,8 @@ export class CompletionRouter {
       segments?: { prefix: string; suffix: string };
       languageId: string;
       file: string;
+      useGraphContext?: boolean;
+      repoId?: string;
       provider: LlmProvider;
       model: string;
       maxTokens: number;

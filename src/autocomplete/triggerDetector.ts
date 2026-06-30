@@ -80,7 +80,7 @@ export class TriggerDetector {
       return { shouldRequest: false, debounceMs: 0, reason: "post_accept_cooldown" };
     }
 
-    if (Date.now() < this.rapidTypingUntil) {
+    if (Date.now() < this.rapidTypingUntil && !options.hotStreakActive) {
       const rapidDebounce = this.resolveDebounceMs(settings.debounceMs, false, options);
       return { shouldRequest: false, debounceMs: rapidDebounce, reason: "rapid_typing" };
     }

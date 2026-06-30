@@ -144,6 +144,20 @@ test("hot streak active uses reduced debounce", () => {
   assert.ok(decision.debounceMs <= 50);
 });
 
+test("hot streak bypasses rapid typing suppression after accept", () => {
+  const detector = new TriggerDetector();
+  detector.noteKeystroke();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ currentLinePrefix: "console.log", contextHash: "hash-after-accept" }),
+    autoTrigger(),
+    { hotStreakActive: true, p95LatencyMs: 0 }
+  );
+  assert.equal(decision.shouldRequest, true);
+  assert.notEqual(decision.reason, "rapid_typing");
+  assert.ok(decision.debounceMs <= 50);
+});
+
 console.log(`\ntriggerDetector: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
