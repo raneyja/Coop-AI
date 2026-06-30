@@ -473,12 +473,177 @@ export type BillingInfo = {
   hasStripeCustomer?: boolean;
 };
 
+export type QuotaSnapshot = {
+  plan: string;
+  unlimited?: boolean;
+  usedTokens?: number;
+  limitTokens?: number;
+  remainingTokens?: number;
+  usedCredits?: number;
+  limitCredits?: number;
+  remainingCredits?: number;
+  windowHours?: number;
+  resetsAt?: string;
+  retryAfterMs?: number;
+};
+
+export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {
+  const result = await coopFetch<QuotaSnapshot>("/v1/admin/quota");
+  if (!result.ok) {
+    return result;
+  }
+
+  const data = result.data;
+  const plan = typeof data?.plan === "string" && data.plan.trim() ? data.plan.trim() : "free";
+  const usedCredits =
+    typeof data?.usedCredits === "number" && Number.isFinite(data.usedCredits)
+      ? Math.max(0, data.usedCredits)
+      : undefined;
+  const limitCredits =
+    typeof data?.limitCredits === "number" && Number.isFinite(data.limitCredits)
+      ? Math.max(0, data.limitCredits)
+      : undefined;
+  const usedTokens =
+    typeof data?.usedTokens === "number" && Number.isFinite(data.usedTokens)
+      ? Math.max(0, data.usedTokens)
+      : undefined;
+  const limitTokens =
+    typeof data?.limitTokens === "number" && Number.isFinite(data.limitTokens)
+      ? Math.max(0, data.limitTokens)
+      : undefined;
+  const remainingTokens =
+    typeof data?.remainingTokens === "number" && Number.isFinite(data.remainingTokens)
+      ? Math.max(0, data.remainingTokens)
+      : undefined;
+  const remainingCredits =
+    typeof data?.remainingCredits === "number" && Number.isFinite(data.remainingCredits)
+      ? Math.max(0, data.remainingCredits)
+      : typeof usedCredits === "number" && typeof limitCredits === "number"
+        ? Math.max(0, limitCredits - usedCredits)
+        : undefined;
+
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      ...data,
+      plan,
+      usedTokens,
+      limitTokens,
+      remainingTokens,
+      usedCredits,
+      limitCredits,
+      remainingCredits
+    }
+  };
+}
+
 export async function fetchBilling(): Promise<ApiResult<BillingInfo>> {
   return coopFetch<BillingInfo>("/v1/admin/billing");
 }
 
 export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {
   return coopFetch<{ url: string }>("/v1/admin/billing/portal-session", { method: "POST" });
+}
+
+export async function createUpgradeCheckoutSession(
+  opts?: { email?: string; seats?: number }
+): Promise<ApiResult<{ sessionId: string; url: string }>> {
+  const body: Record<string, unknown> = {};
+  if (opts?.email?.trim()) {
+    body.email = opts.email.trim();
+  }
+  if (opts?.seats != null) {
+    body.seats = opts.seats;
+  }
+  return coopFetch<{ sessionId: string; url: string }>("/v1/billing/upgrade-checkout-session", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export type EnterpriseUpgradeRequest = {
+  name: string;
+  email: string;
+  orgName: string;
+  notes?: string;
+};
+
+export async function submitEnterpriseUpgradeRequest(
+  payload: EnterpriseUpgradeRequest
+): Promise<ApiResult<{ ok: boolean }>> {
+  return coopFetch<{ ok: boolean }>("/v1/admin/enterprise-upgrade-request", {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      email: payload.email,
+      orgName: payload.orgName,
+      notes: payload.notes ?? ""
+    })
+  });
+}
+
+export type ThreadSummary = {
+  id: string;
+  orgId: string;
+  userId?: string;
+  principal: string;
+  title: string;
+  repoOwner?: string;
+  repoName?: string;
+  repoProvider?: string;
+  messageCount: number;
+  previewText?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ThreadMessage = {
+  id: string;
+  role: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  sortOrder: number;
+};
+
+export type ThreadsListResponse = {
+  threads: ThreadSummary[];
+  nextCursor?: string;
+};
+
+export type ThreadDetailResponse = {
+  thread: ThreadSummary;
+  messages: ThreadMessage[];
+};
+
+export type FetchThreadsParams = {
+  from?: string;
+  to?: string;
+  userId?: string;
+  repo?: string;
+  q?: string;
+  limit?: number;
+  cursor?: string;
+};
+
+export async function fetchThreads(
+  params: FetchThreadsParams = {}
+): Promise<ApiResult<ThreadsListResponse>> {
+  const search = new URLSearchParams();
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.userId) search.set("userId", params.userId);
+  if (params.repo) search.set("repo", params.repo);
+  if (params.q) search.set("q", params.q);
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.cursor) search.set("cursor", params.cursor);
+  const query = search.toString();
+  return coopFetch<ThreadsListResponse>(`/v1/threads${query ? `?${query}` : ""}`);
+}
+
+export async function fetchThread(threadId: string): Promise<ApiResult<ThreadDetailResponse>> {
+  return coopFetch<ThreadDetailResponse>(`/v1/threads/${encodeURIComponent(threadId)}`);
 }
 
 export type AuditEntry = {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getToken } from "@/lib/auth";
+import { getToken, getStoredMe, isMemberAllowedPath, defaultHomePath, isMemberRole } from "@/lib/auth";
 import { IndexingProgressBar } from "./IndexingProgressBar";
 import { OnboardingProvider } from "./OnboardingProvider";
 import { Sidebar } from "./Sidebar";
@@ -23,8 +23,13 @@ export function AdminShell({ children }: AdminShellProps) {
       router.replace("/login");
       return;
     }
+    const me = getStoredMe();
+    if (me && isMemberRole(me) && !isMemberAllowedPath(pathname)) {
+      router.replace(defaultHomePath(me));
+      return;
+    }
     setReady(true);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!ready) {
     return (

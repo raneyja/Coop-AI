@@ -57,3 +57,32 @@ export function isAdminRole(me: StoredMe): boolean {
   const role = (me.role ?? "").toLowerCase();
   return role === "owner" || role === "admin";
 }
+
+export function isMemberRole(me: StoredMe): boolean {
+  return !isAdminRole(me);
+}
+
+export function canAccessAdminPages(me: StoredMe): boolean {
+  return isAdminRole(me);
+}
+
+export function defaultHomePath(me: StoredMe | null): string {
+  if (me && isMemberRole(me)) {
+    return "/feed";
+  }
+  return "/";
+}
+
+const MEMBER_ALLOWED_PREFIXES = ["/feed", "/settings"];
+
+export function isMemberAllowedPath(pathname: string): boolean {
+  if (pathname === "/feed" || pathname.startsWith("/feed/")) {
+    return true;
+  }
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+    return true;
+  }
+  return MEMBER_ALLOWED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}

@@ -26,7 +26,23 @@ type IndexingRepoSectionsProps = {
   repos: OrgRepoRecord[];
   actionId: string | null;
   onReindex: (repoId: string) => void;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
 };
+
+function deepIndexBlocked(
+  repo: OrgRepoRecord,
+  indexedRepoLimit: number | null | undefined,
+  indexedRepoCount: number | undefined
+): boolean {
+  if (repo.lightningEnabled) {
+    return false;
+  }
+  if (indexedRepoLimit == null || indexedRepoCount == null) {
+    return false;
+  }
+  return indexedRepoCount >= indexedRepoLimit;
+}
 
 const EMBEDDING_BADGE_CLASS: Record<EmbeddingBadgeTone, string> = {
   complete: "border-emerald-500/30 bg-emerald-950/40 text-emerald-200",
@@ -159,13 +175,20 @@ function RepoRow({
   repo,
   actionId,
   onReindex,
-  showJobIds
+  showJobIds,
+  indexedRepoLimit,
+  indexedRepoCount
 }: {
   repo: OrgRepoRecord;
   actionId: string | null;
   onReindex: (repoId: string) => void;
   showJobIds: boolean;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
 }): React.ReactElement {
+  const blocked = deepIndexBlocked(repo, indexedRepoLimit, indexedRepoCount);
+  const label = repo.lightningEnabled ? "Reindex" : blocked ? "At limit" : "Deep-Index";
+
   return (
     <tr className="border-b border-coop-border/40">
       <td className="px-4 py-2">
@@ -199,12 +222,18 @@ function RepoRow({
         <button
           type="button"
           className={`admin-btn-secondary min-w-[4.75rem] !px-2 !py-1 text-xs ${
-            actionId === repo.repoId ? "pointer-events-none opacity-60" : ""
+            actionId === repo.repoId || blocked ? "pointer-events-none opacity-60" : ""
           }`}
           aria-busy={actionId === repo.repoId}
+          disabled={blocked}
+          title={
+            blocked
+              ? `Free plan allows ${indexedRepoLimit} Deep-Indexed repos. Disable another repo or upgrade to Pro.`
+              : undefined
+          }
           onClick={() => onReindex(repo.repoId)}
         >
-          {repo.lightningEnabled ? "Reindex" : "Deep-Index"}
+          {label}
         </button>
       </td>
     </tr>
@@ -244,6 +273,8 @@ function RepoSection({
   actionId,
   onReindex,
   showJobIds,
+  indexedRepoLimit,
+  indexedRepoCount,
   colSpan
 }: {
   title: string;
@@ -254,6 +285,8 @@ function RepoSection({
   actionId: string | null;
   onReindex: (repoId: string) => void;
   showJobIds: boolean;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
   colSpan: number;
 }): React.ReactElement | null {
   const sectionRepos = reposMatchingQueue(items, repos);
@@ -270,6 +303,8 @@ function RepoSection({
           actionId={actionId}
           onReindex={onReindex}
           showJobIds={showJobIds}
+          indexedRepoLimit={indexedRepoLimit}
+          indexedRepoCount={indexedRepoCount}
         />
       ))}
     </>
@@ -279,7 +314,9 @@ function RepoSection({
 export function IndexingRepoSections({
   repos,
   actionId,
-  onReindex
+  onReindex,
+  indexedRepoLimit,
+  indexedRepoCount
 }: IndexingRepoSectionsProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [hostFilter, setHostFilter] = useState<CodeHostProvider | "all">("all");
@@ -390,6 +427,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -400,6 +439,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -411,6 +452,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -421,6 +464,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             {offCatalog.length > 0 ? (
@@ -433,6 +478,8 @@ export function IndexingRepoSections({
                     actionId={actionId}
                     onReindex={onReindex}
                     showJobIds={showJobIds}
+                    indexedRepoLimit={indexedRepoLimit}
+                    indexedRepoCount={indexedRepoCount}
                   />
                 ))}
               </>

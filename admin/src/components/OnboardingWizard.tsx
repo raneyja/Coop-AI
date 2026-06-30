@@ -10,6 +10,7 @@ import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { OnboardingScopeStep } from "./OnboardingScopeStep";
 import { OnboardingVerifyStep } from "./OnboardingVerifyStep";
+import { planCapabilities } from "@/lib/planCapabilities";
 
 type OnboardingWizardProps = {
   step: number;
@@ -18,22 +19,46 @@ type OnboardingWizardProps = {
   onDismiss: () => void;
 };
 
-const FULL_STEPS = [
-  { id: "welcome", label: "Welcome" },
-  { id: "tools", label: "Connect" },
-  { id: "scope", label: "Access" },
-  { id: "team", label: "Invite" },
-  { id: "verify", label: "Verify" },
-  { id: "done", label: "Done" }
-] as const;
+type StepDef = {
+  id: string;
+  label: string;
+  include: (plan: string) => boolean;
+};
 
-const FREE_STEPS = [
-  { id: "welcome", label: "Welcome" },
-  { id: "tools", label: "Connect" },
-  { id: "indexing", label: "Index repos" },
-  { id: "api-key", label: "API key" },
-  { id: "done", label: "Done" }
-] as const;
+const ONBOARDING_STEP_DEFS: StepDef[] = [
+  { id: "welcome", label: "Welcome", include: () => true },
+  { id: "tools", label: "Connect", include: () => true },
+  {
+    id: "indexing",
+    label: "Index repos",
+    include: (plan) => planCapabilities(plan).showOnboardingIndexingStep
+  },
+  {
+    id: "scope",
+    label: "Access",
+    include: (plan) => !planCapabilities(plan).showOnboardingIndexingStep
+  },
+  {
+    id: "team",
+    label: "Invite",
+    include: (plan) => planCapabilities(plan).showOnboardingTeamStep
+  },
+  {
+    id: "verify",
+    label: "Verify",
+    include: (plan) => planCapabilities(plan).showOnboardingVerifyStep
+  },
+  {
+    id: "api-key",
+    label: "API key",
+    include: (plan) => planCapabilities(plan).showOnboardingApiKeyStep
+  },
+  { id: "done", label: "Done", include: () => true }
+];
+
+function stepsForPlan(plan: string) {
+  return ONBOARDING_STEP_DEFS.filter((entry) => entry.include(plan));
+}
 
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   const collab = ["slack", "atlassian", "notion", "google-docs"] as const;
@@ -71,7 +96,7 @@ export function OnboardingWizard({
   } = useIntegrations();
 
   const isFreePlan = orgPlan === "free";
-  const steps = isFreePlan ? FREE_STEPS : FULL_STEPS;
+  const steps = stepsForPlan(orgPlan);
   const currentStep = steps[step] ?? steps[0];
   const currentStepId = currentStep.id;
   const [mounted, setMounted] = useState(false);
@@ -399,13 +424,13 @@ export function OnboardingWizard({
                       Configure Slack channel scope before continuing.
                     </p>
                   ) : null}
-                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(3)}>
+                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
                     Skip
                   </button>
                   <button
                     type="button"
                     className="admin-btn-primary"
-                    onClick={() => goToStep(3)}
+                    onClick={() => goToStep(step + 1)}
                     disabled={slackScopeGate}
                   >
                     Continue

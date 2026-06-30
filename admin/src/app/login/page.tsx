@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, isAdminRole, saveSession, clearSession } from "@/lib/auth";
+import { getToken, isAdminRole, saveSession, clearSession, defaultHomePath } from "@/lib/auth";
 import { ssoStartUrl, validateApiKey, normalizeApiKeyInput } from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
 
@@ -20,8 +20,8 @@ export default function LoginPage() {
       return;
     }
     void validateApiKey(token).then((result) => {
-      if (result.ok) {
-        router.replace("/");
+      if (result.ok && result.data) {
+        router.replace(defaultHomePath(result.data));
         return;
       }
       clearSession();
@@ -61,7 +61,7 @@ export default function LoginPage() {
     }
 
     saveSession(token, result.data, orgName);
-    router.replace("/");
+    router.replace(defaultHomePath(result.data));
   }
 
   return (

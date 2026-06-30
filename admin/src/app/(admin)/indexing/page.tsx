@@ -46,6 +46,8 @@ export default function IndexingPage() {
 
   const stats = useMemo(() => computeIndexingStats(repos), [repos]);
   const inFlightCount = stats.inFlight;
+  const indexedCount = useMemo(() => repos.filter((repo) => repo.lightningEnabled).length, [repos]);
+  const indexedRepoLimit = orgPlan === "free" ? 3 : null;
 
   const summary = useMemo(() => {
     const buckets = { total: repos.length, ready: 0, warning: 0, indexing: 0, error: 0 };
@@ -261,6 +263,13 @@ export default function IndexingPage() {
         </p>
       ) : null}
 
+      {orgPlan === "free" ? (
+        <p className="text-sm text-coop-muted">
+          <span className="font-medium text-white">{indexedCount} of 3</span> repos Deep-Indexed on the free plan.
+          Connect a code host under Integrations, sync the catalog, then enable repos here or from the VS Code extension.
+        </p>
+      ) : null}
+
       <AdminStatRow>
         <AdminStat label="Total repos" value={initialLoading ? "—" : String(summary.total)} />
         <AdminStat label="Ready" value={initialLoading ? "—" : String(summary.ready)} />
@@ -274,7 +283,13 @@ export default function IndexingPage() {
       {initialLoading ? (
         <div className="py-8 text-center text-sm text-coop-muted">Loading repositories…</div>
       ) : (
-        <IndexingRepoSections repos={repos} actionId={actionId} onReindex={(id) => void handleReindex(id)} />
+        <IndexingRepoSections
+          repos={repos}
+          actionId={actionId}
+          onReindex={(id) => void handleReindex(id)}
+          indexedRepoLimit={indexedRepoLimit}
+          indexedRepoCount={indexedCount}
+        />
       )}
     </div>
   );

@@ -30,6 +30,7 @@ import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
 import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
+import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
@@ -483,6 +484,22 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           },
           response,
           { orgStore, userStore, serverConfig, usageTracker }
+        )
+      ) {
+        return;
+      }
+
+      if (
+        await handleChatThreadsApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            query: parsed.query,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          { orgStore, userStore, serverConfig }
         )
       ) {
         return;

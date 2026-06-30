@@ -42,3 +42,5 @@ coverage/
 .pnp
 .pnp.js
 .yarn/install-state.gz
+.vercel
+.env*

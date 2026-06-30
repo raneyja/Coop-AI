@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   addRepoToCollection,
   createCollection,
   fetchCollections,
+  fetchOrg,
   fetchOrgRepos,
   removeRepoFromCollection,
   type AdminCollection,
@@ -21,6 +23,7 @@ function lightningLabel(repo: OrgRepoRecord): string {
 }
 
 export default function CollectionsPage() {
+  const router = useRouter();
   const [collections, setCollections] = useState<AdminCollection[]>([]);
   const [repos, setRepos] = useState<OrgRepoRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,8 +49,17 @@ export default function CollectionsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [collectionsResult, reposResult] = await Promise.all([fetchCollections(), fetchOrgRepos()]);
+    const [collectionsResult, reposResult, orgResult] = await Promise.all([
+      fetchCollections(),
+      fetchOrgRepos(),
+      fetchOrg()
+    ]);
     setLoading(false);
+
+    if (orgResult.ok && orgResult.data?.plan === "free") {
+      router.replace("/");
+      return;
+    }
 
     if (collectionsResult.unavailable || reposResult.unavailable) {
       setUnavailable(true);
@@ -70,7 +82,7 @@ export default function CollectionsPage() {
     setCollections(nextCollections);
     setRepos(reposResult.data?.repos ?? []);
     setSelectedCollectionId((current) => current || nextCollections[0]?.id || "");
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     void load();

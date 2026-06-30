@@ -149,4 +149,49 @@
   .admin-page-title {
     @apply text-xl font-semibold text-white;
   }
+
+  /* Feed thread — mirrors extension chat stream */
+  .feed-chat-thread {
+    @apply mx-auto flex max-w-3xl flex-col gap-5 py-2;
+  }
+
+  .feed-chat-message {
+    @apply w-full min-w-0;
+  }
+
+  .feed-chat-message-inner {
+    @apply min-w-0;
+  }
+
+  .feed-chat-message--user .feed-chat-message-inner {
+    @apply rounded-[10px] border border-coop-border/80 bg-white/[0.04] px-3.5 py-2.5;
+  }
+
+  .feed-chat-message--assistant .feed-chat-message-inner {
+    @apply border-l-2 border-coop-border py-1 pl-3;
+  }
+
+  .feed-chat-message-meta {
+    @apply mb-2 flex items-center gap-2;
+  }
+
+  .feed-chat-message-label {
+    @apply text-[11px] font-medium text-coop-muted;
+  }
+
+  .feed-chat-message-time {
+    @apply ml-auto text-[10px] tabular-nums text-coop-muted;
+  }
+
+  .feed-chat-message--user .feed-chat-message-time {
+    @apply mb-1.5 ml-0 block;
+  }
+
+  .feed-chat-message-body {
+    @apply text-[13px] leading-[1.55] break-words text-[#e4e4e7];
+  }
+
+  .coop-chat-prose {
+    @apply min-w-0 text-[13px] leading-relaxed text-[#e4e4e7];
+  }
 }

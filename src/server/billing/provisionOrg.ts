@@ -10,6 +10,8 @@ export type ProvisionInput = {
   seatCount: number;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
+  existingOrgId?: string;
+  upgrade?: boolean;
 };
 
 export type ProvisionResult = {
@@ -26,6 +28,23 @@ export async function provisionOrgFromCheckout(
   input: ProvisionInput
 ): Promise<ProvisionResult> {
   const loginUrl = adminPortalLoginUrl(billingConfig.adminPortalUrl);
+
+  if (input.existingOrgId && input.upgrade) {
+    const org = await orgStore.getOrganization(input.existingOrgId);
+    if (!org) {
+      throw new Error(`Upgrade target org not found: ${input.existingOrgId}`);
+    }
+    await orgStore.setOrganizationPlan(org.id, "pro");
+    await orgStore.updateOrganizationBilling(org.id, {
+      billingEmail: input.adminEmail,
+      stripeCustomerId: input.stripeCustomerId,
+      stripeSubscriptionId: input.stripeSubscriptionId,
+      seatCount: input.seatCount,
+      billingStatus: "active"
+    });
+    return { orgId: org.id, orgName: org.name, adminApiKey: "[existing org — key unchanged]" };
+  }
+
   const existing = await orgStore.findOrganizationByStripeCustomerId(input.stripeCustomerId);
 
   if (existing) {

@@ -88,6 +88,8 @@ import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/
 import { formatWaitTime } from "../jobs/types";
 import type { JobProgressPayload } from "./types";
 import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";
+import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";
+import { resolveGitUserEmail } from "./resolveGitUserEmail";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
@@ -436,6 +438,30 @@ export class CoopChatSession {
     this.postContext();
     this.postChatHistory();
     this.pushThreadsList();
+    this.syncAllLocalThreadsToBackend();
+  }
+
+  private threadSyncOptions() {
+    return {
+      baseUrl: resolveCoopBaseUrl().baseUrl,
+      getToken: () => this.options.api.getToken(),
+      getOwnerEmail: () => resolveGitUserEmail()
+    };
+  }
+
+  private syncAllLocalThreadsToBackend(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    void syncAllThreadsToBackend(this.threadStore.listAllThreads(), this.threadSyncOptions());
+  }
+
+  private syncActiveThreadToBackend(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    const thread = this.threadStore.getActiveThread();
+    void syncThreadToBackend(thread, this.threadSyncOptions());
   }
 
   public async refreshPreferences(): Promise<void> {
@@ -532,6 +558,7 @@ export class CoopChatSession {
     this.options.onTitleChange?.(title);
     this.threadStore?.updateActiveTitle(title);
     this.pushThreadsList();
+    this.syncActiveThreadToBackend();
   }
 
   private persistActiveThread(): void {
@@ -546,6 +573,7 @@ export class CoopChatSession {
       this.threadArtifacts,
       this.currentContext
     );
+    void this.syncActiveThreadToBackend();
   }
 
   private pushThreadsList(): void {

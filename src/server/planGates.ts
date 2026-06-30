@@ -5,7 +5,7 @@ import type { OrgPlan, OrgStore, AuthContext } from "./orgStore";
 import { isPlanAllowed, requireOrgPlan, resolveOrgPlanFromDb } from "./authMiddleware";
 
 export const CODE_HOST_GITHUB_PLANS: OrgPlan[] = ["free", "pro", "enterprise"];
-export const CODE_HOST_GITLAB_BITBUCKET_PLANS: OrgPlan[] = ["enterprise"];
+export const CODE_HOST_GITLAB_BITBUCKET_PLANS: OrgPlan[] = ["free", "pro", "enterprise"];
 /** Org-wide catalog sync and Deep-Index (free capped at 3 repos). */
 export const ORG_INDEXING_PLANS: OrgPlan[] = ["free", "pro", "enterprise"];
 
