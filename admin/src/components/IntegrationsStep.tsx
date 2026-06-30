@@ -15,6 +15,7 @@ type IntegrationsStepProps = {
   onRefresh: (provider: IntegrationProvider) => void;
   compact?: boolean;
   showFullPageLink?: boolean;
+  hideScopePanel?: boolean;
 };
 
 export function IntegrationsStep({
@@ -26,7 +27,8 @@ export function IntegrationsStep({
   error,
   onRefresh,
   compact,
-  showFullPageLink = true
+  showFullPageLink = true,
+  hideScopePanel = false
 }: IntegrationsStepProps) {
   return (
     <div className="space-y-4">
@@ -46,6 +48,7 @@ export function IntegrationsStep({
             refreshSuccess={refreshSuccessProvider === def.id}
             initialLoading={initialLoading}
             compact={compact}
+            hideScopePanel={hideScopePanel}
           />
         ))}
       </div>

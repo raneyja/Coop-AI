@@ -1,26 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { completeOnboarding, fetchUsers } from "@/lib/coopApi";
+import { displayOrgName, getStoredMe } from "@/lib/auth";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
-import { IntegrationScopePanel } from "./IntegrationScopePanel";
+import { OnboardingScopeStep } from "./OnboardingScopeStep";
 import { OnboardingVerifyStep } from "./OnboardingVerifyStep";
 
 type OnboardingWizardProps = {
+  step: number;
+  onStepChange: (step: number) => void;
   onComplete: () => void;
+  onDismiss: () => void;
 };
 
-const STEPS = ["Welcome", "Connect tools", "Manage access", "Invite team", "Verify", "Done"] as const;
+const FULL_STEPS = [
+  { id: "welcome", label: "Welcome" },
+  { id: "tools", label: "Connect" },
+  { id: "scope", label: "Access" },
+  { id: "team", label: "Invite" },
+  { id: "verify", label: "Verify" },
+  { id: "done", label: "Done" }
+] as const;
+
+const FREE_STEPS = [
+  { id: "welcome", label: "Welcome" },
+  { id: "tools", label: "Connect" },
+  { id: "indexing", label: "Index repos" },
+  { id: "api-key", label: "API key" },
+  { id: "done", label: "Done" }
+] as const;
 
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   const collab = ["slack", "atlassian", "notion", "google-docs"] as const;
   return collab.some((provider) => integrations.find((i) => i.provider === provider)?.installed);
 }
 
-function slackScopeBlocking(integrations: IntegrationStatus[], orgPlan: string): boolean {
+function slackScopeGateBlocked(integrations: IntegrationStatus[], orgPlan: string): boolean {
   if (orgPlan !== "enterprise") {
     return false;
   }
@@ -31,7 +51,15 @@ function slackScopeBlocking(integrations: IntegrationStatus[], orgPlan: string):
   return slack.scopeStatus === "required";
 }
 
-export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
+export function OnboardingWizard({
+  step,
+  onStepChange,
+  onComplete,
+  onDismiss
+}: OnboardingWizardProps) {
+  const me = getStoredMe();
+  const orgName = displayOrgName(me);
+
   const {
     integrations,
     orgPlan,
@@ -42,17 +70,39 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     load
   } = useIntegrations();
 
-  const [step, setStep] = useState(0);
+  const isFreePlan = orgPlan === "free";
+  const steps = isFreePlan ? FREE_STEPS : FULL_STEPS;
+  const currentStep = steps[step] ?? steps[0];
+  const currentStepId = currentStep.id;
+  const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [verifyCanComplete, setVerifyCanComplete] = useState(false);
 
   const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
-  const enterprise = orgPlan === "enterprise";
-  const slackConnected = integrations.find((i) => i.provider === "slack")?.installed;
-  const slackScopeActive = integrations.find((i) => i.provider === "slack")?.scopeStatus === "active";
-  const scopeStepApplies = enterprise && Boolean(slackConnected);
-  const scopeBlocked = slackScopeBlocking(integrations, orgPlan);
+  const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
+  const bitbucketConnected = integrations.find((i) => i.provider === "bitbucket")?.installed;
+  const anyCodeHostConnected = githubConnected || gitlabConnected || bitbucketConnected;
+  const slackScopeGate = slackScopeGateBlocked(integrations, orgPlan);
+  const wideStep = currentStepId === "tools";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (step >= steps.length) {
+      onStepChange(steps.length - 1);
+    }
+  }, [step, steps, onStepChange]);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
 
   async function loadMembers() {
     const result = await fetchUsers();
@@ -62,22 +112,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }
 
   function goToStep(next: number) {
-    if (next === 3 && memberCount === null) {
+    const clamped = Math.max(0, Math.min(next, steps.length - 1));
+    const nextStepId = steps[clamped]?.id;
+    if (nextStepId === "team" && memberCount === null) {
       void loadMembers();
     }
-    setStep(next);
+    onStepChange(clamped);
   }
 
   function advanceFromConnect() {
-    if (scopeStepApplies) {
-      goToStep(2);
-      return;
-    }
-    goToStep(3);
-  }
-
-  function advanceFromScope() {
-    goToStep(3);
+    goToStep(step + 1);
   }
 
   async function finish() {
@@ -87,149 +131,332 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     onComplete();
   }
 
-  const finishDisabled = saving || (step === 4 && !verifyCanComplete);
+  if (!mounted) {
+    return null;
+  }
 
-  return (
-    <div className="admin-panel-inset">
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <div>
-          <p className="admin-section-label">Setup</p>
-          <h2 className="mt-1 text-base font-medium text-white">{STEPS[step]}</h2>
-        </div>
-        <p className="font-mono text-xs text-coop-muted">
-          {step + 1} / {STEPS.length}
-        </p>
-      </div>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-coop-dark/75 backdrop-blur-[6px]"
+        aria-label="Close setup"
+        onClick={onDismiss}
+      />
 
-      {step === 0 && (
-        <div className="space-y-4">
-          <p className="text-sm text-coop-muted">
-            Connect your tools once here — every developer in your org inherits access automatically.
-          </p>
-          <button type="button" className="admin-btn-primary" onClick={() => goToStep(1)}>
-            Continue
-          </button>
-        </div>
-      )}
-
-      {step === 1 && (
-        <div className="space-y-4">
-          <IntegrationsStep
-            integrations={integrations}
-            orgPlan={orgPlan}
-            initialLoading={initialLoading}
-            refreshingProvider={refreshingProvider}
-            refreshSuccessProvider={refreshSuccessProvider}
-            error={error}
-            onRefresh={(provider) => void load({ provider })}
-            compact
-          />
-          {scopeBlocked ? (
-            <p className="text-xs text-amber-300">
-              Slack is connected but channel scope is required — continue to Manage access.
+      <div
+        className={`relative z-10 flex max-h-[min(720px,90vh)] w-full flex-col overflow-hidden rounded-lg border border-coop-border bg-coop-surface shadow-2xl shadow-black/40 ${
+          wideStep ? "max-w-3xl" : "max-w-2xl"
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="shrink-0 border-b border-coop-border/80 px-5 py-4 sm:px-6">
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <p className="admin-section-label">Organization setup</p>
+              <h2 id="onboarding-title" className="mt-1 text-lg font-semibold text-white">
+                {orgName}
+              </h2>
+            </div>
+            <p className="font-mono text-xs text-coop-muted">
+              Step {Math.min(step + 1, steps.length)} of {steps.length}
             </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="admin-btn-primary" onClick={advanceFromConnect}>
-              {githubConnected || collaborationConnected(integrations) ? "Continue" : "Skip for now"}
-            </button>
           </div>
-        </div>
-      )}
+          <nav className="mt-4 flex gap-1" aria-label="Setup progress">
+            {steps.map((entry, index) => {
+              const active = index === step;
+              const complete = index < step;
+              return (
+                <div key={entry.id} className="flex min-w-0 flex-1 items-center gap-2">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                      active
+                        ? "bg-coop-index text-coop-dark"
+                        : complete
+                          ? "bg-white/15 text-white"
+                          : "bg-white/5 text-coop-muted"
+                    }`}
+                  >
+                    {complete ? "✓" : index + 1}
+                  </span>
+                  <span
+                    className={`hidden truncate text-xs sm:inline ${active ? "text-white" : "text-coop-muted"}`}
+                  >
+                    {entry.label}
+                  </span>
+                  {index < steps.length - 1 ? (
+                    <span className="mx-1 hidden h-px flex-1 bg-coop-border/60 sm:block" aria-hidden />
+                  ) : null}
+                </div>
+              );
+            })}
+          </nav>
+        </header>
 
-      {step === 2 && (
-        <div className="space-y-4">
-          {scopeStepApplies ? (
-            <>
-              <p className="text-sm text-coop-muted">
-                Choose which Slack channels Coop can search — not your entire workspace.
-              </p>
-              {slackScopeActive ? (
-                <p className="text-xs text-coop-index">Slack access is active.</p>
-              ) : (
-                <p className="text-xs text-amber-300">Scope required before Slack context is used in chat.</p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-coop-muted">No Enterprise Slack scope needed for your plan.</p>
+        <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+          {currentStepId === "welcome" && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Welcome to CoopAI</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  {isFreePlan
+                    ? "Connect your personal developer tools once, then keep coding in the Coop VS Code extension with your own API key."
+                    : "Connect your organization's tools once. Every developer inherits access automatically — they install the VS Code extension and sign in; they never register OAuth apps or paste integration tokens."}
+                </p>
+              </div>
+              <ul className="space-y-2 text-sm text-coop-muted">
+                {isFreePlan ? (
+                  <>
+                    <li>1. Connect a code host (GitHub, GitLab, or Bitbucket)</li>
+                    <li>2. Deep-Index up to 3 repos for your org</li>
+                    <li>3. Create an API key for the VS Code extension</li>
+                  </>
+                ) : (
+                  <>
+                    <li>1. Connect code hosts and collaboration tools</li>
+                    <li>2. Configure access scope (Enterprise)</li>
+                    <li>3. Invite your team and verify connections</li>
+                  </>
+                )}
+              </ul>
+            </div>
           )}
-          <p className="text-xs text-coop-muted">
-            Jira, Notion, and Google Docs scope controls are coming soon.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="admin-btn-primary"
-              onClick={advanceFromScope}
-              disabled={scopeBlocked}
-            >
-              Continue
-            </button>
-            {!scopeStepApplies ? (
-              <button type="button" className="admin-btn-secondary" onClick={advanceFromScope}>
-                Skip
-              </button>
-            ) : null}
+
+          {currentStepId === "tools" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Connect tools</h3>
+                <p className="mt-2 text-sm text-coop-muted">
+                  {isFreePlan
+                    ? "Connect GitHub, GitLab, or Bitbucket — then Deep-Index up to 3 repos org-wide. Collaboration tools (Slack, Jira, Notion) are optional."
+                    : "OAuth opens in a new tab. Return here and refresh each row after approving access."}
+                </p>
+              </div>
+              <IntegrationsStep
+                integrations={integrations}
+                orgPlan={orgPlan}
+                initialLoading={initialLoading}
+                refreshingProvider={refreshingProvider}
+                refreshSuccessProvider={refreshSuccessProvider}
+                error={error}
+                onRefresh={(provider) => void load({ provider })}
+                compact
+                showFullPageLink={false}
+                hideScopePanel
+              />
+            </div>
+          )}
+
+          {currentStepId === "scope" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Manage access</h3>
+                <p className="mt-2 text-sm text-coop-muted">
+                  Configure what Coop can search in each connected tool — not your entire workspace.
+                </p>
+              </div>
+              <OnboardingScopeStep
+                integrations={integrations}
+                orgPlan={orgPlan}
+                onRefresh={(provider) => void load({ provider })}
+              />
+            </div>
+          )}
+
+          {currentStepId === "team" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Invite your team</h3>
+                <p className="mt-2 text-sm text-coop-muted">
+                  Invite teammates — they receive an email with install instructions.
+                  {memberCount !== null
+                    ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
+                    : ""}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {currentStepId === "verify" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Verify connections</h3>
+                <p className="mt-2 text-sm text-coop-muted">
+                  Confirm connected tools respond before you finish setup.
+                </p>
+              </div>
+              <OnboardingVerifyStep onGatesChange={setVerifyCanComplete} />
+            </div>
+          )}
+
+          {currentStepId === "indexing" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Index your repos</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  After connecting a code host, open{" "}
+                  <Link href="/indexing" className="admin-link">
+                    Indexing
+                  </Link>{" "}
+                  to sync your catalog, then choose up to 3 repositories to Deep-Index. Your VS Code workspace can use the same 3
+                  repos for @ mentions and Coop-Search.
+                </p>
+              </div>
+              {!anyCodeHostConnected ? (
+                <p className="text-sm text-amber-300">
+                  Connect a code host on the previous step first, or skip and finish setup later.
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {currentStepId === "api-key" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Issue your API key</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  Open{" "}
+                  <Link href="/api-keys" className="admin-link">
+                    API Keys
+                  </Link>{" "}
+                  to create a key, then paste it into the Coop AI VS Code extension sign-in prompt. Keep keys
+                  private and rotate them if you share a machine.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {currentStepId === "done" && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">You&apos;re ready</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  {isFreePlan ? (
+                    <>
+                      Install the Coop AI VS Code extension and paste the API key from signup (or create one under{" "}
+                      <Link href="/api-keys" className="admin-link">
+                        API Keys
+                      </Link>
+                      ). Open any local folder to chat immediately — connect a code host later to Deep-Index up to 3
+                      repos.
+                    </>
+                  ) : (
+                    <>
+                      Developers install the Coop AI VS Code extension and sign in with an API key you issue from{" "}
+                      <Link href="/api-keys" className="admin-link">
+                        API Keys
+                      </Link>
+                      .
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+        </main>
+
+        <footer className="shrink-0 border-t border-coop-border/80 bg-coop-dark/40 px-5 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              {step > 0 ? (
+                <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step - 1)}>
+                  Back
+                </button>
+              ) : (
+                <span />
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {currentStepId === "welcome" ? (
+                <button type="button" className="admin-btn-primary" onClick={() => goToStep(1)}>
+                  Get started
+                </button>
+              ) : null}
+              {currentStepId === "tools" ? (
+                <button type="button" className="admin-btn-primary" onClick={advanceFromConnect}>
+                  {anyCodeHostConnected || collaborationConnected(integrations) ? "Continue" : "Skip for now"}
+                </button>
+              ) : null}
+              {currentStepId === "indexing" ? (
+                <>
+                  <Link href="/indexing" className="admin-btn-secondary">
+                    Open Indexing
+                  </Link>
+                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                    Continue
+                  </button>
+                </>
+              ) : null}
+              {currentStepId === "scope" ? (
+                <>
+                  {slackScopeGate ? (
+                    <p className="w-full text-xs text-amber-300 sm:order-first sm:w-auto">
+                      Configure Slack channel scope before continuing.
+                    </p>
+                  ) : null}
+                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(3)}>
+                    Skip
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn-primary"
+                    onClick={() => goToStep(3)}
+                    disabled={slackScopeGate}
+                  >
+                    Continue
+                  </button>
+                </>
+              ) : null}
+              {currentStepId === "team" ? (
+                <>
+                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
+                    Skip
+                  </button>
+                  <Link href="/users" className="admin-btn-primary">
+                    Invite users
+                  </Link>
+                </>
+              ) : null}
+              {currentStepId === "verify" ? (
+                <button
+                  type="button"
+                  className="admin-btn-primary"
+                  onClick={() => goToStep(step + 1)}
+                  disabled={!verifyCanComplete}
+                >
+                  Continue
+                </button>
+              ) : null}
+              {currentStepId === "api-key" ? (
+                <>
+                  <Link href="/api-keys" className="admin-btn-secondary">
+                    Open API Keys
+                  </Link>
+                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                    Continue
+                  </button>
+                </>
+              ) : null}
+              {currentStepId === "done" ? (
+                <button
+                  type="button"
+                  className="admin-btn-primary"
+                  onClick={() => void finish()}
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Finish setup"}
+                </button>
+              ) : null}
+            </div>
           </div>
-          <IntegrationScopePanel
-            provider="slack"
-            orgPlan={orgPlan}
-            connected={Boolean(slackConnected)}
-            onSaved={() => void load({ provider: "slack" })}
-          />
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="space-y-4">
-          <p className="text-sm text-coop-muted">
-            Invite teammates — they receive an email with install instructions.
-            {memberCount !== null ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.` : ""}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/users" className="admin-btn-primary">
-              Invite users
-            </Link>
-            <button type="button" className="admin-btn-secondary" onClick={() => goToStep(4)}>
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="space-y-4">
-          <OnboardingVerifyStep onGatesChange={setVerifyCanComplete} />
-          <button
-            type="button"
-            className="admin-btn-primary"
-            onClick={() => goToStep(5)}
-            disabled={!verifyCanComplete}
-          >
-            Continue
-          </button>
-        </div>
-      )}
-
-      {step === 5 && (
-        <div className="space-y-4">
-          <p className="text-sm text-coop-muted">
-            Developers install the Coop AI VS Code extension and sign in with an API key you issue from{" "}
-            <Link href="/api-keys" className="admin-link">
-              API Keys
-            </Link>
-            .
-          </p>
-          <button
-            type="button"
-            className="admin-btn-primary"
-            onClick={() => void finish()}
-            disabled={finishDisabled}
-          >
-            {saving ? "Saving…" : "Finish setup"}
-          </button>
-        </div>
-      )}
-    </div>
+        </footer>
+      </div>
+    </div>,
+    document.body
   );
 }

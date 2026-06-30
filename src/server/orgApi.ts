@@ -36,7 +36,8 @@ import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore"
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
-import { getIndexedRepoQuota } from "./indexedRepoQuota";
+import { getIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
+import { ORG_INDEXING_PLANS } from "./planGates";
 import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceStore";
 import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
@@ -303,7 +304,7 @@ export async function handleOrgApiRequest(
     if (!requireOrgAdmin(auth!, response)) {
       return true;
     }
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     await handleEstateSync(parsed, response, deps, auth!);
@@ -312,7 +313,7 @@ export async function handleOrgApiRequest(
 
   const enableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/enable$/);
   if (parsed.method === "POST" && enableMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(enableMatch[1]);
@@ -325,7 +326,7 @@ export async function handleOrgApiRequest(
     if (!requireOrgAdmin(auth!, response)) {
       return true;
     }
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     await handleReindexEmbeddingFailures(response, deps, auth!);
@@ -334,7 +335,7 @@ export async function handleOrgApiRequest(
 
   const disableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/disable$/);
   if (parsed.method === "POST" && disableMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(disableMatch[1]);
@@ -349,7 +350,7 @@ export async function handleOrgApiRequest(
 
   const statusMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/status$/);
   if (parsed.method === "GET" && statusMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(statusMatch[1]);
@@ -983,7 +984,15 @@ async function handleEnableLightning(
     return;
   }
 
+  const plan = (await deps.orgStore!.getOrganization(auth.orgId))?.plan ?? auth.plan ?? "free";
   const existing = await deps.orgStore!.getOrgRepo(auth.orgId, repoId);
+  if (
+    !(await requireCanEnableMoreRepos(deps.orgStore!, auth.orgId, plan, response, {
+      alreadyEnabled: existing?.lightningEnabled ?? false
+    }))
+  ) {
+    return;
+  }
 
   const queueResult = await queueOrgRepoIndex(auth.orgId, repoId, {
     orgStore: deps.orgStore!,

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { Button } from "@/components/Button";
@@ -6,7 +7,13 @@ import { Button } from "@/components/Button";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "CoopAI pricing — free Developer plan with local workspace context and AI credits; Pro at $20/user/month adds code hosts and Lightning Mode."
+    "CoopAI pricing: Developer free, Pro ($20/user), Enterprise. Org-wide context for code teams.",
+  openGraph: {
+    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
+  },
+  twitter: {
+    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
+  }
 };
 
 type PricingTier = {
@@ -47,12 +54,13 @@ const tiers: PricingTier[] = [
     period: "per user / month",
     features: [
       "Everything in Developer + GitHub code-host connection",
-      "Lightning Mode — managed cloud code graph for fast cross-repo search",
+      "Lightning Mode — instance-wide indexing for instant search across all repos in your organization",
       "Workspace repos and Deep-Indexed catalog (up to 3 repos per seat)",
       "Team seats — invite teammates",
       "Usage visibility & analytics",
       "Priority support"
     ],
+    note: "See Lightning Mode details →",
     recommended: true,
     cta: "Join waitlist",
     href: "/demo?intent=waitlist",
@@ -63,8 +71,8 @@ const tiers: PricingTier[] = [
     price: "Custom",
     features: [
       "Everything in Pro",
-      "Zero-retention LLM routing",
-      "Bring Your Own Key (BYOK)",
+      "Zero-retention LLM routing — your code never trains models; enterprise-grade data privacy",
+      "Bring Your Own Key (BYOK) — connect your own LLM provider (AWS Bedrock, Azure, Vertex AI) or use your API key",
       "Self-hosted deployment",
       "Compliance attestation & DPA support",
       "Dedicated onboarding"
@@ -78,11 +86,7 @@ const tiers: PricingTier[] = [
 export default function PricingPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="Pricing"
-        title="Every tool. Total context"
-        description="Developer is individual-only: local files, AI credits, and unlimited tool integrations. Pro adds GitHub connections, team seats, and Lightning Mode — managed cloud indexing for dramatically faster cross-repo search."
-      />
+      <PageHeader eyebrow="Pricing" title="Your codebase, finally explained" />
 
       <section className="pb-20">
         <div className="mx-auto max-w-6xl px-6">
@@ -92,21 +96,21 @@ export default function PricingPage() {
                 key={tier.name}
                 className={`relative flex flex-col rounded-sm border p-8 ${
                   tier.highlighted
-                    ? "border-coop-index/40 bg-coop-surface/50"
-                    : "border-coop-border bg-coop-editor"
+                    ? "border-gray-900 bg-gray-50"
+                    : "border-coop-border bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-white">{tier.name}</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">{tier.name}</h2>
                   {tier.recommended ? (
-                    <span className="shrink-0 rounded-sm border border-coop-index/40 bg-coop-index/10 px-2.5 py-0.5 font-mono text-[11px] text-coop-index">
+                    <span className="shrink-0 rounded-sm border border-gray-300 bg-gray-100 px-2.5 py-0.5 font-mono text-[11px] text-gray-700">
                       default
                     </span>
                   ) : null}
                 </div>
 
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="text-4xl font-semibold text-white">{tier.price}</span>
+                  <span className="text-4xl font-semibold text-gray-900">{tier.price}</span>
                   {tier.period ? <span className="text-sm text-coop-muted">{tier.period}</span> : null}
                 </div>
 
@@ -117,7 +121,7 @@ export default function PricingPage() {
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex gap-2 text-sm leading-snug text-coop-muted">
-                      <span className="mt-0.5 shrink-0 text-coop-index" aria-hidden>
+                      <span className="mt-0.5 shrink-0 text-gray-900" aria-hidden>
                         ✓
                       </span>
                       <span>{feature}</span>
@@ -127,7 +131,15 @@ export default function PricingPage() {
 
                 {tier.note ? (
                   <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">
-                    {tier.note}
+                    {tier.name === "Pro" ? (
+                      <>
+                        <Link href="/product#lightning-mode" className="font-medium text-gray-900 hover:underline">
+                          {tier.note}
+                        </Link>
+                      </>
+                    ) : (
+                      tier.note
+                    )}
                   </p>
                 ) : (
                   <div className="mt-5 border-t border-transparent pt-4" aria-hidden />

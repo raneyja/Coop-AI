@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getToken } from "@/lib/auth";
 import { IndexingProgressBar } from "./IndexingProgressBar";
+import { OnboardingProvider } from "./OnboardingProvider";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -34,15 +35,17 @@ export function AdminShell({ children }: AdminShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
-        {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
-        <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
-          {children}
-        </main>
+    <OnboardingProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar />
+          {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
+          <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </OnboardingProvider>
   );
 }

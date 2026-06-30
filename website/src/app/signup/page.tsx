@@ -46,7 +46,7 @@ export default function SignupPage() {
             </label>
             <input
               id="orgName"
-              className="w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 text-white"
+              className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
               required
@@ -59,7 +59,7 @@ export default function SignupPage() {
             <input
               id="email"
               type="email"
-              className="w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 text-white"
+              className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -73,17 +73,17 @@ export default function SignupPage() {
               id="seats"
               type="number"
               min={1}
-              className="w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 text-white"
+              className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
               value={seats}
               onChange={(e) => setSeats(Number(e.target.value) || 1)}
               required
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-coop-dark hover:bg-[#46c35a] disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
           >
             {loading ? "Redirecting to Stripe…" : "Continue to checkout"}
           </button>

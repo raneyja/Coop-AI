@@ -4,8 +4,10 @@ import { PRICING_PAGE_URL } from "../config/siteConfig";
 import type { OrgPlan, OrgStore, AuthContext } from "./orgStore";
 import { isPlanAllowed, requireOrgPlan, resolveOrgPlanFromDb } from "./authMiddleware";
 
-export const CODE_HOST_GITHUB_PLANS: OrgPlan[] = ["pro", "enterprise"];
+export const CODE_HOST_GITHUB_PLANS: OrgPlan[] = ["free", "pro", "enterprise"];
 export const CODE_HOST_GITLAB_BITBUCKET_PLANS: OrgPlan[] = ["enterprise"];
+/** Org-wide catalog sync and Deep-Index (free capped at 3 repos). */
+export const ORG_INDEXING_PLANS: OrgPlan[] = ["free", "pro", "enterprise"];
 
 export function codeHostPlansForProvider(provider: CodeHostProvider): OrgPlan[] {
   return provider === "github" ? CODE_HOST_GITHUB_PLANS : CODE_HOST_GITLAB_BITBUCKET_PLANS;
@@ -16,15 +18,15 @@ export function writeCodeHostPlanForbidden(
   provider: CodeHostProvider
 ): void {
   const required = codeHostPlansForProvider(provider);
-  const upgrade =
+  const message =
     provider === "github"
-      ? "Upgrade to Pro to connect GitHub and use remote code graph features."
-      : "GitLab and Bitbucket require an Enterprise plan.";
+      ? "GitHub is available on Free, Pro, and Enterprise plans. If this persists, verify your organization plan and try again."
+      : "Code host tools are not available on your current plan. GitLab and Bitbucket require an Enterprise plan.";
   response.writeHead(403, { "content-type": "application/json; charset=utf-8" });
   response.end(
     JSON.stringify({
       error: "code_host_plan_required",
-      message: `Code host tools are not available on the free plan. ${upgrade}`,
+      message,
       requiredPlans: required,
       provider,
       upgradeUrl: PRICING_PAGE_URL
@@ -38,7 +40,7 @@ export function writeRemoteCodePlanForbidden(response: ServerResponse): void {
     JSON.stringify({
       error: "remote_code_plan_required",
       message:
-        "Remote code graph and cloud repo browsing require Pro. Free plan is limited to local workspace files.",
+        "Remote code graph and cloud repo browsing are available on Free, Pro, and Enterprise plans. Free organizations are limited by repository quota.",
       requiredPlans: CODE_HOST_GITHUB_PLANS,
       upgradeUrl: PRICING_PAGE_URL
     })
@@ -78,7 +80,7 @@ export function writeCodeHostPlanForbiddenHtml(
   const required = codeHostPlansForProvider(provider);
   const message =
     provider === "github"
-      ? "GitHub requires a Pro plan. The free plan is limited to local workspace files."
+      ? "GitHub is available on Free, Pro, and Enterprise plans. If this persists, verify your organization plan and try again."
       : "This code host requires an Enterprise plan.";
   response.writeHead(403, { "content-type": "text/html; charset=utf-8" });
   response.end(`<!DOCTYPE html><html><body><p>${message}</p><p>Required plan: ${required.join(" or ")}.</p></body></html>`);

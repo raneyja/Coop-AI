@@ -1,6 +1,11 @@
 import type { JobQueue } from "../jobs/jobQueue";
-import type { OrgStore } from "./orgStore";
+import type { OrgPlan, OrgStore } from "./orgStore";
 import { queueOrgRepoIndex } from "./queueOrgRepoIndex";
+import {
+  countLightningEnabledRepos,
+  autoIndexOnCatalogSync,
+  indexedRepoLimitForPlan
+} from "./indexedRepoQuota";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import { GitHubClient } from "../api/codeHosts/githubClient";
@@ -23,6 +28,23 @@ export type CatalogSyncProviderResult = CatalogSyncResult & {
   provider: CodeHostProvider;
 };
 
+export function isIndexingPlan(plan: OrgPlan | undefined): boolean {
+  return plan === "free" || plan === "pro" || plan === "enterprise";
+}
+
+function canSyncProvider(plan: OrgPlan, provider: CodeHostProvider): boolean {
+  if (!isIndexingPlan(plan)) {
+    return false;
+  }
+  if (provider === "github") {
+    return true;
+  }
+  if (provider === "gitlab" || provider === "bitbucket") {
+    return plan === "free" || plan === "enterprise";
+  }
+  return false;
+}
+
 export function codeHostDisplayName(provider: CodeHostProvider): string {
   switch (provider) {
     case "gitlab":
@@ -35,23 +57,63 @@ export function codeHostDisplayName(provider: CodeHostProvider): string {
 }
 
 /**
- * Queues Deep-Code Graph indexing for repos discovered on a code host.
- * Used after org admin connects GitHub, GitLab, or Bitbucket (Pro + Enterprise).
+ * Register repos discovered on a code host. Pro/Enterprise also queue Deep-Index jobs;
+ * free orgs register the catalog only — admins enable up to 3 repos manually.
  */
 export async function syncOrgCatalog(
   orgId: string,
   repoIds: string[],
-  deps: { orgStore: OrgStore; jobQueue?: JobQueue; force?: boolean }
+  deps: { orgStore: OrgStore; jobQueue?: JobQueue; force?: boolean; plan?: OrgPlan }
 ): Promise<CatalogSyncResult> {
-  if (!deps.jobQueue || repoIds.length === 0) {
+  const plan = deps.plan ?? "pro";
+  const autoIndex = autoIndexOnCatalogSync(plan);
+
+  if (repoIds.length === 0) {
+    return { discovered: 0, queued: 0, skipped: 0 };
+  }
+
+  if (autoIndex && (!deps.jobQueue || repoIds.length === 0)) {
     return { discovered: repoIds.length, queued: 0, skipped: repoIds.length };
   }
 
+  const repoLimit = indexedRepoLimitForPlan(plan);
+  let enabledCount =
+    autoIndex && repoLimit !== null ? await countLightningEnabledRepos(deps.orgStore, orgId) : 0;
+
   let queued = 0;
   let skipped = 0;
+  let registered = 0;
 
   for (const repoId of repoIds) {
     const existing = await deps.orgStore.getOrgRepo(orgId, repoId);
+
+    if (!autoIndex) {
+      if (!existing) {
+        await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+          lightningEnabled: false,
+          indexStatus: "idle"
+        });
+        registered += 1;
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
+
+    const wouldEnableNew = !existing?.lightningEnabled;
+
+    if (repoLimit !== null && !existing) {
+      await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+        lightningEnabled: false,
+        indexStatus: "idle"
+      });
+    }
+
+    if (repoLimit !== null && wouldEnableNew && enabledCount >= repoLimit) {
+      skipped += 1;
+      continue;
+    }
+
     if (
       !deps.force &&
       existing?.lightningEnabled &&
@@ -65,7 +127,7 @@ export async function syncOrgCatalog(
 
     const queueResult = await queueOrgRepoIndex(orgId, repoId, {
       orgStore: deps.orgStore,
-      jobQueue: deps.jobQueue,
+      jobQueue: deps.jobQueue!,
       bypassRateLimit: true
     });
     if (queueResult.outcome === "skipped") {
@@ -78,11 +140,14 @@ export async function syncOrgCatalog(
       continue;
     }
 
+    if (wouldEnableNew && repoLimit !== null) {
+      enabledCount += 1;
+    }
     queued += 1;
   }
 
   console.log(
-    `[catalog-sync] org=${orgId} discovered=${repoIds.length} queued=${queued} skipped=${skipped}`
+    `[catalog-sync] org=${orgId} plan=${plan} discovered=${repoIds.length} registered=${registered} queued=${queued} skipped=${skipped}`
   );
 
   return { discovered: repoIds.length, queued, skipped };
@@ -148,17 +213,14 @@ export async function runCodeHostCatalogSyncAfterConnect(
   deps: { orgStore: OrgStore; jobQueue?: JobQueue; gitlabHostRoot?: string }
 ): Promise<CatalogSyncResult> {
   const org = await deps.orgStore.getOrganization(orgId);
-  if (!org || (org.plan !== "pro" && org.plan !== "enterprise")) {
-    return { discovered: 0, queued: 0, skipped: 0 };
-  }
-  if ((provider === "gitlab" || provider === "bitbucket") && org.plan !== "enterprise") {
+  if (!org || !canSyncProvider(org.plan, provider)) {
     return { discovered: 0, queued: 0, skipped: 0 };
   }
 
   try {
     const gitlabApiBase = deps.gitlabHostRoot ? gitlabApiBaseUrl(deps.gitlabHostRoot) : undefined;
     const repoIds = await discoverCatalogRepoIds(provider, accessToken, { gitlabApiBase });
-    const result = await syncOrgCatalog(orgId, repoIds, deps);
+    const result = await syncOrgCatalog(orgId, repoIds, { ...deps, plan: org.plan });
     console.log(
       `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} queued=${result.queued} skipped=${result.skipped}`
     );
@@ -200,15 +262,14 @@ export async function runCatalogSyncForProvider(
   }
 ): Promise<CatalogSyncProviderResult> {
   const org = await deps.orgStore.getOrganization(orgId);
-  if (!org || (org.plan !== "pro" && org.plan !== "enterprise")) {
+  if (!org || !canSyncProvider(org.plan, provider)) {
+    if (org && (provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
+      throw new CatalogSyncError(
+        `${codeHostDisplayName(provider)} catalog sync requires an Enterprise plan.`,
+        "plan_required"
+      );
+    }
     return { provider, discovered: 0, queued: 0, skipped: 0 };
-  }
-
-  if ((provider === "gitlab" || provider === "bitbucket") && org.plan !== "enterprise") {
-    throw new CatalogSyncError(
-      `${codeHostDisplayName(provider)} catalog sync requires an Enterprise plan.`,
-      "plan_required"
-    );
   }
 
   if (!deps.jobQueue) {
@@ -259,7 +320,8 @@ export async function runCatalogSyncForProvider(
   const result = await syncOrgCatalog(orgId, repoIds, {
     orgStore: deps.orgStore,
     jobQueue: deps.jobQueue,
-    force: deps.force
+    force: deps.force,
+    plan: org.plan
   });
   console.log(
     `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} queued=${result.queued} skipped=${result.skipped}`

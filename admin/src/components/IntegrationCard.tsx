@@ -19,6 +19,7 @@ type IntegrationCardProps = {
   refreshSuccess?: boolean;
   initialLoading?: boolean;
   compact?: boolean;
+  hideScopePanel?: boolean;
 };
 
 export function IntegrationCard({
@@ -29,7 +30,8 @@ export function IntegrationCard({
   refreshing,
   refreshSuccess,
   initialLoading,
-  compact
+  compact,
+  hideScopePanel = false
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -189,7 +191,7 @@ export function IntegrationCard({
         </div>
       </div>
 
-      {isScopable ? (
+      {isScopable && !hideScopePanel ? (
         <IntegrationScopePanel
           provider={definition.id}
           orgPlan={orgPlan}

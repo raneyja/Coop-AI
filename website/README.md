@@ -19,6 +19,31 @@ This folder is self-contained — it does not share dependencies with the VS Cod
 | `/docs` | Documentation placeholder (coming soon) |
 | `/blog` | Blog index |
 | `/blog/[slug]` | Individual blog posts (Markdown in `content/blog/`) |
+| `/file-context-demo` | **Legacy** dark VS Code mock — dev preview only (not in nav, `noindex`) |
+
+## Homepage hero (production)
+
+Live at [coop-ai.dev](https://coop-ai.dev). The homepage uses the **light-theme** artifact demo — not the older dark VS Code window mock.
+
+| Piece | File |
+|-------|------|
+| Hero layout | `src/components/Hero.tsx` → `<HeroDemoArtifact />` |
+| 4 rotating demos | `src/components/HeroDemoArtifact.tsx` |
+| Copy | `src/lib/site.config.ts` |
+
+Flow: `// question` → `// pulling context from` → `// context found` → `// response` (carousel dots below).
+
+**Agent / contributor note:** See repo root `AGENTS.md` and `.cursor/rules/website-canonical.mdc`. On feature branches, `website/` may lag `main` — if local preview shows the old dark hero, run `git diff main -- website/src/components/Hero.tsx` and restore from `main` when needed.
+
+### Legacy demo components (not the live homepage)
+
+| Component | Route / use |
+|-----------|-------------|
+| `FileContextStoryDemo.tsx` | `/file-context-demo` — dark VS Code split-pane mock |
+| `HeroProductMock.tsx` | Unused; old static product mock |
+| `ProductShowcaseCarousel.tsx` | `/product` page only |
+
+Do not wire `FileContextStoryDemo` into `Hero.tsx` on production branches.
 
 ## Local development
 
@@ -28,7 +53,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3001](http://localhost:3001) (`package.json` sets `next dev -p 3001`).
 
 ## Deploy to Vercel
 
@@ -301,7 +326,7 @@ In Tawk’s dashboard:
 
 | Area | What to set |
 |------|-------------|
-| **Chat Widget → Appearance** | Colors to match CoopAI (dark theme); position bottom-right |
+| **Chat Widget → Appearance** | Colors to match CoopAI (light theme on coop-ai.dev); position bottom-right |
 | **Chat Widget → Behavior** | Offline message, business hours if you use them |
 | **Triggers / Knowledge Base** | Optional; skip until you need them |
 | **Notifications** | Email/mobile when a visitor messages |
@@ -339,7 +364,7 @@ NEXT_PUBLIC_TAWK_WIDGET_ID=your_widget_id_here
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — the bubble should appear. Chats from localhost still show in your Tawk inbox (useful for testing).
+Open [http://localhost:3001](http://localhost:3001) — the bubble should appear. Chats from localhost still show in your Tawk inbox (useful for testing).
 
 If either variable is missing, **no widget is shown** and there is no error on the page (by design).
 

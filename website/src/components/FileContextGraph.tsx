@@ -141,8 +141,8 @@ export function FileContextGraph({
             onClick={() => switchScenario(s.id)}
             className={`rounded-sm border px-3.5 py-1.5 font-mono text-xs transition md:text-sm ${
               s.id === scenarioId
-                ? "border-coop-index/50 bg-coop-index/10 text-white"
-                : "border-coop-border bg-coop-editor text-white/60 hover:border-coop-muted/50 hover:text-white/85"
+                ? "border-gray-900 bg-gray-100 text-gray-900"
+                : "border-coop-border bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800"
             }`}
           >
             {s.file.name}
@@ -153,8 +153,8 @@ export function FileContextGraph({
 
       {/* Desktop graph */}
       <div
-        className={`file-context-graph-stage relative overflow-hidden border border-coop-border bg-[#0f1117] ${
-          compact ? "h-full min-h-[18rem] flex-1 rounded-sm" : "hidden rounded-sm md:block"
+        className={`file-context-graph-stage relative overflow-hidden bg-gray-50 ${
+          compact ? "h-full min-h-[18rem] flex-1" : "hidden rounded-sm border border-coop-border md:block"
         } ${
           transitioning ? "opacity-60" : "opacity-100"
         } transition-opacity duration-200`}
@@ -238,7 +238,7 @@ export function FileContextGraph({
             onBlur={() => setFileFocused(false)}
           >
             <div
-              className={`relative flex h-full flex-col justify-center rounded-xl border bg-[#1a1d27] px-4 shadow-[0_8px_32px_rgba(0,0,0,0.45)] transition duration-300 ${
+              className={`relative flex h-full flex-col justify-center rounded-xl border bg-white px-4 shadow-sm transition duration-300 ${
                 fileFocused
                   ? "border-[#79C0FF]/55 shadow-[0_0_40px_rgba(121,192,255,0.2)]"
                   : "border-[#79C0FF]/30"
@@ -246,7 +246,7 @@ export function FileContextGraph({
               style={{ borderLeftWidth: 3, borderLeftColor: "#79C0FF" }}
             >
               <div className="pointer-events-none absolute -inset-1 rounded-xl bg-[#79C0FF]/8 blur-md" aria-hidden />
-              <p className="relative truncate font-mono text-[1.55cqw] font-semibold text-white">
+              <p className="relative truncate font-mono text-[1.55cqw] font-semibold text-gray-900">
                 {scenario.file.name}
               </p>
               <p className="relative mt-0.5 truncate font-mono text-[1.05cqw] text-[#9ca4ad]">
@@ -254,7 +254,7 @@ export function FileContextGraph({
                 {scenario.file.symbol ? ` · ${scenario.file.symbol}` : ""}
               </p>
               <div className="relative mt-1.5 flex items-center gap-2">
-                <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[0.95cqw] text-white/70">
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[0.95cqw] text-gray-600">
                   {scenario.file.language}
                 </span>
                 <span className="text-[0.95cqw] text-[#79C0FF]">
@@ -270,7 +270,7 @@ export function FileContextGraph({
             className="absolute z-10 -translate-x-1/2"
             style={{ left: `${hubLeftPct}%`, top: `${hubTopPct + heightPct(FILE_CARD.height) * 0.72}%` }}
           >
-            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#14171f]/95 px-3 py-1.5 text-[11px] text-white/55 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] text-gray-500 backdrop-blur-sm">
               <span className="h-2 w-2 rounded-full bg-[#3FB950]" aria-hidden />
               Answers in VS Code sidebar
             </div>
@@ -283,14 +283,14 @@ export function FileContextGraph({
       {!compact && (
       <div className="space-y-3 md:hidden">
         <div
-          className="rounded-xl border border-[#79C0FF]/35 bg-[#1a1d27] p-4"
+          className="rounded-xl border border-blue-200 bg-white p-4"
           style={{ borderLeftWidth: 3, borderLeftColor: "#79C0FF" }}
         >
-          <p className="font-mono text-sm font-semibold text-white">{scenario.file.name}</p>
+          <p className="font-mono text-sm font-semibold text-gray-900">{scenario.file.name}</p>
           <p className="mt-1 font-mono text-xs text-coop-muted">{scenario.file.path}</p>
           <p className="mt-2 text-xs text-[#79C0FF]">{scenario.sourceCount} sources linked</p>
         </div>
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/30">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-gray-400">
           Sources linked to this file
         </p>
         <ul className="space-y-2">
@@ -301,7 +301,7 @@ export function FileContextGraph({
             >
               <OrbitIcon kind={node.kind} className="h-4 w-4 shrink-0" active />
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-white">{node.label}</p>
+                <p className="truncate text-sm font-medium text-gray-900">{node.label}</p>
                 <p className="truncate text-xs text-coop-muted">{node.sublabel}</p>
               </div>
             </li>
@@ -331,7 +331,7 @@ export function FileContextGraph({
             {scenario.highlights.map((h) => (
               <span
                 key={h}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-white/50"
+                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[11px] text-gray-500"
               >
                 {h}
               </span>
@@ -340,7 +340,7 @@ export function FileContextGraph({
           <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-white/30">
             Example question
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-white/85">{scenario.exampleQuestion}</p>
+          <p className="mt-2 text-sm leading-relaxed text-gray-700">{scenario.exampleQuestion}</p>
           <p className="mt-4 text-xs leading-relaxed text-coop-muted">
             Hover the file node on desktop to reveal all linked sources. Toggle context rows to see
             how grounded answers depend on your stack integrations.
@@ -415,7 +415,7 @@ function OrbitNodeCard({
       onBlur={onLeave}
     >
       <div
-        className={`group flex h-full w-full items-stretch overflow-hidden rounded-sm border bg-[#1a1d27] transition duration-200 hover:border-coop-muted/40 ${
+        className={`group flex h-full w-full items-stretch overflow-hidden rounded-sm border bg-white transition duration-200 hover:border-gray-300 ${
           node.isGap
             ? "border-dashed border-amber-400/45"
             : active
@@ -431,14 +431,14 @@ function OrbitNodeCard({
           <OrbitIcon kind={node.kind} className="h-[40%] w-[40%] min-h-[11px] min-w-[11px]" active={active} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center px-[5%] py-[5%]">
-          <p className="truncate text-[1.22cqw] font-medium leading-tight text-white">{node.label}</p>
+          <p className="truncate text-[1.22cqw] font-medium leading-tight text-gray-900">{node.label}</p>
           <p className="mt-0.5 truncate text-[1cqw] leading-snug text-[#9ca4ad]">{node.sublabel}</p>
         </div>
       </div>
 
       {active && (
         <div
-          className="pointer-events-none absolute left-1/2 top-full z-40 mt-2 w-max max-w-[220px] -translate-x-1/2 rounded-lg border border-white/10 bg-[#14171f] px-3 py-2 text-center text-[11px] leading-snug text-white/75 shadow-xl"
+          className="pointer-events-none absolute left-1/2 top-full z-40 mt-2 w-max max-w-[220px] -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-center text-[11px] leading-snug text-gray-600 shadow-xl"
           role="tooltip"
         >
           {node.tooltip}
@@ -462,9 +462,9 @@ function ContextPacket({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#1a1d27]/80 p-5">
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-sm font-medium text-white">
+        <p className="font-mono text-sm font-medium text-gray-900">
           Context packet · {scenario.file.name}
         </p>
         <span
@@ -492,23 +492,23 @@ function ContextPacket({
             >
               <span
                 className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] ${
-                  disabled ? "bg-white/5 text-white/25" : "bg-emerald-500/20 text-emerald-400"
+                  disabled ? "bg-gray-100 text-gray-300" : "bg-emerald-50 text-emerald-600"
                 }`}
                 aria-hidden
               >
                 {disabled ? "—" : "✓"}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-white/40">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   {row.source}
                 </p>
-                <p className="mt-0.5 text-sm text-white/80">{row.detail}</p>
+                <p className="mt-0.5 text-sm text-gray-700">{row.detail}</p>
               </div>
               {row.toggleable && (
                 <button
                   type="button"
                   onClick={() => onToggle(row.id)}
-                  className="shrink-0 rounded border border-white/10 px-2 py-0.5 text-[10px] text-white/50 transition hover:border-white/25 hover:text-white/80"
+                  className="shrink-0 rounded border border-gray-200 px-2 py-0.5 text-[10px] text-gray-500 transition hover:border-gray-300 hover:text-gray-800"
                   aria-pressed={!disabled}
                 >
                   {disabled ? "Include" : "Exclude"}

@@ -3,29 +3,26 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getStoredMe, displayOrgName } from "@/lib/auth";
-import { fetchIntegrations, fetchOrg, fetchUsers } from "@/lib/coopApi";
+import { fetchIntegrations, fetchUsers } from "@/lib/coopApi";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
-import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 export default function DashboardPage() {
   const me = getStoredMe();
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [userCount, setUserCount] = useState<number | null>(null);
-  const [showWizard, setShowWizard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [integrationsResult, usersResult, orgResult] = await Promise.all([
+    const [integrationsResult, usersResult] = await Promise.all([
       fetchIntegrations(),
-      fetchUsers(),
-      fetchOrg()
+      fetchUsers()
     ]);
     setLoading(false);
     if (!integrationsResult.ok) {
@@ -37,9 +34,6 @@ export default function DashboardPage() {
       setUserCount(usersResult.data.users.length);
     } else {
       setUserCount(null);
-    }
-    if (orgResult.ok && orgResult.data) {
-      setShowWizard(!orgResult.data.onboardingCompleted);
     }
   }, []);
 
@@ -57,8 +51,6 @@ export default function DashboardPage() {
           Overview for {displayOrgName(me)}
         </p>
       </div>
-
-      {showWizard && <OnboardingWizard onComplete={() => setShowWizard(false)} />}
 
       <AdminStatRow>
         <div className="admin-stat">

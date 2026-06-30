@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductMock } from "./ProductMock";
-import { isInquiryProductMock, PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
+import { PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
 
-const ROTATE_MS = 5500;
 const FADE_MS = 480;
 
 /** Fixed height so slide changes never shift page layout below the carousel */
@@ -16,10 +15,8 @@ export function ProductShowcaseCarousel() {
   const [paused, setPaused] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scenario = PRODUCT_MOCK_SCENARIOS[index];
-  const isInquiry = isInquiryProductMock(scenario);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -39,21 +36,9 @@ export function ProductShowcaseCarousel() {
   }, []);
 
   const advance = useCallback(() => {
+    if (paused) return;
     goTo(index + 1);
-  }, [goTo, index]);
-
-  useEffect(() => {
-    if (reduceMotion || paused || !isInquiry) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
-      return;
-    }
-
-    timerRef.current = setInterval(advance, ROTATE_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [advance, paused, reduceMotion, isInquiry]);
+  }, [goTo, index, paused]);
 
   useEffect(() => {
     return () => {
@@ -65,7 +50,7 @@ export function ProductShowcaseCarousel() {
     if (i === index) return;
     setPaused(true);
     goTo(i);
-    window.setTimeout(() => setPaused(false), ROTATE_MS * 2);
+    window.setTimeout(() => setPaused(false), 12000);
   }
 
   return (
@@ -89,7 +74,7 @@ export function ProductShowcaseCarousel() {
             key={scenario.id}
             scenario={scenario}
             className="h-full"
-            onAnimationComplete={!isInquiry ? advance : undefined}
+            onAnimationComplete={paused || reduceMotion ? undefined : advance}
           />
         </div>
       </div>
@@ -105,8 +90,8 @@ export function ProductShowcaseCarousel() {
               onClick={() => selectSlide(i)}
               className={`rounded-sm border px-3 py-1.5 font-mono text-xs transition ${
                 i === index
-                  ? "border-coop-index/50 bg-coop-index/10 text-white"
-                  : "border-coop-border bg-coop-editor text-coop-muted hover:border-coop-muted/50 hover:text-white"
+                  ? "border-gray-900 bg-gray-100 text-gray-900"
+                  : "border-coop-border bg-white text-coop-muted hover:border-gray-300 hover:text-gray-900"
               }`}
             >
               {item.feature}
@@ -119,7 +104,7 @@ export function ProductShowcaseCarousel() {
             <span
               key={i}
               className={`h-1 rounded-full transition-all duration-300 ${
-                i === index ? "w-6 bg-coop-index" : "w-1.5 bg-white/20"
+                i === index ? "w-6 bg-gray-900" : "w-1.5 bg-gray-200"
               }`}
             />
           ))}
@@ -131,9 +116,7 @@ export function ProductShowcaseCarousel() {
           </p>
         ) : (
           <p className="text-center text-xs text-coop-muted">
-            {isInquiry
-              ? "Auto-advances every few seconds · hover to pause"
-              : "Plays prompt → context → outcome · advances when complete · hover to pause"}
+            Plays prompt → context → outcome · advances when complete · hover to pause
           </p>
         )}
       </div>

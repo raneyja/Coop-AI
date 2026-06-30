@@ -66,7 +66,7 @@ export default function IndexingPage() {
   }, [repos]);
 
   const syncableHosts = useMemo(() => {
-    if (orgPlan === "enterprise") {
+    if (orgPlan === "enterprise" || orgPlan === "free") {
       return connectedHosts;
     }
     return connectedHosts.filter((provider) => provider === "github");
@@ -144,7 +144,9 @@ export default function IndexingPage() {
     const label = codeHostLabel(provider);
     setSyncMessage(
       data
-        ? `${label}: discovered ${data.discovered} repos · queued ${data.queued} · skipped ${data.skipped}`
+        ? orgPlan === "free" && data.queued === 0
+          ? `${label}: discovered ${data.discovered} repos — choose up to 3 to Deep-Index below`
+          : `${label}: discovered ${data.discovered} repos · queued ${data.queued} · skipped ${data.skipped}`
         : `${label} catalog sync started.`
     );
     await load({ silent: true });
@@ -198,9 +200,11 @@ export default function IndexingPage() {
           </h1>
           <p className="mt-1 text-sm text-coop-muted">
             Deep-indexed repos across your connected code hosts — status refreshes every 10 seconds.
-            {orgPlan === "enterprise"
-              ? " Enterprise orgs can sync GitHub, GitLab, and Bitbucket independently."
-              : " Pro orgs sync GitHub; add GitLab or Bitbucket on Enterprise."}
+            {orgPlan === "free"
+              ? " Free orgs can Deep-Index up to 3 repositories from GitHub, GitLab, or Bitbucket."
+              : orgPlan === "enterprise"
+                ? " Enterprise orgs can sync GitHub, GitLab, and Bitbucket independently."
+                : " Pro orgs sync GitHub; add GitLab or Bitbucket on Enterprise."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

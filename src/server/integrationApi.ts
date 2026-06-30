@@ -210,6 +210,18 @@ async function resolveAccessToken(
   return store.getAccessToken(orgId, provider);
 }
 
+/** Used by admin integration health tests — same as internal credential resolution. */
+export async function resolveOrgIntegrationAccessToken(
+  orgId: string,
+  provider: IntegrationProvider,
+  deps: IntegrationApiDeps
+): Promise<string | undefined> {
+  if (!deps.integrationStore) {
+    return undefined;
+  }
+  return resolveAccessToken(orgId, provider, deps);
+}
+
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));

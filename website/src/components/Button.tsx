@@ -4,13 +4,13 @@ import { marketplaceHref } from "@/lib/site.config";
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const base =
-  "inline-flex items-center justify-center rounded-sm px-4 py-2 text-sm font-medium font-mono transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index";
+  "inline-flex items-center justify-center rounded px-6 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-coop-index text-coop-dark hover:bg-[#46c35a]",
+  primary: "bg-black text-white hover:bg-gray-900",
   secondary:
-    "border border-coop-border bg-coop-surface text-white/90 hover:border-coop-muted/50 hover:bg-[#1c2128]",
-  ghost: "text-coop-muted hover:text-white"
+    "border border-gray-300 bg-white text-gray-900 hover:bg-gray-50",
+  ghost: "text-coop-muted hover:text-gray-900"
 };
 
 type ButtonProps = {

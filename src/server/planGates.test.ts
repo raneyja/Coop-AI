@@ -11,7 +11,7 @@ assert.equal(clampSeatCountForPlan("pro", 3), 3);
 assert.equal(clampSeatCountForPlan("enterprise", 0), 1);
 
 assert.deepEqual(codeHostPlansForProvider("github"), CODE_HOST_GITHUB_PLANS);
-assert.ok(!codeHostPlansForProvider("github").includes("free"));
+assert.ok(codeHostPlansForProvider("github").includes("free"));
 assert.deepEqual(codeHostPlansForProvider("gitlab"), ["enterprise"]);
 assert.deepEqual(codeHostPlansForProvider("bitbucket"), ["enterprise"]);
 

@@ -6,7 +6,7 @@ export const siteConfig = {
     "Understand and refine code in place. CoopAI connects your code graph, Slack, and tickets to answer deep questions and write graph-grounded completions inside VS Code.",
   tagline: "Your codebase, finally explained.",
   subheadline:
-    "Instantly understand any codebase with team-wide context — deep indexing across all codebases, cross-repo search, symbols, Slack, Jira, Notion, and more.",
+    "Instantly understand any codebase with team-wide context from the entire stack.",
   contactEmail: "hello@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   links: {
@@ -24,11 +24,28 @@ export const siteConfig = {
     { label: "Security", href: "/security" },
     { label: "Blog", href: "/blog" }
   ] as const,
-  quote: {
-    text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
-    author: "Senior Engineer",
-    company: "Row Labs"
-  },
+  quotes: [
+    {
+      text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
+      author: "Senior Engineer",
+      company: "Row Labs"
+    },
+    {
+      text: "New engineers used to spend weeks asking senior people basic questions about the codebase. Now they can find that context themselves in minutes. It's completely changed how fast we onboard.",
+      author: "Engineering Manager",
+      company: "Kitebase"
+    },
+    {
+      text: "Our team was losing 15+ hours a week answering 'why did we build it this way?' questions across Slack, emails, and in-person. CoopAI gives us one place to find that context instantly.",
+      author: "Tech Lead",
+      company: "Loopframe"
+    },
+    {
+      text: "Before CoopAI, making changes felt risky because you never knew the full context. Now I can trace decisions back to commits, PRs, and team discussions. I make better calls faster.",
+      author: "Senior Engineer",
+      company: "Halcyon Dev"
+    }
+  ] as const,
   features: [
     {
       id: "understand-repo",
@@ -86,29 +103,27 @@ export const siteConfig = {
     title: "Lightning Intelligence",
     tagline: "Understand any codebase instantly — without cloning monorepos.",
     description:
-      "Your code stays on your infrastructure. CoopAI builds a secure, real-time cross-repository knowledge graph so developers get rich AI context across your entire organization — whether it's a single repo or a massive monorepo.",
-    footnote:
-      "Developer (free) uses local workspace files with AI credits and unlimited tool integrations — individual accounts only. Pro adds GitHub connections, team seats, and Lightning Mode for the fastest cross-repo search.",
+      "CoopAI builds a secure cross-repo knowledge graph so developers get rich AI context across your entire organization.",
     features: [
       {
         label: "Cross-repo context",
         description:
-          "Ask questions that span services, libraries, and teams. Reason across repos from one VS Code sidebar instead of hunting through dozens of clones."
+          "Reason across services, libraries, and teams from one VS Code sidebar."
       },
       {
         label: "Cross-tool context",
         description:
-          "Slack threads, Jira issues, and tickets sit alongside your code graph — so ownership, incidents, and decisions aren’t trapped in tribal knowledge."
+          "Slack, Jira, and tickets alongside your code graph — not trapped in tribal knowledge."
       },
       {
         label: "Secure by design",
         description:
-          "Your source stays on your infrastructure. Context is built from webhooks and index jobs — not full monorepo copies on every laptop."
+          "Context from webhooks and index jobs — not full monorepo copies on every laptop."
       },
       {
         label: "Lightning-fast when you need it",
         description:
-          "Lightning Mode indexes your repos on Coop cloud with symbol-graph precision — faster retrieval for the code paths you touch every day."
+          "Lightning Mode indexes with symbol-graph precision for the code paths you touch every day."
       }
     ]
   },

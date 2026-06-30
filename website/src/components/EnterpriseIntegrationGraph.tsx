@@ -55,7 +55,7 @@ export function EnterpriseIntegrationGraph() {
 
   return (
     <div
-      className="enterprise-graph relative w-full bg-[#0f1117]"
+      className="enterprise-graph relative w-full bg-gray-50"
       aria-label="Knowledge graph connecting repositories, code, collaboration tools, and LLM providers to CoopAI"
     >
       <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-80" aria-hidden />
@@ -117,8 +117,8 @@ export function EnterpriseIntegrationGraph() {
               animationDelay: "0.05s"
             }}
           >
-            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-sm border-2 border-coop-index bg-[#1a1d27] px-4 font-mono">
-              <p className="whitespace-nowrap text-[1.65cqw] font-semibold text-white">
+            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-sm border-2 border-coop-index bg-white px-4 font-mono">
+              <p className="whitespace-nowrap text-[1.65cqw] font-semibold text-gray-900">
                 coop<span className="text-coop-index">index</span>
               </p>
             </div>
@@ -159,7 +159,7 @@ function GraphNodeCard({
       aria-label={`${node.label} — ${node.categoryLabel}`}
     >
       <div
-        className="group flex h-full w-full items-stretch overflow-hidden rounded-sm border border-white/[0.08] bg-[#1a1d27] transition duration-200 hover:border-coop-muted/40"
+        className="group flex h-full w-full items-stretch overflow-hidden rounded-sm border border-gray-200 bg-white transition duration-200 hover:border-gray-300"
         style={{
           borderLeftWidth: 3,
           borderLeftColor: theme.accent
@@ -172,7 +172,7 @@ function GraphNodeCard({
           <Icon className="h-[42%] w-[42%] min-h-[12px] min-w-[12px] stroke-[1.75]" aria-hidden />
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center px-[5%] py-[6%]">
-          <p className="whitespace-nowrap text-[1.3cqw] font-medium leading-tight text-white">{node.label}</p>
+          <p className="whitespace-nowrap text-[1.3cqw] font-medium leading-tight text-gray-900">{node.label}</p>
           <p className="mt-0.5 whitespace-nowrap text-[1.05cqw] leading-snug text-[#9ca4ad]">
             {node.categoryLabel}
           </p>

@@ -204,7 +204,7 @@ function RepoRow({
           aria-busy={actionId === repo.repoId}
           onClick={() => onReindex(repo.repoId)}
         >
-          Reindex
+          {repo.lightningEnabled ? "Reindex" : "Deep-Index"}
         </button>
       </td>
     </tr>
@@ -442,7 +442,7 @@ export function IndexingRepoSections({
                 <td colSpan={colSpan} className="px-4 py-6 text-center text-coop-muted">
                   {filterActive
                     ? "No repositories match your search."
-                    : "No repositories registered yet. Connect a code host and run catalog sync, or enable repos from the extension workspace picker (Pro)."}
+                    : "No repositories registered yet. Connect a code host and run catalog sync, then choose repos to Deep-Index."}
                 </td>
               </tr>
             ) : null}

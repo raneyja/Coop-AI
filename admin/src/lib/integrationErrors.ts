@@ -17,7 +17,16 @@ export function formatIntegrationError(
     return `${name} is not set up on this Coop server. Contact your Coop administrator.`;
   }
   if (status === 403) {
-    return "Only organization owners and admins can connect integrations.";
+    if (/admin_required|org_admin_required|owners and admins/i.test(message)) {
+      return "Only organization owners and admins can connect integrations.";
+    }
+    if (/code_host_plan_required|remote_code_plan_required|\bplan\b|upgrade/i.test(message)) {
+      return `${name} is not available on your current plan. Upgrade your Coop plan to connect this integration.`;
+    }
+    if (message) {
+      return message;
+    }
+    return `You do not have permission to connect ${name}.`;
   }
   if (/redirect_uri/i.test(message)) {
     return `OAuth redirect failed. Your administrator must register the Coop callback URL in the ${name} app settings.`;

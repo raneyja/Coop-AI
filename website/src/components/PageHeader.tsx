@@ -16,12 +16,12 @@ export function PageHeader({ eyebrow, title, titleClassName, description, tight 
     >
       {eyebrow && (
         <p className="coop-section-label">
-          <span className="text-coop-muted">{"// "}</span>
+          <span className="text-gray-400">{"// "}</span>
           {eyebrow.toLowerCase()}
         </p>
       )}
       <h1
-        className={`mt-3 text-4xl font-semibold tracking-tight text-white md:text-5xl${titleClassName ? ` ${titleClassName}` : ""}`}
+        className={`mt-3 text-4xl font-semibold tracking-tight text-gray-900 md:text-5xl${titleClassName ? ` ${titleClassName}` : ""}`}
       >
         {title}
       </h1>
