@@ -36,7 +36,7 @@ function mockResponse(): ServerResponse & {
       }
     }
   };
-  return res as ServerResponse & { statusCode?: number; body?: string; chunks?: string[] };
+  return res as unknown as ServerResponse & { statusCode?: number; body?: string; chunks?: string[] };
 }
 
 void (async () => {
@@ -160,7 +160,7 @@ void (async () => {
 
   const graphCache = new GraphCache();
   graphCache.upsertRepository(
-    { repoId: "github:acme/app", owner: "acme", repo: "app" },
+    { repoId: "github:acme/app", provider: "github", owner: "acme", repo: "app" },
     {
       fileTree: [
         { path: "src/example.ts", size: 10, lastModified: new Date(), lastAuthor: "dev", sha: "abc" }

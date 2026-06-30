@@ -10,7 +10,7 @@ import {
 
 function seedGraph(cache: GraphCache, repoId: string, file: string): void {
   cache.upsertRepository(
-    { repoId, owner: "acme", repo: "app" },
+    { repoId, provider: "github", owner: "acme", repo: "app" },
     {
       fileTree: [{ path: file, size: 100, lastModified: new Date(), lastAuthor: "dev", sha: "abc" }],
       dependencies: [{ from: "src/user.ts", to: file, type: "import" }],
@@ -64,7 +64,7 @@ void (async () => {
       await new Promise((resolve) => setTimeout(resolve, INLINE_GRAPH_TIMEOUT_MS + 50));
       return { data: [] as DependencyEdge[] };
     }
-  } as GraphQueryApi;
+  } as unknown as GraphQueryApi;
   const timeoutResult = await fetchInlineGraphSlice(
     { graphQuery: slowQuery },
     { repoId: "github:acme/app", file: "src/foo.ts", plan: "pro" }

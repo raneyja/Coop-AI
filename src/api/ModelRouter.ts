@@ -125,7 +125,15 @@ export class ModelRouter {
       return this.completeFim(request, route, signal);
     }
 
-    return this.completeInlineChat(request, extraSystemPrompt, signal, route);
+    const chatRoute =
+      route.mode === "chat-fallback"
+        ? route
+        : {
+            mode: "chat-fallback" as const,
+            provider: request.modelConfig.provider,
+            model: request.modelConfig.model
+          };
+    return this.completeInlineChat(request, extraSystemPrompt, signal, chatRoute);
   }
 
   public async *streamInline(
@@ -144,7 +152,15 @@ export class ModelRouter {
       return;
     }
 
-    yield* this.streamInlineChat(request, extraSystemPrompt, signal, route);
+    const chatRoute =
+      route.mode === "chat-fallback"
+        ? route
+        : {
+            mode: "chat-fallback" as const,
+            provider: request.modelConfig.provider,
+            model: request.modelConfig.model
+          };
+    yield* this.streamInlineChat(request, extraSystemPrompt, signal, chatRoute);
   }
 
   private async completeFim(
