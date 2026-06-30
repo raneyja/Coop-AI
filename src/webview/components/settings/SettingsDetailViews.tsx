@@ -397,7 +397,7 @@ function ModelDetail({
         />
         <SettingsCheckboxRow
           title="Enable inline autocomplete"
-          description="When the API supports it"
+          description="Ghost-text suggestions via POST /v1/completions/inline (default off)"
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
         />

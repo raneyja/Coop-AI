@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import { ModelRouter } from "./ModelRouter";
-import { handleInlineCompletionRequest } from "./inlineCompletionApi";
+import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
+import { INLINE_MODEL_PRESETS } from "../config/inlineModelPresets";
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
   const res = {
@@ -29,6 +30,9 @@ void (async () => {
     }
   });
 
+  const org = { orgId: "org-test", plan: "pro" as const };
+  let passed = 0;
+
   const res = mockResponse();
   await handleInlineCompletionRequest(
     {
@@ -39,11 +43,28 @@ void (async () => {
     res,
     router,
     router["config"],
-    { orgId: "org-test", plan: "pro" }
+    org
   );
 
   assert.equal(res.statusCode, 200, "inline completion should return 200");
   const payload = JSON.parse(res.body ?? "{}") as Record<string, unknown>;
   assert.equal(typeof payload.text, "string");
-  console.log("inlineCompletionApi: 1/1 tests passed");
+  assert.equal(typeof payload.model, "string");
+  assert.equal(typeof payload.provider, "string");
+  assert.equal(typeof payload.latencyMs, "number");
+  assert.ok(Array.isArray(payload.alternatives));
+  passed++;
+
+  assert.equal(defaultInlineModelFor("anthropic"), INLINE_MODEL_PRESETS.haiku.model);
+  assert.equal(defaultInlineModelFor("openai"), INLINE_MODEL_PRESETS.gpt35.model);
+  passed++;
+
+  const bad = mockResponse();
+  await handleInlineCompletionRequest({ message: "   " }, bad, router, router["config"], org);
+  assert.equal(bad.statusCode, 400);
+  const badPayload = JSON.parse(bad.body ?? "{}") as Record<string, unknown>;
+  assert.equal(badPayload.error, "invalid_request");
+  passed++;
+
+  console.log(`inlineCompletionApi: ${passed}/3 tests passed`);
 })();

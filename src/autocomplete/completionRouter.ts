@@ -1,6 +1,7 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import { readConfiguration } from "../chat/SecureApiClient";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
+import { resolveInlineModelPreset } from "../config/inlineModelPresets";
 import { buildPromptContextBlock, languageSpecificHints } from "./contextAnalyzer";
 import { filterAndRankCompletions, normalizeCompletionText } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
@@ -14,26 +15,6 @@ export type CompletionRouterDeps = {
   api: SecureApiClient;
   performance: AutocompletePerformanceMonitor;
   cache?: CompletionCache;
-};
-
-const MODEL_PRESETS: Record<
-  AutocompleteSettings["model"],
-  { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } }
-> = {
-  haiku: {
-    provider: "anthropic",
-    model: "claude-haiku-4-5-20251001",
-    fallback: { provider: "openai", model: "gpt-4o-mini" }
-  },
-  gpt35: {
-    provider: "openai",
-    model: "gpt-4o-mini",
-    fallback: { provider: "anthropic", model: "claude-haiku-4-5-20251001" }
-  },
-  custom: {
-    provider: "anthropic",
-    model: "claude-haiku-4-5-20251001"
-  }
 };
 
 export class CompletionRouter {
@@ -200,15 +181,7 @@ function resolveModelPreset(
   settings: AutocompleteSettings,
   defaultProvider: LlmProvider
 ): { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } } {
-  if (settings.model === "custom" && settings.customModel.trim()) {
-    return {
-      provider: defaultProvider,
-      model: settings.customModel.trim(),
-      fallback: MODEL_PRESETS.haiku.fallback
-    };
-  }
-  const preset = MODEL_PRESETS[settings.model] ?? MODEL_PRESETS.haiku;
-  return preset;
+  return resolveInlineModelPreset(settings.model, settings.customModel, defaultProvider);
 }
 
 function linkAbort(outer: AbortSignal | undefined, inner: AbortSignal): AbortSignal {

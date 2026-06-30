@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import type {
-  AutocompleteAcceptKey,
   AutocompleteModelPreset,
   AutocompleteSettings,
-  AutocompleteTriggerMode
+  AutocompleteTriggerMode,
+  CopilotPolicy
 } from "./types";
 
 const SECTION = "coopAI.autocomplete";
@@ -17,7 +17,7 @@ export function readAutocompleteSettings(): AutocompleteSettings {
     debounceMs: config.get<number>("debounceMs", 300),
     model: config.get<AutocompleteModelPreset>("model", "haiku"),
     customModel: config.get<string>("customModel", ""),
-    acceptKey: config.get<AutocompleteAcceptKey>("acceptKey", "Tab"),
+    copilotPolicy: config.get<CopilotPolicy>("copilotPolicy", "warn"),
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
     requestTimeoutMs: config.get<number>("requestTimeoutMs", 400)
   };

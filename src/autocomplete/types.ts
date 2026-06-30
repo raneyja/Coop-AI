@@ -4,7 +4,7 @@ export type AutocompleteTriggerMode = "auto" | "manual" | "off";
 
 export type AutocompleteModelPreset = "haiku" | "gpt35" | "custom";
 
-export type AutocompleteAcceptKey = "Tab" | "Enter" | "Both";
+export type CopilotPolicy = "warn" | "disable-when-copilot";
 
 export type AutocompleteSettings = {
   enabled: boolean;
@@ -13,7 +13,7 @@ export type AutocompleteSettings = {
   debounceMs: number;
   model: AutocompleteModelPreset;
   customModel: string;
-  acceptKey: AutocompleteAcceptKey;
+  copilotPolicy: CopilotPolicy;
   showMultipleSuggestions: boolean;
   requestTimeoutMs: number;
 };

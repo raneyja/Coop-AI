@@ -292,6 +292,11 @@
     color: var(--coop-panel-foreground);
   }
 
+  .coop-autocomplete-copilot-warning {
+    color: var(--vscode-editorWarning-foreground, #cca700);
+    font-size: 0.85em;
+  }
+
   .coop-autocomplete-toggle {
     @apply inline-flex h-[18px] min-w-[30px] shrink-0 cursor-pointer items-center justify-center rounded-full border px-1.5 text-[9px] font-medium uppercase tracking-wide transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];

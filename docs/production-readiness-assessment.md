@@ -122,7 +122,7 @@ Untracked macOS duplicates across `src/`, `migrations/`, `docs/`. Risk of drift 
 | Integration search | Live API at chat time | No background indexing of Slack/Jira/Confluence/Notion (unlike Glean) |
 | SAML SSO | Server implemented | Operator-configured only; no self-serve admin setup; replay protection disabled |
 | Extension marketplace | Built via esbuild | Version `0.0.1`; not published |
-| Inline autocomplete | Registered in extension | Server returns `501` |
+| Inline autocomplete | Shipped (default **off**) | Opt-in via `coopAI.autocomplete.enabled`; Copilot coexistence policy |
 | First-run wizard | Documented as Phase B | Not built |
 | Self-host APIs | Routes exist | Return `501` |
 
@@ -173,7 +173,7 @@ Glean indexes Jira/Confluence with near-real-time sync and webhooks. Coop uses l
 | | Augment/Cursor | Coop AI |
 |---|----------------|---------|
 | Strength | Whole-codebase AI; strong autocomplete; self-serve ($20/mo+) | Org integrations; degradation matrix; enterprise SSO; decision workflows |
-| Gap for Coop | — | No inline autocomplete (501); not marketplace-published |
+| Gap for Coop | — | No inline autocomplete marketplace polish; not marketplace-published |
 
 ### vs DX / Swarmia / LinearB
 
@@ -231,7 +231,7 @@ Do these before any public traffic:
 
 1. First-run onboarding wizard (Phase B in enterprise doc)
 2. Publish VS Code extension to marketplace
-3. Roadmap items: file @-mentions, inline autocomplete T0
+3. Roadmap items: file @-mentions, inline autocomplete T1
 4. Usage analytics in admin (Pro tier promise)
 5. Self-serve SSO setup in admin settings
 6. Redis-backed dedupe/rate limits for multi-instance HA
@@ -245,7 +245,7 @@ Do these before any public traffic:
 From `docs/roadmap.md`:
 
 - File @-mentions in chat
-- Inline autocomplete T0/T1 (server returns 501 today)
+- Inline autocomplete T1 (graph-backed context)
 - BYOK on ModelRouter
 - Live graph context replacing placeholders in quick actions
 - Real provider cutover checklist (leave mock mode)

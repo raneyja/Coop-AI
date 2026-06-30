@@ -6,7 +6,7 @@ import type { LlmProvider } from "./zeroRetentionConfig";
 import type { ChatOrgPlan } from "./types";
 import { systemPromptForUseCase } from "../prompts/systemPrompts";
 import type { PlanQuotaService } from "../server/planQuota";
-import { INLINE_DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
+import { defaultInlineModelForProvider } from "../config/inlineModelPresets";
 
 export type InlineCompletionOrg = {
   orgId: string;
@@ -120,7 +120,7 @@ function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
 }
 
 export function defaultInlineModelFor(provider: LlmProvider): string {
-  return INLINE_DEFAULT_MODEL_BY_PROVIDER[provider];
+  return defaultInlineModelForProvider(provider);
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

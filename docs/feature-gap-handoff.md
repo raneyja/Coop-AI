@@ -12,7 +12,7 @@
 | Prior claim | Corrected status |
 |-------------|------------------|
 | "No self-serve pricing" | **Wrong.** Pro at **$20/user/month** is self-serve via Stripe checkout (`website/src/app/pricing/page.tsx` → `/signup` → `/api/checkout` → `POST /v1/billing/checkout-session`). Gap is **deploy/env polish**, not missing checkout. Developer tier is waitlist-only. |
-| "Autocomplete returns 501" | **Stale.** Current source implements `POST /v1/completions/inline` end-to-end. No 501 in that path. Gap is **default-off setting**, accept/reject wiring, tests, deploy verification — not greenfield implementation. |
+| "Autocomplete returns 501" | **Stale.** Current source implements `POST /v1/completions/inline` end-to-end. T0 shipped (default-off); remaining work is T1 graph context and dogfood at scale. |
 | "Lightning = multi-repo search" | **Partially true.** Lightning indexes **per repo** (SCIP + Zoekt + embeddings). Backend has **org collections** for cross-repo search, but extension/chat never sends `collectionId`. Not comparable to Sourcegraph @-mention multi-repo UX yet. |
 
 ---
@@ -23,7 +23,7 @@
 |--------|------------|-------------|------------|
 | **A** | Multi-repo search + collections UX | 2–3 weeks | Phase 1 API deploy |
 | **B** | Admin analytics dashboard | 2–3 weeks | Usage event instrumentation (Thread D) |
-| **C** | Autocomplete ship (T0 polish) | 3–5 days | Phase 1 API + LLM keys |
+| **C** | Autocomplete ship (T0 polish) | **Shipped (Phase 0)** | Phase 1 API + LLM keys |
 | **D** | Usage telemetry + seat enforcement | 1–2 weeks | Phase 1 migrations applied |
 
 Threads **B** and **D** should be sequenced: **D first** (instrument + enforce), then **B** (admin UI). Threads **A** and **C** are independent.
@@ -265,84 +265,46 @@ Mirror Sourcegraph's export shape where applicable:
 
 ---
 
-## Thread C — Autocomplete ship (T0 polish)
+## Thread C — Autocomplete ship (T0 polish) — Phase 0 shipped
 
-### Copy-paste prompt for new chat
-
-```
-Workstream: Coop AI autocomplete T0 ship
-
-Read docs/feature-gap-handoff.md § Thread C.
-
-The inline completion route is IMPLEMENTED — do not rewrite from scratch. Verify, polish, test, and enable for dogfooding.
-
-Goal: Ghost-text autocomplete working in Extension Development Host with coopAI.autocomplete.enabled=true.
-```
-
-### Current state (verified)
+### Status (Phase 0 complete)
 
 | Layer | Status | File |
 |-------|--------|------|
-| Server route | Implemented | `src/api/chatApi.ts` → `inlineCompletionApi.ts` |
-| ModelRouter.completeInline | Implemented | `src/api/ModelRouter.ts` |
-| Inline system prompt | Implemented | `src/prompts/systemPrompts.ts` (`inline_completion`) |
-| Zero-retention headers | Implemented | `zeroRetentionConfig.ts`, client sends `x-use-case: code-completion-only` |
-| Extension provider | Implemented | `src/autocomplete/coopAutocompleteProvider.ts` |
-| Registration | Implemented | `src/extension.ts` `registerCoopAutocomplete` |
+| Server route | Shipped | `src/api/chatApi.ts` → `inlineCompletionApi.ts` |
+| ModelRouter.completeInline | Shipped | `src/api/ModelRouter.ts` |
+| Inline system prompt | Shipped | `src/prompts/systemPrompts.ts` (`inline_completion`) |
+| Zero-retention headers | Shipped | `zeroRetentionConfig.ts`, client sends `x-use-case: code-completion-only` |
+| Extension provider | Shipped | `src/autocomplete/coopAutocompleteProvider.ts` |
+| Registration | Shipped | `src/extension.ts` `registerCoopAutocomplete` |
 | Settings | Default **off** | `coopAI.autocomplete.enabled` in `package.json` |
-| Accept/reject telemetry | **Not wired** | `noteSuggestionAccepted` / `noteSuggestionRejected` exist but uncalled |
-| Keybinding context | **Gap** | `coopAI.autocomplete.enabled` context not set via `setContext` |
-| Tests | **Missing** | No `inlineCompletionApi.test.ts` |
-| Docs | **Stale** | `roadmap.md` still says 501 |
+| Accept/reject telemetry | Shipped | Tab accept command, Escape reject keybinding, superseded tracking |
+| Copilot coexistence | Shipped | `copilotCoexistence.ts`, `coopAI.autocomplete.copilotPolicy` |
+| Keybinding context | Shipped | `setContext` on activate + setting change |
+| Tests | Shipped | `test:autocomplete`, `test:inline-completion` |
+| Docs | Updated | `roadmap.md`, `production-readiness-assessment.md`, `api-v1.md` |
 
-### Build plan (ordered)
+### Remaining (T1+)
 
-**C1 — Verify server** (~2 hours)
+- Graph-backed context (`coopAI.autocomplete.useGraphContext`)
+- Production dogfood at scale beyond Extension Development Host
 
-- Terminal: rebuild API, `POST /v1/completions/inline` with mock or real LLM key
-- Confirm 200 response shape `{ text, model, provider, latencyMs }`
+### Copy-paste prompt for new chat (T1)
 
-**C2 — Wire accept/reject** (~1 day)
+```
+Workstream: Coop AI autocomplete T1 (graph-backed context)
 
-- Call `noteSuggestionAccepted` / `noteSuggestionRejected` from `CoopAutocompleteProvider` on user action
-- Enables backoff + future CAR metrics (Thread D/B)
+Read docs/feature-gap-handoff.md § Thread C and docs/roadmap.md §3.
 
-**C3 — Fix keybinding context** (~2 hours)
-
-- On activation + setting change: `vscode.commands.executeCommand('setContext', 'coopAI.autocomplete.enabled', value)`
-- Ensures Alt+[/] keybindings work
-
-**C4 — Align model preset** (~1 hour)
-
-- `completionRouter.ts` vs `inlineCompletionApi.ts` default model IDs
-
-**C5 — Server test** (~1 day)
-
-- Mock-mode integration test for inline route
-
-**C6 — Update docs** (~1 hour)
-
-- Fix `roadmap.md`, `production-readiness-assessment.md` — remove 501 claims, check off T0 items
-
-**C7 — Dogfood checklist**
-
-- File: enable `coopAI.autocomplete.enabled` in settings
-- Extension UI: toggle in Settings → Preferences or chat top bar
-- Type in `.ts` file → ghost text appears
-
-### Acceptance criteria
-
-- With `coopAI.autocomplete.enabled: true`, typing in TypeScript produces inline ghost text within ~400ms debounce
-- Accepting/rejecting suggestions updates backoff behavior
-- Audit log records `completion.inline` per request
-- No 501 from current API build
+T0 is shipped. Add optional graph context for inline completions.
+```
 
 ### Key files
 
 - `src/autocomplete/` (entire directory)
 - `src/api/inlineCompletionApi.ts`
 - `src/extension.ts`
-- `docs/roadmap.md` §2
+- `docs/roadmap.md` §3
 
 ---
 

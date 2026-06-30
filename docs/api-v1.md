@@ -97,9 +97,13 @@ Batch completion for editor ghost text (`useCase: inline_completion`). Same auth
 {
   "text": "completion text only",
   "alternatives": [],
-  "model": "claude-3-haiku-20240307",
+  "model": "claude-haiku-4-5-20251001",
   "provider": "anthropic",
-  "latencyMs": 120
+  "latencyMs": 120,
+  "usage": {
+    "inputTokens": 42,
+    "outputTokens": 8
+  }
 }
 ```
 

@@ -65,13 +65,8 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
   deepseek: "deepseek-chat"
 };
 
-/** Fast/cheap models for inline autocomplete. */
-export const INLINE_DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
-  gemini: "gemini-2.0-flash",
-  deepseek: "deepseek-chat"
-};
+/** Fast/cheap models for inline autocomplete — see `inlineModelPresets.ts`. */
+export { INLINE_DEFAULT_MODEL_BY_PROVIDER } from "./inlineModelPresets";
 
 export function modelsForProvider(provider: LlmProvider): ModelDefinition[] {
   return CATALOG.filter((entry) => entry.provider === provider);

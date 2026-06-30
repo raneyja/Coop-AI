@@ -374,15 +374,14 @@
           "default": "",
           "description": "Model id when coopAI.autocomplete.model is custom."
         },
-        "coopAI.autocomplete.acceptKey": {
+        "coopAI.autocomplete.copilotPolicy": {
           "type": "string",
           "enum": [
-            "Tab",
-            "Enter",
-            "Both"
+            "warn",
+            "disable-when-copilot"
           ],
-          "default": "Tab",
-          "description": "Preferred accept key (VS Code inline suggest uses Tab by default)."
+          "default": "warn",
+          "description": "How to behave when GitHub Copilot extensions are installed: warn in the UI, or disable Coop autocomplete."
         },
         "coopAI.autocomplete.showMultipleSuggestions": {
           "type": "boolean",
@@ -799,6 +798,7 @@
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
+    "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
     "test:lightning-search-scope": "npx tsx src/indexing/lightningSearchScope.test.ts",
