@@ -174,14 +174,19 @@ export async function handleInlineCompletionRequest(
 
     if (usageTokens) {
       await org.planQuota?.recordTokens(org.orgId, org.plan, {
-        eventType: "completion.suggested",
+        eventType: "completion.requested",
         inputTokens: usageTokens.inputTokens,
         outputTokens: usageTokens.outputTokens,
         provider: resolvedProvider,
         model,
         userId: org.userId,
         principal: org.principal ?? "anonymous",
-        metadata: { source: "inline", stream: true, fim: route.mode === "fim" }
+        metadata: {
+          source: "inline",
+          stream: true,
+          fim: route.mode === "fim",
+          latencyMs: Date.now() - started
+        }
       });
     }
 
@@ -207,15 +212,16 @@ export async function handleInlineCompletionRequest(
       responseHeaders
     );
 
+    const latencyMs = Date.now() - started;
     await org.planQuota?.recordTokens(org.orgId, org.plan, {
-      eventType: "completion.suggested",
+      eventType: "completion.requested",
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       provider: result.provider,
       model: result.model,
       userId: org.userId,
       principal: org.principal ?? "anonymous",
-      metadata: { source: "inline", fim: route.mode === "fim" }
+      metadata: { source: "inline", fim: route.mode === "fim", latencyMs }
     });
   } catch (error) {
     writeJson(response, 502, {

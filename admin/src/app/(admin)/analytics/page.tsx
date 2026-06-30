@@ -495,14 +495,19 @@ export default function AnalyticsPage() {
           {!loading && completions && completions.suggested === 0 && completions.accepted === 0 ? (
             <PlaceholderCallout
               title="No completion events yet"
-              body="Counts appear when Coop autocomplete is enabled and the extension calls /v1/completions/inline (suggested) and you accept with Tab (accepted). Cursor/Copilot inline suggestions do not count here."
+              body="Counts appear when Coop autocomplete is enabled: ghost-text shown (completion.suggested), Tab accept (completion.accepted), and server inline requests (completion.requested). Cursor/Copilot inline suggestions do not count here."
             />
           ) : null}
           <AdminStatRow>
             <AdminStat
               label="Suggested"
               value={loading ? "—" : (completions?.suggested ?? 0)}
-              hint="completion.suggested events"
+              hint="Shown in editor (completion.suggested)"
+            />
+            <AdminStat
+              label="Requested"
+              value={loading ? "—" : (completions?.requested ?? 0)}
+              hint="Server inline LLM calls (completion.requested)"
             />
             <AdminStat
               label="Accepted"
@@ -518,7 +523,53 @@ export default function AnalyticsPage() {
                     ? formatPercent(completions.acceptanceRate)
                     : "—"
               }
-              hint="Accepted ÷ suggested"
+              hint="Accepted ÷ suggested (shown)"
+            />
+          </AdminStatRow>
+          <AdminStatRow>
+            <AdminStat
+              label="Server p50"
+              value={
+                loading
+                  ? "—"
+                  : completions?.serverLatencyP50Ms != null
+                    ? `${Math.round(completions.serverLatencyP50Ms)}ms`
+                    : "—"
+              }
+              hint="completion.requested latencyMs"
+            />
+            <AdminStat
+              label="Server p95"
+              value={
+                loading
+                  ? "—"
+                  : completions?.serverLatencyP95Ms != null
+                    ? `${Math.round(completions.serverLatencyP95Ms)}ms`
+                    : "—"
+              }
+              hint={`${completions?.serverLatencySamples ?? 0} samples`}
+            />
+            <AdminStat
+              label="Client p50"
+              value={
+                loading
+                  ? "—"
+                  : completions?.clientLatencyP50Ms != null
+                    ? `${Math.round(completions.clientLatencyP50Ms)}ms`
+                    : "—"
+              }
+              hint="completion.performance batches"
+            />
+            <AdminStat
+              label="Client p95"
+              value={
+                loading
+                  ? "—"
+                  : completions?.clientLatencyP95Ms != null
+                    ? `${Math.round(completions.clientLatencyP95Ms)}ms`
+                    : "—"
+              }
+              hint={`${completions?.clientLatencySamples ?? 0} batches`}
             />
           </AdminStatRow>
           <section>

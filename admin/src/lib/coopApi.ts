@@ -480,9 +480,16 @@ export async function fetchAnalyticsChat(
 
 export type AnalyticsCompletions = {
   suggested: number;
+  requested: number;
   accepted: number;
   rejected: number;
   acceptanceRate: number | null;
+  serverLatencyP50Ms: number | null;
+  serverLatencyP95Ms: number | null;
+  serverLatencySamples: number;
+  clientLatencyP50Ms: number | null;
+  clientLatencyP95Ms: number | null;
+  clientLatencySamples: number;
   eventsByDay: Array<{ day: string; count: number }>;
 };
 

@@ -72,9 +72,19 @@ export type AutocompleteStatusState =
   | "processing"
   | "error";
 
+export type PerformanceBatchPayload = {
+  requestCount: number;
+  acceptCount: number;
+  rejectCount: number;
+  p50LatencyMs: number;
+  p95LatencyMs: number;
+  lastLatencyMs: number;
+};
+
 export type AutocompleteTelemetryEvent = {
-  kind: "request" | "accept" | "reject" | "show";
+  kind: "request" | "accept" | "reject" | "show" | "performance";
   latencyMs?: number;
   reason?: string;
   languageId?: string;
+  performance?: PerformanceBatchPayload;
 };

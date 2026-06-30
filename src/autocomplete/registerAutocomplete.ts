@@ -6,6 +6,7 @@ import {
   type AutocompleteStatusPublisher
 } from "./coopAutocompleteProvider";
 import { readAutocompleteSettings } from "./autocompleteConfig";
+import type { AutocompleteTelemetryEvent } from "./types";
 import {
   copilotCoexistenceWarning,
   detectCopilotExtensions,
@@ -24,6 +25,20 @@ const AUTOCOMPLETE_HELP = [
 ].join("\n");
 
 let copilotWarningShown = false;
+
+export function createAutocompleteUsageTelemetryHandler(
+  emitUsage: (eventType: string, metadata?: Record<string, unknown>) => void
+): (event: AutocompleteTelemetryEvent) => void {
+  return (event) => {
+    if (event.kind === "show") {
+      emitUsage("completion.suggested", { languageId: event.languageId });
+      return;
+    }
+    if (event.kind === "performance" && event.performance) {
+      emitUsage("completion.performance", { ...event.performance });
+    }
+  };
+}
 
 function maybeWarnCopilotCoexistence(settings = readAutocompleteSettings()): void {
   if (!settings.enabled || settings.copilotPolicy !== "warn") {

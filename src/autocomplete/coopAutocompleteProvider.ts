@@ -276,8 +276,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         return null;
       }
 
-      this.trackShownItem(extracted.contextHash, extracted.languageId);
-
       this.publishStatusWithCopilot(
         "ready",
         undefined,
@@ -347,9 +345,10 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 export function registerCoopAutocomplete(
   context: vscode.ExtensionContext,
   api: SecureApiClient,
-  publishStatus: AutocompleteStatusPublisher
+  publishStatus: AutocompleteStatusPublisher,
+  onTelemetry?: (event: AutocompleteTelemetryEvent) => void
 ): CoopAutocompleteProvider {
-  const provider = new CoopAutocompleteProvider({ api, onStatus: publishStatus });
+  const provider = new CoopAutocompleteProvider({ api, onStatus: publishStatus, onTelemetry });
 
   const selector: vscode.DocumentSelector = [
     { scheme: "file" },

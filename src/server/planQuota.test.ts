@@ -87,7 +87,7 @@ void (async () => {
   const pool = {
     query: async (sql: string, params: unknown[]) => {
       if (sql.includes("ORDER BY created_at ASC")) {
-        assert.deepEqual(params[3], ["chat.message", "completion.suggested"]);
+        assert.deepEqual(params[3], ["chat.message", "completion.requested"]);
         return {
           rows: [
             { created_at: "2026-06-12T11:00:00.000Z", tokens: 6_000 },

@@ -203,6 +203,39 @@ export class UsageTracker {
     }));
   }
 
+  public async latencyPercentilesForEventType(
+    orgId: string,
+    range: UsageDateRange,
+    eventType: string,
+    metadataKey: string
+  ): Promise<{ p50: number | null; p95: number | null; sampleCount: number }> {
+    if (!this.pool) {
+      return { p50: null, p95: null, sampleCount: 0 };
+    }
+    const result = await this.pool.query(
+      `SELECT (metadata->>$4)::double precision AS value
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = $5
+         AND (metadata->>$4) ~ '^\\d+(\\.\\d+)?$'
+       ORDER BY value`,
+      [orgId, range.from, range.to, metadataKey, eventType]
+    );
+    const values = result.rows
+      .map((row) => Number(row.value))
+      .filter((value) => Number.isFinite(value));
+    if (values.length === 0) {
+      return { p50: null, p95: null, sampleCount: 0 };
+    }
+    return {
+      p50: percentile(values, 0.5),
+      p95: percentile(values, 0.95),
+      sampleCount: values.length
+    };
+  }
+
   public async exportCsv(orgId: string, range: UsageDateRange): Promise<string> {
     if (!this.pool) {
       return "created_at,event_type,principal,user_id,metadata\n";
@@ -236,6 +269,14 @@ function csvEscape(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) {
+    return 0;
+  }
+  const index = Math.min(sorted.length - 1, Math.floor(sorted.length * p));
+  return sorted[index] ?? 0;
 }
 
 export function parseAnalyticsRange(query: URLSearchParams): UsageDateRange {
