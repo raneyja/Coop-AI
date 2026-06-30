@@ -4,6 +4,8 @@ import { detectIndentation, truncateOversizedImports } from "./edgeCases";
 import type { ExtractedCodeContext } from "./types";
 
 const MAX_LINE_PREFIX = 80;
+const MAX_LINE_SUFFIX_ON_LINE = 80;
+const MAX_SUFFIX_WINDOW_CHARS = 500;
 const MAX_PREVIOUS_LINES = 10;
 const MAX_PREVIOUS_CHARS = 1000;
 const MAX_SIGNATURE_CHARS = 200;
@@ -22,6 +24,7 @@ export function analyzeDocumentContext(
 
   const currentLinePrefix = currentLine.slice(0, column).slice(-MAX_LINE_PREFIX);
   const currentLineSuffix = currentLine.slice(column);
+  const suffixWindow = extractSuffixWindow(lines, lineIndex, column);
 
   const previousStart = Math.max(0, lineIndex - MAX_PREVIOUS_LINES);
   const previousSlice = lines.slice(previousStart, lineIndex);
@@ -44,6 +47,7 @@ export function analyzeDocumentContext(
     path: document.uri.fsPath,
     prefix: currentLinePrefix,
     previous: previousLines,
+    suffix: suffixWindow,
     signature: parentSignature,
     imports: importsBlock,
     line: lineIndex,
@@ -55,6 +59,7 @@ export function analyzeDocumentContext(
     filePath: document.uri.fsPath,
     currentLinePrefix,
     currentLineSuffix,
+    suffixWindow,
     previousLines,
     importsBlock,
     parentSignature,
@@ -102,6 +107,20 @@ export function languageSpecificHints(context: ExtractedCodeContext): string {
     return "Prefer JOIN/WHERE patterns; respect SQL dialect keywords in context.";
   }
   return "Match surrounding code style.";
+}
+
+function extractSuffixWindow(lines: string[], lineIndex: number, column: number): string {
+  const currentLine = lines[lineIndex] ?? "";
+  const onLine = currentLine.slice(column, column + MAX_LINE_SUFFIX_ON_LINE);
+  const following = lines.slice(lineIndex + 1).join("\n");
+  let window = onLine;
+  if (following) {
+    window += (onLine.length > 0 ? "\n" : "") + following;
+  }
+  if (window.length > MAX_SUFFIX_WINDOW_CHARS) {
+    return window.slice(0, MAX_SUFFIX_WINDOW_CHARS);
+  }
+  return window;
 }
 
 function extractImports(lines: string[], languageId: string): string {

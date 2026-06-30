@@ -5,6 +5,8 @@ import {
   defaultInlineModelForProvider,
   resolveInlineModelPreset
 } from "../config/inlineModelPresets";
+import { buildFimSegments } from "./completionRouter";
+import type { ExtractedCodeContext } from "./types";
 
 let passed = 0;
 let failed = 0;
@@ -20,6 +22,25 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+const sampleContext: ExtractedCodeContext = {
+  languageId: "typescript",
+  filePath: "/workspace/src/app.ts",
+  currentLinePrefix: "const value = ",
+  currentLineSuffix: "1;",
+  suffixWindow: "1;\nnext();",
+  previousLines: "import fs from 'fs';",
+  importsBlock: "import fs from 'fs';",
+  parentSignature: "",
+  indent: "  ",
+  cursorOffset: 10,
+  contextHash: "abc",
+  inComment: false,
+  inString: false,
+  afterDot: false,
+  afterOpenParen: false,
+  riskySyntax: false
+};
 
 test("haiku preset targets anthropic haiku with openai fallback", () => {
   const preset = resolveInlineModelPreset("haiku", "", "anthropic");
@@ -45,6 +66,18 @@ test("custom preset uses trimmed model id and haiku fallback", () => {
 test("defaultInlineModelForProvider aligns extension and server defaults", () => {
   assert.equal(defaultInlineModelForProvider("anthropic"), INLINE_MODEL_PRESETS.haiku.model);
   assert.equal(defaultInlineModelForProvider("openai"), INLINE_MODEL_PRESETS.gpt35.model);
+});
+
+test("buildFimSegments returns prefix and suffix when useFim enabled", () => {
+  const segments = buildFimSegments(sampleContext, true);
+  assert.ok(segments);
+  assert.match(segments!.prefix, /import fs/);
+  assert.match(segments!.prefix, /const value = /);
+  assert.equal(segments!.suffix, "1;\nnext();");
+});
+
+test("buildFimSegments is undefined when useFim disabled", () => {
+  assert.equal(buildFimSegments(sampleContext, false), undefined);
 });
 
 console.log(`\ncompletionRouter: ${passed} passed, ${failed} failed`);

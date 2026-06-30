@@ -77,7 +77,12 @@ export async function handleChatApiRequest(
       typeof inlineBody.model === "string" && inlineBody.model
         ? inlineBody.model
         : defaultInlineModelFor(provider);
-    const inlineMessage = typeof inlineBody.message === "string" ? inlineBody.message : "";
+    const inlineMessage =
+      typeof inlineBody.message === "string"
+        ? inlineBody.message
+        : typeof (inlineBody.segments as { prefix?: string } | undefined)?.prefix === "string"
+          ? (inlineBody.segments as { prefix: string }).prefix
+          : "";
     try {
       await planQuota.check(
         org.orgId,
@@ -101,7 +106,7 @@ export async function handleChatApiRequest(
       await handleInlineCompletionRequest(parsed.body, response, router, config, {
         ...org,
         planQuota
-      });
+      }, rawRequest);
     } finally {
       await deps.auditLogger?.record({
         orgId: org.orgId,
@@ -336,7 +341,13 @@ function countVisionWeightedAttachments(attachments: unknown[] | undefined): num
 }
 
 function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
-  if (value === "openai" || value === "anthropic" || value === "deepseek" || value === "gemini") {
+  if (
+    value === "openai" ||
+    value === "anthropic" ||
+    value === "deepseek" ||
+    value === "gemini" ||
+    value === "mistral"
+  ) {
     return value;
   }
   return fallback;

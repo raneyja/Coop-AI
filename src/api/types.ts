@@ -49,6 +49,11 @@ export type ChatContextPayload = {
 
 export type ChatOrgPlan = "free" | "pro" | "enterprise";
 
+export type FimSegments = {
+  prefix: string;
+  suffix: string;
+};
+
 export type CompletionRequest = {
   requestId: string;
   orgId: string;
@@ -57,9 +62,20 @@ export type CompletionRequest = {
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
   attachments?: ChatImageAttachment[];
+  segments?: FimSegments;
   useCase: UseCase;
   modelConfig: ModelRuntimeConfig;
   allowUnapprovedProvider?: boolean;
+};
+
+export type FimStreamOptions = {
+  prefix: string;
+  suffix: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  signal?: AbortSignal;
+  requestId: string;
 };
 
 export type CompletionResponse = {

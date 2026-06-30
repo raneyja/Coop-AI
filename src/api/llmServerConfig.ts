@@ -17,16 +17,17 @@ export function loadLlmServerConfig(env: NodeJS.ProcessEnv = process.env): LlmSe
       openai: env.OPENAI_API_KEY,
       anthropic: env.ANTHROPIC_API_KEY,
       deepseek: env.DEEPSEEK_API_KEY,
-      gemini: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY
+      gemini: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY,
+      mistral: env.MISTRAL_API_KEY
     }
   };
 }
 
 export function configuredProviders(config: LlmServerConfig): LlmProvider[] {
   if (config.mockMode) {
-    return ["anthropic", "openai", "gemini", "deepseek"];
+    return ["anthropic", "openai", "gemini", "deepseek", "mistral"];
   }
-  return (["anthropic", "openai", "gemini", "deepseek"] as LlmProvider[]).filter((provider) =>
+  return (["anthropic", "openai", "gemini", "deepseek", "mistral"] as LlmProvider[]).filter((provider) =>
     Boolean(config.apiKeys[provider]?.trim())
   );
 }
@@ -36,7 +37,13 @@ export function resolveProviderApiKey(config: LlmServerConfig, provider: LlmProv
 }
 
 function readProvider(value: string | undefined, fallback: LlmProvider): LlmProvider {
-  if (value === "openai" || value === "anthropic" || value === "deepseek" || value === "gemini") {
+  if (
+    value === "openai" ||
+    value === "anthropic" ||
+    value === "deepseek" ||
+    value === "gemini" ||
+    value === "mistral"
+  ) {
     return value;
   }
   return fallback;

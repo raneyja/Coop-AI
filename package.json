@@ -396,6 +396,11 @@
           "maximum": 2000,
           "description": "Drop slow completion requests after this many milliseconds."
         },
+        "coopAI.autocomplete.useFim": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use fill-in-the-middle (FIM) segments when the server supports Codestral or DeepSeek FIM."
+        },
         "coopAI.autocomplete.projectImports": {
           "type": "array",
           "items": {
@@ -799,6 +804,7 @@
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
+    "test:fim": "npx tsx src/api/fimRouter.test.ts",
     "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",

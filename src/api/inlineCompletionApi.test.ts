@@ -1,21 +1,33 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import { ModelRouter } from "./ModelRouter";
-import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
+import {
+  handleInlineCompletionRequest,
+  defaultInlineModelFor,
+  parseInlineBody
+} from "./inlineCompletionApi";
 import { INLINE_MODEL_PRESETS } from "../config/inlineModelPresets";
 
-function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
+function mockResponse(): ServerResponse & { statusCode?: number; body?: string; chunks?: string[] } {
   const res = {
     statusCode: undefined as number | undefined,
     body: undefined as string | undefined,
-    writeHead(code: number) {
+    chunks: [] as string[],
+    writeHead(code: number, _headers?: Record<string, string>) {
       this.statusCode = code;
     },
-    end(payload: string) {
-      this.body = payload;
+    write(payload: string) {
+      this.chunks?.push(payload);
+    },
+    end(payload?: string) {
+      if (payload !== undefined) {
+        this.body = payload;
+      } else if (this.chunks && this.chunks.length > 0) {
+        this.body = this.chunks.join("");
+      }
     }
   };
-  return res as ServerResponse & { statusCode?: number; body?: string };
+  return res as ServerResponse & { statusCode?: number; body?: string; chunks?: string[] };
 }
 
 void (async () => {
@@ -66,5 +78,61 @@ void (async () => {
   assert.equal(badPayload.error, "invalid_request");
   passed++;
 
-  console.log(`inlineCompletionApi: ${passed}/3 tests passed`);
+  const segmentsOnly = parseInlineBody({
+    segments: { prefix: "const value = ", suffix: ";" }
+  });
+  assert.equal(segmentsOnly.ok, true);
+  if (segmentsOnly.ok) {
+    assert.equal(segmentsOnly.segments?.prefix, "const value = ");
+    assert.equal(segmentsOnly.segments?.suffix, ";");
+  }
+  passed++;
+
+  const longPrefix = parseInlineBody({
+    segments: { prefix: "x".repeat(4001), suffix: "" }
+  });
+  assert.equal(longPrefix.ok, false);
+  passed++;
+
+  const longSuffix = parseInlineBody({
+    segments: { prefix: "ok", suffix: "y".repeat(2001) }
+  });
+  assert.equal(longSuffix.ok, false);
+  passed++;
+
+  const fimRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      segments: { prefix: "const x = ", suffix: ";" },
+      languageId: "typescript"
+    },
+    fimRes,
+    router,
+    router["config"],
+    org
+  );
+  assert.equal(fimRes.statusCode, 200);
+  const fimPayload = JSON.parse(fimRes.body ?? "{}") as Record<string, unknown>;
+  assert.equal(fimPayload.fim, true);
+  assert.equal(typeof fimPayload.text, "string");
+  passed++;
+
+  const streamRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      segments: { prefix: "obj.", suffix: "" },
+      stream: true,
+      languageId: "typescript"
+    },
+    streamRes,
+    router,
+    router["config"],
+    org
+  );
+  assert.equal(streamRes.statusCode, 200);
+  assert.ok(streamRes.body?.includes("data:"), "stream mode should emit SSE");
+  assert.ok(streamRes.body?.includes('"type":"delta"'), "stream should include delta events");
+  passed++;
+
+  console.log(`inlineCompletionApi: ${passed}/${passed} tests passed`);
 })();

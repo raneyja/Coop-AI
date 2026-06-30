@@ -1,38 +1,26 @@
-import { getZeroRetentionConfig } from "../zeroRetentionConfig";
-import { BaseProviderClient } from "./baseClient";
-import { parseOpenAiSseLine } from "./openaiClient";
+import { buildProviderHeaders } from "../zeroRetentionConfig";
+import { BaseProviderClient, type ParseState } from "./baseClient";
 import { parseCompletionSseLine } from "./fimSse";
 import type { FimStreamOptions, ProviderStreamOptions, StreamChunk } from "../types";
 
-/** DeepSeek uses an OpenAI-compatible chat completions API. */
-export class DeepSeekProviderClient extends BaseProviderClient {
+const FIM_PATH = "/v1/fim/completions";
+
+export class MistralProviderClient extends BaseProviderClient {
   public async *streamCompletion(options: ProviderStreamOptions): AsyncGenerator<StreamChunk> {
-    const config = getZeroRetentionConfig("deepseek");
-    const { headers, body } = this.buildFormattedRequest(options);
-    const url = `${config.endpoint.baseUrl}${config.endpoint.inferencePath}`;
-    yield* this.streamFromEndpoint(
-      url,
-      {
-        method: "POST",
-        headers: { ...headers, "content-type": "application/json" },
-        body: JSON.stringify({
-          ...body,
-          stream: true,
-          stream_options: { include_usage: true }
-        })
-      },
-      options,
-      parseOpenAiSseLine
-    );
+    yield {
+      type: "error",
+      message: "Mistral provider is configured for FIM inline completion only."
+    };
   }
 
   public async *streamFim(options: FimStreamOptions): AsyncGenerator<StreamChunk> {
-    const url = "https://api.deepseek.com/beta/completions";
+    const url = `https://api.mistral.ai${FIM_PATH}`;
     yield* this.streamFromEndpoint(
       url,
       {
         method: "POST",
         headers: {
+          ...buildProviderHeaders("mistral", { requestId: options.requestId }),
           authorization: `Bearer ${this.options.apiKey}`,
           "content-type": "application/json"
         },
@@ -42,8 +30,7 @@ export class DeepSeekProviderClient extends BaseProviderClient {
           suffix: options.suffix,
           temperature: options.temperature,
           max_tokens: options.maxTokens,
-          stream: true,
-          stream_options: { include_usage: true }
+          stream: true
         })
       },
       {
@@ -54,7 +41,7 @@ export class DeepSeekProviderClient extends BaseProviderClient {
         signal: options.signal,
         requestId: options.requestId
       },
-      parseCompletionSseLine
+      (line, state) => parseCompletionSseLine(line, state)
     );
   }
 }

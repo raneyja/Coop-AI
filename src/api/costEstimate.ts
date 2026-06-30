@@ -5,7 +5,8 @@ const PRICING_PER_MILLION: Record<LlmProvider, { input: number; output: number }
   openai: { input: 2.5, output: 10 },
   anthropic: { input: 3, output: 15 },
   deepseek: { input: 0.14, output: 0.28 },
-  gemini: { input: 1.25, output: 5 }
+  gemini: { input: 1.25, output: 5 },
+  mistral: { input: 0.3, output: 0.9 }
 };
 
 export function estimateCostUsd(provider: LlmProvider, inputTokens: number, outputTokens: number): number {

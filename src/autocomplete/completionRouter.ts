@@ -17,6 +17,8 @@ export type CompletionRouterDeps = {
   cache?: CompletionCache;
 };
 
+const MAX_FIM_PREFIX_CHARS = 4_000;
+
 export class CompletionRouter {
   private readonly cache: CompletionCache;
   private inFlight = new Map<string, AbortController>();
@@ -59,6 +61,7 @@ export class CompletionRouter {
     timer.markAssembly();
     const safeContext = sanitizeContextForRequest(context);
     const prompt = buildAutocompleteUserMessage(safeContext);
+    const segments = buildFimSegments(safeContext, settings.useFim);
     timer.markNetworkStart();
 
     const prefs = readConfiguration();
@@ -67,7 +70,7 @@ export class CompletionRouter {
     try {
       const timeoutMs = settings.requestTimeoutMs;
       const result = await raceWithTimeout(
-        this.requestWithFallback(prompt, safeContext, preset, prefs.apiBaseUrl, linked),
+        this.requestWithFallback(prompt, safeContext, segments, preset, prefs.apiBaseUrl, linked),
         timeoutMs,
         linked
       );
@@ -132,43 +135,101 @@ export class CompletionRouter {
   private async requestWithFallback(
     prompt: string,
     context: ExtractedCodeContext,
+    segments: { prefix: string; suffix: string } | undefined,
     preset: { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } },
     baseUrl: string,
     signal: AbortSignal
   ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
+    const body = {
+      message: segments ? undefined : prompt,
+      segments,
+      languageId: context.languageId,
+      file: context.filePath,
+      provider: preset.provider,
+      model: preset.model,
+      maxTokens: 96,
+      temperature: 0.15
+    };
+
     try {
-      return await this.deps.api.fetchInlineCompletion(
-        baseUrl,
-        {
-          message: prompt,
-          languageId: context.languageId,
-          file: context.filePath,
-          provider: preset.provider,
-          model: preset.model,
-          maxTokens: 96,
-          temperature: 0.15
-        },
-        signal
-      );
+      return await this.requestStreaming(body, baseUrl, signal);
     } catch (primaryError) {
       if (!preset.fallback || signal.aborted) {
         throw primaryError;
       }
-      return this.deps.api.fetchInlineCompletion(
-        baseUrl,
+      return this.requestStreaming(
         {
-          message: prompt,
-          languageId: context.languageId,
-          file: context.filePath,
+          ...body,
           provider: preset.fallback.provider,
-          model: preset.fallback.model,
-          maxTokens: 96,
-          temperature: 0.15
+          model: preset.fallback.model
         },
+        baseUrl,
         signal
       );
     }
   }
+
+  private async requestStreaming(
+    body: {
+      message?: string;
+      segments?: { prefix: string; suffix: string };
+      languageId: string;
+      file: string;
+      provider: LlmProvider;
+      model: string;
+      maxTokens: number;
+      temperature: number;
+    },
+    baseUrl: string,
+    signal: AbortSignal
+  ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
+    let buffered = "";
+    let lastValid = "";
+
+    const result = await this.deps.api.streamInlineCompletion(
+      baseUrl,
+      body,
+      (chunk) => {
+        buffered += chunk;
+        const normalized = normalizeCompletionText(buffered);
+        if (normalized) {
+          lastValid = normalized;
+        }
+      },
+      signal
+    );
+
+    const text = lastValid || normalizeCompletionText(result.text) || buffered.trim();
+    return { ...result, text, alternatives: result.alternatives ?? [] };
+  }
+}
+
+export function buildFimSegments(
+  context: ExtractedCodeContext,
+  useFim: boolean
+): { prefix: string; suffix: string } | undefined {
+  if (!useFim) {
+    return undefined;
+  }
+  const prefix = buildFimPrefix(context);
+  if (!prefix.trim()) {
+    return undefined;
+  }
+  return {
+    prefix: prefix.slice(0, MAX_FIM_PREFIX_CHARS),
+    suffix: context.suffixWindow ?? context.currentLineSuffix
+  };
+}
+
+function buildFimPrefix(context: ExtractedCodeContext): string {
+  const parts: string[] = [];
+  if (context.previousLines) {
+    parts.push(context.previousLines);
+  }
+  if (context.currentLinePrefix) {
+    parts.push(context.currentLinePrefix);
+  }
+  return parts.join("\n");
 }
 
 function buildAutocompleteUserMessage(context: ExtractedCodeContext): string {

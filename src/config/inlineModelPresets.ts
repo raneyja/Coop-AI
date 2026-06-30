@@ -21,6 +21,12 @@ export const INLINE_MODEL_PRESETS: Record<"haiku" | "gpt35", InlineModelPresetCo
   }
 };
 
+/** Default Codestral model for server-side FIM routing. */
+export const FIM_MISTRAL_MODEL = "codestral-latest";
+
+/** Default DeepSeek model for FIM beta completions. */
+export const FIM_DEEPSEEK_MODEL = "deepseek-chat";
+
 export const INLINE_CUSTOM_FALLBACK = INLINE_MODEL_PRESETS.haiku.fallback;
 
 /** Default fast model per provider when the client omits `model`. */
@@ -28,7 +34,8 @@ export const INLINE_DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
   anthropic: INLINE_MODEL_PRESETS.haiku.model,
   openai: INLINE_MODEL_PRESETS.gpt35.model,
   gemini: "gemini-2.0-flash",
-  deepseek: "deepseek-chat"
+  deepseek: FIM_DEEPSEEK_MODEL,
+  mistral: FIM_MISTRAL_MODEL
 };
 
 export function resolveInlineModelPreset(

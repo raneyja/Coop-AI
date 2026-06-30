@@ -33,6 +33,7 @@ export function shouldSkipForPrivacy(context: ExtractedCodeContext): boolean {
   }
   const combined = [
     context.currentLinePrefix,
+    context.suffixWindow,
     context.previousLines,
     context.importsBlock
   ].join("\n");
@@ -47,6 +48,7 @@ export function sanitizeContextForRequest(context: ExtractedCodeContext): Extrac
     ...context,
     currentLinePrefix: maskSensitiveText(context.currentLinePrefix),
     currentLineSuffix: maskSensitiveText(context.currentLineSuffix),
+    suffixWindow: maskSensitiveText(context.suffixWindow),
     previousLines: maskSensitiveText(context.previousLines),
     importsBlock: maskSensitiveText(context.importsBlock),
     parentSignature: maskSensitiveText(context.parentSignature)

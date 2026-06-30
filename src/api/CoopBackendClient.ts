@@ -32,7 +32,10 @@ export type StreamChatResult = {
 };
 
 export type InlineCompletionBody = {
-  message: string;
+  message?: string;
+  segments?: { prefix: string; suffix: string };
+  stream?: boolean;
+  repoId?: string;
   languageId?: string;
   file?: string;
   provider: LlmProvider;
@@ -1313,6 +1316,103 @@ export class CoopBackendClient {
     return { content: full, usage };
   }
 
+  public async streamInlineCompletion(
+    baseUrl: string,
+    body: InlineCompletionBody,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal
+  ): Promise<InlineCompletionResult> {
+    assertCoopEndpoint(baseUrl);
+    const token = await this.options.getToken();
+    if (!token) {
+      throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
+    }
+
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/completions/inline`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "text/event-stream",
+        "x-use-case": "code-completion-only"
+      },
+      body: JSON.stringify({
+        message: body.message,
+        segments: body.segments,
+        stream: true,
+        repoId: body.repoId,
+        languageId: body.languageId,
+        file: body.file,
+        provider: body.provider,
+        model: body.model,
+        maxTokens: body.maxTokens,
+        temperature: body.temperature
+      }),
+      signal
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      let errorBody: { error?: string; message?: string } | undefined;
+      try {
+        errorBody = text ? (JSON.parse(text) as { error?: string; message?: string }) : undefined;
+      } catch {
+        errorBody = undefined;
+      }
+      if (response.status === 429 && errorBody?.message) {
+        throw new Error(errorBody.message);
+      }
+      throw new Error(
+        `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
+      );
+    }
+
+    if (!response.body) {
+      throw new Error("Inline completion API returned an empty stream.");
+    }
+
+    let full = "";
+    let model = body.model;
+    let provider = body.provider;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const event = parseSseJson(line);
+        if (!event) {
+          continue;
+        }
+        if (event.type === "delta" && typeof event.text === "string") {
+          full += event.text;
+          onChunk(event.text);
+        } else if (event.type === "done") {
+          if (typeof event.model === "string") {
+            model = event.model;
+          }
+          if (typeof event.provider === "string") {
+            provider = event.provider as LlmProvider;
+          }
+        } else if (event.type === "error") {
+          throw new Error(typeof event.message === "string" ? event.message : "Inline stream error.");
+        }
+      }
+      if (signal?.aborted) {
+        break;
+      }
+    }
+
+    return { text: full, alternatives: [], model, provider };
+  }
+
   public async fetchInlineCompletion(
     baseUrl: string,
     body: InlineCompletionBody,
@@ -1333,6 +1433,9 @@ export class CoopBackendClient {
       },
       body: JSON.stringify({
         message: body.message,
+        segments: body.segments,
+        stream: body.stream,
+        repoId: body.repoId,
         languageId: body.languageId,
         file: body.file,
         provider: body.provider,

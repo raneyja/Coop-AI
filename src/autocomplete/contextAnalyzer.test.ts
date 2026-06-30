@@ -27,8 +27,18 @@ test("analyzeDocumentContext extracts prefix and suffix", () => {
   const context = analyzeDocumentContext(doc as never, position);
   assert.equal(context.currentLinePrefix, "const value = ");
   assert.equal(context.currentLineSuffix, "1;");
+  assert.equal(context.suffixWindow, "1;\nconsole.log(value);");
   assert.equal(context.languageId, "typescript");
   assert.ok(context.contextHash.length > 0);
+});
+
+test("suffixWindow caps at 500 characters", () => {
+  const doc = createMockDocument(
+    "begin\n" + Array(30).fill("z".repeat(30)).join("\n"),
+    { path: "/workspace/src/long.ts" }
+  );
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(0, 5));
+  assert.equal(context.suffixWindow.length, 500);
 });
 
 test("languageSpecificHints mentions property access after dot", () => {

@@ -19,7 +19,8 @@ export function readAutocompleteSettings(): AutocompleteSettings {
     customModel: config.get<string>("customModel", ""),
     copilotPolicy: config.get<CopilotPolicy>("copilotPolicy", "warn"),
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
-    requestTimeoutMs: config.get<number>("requestTimeoutMs", 400)
+    requestTimeoutMs: config.get<number>("requestTimeoutMs", 400),
+    useFim: config.get<boolean>("useFim", true)
   };
 }
 

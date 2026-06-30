@@ -16,6 +16,7 @@ export type AutocompleteSettings = {
   copilotPolicy: CopilotPolicy;
   showMultipleSuggestions: boolean;
   requestTimeoutMs: number;
+  useFim: boolean;
 };
 
 export type TriggerKind = "auto" | "manual" | "paste" | "immediate";
@@ -31,6 +32,7 @@ export type ExtractedCodeContext = {
   filePath: string;
   currentLinePrefix: string;
   currentLineSuffix: string;
+  suffixWindow: string;
   previousLines: string;
   importsBlock: string;
   parentSignature: string;
