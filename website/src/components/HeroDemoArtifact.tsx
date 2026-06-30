@@ -142,9 +142,9 @@ const TOOLS = [
 
 const TIMING = {
   questionCharMs: 26,
-  afterQuestionMs: 350,
-  stage2Ms: 1400,
-  stage3Ms: 1600,
+  afterQuestionMs: 850,
+  stage2Ms: 1900,
+  stage3Ms: 2100,
   responseCharMs: 14,
   codeCharMs: 12,
   beforeCodeMs: 180,
