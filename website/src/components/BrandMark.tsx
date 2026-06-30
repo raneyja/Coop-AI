@@ -5,23 +5,17 @@ type BrandMarkProps = {
 };
 
 export function BrandMark({ size = "md" }: BrandMarkProps) {
-  const logoHeight = size === "sm" ? 22 : 30;
+  const height = size === "sm" ? 22 : 28;
 
   return (
-    <>
-      <Image
-        src="/coop-logo.png"
-        alt=""
-        width={logoHeight}
-        height={logoHeight}
-        className="h-auto w-auto invert mix-blend-screen opacity-90"
-        style={{ height: logoHeight }}
-      />
-      <span
-        className={`font-semibold tracking-tight text-white ${size === "sm" ? "text-base" : "text-lg"}`}
-      >
-        CoopAI
-      </span>
-    </>
+    <Image
+      src="/coop-wordmark.png"
+      alt="CoopAI"
+      width={Math.round(height * 3)}
+      height={height}
+      className="h-auto w-auto"
+      style={{ height }}
+      priority
+    />
   );
 }
