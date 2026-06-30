@@ -1,10 +1,16 @@
 import * as vscode from "vscode";
+import { SmartThrottle } from "./smartThrottle";
 import type { AutocompleteSettings, CompletionTriggerContext, ExtractedCodeContext, TriggerKind } from "./types";
 
 export type TriggerDecision = {
   shouldRequest: boolean;
   debounceMs: number;
   reason?: string;
+};
+
+export type TriggerEvaluateOptions = {
+  hotStreakActive?: boolean;
+  p95LatencyMs?: number;
 };
 
 export class TriggerDetector {
@@ -15,6 +21,7 @@ export class TriggerDetector {
   private lastAcceptedHash = "";
   private pasteDetectedUntil = 0;
   private rapidTypingUntil = 0;
+  private readonly smartThrottle = new SmartThrottle();
 
   public notePaste(): void {
     this.pasteDetectedUntil = Date.now() + 500;
@@ -34,12 +41,14 @@ export class TriggerDetector {
 
   public noteKeystroke(): void {
     this.rapidTypingUntil = Date.now() + 120;
+    this.smartThrottle.noteKeystroke();
   }
 
   public evaluate(
     settings: AutocompleteSettings,
     context: ExtractedCodeContext,
-    trigger: CompletionTriggerContext
+    trigger: CompletionTriggerContext,
+    options: TriggerEvaluateOptions = {}
   ): TriggerDecision {
     if (!settings.enabled || settings.trigger === "off") {
       return { shouldRequest: false, debounceMs: 0, reason: "disabled" };
@@ -72,7 +81,8 @@ export class TriggerDetector {
     }
 
     if (Date.now() < this.rapidTypingUntil) {
-      return { shouldRequest: false, debounceMs: settings.debounceMs, reason: "rapid_typing" };
+      const rapidDebounce = this.resolveDebounceMs(settings.debounceMs, false, options);
+      return { shouldRequest: false, debounceMs: rapidDebounce, reason: "rapid_typing" };
     }
 
     const immediate =
@@ -82,20 +92,30 @@ export class TriggerDetector {
       context.afterOpenParen ||
       /[=,(]\s*$/.test(context.currentLinePrefix);
 
-    const debounceMs = immediate ? 0 : settings.debounceMs;
-
     if (trigger.kind === "paste" || Date.now() < this.pasteDetectedUntil) {
       return { shouldRequest: true, debounceMs: 0 };
     }
 
+    const debounceMs = immediate
+      ? 0
+      : this.resolveDebounceMs(settings.debounceMs, options.hotStreakActive ?? false, options);
+
     if (trigger.vscodeKind === vscode.InlineCompletionTriggerKind.Automatic) {
-      if (!immediate && debounceMs > 0) {
-        return { shouldRequest: true, debounceMs };
-      }
-      return { shouldRequest: true, debounceMs: immediate ? 0 : settings.debounceMs };
+      return { shouldRequest: true, debounceMs };
     }
 
     return { shouldRequest: true, debounceMs };
+  }
+
+  private resolveDebounceMs(
+    baseMs: number,
+    hotStreakActive: boolean,
+    options: TriggerEvaluateOptions
+  ): number {
+    if (hotStreakActive) {
+      return Math.min(50, Math.max(0, Math.floor(baseMs * 0.1)));
+    }
+    return this.smartThrottle.nextDelay(baseMs, options.p95LatencyMs ?? 0);
   }
 
   public markRequested(contextHash: string): void {

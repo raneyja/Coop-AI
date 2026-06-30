@@ -72,7 +72,7 @@ export type AutocompleteStatusState =
   | "error";
 
 export type AutocompleteTelemetryEvent = {
-  kind: "request" | "accept" | "reject";
+  kind: "request" | "accept" | "reject" | "show";
   latencyMs?: number;
   reason?: string;
   languageId?: string;

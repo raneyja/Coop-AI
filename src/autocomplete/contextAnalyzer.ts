@@ -289,6 +289,49 @@ function hashContext(parts: Record<string, string | number>): string {
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
 }
 
+export function wantsMultiLineCompletion(context: ExtractedCodeContext): boolean {
+  const prefix = context.currentLinePrefix;
+  if (/{\s*$/.test(prefix)) {
+    return true;
+  }
+  if (/=>\s*$/.test(prefix)) {
+    return true;
+  }
+  if (/[\(,]\s*$/.test(prefix)) {
+    return true;
+  }
+  if (isEmptyLineInsideBlock(context)) {
+    return true;
+  }
+  return false;
+}
+
+function isEmptyLineInsideBlock(context: ExtractedCodeContext): boolean {
+  if (context.currentLinePrefix.trim() !== "") {
+    return false;
+  }
+  if (context.currentLinePrefix.length === 0) {
+    return false;
+  }
+  let braceDepth = 0;
+  for (const ch of context.previousLines) {
+    if (ch === "{") {
+      braceDepth += 1;
+    } else if (ch === "}") {
+      braceDepth -= 1;
+    }
+  }
+  if (braceDepth > 0) {
+    return true;
+  }
+  const lines = context.previousLines.split("\n");
+  const lastLine = lines[lines.length - 1] ?? "";
+  if (context.languageId === "python" && /:\s*$/.test(lastLine.trim())) {
+    return true;
+  }
+  return false;
+}
+
 export function isFileEligible(document: vscode.TextDocument): boolean {
   const path = document.uri.fsPath;
   if (document.uri.scheme !== "file" && document.uri.scheme !== "untitled") {

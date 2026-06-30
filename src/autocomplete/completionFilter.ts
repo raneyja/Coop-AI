@@ -1,7 +1,10 @@
 import type { AutocompleteSettings, ExtractedCodeContext, RankedCompletion } from "./types";
+import { wantsMultiLineCompletion } from "./contextAnalyzer";
 
 const TRIVIAL_PATTERN = /^[\s;,.)}\]]+$/;
 const FENCE_PATTERN = /^```[\w]*\n?|```$/g;
+const SINGLE_LINE_CAP = 4;
+const MULTI_LINE_CAP = 8;
 
 export function filterAndRankCompletions(
   raw: string[],
@@ -13,7 +16,7 @@ export function filterAndRankCompletions(
   const ranked: RankedCompletion[] = [];
 
   for (const item of raw) {
-    const cleaned = normalizeCompletionText(item);
+    const cleaned = normalizeCompletionText(item, context);
     if (!cleaned || seen.has(cleaned)) {
       continue;
     }
@@ -34,15 +37,17 @@ export function filterAndRankCompletions(
   return ranked.slice(0, settings.showMultipleSuggestions ? 3 : 1);
 }
 
-export function normalizeCompletionText(text: string): string {
+export function normalizeCompletionText(text: string, context?: ExtractedCodeContext): string {
   let value = text.trim();
   value = value.replace(FENCE_PATTERN, "").trim();
   if (value.startsWith("`") && value.endsWith("`")) {
     value = value.slice(1, -1);
   }
+  const lineCap =
+    context && wantsMultiLineCompletion(context) ? MULTI_LINE_CAP : SINGLE_LINE_CAP;
   const lines = value.split("\n");
-  if (lines.length > 4) {
-    value = lines.slice(0, 4).join("\n");
+  if (lines.length > lineCap) {
+    value = lines.slice(0, lineCap).join("\n");
   }
   return value;
 }

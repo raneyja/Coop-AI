@@ -5,8 +5,13 @@ import {
   defaultInlineModelForProvider,
   resolveInlineModelPreset
 } from "../config/inlineModelPresets";
-import { buildFimSegments } from "./completionRouter";
-import type { ExtractedCodeContext } from "./types";
+import { AutocompletePerformanceMonitor } from "./performance";
+import {
+  CompletionRouter,
+  buildFimSegments,
+  synthesizeMessageFromSegments
+} from "./completionRouter";
+import type { AutocompleteSettings, ExtractedCodeContext } from "./types";
 
 let passed = 0;
 let failed = 0;
@@ -80,7 +85,103 @@ test("buildFimSegments is undefined when useFim disabled", () => {
   assert.equal(buildFimSegments(sampleContext, false), undefined);
 });
 
-console.log(`\ncompletionRouter: ${passed} passed, ${failed} failed`);
-if (failed > 0) {
-  process.exit(1);
+test("synthesizeMessageFromSegments builds chat-fallback prompt from FIM segments", () => {
+  const segments = { prefix: "const x = ", suffix: ";" };
+  const message = synthesizeMessageFromSegments(segments, sampleContext, "fallback");
+  assert.match(message, /PREFIX:/);
+  assert.match(message, /const x = /);
+  assert.match(message, /SUFFIX:/);
+  assert.match(message, /TASK:/);
+});
+
+const autocompleteSettings: AutocompleteSettings = {
+  enabled: true,
+  trigger: "auto",
+  maxSuggestionLength: 200,
+  debounceMs: 300,
+  model: "haiku",
+  customModel: "",
+  copilotPolicy: "warn",
+  showMultipleSuggestions: false,
+  requestTimeoutMs: 5_000,
+  useFim: true
+};
+
+async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ ${name}`);
+    console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+    failed++;
+  }
 }
+
+async function runAsyncTests(): Promise<void> {
+  await asyncTest("reuses in-flight promise for prefix-compatible extension", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const baseContext: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-base",
+      currentLinePrefix: "const "
+    };
+    const extendedContext: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-extended",
+      currentLinePrefix: "const v"
+    };
+
+    const first = router.fetchCompletions(baseContext, autocompleteSettings);
+    const second = router.fetchCompletions(extendedContext, autocompleteSettings);
+    await Promise.all([first, second]);
+
+    assert.equal(requestCount, 1);
+  });
+
+  await asyncTest("starts new request when prefix is not compatible", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        return { text: "ok;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const ctxA: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-a",
+      currentLinePrefix: "let "
+    };
+    const ctxB: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-b",
+      currentLinePrefix: "const "
+    };
+
+    await router.fetchCompletions(ctxA, autocompleteSettings);
+    await router.fetchCompletions(ctxB, autocompleteSettings);
+
+    assert.equal(requestCount, 2);
+  });
+}
+
+void runAsyncTests().then(() => {
+  console.log(`\ncompletionRouter: ${passed} passed, ${failed} failed`);
+  if (failed > 0) {
+    process.exit(1);
+  }
+});

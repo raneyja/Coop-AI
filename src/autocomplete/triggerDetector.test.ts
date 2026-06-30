@@ -30,6 +30,7 @@ function baseSettings(overrides: Partial<AutocompleteSettings> = {}): Autocomple
     copilotPolicy: "warn",
     showMultipleSuggestions: false,
     requestTimeoutMs: 400,
+    useFim: true,
     ...overrides
   };
 }
@@ -129,6 +130,18 @@ test("backoff after rejection suppresses requests", () => {
 test("isImmediateTriggerLine detects property access", () => {
   assert.equal(isImmediateTriggerLine("foo."), true);
   assert.equal(isImmediateTriggerLine("console.log"), false);
+});
+
+test("hot streak active uses reduced debounce", () => {
+  const detector = new TriggerDetector();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ currentLinePrefix: "console.log" }),
+    autoTrigger(),
+    { hotStreakActive: true, p95LatencyMs: 0 }
+  );
+  assert.equal(decision.shouldRequest, true);
+  assert.ok(decision.debounceMs <= 50);
 });
 
 console.log(`\ntriggerDetector: ${passed} passed, ${failed} failed`);

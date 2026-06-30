@@ -32,7 +32,8 @@ const settings: AutocompleteSettings = {
   customModel: "",
   copilotPolicy: "warn",
   showMultipleSuggestions: false,
-  requestTimeoutMs: 400
+  requestTimeoutMs: 400,
+  useFim: true
 };
 
 const context: ExtractedCodeContext = {

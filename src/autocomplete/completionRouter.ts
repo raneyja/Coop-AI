@@ -2,7 +2,7 @@ import type { SecureApiClient } from "../chat/SecureApiClient";
 import { readConfiguration } from "../chat/SecureApiClient";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveInlineModelPreset } from "../config/inlineModelPresets";
-import { buildPromptContextBlock, languageSpecificHints } from "./contextAnalyzer";
+import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
 import { filterAndRankCompletions, normalizeCompletionText } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
 import { applyEdgeCaseFallbacks } from "./edgeCases";
@@ -18,10 +18,19 @@ export type CompletionRouterDeps = {
 };
 
 const MAX_FIM_PREFIX_CHARS = 4_000;
+const SINGLE_LINE_MAX_TOKENS = 96;
+const MULTI_LINE_MAX_TOKENS = 200;
+
+type InFlightEntry = {
+  prefix: string;
+  contextHash: string;
+  promise: Promise<CompletionRouterResult>;
+  controller: AbortController;
+};
 
 export class CompletionRouter {
   private readonly cache: CompletionCache;
-  private inFlight = new Map<string, AbortController>();
+  private readonly inFlightByDoc = new Map<string, InFlightEntry>();
 
   public constructor(private readonly deps: CompletionRouterDeps) {
     this.cache = deps.cache ?? new CompletionCache();
@@ -50,12 +59,50 @@ export class CompletionRouter {
       };
     }
 
-    const existing = this.inFlight.get(context.contextHash);
-    if (existing) {
-      existing.abort();
+    const docKey = context.filePath;
+    const prefixKey = buildFimPrefix(context) || context.currentLinePrefix;
+    const existing = this.inFlightByDoc.get(docKey);
+    if (existing && !existing.controller.signal.aborted) {
+      const prefixCompatible =
+        prefixKey.startsWith(existing.prefix) && prefixKey.length > existing.prefix.length;
+      const sameHash = existing.contextHash === context.contextHash;
+      if (prefixCompatible || sameHash) {
+        return existing.promise;
+      }
+      existing.controller.abort();
+      this.inFlightByDoc.delete(docKey);
     }
+
     const controller = new AbortController();
-    this.inFlight.set(context.contextHash, controller);
+    const promise = this.executeFetch(context, settings, signal, controller, timer);
+    this.inFlightByDoc.set(docKey, {
+      prefix: prefixKey,
+      contextHash: context.contextHash,
+      promise,
+      controller
+    });
+
+    try {
+      return await promise;
+    } finally {
+      const current = this.inFlightByDoc.get(docKey);
+      if (current?.promise === promise) {
+        this.inFlightByDoc.delete(docKey);
+      }
+    }
+  }
+
+  public clearCache(): void {
+    this.cache.clear();
+  }
+
+  private async executeFetch(
+    context: ExtractedCodeContext,
+    settings: AutocompleteSettings,
+    signal: AbortSignal | undefined,
+    controller: AbortController,
+    timer: ReturnType<typeof createLatencyTimer>
+  ): Promise<CompletionRouterResult> {
     const linked = linkAbort(signal, controller.signal);
 
     timer.markAssembly();
@@ -66,18 +113,22 @@ export class CompletionRouter {
 
     const prefs = readConfiguration();
     const preset = resolveModelPreset(settings, prefs.llmProvider as LlmProvider);
+    const multiLine = wantsMultiLineCompletion(safeContext);
+    const maxTokens = multiLine ? MULTI_LINE_MAX_TOKENS : SINGLE_LINE_MAX_TOKENS;
 
     try {
       const timeoutMs = settings.requestTimeoutMs;
       const result = await raceWithTimeout(
-        this.requestWithFallback(prompt, safeContext, segments, preset, prefs.apiBaseUrl, linked),
+        this.requestWithFallback(prompt, safeContext, segments, preset, prefs.apiBaseUrl, linked, maxTokens),
         timeoutMs,
         linked
       );
       timer.markNetworkEnd();
 
-      const alternatives = result.alternatives.map((t) => normalizeCompletionText(t)).filter(Boolean);
-      const primary = normalizeCompletionText(result.text);
+      const alternatives = result.alternatives
+        .map((t) => normalizeCompletionText(t, safeContext))
+        .filter(Boolean);
+      const primary = normalizeCompletionText(result.text, safeContext);
       timer.markParseEnd();
       const breakdown = timer.finish();
 
@@ -123,13 +174,7 @@ export class CompletionRouter {
       }
       console.warn("[CoopAI autocomplete]", error instanceof Error ? error.message : error);
       return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
-    } finally {
-      this.inFlight.delete(context.contextHash);
     }
-  }
-
-  public clearCache(): void {
-    this.cache.clear();
   }
 
   private async requestWithFallback(
@@ -138,16 +183,20 @@ export class CompletionRouter {
     segments: { prefix: string; suffix: string } | undefined,
     preset: { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } },
     baseUrl: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    maxTokens: number
   ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
+    const chatMessage = segments
+      ? synthesizeMessageFromSegments(segments, context, prompt)
+      : prompt;
     const body = {
-      message: segments ? undefined : prompt,
+      message: chatMessage,
       segments,
       languageId: context.languageId,
       file: context.filePath,
       provider: preset.provider,
       model: preset.model,
-      maxTokens: 96,
+      maxTokens,
       temperature: 0.15
     };
 
@@ -191,7 +240,7 @@ export class CompletionRouter {
       body,
       (chunk) => {
         buffered += chunk;
-        const normalized = normalizeCompletionText(buffered);
+        const normalized = normalizeCompletionText(buffered, undefined);
         if (normalized) {
           lastValid = normalized;
         }
@@ -199,9 +248,22 @@ export class CompletionRouter {
       signal
     );
 
-    const text = lastValid || normalizeCompletionText(result.text) || buffered.trim();
+    const text = lastValid || normalizeCompletionText(result.text, undefined) || buffered.trim();
     return { ...result, text, alternatives: result.alternatives ?? [] };
   }
+}
+
+export function synthesizeMessageFromSegments(
+  segments: { prefix: string; suffix: string },
+  context: ExtractedCodeContext,
+  fallbackPrompt: string
+): string {
+  const hints = languageSpecificHints(context);
+  const prefix = segments.prefix.trim();
+  if (!prefix) {
+    return fallbackPrompt;
+  }
+  return `${hints}\n\nPREFIX:\n${segments.prefix}\n\nSUFFIX:\n${segments.suffix}\n\nTASK: Complete the code at the cursor position (between PREFIX and SUFFIX). Return ONLY the completion text.`;
 }
 
 export function buildFimSegments(

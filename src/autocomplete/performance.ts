@@ -60,6 +60,14 @@ export class AutocompletePerformanceMonitor {
     };
   }
 
+  public getRollingP50(): number {
+    return percentile([...this.latencies].sort((a, b) => a - b), 0.5);
+  }
+
+  public getRollingP95(): number {
+    return percentile([...this.latencies].sort((a, b) => a - b), 0.95);
+  }
+
   public snapshot(): PerformanceSnapshot {
     const sorted = [...this.latencies].sort((a, b) => a - b);
     const p50 = percentile(sorted, 0.5);
@@ -73,6 +81,10 @@ export class AutocompletePerformanceMonitor {
       lastLatencyMs: this.lastLatencyMs,
       alertThresholdMs: LATENCY_ALERT_MS
     };
+  }
+
+  public recordShow(languageId?: string): void {
+    this.emit({ kind: "show", languageId });
   }
 
   public acceptanceRate(): number {

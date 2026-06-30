@@ -805,7 +805,7 @@
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
     "test:fim": "npx tsx src/api/fimRouter.test.ts",
-    "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
+    "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
     "test:lightning-search-scope": "npx tsx src/indexing/lightningSearchScope.test.ts",

@@ -1,7 +1,7 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { analyzeDocumentContext, isFileEligible, languageSpecificHints } from "./contextAnalyzer";
+import { analyzeDocumentContext, isFileEligible, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
 import { createMockDocument } from "./test/vscodeMockSetup";
 
 let passed = 0;
@@ -69,6 +69,32 @@ test("isFileEligible accepts typescript source files", () => {
     languageId: "typescript"
   });
   assert.equal(isFileEligible(doc as never), true);
+});
+
+test("wantsMultiLineCompletion after opening brace", () => {
+  const doc = createMockDocument("function run() {");
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(0, doc.getText().length));
+  assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("wantsMultiLineCompletion after arrow", () => {
+  const doc = createMockDocument("const fn = () =>");
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(0, doc.getText().length));
+  assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("wantsMultiLineCompletion after trailing open paren", () => {
+  const doc = createMockDocument("console.log(");
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(0, doc.getText().length));
+  assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("wantsMultiLineCompletion on empty line inside block", () => {
+  const context = analyzeDocumentContext(
+    createMockDocument("function run() {\n  \n}") as never,
+    new vscode.Position(1, 2)
+  );
+  assert.equal(wantsMultiLineCompletion(context), true);
 });
 
 console.log(`\ncontextAnalyzer: ${passed} passed, ${failed} failed`);

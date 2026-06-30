@@ -7,6 +7,7 @@ import { CompletionRouter } from "./completionRouter";
 import { toInlineInsertText } from "./completionFilter";
 import { discardContextPayload } from "./privacy";
 import { AutocompletePerformanceMonitor } from "./performance";
+import { HotStreak } from "./hotStreak";
 import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
 import type {
   AutocompleteStatusState,
@@ -33,6 +34,7 @@ const SHOWN_ITEM_TTL_MS = 30_000;
 
 export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProvider {
   private settings = readAutocompleteSettings();
+  private readonly hotStreak = new HotStreak();
   private readonly triggerDetector = new TriggerDetector();
   private readonly performance = new AutocompletePerformanceMonitor();
   private readonly router: CompletionRouter;
@@ -95,12 +97,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   ): void {
     const args = completionItem.command?.arguments;
     const contextHash = typeof args?.[0] === "string" ? args[0] : "";
+    const languageId = typeof args?.[1] === "string" ? args[1] : undefined;
     if (!contextHash) {
       return;
     }
-    this.lastShownContextHash = contextHash;
-    this.lastShownAt = Date.now();
-    this.lastShownLanguageId = typeof args?.[1] === "string" ? args[1] : undefined;
+    this.trackShownItem(contextHash, languageId ?? "");
   }
 
   public async provideInlineCompletionItems(
@@ -128,7 +129,10 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const trigger = triggerContextFromVscode(context, this.manualInvoke);
     this.manualInvoke = false;
 
-    const decision = this.triggerDetector.evaluate(this.settings, extracted, trigger);
+    const decision = this.triggerDetector.evaluate(this.settings, extracted, trigger, {
+      hotStreakActive: this.hotStreak.isActive(),
+      p95LatencyMs: this.performance.getRollingP95()
+    });
     if (!decision.shouldRequest) {
       return null;
     }
@@ -145,6 +149,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   }
 
   public noteDocumentChange(event: vscode.TextDocumentChangeEvent): void {
+    this.hotStreak.noteKeystroke();
     this.triggerDetector.noteKeystroke();
     const pasted = event.contentChanges.some((change) => change.text.length > 1);
     if (pasted) {
@@ -154,6 +159,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
   public noteSuggestionAccepted(contextHash: string, languageId?: string): void {
     this.clearLastShown();
+    this.hotStreak.activate();
     this.triggerDetector.noteAcceptance(contextHash);
     this.performance.recordAccept(languageId);
     this.lastScopeHash = contextHash;
@@ -195,6 +201,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.lastShownContextHash = contextHash;
     this.lastShownAt = Date.now();
     this.lastShownLanguageId = languageId;
+    this.performance.recordShow(languageId);
   }
 
   private clearLastShown(): void {
