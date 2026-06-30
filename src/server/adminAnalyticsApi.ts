@@ -75,13 +75,26 @@ export async function handleAdminAnalyticsRequest(
     const countFor = (eventType: string) =>
       byType.find((row) => row.eventType === eventType)?.count ?? 0;
     const suggested = countFor("completion.suggested");
+    const requested = countFor("completion.requested");
     const accepted = countFor("completion.accepted");
     const rejected = countFor("completion.rejected");
+    const [serverLatency, clientP50, clientP95] = await Promise.all([
+      usageTracker.latencyPercentilesForEventType(auth.orgId, range, "completion.requested", "latencyMs"),
+      usageTracker.latencyPercentilesForEventType(auth.orgId, range, "completion.performance", "p50LatencyMs"),
+      usageTracker.latencyPercentilesForEventType(auth.orgId, range, "completion.performance", "p95LatencyMs")
+    ]);
     writeJson(response, 200, {
       suggested,
+      requested,
       accepted,
       rejected,
       acceptanceRate: suggested > 0 ? accepted / suggested : null,
+      serverLatencyP50Ms: serverLatency.p50,
+      serverLatencyP95Ms: serverLatency.p95,
+      serverLatencySamples: serverLatency.sampleCount,
+      clientLatencyP50Ms: clientP50.p50,
+      clientLatencyP95Ms: clientP95.p95,
+      clientLatencySamples: Math.max(clientP50.sampleCount, clientP95.sampleCount),
       eventsByDay: await usageTracker.eventsByDayForEventTypes(auth.orgId, range, "completion.")
     });
     return true;

@@ -77,31 +77,55 @@ Streams assistant output as Server-Sent Events.
 
 ### `POST /v1/completions/inline`
 
-Batch completion for editor ghost text (`useCase: inline_completion`). Same auth as `/v1/chat`.
+Batch or streaming completion for editor ghost text (`useCase: inline_completion`). Same auth as `/v1/chat`.
 
 **Request body**
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `message` | string | Prompt with surrounding code context |
+| `message` | string? | Prompt with surrounding code context (chat-fallback mode) |
+| `segments` | object? | FIM mode: `{ prefix, suffix }` — requires `prefix` if `message` omitted |
+| `segments.prefix` | string | Code before cursor (max 4,000 chars) |
+| `segments.suffix` | string? | Code after cursor (max 2,000 chars) |
+| `stream` | boolean? | `true` → SSE (`text/event-stream`); default `false` → JSON |
+| `repoId` | string? | Repo metadata for quota/audit |
 | `languageId` | string? | VS Code language id |
 | `file` | string? | File path (metadata only) |
-| `provider` | string? | `anthropic` \| `openai` \| … |
-| `model` | string? | Fast model recommended (e.g. Haiku) |
-| `maxTokens` | number? | Default 96, cap 128 |
+| `provider` | string? | `anthropic` \| `openai` \| `deepseek` \| `gemini` \| `mistral` |
+| `model` | string? | Fast model recommended (e.g. Haiku, `codestral-latest`) |
+| `maxTokens` | number? | Default 96, cap 200 (multi-line) |
 | `temperature` | number? | Default 0.15 |
 
-**Response** `200`
+**Validation:** require `message` **or** `segments.prefix` (non-empty after trim).
+
+**FIM routing (server-side):** when `segments.prefix` is present, the API prefers Mistral Codestral FIM (`MISTRAL_API_KEY`), then DeepSeek FIM beta (`DEEPSEEK_API_KEY`), otherwise chat-fallback using `message`.
+
+**Response** `200` (JSON, `stream` omitted or `false`)
 
 ```json
 {
   "text": "completion text only",
   "alternatives": [],
-  "model": "claude-3-haiku-20240307",
-  "provider": "anthropic",
-  "latencyMs": 120
+  "model": "codestral-latest",
+  "provider": "mistral",
+  "latencyMs": 120,
+  "fim": true,
+  "usage": {
+    "inputTokens": 42,
+    "outputTokens": 8
+  }
 }
 ```
+
+**Response** `200` (`stream: true`)
+
+`Content-Type: text/event-stream`. Each line is `data: {json}\n\n` with the same chunk shapes as `/v1/chat`:
+
+| `type` | Payload |
+|--------|---------|
+| `delta` | `{ "type": "delta", "text": "..." }` |
+| `done` | `{ "type": "done", "usage": { ... }, "model": "...", "provider": "...", "finishReason": "stop" }` |
+| `error` | `{ "type": "error", "message": "..." }` |
 
 ## Graph (Pro and Enterprise)
 
@@ -127,4 +151,5 @@ Batch completion for editor ghost text (`useCase: inline_completion`). Same auth
 | `ANTHROPIC_API_KEY` | Anthropic |
 | `OPENAI_API_KEY` | OpenAI |
 | `DEEPSEEK_API_KEY` | DeepSeek |
+| `MISTRAL_API_KEY` | Mistral Codestral (FIM inline) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini |

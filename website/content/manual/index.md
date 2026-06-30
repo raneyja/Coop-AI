@@ -1,7 +1,7 @@
 ---
 title: "Coop AI Owner's Manual"
 description: "Install, configure, and use Coop AI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-06-30"
 ---
 
 Congratulations on choosing Coop AI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -148,7 +148,27 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 
 ### Inline complete and edit selection
 
-**Inline complete** — Ghost-text completions as you type. Tab to accept. Optional graph context for callers, types, and conventions.
+**Inline complete** — Ghost-text autocomplete as you type. Shipped in production; **off by default** (`coopAI.autocomplete.enabled: false`).
+
+| Step | Surface | Action |
+| --- | --- | --- |
+| Enable | **File** — VS Code settings | Set `"coopAI.autocomplete.enabled": true` |
+| Or toggle | **Extension UI** — Command Palette | **CoopAI: Toggle Autocomplete** |
+| Accept | Editor | **Tab** |
+| Reject | Editor | **Escape** |
+| Manual trigger | Editor | **Ctrl+Shift+\\** (Windows/Linux) or **Cmd+Shift+\\** (macOS) |
+
+**How it works:**
+
+- VS Code `InlineCompletionItemProvider` shows streaming ghost text
+- **FIM** (fill-in-the-middle) sends `prefix` + `suffix` segments when `coopAI.autocomplete.useFim` is `true` (default) — routed to Codestral or DeepSeek when configured
+- **Hot Streak** keeps completions snappy after Tab-accept; **Smart Throttle** adapts debounce to typing speed and latency
+- **Multi-line** completions activate after `{`, `=>`, `(`, or inside blocks (up to 200 tokens)
+- **Pro:** optional graph context via `coopAI.autocomplete.useGraphContext` — dependents and ownership from indexed repos
+
+**Copilot:** if GitHub Copilot is installed, set `coopAI.autocomplete.copilotPolicy` to `warn` (default) or `disable-when-copilot`.
+
+Full guide: [Inline autocomplete](/docs/autocomplete).
 
 **Edit selection** — Highlight a block, describe the change, review an inline diff. Accept, retry, or undo.
 

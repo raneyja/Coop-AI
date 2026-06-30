@@ -9,7 +9,8 @@ import { readConfiguration, readDegradationConfiguration, SecureApiClient } from
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
 import {
   registerCoopAutocomplete,
-  registerAutocompleteCommands
+  registerAutocompleteCommands,
+  createAutocompleteUsageTelemetryHandler
 } from "./autocomplete/registerAutocomplete";
 import { readAutocompleteSettings } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
@@ -563,16 +564,22 @@ export function activate(context: vscode.ExtensionContext): void {
 
   registerQuickActionCommands(context, () => provider.session);
 
-  const autocompleteProvider = registerCoopAutocomplete(context, api, (payload) => {
-    for (const session of coopSessionRegistry.getAll()) {
-      session.postAutocompleteStatus(payload);
-    }
-  });
-  registerAutocompleteCommands(context, api, autocompleteProvider, (payload) => {
-    for (const session of coopSessionRegistry.getAll()) {
-      session.postAutocompleteStatus(payload);
-    }
-  });
+  const publishAutocompleteStatus: import("./autocomplete/coopAutocompleteProvider").AutocompleteStatusPublisher =
+    (payload) => {
+      for (const session of coopSessionRegistry.getAll()) {
+        session.postAutocompleteStatus(payload);
+      }
+    };
+
+  const autocompleteProvider = registerCoopAutocomplete(
+    context,
+    api,
+    publishAutocompleteStatus,
+    createAutocompleteUsageTelemetryHandler((eventType, metadata) => {
+      void api.recordUsageEvents(eventType, metadata).catch(() => undefined);
+    })
+  );
+  registerAutocompleteCommands(context, api, autocompleteProvider, publishAutocompleteStatus);
 
   void vscode.commands.executeCommand(
     "setContext",

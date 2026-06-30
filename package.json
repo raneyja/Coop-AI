@@ -159,6 +159,7 @@
       {
         "command": "coopAI.internal.autocompleteRejected",
         "key": "escape",
+        "args": "escape",
         "when": "editorTextFocus && inlineSuggestionVisible && coopAI.autocomplete.enabled"
       }
     ],
@@ -374,15 +375,14 @@
           "default": "",
           "description": "Model id when coopAI.autocomplete.model is custom."
         },
-        "coopAI.autocomplete.acceptKey": {
+        "coopAI.autocomplete.copilotPolicy": {
           "type": "string",
           "enum": [
-            "Tab",
-            "Enter",
-            "Both"
+            "warn",
+            "disable-when-copilot"
           ],
-          "default": "Tab",
-          "description": "Preferred accept key (VS Code inline suggest uses Tab by default)."
+          "default": "warn",
+          "description": "How to behave when GitHub Copilot extensions are installed: warn in the UI, or disable Coop autocomplete."
         },
         "coopAI.autocomplete.showMultipleSuggestions": {
           "type": "boolean",
@@ -395,6 +395,16 @@
           "minimum": 100,
           "maximum": 2000,
           "description": "Drop slow completion requests after this many milliseconds."
+        },
+        "coopAI.autocomplete.useFim": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use fill-in-the-middle (FIM) segments when the server supports Codestral or DeepSeek FIM."
+        },
+        "coopAI.autocomplete.useGraphContext": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include indexed dependency graph context in inline completions (Pro plan)."
         },
         "coopAI.autocomplete.projectImports": {
           "type": "array",
@@ -798,7 +808,10 @@
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
-    "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
+    "test:inline-completion": "npx tsx src/api/inlineGraphContext.test.ts && npx tsx src/api/inlineCompletionApi.test.ts",
+    "test:autocomplete-smoke": "npx tsx scripts/autocomplete-smoke.mjs",
+    "test:fim": "npx tsx src/api/fimRouter.test.ts",
+    "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
     "test:lightning-search-scope": "npx tsx src/indexing/lightningSearchScope.test.ts",

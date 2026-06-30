@@ -3,7 +3,7 @@ title: API reference
 description: Coop AI API v1 — chat, inline completion, health, and authentication.
 section: api
 order: 1
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-06-30"
 ---
 
 All routes are served from your API base URL (`https://api.coop-ai.dev` or self-hosted).
@@ -77,30 +77,70 @@ Streams assistant output as Server-Sent Events (SSE).
 
 ### `POST /v1/completions/inline`
 
-Batch completion for editor ghost text. Same auth as chat.
+Streaming or batch completion for editor ghost text (`useCase: inline_completion`). Same auth as `/v1/chat`.
 
-**Request:**
+The VS Code extension sends `x-use-case: code-completion-only` for zero-retention routing.
 
-| Field | Notes |
-| --- | --- |
-| `message` | Prompt with surrounding code context |
-| `languageId` | VS Code language id |
-| `file` | File path (metadata) |
-| `maxTokens` | Default 96, cap 128 |
-| `temperature` | Default 0.15 |
+**Request body:**
 
-Uses header `x-use-case: code-completion-only` for zero-retention routing.
+| Field | Type | Notes |
+| --- | --- | --- |
+| `message` | string? | Prompt with surrounding code (chat-fallback when FIM unavailable) |
+| `segments` | object? | FIM mode: `{ prefix, suffix }` — requires non-empty `prefix` if `message` omitted |
+| `segments.prefix` | string | Code before cursor (max 4,000 chars) |
+| `segments.suffix` | string? | Code after cursor (max 2,000 chars) |
+| `stream` | boolean? | `true` → SSE (`text/event-stream`); default `false` → JSON |
+| `repoId` | string? | Repo id for quota, audit, and graph context |
+| `useGraphContext` | boolean? | Attach indexed graph slice (**Pro** / Enterprise) |
+| `languageId` | string? | VS Code language id |
+| `file` | string? | File path (metadata) |
+| `provider` | string? | `anthropic` \| `openai` \| `deepseek` \| `gemini` \| `mistral` |
+| `model` | string? | Fast model (e.g. `claude-haiku-4-5-20251001`, `codestral-latest`) |
+| `maxTokens` | number? | Default 96; cap **200** (multi-line completions use higher limit) |
+| `temperature` | number? | Default 0.15 |
 
-**Response:**
+**Validation:** require `message` **or** non-empty `segments.prefix`.
+
+**FIM routing (server-side):** when `segments.prefix` is present, the API prefers:
+
+1. Mistral Codestral FIM (`MISTRAL_API_KEY`) → `codestral-latest`
+2. DeepSeek FIM (`DEEPSEEK_API_KEY`) → `deepseek-chat`
+3. Chat fallback via `message` (Anthropic Haiku or OpenAI mini)
+
+Response includes `"fim": true` when a FIM provider handled the request.
+
+**Response** `200` (JSON, `stream` omitted or `false`):
 
 ```json
 {
   "text": "completion text only",
-  "model": "claude-3-haiku-20240307",
-  "provider": "anthropic",
-  "latencyMs": 120
+  "alternatives": [],
+  "model": "codestral-latest",
+  "provider": "mistral",
+  "latencyMs": 120,
+  "fim": true,
+  "usage": {
+    "inputTokens": 42,
+    "outputTokens": 8
+  }
 }
 ```
+
+**Response** `200` (`stream: true`):
+
+`Content-Type: text/event-stream`. Each line is `data: {json}\n\n`:
+
+| `type` | Payload |
+| --- | --- |
+| `delta` | `{ "type": "delta", "text": "..." }` |
+| `done` | `{ "type": "done", "usage": { ... }, "model": "...", "provider": "...", "finishReason": "stop" }` |
+| `error` | `{ "type": "error", "message": "..." }` |
+
+**Telemetry:** successful completions emit `completion.requested` server-side with `metadata.latencyMs` and `metadata.fim`.
+
+When `useGraphContext` is `true`, responses may include `x-graph-context: degraded` if the graph slice timed out or was unavailable.
+
+**Errors:** `400` invalid request, `401` unauthorized, `429` rate limited, `502` provider failure
 
 ## Graph (Pro and Enterprise)
 
@@ -119,6 +159,8 @@ Returns `403` with `plan_required` on free plans.
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Anthropic provider |
 | `OPENAI_API_KEY` | OpenAI provider |
+| `MISTRAL_API_KEY` | Mistral Codestral (FIM inline completion) |
+| `DEEPSEEK_API_KEY` | DeepSeek (FIM inline completion) |
 | `COOP_LLM_DEFAULT_PROVIDER` | Default provider (`anthropic`) |
 | `COOP_LLM_MOCK` | `true` = mock stream without provider keys |
 | `COOP_REQUIRE_API_AUTH` | Require Bearer token (production: `true`) |

@@ -26,6 +26,8 @@ import {
 } from "../server/planQuota";
 import { isValidPaperclipDataUrl, isAcceptedPaperclipMimeType, isVisionWeightedPaperclipAttachment } from "../chat/paperclipAttachments";
 
+import type { GraphQueryApi } from "./graphQuery";
+
 export type ChatApiDeps = {
   router?: ModelRouter;
   config?: LlmServerConfig;
@@ -35,6 +37,7 @@ export type ChatApiDeps = {
   usageTracker?: UsageTracker;
   userStore?: UserStore;
   planQuota?: PlanQuotaService;
+  graphQuery?: GraphQueryApi;
 };
 
 type ParsedChatRequest = {
@@ -71,13 +74,19 @@ export async function handleChatApiRequest(
     }
     const planQuota = resolvePlanQuota(deps);
     const inlineBody = asRecord(parsed.body);
-    const maxTokens = typeof inlineBody.maxTokens === "number" ? Math.min(inlineBody.maxTokens, 128) : 96;
+    const maxTokens =
+      typeof inlineBody.maxTokens === "number" ? Math.min(inlineBody.maxTokens, 200) : 96;
     const provider = readProvider(inlineBody.provider, config.defaultProvider);
     const model =
       typeof inlineBody.model === "string" && inlineBody.model
         ? inlineBody.model
         : defaultInlineModelFor(provider);
-    const inlineMessage = typeof inlineBody.message === "string" ? inlineBody.message : "";
+    const inlineMessage =
+      typeof inlineBody.message === "string"
+        ? inlineBody.message
+        : typeof (inlineBody.segments as { prefix?: string } | undefined)?.prefix === "string"
+          ? (inlineBody.segments as { prefix: string }).prefix
+          : "";
     try {
       await planQuota.check(
         org.orgId,
@@ -98,10 +107,18 @@ export async function handleChatApiRequest(
     }
     const router = createChatRouter(deps);
     try {
-      await handleInlineCompletionRequest(parsed.body, response, router, config, {
-        ...org,
-        planQuota
-      });
+      await handleInlineCompletionRequest(
+        parsed.body,
+        response,
+        router,
+        config,
+        {
+          ...org,
+          planQuota
+        },
+        rawRequest,
+        { graphQuery: deps.graphQuery }
+      );
     } finally {
       await deps.auditLogger?.record({
         orgId: org.orgId,
@@ -336,7 +353,13 @@ function countVisionWeightedAttachments(attachments: unknown[] | undefined): num
 }
 
 function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
-  if (value === "openai" || value === "anthropic" || value === "deepseek" || value === "gemini") {
+  if (
+    value === "openai" ||
+    value === "anthropic" ||
+    value === "deepseek" ||
+    value === "gemini" ||
+    value === "mistral"
+  ) {
     return value;
   }
   return fallback;

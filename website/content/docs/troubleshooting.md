@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for Coop AI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-06-30"
 ---
 
 ## Extension
@@ -16,6 +16,20 @@ lastUpdated: "2026-06-29"
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
 | **No integration context** | Ask admin to connect tools in admin portal |
+
+## Autocomplete
+
+| Problem | Fix |
+| --- | --- |
+| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true` in VS Code settings |
+| **Manual trigger does nothing** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
+| **Competing suggestions with Copilot** | Set `coopAI.autocomplete.copilotPolicy` to `disable-when-copilot`, or disable Copilot inline |
+| **Slow or dropped completions** | Increase `requestTimeoutMs` (default 400); check API latency; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
+| **401 on completions** | Verify API key; create new key in admin portal if revoked |
+| **Graph context not applied** | Pro plan required; connect and index repo in admin portal; set Workspace owner/repo/branch |
+| **FIM not used** | Ensure `coopAI.autocomplete.useFim` is `true`; operator sets `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` on API server |
+
+Full guide: [Inline autocomplete](/docs/autocomplete).
 
 ## Admin portal
 

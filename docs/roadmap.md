@@ -10,7 +10,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 |------------|----------------|-------|
 | Multi-model router | `src/api/ModelRouter.ts` | Server-side; provider keys in env |
 | Chat streaming | `POST /v1/chat` | SSE: `delta`, `done`, `error` |
-| Inline completion stub | `POST /v1/completions/inline` | Returns `501` until implemented |
+| Inline completion | `POST /v1/completions/inline` | `useCase: inline_completion`; mock or provider keys |
 | Health + LLM status | `GET /health` | `llm.mockMode`, `llm.configuredProviders` |
 | Zero-retention routing | `requestFormatter`, `zeroRetentionConfig` | All provider calls |
 | Mock dev mode | `COOP_LLM_MOCK=true` | No provider keys required |
@@ -28,11 +28,11 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Open repo in editor (hybrid) | On remote explorer repo pick: local clone via `openFolder`, else GitHub Repositories (`coopAI.openRepoInEditor`) |
 | Workspace prompt library | `.coop/prompts.json` + sidebar chips + Save / Run |
 | API key UX | **Save API key** button (any length for local dev) |
+| Inline autocomplete (T0) | `coopAI.autocomplete.enabled` default **off**; buffer-only ghost text |
 
 ### Explicitly not in scope of that pass
 
 - File `@`-mentions in chat
-- Inline autocomplete in the editor
 - Graph-backed completion context (T1)
 
 ---
@@ -58,22 +58,24 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 ---
 
-### 2. Autocomplete T0 (buffer-only)
+### 2. Autocomplete T0 (buffer-only) — shipped
 
 **Goal:** Inline ghost-text completions using the open file only—no graph yet.
 
-**Trigger to start:** `POST /v1/completions/inline` implemented on the server (replace `501`).
+**Status:** Shipped. Default `coopAI.autocomplete.enabled` is **off** until users opt in.
 
 **Build list:**
 
-- [ ] Implement inline route on server (reuse `ModelRouter`, `useCase: inline_completion`)
-- [ ] `CoopInlineCompletionProvider` in extension (`registerInlineCompletionItemProvider`)
-- [ ] Debounce + cancel in-flight requests
-- [ ] Honor `coopAI.autocomplete.enabled` (default **off** until ready)
-- [ ] Zero-retention headers (`x-use-case: code-completion-only`)
-- [ ] Strip markdown fences from model output
+- [x] Implement inline route on server (reuse `ModelRouter`, `useCase: inline_completion`)
+- [x] `CoopAutocompleteProvider` in extension (`registerInlineCompletionItemProvider`)
+- [x] Debounce + cancel in-flight requests
+- [x] Honor `coopAI.autocomplete.enabled` (default **off**)
+- [x] Zero-retention headers (`x-use-case: code-completion-only`)
+- [x] Strip markdown fences from model output
+- [x] Copilot coexistence policy (`coopAI.autocomplete.copilotPolicy`)
+- [x] Accept/reject telemetry (Tab accept, Escape reject, superseded)
 
-**Prompt shape:** Narrow completion system prompt in `systemPrompts.ts` (already sketched for `inline_completion`).
+**Prompt shape:** Narrow completion system prompt in `systemPrompts.ts` (`inline_completion`).
 
 ---
 
@@ -142,9 +144,8 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 ## Recommended build order
 
 ```text
-Now (verified)     →  mock chat + settings + prompts + context menu
+Now (verified)     →  mock chat + settings + prompts + context menu + Autocomplete T0
 Next               →  @-mentions (files only) + live graph context for quick actions
-Then               →  POST /v1/completions/inline + Autocomplete T0
 Then               →  Autocomplete T1, BYOK on router
 ```
 
@@ -178,7 +179,7 @@ When ready for a row above, use a prompt like:
 
 **Autocomplete T0**
 
-> Implement `POST /v1/completions/inline` and extension `InlineCompletionItemProvider` (buffer-only). Default `coopAI.autocomplete.enabled` false. See `docs/roadmap.md` §2.
+> Shipped: `POST /v1/completions/inline` + extension `InlineCompletionItemProvider` (buffer-only). Default `coopAI.autocomplete.enabled` false. See `docs/roadmap.md` §2.
 
 ---
 

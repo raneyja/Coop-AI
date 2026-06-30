@@ -7,7 +7,7 @@ import { formatWaitTime } from "../jobs/types";
 import type { OrgPlan } from "./orgStore";
 import type { TokenUsageEvent, UsageTracker } from "./usageTracker";
 
-export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.suggested"] as const;
+export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.requested"] as const;
 
 export const DEFAULT_FREE_TOKEN_LIMIT = 80_000;
 /** @deprecated Use DEFAULT_FREE_TOKEN_LIMIT */

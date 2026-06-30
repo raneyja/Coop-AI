@@ -34,14 +34,17 @@ const CATALOG: ModelDefinition[] = [
   { id: "gemini-2.0-flash", provider: "gemini", creditWeight: 1, tier: "budget", label: "Gemini 2.0 Flash" },
   // DeepSeek
   { id: "deepseek-chat", provider: "deepseek", creditWeight: 0.5, tier: "budget", label: "DeepSeek Chat" },
-  { id: "deepseek-reasoner", provider: "deepseek", creditWeight: 2, tier: "capable", label: "DeepSeek Reasoner" }
+  { id: "deepseek-reasoner", provider: "deepseek", creditWeight: 2, tier: "capable", label: "DeepSeek Reasoner" },
+  // Mistral (FIM inline)
+  { id: "codestral-latest", provider: "mistral", creditWeight: 0.5, tier: "budget", label: "Codestral" }
 ];
 
 const PROVIDER_DEFAULT_CREDIT_WEIGHT: Record<LlmProvider, number> = {
   openai: 4,
   anthropic: 4,
   gemini: 1.5,
-  deepseek: 0.5
+  deepseek: 0.5,
+  mistral: 0.5
 };
 
 const catalogById = new Map(CATALOG.map((entry) => [entry.id.toLowerCase(), entry]));
@@ -51,7 +54,8 @@ export const MODELS_BY_PROVIDER: Record<LlmProvider, string[]> = {
   anthropic: [],
   openai: [],
   gemini: [],
-  deepseek: []
+  deepseek: [],
+  mistral: []
 };
 
 for (const entry of CATALOG) {
@@ -62,16 +66,12 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
   anthropic: "claude-sonnet-4-6",
   openai: "gpt-5.1",
   gemini: "gemini-2.5-flash",
-  deepseek: "deepseek-chat"
+  deepseek: "deepseek-chat",
+  mistral: "codestral-latest"
 };
 
-/** Fast/cheap models for inline autocomplete. */
-export const INLINE_DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
-  gemini: "gemini-2.0-flash",
-  deepseek: "deepseek-chat"
-};
+/** Fast/cheap models for inline autocomplete — see `inlineModelPresets.ts`. */
+export { INLINE_DEFAULT_MODEL_BY_PROVIDER } from "./inlineModelPresets";
 
 export function modelsForProvider(provider: LlmProvider): ModelDefinition[] {
   return CATALOG.filter((entry) => entry.provider === provider);

@@ -182,6 +182,7 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import { buildRepoId } from "./buildRepoId";
 import {
   buildTraceDecisionSearchSeeds,
   mergeTraceDecisionIntegrationEvidence
@@ -5417,16 +5418,6 @@ function mergeContextBundleResults(
   const incomingTypes = new Set(incoming.map((entry) => entry.type));
   const preserved = previous.filter((entry) => !incomingTypes.has(entry.type));
   return [...incoming, ...preserved];
-}
-
-function buildRepoId(preferences: UserPreferences, context: RepoContext): string {
-  const owner = context.owner ?? preferences.owner;
-  const repo = context.repo ?? preferences.repo;
-  const provider = context.provider ?? preferences.defaultCodeHost;
-  if (owner && repo) {
-    return `${provider}:${owner}/${repo}`;
-  }
-  return `${provider}:unknown/unknown`;
 }
 
 function parseRepoIdParts(repoId: string): [string, string] {

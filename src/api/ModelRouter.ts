@@ -5,7 +5,8 @@ import type { LlmProvider } from "./zeroRetentionConfig";
 import { estimateCostUsd, estimateTokensFromText } from "./costEstimate";
 import type { CompletionRequest, CompletionResponse, LlmAuditEvent, StreamChunk } from "./types";
 import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type LlmServerConfig } from "./llmServerConfig";
-import { createProviderClient } from "./providers";
+import { createProviderClient, createFimClient } from "./providers";
+import { selectFimProvider } from "./fimRouter";
 import { buildUserMessageWithContext, systemPromptForUseCase } from "../prompts/systemPrompts";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT } from "./requestFormatter";
@@ -114,8 +115,207 @@ export class ModelRouter {
     extraSystemPrompt?: string,
     signal?: AbortSignal
   ): Promise<CompletionResponse> {
+    const route = selectFimProvider(this.config, {
+      segments: request.segments,
+      requestedProvider: request.modelConfig.provider,
+      requestedModel: request.modelConfig.model
+    });
+
+    if (route.mode === "fim" && request.segments) {
+      return this.completeFim(request, route, signal);
+    }
+
+    const chatRoute =
+      route.mode === "chat-fallback"
+        ? route
+        : {
+            mode: "chat-fallback" as const,
+            provider: request.modelConfig.provider,
+            model: request.modelConfig.model
+          };
+    return this.completeInlineChat(request, extraSystemPrompt, signal, chatRoute);
+  }
+
+  public async *streamInline(
+    request: CompletionRequest,
+    extraSystemPrompt?: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    const route = selectFimProvider(this.config, {
+      segments: request.segments,
+      requestedProvider: request.modelConfig.provider,
+      requestedModel: request.modelConfig.model
+    });
+
+    if (route.mode === "fim" && request.segments) {
+      yield* this.streamFim(request, route, signal);
+      return;
+    }
+
+    const chatRoute =
+      route.mode === "chat-fallback"
+        ? route
+        : {
+            mode: "chat-fallback" as const,
+            provider: request.modelConfig.provider,
+            model: request.modelConfig.model
+          };
+    yield* this.streamInlineChat(request, extraSystemPrompt, signal, chatRoute);
+  }
+
+  private async completeFim(
+    request: CompletionRequest,
+    route: { mode: "fim"; provider: "mistral" | "deepseek"; model: string },
+    signal?: AbortSignal
+  ): Promise<CompletionResponse> {
     const started = Date.now();
-    const provider = this.resolveProvider(request);
+    const segments = request.segments!;
+    const provider = route.provider;
+
+    if (this.isMockMode()) {
+      const mockText = suggestMockFimCompletion(segments.prefix, segments.suffix);
+      const inputTokens = estimateTokensFromText(segments.prefix + segments.suffix);
+      const outputTokens = estimateTokensFromText(mockText);
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+      return {
+        text: mockText,
+        usage: {
+          inputTokens,
+          outputTokens,
+          estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+        },
+        model: route.model,
+        provider,
+        finishReason: "stop"
+      };
+    }
+
+    if (!request.allowUnapprovedProvider && provider === "deepseek") {
+      try {
+        requireEnterpriseApprovedProvider(provider);
+      } catch (error) {
+        throw new Error(error instanceof Error ? error.message : "Provider not approved.");
+      }
+    }
+
+    const apiKey = resolveProviderApiKey(this.config, provider);
+    if (!apiKey) {
+      throw new Error(`No API key configured for provider ${provider}.`);
+    }
+
+    const client = createFimClient(provider, { apiKey });
+    let text = "";
+    let usage = { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+    let finishReason: CompletionResponse["finishReason"] = "stop";
+
+    for await (const chunk of client.streamFim({
+      prefix: segments.prefix,
+      suffix: segments.suffix,
+      model: route.model,
+      temperature: request.modelConfig.temperature,
+      maxTokens: request.modelConfig.maxTokens,
+      signal,
+      requestId: request.requestId
+    })) {
+      if (chunk.type === "delta") {
+        text += chunk.text;
+      } else if (chunk.type === "done") {
+        usage = chunk.usage;
+        finishReason = chunk.finishReason;
+      } else if (chunk.type === "error") {
+        this.audit(request, provider, started, "error", 0, 0, "ProviderError");
+        throw new Error(chunk.message);
+      }
+      if (signal?.aborted) {
+        finishReason = "cancelled";
+        break;
+      }
+    }
+
+    text = stripInlineFences(text);
+    this.audit(request, provider, started, "ok", usage.inputTokens, usage.outputTokens);
+    return {
+      text,
+      usage,
+      model: route.model,
+      provider,
+      finishReason
+    };
+  }
+
+  private async *streamFim(
+    request: CompletionRequest,
+    route: { mode: "fim"; provider: "mistral" | "deepseek"; model: string },
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    const started = Date.now();
+    const segments = request.segments!;
+    const provider = route.provider;
+
+    if (this.isMockMode()) {
+      yield* this.mockFimStream(request, segments, provider, route.model, signal);
+      return;
+    }
+
+    if (!request.allowUnapprovedProvider && provider === "deepseek") {
+      try {
+        requireEnterpriseApprovedProvider(provider);
+      } catch (error) {
+        yield {
+          type: "error",
+          message: error instanceof Error ? error.message : "Provider not approved for enterprise use."
+        };
+        this.audit(request, provider, started, "error", 0, 0, "ProviderNotApproved");
+        return;
+      }
+    }
+
+    const apiKey = resolveProviderApiKey(this.config, provider);
+    if (!apiKey) {
+      yield { type: "error", message: `No API key configured for provider ${provider}.` };
+      this.audit(request, provider, started, "error", 0, 0, "MissingApiKey");
+      return;
+    }
+
+    const client = createFimClient(provider, { apiKey });
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    try {
+      for await (const chunk of client.streamFim({
+        prefix: segments.prefix,
+        suffix: segments.suffix,
+        model: route.model,
+        temperature: request.modelConfig.temperature,
+        maxTokens: request.modelConfig.maxTokens,
+        signal,
+        requestId: request.requestId
+      })) {
+        if (chunk.type === "done") {
+          inputTokens = chunk.usage.inputTokens;
+          outputTokens = chunk.usage.outputTokens;
+        }
+        yield chunk;
+        if (chunk.type === "error") {
+          this.audit(request, provider, started, "error", inputTokens, outputTokens, "ProviderError");
+          return;
+        }
+      }
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+    } catch (error) {
+      yield { type: "error", message: error instanceof Error ? error.message : "FIM stream failed." };
+      this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException");
+    }
+  }
+
+  private async completeInlineChat(
+    request: CompletionRequest,
+    extraSystemPrompt: string | undefined,
+    signal: AbortSignal | undefined,
+    route: { mode: "chat-fallback"; provider: LlmProvider; model: string }
+  ): Promise<CompletionResponse> {
+    const started = Date.now();
+    const provider = route.provider;
     const userContent = buildUserMessageWithContext(request.message, request.context);
     const systemContent = extraSystemPrompt
       ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${extraSystemPrompt}`
@@ -140,7 +340,7 @@ export class ModelRouter {
           outputTokens,
           estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
         },
-        model: request.modelConfig.model,
+        model: route.model,
         provider,
         finishReason: "stop"
       };
@@ -170,7 +370,7 @@ export class ModelRouter {
 
     for await (const chunk of client.streamCompletion({
       messages,
-      model: request.modelConfig.model,
+      model: route.model,
       temperature: request.modelConfig.temperature,
       maxTokens: request.modelConfig.maxTokens,
       signal,
@@ -196,14 +396,171 @@ export class ModelRouter {
     return {
       text,
       usage,
-      model: request.modelConfig.model,
+      model: route.model,
       provider,
       finishReason
     };
   }
 
+  private async *streamInlineChat(
+    request: CompletionRequest,
+    extraSystemPrompt: string | undefined,
+    signal: AbortSignal | undefined,
+    route: { mode: "chat-fallback"; provider: LlmProvider; model: string }
+  ): AsyncGenerator<StreamChunk> {
+    const started = Date.now();
+    const provider = route.provider;
+    const userContent = buildUserMessageWithContext(request.message, request.context);
+    const systemContent = extraSystemPrompt
+      ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${extraSystemPrompt}`
+      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
+          activeFile: request.context?.file
+        })}`;
+
+    const messages: ChatRequestMessage[] = [
+      { role: "system", content: systemContent },
+      { role: "user", content: userContent }
+    ];
+
+    if (this.isMockMode()) {
+      yield* this.mockInlineStream(request, userContent, provider, route.model, signal);
+      return;
+    }
+
+    if (!request.allowUnapprovedProvider) {
+      try {
+        requireEnterpriseApprovedProvider(provider);
+      } catch (error) {
+        yield {
+          type: "error",
+          message: error instanceof Error ? error.message : "Provider not approved for enterprise use."
+        };
+        this.audit(request, provider, started, "error", 0, 0, "ProviderNotApproved");
+        return;
+      }
+    }
+
+    const apiKey = resolveProviderApiKey(this.config, provider);
+    if (!apiKey) {
+      yield { type: "error", message: `No API key configured for provider ${provider}.` };
+      this.audit(request, provider, started, "error", 0, 0, "MissingApiKey");
+      return;
+    }
+
+    const client = createProviderClient(provider, { apiKey });
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    try {
+      for await (const chunk of client.streamCompletion({
+        messages,
+        model: route.model,
+        temperature: request.modelConfig.temperature,
+        maxTokens: request.modelConfig.maxTokens,
+        signal,
+        requestId: request.requestId
+      })) {
+        if (chunk.type === "done") {
+          inputTokens = chunk.usage.inputTokens;
+          outputTokens = chunk.usage.outputTokens;
+        }
+        yield chunk;
+        if (chunk.type === "error") {
+          this.audit(request, provider, started, "error", inputTokens, outputTokens, "ProviderError");
+          return;
+        }
+      }
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+    } catch (error) {
+      yield { type: "error", message: error instanceof Error ? error.message : "Inline stream failed." };
+      this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException");
+    }
+  }
+
   private resolveProvider(request: CompletionRequest): LlmProvider {
     return request.modelConfig.provider ?? this.config.defaultProvider;
+  }
+
+  private async *mockInlineStream(
+    request: CompletionRequest,
+    userContent: string,
+    provider: LlmProvider,
+    model: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    const mockText = suggestMockCompletion(request.message);
+    for (const word of mockText.split(/(\s+)/).filter(Boolean)) {
+      if (signal?.aborted) {
+        yield {
+          type: "done",
+          usage: {
+            inputTokens: estimateTokensFromText(userContent),
+            outputTokens: 0,
+            estimatedCostUsd: 0
+          },
+          model,
+          provider,
+          finishReason: "cancelled"
+        };
+        return;
+      }
+      yield { type: "delta", text: word };
+      await delay(10);
+    }
+    const inputTokens = estimateTokensFromText(userContent);
+    const outputTokens = estimateTokensFromText(mockText);
+    yield {
+      type: "done",
+      usage: {
+        inputTokens,
+        outputTokens,
+        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+      },
+      model,
+      provider,
+      finishReason: "stop"
+    };
+  }
+
+  private async *mockFimStream(
+    request: CompletionRequest,
+    segments: { prefix: string; suffix: string },
+    provider: LlmProvider,
+    model: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    const mockText = suggestMockFimCompletion(segments.prefix, segments.suffix);
+    for (const part of mockText.split(/(?=[();])/).filter(Boolean)) {
+      if (signal?.aborted) {
+        yield {
+          type: "done",
+          usage: {
+            inputTokens: estimateTokensFromText(segments.prefix + segments.suffix),
+            outputTokens: 0,
+            estimatedCostUsd: 0
+          },
+          model,
+          provider,
+          finishReason: "cancelled"
+        };
+        return;
+      }
+      yield { type: "delta", text: part };
+      await delay(10);
+    }
+    const inputTokens = estimateTokensFromText(segments.prefix + segments.suffix);
+    const outputTokens = estimateTokensFromText(mockText);
+    yield {
+      type: "done",
+      usage: {
+        inputTokens,
+        outputTokens,
+        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+      },
+      model,
+      provider,
+      finishReason: "stop"
+    };
   }
 
   private async *mockStream(
@@ -290,6 +647,19 @@ function stripInlineFences(text: string): string {
     .replace(/^```[\w]*\n?/gm, "")
     .replace(/```$/gm, "")
     .trim();
+}
+
+function suggestMockFimCompletion(prefix: string, suffix: string): string {
+  if (prefix.trim().endsWith(".")) {
+    return "then((value) => value)";
+  }
+  if (prefix.includes("const ")) {
+    return " = undefined;";
+  }
+  if (suffix.trim().startsWith(")")) {
+    return "value";
+  }
+  return "();";
 }
 
 function suggestMockCompletion(message: string): string {

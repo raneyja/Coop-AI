@@ -1,4 +1,4 @@
-export type LlmProvider = "openai" | "anthropic" | "deepseek" | "gemini";
+export type LlmProvider = "openai" | "anthropic" | "deepseek" | "gemini" | "mistral";
 
 export type HeaderValue = string | boolean | number;
 
@@ -172,6 +172,38 @@ const PROVIDER_CONFIGS: Record<LlmProvider, ZeroRetentionProviderConfig> = {
         "Public DeepSeek policy language should be reviewed with counsel before enterprise-confidential code is routed to DeepSeek.",
         "Treat DeepSeek as contract-review-required until a DPA or enterprise no-training commitment is in place.",
         "Prefer BYOK plus customer-approved account terms when this provider is enabled."
+      ]
+    }
+  },
+  mistral: {
+    provider: "mistral",
+    displayName: "Mistral Codestral API",
+    endpoint: {
+      baseUrl: "https://api.mistral.ai",
+      inferencePath: "/v1/fim/completions",
+      blockedPathFragments: ["/batch", "/files", "/fine_tunes"]
+    },
+    defaultHeaders: {
+      ...STANDARD_ZERO_RETENTION_HEADERS,
+      "X-Data-Retention": "none",
+      "X-Purpose": "inference"
+    },
+    requestMetadata: {
+      ...SHARED_METADATA,
+      provider_training_default: "api_data_not_used_for_training_by_default"
+    },
+    bodyAnnotations: {
+      retention_policy: STRICT_RETENTION_POLICY
+    },
+    compliance: {
+      noTrainingOnApi: true,
+      zeroRetentionEligible: true,
+      needsDpa: true,
+      verifiedDate: "2026-05-28",
+      policyUrl: "https://docs.mistral.ai/getting-started/terms/",
+      notes: [
+        "Use Codestral FIM endpoint for inline completion only.",
+        "Mistral states API data is not used for model training by default for eligible tiers."
       ]
     }
   },

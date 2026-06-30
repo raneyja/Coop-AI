@@ -1,4 +1,4 @@
-import type { AutocompleteTelemetryEvent } from "./types";
+import type { AutocompleteTelemetryEvent, PerformanceBatchPayload } from "./types";
 
 export type LatencyBreakdown = {
   assemblyMs: number;
@@ -20,6 +20,45 @@ export type PerformanceSnapshot = {
 const LATENCY_ALERT_MS = 600;
 const MAX_SAMPLES = 200;
 
+export type { PerformanceBatchPayload } from "./types";
+
+export const DEFAULT_PERFORMANCE_BATCH_SIZE = 10;
+
+export function buildPerformanceBatchPayload(snapshot: PerformanceSnapshot): PerformanceBatchPayload {
+  return {
+    requestCount: snapshot.requestCount,
+    acceptCount: snapshot.acceptCount,
+    rejectCount: snapshot.rejectCount,
+    p50LatencyMs: snapshot.p50LatencyMs,
+    p95LatencyMs: snapshot.p95LatencyMs,
+    lastLatencyMs: snapshot.lastLatencyMs
+  };
+}
+
+export class PerformanceBatchEmitter {
+  private pending = 0;
+
+  public constructor(
+    private readonly flushEvery: number = DEFAULT_PERFORMANCE_BATCH_SIZE,
+    private readonly onFlush?: (payload: PerformanceBatchPayload) => void
+  ) {}
+
+  public noteRequest(snapshot: () => PerformanceSnapshot): PerformanceBatchPayload | null {
+    this.pending += 1;
+    if (this.pending < this.flushEvery) {
+      return null;
+    }
+    this.pending = 0;
+    const payload = buildPerformanceBatchPayload(snapshot());
+    this.onFlush?.(payload);
+    return payload;
+  }
+
+  public reset(): void {
+    this.pending = 0;
+  }
+}
+
 export class AutocompletePerformanceMonitor {
   private readonly latencies: number[] = [];
   private requestCount = 0;
@@ -27,12 +66,20 @@ export class AutocompletePerformanceMonitor {
   private rejectCount = 0;
   private lastLatencyMs = 0;
   private readonly listeners: Array<(event: AutocompleteTelemetryEvent) => void> = [];
+  private readonly performanceBatch: PerformanceBatchEmitter;
+
+  public constructor(batchSize = DEFAULT_PERFORMANCE_BATCH_SIZE) {
+    this.performanceBatch = new PerformanceBatchEmitter(batchSize, (payload) => {
+      this.emit({ kind: "performance", performance: payload });
+    });
+  }
 
   public recordRequest(breakdown: LatencyBreakdown, languageId?: string): void {
     this.requestCount += 1;
     this.lastLatencyMs = breakdown.totalMs;
     this.pushLatency(breakdown.totalMs);
     this.emit({ kind: "request", latencyMs: breakdown.totalMs, languageId });
+    this.performanceBatch.noteRequest(() => this.snapshot());
     if (breakdown.totalMs > LATENCY_ALERT_MS) {
       console.warn(
         `[CoopAI autocomplete] Latency ${breakdown.totalMs}ms exceeded ${LATENCY_ALERT_MS}ms (assembly=${breakdown.assemblyMs}, network=${breakdown.networkMs}, parse=${breakdown.parseMs})`
@@ -60,6 +107,14 @@ export class AutocompletePerformanceMonitor {
     };
   }
 
+  public getRollingP50(): number {
+    return percentile([...this.latencies].sort((a, b) => a - b), 0.5);
+  }
+
+  public getRollingP95(): number {
+    return percentile([...this.latencies].sort((a, b) => a - b), 0.95);
+  }
+
   public snapshot(): PerformanceSnapshot {
     const sorted = [...this.latencies].sort((a, b) => a - b);
     const p50 = percentile(sorted, 0.5);
@@ -73,6 +128,10 @@ export class AutocompletePerformanceMonitor {
       lastLatencyMs: this.lastLatencyMs,
       alertThresholdMs: LATENCY_ALERT_MS
     };
+  }
+
+  public recordShow(languageId?: string): void {
+    this.emit({ kind: "show", languageId });
   }
 
   public acceptanceRate(): number {

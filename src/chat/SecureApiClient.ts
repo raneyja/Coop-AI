@@ -651,6 +651,18 @@ export class SecureApiClient {
     return this.backend.fetchInlineCompletion(baseUrl, body, signal);
   }
 
+  public async streamInlineCompletion(
+    baseUrl: string,
+    body: import("../api/CoopBackendClient").InlineCompletionBody,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal
+  ): Promise<import("../api/CoopBackendClient").InlineCompletionResult> {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    this.setBaseUrl(baseUrl);
+    return this.backend.streamInlineCompletion(baseUrl, body, onChunk, signal);
+  }
+
   public async recordUsageEvents(
     eventType: string,
     metadata?: Record<string, unknown>

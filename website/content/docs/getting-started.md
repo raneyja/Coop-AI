@@ -3,7 +3,7 @@ title: Getting started
 description: Install Coop AI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-06-30"
 ---
 
 This guide gets you from signup to your first useful chat in Coop AI.
@@ -44,6 +44,15 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 With a file open, right-click the selection and choose **Trace Decision** or type `/trace` in chat.
 
+## Optional — Inline autocomplete
+
+Coop AI can show ghost-text code completions as you type. The feature is **off by default**.
+
+1. **File** — VS Code settings: set `"coopAI.autocomplete.enabled": true`
+2. Type in a code file — ghost text appears after a short pause; **Tab** to accept
+
+See [Inline autocomplete](/docs/autocomplete) for FIM, graph context (Pro), Copilot coexistence, and shortcuts.
+
 ## Plans at a glance
 
 | Plan | Best for |
@@ -56,5 +65,6 @@ See [Plans & billing](/docs/plans-billing) for details.
 
 ## Next
 
+- [Inline autocomplete](/docs/autocomplete) — ghost-text completions (opt-in)
 - [Extension settings](/docs/extension-settings) — workspace, tools, preferences
 - [Owner's Manual](/manual) — daily use, quick actions, prompt library

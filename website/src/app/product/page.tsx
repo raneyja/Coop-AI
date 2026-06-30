@@ -111,8 +111,12 @@ export default function ProductPage() {
           <SectionHeading label="features" title="Capabilities" />
           <CapabilitiesMatrix groups={productCapabilityGroups} />
           <p className="mt-8 text-sm text-coop-muted">
-            Graph-backed completion context and file @-mentions in chat are rolling out next.{" "}
-            <span className="text-gray-600">Inline complete and edit selection are in active development.</span>
+            Inline autocomplete is available opt-in — enable{" "}
+            <code className="text-gray-600">coopAI.autocomplete.enabled</code> in settings.{" "}
+            <a href="/docs/autocomplete" className="text-coop-index hover:underline">
+              Autocomplete docs
+            </a>
+            . Edit selection is in active development.
           </p>
         </div>
       </section>

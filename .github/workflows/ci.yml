@@ -32,7 +32,9 @@ jobs:
           npm run test:format-chat-copy
           npm run test:effective-quick-action
           npm run test:chat-threads
+          npm run test:autocomplete
           npm run test:inline-completion
+          npm run test:autocomplete-smoke
 
   docker-build:
     runs-on: ubuntu-latest
