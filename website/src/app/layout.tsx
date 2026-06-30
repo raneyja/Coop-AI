@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     template: `%s · ${siteConfig.name}`
   },
   description: siteConfig.description,
+  alternates: {
+    canonical: siteConfig.url
+  },
   openGraph: {
     title: siteConfig.name,
     description: siteConfig.description,
@@ -35,7 +38,10 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description
-  }
+  },
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
+    : {})
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

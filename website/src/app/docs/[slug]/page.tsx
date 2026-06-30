@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DocsArticleLayout } from "@/components/DocsArticleLayout";
 import { getAdjacentDocs, getAllDocs, getDocBySlug, getDocNav, getDocsSections } from "@/lib/docs";
+import { buildPageMetadata } from "@/lib/pageMetadata";
 
 const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   "getting-started": [
@@ -70,10 +71,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Not found" };
   }
 
-  return {
-    title: doc.title,
-    description: doc.description
-  };
+  return buildPageMetadata(`/docs/${slug}`, doc.title, doc.description ?? doc.title);
 }
 
 export default async function DocsArticlePage({ params }: PageProps) {

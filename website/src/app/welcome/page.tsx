@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { getAdminPortalLoginUrl } from "@/lib/adminPortal";
+import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 import { WelcomeContent } from "./WelcomeContent";
 
-export const metadata: Metadata = {
-  title: "Welcome",
-  description: "Your Coop AI organization is ready."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/welcome",
+  "Welcome",
+  "Your Coop AI organization is ready.",
+  { robots: noIndexRobots }
+);
 
 type WelcomePageProps = {
   searchParams: Promise<{ session_id?: string }>;
