@@ -77,13 +77,13 @@ export const siteConfig = {
     title: "Graph-grounded code creation",
     tagline: "Stay in the file. Write like you've been in the repo for years.",
     description:
-      "CoopAI is built for engineers perfecting production code — not vibe-coding greenfield apps. Inline completions and in-file edits draw from your indexed graph, team patterns, and open buffer so suggestions match how your org actually writes code.",
+      "CoopAI is built for engineers perfecting production code — not vibe-coding greenfield apps. Inline completions use your open buffer by default; Pro can add indexed graph context. In-file edits and completions bias toward team patterns so suggestions match how your org actually writes code.",
     features: [
       {
         id: "inline-complete",
         title: "Inline complete",
         description:
-          "Ghost-text completions as you type — single- and multi-line, Tab to accept. Optional graph context for callers, types, and conventions from your indexed repo."
+          "Ghost-text completions as you type — single- and multi-line, Tab to accept. Optional graph context (Pro) adds dependents and ownership from your indexed repo."
       },
       {
         id: "edit-selection",

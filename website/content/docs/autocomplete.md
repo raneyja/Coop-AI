@@ -20,7 +20,7 @@ Add or change:
 "coopAI.autocomplete.enabled": true
 ```
 
-**Success:** Status bar shows autocomplete ready. Typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
+**Success:** Coop sidebar shows **Autocomplete On**. Typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
 ### 2. Extension UI — Command Palette (optional)
 
@@ -30,7 +30,7 @@ Run **CoopAI: Toggle Autocomplete** to flip `coopAI.autocomplete.enabled` withou
 
 - Valid Coop API key in **Settings → Account**
 - **Test connection** succeeds (`GET /health`)
-- File type is supported (code files; secrets and lockfiles are skipped)
+- File type is supported (code files; sensitive files such as `.env` are skipped)
 
 ## How it works
 
@@ -112,7 +112,7 @@ If **GitHub Copilot** or **GitHub Copilot Chat** is installed, both extensions c
 | `warn` (default) | Coop autocomplete runs; a one-time warning suggests changing policy |
 | `disable-when-copilot` | Coop autocomplete disables while Copilot extensions are installed |
 
-**Recommendation:** If Copilot is your primary inline tool, set `disable-when-copilot`. If you prefer Coop's graph-informed completions, keep `warn` or uninstall Copilot inline.
+**Recommendation:** If Copilot is your primary inline tool, set `disable-when-copilot`. If you prefer Coop graph context (Pro + `useGraphContext`), keep `warn` or uninstall Copilot inline.
 
 ## Graph context (Pro)
 
@@ -158,7 +158,7 @@ See [Zero-retention LLM routing](/docs/zero-retention).
 | `completion.rejected` | Extension | Escape or superseded suggestion |
 | `completion.performance` | Extension | Batched client p50/p95 snapshots |
 
-Org admins can view completion metrics in the [admin portal](https://admin.coop-ai.dev) → **Analytics** → **Completions**.
+Org admins can view completion metrics in the [admin portal](https://admin.coop-ai.dev/analytics) → **Completions** tab.
 
 ## Troubleshooting
 
@@ -167,7 +167,7 @@ Org admins can view completion metrics in the [admin portal](https://admin.coop-
 | **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm API key and **Test connection** |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Copilot wins** | Set `copilotPolicy` to `disable-when-copilot`, or disable Copilot inline |
-| **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted needs `MISTRAL_API_KEY` or `ANTHROPIC_API_KEY` |
+| **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
 | **Graph context empty** | Pro plan + indexed repo; check Workspace owner/repo/branch |
 

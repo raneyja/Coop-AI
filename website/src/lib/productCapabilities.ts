@@ -27,7 +27,7 @@ export const productCapabilityGroups: CapabilityGroup[] = [
     items: [
       {
         title: "Inline complete & edit",
-        body: "Ghost-text completions and selection-based edits in the open file. Graph-informed suggestions match team patterns — craftsmanship in the editor, not autonomous agents."
+        body: "Ghost-text completions and selection-based edits in the open file. Optional graph context (Pro) and project-style biasing keep suggestions aligned with your codebase — craftsmanship in the editor, not autonomous agents."
       },
       {
         title: "Completion-only routing",

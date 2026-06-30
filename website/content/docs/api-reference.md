@@ -138,6 +138,8 @@ Response includes `"fim": true` when a FIM provider handled the request.
 
 **Telemetry:** successful completions emit `completion.requested` server-side with `metadata.latencyMs` and `metadata.fim`.
 
+When `useGraphContext` is `true`, responses may include `x-graph-context: degraded` if the graph slice timed out or was unavailable.
+
 **Errors:** `400` invalid request, `401` unauthorized, `429` rate limited, `502` provider failure
 
 ## Graph (Pro and Enterprise)
