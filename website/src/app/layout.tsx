@@ -26,6 +26,9 @@ export const metadata: Metadata = {
   },
   description:
     "CoopAI: Organizational context for code intelligence. Zero-clone. Enterprise-ready. For teams.",
+  alternates: {
+    canonical: siteConfig.url
+  },
   openGraph: {
     title: siteConfig.name,
     description:
@@ -39,7 +42,10 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description:
       "Your codebase, finally explained. Context from Slack, Jira, code graph—for teams."
-  }
+  },
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
+    : {})
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

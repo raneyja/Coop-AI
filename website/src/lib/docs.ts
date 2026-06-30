@@ -34,7 +34,7 @@ export function getAllDocs(): DocsPage[] {
 
   return fs
     .readdirSync(docsDirectory)
-    .filter((filename) => filename.endsWith(".md"))
+    .filter((filename) => filename.endsWith(".md") && !/ \d+\.md$/.test(filename))
     .map((filename) => readDocFile(filename))
     .sort((a, b) => {
       if (a.section !== b.section) {
