@@ -45,7 +45,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [memberCount, setMemberCount] = useState<number | null>(null);
-  const [slackScopeOpen, setSlackScopeOpen] = useState(false);
   const [verifyCanComplete, setVerifyCanComplete] = useState(false);
 
   const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
@@ -150,13 +149,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               ) : (
                 <p className="text-xs text-amber-300">Scope required before Slack context is used in chat.</p>
               )}
-              <button
-                type="button"
-                className="admin-btn-primary"
-                onClick={() => setSlackScopeOpen(true)}
-              >
-                Manage Slack access
-              </button>
             </>
           ) : (
             <p className="text-sm text-coop-muted">No Enterprise Slack scope needed for your plan.</p>
@@ -181,13 +173,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           </div>
           <IntegrationScopePanel
             provider="slack"
-            providerName="Slack"
             orgPlan={orgPlan}
             connected={Boolean(slackConnected)}
-            open={slackScopeOpen}
-            onClose={() => setSlackScopeOpen(false)}
             onSaved={() => void load({ provider: "slack" })}
-            scopeNeedsReconnect={integrations.find((i) => i.provider === "slack")?.scopeNeedsReconnect}
           />
         </div>
       )}

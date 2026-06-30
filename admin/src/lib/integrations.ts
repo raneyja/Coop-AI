@@ -12,6 +12,18 @@ export type CodeHostProvider = Extract<IntegrationProvider, "github" | "gitlab" 
 
 export const CODE_HOST_PROVIDERS: CodeHostProvider[] = ["github", "gitlab", "bitbucket"];
 
+export type ScopableProvider = Extract<
+  IntegrationProvider,
+  "slack" | "atlassian" | "notion" | "google-docs"
+>;
+
+export const SCOPABLE_PROVIDERS: ScopableProvider[] = [
+  "slack",
+  "atlassian",
+  "notion",
+  "google-docs"
+];
+
 export type IntegrationDefinition = {
   id: IntegrationProvider;
   name: string;
@@ -79,6 +91,7 @@ export type IntegrationStatus = {
   detail?: string;
   scopeStatus?: "none" | "required" | "active";
   scopeSummary?: string;
+  scopeNeedsReconnect?: boolean;
 };
 
 export type SlackScopeChannel = {
@@ -92,13 +105,17 @@ export type SlackScopePolicy = {
   channels: SlackScopeChannel[];
 };
 
+export type AtlassianScopePolicy = Record<string, unknown>;
+export type NotionScopePolicy = Record<string, unknown>;
+export type GoogleDocsScopePolicy = Record<string, unknown>;
+
 export type IntegrationScopeResponse = {
   provider: IntegrationProvider;
   installed: boolean;
   scopeStatus: "none" | "required" | "active";
   enforced: boolean;
   allowed: boolean;
-  policy: SlackScopePolicy | Record<string, unknown>;
+  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy;
   summary?: string;
   updatedAt?: string;
 };

@@ -33,26 +33,19 @@ export function IntegrationCard({
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const comingSoon = definition.comingSoon;
   const isCodeHost = CODE_HOST_PROVIDERS.includes(definition.id as CodeHostProvider);
-  const requiresPro = isCodeHost && orgPlan === "free";
   const requiresEnterprise =
-    isCodeHost && definition.id !== "github" && orgPlan !== "enterprise" && orgPlan !== "free";
-  const planBlocked = requiresPro || requiresEnterprise;
+    isCodeHost && definition.id !== "github" && orgPlan === "pro";
+  const planBlocked = requiresEnterprise;
   const isScopable = SCOPABLE_PROVIDERS.includes(
     definition.id as (typeof SCOPABLE_PROVIDERS)[number]
   );
-  const enterprise = orgPlan === "enterprise";
 
   async function handleConnect() {
     if (planBlocked) {
-      setError(
-        requiresPro
-          ? "Code host connections require Pro. Free plan uses local workspace files only."
-          : "GitLab and Bitbucket require an Enterprise plan."
-      );
+      setError("GitLab and Bitbucket require an Enterprise plan.");
       return;
     }
     setConnecting(true);
@@ -72,7 +65,6 @@ export function IntegrationCard({
   const scopeStatus = status?.scopeStatus;
   const scopeActive = scopeStatus === "active";
   const scopeRequired = scopeStatus === "required";
-  const showManageAccess = enterprise && connected && isScopable;
 
   async function handleDisconnect() {
     if (!confirm(`Disconnect ${definition.name} for your entire organization?`)) return;
@@ -84,16 +76,12 @@ export function IntegrationCard({
       setError(result.error ?? "Disconnect failed.");
       return;
     }
-    setScopeOpen(false);
     onRefresh();
   }
 
   function connectionBadge() {
     if (comingSoon) {
       return <AdminChip>Coming soon</AdminChip>;
-    }
-    if (requiresPro) {
-      return <AdminChip variant="plan-pro">Pro</AdminChip>;
     }
     if (requiresEnterprise) {
       return <AdminChip variant="plan-enterprise">Enterprise</AdminChip>;
@@ -132,15 +120,9 @@ export function IntegrationCard({
           {status?.scopeSummary ? (
             <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
           ) : null}
-          {requiresPro && !connected ? (
+          {requiresEnterprise && !connected ? (
             <p className="mt-1 text-xs text-coop-muted">
-              Code host connections require Pro. The free plan is individual-only and uses local
-              workspace files.
-            </p>
-          ) : requiresEnterprise && !connected ? (
-            <p className="mt-1 text-xs text-coop-muted">
-              Multi-code-host estate indexing is available on Enterprise. Upgrade to connect{" "}
-              {definition.name}.
+              GitLab and Bitbucket on Pro require Enterprise. Upgrade to connect {definition.name}.
             </p>
           ) : null}
           {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
@@ -156,15 +138,6 @@ export function IntegrationCard({
               {connecting ? "Opening…" : needsReconnect ? "Reconnect" : "Connect"}
             </button>
           )}
-          {showManageAccess ? (
-            <button
-              type="button"
-              className="admin-btn-secondary"
-              onClick={() => setScopeOpen(true)}
-            >
-              Manage access
-            </button>
-          ) : null}
           {!comingSoon && (connected || needsReconnect) && (
             <button
               type="button"
@@ -216,17 +189,14 @@ export function IntegrationCard({
         </div>
       </div>
 
-      <IntegrationScopePanel
-        provider={definition.id}
-        providerName={definition.name}
-        orgPlan={orgPlan}
-        connected={connected}
-        open={scopeOpen}
-        onClose={() => setScopeOpen(false)}
-        onSaved={onRefresh}
-        onReconnect={() => void handleConnect()}
-        scopeNeedsReconnect={status?.scopeNeedsReconnect}
-      />
+      {isScopable ? (
+        <IntegrationScopePanel
+          provider={definition.id}
+          orgPlan={orgPlan}
+          connected={connected}
+          onSaved={onRefresh}
+        />
+      ) : null}
     </>
   );
 }
