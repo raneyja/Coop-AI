@@ -159,6 +159,7 @@
       {
         "command": "coopAI.internal.autocompleteRejected",
         "key": "escape",
+        "args": "escape",
         "when": "editorTextFocus && inlineSuggestionVisible && coopAI.autocomplete.enabled"
       }
     ],

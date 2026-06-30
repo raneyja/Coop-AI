@@ -84,13 +84,17 @@ export function registerAutocompleteCommands(
     vscode.commands.registerCommand(
       "coopAI.internal.autocompleteAccepted",
       (contextHash: string, languageId?: string) => {
-        provider.noteSuggestionAccepted(contextHash);
+        provider.noteSuggestionAccepted(contextHash, languageId);
         void emitUsage("completion.accepted", { languageId });
       }
     ),
-    vscode.commands.registerCommand("coopAI.internal.autocompleteRejected", (reason?: string, languageId?: string) => {
-      provider.noteSuggestionRejected(reason ?? "dismissed", languageId);
-      void emitUsage("completion.rejected", { reason: reason ?? "dismissed", languageId });
+    vscode.commands.registerCommand("coopAI.internal.autocompleteRejected", (reason?: string) => {
+      const resolvedReason = reason ?? "dismissed";
+      const { rejected, languageId } = provider.rejectActiveSuggestion(resolvedReason);
+      if (!rejected) {
+        return;
+      }
+      void emitUsage("completion.rejected", { reason: resolvedReason, languageId });
     }),
     vscode.commands.registerCommand("coopAI.triggerAutocomplete", async () => {
       const settings = readAutocompleteSettings();

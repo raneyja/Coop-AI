@@ -152,10 +152,10 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     }
   }
 
-  public noteSuggestionAccepted(contextHash: string): void {
+  public noteSuggestionAccepted(contextHash: string, languageId?: string): void {
     this.clearLastShown();
     this.triggerDetector.noteAcceptance(contextHash);
-    this.performance.recordAccept();
+    this.performance.recordAccept(languageId);
     this.lastScopeHash = contextHash;
   }
 
@@ -165,6 +165,19 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.performance.recordReject(reason, languageId);
     this.lastAlternatives = [];
     this.alternativeIndex = 0;
+  }
+
+  /** Reject only when Coop recently showed a suggestion (avoids Copilot escape false positives). */
+  public rejectActiveSuggestion(reason: string): { rejected: boolean; languageId?: string } {
+    if (
+      !this.lastShownContextHash ||
+      Date.now() - this.lastShownAt > SHOWN_ITEM_TTL_MS
+    ) {
+      return { rejected: false };
+    }
+    const languageId = this.lastShownLanguageId;
+    this.noteSuggestionRejected(reason, languageId);
+    return { rejected: true, languageId };
   }
 
   private noteSupersededIfNeeded(newContextHash: string): void {
