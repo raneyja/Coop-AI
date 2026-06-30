@@ -142,6 +142,8 @@ function providerBody(
       return anthropicBody(commonBody, messages);
     case "gemini":
       return geminiBody(commonBody, messages);
+    case "mistral":
+      throw new Error("Mistral provider supports FIM inline completion only, not chat formatting.");
   }
 }
 
