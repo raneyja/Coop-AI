@@ -69,6 +69,39 @@ export type PlanQuotaCredits = {
   retryAfterMs: number;
 };
 
+export type ChatQuotaExceededPayload = {
+  message: string;
+  retryAfterMs?: number;
+  resetsAt?: string;
+  upgradeUrl?: string;
+  usedCredits?: number;
+  limitCredits?: number;
+};
+
+export class ChatQuotaExceededError extends Error {
+  public readonly code = "quota_limit_reached";
+
+  public readonly retryAfterMs?: number;
+
+  public readonly resetsAt?: string;
+
+  public readonly upgradeUrl?: string;
+
+  public readonly usedCredits?: number;
+
+  public readonly limitCredits?: number;
+
+  public constructor(payload: ChatQuotaExceededPayload) {
+    super(payload.message);
+    this.name = "ChatQuotaExceededError";
+    this.retryAfterMs = payload.retryAfterMs;
+    this.resetsAt = payload.resetsAt;
+    this.upgradeUrl = payload.upgradeUrl;
+    this.usedCredits = payload.usedCredits;
+    this.limitCredits = payload.limitCredits;
+  }
+}
+
 export type MeResponse = {
   orgId: string;
   orgName: string;
@@ -79,6 +112,12 @@ export type MeResponse = {
   role?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
+  onboardingCompleted?: boolean;
+  adminPortalUrl?: string;
+  integrationHealthSummary?: {
+    connected: number;
+    scopeRequired: number;
+  };
   indexedRepoCount?: number;
   indexedRepoLimit?: number | null;
   canEnableMoreRepos?: boolean;
@@ -405,6 +444,26 @@ export class CoopBackendClient {
       metadata: response.data?.metadata ?? {},
       tokenExpiresAt: response.data?.tokenExpiresAt
     };
+  }
+
+  public async getIntegrationScope(
+    baseUrl: string,
+    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
+  ): Promise<import("../integrationScope/types").ResolvedIntegrationScope> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<import("../integrationScope/types").ResolvedIntegrationScope & CoopApiErrorBody>(
+      "/v1/orgs/integrations/scope",
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        params: { provider },
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data;
   }
 
   private async getOrgIntegrationInstallationStatus(
@@ -1265,14 +1324,10 @@ export class CoopBackendClient {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      let body: { error?: string; message?: string; upgradeUrl?: string } | undefined;
-      try {
-        body = text ? (JSON.parse(text) as { error?: string; message?: string; upgradeUrl?: string }) : undefined;
-      } catch {
-        body = undefined;
-      }
-      if (response.status === 429 && body?.message) {
-        throw new Error(body.message);
+      const body = parseJsonObject(text);
+      const quota = readChatQuotaExceededPayload(response.status, body);
+      if (quota) {
+        throw new ChatQuotaExceededError(quota);
       }
       throw new Error(`Chat API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
     }
@@ -1540,4 +1595,39 @@ function parseSseJson(line: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readChatQuotaExceededPayload(
+  status: number,
+  body: Record<string, unknown> | undefined
+): ChatQuotaExceededPayload | undefined {
+  if (status !== 429 || !body) {
+    return undefined;
+  }
+  const errorCode = typeof body.error === "string" ? body.error : undefined;
+  if (errorCode !== "quota_limit_reached") {
+    return undefined;
+  }
+  const message = typeof body.message === "string" && body.message.trim() ? body.message : "AI credit limit reached.";
+  return {
+    message,
+    retryAfterMs: typeof body.retryAfterMs === "number" ? body.retryAfterMs : undefined,
+    resetsAt: typeof body.resetsAt === "string" ? body.resetsAt : undefined,
+    upgradeUrl: typeof body.upgradeUrl === "string" ? body.upgradeUrl : undefined,
+    usedCredits: typeof body.usedCredits === "number" ? body.usedCredits : undefined,
+    limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined
+  };
 }

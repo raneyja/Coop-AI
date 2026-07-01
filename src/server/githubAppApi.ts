@@ -272,7 +272,7 @@ async function maybeRunCatalogSync(
   installationId: number
 ): Promise<void> {
   const org = await deps.orgStore?.getOrganization(orgId);
-  if (!org || (org.plan !== "enterprise" && org.plan !== "pro")) {
+  if (!org || (org.plan !== "enterprise" && org.plan !== "pro" && org.plan !== "free")) {
     return;
   }
   const estateSync =

@@ -95,7 +95,7 @@ export class JobScheduler {
 
     const targets = await this.orgStore.listLightningEnabledReposForScheduledIndex();
     if (targets.length === 0) {
-      console.log(`[jobs] ${name}: no lightning-enabled repos for pro/enterprise orgs`);
+      console.log(`[jobs] ${name}: no lightning-enabled repos`);
       return;
     }
 

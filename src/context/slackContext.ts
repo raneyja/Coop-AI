@@ -1,6 +1,13 @@
 import { SlackClient } from "../api/slack/slackClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  applySlackChannelScope,
+  filterSlackHitsByChannel,
+  isSlackScopeBlocked,
+  slackScopeBlockMessage
+} from "../integrationScope/slackQuery";
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { collectJiraKeysFromText } from "./jiraContext";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
@@ -127,7 +134,17 @@ export async function fetchSlackSearchContext(options: {
   crossToolText?: string[];
   jiraIssueKeys?: string[];
   limit?: number;
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<SlackSearchContext> {
+  if (isSlackScopeBlocked(options.integrationScope)) {
+    return {
+      source: "slack-search",
+      query: "",
+      messages: [],
+      error: slackScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   if (!creds.slackToken) {
     return {
@@ -139,7 +156,15 @@ export async function fetchSlackSearchContext(options: {
   }
 
   const queries = buildSlackSearchQueries(options);
-  const query = queries[0] ?? "";
+  const scopedQueries =
+    options.integrationScope?.enforced && options.integrationScope.slack
+      ? applySlackChannelScope(
+          queries,
+          options.integrationScope.slack.channelIds,
+          options.integrationScope.slack.channelNames
+        )
+      : queries;
+  const query = scopedQueries[0] ?? "";
   if (!query) {
     return {
       source: "slack-search",
@@ -155,12 +180,14 @@ export async function fetchSlackSearchContext(options: {
   const seen = new Map<string, SlackSearchMessage>();
   const errors: string[] = [];
 
-  for (const searchQuery of queries.slice(0, 16)) {
+  const allowedChannels = new Set(options.integrationScope?.slack?.channelIds ?? []);
+
+  for (const searchQuery of scopedQueries.slice(0, 16)) {
     if (seen.size >= limit) {
       break;
     }
     try {
-      await mergeSlackHits(client, searchQuery, seen, limit, perQueryLimit);
+      await mergeSlackHits(client, searchQuery, seen, limit, perQueryLimit, allowedChannels);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Slack search failed.";
       if (!errors.includes(message)) {
@@ -177,7 +204,7 @@ export async function fetchSlackSearchContext(options: {
   return {
     source: "slack-search",
     query,
-    queries: queries.length > 1 ? queries : undefined,
+    queries: scopedQueries.length > 1 ? scopedQueries : undefined,
     repoQuery,
     messages: [...seen.values()].slice(0, limit),
     error: seen.size === 0 && errors.length > 0 ? errors[0] : undefined
@@ -196,12 +223,20 @@ async function mergeSlackHits(
   searchQuery: string,
   seen: Map<string, SlackSearchMessage>,
   limit: number,
-  perQueryLimit: number
+  perQueryLimit: number,
+  allowedChannelIds: Set<string> = new Set()
 ): Promise<void> {
   const hits = await client.searchMessages(searchQuery, {
     limit: Math.min(perQueryLimit, limit - seen.size)
   });
-  for (const hit of hits) {
+  const scopedHits =
+    allowedChannelIds.size > 0
+      ? filterSlackHitsByChannel(
+          hits.map((hit) => ({ ...hit, channelId: hit.channelId })),
+          allowedChannelIds
+        )
+      : hits;
+  for (const hit of scopedHits) {
     const key = `${hit.channelId}:${hit.ts}`;
     if (seen.has(key)) {
       continue;

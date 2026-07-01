@@ -1,63 +1,106 @@
 "use client";
 
-import { getStoredMe, displayOrgName } from "@/lib/auth";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { clearSession, displayOrgName, getStoredMe, isAdminRole } from "@/lib/auth";
 import { getApiBase } from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 
+function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-1 border-b border-coop-border/30 py-3 last:border-0 sm:grid-cols-[9rem_1fr] sm:items-center sm:gap-x-6">
+      <dt className="text-sm text-coop-muted">{label}</dt>
+      <dd className="min-w-0 text-sm text-white">{children}</dd>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
+  const router = useRouter();
   const me = getStoredMe();
+  const isAdmin = me ? isAdminRole(me) : false;
+
+  function handleSignOut() {
+    clearSession();
+    router.replace("/login");
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl space-y-8">
       <div>
         <h1 className="admin-page-title">Settings</h1>
-        <p className="mt-1 text-sm text-coop-muted">Organization configuration.</p>
+        <p className="mt-1 text-sm text-coop-muted">Manage your account, organization, and portal preferences.</p>
       </div>
 
-      <div className="space-y-8">
-        <section className="admin-card">
-          <h2 className="admin-section-label">Organization</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div>
-              <dt className="text-coop-muted">Name</dt>
-              <dd className="mt-0.5 font-medium">{displayOrgName(me)}</dd>
-            </div>
-            <div>
-              <dt className="text-coop-muted">Org ID</dt>
-              <dd className="mt-0.5 font-mono text-xs">{me?.orgId ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-coop-muted">Plan</dt>
-              <dd className="mt-1">
-                <PlanBadge plan={me?.plan ?? "free"} />
-              </dd>
-            </div>
-          </dl>
-        </section>
+      <section className="admin-card">
+        <h2 className="admin-section-label">Sign-in &amp; access</h2>
+        <p className="mt-2 text-sm text-coop-muted">
+          This portal uses your Coop API key — there is no separate password. Your key is stored in this browser
+          session only and is cleared when you sign out.
+        </p>
+        <dl className="mt-4">
+          <SettingsRow label="Role">{me?.role ?? "Member"}</SettingsRow>
+          <SettingsRow label="API keys">
+            {isAdmin ? (
+              <Link href="/api-keys" className="admin-link">
+                Manage API keys →
+              </Link>
+            ) : (
+              <span className="text-coop-muted">Contact an org admin to rotate keys.</span>
+            )}
+          </SettingsRow>
+          <SettingsRow label="Session">
+            <button type="button" className="admin-btn-danger !px-3 !py-1.5 text-xs" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </SettingsRow>
+        </dl>
+      </section>
 
+      <section className="admin-card">
+        <h2 className="admin-section-label">Organization</h2>
+        <dl className="mt-4">
+          <SettingsRow label="Name">{displayOrgName(me)}</SettingsRow>
+          <SettingsRow label="Org ID">
+            <code className="font-mono text-xs text-coop-muted">{me?.orgId ?? "—"}</code>
+          </SettingsRow>
+          <SettingsRow label="Plan">
+            <PlanBadge plan={me?.plan ?? "free"} />
+          </SettingsRow>
+          {isAdmin ? (
+            <SettingsRow label="Billing">
+              <Link href="/billing" className="admin-link">
+                View plan &amp; billing →
+              </Link>
+            </SettingsRow>
+          ) : null}
+        </dl>
+      </section>
+
+      {me?.plan === "enterprise" ? (
         <section className="admin-card">
           <h2 className="admin-section-label">Single sign-on (SSO)</h2>
-          <p className="mt-3 text-sm text-coop-muted">
+          <p className="mt-2 text-sm text-coop-muted">
             Enterprise SAML SSO is configured by Coop support during onboarding.
           </p>
           <div className="admin-panel-inset mt-4 text-sm">
-            <p className="font-medium text-white/90">Status: Not configured</p>
+            <p className="font-medium text-white/90">Not configured</p>
             <p className="mt-1 text-coop-muted">
-              Contact support to enable SAML for your organization. Self-serve SSO setup is planned for a future release.
+              Contact support to enable SAML for your organization.
             </p>
           </div>
         </section>
+      ) : null}
 
-        <section className="admin-card">
-          <h2 className="admin-section-label">API connection</h2>
-          <p className="mt-3 text-sm text-coop-muted">
-            This portal connects to the Coop backend API configured at build/runtime.
-          </p>
-          <code className="mt-3 block rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
-            {getApiBase()}
-          </code>
-        </section>
-      </div>
+      <section className="admin-card">
+        <h2 className="admin-section-label">Developer</h2>
+        <p className="mt-2 text-sm text-coop-muted">
+          Backend API this portal uses (set via <code className="text-xs">COOP_API_BASE</code> at build/runtime).
+        </p>
+        <code className="mt-3 inline-block max-w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
+          {getApiBase()}
+        </code>
+      </section>
     </div>
   );
 }

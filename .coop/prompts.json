@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "prompts": [
+    {
+      "id": "prompt-1782938817251-2djm",
+      "title": "test",
+      "template": "asdfsdagsd",
+      "scope": "workspace"
+    },
+    {
+      "id": "prompt-1782938820734-fh2r",
+      "title": "sdfsd",
+      "template": "sdgsdasdf",
+      "scope": "workspace"
+    }
+  ]
+}

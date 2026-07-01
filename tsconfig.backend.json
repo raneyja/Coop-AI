@@ -17,6 +17,9 @@
     "src/webhooks/**/*.ts"
   ],
   "exclude": [
-    "src/server/billing/adminPortalUrl.test.ts"
+    "src/server/billing/adminPortalUrl.test.ts",
+    "**/* 2.*",
+    "**/* 3.*",
+    "**/* 4.*"
   ]
 }

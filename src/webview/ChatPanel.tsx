@@ -3,6 +3,7 @@ import type { SettingsScreen } from "../chat/settingsScreens";
 import { ContextScopeLabel } from "./components/ContextScopeLabel";
 import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { CoopNotice } from "./components/CoopNotice";
+import { QuotaExceededNotice, type QuotaExceededNoticeState } from "./components/QuotaExceededNotice";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatStream, ChatMessage, type ChatInlineArtifact, renderInlineArtifact } from "./components/ChatStream";
 import { ChatThinkingIndicator } from "./components/ChatThinkingIndicator";
@@ -24,6 +25,7 @@ import {
 } from "./thinkingMessageRotation";
 import { QuickActionId } from "./types";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
+import { PromptDetailOverlay } from "./components/PromptDetailOverlay";
 import { PanelWidthEnforcer } from "./components/PanelWidthEnforcer";
 import { ThreadHeaderSwitcher, type ThreadListItem } from "./components/ThreadHeaderSwitcher";
 import { PromptLibraryPill } from "./components/PromptLibraryPill";
@@ -39,6 +41,8 @@ import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashComm
 import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
 import { appendFileMention } from "./lib/fileMentionUtils";
+import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
+import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
 import { useDebouncedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
@@ -72,6 +76,16 @@ type InboundMessage =
   | { type: "chat:delta"; payload: { chunk: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage } }
   | { type: "chat:error"; payload: { message: string } }
+  | {
+      type: "chat:quota-exceeded";
+      payload: {
+        resetsAt: string;
+        upgradeUrl: string;
+        timezone?: string;
+        retryAfterMs?: number;
+      };
+    }
+  | { type: "chat:quota-cleared" }
   | {
       type: "repo:tree";
       payload: {
@@ -128,6 +142,7 @@ type InboundMessage =
         hasWorkspace: boolean;
       };
     }
+  | { type: "prompts:insert"; payload: { text: string; actionId?: string } }
   | {
       type: "autocomplete:status";
       payload: {
@@ -224,6 +239,8 @@ const INPUT_MAX = 12_000;
 function ChatFooter({
   error,
   onDismissError,
+  quotaNotice,
+  onDismissQuotaNotice,
   contextWarning,
   onDismissContextWarning,
   intentFeedback,
@@ -239,6 +256,8 @@ function ChatFooter({
 }: {
   error: string;
   onDismissError: () => void;
+  quotaNotice?: QuotaExceededNoticeState;
+  onDismissQuotaNotice?: () => void;
   contextWarning?: string;
   onDismissContextWarning?: () => void;
   intentFeedback?: IntentFeedbackState;
@@ -254,8 +273,11 @@ function ChatFooter({
 }): React.ReactElement {
   return (
     <footer className="chat-footer">
+      {quotaNotice && onDismissQuotaNotice ? (
+        <QuotaExceededNotice notice={quotaNotice} onDismiss={onDismissQuotaNotice} />
+      ) : null}
       <ChatActivityStrip
-        error={error || undefined}
+        error={quotaNotice ? undefined : error || undefined}
         onDismissError={onDismissError}
         contextWarning={contextWarning}
         onDismissContextWarning={onDismissContextWarning}
@@ -287,6 +309,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [mentionError, setMentionError] = useState("");
   const [mentionHint, setMentionHint] = useState("");
   const [error, setError] = useState("");
+  const [quotaNotice, setQuotaNotice] = useState<QuotaExceededNoticeState | undefined>();
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
@@ -319,6 +342,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }>({ prompts: [], pinnedIds: [], hasWorkspace: false });
   const [promptMenuOpen, setPromptMenuOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [pendingPromptActionId, setPendingPromptActionId] = useState<QuickActionId | undefined>();
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [savePromptDraft, setSavePromptDraft] = useState({ title: "", template: "" });
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
   const [autocompleteMessage, setAutocompleteMessage] = useState<string | undefined>();
   const [inlineArtifacts, setInlineArtifacts] = useState<ChatInlineArtifact[]>([]);
@@ -338,12 +364,31 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setStreamingBuffer("");
     setIsStreaming(false);
     setError("");
+    setQuotaNotice(undefined);
     setUsageLabel(undefined);
     setIntentFeedback(undefined);
     setJobProgress(undefined);
     setCommandConfirm(undefined);
     setAttachmentError("");
   }, []);
+
+  useEffect(() => {
+    if (!quotaNotice?.resetsAt) {
+      return;
+    }
+    const resetAtMs = new Date(quotaNotice.resetsAt).getTime();
+    if (!Number.isFinite(resetAtMs)) {
+      return;
+    }
+    const clearNotice = () => setQuotaNotice(undefined);
+    if (resetAtMs <= Date.now()) {
+      clearNotice();
+      return;
+    }
+    const timeoutMs = Math.min(resetAtMs - Date.now(), 2_147_483_647);
+    const timer = window.setTimeout(clearNotice, timeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [quotaNotice?.resetsAt]);
 
   const streamMessage = useMemo<ChatMessage | null>(() => {
     if (!debouncedStream) {
@@ -598,6 +643,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
+          setPendingPromptActionId(undefined);
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
         case "lightning:state":
@@ -625,6 +671,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setError(message.payload.message);
           setIsStreaming(false);
           setStreamingBuffer("");
+          break;
+        case "chat:quota-exceeded":
+          setIntentFeedback(undefined);
+          setJobProgress((current) =>
+            current?.deliverable === "standalone" ? current : undefined
+          );
+          setError("");
+          setQuotaNotice({
+            resetsAt: message.payload.resetsAt,
+            upgradeUrl: message.payload.upgradeUrl,
+            timezone: message.payload.timezone
+          });
+          setIsStreaming(false);
+          setStreamingBuffer("");
+          break;
+        case "chat:quota-cleared":
+          setQuotaNotice(undefined);
           break;
         case "repo:tree":
           setTreeState({
@@ -776,6 +839,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "prompts:list":
           setPromptLibrary(message.payload);
           break;
+        case "prompts:insert":
+          setInput(message.payload.text);
+          setPendingPromptActionId(message.payload.actionId as QuickActionId | undefined);
+          setPromptMenuOpen(false);
+          setPromptModalOpen(false);
+          vscode.setState({ draftInput: message.payload.text } satisfies PersistedWebviewState);
+          break;
         case "autocomplete:status":
           setAutocompleteStatus(message.payload.status);
           setAutocompleteMessage(message.payload.message);
@@ -799,10 +869,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       prompt: string,
       quickAction?: QuickActionId,
       pendingAttachments: ChatImageAttachment[] = attachments,
-      pendingMentions: ChatFileMention[] = mentions
+      pendingMentions: ChatFileMention[] = mentions,
+      options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
-      if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0) {
+      if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
         return;
       }
       if (message.length > INPUT_MAX) {
@@ -818,6 +889,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         payload: {
           message,
           quickAction,
+          slashUserArgs: options?.slashUserArgs,
           attachments: pendingAttachments.length ? pendingAttachments : undefined,
           mentions: pendingMentions.length ? pendingMentions.slice(0, 3) : undefined
         }
@@ -827,6 +899,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentions([]);
       setMentionResults([]);
       setMentionError("");
+      setPendingPromptActionId(undefined);
     },
     [attachments, mentions, post]
   );
@@ -840,30 +913,35 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [post]
   );
 
-  const handleSend = useCallback(() => submitPrompt(input), [input, submitPrompt]);
+  const handleSend = useCallback(() => {
+    if (pendingPromptActionId) {
+      const plan = resolvePromptLibraryRun(input, pendingPromptActionId);
+      switch (plan.kind) {
+        case "quick-action":
+          submitPrompt("", plan.actionId, attachments, mentions, { slashUserArgs: plan.slashUserArgs });
+          return;
+        case "chat":
+          submitPrompt(plan.message);
+          return;
+        case "slash":
+          submitPrompt(input);
+          return;
+      }
+    }
+    submitPrompt(input);
+  }, [attachments, input, mentions, pendingPromptActionId, submitPrompt]);
 
-  const runPromptLibraryEntry = useCallback(
+  const insertPromptLibraryEntry = useCallback(
     (id: string) => {
-      setError("");
-      setAttachmentError("");
-      setIsStreaming(true);
-      setStreamingBuffer("");
       post({
         type: "prompts:run",
         payload: {
           id,
-          mentions: mentions.length ? mentions.slice(0, 3) : undefined,
-          attachments: attachments.length ? attachments : undefined,
           composerText: input.trim() || undefined
         }
       });
-      setInput("");
-      setAttachments([]);
-      setMentions([]);
-      setMentionResults([]);
-      setMentionError("");
     },
-    [attachments, input, mentions, post]
+    [input, post]
   );
 
   const handlePanelDrop = useCallback(
@@ -1101,6 +1179,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         value={input}
         maxLength={INPUT_MAX}
         isStreaming={isStreaming}
+        submitDisabled={Boolean(quotaNotice)}
         variant={isActiveChat ? "chat" : "landing"}
         usageLabel={usageLabel}
         attachments={attachments}
@@ -1152,9 +1231,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           disabled={isStreaming}
           open={promptMenuOpen}
           onOpenChange={setPromptMenuOpen}
-          onRun={runPromptLibraryEntry}
+          onRun={insertPromptLibraryEntry}
           onSeeAll={openPromptLibrary}
         />
+        {promptLibrary.hasWorkspace && input.trim() && !isStreaming ? (
+          <button
+            type="button"
+            className="coop-text-btn ml-auto shrink-0"
+            onClick={() => {
+              setSavePromptDraft({ title: "", template: input.trim() });
+              setSavePromptOpen(true);
+            }}
+          >
+            Save to library
+          </button>
+        ) : null}
         {context.file || (context.owner && context.repo) ? (
           <ContextScopeLabel
             context={context}
@@ -1252,6 +1343,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <ChatFooter
             error={error}
             onDismissError={() => setError("")}
+            quotaNotice={quotaNotice}
+            onDismissQuotaNotice={() => setQuotaNotice(undefined)}
             contextWarning={context.contextWarning}
             onDismissContextWarning={() => post({ type: "context:dismiss-warning" })}
             intentFeedback={intentFeedback}
@@ -1362,8 +1455,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         hasWorkspace={promptLibrary.hasWorkspace}
         onClose={() => setPromptModalOpen(false)}
         onRun={(id) => {
-          setPromptModalOpen(false);
-          runPromptLibraryEntry(id);
+          insertPromptLibraryEntry(id);
         }}
         onCommit={(payload) =>
           post({
@@ -1380,6 +1472,32 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           })
         }
       />
+      {savePromptOpen ? (
+        <PromptDetailOverlay
+          headerTitle="Save to library"
+          draft={savePromptDraft}
+          onChange={setSavePromptDraft}
+          onDiscard={() => setSavePromptOpen(false)}
+          onSave={() => {
+            const title = savePromptDraft.title.trim();
+            const template = savePromptDraft.template.trim();
+            if (!title || !template) {
+              return;
+            }
+            const actionId = inferActionIdFromTemplate(template);
+            post({
+              type: "prompts:save",
+              payload: {
+                title,
+                template,
+                ...(actionId ? { actionId } : {})
+              }
+            });
+            setSavePromptOpen(false);
+            setInput("");
+          }}
+        />
+      ) : null}
       <PanelWidthEnforcer vscode={vscode} />
       </ChatLinkProvider>
       </CitationNavigationProvider>

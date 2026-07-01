@@ -51,6 +51,12 @@ export type Preferences = {
   userRole?: string;
   authMethod?: "api_key" | "sso_session";
   canInstallIntegrations?: boolean;
+  onboardingCompleted?: boolean;
+  adminPortalUrl?: string;
+  integrationHealthSummary?: {
+    connected: number;
+    scopeRequired: number;
+  };
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
@@ -80,6 +86,7 @@ export type Preferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
 };
 

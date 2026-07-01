@@ -32,12 +32,13 @@ export async function assessGithubConnection(
   const hasRefreshToken = Boolean(await orgStore.getCredential(orgId, "github:refresh"));
   const accessValid =
     installation.tokenExpiresAt.getTime() - Date.now() > TOKEN_REFRESH_BUFFER_MS;
-  const tokenValid = accessValid || hasRefreshToken;
+  // GitHub App installation tokens expire hourly but are minted on demand — not a user reconnect.
+  const tokenValid = accessValid || hasRefreshToken || Boolean(installation.installationId);
 
   return {
     installed: true,
     tokenValid,
-    needsReconnect: !tokenValid,
+    needsReconnect: false,
     hasRefreshToken,
     tokenExpiresAt: installation.tokenExpiresAt
   };

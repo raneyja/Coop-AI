@@ -21,7 +21,7 @@ import {
   resolveAuthContext,
   resolveOrgPlanFromDb
 } from "./authMiddleware";
-import { requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
+import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
 import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg, assessGithubConnection } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
@@ -32,10 +32,11 @@ import { canUseLightningPlan, type AuthContext, type OrgRepoRecord, type OrgStor
 import { OrgIdentityDirectoryStore } from "./orgIdentityDirectoryStore";
 import { buildIdentityConnectionHints } from "./identityHintsService";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
+import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
-import { getIndexedRepoQuota } from "./indexedRepoQuota";
+import { getIndexedRepoQuota, reconcileIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
 import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceStore";
 import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
@@ -45,6 +46,9 @@ import { syncOrgCatalog, runCatalogSyncForProvider, CatalogSyncError } from "./c
 import { queueOrgRepoIndex, reindexEmbeddingFailures } from "./queueOrgRepoIndex";
 import type { UsageTracker } from "./usageTracker";
 import type { UserStore } from "./users/userStore";
+import { loadBillingConfig } from "./billing/billingConfig";
+import { resolveIntegrationScope } from "./resolveIntegrationScope";
+import type { IntegrationProvider } from "./integrationConnectionStore";
 
 export type OrgApiDeps = {
   orgStore?: OrgStore;
@@ -56,6 +60,7 @@ export type OrgApiDeps = {
   userStore?: UserStore;
   usageTracker?: UsageTracker;
   integrationStore?: IntegrationConnectionStore;
+  scopePolicyStore?: IntegrationScopePolicyStore;
 };
 
 /** Apply index_repository rate limits only when re-queuing a repo that already reached ready. */
@@ -192,6 +197,9 @@ export async function handleOrgApiRequest(
       role: auth.role,
       authMethod: auth.userId ? "sso_session" : "api_key",
       canInstallIntegrations: canInstallIntegrations(auth),
+      onboardingCompleted: await loadOnboardingCompleted(deps, auth.orgId),
+      adminPortalUrl: loadBillingConfig().adminPortalUrl,
+      integrationHealthSummary: await buildIntegrationHealthSummary(deps, auth.orgId, plan),
       indexedRepoCount: indexedRepoQuota?.indexedRepoCount,
       indexedRepoLimit: indexedRepoQuota?.indexedRepoLimit,
       canEnableMoreRepos: indexedRepoQuota?.canEnableMoreRepos,
@@ -270,8 +278,15 @@ export async function handleOrgApiRequest(
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }
-    const repos = await enrichReposWithIndexProgress(await deps.orgStore.listOrgRepos(auth!.orgId));
-    writeJson(response, 200, { repos });
+    const plan = (await deps.orgStore!.getOrganization(auth!.orgId))?.plan ?? auth!.plan ?? "free";
+    const quotaReconciled = await reconcileIndexedRepoQuota(deps.orgStore!, auth!.orgId, plan);
+    const repos = await enrichReposWithIndexProgress(await deps.orgStore!.listOrgRepos(auth!.orgId));
+    writeJson(response, 200, {
+      repos,
+      ...(quotaReconciled.trimmed > 0
+        ? { quotaReconciled: { trimmed: quotaReconciled.trimmed } }
+        : {})
+    });
     return true;
   }
 
@@ -295,7 +310,7 @@ export async function handleOrgApiRequest(
     if (!requireOrgAdmin(auth!, response)) {
       return true;
     }
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     await handleEstateSync(parsed, response, deps, auth!);
@@ -304,7 +319,7 @@ export async function handleOrgApiRequest(
 
   const enableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/enable$/);
   if (parsed.method === "POST" && enableMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(enableMatch[1]);
@@ -317,7 +332,7 @@ export async function handleOrgApiRequest(
     if (!requireOrgAdmin(auth!, response)) {
       return true;
     }
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     await handleReindexEmbeddingFailures(response, deps, auth!);
@@ -326,7 +341,7 @@ export async function handleOrgApiRequest(
 
   const disableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/disable$/);
   if (parsed.method === "POST" && disableMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(disableMatch[1]);
@@ -341,7 +356,7 @@ export async function handleOrgApiRequest(
 
   const statusMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/status$/);
   if (parsed.method === "GET" && statusMatch) {
-    if (!(await requireOrgPlan(deps.orgStore, auth!, response, "pro", "enterprise"))) {
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
     const repoId = decodeURIComponent(statusMatch[1]);
@@ -975,7 +990,15 @@ async function handleEnableLightning(
     return;
   }
 
+  const plan = (await deps.orgStore!.getOrganization(auth.orgId))?.plan ?? auth.plan ?? "free";
   const existing = await deps.orgStore!.getOrgRepo(auth.orgId, repoId);
+  if (
+    !(await requireCanEnableMoreRepos(deps.orgStore!, auth.orgId, plan, response, {
+      alreadyEnabled: existing?.lightningEnabled ?? false
+    }))
+  ) {
+    return;
+  }
 
   const queueResult = await queueOrgRepoIndex(auth.orgId, repoId, {
     orgStore: deps.orgStore!,
@@ -2077,6 +2100,45 @@ function writeCodeHostError(response: ServerResponse, error: unknown, fallback: 
   }
   const message = error instanceof Error ? error.message : fallback;
   writeJson(response, 502, { error: message });
+}
+
+async function loadOnboardingCompleted(deps: OrgApiDeps, orgId: string): Promise<boolean> {
+  if (!deps.orgStore || orgId === "legacy") {
+    return false;
+  }
+  const billing = await deps.orgStore.getOrganizationBilling(orgId);
+  return Boolean(billing?.onboardingCompletedAt);
+}
+
+async function buildIntegrationHealthSummary(
+  deps: OrgApiDeps,
+  orgId: string,
+  orgPlan: string
+): Promise<{ connected: number; scopeRequired: number }> {
+  const scopable: IntegrationProvider[] = ["slack", "atlassian", "notion", "google-docs"];
+  let connected = 0;
+  let scopeRequired = 0;
+  if (!deps.integrationStore || orgId === "legacy") {
+    return { connected, scopeRequired };
+  }
+  for (const provider of scopable) {
+    const installation = await deps.integrationStore.get(orgId, provider);
+    if (!installation) {
+      continue;
+    }
+    connected += 1;
+    const resolved = await resolveIntegrationScope({
+      orgId,
+      provider,
+      orgPlan,
+      connected: true,
+      scopePolicyStore: deps.scopePolicyStore
+    });
+    if (resolved.scopeStatus === "required") {
+      scopeRequired += 1;
+    }
+  }
+  return { connected, scopeRequired };
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

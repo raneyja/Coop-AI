@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ConfluenceIcon,
   GitHubIcon,
@@ -38,7 +38,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "23 dependents across 6 repos. Highest risk: api-gateway and webhook-processor in the auth chain."
+        "**Short answer:** 23 dependents across 6 repos — signature or empty-payload changes are breaking for api-gateway and webhook-processor.\n\n**Downstream impact:**\n• api-gateway — 4 runtime importers in the auth middleware chain\n• webhook-processor — validate() called before every inbound handler\n• billing-worker (GitLab) — batch retry path imports the same module\n\n**From your stack:** Slack #platform-auth discussed this Sep 18. Loop in @jessica_dawson (90% blame on auth_middleware.go) before merging."
     }
   },
   {
@@ -51,7 +51,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "PLATFORM-2847: add a null guard before validate() in the webhook path — same pattern as api-gateway PR #891.",
+        "**Short answer:** PLATFORM-2847 — add a null guard before validate() in the webhook path.\n\nMatched the pattern from api-gateway PR #891: reject unauthorized payloads before the middleware chain runs. Four importers depend on consistent rejection semantics.",
       code: "if (payload == null) return unauthorized();\nawait AuthMiddleware.validate(req);"
     }
   },
@@ -65,7 +65,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "Centralized in PR #412 per the Auth ADR — one middleware wrapper instead of per-route checks."
+        "**Short answer:** PR #412 centralized validation per the Auth ADR — one middleware wrapper instead of per-route checks.\n\n**Decision trail:**\n• Jira PROJ-1847 — \"Add zero-retention headers to middleware\"\n• Slack #architecture — Marcus proposed the wrapper Mar 2024; Elena confirmed with security\n• Confluence Auth RFC v2 — linked from the PR description\n\n14 downstream refs include api-gateway middleware — not an isolated change."
     }
   },
   {
@@ -78,7 +78,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "6 services break on signature change. billing-worker batch retry and webhook-processor auth chain fail first."
+        "**Short answer:** 6 services break on signature change — billing-worker batch retry and webhook-processor auth chain fail first.\n\n**Blast radius:**\n• billing-worker — batch retry imports validate() on every job tick\n• webhook-processor — auth middleware chain assumes current error shapes\n• api-gateway — 4 importers share the runtime dependency\n\nJira PLATFORM-1102 tracks the blocked refactor. Coordinate with owners before merging."
     }
   }
 ];
@@ -140,20 +140,85 @@ const TOOLS = [
   }
 ];
 
+const TIMING = {
+  questionCharMs: 26,
+  afterQuestionMs: 850,
+  stage2Ms: 1900,
+  stage3Ms: 2100,
+  responseCharMs: 14,
+  codeCharMs: 12,
+  beforeCodeMs: 180,
+  /** Min/max dwell after response finishes streaming (ms) */
+  responseHoldMinMs: 2200,
+  responseHoldMaxMs: 3800
+};
+
 type Stage = 1 | 2 | 3 | 4;
 
 function stageClass(active: boolean) {
   return active ? "hero-demo-stage-visible" : "hero-demo-stage-hidden";
 }
 
+function streamDelay(char: string, baseMs: number): number {
+  let delay = baseMs;
+  if (/[.!?]/.test(char)) delay += 50;
+  if (char === "\n") delay += 25;
+  return delay;
+}
+
+/** Brief beat after stream ends — scales with length, capped so loops don't feel stuck. */
+function completedResponseHoldMs(summary: string, code?: string): number {
+  const totalChars = summary.length + (code?.length ?? 0);
+  const scaled = 1600 + totalChars * 3.5;
+  return Math.min(TIMING.responseHoldMaxMs, Math.max(TIMING.responseHoldMinMs, scaled));
+}
+
+/** Renders `**bold**` markers in streamed text (Coop-style section headings). */
+function renderStreamedBoldText(text: string): React.ReactNode {
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < text.length) {
+    const open = text.indexOf("**", i);
+    if (open === -1) {
+      nodes.push(text.slice(i));
+      break;
+    }
+    if (open > i) nodes.push(text.slice(i, open));
+
+    const close = text.indexOf("**", open + 2);
+    if (close === -1) {
+      nodes.push(text.slice(open));
+      break;
+    }
+
+    nodes.push(
+      <strong key={key++} className="font-semibold text-gray-900">
+        {text.slice(open + 2, close)}
+      </strong>
+    );
+    i = close + 2;
+  }
+
+  return nodes;
+}
+
 export function HeroDemoArtifact() {
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [stage, setStage] = useState<Stage>(1);
   const [typedQuestion, setTypedQuestion] = useState("");
+  const [streamedSummary, setStreamedSummary] = useState("");
+  const [streamedCode, setStreamedCode] = useState("");
+  const [responseStreaming, setResponseStreaming] = useState(false);
   const [paused, setPaused] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const typeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pausedRef = useRef(false);
+  const questionRunIdRef = useRef(0);
+  const responseRunIdRef = useRef(0);
+  const prevStageRef = useRef<Stage>(1);
+  const reduceMotionRef = useRef(false);
 
   const scenario = SCENARIOS[scenarioIndex];
 
@@ -161,13 +226,28 @@ export function HeroDemoArtifact() {
     pausedRef.current = paused;
   }, [paused]);
 
-  const clearTimers = useCallback(() => {
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      reduceMotionRef.current = mq.matches;
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const clearQuestionTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     if (typeIntervalRef.current) {
       clearInterval(typeIntervalRef.current);
       typeIntervalRef.current = null;
     }
+    questionRunIdRef.current += 1;
+  }, []);
+
+  const cancelResponseStream = useCallback(() => {
+    responseRunIdRef.current += 1;
   }, []);
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
@@ -175,23 +255,54 @@ export function HeroDemoArtifact() {
     timersRef.current.push(id);
   }, []);
 
+  const advanceScenario = useCallback(() => {
+    if (pausedRef.current) return;
+    cancelResponseStream();
+    setStage(1);
+    setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
+  }, [cancelResponseStream]);
+
   const selectScenario = useCallback(
     (index: number) => {
       if (index === scenarioIndex) return;
-      clearTimers();
+      clearQuestionTimers();
+      cancelResponseStream();
+      setStage(1);
       setScenarioIndex(index);
     },
-    [scenarioIndex, clearTimers]
+    [scenarioIndex, clearQuestionTimers, cancelResponseStream]
   );
 
   useEffect(() => {
     const query = SCENARIOS[scenarioIndex].question;
-    setStage(1);
+    const runId = ++questionRunIdRef.current;
+
     setTypedQuestion("");
+    setStreamedSummary("");
+    setStreamedCode("");
+    setResponseStreaming(false);
+
+    const scheduleStagesAfterQuestion = () => {
+      addTimer(() => setStage(2), TIMING.afterQuestionMs);
+      addTimer(() => setStage(3), TIMING.afterQuestionMs + TIMING.stage2Ms);
+      addTimer(() => setStage(4), TIMING.afterQuestionMs + TIMING.stage2Ms + TIMING.stage3Ms);
+    };
+
+    if (reduceMotionRef.current) {
+      setTypedQuestion(query);
+      setStage(1);
+      addTimer(() => setStage(2), 0);
+      addTimer(() => setStage(3), 300);
+      addTimer(() => setStage(4), 600);
+      return clearQuestionTimers;
+    }
+
+    setStage(1);
 
     let charIndex = 0;
 
-    typeIntervalRef.current = setInterval(() => {
+    const typeNext = () => {
+      if (runId !== questionRunIdRef.current) return;
       charIndex += 1;
       setTypedQuestion(query.slice(0, charIndex));
       if (charIndex >= query.length) {
@@ -199,19 +310,91 @@ export function HeroDemoArtifact() {
           clearInterval(typeIntervalRef.current);
           typeIntervalRef.current = null;
         }
-        addTimer(() => setStage(2), 500);
-        addTimer(() => setStage(3), 2500);
-        addTimer(() => setStage(4), 5000);
-        addTimer(() => {
-          if (!pausedRef.current) {
-            setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
-          }
-        }, 8500);
+        scheduleStagesAfterQuestion();
       }
-    }, 30);
+    };
 
-    return clearTimers;
-  }, [scenarioIndex, addTimer, clearTimers]);
+    typeNext();
+    typeIntervalRef.current = setInterval(typeNext, TIMING.questionCharMs);
+
+    return clearQuestionTimers;
+  }, [scenarioIndex, addTimer, clearQuestionTimers]);
+
+  useEffect(() => {
+    const justEnteredStage4 = stage === 4 && prevStageRef.current !== 4;
+    prevStageRef.current = stage;
+    if (!justEnteredStage4) return;
+
+    const runId = ++responseRunIdRef.current;
+    const { summary, code } = SCENARIOS[scenarioIndex].response;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
+
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const id = setTimeout(() => {
+          if (!cancelled && runId === responseRunIdRef.current) resolve();
+        }, ms);
+        timers.push(id);
+      });
+
+    const waitWhilePaused = async () => {
+      while (pausedRef.current && !cancelled && runId === responseRunIdRef.current) {
+        await wait(120);
+      }
+    };
+
+    async function streamResponse() {
+      setStreamedSummary("");
+      setStreamedCode("");
+      setResponseStreaming(true);
+
+      if (reduceMotionRef.current) {
+        setStreamedSummary(summary);
+        setStreamedCode(code ?? "");
+        setResponseStreaming(false);
+        await wait(completedResponseHoldMs(summary, code));
+        if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+        return;
+      }
+
+      for (let i = 1; i <= summary.length; i++) {
+        await waitWhilePaused();
+        if (cancelled || runId !== responseRunIdRef.current) return;
+        setStreamedSummary(summary.slice(0, i));
+        await wait(streamDelay(summary[i - 1] ?? "", TIMING.responseCharMs));
+      }
+
+      if (code) {
+        await wait(TIMING.beforeCodeMs);
+        for (let i = 1; i <= code.length; i++) {
+          await waitWhilePaused();
+          if (cancelled || runId !== responseRunIdRef.current) return;
+          setStreamedCode(code.slice(0, i));
+          await wait(streamDelay(code[i - 1] ?? "", TIMING.codeCharMs));
+        }
+      }
+
+      setResponseStreaming(false);
+      await waitWhilePaused();
+      if (cancelled || runId !== responseRunIdRef.current) return;
+      await wait(completedResponseHoldMs(summary, code));
+      if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+    }
+
+    streamResponse();
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [stage, scenarioIndex, advanceScenario]);
+
+  const summaryComplete = streamedSummary.length >= scenario.response.summary.length;
+  const codeText = scenario.response.code ?? "";
+  const showSummaryCursor = stage === 4 && responseStreaming && !summaryComplete;
+  const showCodeCursor =
+    stage === 4 && responseStreaming && summaryComplete && codeText.length > 0 && streamedCode.length < codeText.length;
 
   return (
     <div
@@ -276,19 +459,36 @@ export function HeroDemoArtifact() {
         </div>
 
         <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
-          <div className="mb-4 font-mono text-sm text-gray-500">// response</div>
-          <div className="hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-sm leading-relaxed text-gray-700">{scenario.response.summary}</p>
-            {scenario.response.code ? (
+          <div className="mb-4 flex items-center gap-2 font-mono text-sm text-gray-500">
+            <span>// response</span>
+            {responseStreaming ? (
+              <span className="hero-demo-streaming-indicator" aria-hidden="true">
+                <span className="hero-demo-streaming-dot" />
+                <span className="hero-demo-streaming-dot" />
+                <span className="hero-demo-streaming-dot" />
+              </span>
+            ) : null}
+          </div>
+          <div className="hero-demo-response-card hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+              {renderStreamedBoldText(streamedSummary)}
+              {showSummaryCursor ? (
+                <span className="hero-demo-response-cursor text-blue-500">|</span>
+              ) : null}
+            </p>
+            {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
               <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
-                {scenario.response.code}
+                {streamedCode}
+                {showCodeCursor ? (
+                  <span className="hero-demo-response-cursor text-blue-500">|</span>
+                ) : null}
               </pre>
             ) : null}
           </div>
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col items-center gap-3">
+      <div className="mt-6 flex justify-center">
         <div className="flex items-center gap-2" role="tablist" aria-label="Demo scenarios">
           {SCENARIOS.map((_, i) => (
             <button
@@ -304,9 +504,6 @@ export function HeroDemoArtifact() {
             />
           ))}
         </div>
-        <p className="text-center text-xs text-coop-muted">
-          Plays prompt → context → outcome · advances when complete · hover to pause
-        </p>
       </div>
     </div>
   );

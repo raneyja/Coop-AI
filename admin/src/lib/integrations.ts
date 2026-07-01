@@ -12,6 +12,18 @@ export type CodeHostProvider = Extract<IntegrationProvider, "github" | "gitlab" 
 
 export const CODE_HOST_PROVIDERS: CodeHostProvider[] = ["github", "gitlab", "bitbucket"];
 
+export type ScopableProvider = Extract<
+  IntegrationProvider,
+  "slack" | "atlassian" | "notion" | "google-docs"
+>;
+
+export const SCOPABLE_PROVIDERS: ScopableProvider[] = [
+  "slack",
+  "atlassian",
+  "notion",
+  "google-docs"
+];
+
 export type IntegrationDefinition = {
   id: IntegrationProvider;
   name: string;
@@ -77,4 +89,59 @@ export type IntegrationStatus = {
   installed: boolean;
   needsReconnect?: boolean;
   detail?: string;
+  scopeStatus?: "none" | "required" | "active";
+  scopeSummary?: string;
+  scopeNeedsReconnect?: boolean;
+};
+
+export type SlackScopeChannel = {
+  id: string;
+  name: string;
+};
+
+export type SlackScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  channels: SlackScopeChannel[];
+};
+
+export type AtlassianScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  jiraProjects: Array<{ id: string; key: string; name: string }>;
+  confluenceSpaces: Array<{ id: string; key: string; name: string }>;
+};
+
+export type NotionScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  resources: Array<{ id: string; title: string; type: "page" | "database" }>;
+};
+
+export type GoogleDocsScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  folders: Array<{ id: string; name: string; kind: "folder" | "shared_drive" }>;
+  expandedFolderIds?: string[];
+};
+
+export type IntegrationScopeResponse = {
+  provider: IntegrationProvider;
+  installed: boolean;
+  scopeStatus: "none" | "required" | "active";
+  enforced: boolean;
+  allowed: boolean;
+  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy;
+  summary?: string;
+  updatedAt?: string;
+};
+
+export type IntegrationResource = {
+  id: string;
+  name: string;
+  key?: string;
+  type?: string;
+  kind?: string;
+  isPrivate?: boolean;
+  topic?: string;
 };

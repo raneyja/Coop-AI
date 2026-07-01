@@ -2,6 +2,7 @@ import type { JobQueue } from "../jobs/jobQueue";
 import type { GitHubAppService } from "./githubAppService";
 import type { OrgStore } from "./orgStore";
 import { queueOrgRepoIndex } from "./queueOrgRepoIndex";
+import { autoIndexOnCatalogSync, countLightningEnabledRepos, indexedRepoLimitForPlan } from "./indexedRepoQuota";
 
 export type EstateSyncResult = {
   discovered: number;
@@ -22,16 +23,55 @@ export class EstateSyncService {
     options?: { force?: boolean }
   ): Promise<EstateSyncResult> {
     const org = await this.orgStore.getOrganization(orgId);
-    if (!org || (org.plan !== "enterprise" && org.plan !== "pro")) {
+    if (!org || (org.plan !== "enterprise" && org.plan !== "pro" && org.plan !== "free")) {
       return { discovered: 0, queued: 0, skipped: 0 };
     }
 
     const repoIds = await this.githubApp.listInstallationRepositories(installationId);
+    const autoIndex = autoIndexOnCatalogSync(org.plan);
+
+    if (!autoIndex) {
+      let registered = 0;
+      let skipped = 0;
+      for (const repoId of repoIds) {
+        const existing = await this.orgStore.getOrgRepo(orgId, repoId);
+        if (!existing) {
+          await this.orgStore.upsertOrgRepo(orgId, repoId, {
+            lightningEnabled: false,
+            indexStatus: "idle"
+          });
+          registered += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+      console.log(
+        `[estate-sync] org=${orgId} installation=${installationId} discovered=${repoIds.length} registered=${registered} skipped=${skipped} (catalog only)`
+      );
+      return { discovered: repoIds.length, queued: 0, skipped };
+    }
+
+    const repoLimit = indexedRepoLimitForPlan(org.plan);
+    let enabledCount = repoLimit !== null ? await countLightningEnabledRepos(this.orgStore, orgId) : 0;
     let queued = 0;
     let skipped = 0;
 
     for (const repoId of repoIds) {
       const existing = await this.orgStore.getOrgRepo(orgId, repoId);
+      const wouldEnableNew = !existing?.lightningEnabled;
+
+      if (repoLimit !== null && !existing) {
+        await this.orgStore.upsertOrgRepo(orgId, repoId, {
+          lightningEnabled: false,
+          indexStatus: "idle"
+        });
+      }
+
+      if (repoLimit !== null && wouldEnableNew && enabledCount >= repoLimit) {
+        skipped += 1;
+        continue;
+      }
+
       if (
         !options?.force &&
         existing?.lightningEnabled &&
@@ -56,6 +96,9 @@ export class EstateSyncService {
         continue;
       }
 
+      if (wouldEnableNew && repoLimit !== null) {
+        enabledCount += 1;
+      }
       queued += 1;
     }
 

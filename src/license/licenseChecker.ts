@@ -1,7 +1,25 @@
 import * as vscode from "vscode";
 import { isCoopDevMode } from "../config/lightningConfig";
+import {
+  clampSearchScopeModeForPlan,
+  canUseCollections,
+  canUseOrgSearchScope,
+  isFreePlan,
+  isProOrHigher,
+  resolveSearchScopeForPlan,
+  type ResolvedSearchScope,
+  type SubscriptionPlan
+} from "./planSearchScope";
 
-export type SubscriptionPlan = "free" | "pro" | "enterprise";
+export type { ResolvedSearchScope, SubscriptionPlan };
+export {
+  canUseCollections,
+  canUseOrgSearchScope,
+  clampSearchScopeModeForPlan,
+  isFreePlan,
+  isProOrHigher,
+  resolveSearchScopeForPlan
+};
 
 export type LicenseStatus = {
   plan: SubscriptionPlan;
@@ -29,33 +47,25 @@ export function readConfiguredPlan(): SubscriptionPlan {
   return "free";
 }
 
-export function isProOrHigher(plan: SubscriptionPlan): boolean {
-  return plan === "pro" || plan === "enterprise";
-}
-
-export function isFreePlan(plan?: SubscriptionPlan): boolean {
-  return !plan || plan === "free";
-}
-
-/** Pro+ — remote code graph, code-host connections, cross-repo search. */
-export function canUseCodeHosts(plan?: SubscriptionPlan): boolean {
-  return isProOrHigher(plan ?? "free");
+/** All org plans — capability limits are token/repo quotas, not plan tier. */
+export function canUseCodeHosts(_plan?: SubscriptionPlan): boolean {
+  return true;
 }
 
 export function canUseRemoteCodeGraph(plan?: SubscriptionPlan): boolean {
   return canUseCodeHosts(plan);
 }
 
-/** Pro/Enterprise on cloud: org catalog indexing — no manual Lightning toggle. */
+/** Cloud orgs use server-side Deep-Index; local indexing remains devMode-only. */
 export function usesOrgManagedDeepIndex(
-  plan: SubscriptionPlan,
+  _plan: SubscriptionPlan,
   backend: "local" | "cloud"
 ): boolean {
-  return backend === "cloud" && isProOrHigher(plan);
+  return backend === "cloud";
 }
 
 export function canUseLightningMode(status: LicenseStatus): boolean {
-  return status.isActive && isProOrHigher(status.plan);
+  return status.isActive;
 }
 
 export async function resolveLicenseStatus(

@@ -26,7 +26,25 @@ type IndexingRepoSectionsProps = {
   repos: OrgRepoRecord[];
   actionId: string | null;
   onReindex: (repoId: string) => void;
+  onDisable?: (repoId: string) => void;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
+  hideUnindexed?: boolean;
 };
+
+function deepIndexBlocked(
+  repo: OrgRepoRecord,
+  indexedRepoLimit: number | null | undefined,
+  indexedRepoCount: number | undefined
+): boolean {
+  if (repo.lightningEnabled) {
+    return false;
+  }
+  if (indexedRepoLimit == null || indexedRepoCount == null) {
+    return false;
+  }
+  return indexedRepoCount >= indexedRepoLimit;
+}
 
 const EMBEDDING_BADGE_CLASS: Record<EmbeddingBadgeTone, string> = {
   complete: "border-emerald-500/30 bg-emerald-950/40 text-emerald-200",
@@ -74,16 +92,6 @@ function statusTextClass(repo: OrgRepoRecord): string {
     return "text-sky-300";
   }
   return "";
-}
-
-function detailNote(repo: OrgRepoRecord): string {
-  if (repo.indexStatus === "error") {
-    return repo.error ?? "—";
-  }
-  if (repo.embeddingError) {
-    return repo.embeddingError;
-  }
-  return "—";
 }
 
 function EmbeddingBadge({ repo }: { repo: OrgRepoRecord }): React.ReactElement {
@@ -159,13 +167,22 @@ function RepoRow({
   repo,
   actionId,
   onReindex,
-  showJobIds
+  onDisable,
+  showJobIds,
+  indexedRepoLimit,
+  indexedRepoCount
 }: {
   repo: OrgRepoRecord;
   actionId: string | null;
   onReindex: (repoId: string) => void;
+  onDisable?: (repoId: string) => void;
   showJobIds: boolean;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
 }): React.ReactElement {
+  const blocked = deepIndexBlocked(repo, indexedRepoLimit, indexedRepoCount);
+  const label = repo.lightningEnabled ? "Reindex" : blocked ? "At limit" : "Deep-Index";
+
   return (
     <tr className="border-b border-coop-border/40">
       <td className="px-4 py-2">
@@ -189,23 +206,42 @@ function RepoRow({
       <td className="px-4 py-2 text-coop-muted" title={repo.lastIndexedAt ?? undefined}>
         {formatRelativeTime(repo.lastIndexedAt)}
       </td>
-      <td className="px-4 py-2 text-xs text-coop-muted">{detailNote(repo)}</td>
       {showJobIds ? (
         <td className="px-4 py-2 font-mono text-[11px] text-coop-muted" title={repo.lastJobId ?? undefined}>
           {shortJobId(repo.lastJobId)}
         </td>
       ) : null}
       <td className="px-4 py-2">
-        <button
-          type="button"
-          className={`admin-btn-secondary min-w-[4.75rem] !px-2 !py-1 text-xs ${
-            actionId === repo.repoId ? "pointer-events-none opacity-60" : ""
-          }`}
-          aria-busy={actionId === repo.repoId}
-          onClick={() => onReindex(repo.repoId)}
-        >
-          Reindex
-        </button>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={`admin-btn-secondary min-w-[4.75rem] !px-2 !py-1 text-xs ${
+              actionId === repo.repoId || blocked ? "pointer-events-none opacity-60" : ""
+            }`}
+            aria-busy={actionId === repo.repoId}
+            disabled={blocked}
+            title={
+              blocked
+                ? `Free plan allows ${indexedRepoLimit} Deep-Indexed repos. Disable another repo or upgrade to Pro.`
+                : undefined
+            }
+            onClick={() => onReindex(repo.repoId)}
+          >
+            {label}
+          </button>
+          {repo.lightningEnabled && onDisable ? (
+            <button
+              type="button"
+              className={`admin-btn-secondary !px-2 !py-1 text-xs ${
+                actionId === `off:${repo.repoId}` ? "pointer-events-none opacity-60" : ""
+              }`}
+              aria-busy={actionId === `off:${repo.repoId}`}
+              onClick={() => onDisable(repo.repoId)}
+            >
+              Turn off
+            </button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );
@@ -243,7 +279,10 @@ function RepoSection({
   total,
   actionId,
   onReindex,
+  onDisable,
   showJobIds,
+  indexedRepoLimit,
+  indexedRepoCount,
   colSpan
 }: {
   title: string;
@@ -253,7 +292,10 @@ function RepoSection({
   total?: number;
   actionId: string | null;
   onReindex: (repoId: string) => void;
+  onDisable?: (repoId: string) => void;
   showJobIds: boolean;
+  indexedRepoLimit?: number | null;
+  indexedRepoCount?: number;
   colSpan: number;
 }): React.ReactElement | null {
   const sectionRepos = reposMatchingQueue(items, repos);
@@ -269,7 +311,10 @@ function RepoSection({
           repo={repo}
           actionId={actionId}
           onReindex={onReindex}
+          onDisable={onDisable}
           showJobIds={showJobIds}
+          indexedRepoLimit={indexedRepoLimit}
+          indexedRepoCount={indexedRepoCount}
         />
       ))}
     </>
@@ -279,7 +324,11 @@ function RepoSection({
 export function IndexingRepoSections({
   repos,
   actionId,
-  onReindex
+  onReindex,
+  onDisable,
+  indexedRepoLimit,
+  indexedRepoCount,
+  hideUnindexed = false
 }: IndexingRepoSectionsProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [hostFilter, setHostFilter] = useState<CodeHostProvider | "all">("all");
@@ -296,17 +345,24 @@ export function IndexingRepoSections({
     return Array.from(hosts).sort();
   }, [repos]);
 
+  const displayRepos = useMemo(() => {
+    if (indexedRepoLimit != null || hideUnindexed) {
+      return repos.filter((repo) => repo.lightningEnabled);
+    }
+    return repos;
+  }, [repos, indexedRepoLimit, hideUnindexed]);
+
   const filteredRepos = useMemo(
-    () => filterReposForIndexingView(repos, searchQuery, hostFilter),
-    [repos, searchQuery, hostFilter]
+    () => filterReposForIndexingView(displayRepos, searchQuery, hostFilter),
+    [displayRepos, searchQuery, hostFilter]
   );
 
   const queue = useMemo(() => buildIndexingQueue(filteredRepos), [filteredRepos]);
   const indexedTotal = queue.ready.length;
   const estateTotal =
     queue.inFlight.length + queue.attention.length + queue.ready.length + queue.idle.length;
-  const offCatalog = filteredRepos.filter((repo) => !repo.lightningEnabled);
-  const colSpan = showJobIds ? 9 : 8;
+  const offCatalog = hideUnindexed ? [] : filteredRepos.filter((repo) => !repo.lightningEnabled);
+  const colSpan = showJobIds ? 8 : 7;
 
   const hasRows =
     queue.inFlight.length > 0 ||
@@ -376,7 +432,6 @@ export function IndexingRepoSections({
               <th>Status</th>
               <th>Embeddings</th>
               <th>Last indexed</th>
-              <th>Details</th>
               {showJobIds ? <th>Job ID</th> : null}
               <th>Actions</th>
             </tr>
@@ -389,7 +444,10 @@ export function IndexingRepoSections({
               count={queue.inFlight.length}
               actionId={actionId}
               onReindex={onReindex}
+              onDisable={onDisable}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -399,7 +457,10 @@ export function IndexingRepoSections({
               count={queue.attention.length}
               actionId={actionId}
               onReindex={onReindex}
+              onDisable={onDisable}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -410,7 +471,10 @@ export function IndexingRepoSections({
               total={estateTotal}
               actionId={actionId}
               onReindex={onReindex}
+              onDisable={onDisable}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             <RepoSection
@@ -420,7 +484,10 @@ export function IndexingRepoSections({
               count={queue.idle.length}
               actionId={actionId}
               onReindex={onReindex}
+              onDisable={onDisable}
               showJobIds={showJobIds}
+              indexedRepoLimit={indexedRepoLimit}
+              indexedRepoCount={indexedRepoCount}
               colSpan={colSpan}
             />
             {offCatalog.length > 0 ? (
@@ -432,7 +499,10 @@ export function IndexingRepoSections({
                     repo={repo}
                     actionId={actionId}
                     onReindex={onReindex}
+                    onDisable={onDisable}
                     showJobIds={showJobIds}
+                    indexedRepoLimit={indexedRepoLimit}
+                    indexedRepoCount={indexedRepoCount}
                   />
                 ))}
               </>
@@ -442,7 +512,7 @@ export function IndexingRepoSections({
                 <td colSpan={colSpan} className="px-4 py-6 text-center text-coop-muted">
                   {filterActive
                     ? "No repositories match your search."
-                    : "No repositories registered yet. Connect a code host and run catalog sync, or enable repos from the extension workspace picker (Pro)."}
+                    : "No repositories registered yet. Connect a code host and run catalog sync, then choose repos to Deep-Index."}
                 </td>
               </tr>
             ) : null}

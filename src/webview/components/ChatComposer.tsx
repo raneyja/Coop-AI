@@ -28,6 +28,8 @@ type ChatComposerProps = {
   value: string;
   maxLength: number;
   isStreaming: boolean;
+  /** When true, send is disabled but stop/streaming UI is unchanged. */
+  submitDisabled?: boolean;
   variant?: "landing" | "chat";
   usageLabel?: string;
   attachments: ChatImageAttachment[];
@@ -133,6 +135,7 @@ export function ChatComposer({
   value,
   maxLength,
   isStreaming,
+  submitDisabled = false,
   variant = "landing",
   usageLabel,
   attachments,
@@ -686,7 +689,7 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onSend}
-              disabled={isStreaming || !canSend}
+              disabled={isStreaming || submitDisabled || !canSend}
               title="Send"
               aria-label="Send"
               className="

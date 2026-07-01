@@ -88,7 +88,11 @@ import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/
 import { formatWaitTime } from "../jobs/types";
 import type { JobProgressPayload } from "./types";
 import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";
+import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";
+import { resolveGitUserEmail } from "./resolveGitUserEmail";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
+import { ChatQuotaExceededError } from "../api/CoopBackendClient";
+import { buildQuotaExceededUpgradeUrl, isFreeQuotaExhausted } from "./quotaNotice";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
@@ -113,6 +117,10 @@ import {
 import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
+import {
+  buildMissingIntentClarificationResponse,
+  shouldClarifyFirstChatTurn
+} from "./chatMessageIntent";
 import { openReferencedLink } from "./openReferencedLink";
 import {
   buildUserMessageWithContext,
@@ -231,7 +239,7 @@ import {
   preferMentionFileContent,
   rankMentionSearchResults
 } from "./mentionSearchMerge";
-import { canUseCodeHosts, canUseRemoteCodeGraph, isFreePlan } from "../license/licenseChecker";
+import { canUseCodeHosts, canUseRemoteCodeGraph, isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
 import { wantsJiraContext } from "../context/jiraContext";
@@ -239,6 +247,8 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import { shouldFetchSlackContext } from "../context/slackContext";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -435,6 +445,30 @@ export class CoopChatSession {
     this.postContext();
     this.postChatHistory();
     this.pushThreadsList();
+    this.syncAllLocalThreadsToBackend();
+  }
+
+  private threadSyncOptions() {
+    return {
+      baseUrl: resolveCoopBaseUrl().baseUrl,
+      getToken: () => this.options.api.getToken(),
+      getOwnerEmail: () => resolveGitUserEmail()
+    };
+  }
+
+  private syncAllLocalThreadsToBackend(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    void syncAllThreadsToBackend(this.threadStore.listAllThreads(), this.threadSyncOptions());
+  }
+
+  private syncActiveThreadToBackend(): void {
+    if (!this.threadStore) {
+      return;
+    }
+    const thread = this.threadStore.getActiveThread();
+    void syncThreadToBackend(thread, this.threadSyncOptions());
   }
 
   public async refreshPreferences(): Promise<void> {
@@ -447,6 +481,9 @@ export class CoopChatSession {
       this.options.integrationSecrets
     );
     this.applyDefaultRepoToContext();
+    if (this.preferences.plan === "free" && !isFreeQuotaExhausted(this.preferences.quotaCredits)) {
+      this.post({ type: "chat:quota-cleared" });
+    }
     await this.pushSettingsState();
   }
 
@@ -531,6 +568,7 @@ export class CoopChatSession {
     this.options.onTitleChange?.(title);
     this.threadStore?.updateActiveTitle(title);
     this.pushThreadsList();
+    this.syncActiveThreadToBackend();
   }
 
   private persistActiveThread(): void {
@@ -545,6 +583,7 @@ export class CoopChatSession {
       this.threadArtifacts,
       this.currentContext
     );
+    void this.syncActiveThreadToBackend();
   }
 
   private pushThreadsList(): void {
@@ -683,6 +722,26 @@ export class CoopChatSession {
     }
   }
 
+  private resolvePromptLibraryText(entry: WorkspacePromptEntry, composerText?: string): string {
+    return mergeComposerWithPromptTemplate(
+      composerText,
+      applyPromptTemplate(entry.template, promptVariablesFromContext(this.currentContext))
+    );
+  }
+
+  public insertPromptLibraryEntry(
+    entry: WorkspacePromptEntry,
+    options?: { composerText?: string }
+  ): void {
+    this.postToChat({
+      type: "prompts:insert",
+      payload: {
+        text: this.resolvePromptLibraryText(entry, options?.composerText),
+        actionId: entry.actionId
+      }
+    });
+  }
+
   private async runPromptLibraryEntry(
     entry: WorkspacePromptEntry,
     options?: {
@@ -691,10 +750,7 @@ export class CoopChatSession {
       composerText?: string;
     }
   ): Promise<void> {
-    const text = mergeComposerWithPromptTemplate(
-      options?.composerText,
-      applyPromptTemplate(entry.template, promptVariablesFromContext(this.currentContext))
-    );
+    const text = this.resolvePromptLibraryText(entry, options?.composerText);
     await this.runResolvedPromptText(text, entry.actionId, {
       mentions: options?.mentions,
       attachments: options?.attachments
@@ -762,6 +818,7 @@ export class CoopChatSession {
           void this.pushWorkspacePrompts();
           void this.handleCollectionsListRequest();
           this.flushPendingSettingsNavigation();
+          void this.pushLightningState();
         }
         return;
       case "ui:close-settings":
@@ -820,11 +877,12 @@ export class CoopChatSession {
         if (!entry) {
           return;
         }
-        await this.runPromptLibraryEntry(entry, {
-          mentions: message.payload.mentions,
-          attachments: message.payload.attachments,
+        this.insertPromptLibraryEntry(entry, {
           composerText: message.payload.composerText
         });
+        if (source === "settings") {
+          void vscode.commands.executeCommand("workbench.view.extension.coopAI");
+        }
         return;
       }
       case "prompts:save":
@@ -1629,6 +1687,7 @@ export class CoopChatSession {
     request: ContextFetchRequest
   ): Promise<ContextFetchResult> {
     const contextText = await this.integrationContextText(result, request);
+    const integrationScopes = await this.resolveIntegrationScopes(request);
     return mergeIntegrationChatContext({
       result,
       request,
@@ -1639,8 +1698,23 @@ export class CoopChatSession {
       activeFile: request.params.file,
       contextText,
       codeHostProvider: this.preferences.defaultCodeHost,
-      codeHostConnected: this.isCodeHostConnected()
+      codeHostConnected: this.isCodeHostConnected(),
+      integrationScopes
     });
+  }
+
+  private async resolveIntegrationScopes(
+    request: ContextFetchRequest
+  ): Promise<Partial<Record<"slack", ResolvedIntegrationScope>> | undefined> {
+    if (isCoopDevMode() || !shouldFetchSlackContext(request)) {
+      return undefined;
+    }
+    try {
+      const scope = await this.options.api.getIntegrationScope(this.preferences.apiBaseUrl, "slack");
+      return { slack: scope };
+    } catch {
+      return undefined;
+    }
   }
 
   private async integrationContextText(
@@ -2140,6 +2214,26 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
     }
+
+    const integrationProviderForGuard =
+      quickAction || options?.sourceHint
+        ? options?.integrationProvider
+        : options?.integrationProvider ?? this.detectChatIntegrationProvider(message);
+    if (
+      shouldClarifyFirstChatTurn({
+        message,
+        hasPriorThreadMessages: this.chatHistory.length > 0,
+        hasQuickAction: Boolean(quickAction),
+        hasAttachments: Boolean(attachments?.length),
+        hasMentions: Boolean(options?.mentions?.length),
+        hasSourceHint: Boolean(options?.sourceHint),
+        hasIntegrationProvider: Boolean(integrationProviderForGuard)
+      })
+    ) {
+      await this.completeMissingIntentClarification(message, options?.mentions, attachments);
+      return;
+    }
+
     const actionContext = quickAction
       ? this.contextForQuickAction(this.currentContext, options?.targetFile)
       : this.currentContext;
@@ -2155,6 +2249,10 @@ export class CoopChatSession {
           message: quickActionBlockedMessage(quickAction as QuickActionId, actionContext)
         }
       });
+      return;
+    }
+
+    if (await this.blockIfFreeQuotaExhausted()) {
       return;
     }
 
@@ -2255,6 +2353,51 @@ export class CoopChatSession {
       integrationProvider,
       mentions: options?.mentions
     });
+  }
+
+  private async completeMissingIntentClarification(
+    message: string,
+    mentions?: ChatFileMention[],
+    attachments?: ChatImageAttachment[]
+  ): Promise<void> {
+    const mentionRefs = this.quickActionMentionRefs(mentions);
+    const historyContent = plainChatHistoryContent(message, mentionRefs);
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: historyContent,
+      timestamp: Date.now(),
+      attachments: attachments?.length ? attachments : undefined
+    };
+    this.chatHistory.push(userMessage);
+    if (this.chatHistory.length === 1) {
+      this.setThreadTitle(
+        summarizeThreadTitle({
+          content: historyContent || attachments?.[0]?.name || "File attachment",
+          context: this.currentContext
+        })
+      );
+    }
+    this.postChatHistory();
+    this.persistActiveThread();
+    this.chatTurnStartedAt = Date.now();
+    this.clearIntentFeedback();
+
+    const responseContent = buildMissingIntentClarificationResponse({
+      file: this.currentContext.file,
+      owner: this.currentContext.owner ?? this.preferences.owner,
+      repo: this.currentContext.repo ?? this.preferences.repo
+    });
+
+    await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+    const finalMessage: ChatMessage = {
+      role: "assistant",
+      content: responseContent,
+      timestamp: Date.now()
+    };
+    this.chatHistory.push(finalMessage);
+    this.post({ type: "chat:complete", payload: { message: finalMessage } });
+    this.postChatHistory();
+    this.persistActiveThread();
   }
 
   private quickActionMentionRefs(mentions?: ChatFileMention[]): QuickActionMentionRef[] {
@@ -3085,6 +3228,10 @@ export class CoopChatSession {
         }
       });
 
+      if (await this.blockIfFreeQuotaExhausted()) {
+        return;
+      }
+
       const result = await this.options.api.streamChat(
         {
           message: apiMessage,
@@ -3162,8 +3309,18 @@ export class CoopChatSession {
         });
         this.persistActiveThread();
       }
+
+      await this.notifyQuotaExceededIfNeeded();
     } catch (error) {
       if (token !== this.streamToken) {
+        return;
+      }
+      if (error instanceof ChatQuotaExceededError) {
+        this.postQuotaExceeded({
+          resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+          upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+          retryAfterMs: error.retryAfterMs
+        });
         return;
       }
       const message = formatUserFacingNetworkError(error);
@@ -3171,6 +3328,77 @@ export class CoopChatSession {
     } finally {
       this.pendingChatLocalFiles = undefined;
     }
+  }
+
+  private postQuotaExceeded(payload: {
+    resetsAt: string;
+    upgradeUrl: string;
+    retryAfterMs?: number;
+  }): void {
+    this.post({
+      type: "chat:quota-exceeded",
+      payload: {
+        resetsAt: payload.resetsAt,
+        upgradeUrl: payload.upgradeUrl,
+        timezone: this.preferences.timezone,
+        retryAfterMs: payload.retryAfterMs
+      }
+    });
+  }
+
+  private async blockIfFreeQuotaExhausted(): Promise<boolean> {
+    if (this.preferences.plan !== "free") {
+      return false;
+    }
+
+    let quota = this.preferences.quotaCredits;
+    try {
+      const me = await this.options.api.fetchMe(this.preferences.apiBaseUrl);
+      if (me.plan) {
+        this.preferences = { ...this.preferences, plan: me.plan };
+      }
+      if (me.plan !== "free") {
+        return false;
+      }
+      if (me.quota) {
+        quota = me.quota;
+        this.preferences = { ...this.preferences, quotaCredits: me.quota };
+      }
+    } catch {
+      // Fall back to cached quota snapshot.
+    }
+
+    if (!isFreeQuotaExhausted(quota)) {
+      return false;
+    }
+
+    this.clearIntentFeedback();
+    this.postQuotaExceeded({
+      resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+      retryAfterMs: quota?.retryAfterMs
+    });
+    return true;
+  }
+
+  private async notifyQuotaExceededIfNeeded(): Promise<void> {
+    if (this.preferences.plan !== "free") {
+      return;
+    }
+    try {
+      await this.refreshPreferences();
+    } catch {
+      // Best-effort — still show notice from stale quota if available.
+    }
+    const quota = this.preferences.quotaCredits;
+    if (!quota || !isFreeQuotaExhausted(quota)) {
+      return;
+    }
+    this.postQuotaExceeded({
+      resetsAt: quota.resetsAt ?? "",
+      upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+      retryAfterMs: quota.retryAfterMs
+    });
   }
 
   private async runAsyncQuickAction(quickAction: string, _message: string): Promise<boolean> {
@@ -4519,6 +4747,7 @@ export class CoopChatSession {
   private async pushLightningState(): Promise<void> {
     const state = await this.options.lightningStatusBar.buildState();
     this.post({ type: "lightning:state", payload: state });
+    this.postToSettings({ type: "lightning:state", payload: state });
   }
 
   private async syncGithubCredentialToCloud(token: string): Promise<void> {
@@ -5042,7 +5271,7 @@ export class CoopChatSession {
               0,
               MENTION_SEARCH_LIMIT
             ),
-            hint: items.length === 0 ? "No workspace files matched. Free plan searches local folders only." : undefined
+            hint: items.length === 0 ? "No files matched. Connect a code host, Deep-Index repos in admin, or open a local folder." : undefined
           }
         });
         return;
@@ -5334,18 +5563,11 @@ function resolveSearchScope(preferences: UserPreferences): {
   collectionId?: string;
   scope?: "indexed" | "org";
 } {
-  if (isFreePlan(preferences.plan)) {
-    return { mode: "repo" };
-  }
-  const mode = preferences.searchScopeMode;
-  if (mode === "collection") {
-    const collectionId = preferences.searchCollectionId.trim();
-    return { mode, collectionId: collectionId || undefined };
-  }
-  if (mode === "indexed" || mode === "org") {
-    return { mode, scope: mode };
-  }
-  return { mode: "repo" };
+  return resolveSearchScopeForPlan({
+    plan: preferences.plan,
+    searchScopeMode: preferences.searchScopeMode,
+    searchCollectionId: preferences.searchCollectionId
+  });
 }
 
 type MentionRepoScope = {

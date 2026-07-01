@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { fetchUsers, fetchOrg, inviteUser, updateUser, type AdminUser } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
+import { PlanUpgradeNotice } from "@/components/PlanUpgradeNotice";
 
 const ROLES = ["member", "admin", "owner"];
 
@@ -86,9 +87,7 @@ export default function UsersPage() {
       <div>
         <h1 className="admin-page-title">Users</h1>
         <p className="mt-1 text-sm text-coop-muted">
-          {teamInvitesBlocked
-            ? "Free plan is individual only — one seat per account. Upgrade to Pro to invite teammates."
-            : "Invite teammates and manage roles."}
+          {teamInvitesBlocked ? "Your personal account — one seat on the free Developer plan." : "Invite teammates and manage roles."}
         </p>
       </div>
 
@@ -97,9 +96,10 @@ export default function UsersPage() {
       <form onSubmit={handleInvite} className="admin-card">
         <h2 className="admin-section-label">Invite user</h2>
         {teamInvitesBlocked ? (
-          <p className="mb-3 text-sm text-coop-muted">
-            Team invites require Pro. The free Developer plan never includes team accounts.
-          </p>
+          <PlanUpgradeNotice
+            className="mb-4"
+            message="Inviting additional users requires a Pro subscription. Upgrade now to invite your team."
+          />
         ) : null}
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">

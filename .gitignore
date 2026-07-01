@@ -25,6 +25,8 @@ scripts/.env
 # OS and editor
 .DS_Store
 * 2.*
+* 3.*
+* 4.*
 *.pem
 
 # Logs
@@ -42,3 +44,5 @@ coverage/
 .pnp
 .pnp.js
 .yarn/install-state.gz
+.vercel
+.env*

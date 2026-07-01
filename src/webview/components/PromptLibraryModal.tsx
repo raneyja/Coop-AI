@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CoopPanelHeader } from "./CoopPanelHeader";
+import { PromptDetailOverlay } from "./PromptDetailOverlay";
 import { PromptLibraryRow } from "./PromptLibraryRow";
 import {
   createDraftPromptId,
@@ -14,6 +15,7 @@ type PromptLibraryModalProps = {
   prompts: PromptLibraryItem[];
   pinnedIds: string[];
   hasWorkspace: boolean;
+  runDisabled?: boolean;
   onClose: () => void;
   onRun?: (id: string) => void;
   onCommit: (payload: { prompts: PromptLibraryItem[]; pinnedIds: string[] }) => void;
@@ -23,85 +25,6 @@ type EditorState =
   | { mode: "closed" }
   | { mode: "new"; title: string; template: string }
   | { mode: "edit"; id: string; title: string; template: string };
-
-type PromptDetailOverlayProps = {
-  editor: Exclude<EditorState, { mode: "closed" }>;
-  onChange: (editor: Exclude<EditorState, { mode: "closed" }>) => void;
-  onDiscard: () => void;
-  onSave: () => void;
-};
-
-function PromptDetailOverlay({
-  editor,
-  onChange,
-  onDiscard,
-  onSave
-}: PromptDetailOverlayProps): React.ReactElement {
-  const isNew = editor.mode === "new";
-  const canSave = editor.title.trim().length > 0 && editor.template.trim().length > 0;
-
-  return (
-    <div
-      className="coop-prompt-modal-stack"
-      role="presentation"
-      onClick={onDiscard}
-    >
-      <div
-        className="coop-prompt-modal coop-prompt-editor-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="coop-prompt-editor-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <CoopPanelHeader
-          variant="modal"
-          titleElement="h2"
-          titleId="coop-prompt-editor-title"
-          title={isNew ? "New prompt" : "Edit prompt"}
-          onClose={onDiscard}
-          closeAriaLabel="Close"
-        />
-
-        <label className="coop-prompt-editor-field">
-          <span className="coop-prompt-modal-section-title">Title</span>
-          <input
-            type="text"
-            value={editor.title}
-            onChange={(event) => onChange({ ...editor, title: event.target.value })}
-            placeholder="Name this prompt"
-            className="coop-prompt-modal-search"
-            autoFocus
-          />
-        </label>
-
-        <label className="coop-prompt-editor-field">
-          <span className="coop-prompt-modal-section-title">Prompt</span>
-          <textarea
-            value={editor.template}
-            onChange={(event) => onChange({ ...editor, template: event.target.value })}
-            placeholder="Write your prompt… Use {{file}}, {{repo}}, {{branch}}, {{lines}}, or a slash command like /understand"
-            rows={6}
-            className="coop-prompt-modal-textarea coop-prompt-editor-textarea"
-          />
-        </label>
-
-        <div className="coop-prompt-modal-actions">
-          <button type="button" className="coop-settings-action-btn" onClick={onDiscard}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="coop-settings-action-btn"
-            onClick={onSave}
-            disabled={!canSave}
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function reorderPinnedIds(pinnedIds: string[], fromIndex: number, toIndex: number): string[] {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= pinnedIds.length || toIndex >= pinnedIds.length) {
@@ -122,6 +45,7 @@ export function PromptLibraryModal({
   prompts,
   pinnedIds,
   hasWorkspace,
+  runDisabled,
   onClose,
   onRun,
   onCommit
@@ -265,6 +189,12 @@ export function PromptLibraryModal({
   const showPinHint = pinned.length === 0 && hasResults;
   const editorOpen = editor.mode !== "closed";
 
+  const handleRun = (id: string) => {
+    if (onRun && !runDisabled && hasWorkspace) {
+      onRun(id);
+    }
+  };
+
   return (
     <div
       className="coop-prompt-modal-backdrop"
@@ -335,6 +265,8 @@ export function PromptLibraryModal({
                         dragging={dragSourceIndex === index}
                         dropTarget={dropTargetIndex === index && dragSourceIndex !== index}
                         onSelect={openEdit}
+                        onRun={onRun ? handleRun : undefined}
+                        runDisabled={runDisabled}
                         onTogglePin={togglePin}
                         onEdit={openEdit}
                         onDelete={deleteDraftPrompt}
@@ -361,6 +293,8 @@ export function PromptLibraryModal({
                         prompt={prompt}
                         pinned={false}
                         onSelect={openEdit}
+                        onRun={onRun ? handleRun : undefined}
+                        runDisabled={runDisabled}
                         onTogglePin={togglePin}
                         onEdit={openEdit}
                         onDelete={deleteDraftPrompt}
@@ -394,8 +328,9 @@ export function PromptLibraryModal({
 
       {editorOpen ? (
         <PromptDetailOverlay
-          editor={editor}
-          onChange={setEditor}
+          headerTitle={editor.mode === "new" ? "New prompt" : "Edit prompt"}
+          draft={{ title: editor.title, template: editor.template }}
+          onChange={(draft) => setEditor({ ...editor, title: draft.title, template: draft.template })}
           onDiscard={() => setEditor({ mode: "closed" })}
           onSave={applyEditorToDraft}
         />

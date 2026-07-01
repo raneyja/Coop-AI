@@ -149,4 +149,148 @@
   .admin-page-title {
     @apply text-xl font-semibold text-white;
   }
+
+  /* Feed thread — mirrors extension chat stream */
+  .feed-chat-thread {
+    @apply mx-auto flex max-w-3xl flex-col gap-5 py-2;
+  }
+
+  .feed-chat-message {
+    @apply w-full min-w-0;
+  }
+
+  .feed-chat-message-inner {
+    @apply min-w-0;
+  }
+
+  .feed-chat-message--user .feed-chat-message-inner {
+    @apply rounded-[10px] border border-coop-border/80 bg-white/[0.04] px-3.5 py-2.5;
+  }
+
+  .feed-chat-message--assistant .feed-chat-message-inner {
+    @apply border-l-2 border-coop-border py-1 pl-3;
+  }
+
+  .feed-chat-message-meta {
+    @apply mb-2 flex items-center gap-2;
+  }
+
+  .feed-chat-message-label {
+    @apply text-[11px] font-medium text-coop-muted;
+  }
+
+  .feed-chat-message-time {
+    @apply ml-auto text-[10px] tabular-nums text-coop-muted;
+  }
+
+  .feed-chat-message--user .feed-chat-message-time {
+    @apply mb-1.5 ml-0 block;
+  }
+
+  .feed-chat-message-body {
+    @apply text-[13px] leading-[1.55] break-words text-[#e4e4e7];
+  }
+
+  /* Chat prose — mirrors extension ChatProse renderer */
+  .coop-chat-prose {
+    @apply min-w-0 text-[13px] leading-relaxed text-[#e4e4e7];
+  }
+
+  .coop-chat-heading {
+    @apply m-0 text-[14px] font-semibold leading-snug tracking-tight text-white;
+  }
+
+  .coop-chat-heading + .coop-chat-paragraph,
+  .coop-chat-heading + .coop-chat-list,
+  .coop-chat-heading + .coop-chat-code-block,
+  .coop-chat-heading + .coop-chat-citation {
+    @apply mt-2;
+  }
+
+  .coop-chat-paragraph {
+    @apply m-0 whitespace-pre-wrap break-words;
+  }
+
+  .coop-chat-prose strong {
+    @apply font-semibold text-white;
+  }
+
+  .coop-chat-paragraph + .coop-chat-paragraph,
+  .coop-chat-paragraph + .coop-chat-list,
+  .coop-chat-paragraph + .coop-chat-code-block,
+  .coop-chat-paragraph + .coop-chat-citation,
+  .coop-chat-list + .coop-chat-paragraph,
+  .coop-chat-list + .coop-chat-code-block,
+  .coop-chat-list + .coop-chat-citation,
+  .coop-chat-code-block + .coop-chat-paragraph,
+  .coop-chat-code-block + .coop-chat-list,
+  .coop-chat-citation + .coop-chat-paragraph,
+  .coop-chat-citation + .coop-chat-list {
+    @apply mt-3;
+  }
+
+  .coop-chat-list {
+    @apply m-0 list-disc space-y-1 pl-5;
+  }
+
+  .coop-chat-list li {
+    @apply leading-relaxed;
+  }
+
+  .coop-chat-list:where(ol) {
+    @apply list-decimal;
+  }
+
+  .coop-chat-inline-code {
+    @apply rounded border border-coop-border/80 bg-white/[0.06] px-1 py-0.5 font-mono text-[12px] text-[#e4e4e7];
+  }
+
+  .coop-chat-action-link {
+    @apply inline cursor-pointer border-0 bg-transparent p-0 text-[#75beff] underline decoration-[#75beff]/55 underline-offset-2 transition-colors hover:text-[#9dd0ff] hover:decoration-current;
+  }
+
+  .coop-chat-action-link--file {
+    @apply font-mono text-[0.92em];
+  }
+
+  .coop-chat-action-link--external::after {
+    content: "↗";
+    @apply ml-0.5 inline-block text-[0.82em] opacity-80 no-underline;
+  }
+
+  .coop-chat-code-block {
+    @apply my-2 overflow-hidden rounded-md border border-coop-border/80 bg-[#1a1a1a] font-mono text-[12px];
+  }
+
+  .coop-chat-code-header {
+    @apply flex items-center justify-between gap-2 border-b border-coop-border/80 bg-white/[0.04] px-2.5 py-1.5;
+  }
+
+  .coop-chat-code-lang {
+    @apply text-[10px] font-medium uppercase tracking-wide text-coop-muted;
+  }
+
+  .coop-chat-code-block pre {
+    @apply m-0 overflow-x-auto px-2.5 py-2;
+  }
+
+  .coop-chat-code-block code {
+    @apply block whitespace-pre text-[#d4d4d4];
+  }
+
+  .coop-chat-citation {
+    @apply my-2 overflow-hidden rounded-md border border-coop-border/80 border-l-[3px] border-l-[#75beff] bg-[#1a1a1a];
+  }
+
+  .coop-chat-citation-header {
+    @apply block w-full border-b border-coop-border/80 bg-white/[0.04] px-2.5 py-1.5 text-left text-[11px] text-[#75beff];
+  }
+
+  .coop-chat-citation-block pre {
+    @apply m-0 overflow-x-auto p-2.5;
+  }
+
+  .coop-chat-citation-block code {
+    @apply block whitespace-pre font-mono text-[12px] text-[#d4d4d4];
+  }
 }

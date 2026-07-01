@@ -474,6 +474,28 @@
           "default": "",
           "description": "Collection id when searchScope.mode is collection."
         },
+        "coopAI.timezone": {
+          "type": "string",
+          "default": "America/Los_Angeles",
+          "enum": [
+            "America/Los_Angeles",
+            "America/Denver",
+            "America/Chicago",
+            "America/New_York",
+            "America/Anchorage",
+            "Pacific/Honolulu",
+            "Europe/London",
+            "Europe/Dublin",
+            "Europe/Paris",
+            "Europe/Berlin",
+            "Europe/Amsterdam",
+            "Europe/Rome",
+            "Europe/Madrid",
+            "Europe/Athens",
+            "Europe/Helsinki"
+          ],
+          "description": "Timezone for Coop timestamps and quota reset labels. US options use PST/MST/CST/EST; European options use GMT offsets."
+        },
         "coopAI.defaultCodeHost": {
           "type": "string",
           "enum": [
@@ -732,12 +754,12 @@
             "enterprise"
           ],
           "default": "free",
-          "description": "Subscription plan (devMode only). Lightning Mode requires Pro or Enterprise from the API in production."
+          "description": "Subscription plan (devMode only). Production plan comes from the Coop API (/v1/me)."
         },
         "coopAI.lightning.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable Deep-Code Graph indexing (Pro plan). When false, chat uses local file and integration context only."
+          "description": "Enable Deep-Code Graph indexing. When false, chat uses local file and integration context only."
         },
         "coopAI.lightning.autoIndexOnEnable": {
           "type": "boolean",
@@ -806,7 +828,9 @@
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
+    "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
+    "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineGraphContext.test.ts && npx tsx src/api/inlineCompletionApi.test.ts",
     "test:autocomplete-smoke": "npx tsx scripts/autocomplete-smoke.mjs",
@@ -824,6 +848,8 @@
     "test:error-handling": "npx tsx src/jobs/errorHandling.test.ts",
     "test:indexing-progress": "npx tsx admin/src/lib/indexingProgress.test.ts",
     "test:user-facing-errors": "npx tsx src/api/userFacingErrors.test.ts",
+    "test:integration-scope": "npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts",
+    "test": "npm run test:integration-scope",
     "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
     "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh"
   },

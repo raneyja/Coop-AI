@@ -35,6 +35,16 @@ test("settingsScreenParent routes preferences children", () => {
   assert.equal(settingsScreenParent("prompts"), "preferences");
 });
 
+test("settingsScreenParent routes plan and indexing to hub", () => {
+  assert.equal(settingsScreenParent("plan-usage"), "hub");
+  assert.equal(settingsScreenParent("indexing"), "hub");
+});
+
+test("migrateSettingsScreen accepts new screens", () => {
+  assert.equal(migrateSettingsScreen("plan-usage"), "plan-usage");
+  assert.equal(migrateSettingsScreen("indexing"), "indexing");
+});
+
 console.log(`\nsettingsScreens: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

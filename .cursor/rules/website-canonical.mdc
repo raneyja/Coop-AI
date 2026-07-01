@@ -1,0 +1,51 @@
+---
+description: Marketing site canonical source — coop-ai.dev / main branch / HeroDemoArtifact
+globs: website/**/*
+alwaysApply: false
+---
+
+# Marketing site — canonical source
+
+**Production truth:** [https://coop-ai.dev](https://coop-ai.dev) (deployed from `main`).
+
+When editing the homepage, hero, or marketing demos, use the **current** light-theme stack — not legacy dark-theme components.
+
+## Current homepage hero (production)
+
+| Piece | File |
+|-------|------|
+| Hero layout | `website/src/components/Hero.tsx` → `<HeroDemoArtifact />` |
+| 4 demo artefacts | `website/src/components/HeroDemoArtifact.tsx` |
+| Site copy | `website/src/lib/site.config.ts` |
+| Light theme | `website/src/app/layout.tsx` (`className` without `dark`), `website/tailwind.config.ts` |
+
+Demo flow labels: `// question` → `// pulling context from` → `// context found` → `// response`.
+
+## Legacy — do NOT treat as production homepage
+
+| Legacy | File | Notes |
+|--------|------|-------|
+| Dark VS Code mock carousel | `website/src/components/FileContextStoryDemo.tsx` | `/file-context-demo` preview only |
+| Old hero mock | `website/src/components/HeroProductMock.tsx` | Unused on production hero |
+| Product page carousel | `website/src/components/ProductShowcaseCarousel.tsx` | `/product` only |
+
+Before changing hero demo behavior, **confirm `Hero.tsx` imports `HeroDemoArtifact`**, not `FileContextStoryDemo`.
+
+## Branch drift
+
+Feature branches may lag `main` on `website/` (missing `HeroDemoArtifact.tsx`, old `Hero.tsx`). If local preview looks wrong:
+
+1. Compare: `git diff main -- website/src/components/Hero.tsx`
+2. Restore from main: `git checkout main -- website/` (or merge `main` into your branch)
+3. Restart dev server after checkout
+
+## Local preview
+
+| Step | Detail |
+|------|--------|
+| Port | **3001** — `website/package.json` → `"dev": "next dev -p 3001"` |
+| URL | `http://localhost:3001` (not 3000) |
+| Command | `cd website && npm run dev` |
+| Success | Light background, centered hero, `// response` box with 4 carousel dots |
+
+Never point users at `localhost:3000` for the marketing site unless they explicitly started Next on that port.

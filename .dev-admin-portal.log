@@ -1,0 +1,950 @@
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3002
+   - Network:      http://192.168.1.171:3002
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1223ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ○ Compiling / ...
+ ✓ Compiled / in 2.5s (735 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 2798ms
+ GET / 200 in 22ms
+ ✓ Compiled /api/integrations in 500ms (737 modules)
+ GET / 200 in 48ms
+ GET /api/integrations 200 in 734ms
+ GET /api/integrations 200 in 837ms
+ GET /api/integrations 200 in 195ms
+ GET /api/integrations 200 in 205ms
+ ✓ Compiled /login in 121ms (730 modules)
+ GET /login 200 in 232ms
+ GET / 200 in 41ms
+ GET / 200 in 56ms
+ ✓ Compiled /icon.png in 184ms (459 modules)
+ GET /icon.png?65400d324ede031a 200 in 341ms
+ GET /api/integrations 200 in 345ms
+ GET /api/integrations 200 in 356ms
+ GET /api/integrations 200 in 13ms
+ GET /api/integrations 200 in 19ms
+ ⨯ ./src/components/OnboardingWizard.tsx:11:1
+Module not found: Can't resolve './OnboardingScopeStep'
+   9 | import { useIntegrations } from "@/hooks/useIntegrations";
+  10 | import { IntegrationsStep } from "./IntegrationsStep";
+> 11 | import { OnboardingScopeStep } from "./OnboardingScopeStep";
+     | ^
+  12 | import { OnboardingVerifyStep } from "./OnboardingVerifyStep";
+  13 |
+  14 | type OnboardingWizardProps = {
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ✓ Compiled in 295ms (722 modules)
+ GET / 200 in 525ms
+ ✓ Compiled /api/integrations in 126ms (453 modules)
+ GET /api/integrations 200 in 599ms
+ ✓ Compiled in 344ms (741 modules)
+ GET / 200 in 60ms
+ ✓ Compiled in 110ms (741 modules)
+ GET / 200 in 54ms
+ ✓ Compiled in 193ms (741 modules)
+ GET / 200 in 62ms
+ ✓ Compiled in 123ms (741 modules)
+ GET / 200 in 55ms
+ ✓ Compiled in 188ms (288 modules)
+ GET / 200 in 22ms
+ ✓ Compiled in 164ms (741 modules)
+ GET / 200 in 95ms
+ GET /api/integrations 200 in 112ms
+ GET /api/integrations 200 in 114ms
+ GET /api/integrations 200 in 11ms
+ GET /api/integrations 200 in 12ms
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET / 200 in 65ms
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET / 200 in 215ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET /icon.png?65400d324ede031a 200 in 207ms
+ ○ Compiling /icon.png ...
+ GET / 200 in 433ms
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET / 200 in 164ms
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET /icon.png?65400d324ede031a 200 in 34ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ ./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+
+./src/components/OnboardingProvider.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ GET / 200 in 757ms
+ GET /icon.png?65400d324ede031a 200 in 30ms
+ ✓ Compiled /icon.png in 161ms (745 modules)
+ GET / 200 in 234ms
+ ✓ Compiled in 197ms (745 modules)
+ GET /icon.png?65400d324ede031a 200 in 27ms
+ GET / 200 in 1609ms
+ GET /api/integrations 200 in 347ms
+ GET /api/integrations 200 in 94ms
+ GET /api/integrations 200 in 362ms
+ GET /api/integrations 200 in 183ms
+ ○ Compiling /api/install-url/[provider] ...
+ ✓ Compiled /api/install-url/[provider] in 2.6s (731 modules)
+ GET /api/install-url/github 403 in 3722ms
+ ○ Compiling /indexing ...
+ ✓ Compiled /indexing in 2.8s (723 modules)
+ GET /indexing 200 in 3946ms
+ ✓ Compiled /api/integrations in 189ms (462 modules)
+ GET /api/integrations 200 in 842ms
+ GET /api/integrations 200 in 844ms
+ GET /api/integrations 200 in 91ms
+ GET /api/integrations 200 in 36ms
+ GET /api/integrations 200 in 33ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 71ms
+ GET /api/integrations 200 in 97ms
+ ✓ Compiled in 723ms (756 modules)
+ GET /indexing 200 in 146ms
+ GET /api/integrations 200 in 100ms
+ GET /api/integrations 200 in 42ms
+ GET /api/integrations 200 in 116ms
+ GET /api/integrations 200 in 52ms
+ GET /api/integrations 200 in 132ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 114ms
+ GET /api/integrations 200 in 62ms
+ GET /api/integrations 200 in 62ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 119ms
+ GET /api/integrations 200 in 62ms
+ GET /api/integrations 200 in 51ms
+ GET /api/integrations 200 in 158ms
+ GET /api/integrations 200 in 63ms
+ GET /api/integrations 200 in 57ms
+ GET /api/integrations 200 in 254ms
+ GET /api/integrations 200 in 79ms
+ GET /api/integrations 200 in 116ms
+ GET /api/integrations 200 in 82ms
+ GET /api/integrations 200 in 145ms
+ GET /api/integrations 200 in 102ms
+ GET /api/integrations 200 in 139ms
+ GET /api/integrations 200 in 67ms
+ GET /api/integrations 200 in 52ms
+ GET /api/integrations 200 in 167ms
+ GET / 200 in 911ms
+ GET / 200 in 123ms
+ GET /api/integrations 200 in 94ms
+ GET /api/integrations 200 in 108ms
+ GET / 200 in 580ms
+ ○ Compiling /icon.png ...
+ ✓ Compiled /icon.png in 1327ms (464 modules)
+ GET /icon.png?65400d324ede031a 200 in 1704ms
+ GET /api/integrations 200 in 1724ms
+ GET /api/integrations 200 in 1791ms
+ GET /api/integrations 200 in 1793ms
+ GET /api/integrations 200 in 1834ms
+ ✓ Compiled /api/install-url/[provider] in 118ms (466 modules)
+ GET /api/install-url/github 200 in 256ms
+ GET /api/integrations 200 in 101ms
+ GET /indexing 200 in 213ms
+ GET /api/integrations 200 in 72ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 29ms
+ GET / 200 in 78ms
+ GET /api/integrations 200 in 110ms
+ GET /api/integrations 200 in 100ms
+ GET /api/integrations 200 in 130ms
+ GET /api/integrations 200 in 165ms
+ GET /indexing 200 in 25ms
+ GET /api/integrations 200 in 73ms
+ GET /api/integrations 200 in 61ms
+ GET /api/integrations 200 in 62ms
+ GET /api/integrations 200 in 48ms
+ GET /api/integrations 200 in 55ms
+ GET /api/integrations 200 in 45ms
+ GET /api/integrations 200 in 121ms
+ GET /api/integrations 200 in 24ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 97ms
+ GET /api/integrations 200 in 76ms
+ GET /api/integrations 200 in 97ms
+ GET /api/integrations 200 in 202ms
+ GET /api/integrations 200 in 120ms
+ GET /api/integrations 200 in 58ms
+ GET /api/integrations 200 in 232ms
+ GET /api/integrations 200 in 241ms
+ ○ Compiling /billing ...
+ ✓ Compiled /billing in 1988ms (749 modules)
+ GET /billing 200 in 2443ms
+ GET /billing 200 in 13ms
+ GET /billing 200 in 581ms
+ ✓ Compiled /icon.png in 393ms (469 modules)
+ GET /icon.png?65400d324ede031a 200 in 687ms
+ GET /api/integrations 200 in 598ms
+ GET /api/integrations 200 in 625ms
+ ✓ Compiled in 2.5s (744 modules)
+ GET /billing 200 in 1221ms
+ GET /billing 200 in 536ms
+ ○ Compiling /api/integrations ...
+ ✓ Compiled /api/integrations in 574ms (465 modules)
+ ✓ Compiled (469 modules)
+ GET /icon.png?65400d324ede031a 200 in 1439ms
+ GET /api/integrations 200 in 1192ms
+ GET /api/integrations 200 in 1205ms
+ GET /indexing 200 in 132ms
+ GET /api/integrations 200 in 34ms
+ GET /api/integrations 200 in 34ms
+ GET /api/integrations 200 in 42ms
+ GET /api/integrations 200 in 15ms
+ GET /api/integrations 200 in 77ms
+ GET /api/integrations 200 in 46ms
+ GET /api/integrations 200 in 72ms
+ GET /api/integrations 200 in 66ms
+ GET /api/integrations 200 in 72ms
+ GET /api/integrations 200 in 36ms
+ GET /api/integrations 200 in 16ms
+ GET /api/integrations 200 in 46ms
+ GET /api/integrations 200 in 48ms
+ GET /api/integrations 200 in 27ms
+ GET /api/integrations 200 in 54ms
+ GET /api/integrations 200 in 36ms
+ GET /api/integrations 200 in 58ms
+ GET /api/integrations 200 in 14ms
+ GET /api/integrations 200 in 20ms
+ GET /api/integrations 200 in 55ms
+ GET /api/integrations 200 in 28ms
+ GET /api/integrations 200 in 47ms
+ GET /api/integrations 200 in 90ms
+ GET /api/integrations 200 in 56ms
+ GET /api/integrations 200 in 44ms
+ GET /api/integrations 200 in 104ms
+ GET /api/integrations 200 in 51ms
+ GET /api/integrations 200 in 137ms
+ GET /api/integrations 200 in 45ms
+ GET /api/integrations 200 in 107ms
+ ✓ Compiled in 1832ms (763 modules)
+ GET /indexing 200 in 317ms
+ GET /api/integrations 200 in 41ms
+ ✓ Compiled in 613ms (763 modules)
+ GET /indexing 200 in 89ms
+ GET /api/integrations 200 in 68ms
+[TypeError: fetch failed] {
+  [cause]: [Error: read ECONNRESET] {
+    errno: -54,
+    code: 'ECONNRESET',
+    syscall: 'read'
+  }
+}
+ GET /api/integrations 500 in 1044ms
+ GET /api/integrations 200 in 117ms
+ GET /api/integrations 200 in 154ms
+ GET /indexing 200 in 560ms
+ ✓ Compiled /icon.png in 328ms (469 modules)
+ GET /icon.png?65400d324ede031a 200 in 511ms
+ GET /api/integrations 200 in 545ms
+ GET /api/integrations 200 in 547ms
+ GET /api/integrations 200 in 50ms
+ GET /api/integrations 200 in 20ms
+ GET /api/integrations 200 in 61ms
+ GET /api/integrations 200 in 136ms
+ GET /api/integrations 200 in 65ms
+ GET /api/integrations 200 in 65ms
+ GET /api/integrations 200 in 26ms
+ ✓ Compiled /login in 278ms (474 modules)
+ GET /login 200 in 378ms
+ GET / 200 in 1228ms
+ GET /login 200 in 49ms
+ ○ Compiling /api/validate-key ...
+ ✓ Compiled /api/validate-key in 804ms (754 modules)
+ POST /api/validate-key 200 in 957ms
+ GET / 200 in 115ms
+ ✓ Compiled /api/integrations in 109ms (474 modules)
+ GET /api/integrations 200 in 150ms
+ GET /api/integrations 200 in 158ms
+ GET /api/integrations 200 in 136ms
+ GET /api/integrations 200 in 137ms
+ GET /indexing 200 in 142ms
+ GET /api/integrations 200 in 50ms
+ GET /api/integrations 200 in 57ms
+ ✓ Compiled /collections in 424ms (763 modules)
+ GET /collections 200 in 572ms
+ GET / 200 in 276ms
+ GET /api/integrations 200 in 44ms
+ GET /api/integrations 200 in 53ms
+ GET /api/integrations 200 in 17ms
+ GET /api/integrations 200 in 26ms
+ ✓ Compiled in 658ms (298 modules)
+ ✓ Compiled in 123ms (298 modules)
+ ✓ Compiled in 108ms (298 modules)
+ ✓ Compiled in 194ms (298 modules)
+ ✓ Compiled in 131ms (298 modules)
+ ✓ Compiled in 99ms (298 modules)
+ ✓ Compiled in 1137ms (756 modules)
+ ⚠ ./src/components/Sidebar.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/Sidebar.tsx
+./src/components/AdminShell.tsx
+
+./src/components/Sidebar.tsx
+Attempted import error: 'canAccessAdminPages' is not exported from '@/lib/auth' (imported as 'canAccessAdminPages').
+
+Import trace for requested module:
+./src/components/Sidebar.tsx
+./src/components/AdminShell.tsx
+ ✓ Compiled in 235ms (758 modules)
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ✓ Compiled in 61ms (296 modules)
+ ✓ Compiled in 82ms (296 modules)
+ ✓ Compiled in 81ms (296 modules)
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ✓ Compiled in 154ms (298 modules)
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ⨯ ./src/app/(admin)/page.tsx
+Error:   [31mx[0m Expected ',', got ']'
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/app/(admin)/page.tsx[0m:36:1]
+ [2m33[0m |       Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
+ [2m34[0m |       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
+ [2m35[0m |       Promise<Awaited<ReturnType<typeof fetchQuota>> | null
+ [2m36[0m |     ] = [
+    : [35;1m    ^[0m
+ [2m37[0m |       fetchIntegrations(),
+ [2m38[0m |       fetchUsers(),
+ [2m39[0m |       capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/(admin)/page.tsx
+ ✓ Compiled in 311ms (768 modules)
+ ✓ Compiled in 371ms (768 modules)
+ ✓ Compiled in 3s (768 modules)
+ ✓ Compiled in 935ms (768 modules)
+ ✓ Compiled in 411ms (768 modules)
+ ✓ Compiled in 151ms (768 modules)
+ ✓ Compiled in 208ms (768 modules)
+ ✓ Compiled in 148ms (768 modules)
+ ✓ Compiled in 1825ms (779 modules)
+ ✓ Compiled in 665ms (779 modules)
+ ✓ Compiled in 971ms (779 modules)
+ ✓ Compiled in 1472ms (779 modules)
+ ✓ Compiled in 925ms (779 modules)
+ ✓ Compiled in 528ms (779 modules)
+ ✓ Compiled in 522ms (779 modules)
+ ✓ Compiled in 392ms (308 modules)
+ ✓ Compiled in 589ms (779 modules)
+ ✓ Compiled in 240ms (779 modules)
+ ✓ Compiled in 387ms (779 modules)
+ ✓ Compiled in 503ms (779 modules)
+ ✓ Compiled in 341ms (779 modules)
+ ✓ Compiled in 287ms (779 modules)
+ ✓ Compiled in 482ms (779 modules)
+ ✓ Compiled in 839ms (779 modules)
+ ⨯ ./src/lib/integrationErrors.ts
+Error:   [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:37:1]
+ [2m34[0m |     return `OAuth redirect failed. Your administrator must register the Coop callback URL in the ${name} app settings.`;
+ [2m35[0m |   }
+ [2m36[0m |   if (/Invalid permissions requested/i.test(message)) {
+ [2m37[0m |     return `Slack rejected the requested permissions. Your Coop administrator must add the required scopes in the Slack app settings, reinstall the app, then reconnect here.`;
+    : [35;1m    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+ [2m38[0m |   }
+ [2m39[0m |   if (/missing_scope/i.test(message)) {
+ [2m40[0m |     return "Channel list unavailable. Reinstall the Slack app with bot scopes channels:read and groups:read, then disconnect and reconnect Slack.";
+    `----
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:40:1]
+ [2m37[0m |     return `Slack rejected the requested permissions. Your Coop administrator must add the required scopes in the Slack app settings, reinstall the app, then reconnect here.`;
+ [2m38[0m |   }
+ [2m39[0m |   if (/missing_scope/i.test(message)) {
+ [2m40[0m |     return "Channel list unavailable. Reinstall the Slack app with bot scopes channels:read and groups:read, then disconnect and reconnect Slack.";
+    : [35;1m    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+ [2m41[0m |   }
+ [2m42[0m |   if (/insufficient.*scope/i.test(message) || /insufficientPermissions/i.test(message)) {
+ [2m43[0m |     return "Google Drive access is incomplete. Revoke Coop at myaccount.google.com/permissions, then connect again.";
+    `----
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:43:1]
+ [2m40[0m |     return "Channel list unavailable. Reinstall the Slack app with bot scopes channels:read and groups:read, then disconnect and reconnect Slack.";
+ [2m41[0m |   }
+ [2m42[0m |   if (/insufficient.*scope/i.test(message) || /insufficientPermissions/i.test(message)) {
+ [2m43[0m |     return "Google Drive access is incomplete. Revoke Coop at myaccount.google.com/permissions, then connect again.";
+    : [35;1m    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+ [2m44[0m |   }
+ [2m45[0m |   if (status === 0) {
+ [2m46[0m |     return "Could not reach the Coop API. Check your network and API base URL.";
+    `----
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:46:1]
+ [2m43[0m |     return "Google Drive access is incomplete. Revoke Coop at myaccount.google.com/permissions, then connect again.";
+ [2m44[0m |   }
+ [2m45[0m |   if (status === 0) {
+ [2m46[0m |     return "Could not reach the Coop API. Check your network and API base URL.";
+    : [35;1m    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+ [2m47[0m |   }
+ [2m48[0m |   if (message) {
+ [2m49[0m |     return message;
+    `----
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:49:1]
+ [2m46[0m |     return "Could not reach the Coop API. Check your network and API base URL.";
+ [2m47[0m |   }
+ [2m48[0m |   if (message) {
+ [2m49[0m |     return message;
+    : [35;1m    ^^^^^^^^^^^^^^^[0m
+ [2m50[0m |   }
+ [2m51[0m |   return `Request failed (${status}). Try refresh, then disconnect and connect.`;
+ [2m52[0m | }
+    `----
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:51:1]
+ [2m48[0m |   if (message) {
+ [2m49[0m |     return message;
+ [2m50[0m |   }
+ [2m51[0m |   return `Request failed (${status}). Try refresh, then disconnect and connect.`;
+    : [35;1m  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+ [2m52[0m | }
+    `----
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/Users/jonraney/Desktop/Coop AI/admin/src/lib/integrationErrors.ts[0m:52:1]
+ [2m49[0m |     return message;
+ [2m50[0m |   }
+ [2m51[0m |   return `Request failed (${status}). Try refresh, then disconnect and connect.`;
+ [2m52[0m | }
+    : [35;1m^[0m
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/lib/integrationErrors.ts
+./src/components/IntegrationCard.tsx
+./src/components/IntegrationsStep.tsx
+./src/components/OnboardingWizard.tsx
+./src/components/OnboardingProvider.tsx
+./src/components/AdminShell.tsx
+ ✓ Compiled in 426ms (779 modules)
+ ✓ Compiled in 322ms (308 modules)
+ ✓ Compiled in 314ms (779 modules)
+ ✓ Compiled in 460ms (779 modules)
+ ✓ Compiled in 406ms (779 modules)
+ ✓ Compiled in 703ms (779 modules)
+ ✓ Compiled in 250ms (779 modules)
+ ✓ Compiled in 304ms (779 modules)
+ ✓ Compiled in 422ms (779 modules)
+ ✓ Compiled in 515ms (779 modules)
+ ✓ Compiled in 503ms (779 modules)
+ ✓ Compiled in 523ms (779 modules)
+ ✓ Compiled in 662ms (779 modules)
+ ✓ Compiled in 806ms (308 modules)
+ ✓ Compiled in 566ms (779 modules)
+ ✓ Compiled in 411ms (779 modules)
+ ✓ Compiled in 200ms (779 modules)
+ ✓ Compiled in 385ms (779 modules)
+[?25h

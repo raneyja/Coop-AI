@@ -109,16 +109,33 @@ void (async () => {
   assert.equal(snapshot?.limitCredits, 10);
   assert.equal(snapshot?.windowHours, 5);
 
+  // With 9,500 used and 500 remaining, requests should still be allowed.
+  await quota.check("org-free", "free", 600);
+
+  const exhaustedPool = {
+    query: async (sql: string, params: unknown[]) => {
+      if (sql.includes("ORDER BY created_at ASC")) {
+        return {
+          rows: [
+            { created_at: "2026-06-12T11:00:00.000Z", tokens: 6_000 },
+            { created_at: "2026-06-12T13:00:00.000Z", tokens: 4_000 }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+  const exhaustedQuota = new PlanQuotaService(new UsageTracker(exhaustedPool as never), config);
   try {
-    await quota.check("org-free", "free", 600);
-    assert.fail("expected quota check to reject");
+    await exhaustedQuota.check("org-free", "free", 1);
+    assert.fail("expected quota check to reject when exhausted");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.code, "quota_limit_reached");
-    assert.equal(error.usedTokens, 9_500);
+    assert.equal(error.usedTokens, 10_000);
     assert.equal(error.limitTokens, 10_000);
     assert.match(error.message, /upgrade to Pro/i);
-    assert.match(error.message, /5-hour window/);
+    assert.match(error.message, /Try again at/i);
   }
 
   await quota.check("org-free", "pro", 50_000);
@@ -165,5 +182,38 @@ void (async () => {
   });
 
   assert.equal(DEFAULT_FREE_TOKEN_LIMIT, 80_000);
+
+  const windowMs = DEFAULT_ROLLING_WINDOW_MS;
+  const usageRows = [{ created_at: "2026-06-12T11:00:00.000Z", tokens: 10_000 }];
+  const rollingPool = {
+    query: async (sql: string, params: unknown[]) => {
+      if (!sql.includes("ORDER BY created_at ASC")) {
+        return { rows: [] };
+      }
+      const from = new Date(String(params[1]));
+      const to = new Date(String(params[2]));
+      const rows = usageRows.filter((row) => {
+        const createdAt = new Date(row.created_at);
+        return createdAt >= from && createdAt < to;
+      });
+      return { rows };
+    }
+  };
+  const rollingQuota = new PlanQuotaService(new UsageTracker(rollingPool as never), config);
+  const exhaustedAt = new Date("2026-06-12T15:00:00.000Z");
+  try {
+    await rollingQuota.check("org-free", "free", 0, exhaustedAt);
+    assert.fail("expected quota check to reject when rolling window is full");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.resetsAt.toISOString(), "2026-06-12T16:00:00.000Z");
+  }
+
+  const afterReset = new Date("2026-06-12T16:00:01.000Z");
+  await rollingQuota.check("org-free", "free", 0, afterReset);
+  const recovered = await rollingQuota.getSnapshot("org-free", "free", afterReset);
+  assert.equal(recovered?.usedTokens, 0);
+  assert.equal(recovered?.remainingTokens, 10_000);
+
   console.log("planQuota: 1/1 tests passed");
 })();

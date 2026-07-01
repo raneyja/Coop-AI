@@ -2,6 +2,7 @@ import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import { fetchCodeHostSearchContext, shouldFetchCodeHostContext } from "./codeHostContext";
 import { fetchConfluenceSearchContext, shouldFetchConfluenceContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext, shouldFetchGoogleDocsContext } from "./googleDocsContext";
@@ -30,6 +31,7 @@ export async function enrichChatContextWithIntegrations(options: {
   contextText?: string[];
   codeHostProvider?: CodeHostProvider;
   codeHostConnected?: boolean;
+  integrationScopes?: Partial<Record<"slack", ResolvedIntegrationScope>>;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
@@ -90,7 +92,8 @@ export async function enrichChatContextWithIntegrations(options: {
       secrets: options.secrets,
       ...base,
       crossToolText: crossToolKeys,
-      jiraIssueKeys
+      jiraIssueKeys,
+      integrationScope: options.integrationScopes?.slack
     });
   }
   if (shouldFetchTeamsContext(options.request)) {

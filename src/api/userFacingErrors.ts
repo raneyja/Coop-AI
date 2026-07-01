@@ -72,12 +72,12 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   unauthorized: "Sign in to Coop first (API key or SSO).",
   admin_required: "Only your organization admin can connect GitHub. Ask IT to install the GitHub App.",
   repo_limit:
-    "You've reached the Pro limit of 3 Deep-Indexed Repos per seat. Upgrade to Enterprise for estate-wide indexing.",
+    "You've reached your plan limit for Deep-Indexed repos. Disable another repo or upgrade to Pro for unlimited indexing.",
   plan_required: "This feature requires an Enterprise plan.",
   code_host_plan_required:
-    "Code host tools require Pro. The free plan uses local workspace files only. See https://coop-ai.dev/pricing",
+    "Connect a code host in the admin portal (Integrations), then Deep-Index repos under Indexing.",
   remote_code_plan_required:
-    "Remote code graph requires Pro. The free plan is limited to local workspace files.",
+    "Connect a code host and Deep-Index repositories in the admin portal to search remote code.",
   team_not_available:
     "The free plan is individual only — one seat per account. Upgrade to Pro to invite teammates.",
   quota_limit_reached:

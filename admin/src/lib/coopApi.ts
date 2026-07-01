@@ -1,5 +1,13 @@
 import type { CodeHostProvider, IntegrationProvider, IntegrationStatus } from "./integrations";
 import { INTEGRATIONS } from "./integrations";
+import type {
+  IntegrationResource,
+  IntegrationScopeResponse,
+  AtlassianScopePolicy,
+  GoogleDocsScopePolicy,
+  NotionScopePolicy,
+  SlackScopePolicy
+} from "./integrations";
 import type { StoredMe } from "./auth";
 
 export type ApiError = {
@@ -74,7 +82,10 @@ type BackendIntegrationStatus = {
   provider: IntegrationProvider;
   installed: boolean;
   needsReconnect?: boolean;
+  scopeNeedsReconnect?: boolean;
   detail?: string;
+  scopeStatus?: IntegrationStatus["scopeStatus"];
+  scopeSummary?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -94,7 +105,10 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
     provider: raw.provider,
     installed: raw.installed,
     needsReconnect: raw.needsReconnect,
-    detail: integrationDetail(raw)
+    scopeNeedsReconnect: raw.scopeNeedsReconnect,
+    detail: integrationDetail(raw),
+    scopeStatus: raw.scopeStatus,
+    scopeSummary: raw.scopeSummary
   };
 }
 
@@ -246,7 +260,9 @@ export async function fetchIntegrations(): Promise<ApiResult<IntegrationStatus[]
   return { ok: true, status: 200, data: statuses };
 }
 
-export async function fetchInstallUrl(provider: IntegrationProvider): Promise<ApiResult<{ url: string }>> {
+export async function fetchInstallUrl(
+  provider: IntegrationProvider
+): Promise<ApiResult<{ url?: string; connected?: boolean; workspaceName?: string }>> {
   const token = getToken();
   if (!token) {
     return { ok: false, status: 401, error: "Not signed in." };
@@ -257,8 +273,26 @@ export async function fetchInstallUrl(provider: IntegrationProvider): Promise<Ap
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store"
     });
-    const body = (await response.json().catch(() => ({}))) as { url?: string } & ApiError;
-    if (!response.ok || !body.url) {
+    const body = (await response.json().catch(() => ({}))) as {
+      url?: string;
+      connected?: boolean;
+      workspaceName?: string;
+    } & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, `Request failed (${response.status}).`)
+      };
+    }
+    if (body.connected) {
+      return {
+        ok: true,
+        status: response.status,
+        data: { connected: true, workspaceName: body.workspaceName }
+      };
+    }
+    if (!body.url) {
       return {
         ok: false,
         status: response.status,
@@ -364,10 +398,91 @@ export async function completeOnboarding(): Promise<ApiResult<{ ok: boolean }>> 
   return coopFetch<{ ok: boolean }>("/v1/admin/onboarding/complete", { method: "POST" });
 }
 
+export type IntegrationHealthValue =
+  | "not_connected"
+  | "not_configured"
+  | "scope_required"
+  | "degraded"
+  | "healthy";
+
+export type IntegrationHealthEntry = {
+  provider: IntegrationProvider;
+  installed: boolean;
+  health: IntegrationHealthValue;
+  message?: string;
+  scopeStatus?: IntegrationStatus["scopeStatus"];
+  configured: boolean;
+};
+
+export type IntegrationsHealthResponse = {
+  orgPlan: string;
+  onboardingGates: {
+    githubOrToolConnected: boolean;
+    slackScopeActive: boolean;
+    canCompleteOnboarding: boolean;
+  };
+  integrations: IntegrationHealthEntry[];
+};
+
+export async function fetchIntegrationsHealth(
+  refresh = false
+): Promise<ApiResult<IntegrationsHealthResponse>> {
+  const suffix = refresh ? "?refresh=true" : "";
+  return coopFetch<IntegrationsHealthResponse>(`/v1/admin/integrations/health${suffix}`);
+}
+
 export async function disconnectIntegration(provider: string): Promise<ApiResult<{ ok: boolean }>> {
   return coopFetch<{ ok: boolean }>(`/v1/admin/integrations/${encodeURIComponent(provider)}`, {
     method: "DELETE"
   });
+}
+
+export async function fetchIntegrationScope(
+  provider: IntegrationProvider
+): Promise<ApiResult<IntegrationScopeResponse>> {
+  return coopFetch<IntegrationScopeResponse>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`
+  );
+}
+
+export async function saveIntegrationScope(
+  provider: IntegrationProvider,
+  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy
+): Promise<ApiResult<IntegrationScopeResponse>> {
+  return coopFetch<IntegrationScopeResponse>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ policy })
+    }
+  );
+}
+
+export async function fetchIntegrationResources(
+  provider: IntegrationProvider,
+  query?: string,
+  product?: "jira" | "confluence"
+): Promise<ApiResult<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>> {
+  const params = new URLSearchParams();
+  if (query?.trim()) {
+    params.set("q", query.trim());
+  }
+  if (product) {
+    params.set("product", product);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return coopFetch<{ provider: string; resources: IntegrationResource[]; comingSoon?: boolean }>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/resources${suffix}`
+  );
+}
+
+export async function testIntegrationScope(
+  provider: IntegrationProvider
+): Promise<ApiResult<{ ok: boolean; message: string }>> {
+  return coopFetch<{ ok: boolean; message: string }>(
+    `/v1/admin/integrations/${encodeURIComponent(provider)}/test`,
+    { method: "POST", body: "{}" }
+  );
 }
 
 export type BillingInfo = {
@@ -378,12 +493,177 @@ export type BillingInfo = {
   hasStripeCustomer?: boolean;
 };
 
+export type QuotaSnapshot = {
+  plan: string;
+  unlimited?: boolean;
+  usedTokens?: number;
+  limitTokens?: number;
+  remainingTokens?: number;
+  usedCredits?: number;
+  limitCredits?: number;
+  remainingCredits?: number;
+  windowHours?: number;
+  resetsAt?: string;
+  retryAfterMs?: number;
+};
+
+export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {
+  const result = await coopFetch<QuotaSnapshot>("/v1/admin/quota");
+  if (!result.ok) {
+    return result;
+  }
+
+  const data = result.data;
+  const plan = typeof data?.plan === "string" && data.plan.trim() ? data.plan.trim() : "free";
+  const usedCredits =
+    typeof data?.usedCredits === "number" && Number.isFinite(data.usedCredits)
+      ? Math.max(0, data.usedCredits)
+      : undefined;
+  const limitCredits =
+    typeof data?.limitCredits === "number" && Number.isFinite(data.limitCredits)
+      ? Math.max(0, data.limitCredits)
+      : undefined;
+  const usedTokens =
+    typeof data?.usedTokens === "number" && Number.isFinite(data.usedTokens)
+      ? Math.max(0, data.usedTokens)
+      : undefined;
+  const limitTokens =
+    typeof data?.limitTokens === "number" && Number.isFinite(data.limitTokens)
+      ? Math.max(0, data.limitTokens)
+      : undefined;
+  const remainingTokens =
+    typeof data?.remainingTokens === "number" && Number.isFinite(data.remainingTokens)
+      ? Math.max(0, data.remainingTokens)
+      : undefined;
+  const remainingCredits =
+    typeof data?.remainingCredits === "number" && Number.isFinite(data.remainingCredits)
+      ? Math.max(0, data.remainingCredits)
+      : typeof usedCredits === "number" && typeof limitCredits === "number"
+        ? Math.max(0, limitCredits - usedCredits)
+        : undefined;
+
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      ...data,
+      plan,
+      usedTokens,
+      limitTokens,
+      remainingTokens,
+      usedCredits,
+      limitCredits,
+      remainingCredits
+    }
+  };
+}
+
 export async function fetchBilling(): Promise<ApiResult<BillingInfo>> {
   return coopFetch<BillingInfo>("/v1/admin/billing");
 }
 
 export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {
   return coopFetch<{ url: string }>("/v1/admin/billing/portal-session", { method: "POST" });
+}
+
+export async function createUpgradeCheckoutSession(
+  opts?: { email?: string; seats?: number }
+): Promise<ApiResult<{ sessionId: string; url: string }>> {
+  const body: Record<string, unknown> = {};
+  if (opts?.email?.trim()) {
+    body.email = opts.email.trim();
+  }
+  if (opts?.seats != null) {
+    body.seats = opts.seats;
+  }
+  return coopFetch<{ sessionId: string; url: string }>("/v1/billing/upgrade-checkout-session", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export type EnterpriseUpgradeRequest = {
+  name: string;
+  email: string;
+  orgName: string;
+  notes?: string;
+};
+
+export async function submitEnterpriseUpgradeRequest(
+  payload: EnterpriseUpgradeRequest
+): Promise<ApiResult<{ ok: boolean }>> {
+  return coopFetch<{ ok: boolean }>("/v1/admin/enterprise-upgrade-request", {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      email: payload.email,
+      orgName: payload.orgName,
+      notes: payload.notes ?? ""
+    })
+  });
+}
+
+export type ThreadSummary = {
+  id: string;
+  orgId: string;
+  userId?: string;
+  principal: string;
+  title: string;
+  repoOwner?: string;
+  repoName?: string;
+  repoProvider?: string;
+  messageCount: number;
+  previewText?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ThreadMessage = {
+  id: string;
+  role: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  sortOrder: number;
+};
+
+export type ThreadsListResponse = {
+  threads: ThreadSummary[];
+  nextCursor?: string;
+};
+
+export type ThreadDetailResponse = {
+  thread: ThreadSummary;
+  messages: ThreadMessage[];
+};
+
+export type FetchThreadsParams = {
+  from?: string;
+  to?: string;
+  userId?: string;
+  repo?: string;
+  q?: string;
+  limit?: number;
+  cursor?: string;
+};
+
+export async function fetchThreads(
+  params: FetchThreadsParams = {}
+): Promise<ApiResult<ThreadsListResponse>> {
+  const search = new URLSearchParams();
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.userId) search.set("userId", params.userId);
+  if (params.repo) search.set("repo", params.repo);
+  if (params.q) search.set("q", params.q);
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.cursor) search.set("cursor", params.cursor);
+  const query = search.toString();
+  return coopFetch<ThreadsListResponse>(`/v1/threads${query ? `?${query}` : ""}`);
+}
+
+export async function fetchThread(threadId: string): Promise<ApiResult<ThreadDetailResponse>> {
+  return coopFetch<ThreadDetailResponse>(`/v1/threads/${encodeURIComponent(threadId)}`);
 }
 
 export type AuditEntry = {
@@ -521,12 +801,23 @@ export type AdminCollection = {
   repos: Array<{ collectionId: string; repoId: string; addedAt: string }>;
 };
 
-export async function fetchOrgRepos(): Promise<ApiResult<{ repos: OrgRepoRecord[] }>> {
-  const result = await coopFetch<{ repos: OrgRepoRecord[] }>("/v1/orgs/repos");
+export async function fetchOrgRepos(): Promise<
+  ApiResult<{ repos: OrgRepoRecord[]; quotaReconciled?: { trimmed: number } }>
+> {
+  const result = await coopFetch<{ repos: OrgRepoRecord[]; quotaReconciled?: { trimmed: number } }>(
+    "/v1/orgs/repos"
+  );
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
-  return { ok: true, status: result.status, data: { repos: result.data?.repos ?? [] } };
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      repos: result.data?.repos ?? [],
+      quotaReconciled: result.data?.quotaReconciled
+    }
+  };
 }
 
 export function codeHostLabel(provider: CodeHostProvider): string {
@@ -572,6 +863,17 @@ export async function syncEstate(): Promise<
 export async function enableLightningRepo(repoId: string): Promise<ApiResult<{ jobId?: string; status?: string }>> {
   const result = await coopFetch<{ jobId?: string; status?: string }>(
     `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/enable`,
+    { method: "POST", body: "{}" }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return { ok: true, status: result.status, data: result.data };
+}
+
+export async function disableLightningRepo(repoId: string): Promise<ApiResult<{ repo?: OrgRepoRecord }>> {
+  const result = await coopFetch<{ repo?: OrgRepoRecord }>(
+    `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/disable`,
     { method: "POST", body: "{}" }
   );
   if (!result.ok) {

@@ -24,6 +24,8 @@ export class StripeService {
     orgName: string;
     email: string;
     seats: number;
+    existingOrgId?: string;
+    upgrade?: boolean;
   }): Promise<StripeSession> {
     const params = new URLSearchParams();
     params.set("mode", "subscription");
@@ -36,6 +38,14 @@ export class StripeService {
     params.set("metadata[admin_email]", input.email);
     params.set("metadata[seat_count]", String(Math.max(1, input.seats)));
     params.set("subscription_data[metadata][org_name]", input.orgName);
+    if (input.existingOrgId) {
+      params.set("metadata[existing_org_id]", input.existingOrgId);
+      params.set("subscription_data[metadata][existing_org_id]", input.existingOrgId);
+    }
+    if (input.upgrade) {
+      params.set("metadata[upgrade]", "true");
+      params.set("subscription_data[metadata][upgrade]", "true");
+    }
 
     return this.postForm<StripeSession>("/v1/checkout/sessions", params);
   }

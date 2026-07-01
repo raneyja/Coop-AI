@@ -122,7 +122,7 @@ async function handleCreateJob(
         writeJson(response, 403, { error: "plan_required", message: "INDEX_REPOSITORY requires organization API key auth" });
         return;
       }
-      if (!(await requireOrgPlan(deps.orgStore, auth, response, "pro", "enterprise"))) {
+      if (!(await requireOrgPlan(deps.orgStore, auth, response, "free", "pro", "enterprise"))) {
         return;
       }
     }

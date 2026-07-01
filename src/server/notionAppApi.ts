@@ -4,7 +4,9 @@ import { requireInstallAdmin } from "./authMiddleware";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { NotionAppConfig } from "./notionAppConfig";
+import { isNotionOAuthConfig } from "./notionAppConfig";
 import type { NotionAppService } from "./notionAppService";
+import { NotionClient } from "../api/notion/notionClient";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
 
 export type NotionAppApiDeps = {
@@ -50,8 +52,52 @@ async function handleInstallUrl(
   if (!requireInstallAdmin(auth, response)) {
     return true;
   }
-  if (!deps.notionApp || !deps.notionAppConfig) {
-    writeJson(response, 503, { error: "Notion App is not configured on this server" });
+  if (!deps.notionAppConfig) {
+    writeJson(response, 503, {
+      error:
+        "Notion is not configured. Set NOTION_INTEGRATION_TOKEN (internal integration) or NOTION_APP_CLIENT_ID and NOTION_APP_CLIENT_SECRET (OAuth) in .env.backend."
+    });
+    return true;
+  }
+
+  if (deps.notionAppConfig.mode === "internal") {
+    if (!deps.integrationStore) {
+      writeJson(response, 503, { error: "organization database not configured" });
+      return true;
+    }
+    try {
+      const client = new NotionClient({ token: deps.notionAppConfig.integrationToken });
+      const test = await client.testConnection();
+      if (!test.ok) {
+        writeJson(response, 400, {
+          error: formatNotionInternalTokenError(test.message)
+        });
+        return true;
+      }
+      const profile = await client.getBotProfile();
+      await deps.integrationStore.upsert(auth.orgId, "notion", deps.notionAppConfig.integrationToken, {
+        metadata: {
+          workspaceId: profile.workspaceId,
+          workspaceName: profile.workspaceName,
+          botId: profile.botId
+        }
+      });
+      writeJson(response, 200, {
+        connected: true,
+        workspaceName: profile.workspaceName
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Notion connection failed.";
+      writeJson(response, 400, { error: message });
+    }
+    return true;
+  }
+
+  if (!deps.notionApp) {
+    writeJson(response, 503, {
+      error:
+        "Notion OAuth is not configured. Set NOTION_APP_CLIENT_ID and NOTION_APP_CLIENT_SECRET from a public OAuth integration at notion.so/my-integrations."
+    });
     return true;
   }
   const redirectUri = buildRedirectUri(deps.notionAppConfig);
@@ -65,8 +111,12 @@ async function handleCallback(
   response: ServerResponse,
   deps: NotionAppApiDeps
 ): Promise<boolean> {
-  if (!deps.integrationStore || !deps.notionApp || !deps.notionAppConfig) {
-    writeHtml(response, 503, "Notion integration is not configured.");
+  if (!deps.integrationStore || !deps.notionAppConfig || !isNotionOAuthConfig(deps.notionAppConfig)) {
+    writeHtml(response, 503, "Notion OAuth is not configured.");
+    return true;
+  }
+  if (!deps.notionApp) {
+    writeHtml(response, 503, "Notion OAuth is not configured.");
     return true;
   }
 
@@ -168,4 +218,15 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function formatNotionInternalTokenError(message: string): string {
+  if (/API token is invalid|unauthorized/i.test(message)) {
+    return (
+      "Notion internal token is invalid. In notion.so/my-integrations → your internal integration → " +
+      "Configuration, copy Internal integration secret into NOTION_INTEGRATION_TOKEN in .env.backend " +
+      "(not the OAuth client secret)."
+    );
+  }
+  return message;
 }

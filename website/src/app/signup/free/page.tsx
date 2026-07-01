@@ -86,20 +86,20 @@ export default function FreeSignupPage() {
         <div className="coop-panel space-y-6 p-6">
           {apiKey ? (
             <>
-              <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm leading-relaxed text-white/90">
+              <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm leading-relaxed text-coop-foreground">
                 Your API key is shown once. Copy it now and store it securely before leaving this page.
               </p>
 
               <div>
                 <label className="mb-2 block text-sm text-coop-muted">API key</label>
-                <div className="rounded-sm border border-coop-border bg-coop-dark p-3">
-                  <code className="block break-all font-mono text-xs text-white">{apiKey}</code>
+                <div className="rounded-sm border border-coop-border bg-gray-50 p-3">
+                  <code className="block break-all font-mono text-xs text-gray-900">{apiKey}</code>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={copyApiKey}
-                    className="inline-flex items-center justify-center rounded-sm border border-coop-border bg-coop-surface px-3 py-2 text-xs font-medium text-white/90 hover:border-coop-muted/50 hover:bg-[#1c2128]"
+                    className="inline-flex items-center justify-center rounded-sm border border-coop-border bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:border-gray-400 hover:bg-gray-50"
                   >
                     Copy API key
                   </button>
@@ -107,7 +107,7 @@ export default function FreeSignupPage() {
                     {copyState === "copied" ? (
                       <span className="text-coop-index">Copied</span>
                     ) : copyState === "failed" ? (
-                      <span className="text-red-300">Could not copy. Select and copy manually.</span>
+                      <span className="text-red-600">Could not copy. Select and copy manually.</span>
                     ) : (
                       "Keep this key private."
                     )}
@@ -139,7 +139,7 @@ export default function FreeSignupPage() {
                   id="email"
                   type="email"
                   autoComplete="email"
-                  className="w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 text-white"
+                  className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -153,14 +153,14 @@ export default function FreeSignupPage() {
                 <input
                   id="displayName"
                   type="text"
-                  className="w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 text-white"
+                  className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                 />
               </div>
 
               {error ? (
-                <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700">
                   {error}
                 </p>
               ) : null}
@@ -168,7 +168,7 @@ export default function FreeSignupPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-coop-dark hover:bg-[#46c35a] disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
               >
                 {submitting ? "Creating account…" : "Create free account"}
               </button>

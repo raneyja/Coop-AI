@@ -1,38 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { fetchIntegrations, fetchOrg } from "@/lib/coopApi";
-import { INTEGRATIONS } from "@/lib/integrations";
-import type { IntegrationStatus } from "@/lib/integrations";
-import { IntegrationCard } from "@/components/IntegrationCard";
+import { useIntegrations } from "@/hooks/useIntegrations";
+import { IntegrationsStep } from "@/components/IntegrationsStep";
 
 export default function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [orgPlan, setOrgPlan] = useState<string>("free");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const [integrationsResult, orgResult] = await Promise.all([fetchIntegrations(), fetchOrg()]);
-    setLoading(false);
-    if (!integrationsResult.ok) {
-      setError(integrationsResult.error ?? "Failed to load integration status.");
-      return;
-    }
-    setIntegrations(integrationsResult.data ?? []);
-    if (orgResult.ok && orgResult.data?.plan) {
-      setOrgPlan(orgResult.data.plan);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const {
+    integrations,
+    orgPlan,
+    initialLoading,
+    refreshingProvider,
+    refreshSuccessProvider,
+    error,
+    load
+  } = useIntegrations();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="admin-page-title">Integrations</h1>
         <p className="mt-1 text-sm text-coop-muted">
@@ -40,20 +23,17 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
-
-      <div className="divide-y divide-coop-border/40">
-        {INTEGRATIONS.map((def) => (
-          <IntegrationCard
-            key={def.id}
-            definition={def}
-            status={integrations.find((s) => s.provider === def.id)}
-            orgPlan={orgPlan}
-            onRefresh={load}
-            refreshing={loading}
-          />
-        ))}
-      </div>
+      <IntegrationsStep
+        integrations={integrations}
+        orgPlan={orgPlan}
+        initialLoading={initialLoading}
+        refreshingProvider={refreshingProvider}
+        refreshSuccessProvider={refreshSuccessProvider}
+        error={error}
+        onRefresh={(provider) => void load({ provider })}
+        showFullPageLink={false}
+        hideIntro
+      />
     </div>
   );
 }

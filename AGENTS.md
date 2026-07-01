@@ -27,6 +27,7 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 ## Other areas
 
 - Marketing site: `website/` (separate Tailwind stack; not shared with the extension webview)
+- **Marketing site canonical:** production is [https://coop-ai.dev](https://coop-ai.dev) (`main`). Homepage hero = `HeroDemoArtifact.tsx` (light theme, `// question` → `// response`). Legacy dark mock = `FileContextStoryDemo.tsx` — not the live homepage. Local dev: `cd website && npm run dev` → **http://localhost:3001**. See `.cursor/rules/website-canonical.mdc`.
 - Backend/docs: `docs/`
 - Enterprise integration onboarding: `docs/enterprise-integration-onboarding.md` (operator vs org admin vs developer)
 - Production Connect checklist: `docs/connect-integrations-production.md`

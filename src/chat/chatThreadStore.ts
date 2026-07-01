@@ -132,6 +132,10 @@ export class ChatThreadStore {
       }));
   }
 
+  public listAllThreads(): ChatThreadRecord[] {
+    return [...this.snapshot.threads];
+  }
+
   public setActiveThread(
     messages: ChatMessage[],
     sessionCostUsd: number,

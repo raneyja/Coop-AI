@@ -648,6 +648,13 @@
     background: var(--vscode-editorWidget-background, var(--coop-panel-canvas));
   }
 
+  .coop-prompt-row-menu--floating {
+    @apply mt-0;
+    position: fixed;
+    right: auto;
+    top: auto;
+  }
+
   .coop-prompt-row-menu-item {
     @apply block w-full cursor-pointer px-3 py-1.5 text-left text-[12px] transition-colors;
     color: var(--coop-panel-foreground);
@@ -1119,6 +1126,10 @@
     @apply shrink-0 border-t;
     border-color: var(--coop-border);
     background: var(--coop-panel-canvas);
+  }
+
+  .chat-quota-notice {
+    @apply mx-3 mt-2;
   }
 
   .chat-footer-inner {

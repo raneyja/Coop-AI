@@ -4,11 +4,13 @@ import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { EmailService } from "../email/emailService";
 import { type AuditLogger } from "../audit/auditLogger";
-import { requireAuth, requireOrgAdmin, resolveAuthContext } from "../authMiddleware";
+import { requireAuth, requireOrgAdmin, resolveAuthContext, resolveOrgPlanFromDb } from "../authMiddleware";
+import { clampSeatCountForPlan } from "../planGates";
 import type { ServerConfig } from "../serverConfig";
 import { loadBillingConfig } from "./billingConfig";
 import { adminPortalLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
+import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
 
 type ParsedRequest = {
@@ -42,8 +44,30 @@ export async function handleBillingApiRequest(
     return handleStripeWebhook(parsed, response, deps, stripe);
   }
 
+  if (
+    await handleFreeSignupApiRequest(
+      {
+        method: parsed.method,
+        pathname: parsed.pathname,
+        body: parsed.body
+      },
+      response,
+      {
+        orgStore: deps.orgStore,
+        userStore: deps.userStore,
+        emailService: deps.emailService
+      }
+    )
+  ) {
+    return true;
+  }
+
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/checkout-session") {
     return handleCreateCheckout(parsed, response, stripe);
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/billing/upgrade-checkout-session") {
+    return handleCreateUpgradeCheckout(parsed, response, deps, stripe);
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/billing/checkout-status") {
@@ -89,6 +113,85 @@ async function handleCreateCheckout(
 
   try {
     const session = await stripe.createCheckoutSession({ orgName, email, seats });
+    writeJson(response, 200, { sessionId: session.id, url: session.url });
+  } catch (error) {
+    writeJson(response, 502, {
+      error: "stripe_error",
+      message: error instanceof Error ? error.message : "Checkout failed"
+    });
+  }
+  return true;
+}
+
+async function handleCreateUpgradeCheckout(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: BillingApiDeps,
+  stripe: StripeService
+): Promise<boolean> {
+  const auth = await resolveAuthContext(
+    parsed.headers,
+    deps.orgStore,
+    deps.serverConfig.legacyApiToken,
+    deps.serverConfig.requireApiAuth,
+    deps.userStore
+  );
+  if (!requireAuth(auth, deps.serverConfig.requireApiAuth) || !auth) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (!requireOrgAdmin(auth, response)) {
+    return true;
+  }
+  if (!deps.orgStore || auth.orgId === "legacy") {
+    writeJson(response, 503, { error: "organization database not configured" });
+    return true;
+  }
+  if (!stripe.isConfigured()) {
+    writeJson(response, 503, { error: "billing_unavailable", message: "Stripe is not configured on this server." });
+    return true;
+  }
+
+  const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
+  if (plan !== "free") {
+    writeJson(response, 409, { error: "upgrade_not_available", message: "Only free organizations can upgrade." });
+    return true;
+  }
+
+  const body = asRecord(parsed.body);
+  const org = await deps.orgStore.getOrganization(auth.orgId);
+  const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
+  const requestedEmail = String(body.email ?? "")
+    .trim()
+    .toLowerCase();
+  const fallbackSessionEmail =
+    auth.userId && deps.userStore ? (await deps.userStore.getUser(auth.userId))?.email?.trim().toLowerCase() : "";
+  let fallbackOwnerEmail = "";
+  if (!requestedEmail && !billing?.billingEmail?.trim() && !fallbackSessionEmail && deps.userStore) {
+    const orgUsers = await deps.userStore.listOrgUsers(auth.orgId);
+    const owner = orgUsers.find((user) => user.role === "owner" && !user.deactivatedAt);
+    fallbackOwnerEmail = owner?.email?.trim().toLowerCase() ?? "";
+  }
+  const adminEmail =
+    requestedEmail || billing?.billingEmail?.trim().toLowerCase() || fallbackSessionEmail || fallbackOwnerEmail || "";
+  const seats = clampSeatCountForPlan("pro", Number(body.seats ?? billing?.seatCount ?? 1) || 1);
+
+  if (!isValidEmail(adminEmail)) {
+    writeJson(response, 400, {
+      error: "invalid_email",
+      message: "An admin email is required to start checkout. Pass `email` in the request body."
+    });
+    return true;
+  }
+
+  try {
+    const session = await stripe.createCheckoutSession({
+      orgName: org?.name ?? auth.orgName,
+      email: adminEmail,
+      seats,
+      existingOrgId: auth.orgId,
+      upgrade: true
+    });
     writeJson(response, 200, { sessionId: session.id, url: session.url });
   } catch (error) {
     writeJson(response, 502, {
@@ -275,6 +378,10 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
   const orgName = String(metadata.org_name ?? session.client_reference_id ?? "New Coop Org").trim();
   const adminEmail = String(metadata.admin_email ?? session.customer_email ?? "").trim();
   const seatCount = Math.max(1, Number(metadata.seat_count ?? 1) || 1);
+  const existingOrgId = String(metadata.existing_org_id ?? "").trim();
+  const upgrade = String(metadata.upgrade ?? "")
+    .trim()
+    .toLowerCase() === "true";
 
   if (!customerId || !adminEmail) {
     console.warn("[stripe] checkout.session.completed skipped: missing customer or admin email", {
@@ -295,14 +402,16 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
       adminEmail,
       seatCount,
       stripeCustomerId: customerId,
-      stripeSubscriptionId: subscriptionId
+      stripeSubscriptionId: subscriptionId,
+      existingOrgId: existingOrgId || undefined,
+      upgrade
     }
   );
 
   await deps.auditLogger?.record({
     orgId: provisioned.orgId,
     action: "billing.checkout.completed",
-    metadata: { orgName, adminEmail, seatCount, stripeCustomerId: customerId }
+    metadata: { orgName, adminEmail, seatCount, stripeCustomerId: customerId, existingOrgId, upgrade }
   });
 }
 

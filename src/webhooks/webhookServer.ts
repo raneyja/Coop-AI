@@ -30,9 +30,11 @@ import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
 import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
+import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import { requireRemoteCodePlan } from "../server/planGates";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import type { GitHubAppService } from "../server/githubAppService";
@@ -58,7 +60,7 @@ import { handleSlackAppApiRequest } from "../server/slackAppApi";
 import { loadAtlassianAppConfig } from "../server/atlassianAppConfig";
 import { createAtlassianAppService } from "../server/atlassianAppService";
 import { handleAtlassianAppApiRequest } from "../server/atlassianAppApi";
-import { loadNotionAppConfig } from "../server/notionAppConfig";
+import { loadNotionAppConfig, isNotionOAuthConfig } from "../server/notionAppConfig";
 import { createNotionAppService } from "../server/notionAppService";
 import { handleNotionAppApiRequest } from "../server/notionAppApi";
 import { loadGoogleDocsAppConfig } from "../server/googleDocsAppConfig";
@@ -68,6 +70,7 @@ import { loadTeamsAppConfig } from "../server/teamsAppConfig";
 import { createTeamsAppService } from "../server/teamsAppService";
 import { handleTeamsAppApiRequest } from "../server/teamsAppApi";
 import { IntegrationConnectionStore } from "../server/integrationConnectionStore";
+import { IntegrationScopePolicyStore } from "../server/integrationScopePolicyStore";
 import { handleIntegrationApiRequest } from "../server/integrationApi";
 import { handleAdminApiRequest } from "../server/adminApi";
 import { handleBillingApiRequest } from "../server/billing/billingApi";
@@ -202,6 +205,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         ? new IntegrationConnectionStore(pool)
         : undefined;
 
+  const scopePolicyStore = pool ? new IntegrationScopePolicyStore(pool) : undefined;
+
   const slackAppConfig = loadSlackAppConfig();
   const slackApp =
     slackAppConfig && serverConfig.credentialsEncryptionKey
@@ -224,7 +229,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
   const notionAppConfig = loadNotionAppConfig();
   const notionApp =
-    notionAppConfig && serverConfig.credentialsEncryptionKey
+    notionAppConfig &&
+    isNotionOAuthConfig(notionAppConfig) &&
+    serverConfig.credentialsEncryptionKey
       ? createNotionAppService(
           notionAppConfig.clientId,
           notionAppConfig.clientSecret,
@@ -486,6 +493,22 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (
+        await handleChatThreadsApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            query: parsed.query,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          { orgStore, userStore, serverConfig }
+        )
+      ) {
+        return;
+      }
+
+      if (
         await handleChatApiRequest(
           {
             method: parsed.method,
@@ -504,6 +527,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       if (
         await handleIntegrationApiRequest(orgParsed, response, {
           integrationStore,
+          scopePolicyStore,
+          orgStore,
           atlassianApp,
           notionApp,
           googleDocsApp,
@@ -529,6 +554,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           orgStore,
           userStore,
           integrationStore,
+          scopePolicyStore,
           serverConfig,
           auditLogger,
           usageTracker
@@ -546,7 +572,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         userStore,
         auditLogger,
         usageTracker,
-        integrationStore
+        integrationStore,
+        scopePolicyStore
       })) {
         return;
       }
@@ -638,7 +665,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           writeJson(response, 503, { error: "organization database not configured" });
           return;
         }
-        if (!(await requireOrgPlan(orgStore, auth!, response, "pro", "enterprise"))) {
+        if (!(await requireRemoteCodePlan(orgStore, auth!, response))) {
           return;
         }
         const [repoId, query] = parseGraphPath(parsed.pathname);

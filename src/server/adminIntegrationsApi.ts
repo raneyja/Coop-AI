@@ -4,10 +4,29 @@ import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
+import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
+import { testAdminIntegration } from "./adminIntegrationTest";
 
 type ParsedRequest = {
   method: string;
   pathname: string;
+  query?: URLSearchParams;
+};
+
+export type IntegrationHealthValue =
+  | "not_connected"
+  | "not_configured"
+  | "scope_required"
+  | "degraded"
+  | "healthy";
+
+export type IntegrationHealthEntry = {
+  provider: AnyProvider;
+  installed: boolean;
+  health: IntegrationHealthValue;
+  message?: string;
+  scopeStatus?: string;
+  configured: boolean;
 };
 
 const ALL_PROVIDERS = [
@@ -69,6 +88,7 @@ export async function handleAdminIntegrationsRequest(
       }
     } else {
       await deps.integrationStore!.delete(auth.orgId, provider);
+      await deps.scopePolicyStore?.delete(auth.orgId, provider as IntegrationProvider);
     }
     const actor = auditActor(auth);
     await deps.auditLogger?.record({
@@ -82,19 +102,84 @@ export async function handleAdminIntegrationsRequest(
     return true;
   }
 
+  if (parsed.method === "GET" && parsed.pathname === "/v1/admin/integrations/health") {
+    const refresh = parsed.query?.get("refresh") === "true";
+    const orgPlan = await loadOrgPlan(deps, auth.orgId);
+    const statuses = [
+      ...(await Promise.all(
+        CODE_HOST_PROVIDERS.map((provider) => loadCodeHostStatus(deps, auth.orgId, provider))
+      )),
+      ...(await Promise.all(
+        INTEGRATION_PROVIDERS.map((provider) =>
+          loadIntegrationStatus(deps, auth.orgId, provider, orgPlan)
+        )
+      ))
+    ];
+
+    const integrations: IntegrationHealthEntry[] = [];
+    for (const status of statuses) {
+      integrations.push(await buildHealthEntry(deps, auth.orgId, orgPlan, status, refresh));
+    }
+
+    const githubOrToolConnected =
+      statuses.some((entry) => entry.provider === "github" && entry.installed) ||
+      statuses.some(
+        (entry) =>
+          INTEGRATION_PROVIDERS.includes(entry.provider as IntegrationProvider) && entry.installed
+      );
+
+    const slack = statuses.find((entry) => entry.provider === "slack");
+    const slackScopeStatus =
+      slack && "scopeStatus" in slack ? slack.scopeStatus : undefined;
+    const slackScopeActive =
+      orgPlan !== "enterprise" ||
+      !slack?.installed ||
+      slackScopeStatus === "active" ||
+      slackScopeStatus === "none";
+
+    const canCompleteOnboarding =
+      githubOrToolConnected &&
+      slackScopeActive &&
+      !integrations.some(
+        (entry) =>
+          entry.installed &&
+          (entry.health === "not_configured" || entry.health === "scope_required")
+      );
+
+    writeJson(response, 200, {
+      orgPlan,
+      onboardingGates: {
+        githubOrToolConnected,
+        slackScopeActive,
+        canCompleteOnboarding
+      },
+      integrations
+    });
+    return true;
+  }
+
   if (parsed.method !== "GET" || parsed.pathname !== "/v1/admin/integrations") {
     return false;
   }
 
+  const orgPlan = await loadOrgPlan(deps, auth.orgId);
+
   const integrations = [
     ...(await Promise.all(CODE_HOST_PROVIDERS.map((provider) => loadCodeHostStatus(deps, auth.orgId, provider)))),
     ...(await Promise.all(
-      INTEGRATION_PROVIDERS.map((provider) => loadIntegrationStatus(deps, auth.orgId, provider))
+      INTEGRATION_PROVIDERS.map((provider) =>
+        loadIntegrationStatus(deps, auth.orgId, provider, orgPlan)
+      )
     ))
   ];
 
   writeJson(response, 200, { integrations });
   return true;
+}
+
+async function loadOrgPlan(deps: AdminApiDeps, orgId: string): Promise<string> {
+  const org = deps.orgStore ? await deps.orgStore.getOrganization(orgId) : undefined;
+  return org?.plan ?? "free";
 }
 
 async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: CodeHostProvider) {
@@ -130,20 +215,126 @@ async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: C
   };
 }
 
-async function loadIntegrationStatus(deps: AdminApiDeps, orgId: string, provider: IntegrationProvider) {
+async function loadIntegrationStatus(
+  deps: AdminApiDeps,
+  orgId: string,
+  provider: IntegrationProvider,
+  orgPlan: string
+) {
   const connection = deps.integrationStore
     ? await deps.integrationStore.get(orgId, provider)
     : undefined;
+  const installed = Boolean(connection);
+  const scope = await resolveScopeStatusForIntegration(deps, orgId, orgPlan, provider, installed);
+  const metadata = connection
+    ? sanitizeIntegrationMetadata({
+        ...connection.metadata,
+        tokenExpiresAt: connection.tokenExpiresAt,
+        updatedAt: connection.updatedAt
+      })
+    : {};
+  const scopeNeedsReconnect =
+    provider === "slack" &&
+    installed &&
+    orgPlan === "enterprise" &&
+    !connection?.metadata.encryptedBotToken;
   return {
     provider,
-    installed: Boolean(connection),
+    installed,
     installUrlPath: `/v1/${provider}/app/install-url`,
-    metadata: connection
-      ? {
-          ...connection.metadata,
-          tokenExpiresAt: connection.tokenExpiresAt,
-          updatedAt: connection.updatedAt
-        }
-      : {}
+    scopeStatus: scope.scopeStatus,
+    scopeSummary: scope.scopeSummary,
+    scopeNeedsReconnect,
+    metadata
+  };
+}
+
+function sanitizeIntegrationMetadata(
+  metadata: Record<string, unknown>
+): Record<string, unknown> {
+  const { encryptedBotToken: _bot, ...rest } = metadata;
+  return rest;
+}
+
+async function buildHealthEntry(
+  deps: AdminApiDeps,
+  orgId: string,
+  orgPlan: string,
+  status: {
+    provider: AnyProvider;
+    installed: boolean;
+    needsReconnect?: boolean;
+    scopeStatus?: string;
+    scopeNeedsReconnect?: boolean;
+  },
+  refresh: boolean
+): Promise<IntegrationHealthEntry> {
+  const scopeStatus = status.scopeStatus ?? "none";
+  if (!status.installed) {
+    return {
+      provider: status.provider,
+      installed: false,
+      health: "not_connected",
+      scopeStatus,
+      configured: true
+    };
+  }
+
+  if (status.needsReconnect || status.scopeNeedsReconnect) {
+    return {
+      provider: status.provider,
+      installed: true,
+      health: "degraded",
+      message: status.scopeNeedsReconnect
+        ? "Reconnect to refresh channel access."
+        : "Reconnect required.",
+      scopeStatus,
+      configured: true
+    };
+  }
+
+  if (
+    orgPlan === "enterprise" &&
+    scopeStatus === "required" &&
+    ["slack", "atlassian", "notion", "google-docs"].includes(status.provider)
+  ) {
+    return {
+      provider: status.provider,
+      installed: true,
+      health: "scope_required",
+      message: "Configure access scope before chat uses this integration.",
+      scopeStatus,
+      configured: true
+    };
+  }
+
+  if (refresh) {
+    const test = await testAdminIntegration(orgId, status.provider, deps);
+    if (/not configured/i.test(test.message)) {
+      return {
+        provider: status.provider,
+        installed: true,
+        health: "not_configured",
+        message: test.message,
+        scopeStatus,
+        configured: false
+      };
+    }
+    return {
+      provider: status.provider,
+      installed: true,
+      health: test.ok ? "healthy" : "degraded",
+      message: test.message,
+      scopeStatus,
+      configured: true
+    };
+  }
+
+  return {
+    provider: status.provider,
+    installed: true,
+    health: "healthy",
+    scopeStatus,
+    configured: true
   };
 }

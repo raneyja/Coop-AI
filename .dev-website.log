@@ -1,0 +1,132 @@
+
+> coop-ai-website@0.1.0 dev
+> next dev -p 3001
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3001
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3001)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+[?25h
+
+> coop-ai-website@0.1.0 dev
+> next dev -p 3001
+
+   ▲ Next.js 15.5.18
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.1.171:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1440ms
+ ○ Compiling /signup/free ...
+ ✓ Compiled /signup/free in 1074ms (728 modules)
+ GET /signup/free 200 in 1362ms
+ GET /signup/free 200 in 47ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.3s (799 modules)
+ GET / 200 in 2787ms
+ GET / 200 in 145ms
+ GET / 200 in 153ms
+ GET / 200 in 106ms
+ ✓ Compiled /icon.png in 371ms (502 modules)
+ GET /icon.png?65400d324ede031a 200 in 478ms
+ ✓ Compiled in 1070ms (314 modules)
+ ✓ Compiled in 246ms (314 modules)
+ ✓ Compiled in 422ms (801 modules)
+ ✓ Compiled in 208ms (801 modules)
+ ✓ Compiled in 242ms (801 modules)
+ ✓ Compiled in 143ms (801 modules)
+ ✓ Compiled in 264ms (801 modules)
+ ✓ Compiled in 117ms (801 modules)
+ ✓ Compiled in 112ms (801 modules)
+ ✓ Compiled in 117ms (801 modules)
+ ✓ Compiled in 548ms (801 modules)
+ ✓ Compiled in 191ms (801 modules)
+ ✓ Compiled in 186ms (801 modules)
+ ✓ Compiled in 448ms (801 modules)
+ ✓ Compiled in 2.8s (801 modules)
+ GET / 200 in 899ms
+ GET / 200 in 235ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /pricing in 3s (1174 modules)
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/_not-found/page.js:359:47)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:362:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/_not-found/page.js:359:47)
+    at Object.<anonymous> (.next/server/app/_not-found/page.js:362:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/manual/page.js:577:47)
+    at Object.<anonymous> (.next/server/app/manual/page.js:580:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js',
+  page: '/manual'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/enterprise/page.js:467:47)
+    at Object.<anonymous> (.next/server/app/enterprise/page.js:470:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js',
+  page: '/enterprise'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/product/page.js:665:47)
+    at Object.<anonymous> (.next/server/app/product/page.js:668:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js',
+  page: '/product'
+}
+ ⨯ Error: ENOENT: no such file or directory, open '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js'
+    at <unknown> (.next/server/app/pricing/page.js:423:47)
+    at Object.<anonymous> (.next/server/app/pricing/page.js:426:3) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jonraney/Desktop/Coop AI/website/.next/server/vendor-chunks/next.js',
+  page: '/pricing'
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.6s (1521 modules)
+ GET /_vercel/speed-insights/script.js 500 in 6340ms
+ GET /_vercel/insights/script.js 500 in 6353ms
+ GET /manual 500 in 6415ms
+ GET /enterprise 500 in 6437ms
+ GET /product 500 in 6438ms
+ GET /pricing 500 in 6437ms
+ ○ Compiling /demo ...
+ ✓ Compiled /demo in 1551ms (1564 modules)
+ GET /security 200 in 1295ms
+ GET /blog 200 in 1296ms
+ GET /demo 200 in 1296ms
+ GET /docs 200 in 1780ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Users/jonraney/Desktop/Coop AI/website/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/Users/jonraney/Desktop/Coop AI/website/.next/cache/webpack/client-development-fallback/0.pack.gz'
+ GET / 200 in 304ms
+ ✓ Compiled in 5.3s (1084 modules)
+ ✓ Compiled in 499ms (1084 modules)
+ ✓ Compiled in 200ms (499 modules)
+ ✓ Compiled in 196ms (1084 modules)
+ ✓ Compiled in 265ms (1084 modules)
+ ✓ Compiled in 225ms (1084 modules)
+[?25h

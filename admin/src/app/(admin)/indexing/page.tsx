@@ -5,6 +5,7 @@ import type { CodeHostProvider } from "@/lib/integrations";
 import { CODE_HOST_PROVIDERS } from "@/lib/integrations";
 import {
   codeHostLabel,
+  disableLightningRepo,
   enableLightningRepo,
   fetchIntegrations,
   fetchOrg,
@@ -14,23 +15,14 @@ import {
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
-import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
-import { IndexingEstateProgress } from "@/components/IndexingEstateProgress";
+import { IndexingRepoPickerModal } from "@/components/IndexingRepoPickerModal";
 import { IndexingRepoSections } from "@/components/IndexingRepoSections";
 import { computeIndexingStats, shortRepoName } from "@/lib/indexingProgress";
 
-function statusBucket(status?: string, embeddingStatus?: string): "ready" | "indexing" | "error" | "warning" | "other" {
-  if (status === "ready") {
-    return embeddingStatus === "failed" ? "warning" : "ready";
-  }
-  if (status === "indexing" || status === "queued" || status === "cloning") {
-    return "indexing";
-  }
-  if (status === "error") {
-    return "error";
-  }
-  return "other";
-}
+type PickerState = {
+  open: boolean;
+  provider: CodeHostProvider;
+};
 
 export default function IndexingPage() {
   const [repos, setRepos] = useState<OrgRepoRecord[]>([]);
@@ -43,30 +35,15 @@ export default function IndexingPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [picker, setPicker] = useState<PickerState>({ open: false, provider: "github" });
 
   const stats = useMemo(() => computeIndexingStats(repos), [repos]);
   const inFlightCount = stats.inFlight;
-
-  const summary = useMemo(() => {
-    const buckets = { total: repos.length, ready: 0, warning: 0, indexing: 0, error: 0 };
-    for (const repo of repos) {
-      const bucket = statusBucket(repo.indexStatus, repo.embeddingStatus);
-      if (bucket === "ready") {
-        buckets.ready += 1;
-      } else if (bucket === "warning") {
-        buckets.warning += 1;
-        buckets.ready += 1;
-      } else if (bucket === "indexing") {
-        buckets.indexing += 1;
-      } else if (bucket === "error") {
-        buckets.error += 1;
-      }
-    }
-    return buckets;
-  }, [repos]);
+  const indexedCount = useMemo(() => repos.filter((repo) => repo.lightningEnabled).length, [repos]);
+  const indexedRepoLimit = orgPlan === "free" ? 3 : null;
 
   const syncableHosts = useMemo(() => {
-    if (orgPlan === "enterprise") {
+    if (orgPlan === "enterprise" || orgPlan === "free") {
       return connectedHosts;
     }
     return connectedHosts.filter((provider) => provider === "github");
@@ -111,6 +88,12 @@ export default function IndexingPage() {
     }
 
     setRepos(reposResult.data?.repos ?? []);
+    const trimmed = reposResult.data?.quotaReconciled?.trimmed;
+    if (trimmed && trimmed > 0) {
+      setActionMessage(
+        `Free plan allows 3 Deep-Indexed repos — turned off ${trimmed} extra repo${trimmed === 1 ? "" : "s"} that exceeded the limit.`
+      );
+    }
     if (integrationsResult.ok && integrationsResult.data) {
       setConnectedHosts(
         CODE_HOST_PROVIDERS.filter((provider) =>
@@ -130,6 +113,22 @@ export default function IndexingPage() {
     return () => window.clearInterval(timer);
   }, [load, inFlightCount]);
 
+  useEffect(() => {
+    if (!syncMessage) {
+      return;
+    }
+    const timer = window.setTimeout(() => setSyncMessage(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [syncMessage]);
+
+  useEffect(() => {
+    if (!actionMessage) {
+      return;
+    }
+    const timer = window.setTimeout(() => setActionMessage(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [actionMessage]);
+
   async function handleSync(provider: CodeHostProvider) {
     setActionId(`sync:${provider}`);
     setSyncMessage(null);
@@ -140,13 +139,35 @@ export default function IndexingPage() {
       setError(result.error ?? "Catalog sync failed.");
       return;
     }
-    const data = result.data;
+    await load({ silent: true });
+
+    const latestRepos = await fetchOrgRepos();
+    const currentIndexed = (latestRepos.data?.repos ?? []).filter((repo) => repo.lightningEnabled).length;
     const label = codeHostLabel(provider);
-    setSyncMessage(
-      data
-        ? `${label}: discovered ${data.discovered} repos · queued ${data.queued} · skipped ${data.skipped}`
-        : `${label} catalog sync started.`
-    );
+    const discovered = result.data?.discovered ?? 0;
+    const remaining = (indexedRepoLimit ?? 999) - currentIndexed;
+    if (indexedRepoLimit != null && remaining <= 0) {
+      setSyncMessage(
+        `${label} — catalog synced (${discovered} repos). At the ${indexedRepoLimit}-repo limit — browse catalog or turn off a repo to swap.`
+      );
+    } else {
+      setSyncMessage(
+        `${label} — ${discovered} repos discovered. Choose up to ${remaining} to Deep-Index.`
+      );
+    }
+    setPicker({ open: true, provider });
+  }
+
+  async function handlePickerConfirm(repoIds: string[]) {
+    for (const repoId of repoIds) {
+      setActionId(repoId);
+      const result = await enableLightningRepo(repoId);
+      setActionId(null);
+      if (!result.ok) {
+        throw new Error(result.error ?? `Failed to Deep-Index ${shortRepoName(repoId)}.`);
+      }
+    }
+    setActionMessage(`Queued ${repoIds.length} repo(s) for Deep-Index.`);
     await load({ silent: true });
   }
 
@@ -161,6 +182,20 @@ export default function IndexingPage() {
       return;
     }
     setActionMessage(`Queued ${shortRepoName(repoId)} for indexing.`);
+    await load({ silent: true });
+  }
+
+  async function handleDisable(repoId: string) {
+    setActionId(`off:${repoId}`);
+    setError(null);
+    setActionMessage(null);
+    const result = await disableLightningRepo(repoId);
+    setActionId(null);
+    if (!result.ok) {
+      setError(result.error ?? "Could not turn off Deep-Index.");
+      return;
+    }
+    setActionMessage(`Turned off Deep-Index for ${shortRepoName(repoId)}.`);
     await load({ silent: true });
   }
 
@@ -183,6 +218,11 @@ export default function IndexingPage() {
     await load({ silent: true });
   }
 
+  const capMessage =
+    indexedRepoLimit != null
+      ? `${indexedCount}/${indexedRepoLimit} repos Deep-Indexed (Free plan limit).`
+      : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -197,14 +237,18 @@ export default function IndexingPage() {
             />
           </h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Deep-indexed repos across your connected code hosts — status refreshes every 10 seconds.
-            {orgPlan === "enterprise"
-              ? " Enterprise orgs can sync GitHub, GitLab, and Bitbucket independently."
-              : " Pro orgs sync GitHub; add GitLab or Bitbucket on Enterprise."}
+            Deep-indexed repos across GitHub, GitLab, and Bitbucket. Status updates every 10 seconds.
           </p>
+          {syncMessage ? (
+            <p className="mt-2 text-sm text-emerald-300">{syncMessage}</p>
+          ) : capMessage ? (
+            <p className="mt-2 text-sm text-coop-muted">{capMessage}</p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          {summary.warning > 0 ? (
+          {repos.some(
+            (repo) => repo.embeddingStatus === "failed" || repo.embeddingStatus === "skipped"
+          ) ? (
             <button
               type="button"
               className={`admin-btn-primary min-w-[10rem] ${actionId === "retry-embeddings" ? "pointer-events-none opacity-60" : ""}`}
@@ -212,7 +256,7 @@ export default function IndexingPage() {
               aria-busy={actionId === "retry-embeddings"}
               onClick={() => void handleRetryEmbeddingFailures()}
             >
-              Retry failed embeddings
+              Run embeddings
             </button>
           ) : null}
           {syncableHosts.map((provider) => {
@@ -244,10 +288,7 @@ export default function IndexingPage() {
 
       <div className="min-h-5">
         {error ? <p className="text-sm text-red-300">{error}</p> : null}
-        {!error && syncMessage ? <p className="text-sm text-emerald-300">{syncMessage}</p> : null}
-        {!error && !syncMessage && actionMessage ? (
-          <p className="text-sm text-emerald-300">{actionMessage}</p>
-        ) : null}
+        {!error && actionMessage ? <p className="text-sm text-emerald-300">{actionMessage}</p> : null}
       </div>
 
       {unavailable ? <UnavailableBanner /> : null}
@@ -257,21 +298,37 @@ export default function IndexingPage() {
         </p>
       ) : null}
 
-      <AdminStatRow>
-        <AdminStat label="Total repos" value={initialLoading ? "—" : String(summary.total)} />
-        <AdminStat label="Ready" value={initialLoading ? "—" : String(summary.ready)} />
-        <AdminStat label="Embeddings warn" value={initialLoading ? "—" : String(summary.warning)} />
-        <AdminStat label="Indexing" value={initialLoading ? "—" : String(summary.indexing)} />
-        <AdminStat label="Errors" value={initialLoading ? "—" : String(summary.error)} />
-      </AdminStatRow>
-
-      <IndexingEstateProgress stats={stats} loading={initialLoading} />
+      {!initialLoading && indexedCount === 0 && syncableHosts.length > 0 ? (
+        <p className="text-sm text-coop-muted">
+          Sync a code host above to choose repos for Deep-Index.
+        </p>
+      ) : null}
 
       {initialLoading ? (
         <div className="py-8 text-center text-sm text-coop-muted">Loading repositories…</div>
-      ) : (
-        <IndexingRepoSections repos={repos} actionId={actionId} onReindex={(id) => void handleReindex(id)} />
-      )}
+      ) : indexedCount > 0 || orgPlan !== "free" ? (
+        !picker.open ? (
+          <IndexingRepoSections
+          repos={repos}
+          actionId={actionId}
+          onReindex={(id) => void handleReindex(id)}
+          onDisable={indexedRepoLimit != null ? (id) => void handleDisable(id) : undefined}
+          indexedRepoLimit={indexedRepoLimit}
+          indexedRepoCount={indexedCount}
+          hideUnindexed={indexedRepoLimit != null}
+        />
+        ) : null
+      ) : null}
+
+      <IndexingRepoPickerModal
+        open={picker.open}
+        provider={picker.provider}
+        repos={repos}
+        maxSelect={indexedRepoLimit ?? 999}
+        alreadyIndexed={indexedCount}
+        onClose={() => setPicker((current) => ({ ...current, open: false }))}
+        onConfirm={handlePickerConfirm}
+      />
     </div>
   );
 }

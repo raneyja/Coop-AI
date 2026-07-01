@@ -3,7 +3,7 @@ import type { SettingsTestKey } from "./TestButton";
 import type { SettingsSaveKey } from "./SaveFlashLabel";
 import type { PromptLibraryItem } from "./promptLibraryTypes";
 import type { CodeHostProviderPreference, GithubRepoOption, IntegrationChatProvider } from "../../chat/types";
-import { SettingsHub, SettingsNavHeader } from "./settings/SettingsHub";
+import { SettingsHub, SettingsNavHeader, type SettingsLightningSummary } from "./settings/SettingsHub";
 import { SettingsDetailView } from "./settings/SettingsDetailViews";
 import type { IdentityDirectory } from "../../identity/types";
 import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./settings/types";
@@ -118,6 +118,7 @@ type SettingsPanelProps = {
     saving: boolean;
     error?: string;
   };
+  lightningState?: SettingsLightningSummary | null;
 };
 
 export function SettingsPanel({
@@ -127,6 +128,7 @@ export function SettingsPanel({
   onClose,
   promptLibrary,
   onTestIntegration,
+  lightningState,
   ...detailProps
 }: SettingsPanelProps): React.ReactElement {
   const handleBack = () => {
@@ -138,6 +140,7 @@ export function SettingsPanel({
     promptLibrary,
     onTestIntegration,
     onNavigate: (next: SettingsDetailScreen) => onNavigate(next),
+    lightningState,
     ...detailProps
   };
 
@@ -150,12 +153,25 @@ export function SettingsPanel({
           <SettingsHub
             prefs={prefs}
             pinnedCount={promptLibrary.pinnedIds.length}
+            lightningState={lightningState}
             onNavigate={(next) => onNavigate(next)}
           />
         ) : (
           <SettingsDetailView screen={screen} {...detailCommon} />
         )}
       </div>
+      {screen === "hub" ? (
+        <div className="coop-settings-footer !border-t-0 !pt-0 mt-2 px-0.5">
+          <a
+            className="coop-text-btn"
+            href="https://coop-ai.dev/manual"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Owner&apos;s Manual ↗
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }

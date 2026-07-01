@@ -65,40 +65,39 @@ export class PlanQuotaService {
     return plan === "free" && this.config.enabled;
   }
 
-  public async getSnapshot(orgId: string, plan: OrgPlan | ChatOrgPlan): Promise<PlanQuotaSnapshot | undefined> {
+  public async getSnapshot(
+    orgId: string,
+    plan: OrgPlan | ChatOrgPlan,
+    now = new Date()
+  ): Promise<PlanQuotaSnapshot | undefined> {
     if (!this.appliesToPlan(plan) || orgId === "dev") {
       return undefined;
     }
-    const usage = await this.getRollingUsage(orgId);
+    const usage = await this.getRollingUsage(orgId, now);
     return buildSnapshot(usage.usedTokens, this.config.freeTokenLimit, usage.resetsAt, this.config.rollingWindowMs);
   }
 
   public async check(
     orgId: string,
     plan: OrgPlan | ChatOrgPlan,
-    estimatedAdditionalTokens: number
+    _estimatedAdditionalTokens = 0,
+    now = new Date()
   ): Promise<void> {
     if (!this.appliesToPlan(plan) || orgId === "dev") {
       return;
     }
-    const usage = await this.getRollingUsage(orgId);
-    if (usage.usedTokens + estimatedAdditionalTokens > this.config.freeTokenLimit) {
-      const resetsAt =
-        computeQuotaResetsAt(
-          usage.events,
-          usage.usedTokens,
-          this.config.freeTokenLimit,
-          this.config.rollingWindowMs,
-          new Date(),
-          estimatedAdditionalTokens
-        ) ?? usage.resetsAt;
-      const retryAfterMs = Math.max(0, resetsAt.getTime() - Date.now());
+    const usage = await this.getRollingUsage(orgId, now);
+    const remainingTokens = this.config.freeTokenLimit - usage.usedTokens;
+    // Block new requests only when already exhausted. Do not use estimated tokens —
+    // a request that starts with any remaining budget may finish even if it goes over.
+    if (remainingTokens <= 0) {
+      const retryAfterMs = Math.max(0, usage.resetsAt.getTime() - Date.now());
       throw new PlanQuotaExceededError(
         retryAfterMs,
         usage.usedTokens,
         this.config.freeTokenLimit,
         this.config.upgradeUrl,
-        resetsAt
+        usage.resetsAt
       );
     }
   }
@@ -313,10 +312,9 @@ function buildSnapshot(
   };
 }
 
-function buildQuotaLimitMessage(retryAfterMs: number, resetsAt: Date, upgradeUrl: string): string {
-  const retryLabel = formatQuotaRetryAfter(retryAfterMs);
+function buildQuotaLimitMessage(_retryAfterMs: number, resetsAt: Date, _upgradeUrl: string): string {
   const atLabel = formatResetsAtLocal(resetsAt);
-  return `You've used your free AI credits for this 5-hour window. Try again at ${atLabel} (${retryLabel}) or upgrade to Pro for unlimited usage: ${upgradeUrl}`;
+  return `You've reached your free AI credits limit. Try again at ${atLabel} or upgrade to Pro for unlimited usage.`;
 }
 
 function formatResetsAtLocal(resetsAt: Date): string {

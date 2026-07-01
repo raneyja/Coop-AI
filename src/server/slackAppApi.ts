@@ -96,6 +96,7 @@ async function handleCallback(
     await deps.integrationStore.upsert(orgId, "slack", tokens.userAccessToken, {
       refreshToken: tokens.refreshToken,
       expiresAt: tokens.expiresAt,
+      botAccessToken: tokens.botAccessToken,
       metadata: {
         teamId: tokens.teamId,
         teamName: tokens.teamName,
