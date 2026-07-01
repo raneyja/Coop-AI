@@ -3,6 +3,7 @@ import type { Preferences } from "./types";
 import { CoopNotice } from "../CoopNotice";
 import {
   accountHubSubtitle,
+  planUsageHubSubtitle,
   toolsHubSubtitle,
   workspaceHubSubtitle
 } from "./subtitles";
@@ -55,6 +56,7 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
       <p className="coop-settings-row-title">Finish org setup</p>
       <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[var(--coop-panel-muted)]">
         <li>Account: {accountHubSubtitle(prefs)}</li>
+        <li>Plan &amp; Usage: {planUsageHubSubtitle(prefs)}</li>
         <li>Tools: {toolsHubSubtitle(prefs)}</li>
         <li>Workspace: {workspaceHubSubtitle(prefs)}</li>
         {scopeHint ? (
@@ -71,16 +73,9 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
             admin portal
           </a>
         </li>
+        <li>Open Plan &amp; Usage in Settings for billing and org dashboard links.</li>
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
-        <a
-          className="coop-settings-action-btn"
-          href={`${adminBase}/integrations`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open admin portal
-        </a>
         <button
           type="button"
           className="coop-text-btn"

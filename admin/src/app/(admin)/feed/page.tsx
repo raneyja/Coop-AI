@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FeedChatProse } from "@/components/FeedChatProse";
 import {
   fetchThread,
   fetchThreads,
@@ -43,7 +44,9 @@ function FeedMessage({ message }: { message: ThreadMessage }) {
           <span className="feed-chat-message-label">{roleLabel(message.role)}</span>
           <time className="feed-chat-message-time">{formatThreadTime(message.createdAt)}</time>
         </div>
-        <div className="feed-chat-message-body coop-chat-prose whitespace-pre-wrap">{message.content}</div>
+        <div className="feed-chat-message-body">
+          <FeedChatProse content={message.content} />
+        </div>
       </div>
     </article>
   );

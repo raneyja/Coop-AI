@@ -131,6 +131,24 @@ export class UserStore {
     return result.rows.map(rowToUser);
   }
 
+  public async findActiveUserByEmail(email: string): Promise<UserRecord | undefined> {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at
+       FROM users
+       WHERE lower(email) = lower($1)
+         AND deactivated_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [trimmed]
+    );
+    const row = result.rows[0];
+    return row ? rowToUser(row) : undefined;
+  }
+
   public async createUser(orgId: string, email: string, role: UserRole = "member"): Promise<UserRecord> {
     const inserted = await this.pool.query(
       `INSERT INTO users (org_id, email, role)

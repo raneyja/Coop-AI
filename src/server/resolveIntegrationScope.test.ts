@@ -20,7 +20,7 @@ function mockStore(policy: unknown): IntegrationScopePolicyStore {
   } as unknown as IntegrationScopePolicyStore;
 }
 
-test("resolveIntegrationScope allows non-enterprise slack without policy", async () => {
+test("resolveIntegrationScope allows pro slack without policy", async () => {
   const resolved = await resolveIntegrationScope({
     orgId: "org1",
     provider: "slack",
@@ -30,6 +30,7 @@ test("resolveIntegrationScope allows non-enterprise slack without policy", async
   });
   assert.equal(resolved.enforced, false);
   assert.equal(resolved.allowed, true);
+  assert.equal(resolved.scopeStatus, "none");
 });
 
 test("resolveIntegrationScope blocks enterprise slack without allowlist", async () => {
@@ -45,7 +46,7 @@ test("resolveIntegrationScope blocks enterprise slack without allowlist", async 
   assert.equal(resolved.scopeStatus, "required");
 });
 
-test("resolveIntegrationScope returns active slack channels for enterprise", async () => {
+test("resolveIntegrationScope returns active slack channels when allowlisted", async () => {
   const resolved = await resolveIntegrationScope({
     orgId: "org1",
     provider: "slack",

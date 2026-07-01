@@ -15,7 +15,7 @@ type IntegrationsStepProps = {
   onRefresh: (provider: IntegrationProvider) => void;
   compact?: boolean;
   showFullPageLink?: boolean;
-  hideScopePanel?: boolean;
+  hideIntro?: boolean;
 };
 
 export function IntegrationsStep({
@@ -28,13 +28,15 @@ export function IntegrationsStep({
   onRefresh,
   compact,
   showFullPageLink = true,
-  hideScopePanel = false
+  hideIntro = false
 }: IntegrationsStepProps) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-coop-muted">
-        Connect tools your team uses. OAuth opens in a new tab — return here and refresh status.
-      </p>
+      {!hideIntro ? (
+        <p className="text-sm text-coop-muted">
+          Connect tools your team uses. OAuth opens in a new tab — return here and refresh status.
+        </p>
+      ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       <div className={compact ? "divide-y divide-coop-border/40" : "divide-y divide-coop-border/40"}>
         {INTEGRATIONS.map((def) => (
@@ -48,7 +50,6 @@ export function IntegrationsStep({
             refreshSuccess={refreshSuccessProvider === def.id}
             initialLoading={initialLoading}
             compact={compact}
-            hideScopePanel={hideScopePanel}
           />
         ))}
       </div>

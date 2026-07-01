@@ -9,6 +9,7 @@ import { ConflictConfig, mergeConflictConfig, parseConflictSeverity } from "../c
 import { IntentConfig, mergeIntentConfig } from "../config/intentConfig";
 import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { CoopBackendClient } from "../api/CoopBackendClient";
+import { clampSearchScopeModeForPlan } from "../license/licenseChecker";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
@@ -25,7 +26,7 @@ import type {
   OrgCollectionSummary
 } from "./types";
 import { isCoopDevMode } from "../config/lightningConfig";
-import { isFreePlan } from "../license/licenseChecker";
+import { DEFAULT_TIMEZONE_ID } from "./timezone";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -714,6 +715,7 @@ export function readConfiguration(): Omit<
     devMode: config.get<boolean>("devMode", false),
     searchScopeMode: config.get<import("./types").SearchScopeMode>("searchScope.mode", "repo"),
     searchCollectionId: config.get<string>("searchScope.collectionId", ""),
+    timezone: config.get<string>("timezone", DEFAULT_TIMEZONE_ID),
     hasGitHubAppInstalled: false,
     hasGitLabAppInstalled: false,
     hasBitbucketAppInstalled: false
@@ -1054,6 +1056,9 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   if (updates.searchCollectionId !== undefined) {
     ops.push(["searchScope.collectionId", updates.searchCollectionId]);
   }
+  if (updates.timezone !== undefined) {
+    ops.push(["timezone", updates.timezone]);
+  }
   for (const [key, value] of ops) {
     await config.update(key, value, vscode.ConfigurationTarget.Global);
   }
@@ -1064,17 +1069,15 @@ function resolveDefaultSearchScope(
   plan: UserPreferences["plan"] | undefined,
   indexedRepoCount: number | undefined
 ): import("./types").SearchScopeMode {
-  if (isFreePlan(plan)) {
-    return "repo";
-  }
-  if (current !== "repo") {
-    return current;
+  const clamped = clampSearchScopeModeForPlan(current, plan);
+  if (clamped !== "repo") {
+    return clamped;
   }
   if (plan === "enterprise") {
     return "org";
   }
-  if (plan === "pro" && (indexedRepoCount ?? 0) > 1) {
+  if ((plan === "pro" || plan === "free") && (indexedRepoCount ?? 0) > 1) {
     return "indexed";
   }
-  return current;
+  return clamped;
 }

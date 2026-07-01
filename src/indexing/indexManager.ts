@@ -91,7 +91,7 @@ export class IndexManager {
   public async enableRepo(ref: RepoIndexRef, localPath?: string): Promise<IndexManifest> {
     const license = await this.getLicenseStatus();
     if (!canUseLightningMode(license)) {
-      throw new Error("Lightning Mode requires an active Pro plan ($20/user/month).");
+      throw new Error("Lightning Mode requires an active Coop account.");
     }
 
     const config = readLightningConfiguration();

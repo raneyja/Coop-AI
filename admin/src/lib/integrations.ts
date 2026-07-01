@@ -105,9 +105,25 @@ export type SlackScopePolicy = {
   channels: SlackScopeChannel[];
 };
 
-export type AtlassianScopePolicy = Record<string, unknown>;
-export type NotionScopePolicy = Record<string, unknown>;
-export type GoogleDocsScopePolicy = Record<string, unknown>;
+export type AtlassianScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  jiraProjects: Array<{ id: string; key: string; name: string }>;
+  confluenceSpaces: Array<{ id: string; key: string; name: string }>;
+};
+
+export type NotionScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  resources: Array<{ id: string; title: string; type: "page" | "database" }>;
+};
+
+export type GoogleDocsScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  folders: Array<{ id: string; name: string; kind: "folder" | "shared_drive" }>;
+  expandedFolderIds?: string[];
+};
 
 export type IntegrationScopeResponse = {
   provider: IntegrationProvider;
@@ -123,6 +139,9 @@ export type IntegrationScopeResponse = {
 export type IntegrationResource = {
   id: string;
   name: string;
+  key?: string;
+  type?: string;
+  kind?: string;
   isPrivate?: boolean;
   topic?: string;
 };

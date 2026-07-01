@@ -23,17 +23,19 @@ function ContextModePlanSummary(): React.ReactElement {
     <div className="coop-context-mode-plans space-y-2">
       <p>
         <span className="coop-context-mode-plan-label">Developer (free)</span>
-        {": Local workspace files, AI credits, and unlimited tool integrations — individual account only."}
+        {
+          ": Deep-Index up to 3 repos — same cloud search (symbols, full-text, embeddings) as Pro. AI usage capped at 80,000 tokens per 5-hour window."
+        }
       </p>
       <p>
         <span className="coop-context-mode-plan-label">Pro</span>
         {
-          ": GitHub connection, workspace repos, and up to 3 Deep-Indexed Repos per seat — Coop-Search across your catalog."
+          ": Unlimited Deep-Indexed repos, team seats, and Collections for advanced cross-repo groupings."
         }
       </p>
       <p className="coop-context-mode-plans-all">
         <span className="font-medium text-[var(--coop-panel-foreground)]">All plans</span> include Slack, Jira, Notion,
-        and more when connected in Settings. Code hosts and Deep-Code Graph require Pro.
+        and more when connected in Settings.
       </p>
     </div>
   );
@@ -200,14 +202,15 @@ export function LightningModePanel({
                 </div>
               </div>
 
-              {state.plan === "pro" && state.indexedRepoCount === 0 ? (
+              {(state.plan === "free" || state.plan === "pro") && state.indexedRepoCount === 0 ? (
                 <div className="coop-notice coop-notice--info coop-notice--compact">
-                  Choose up to 3 repos for Deep-Code Graph indexing. Coop-Search works across every Deep-Indexed Repo
-                  you add.
+                  {state.plan === "free"
+                    ? "Deep-Index up to 3 repos in the admin portal (Indexing). Coop-Search uses the same cloud index as Pro."
+                    : "Choose up to 3 repos for Deep-Code Graph indexing. Coop-Search works across every Deep-Indexed Repo you add."}
                 </div>
               ) : null}
 
-              {state.plan === "pro" ? (
+              {state.plan === "free" || state.plan === "pro" ? (
                 <ProOnboardingChecklist
                   githubConnected={state.repos.length > 0 || Boolean(state.currentRepoId)}
                   indexedCount={state.indexedRepoCount ?? state.enabledRepos}
@@ -355,7 +358,7 @@ function RepoList({
   onAddRepo?: () => void;
 }): React.ReactElement {
   const limitLabel =
-    plan === "pro" && indexedRepoLimit != null
+    (plan === "free" || plan === "pro") && indexedRepoLimit != null
       ? `Your Deep-Indexed Repos (${indexedRepoCount}/${indexedRepoLimit})`
       : plan === "enterprise"
         ? `Deep-Indexed Repos (${indexedRepoCount})`
@@ -391,11 +394,18 @@ function RepoList({
               Upgrade to Enterprise
             </button>
           ) : null}
+          {plan === "free" && !canEnableMoreRepos && onUpgrade ? (
+            <button type="button" className="coop-text-btn" onClick={onUpgrade}>
+              Upgrade to Pro
+            </button>
+          ) : null}
         </div>
       </div>
       {!canEnableMoreRepos ? (
         <p className="coop-prompt-modal-note mt-1">
-          Pro includes up to 3 Deep-Indexed Repos per seat. Upgrade for estate-wide indexing.
+          {plan === "free"
+            ? "Free includes up to 3 Deep-Indexed repos. Upgrade to Pro for unlimited indexing and team seats."
+            : "Pro includes up to 3 Deep-Indexed Repos per seat. Upgrade for estate-wide indexing."}
         </p>
       ) : null}
       <ul className="space-y-2">

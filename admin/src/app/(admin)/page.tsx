@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import { fetchIntegrations, fetchQuota, fetchUsers, type QuotaSnapshot } from "@/lib/coopApi";
+import { createUpgradeCheckoutSession, fetchIntegrations, fetchQuota, fetchUsers, type QuotaSnapshot } from "@/lib/coopApi";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { useOrgPlan } from "@/hooks/useOrgPlan";
@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +66,18 @@ export default function DashboardPage() {
 
   const connectedCount = integrations.filter((i) => i.installed).length;
 
+  async function handleUpgrade() {
+    setUpgrading(true);
+    setUpgradeError(null);
+    const result = await createUpgradeCheckoutSession();
+    setUpgrading(false);
+    if (!result.ok || !result.data?.url) {
+      setUpgradeError(result.error ?? "Could not start checkout.");
+      return;
+    }
+    window.location.href = result.data.url;
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -72,12 +86,17 @@ export default function DashboardPage() {
       </div>
 
       {capabilities.showUsageQuota ? (
-        <UpgradeCTA
-          variant="banner"
-          title="Upgrade to Pro"
-          body="Upgrade for unlimited Deep-Indexed repos, additional models, team seats, and higher usage limits."
-          ctaLabel="View billing"
-        />
+        <>
+          <UpgradeCTA
+            variant="banner"
+            title="Upgrade to Pro"
+            body="Upgrade for unlimited Deep-Indexed repos, additional models, team seats, and higher usage limits."
+            ctaLabel="Upgrade to Pro"
+            onAction={handleUpgrade}
+            actionLoading={upgrading}
+          />
+          {upgradeError ? <p className="text-sm text-red-400">{upgradeError}</p> : null}
+        </>
       ) : null}
 
       <AdminStatRow>
@@ -106,13 +125,16 @@ export default function DashboardPage() {
         </div>
       </AdminStatRow>
 
-      {capabilities.showUsageQuota ? <UsageQuotaMeter snapshot={quota} loading={quotaLoading} /> : null}
+      {capabilities.showUsageQuota ? (
+        <UsageQuotaMeter snapshot={quota} loading={quotaLoading} showUpgradeLink={false} />
+      ) : null}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="admin-section-label">Integration status</h2>
-          <Link href="/integrations" className="admin-link text-sm">
+          <Link href="/integrations" className="admin-link inline-flex items-center gap-1 text-sm">
             Manage integrations
+            <span aria-hidden>↗</span>
           </Link>
         </div>
         {error && <p className="mb-4 text-sm text-red-400">{error}</p>}

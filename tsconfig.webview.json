@@ -22,6 +22,14 @@
   "include": [
     "src/webview/**/*",
     "src/chat/settingsScreens.ts",
+    "src/chat/timezone.ts",
+    "src/chat/quotaNotice.ts",
+    "src/indexing/lightningTypes.ts",
     "src/types/decisionTimeline.ts"
+  ],
+  "exclude": [
+    "**/* 2.*",
+    "**/* 3.*",
+    "**/* 4.*"
   ]
 }

@@ -28,6 +28,15 @@ export function formatIntegrationError(
     }
     return `You do not have permission to connect ${name}.`;
   }
+  if (/API token is invalid|unauthorized.*notion/i.test(message)) {
+    return `${name} token is invalid. Copy the Internal integration secret from notion.so/my-integrations → Configuration into NOTION_INTEGRATION_TOKEN in .env.backend, then restart the API.`;
+  }
+  if (/invalid_client/i.test(message)) {
+    if (/secret_/i.test(message)) {
+      return `${name} OAuth is misconfigured: NOTION_APP_CLIENT_SECRET is an internal integration secret, not an OAuth client secret. Create a public OAuth integration at notion.so/my-integrations.`;
+    }
+    return `${name} OAuth failed — the client ID or secret on this Coop server does not match your Notion OAuth integration. In .env.backend, set NOTION_APP_CLIENT_ID and NOTION_APP_CLIENT_SECRET from a public OAuth integration (not an internal integration secret).`;
+  }
   if (/redirect_uri/i.test(message)) {
     return `OAuth redirect failed. Your administrator must register the Coop callback URL in the ${name} app settings.`;
   }
@@ -35,7 +44,10 @@ export function formatIntegrationError(
     return `Slack rejected the requested permissions. Your Coop administrator must add the required scopes in the Slack app settings, reinstall the app, then reconnect here.`;
   }
   if (/missing_scope/i.test(message)) {
-    return "Channel list unavailable. Reinstall the Slack app with bot scopes channels:read and groups:read, then disconnect and reconnect Slack.";
+    return "Channel list unavailable. Disconnect and reconnect Slack so Coop can refresh its bot token with channels:read and groups:read scopes.";
+  }
+  if (/bot token unavailable/i.test(message)) {
+    return "Slack bot token missing. Disconnect and reconnect Slack, then open Manage access again.";
   }
   if (/insufficient.*scope/i.test(message) || /insufficientPermissions/i.test(message)) {
     return "Google Drive access is incomplete. Revoke Coop at myaccount.google.com/permissions, then connect again.";

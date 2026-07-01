@@ -86,6 +86,7 @@ export type Preferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
 };
 

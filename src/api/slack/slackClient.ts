@@ -280,14 +280,40 @@ export class SlackClient {
     return match?.id;
   }
 
-  public async listChannels(options?: { limit?: number }): Promise<SlackChannelInfo[]> {
+  /**
+   * List channels for admin scope picker. Public channels always; private channels
+   * only when the bot token includes groups:read (graceful fallback otherwise).
+   */
+  public async listChannelsForScopePicker(options?: { limit?: number }): Promise<SlackChannelInfo[]> {
+    const limit = Math.min(options?.limit ?? 500, 1000);
+    const publicChannels = await this.listChannels({ limit, types: "public_channel" });
+    try {
+      const privateChannels = await this.listChannels({ limit, types: "private_channel" });
+      const seen = new Set(publicChannels.map((channel) => channel.id));
+      for (const channel of privateChannels) {
+        if (!seen.has(channel.id)) {
+          publicChannels.push(channel);
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof SlackApiError && error.code === "missing_scope")) {
+        throw error;
+      }
+    }
+    return publicChannels.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  public async listChannels(options?: {
+    limit?: number;
+    types?: "public_channel" | "private_channel" | "public_channel,private_channel";
+  }): Promise<SlackChannelInfo[]> {
     const limit = Math.min(options?.limit ?? 200, 1000);
     const channels: SlackChannelInfo[] = [];
     let cursor: string | undefined;
 
     while (channels.length < limit) {
       const query: Record<string, string> = {
-        types: "public_channel,private_channel",
+        types: options?.types ?? "public_channel",
         exclude_archived: "true",
         limit: String(Math.min(200, limit - channels.length))
       };

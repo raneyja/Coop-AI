@@ -371,7 +371,7 @@ export class OrgStore {
        FROM org_repos r
        JOIN organizations o ON o.id = r.org_id
        WHERE r.lightning_enabled = true
-         AND o.plan IN ('pro', 'enterprise')
+         AND o.plan IN ('free', 'pro', 'enterprise')
        ORDER BY r.org_id, r.repo_id`
     );
     return result.rows.map((row) => ({
@@ -514,5 +514,5 @@ function rowToOrgRepo(row: Record<string, unknown>): OrgRepoRecord {
 }
 
 export function canUseLightningPlan(plan: OrgPlan): boolean {
-  return plan === "pro" || plan === "enterprise";
+  return plan === "free" || plan === "pro" || plan === "enterprise";
 }

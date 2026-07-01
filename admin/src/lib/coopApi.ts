@@ -260,7 +260,9 @@ export async function fetchIntegrations(): Promise<ApiResult<IntegrationStatus[]
   return { ok: true, status: 200, data: statuses };
 }
 
-export async function fetchInstallUrl(provider: IntegrationProvider): Promise<ApiResult<{ url: string }>> {
+export async function fetchInstallUrl(
+  provider: IntegrationProvider
+): Promise<ApiResult<{ url?: string; connected?: boolean; workspaceName?: string }>> {
   const token = getToken();
   if (!token) {
     return { ok: false, status: 401, error: "Not signed in." };
@@ -271,8 +273,26 @@ export async function fetchInstallUrl(provider: IntegrationProvider): Promise<Ap
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store"
     });
-    const body = (await response.json().catch(() => ({}))) as { url?: string } & ApiError;
-    if (!response.ok || !body.url) {
+    const body = (await response.json().catch(() => ({}))) as {
+      url?: string;
+      connected?: boolean;
+      workspaceName?: string;
+    } & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, `Request failed (${response.status}).`)
+      };
+    }
+    if (body.connected) {
+      return {
+        ok: true,
+        status: response.status,
+        data: { connected: true, workspaceName: body.workspaceName }
+      };
+    }
+    if (!body.url) {
       return {
         ok: false,
         status: response.status,
@@ -774,12 +794,23 @@ export type AdminCollection = {
   repos: Array<{ collectionId: string; repoId: string; addedAt: string }>;
 };
 
-export async function fetchOrgRepos(): Promise<ApiResult<{ repos: OrgRepoRecord[] }>> {
-  const result = await coopFetch<{ repos: OrgRepoRecord[] }>("/v1/orgs/repos");
+export async function fetchOrgRepos(): Promise<
+  ApiResult<{ repos: OrgRepoRecord[]; quotaReconciled?: { trimmed: number } }>
+> {
+  const result = await coopFetch<{ repos: OrgRepoRecord[]; quotaReconciled?: { trimmed: number } }>(
+    "/v1/orgs/repos"
+  );
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
-  return { ok: true, status: result.status, data: { repos: result.data?.repos ?? [] } };
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      repos: result.data?.repos ?? [],
+      quotaReconciled: result.data?.quotaReconciled
+    }
+  };
 }
 
 export function codeHostLabel(provider: CodeHostProvider): string {
@@ -825,6 +856,17 @@ export async function syncEstate(): Promise<
 export async function enableLightningRepo(repoId: string): Promise<ApiResult<{ jobId?: string; status?: string }>> {
   const result = await coopFetch<{ jobId?: string; status?: string }>(
     `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/enable`,
+    { method: "POST", body: "{}" }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return { ok: true, status: result.status, data: result.data };
+}
+
+export async function disableLightningRepo(repoId: string): Promise<ApiResult<{ repo?: OrgRepoRecord }>> {
+  const result = await coopFetch<{ repo?: OrgRepoRecord }>(
+    `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/disable`,
     { method: "POST", body: "{}" }
   );
   if (!result.ok) {

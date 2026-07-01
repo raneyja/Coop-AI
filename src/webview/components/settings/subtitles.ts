@@ -3,8 +3,11 @@ import type { IntegrationChatProvider } from "../../../chat/types";
 import type { Preferences } from "./types";
 export {
   accountHubSubtitle,
+  planUsageHubSubtitle,
+  indexingHubSubtitle,
   toolsHubSubtitle,
   displayOrgName,
+  displayIdentitySubtitle,
   preferencesHubSubtitle
 } from "./connectionCopy";
 

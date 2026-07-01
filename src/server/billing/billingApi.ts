@@ -10,6 +10,7 @@ import type { ServerConfig } from "../serverConfig";
 import { loadBillingConfig } from "./billingConfig";
 import { adminPortalLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
+import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
 
 type ParsedRequest = {
@@ -41,6 +42,24 @@ export async function handleBillingApiRequest(
 
   if (parsed.method === "POST" && parsed.pathname === "/webhooks/stripe") {
     return handleStripeWebhook(parsed, response, deps, stripe);
+  }
+
+  if (
+    await handleFreeSignupApiRequest(
+      {
+        method: parsed.method,
+        pathname: parsed.pathname,
+        body: parsed.body
+      },
+      response,
+      {
+        orgStore: deps.orgStore,
+        userStore: deps.userStore,
+        emailService: deps.emailService
+      }
+    )
+  ) {
+    return true;
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/checkout-session") {

@@ -17,6 +17,12 @@ export type ConfluencePage = {
   htmlUrl: string;
 };
 
+export type ConfluenceSpace = {
+  id: string;
+  key: string;
+  name: string;
+};
+
 export class ConfluenceApiError extends Error {
   public constructor(
     message: string,
@@ -44,6 +50,9 @@ function formatConfluenceError(status: number, body: string, oauthMode = false):
       "account email, and a classic API token (create without scopes at id.atlassian.com)."
     );
   }
+  if (status === 410) {
+    return "Confluence search API is unavailable on this site. Try again after reconnecting Atlassian.";
+  }
   if (status === 401) {
     if (oauthMode && body.includes("scope does not match")) {
       return (
@@ -56,7 +65,27 @@ function formatConfluenceError(status: number, body: string, oauthMode = false):
     }
     return "Confluence authentication failed. Verify your account email and API token, then save credentials again.";
   }
+  const parsedMessage = parseConfluenceJsonMessage(body);
+  if (parsedMessage) {
+    return parsedMessage;
+  }
   return body || `Confluence request failed (${status}).`;
+}
+
+function parseConfluenceJsonMessage(body: string): string | undefined {
+  try {
+    const payload = JSON.parse(body) as { message?: string };
+    const message = payload.message?.trim();
+    if (!message) {
+      return undefined;
+    }
+    if (/GoneException|deprecated endpoint has been removed/i.test(message)) {
+      return "Confluence search API is unavailable on this site. Try again after reconnecting Atlassian.";
+    }
+    return message;
+  } catch {
+    return undefined;
+  }
 }
 
 function shouldRetryOnPlatformApi(status: number, body: string): boolean {
@@ -106,14 +135,9 @@ export class ConfluenceClient {
     }
     try {
       if (this.oauthMode) {
-        // search:confluence for CQL search; read:confluence-space.summary for space listing.
-        try {
-          await this.request<{ results?: unknown[] }>("/content/search", {
-            query: { cql: "type=page", limit: "1" }
-          });
-        } catch {
-          await this.request<{ results?: unknown[] }>("/space", { query: { limit: "1" } });
-        }
+        await this.request<{ results?: unknown[] }>("/search", {
+          query: { cql: "type=page", limit: "1" }
+        });
       } else {
         await this.request<{ displayName?: string }>("/user/current");
       }
@@ -129,27 +153,77 @@ export class ConfluenceClient {
   public async searchPages(cql: string, limit = 20): Promise<ConfluencePage[]> {
     const result = await this.request<{
       results?: Array<{
-        id: string;
+        content?: {
+          id: string;
+          title?: string;
+          history?: { lastUpdated?: { when?: string } };
+          _links?: { webui?: string; base?: string; self?: string };
+        };
         title?: string;
         excerpt?: string;
-        history?: { lastUpdated?: { when?: string } };
-        _links?: { webui?: string; base?: string; self?: string };
+        url?: string;
+        lastModified?: string;
       }>;
-    }>("/content/search", {
+    }>("/search", {
       query: {
         cql,
-        limit: String(Math.min(limit, 50)),
-        expand: "history"
+        limit: String(Math.min(limit, 50))
       }
     });
 
-    return (result.results ?? []).map((page) => ({
-      id: page.id,
-      title: page.title ?? "Untitled",
-      excerpt: page.excerpt,
-      updated: page.history?.lastUpdated?.when ?? new Date(0).toISOString(),
-      htmlUrl: this.buildPageHtmlUrl(page.id, page._links)
-    }));
+    return (result.results ?? [])
+      .map((item) => {
+        const content = item.content;
+        const id = content?.id ?? "";
+        const title = content?.title ?? item.title ?? "Untitled";
+        return {
+          id,
+          title,
+          excerpt: item.excerpt,
+          updated:
+            item.lastModified ??
+            content?.history?.lastUpdated?.when ??
+            new Date(0).toISOString(),
+          htmlUrl: item.url ?? this.buildPageHtmlUrl(id, content?._links)
+        };
+      })
+      .filter((page) => page.id);
+  }
+
+  public async listSpaces(options?: { limit?: number }): Promise<ConfluenceSpace[]> {
+    const limit = Math.min(options?.limit ?? 500, 1000);
+    const spaces: ConfluenceSpace[] = [];
+    let start = 0;
+
+    while (spaces.length < limit) {
+      const pageSize = Math.min(50, limit - spaces.length);
+      const result = await this.request<{
+        results?: Array<{ id?: string | number; key?: string; name?: string }>;
+        size?: number;
+      }>("/space", {
+        query: {
+          start: String(start),
+          limit: String(pageSize)
+        }
+      });
+
+      const batch = result.results ?? [];
+      for (const space of batch) {
+        const id = space.id !== undefined ? String(space.id).trim() : "";
+        const key = typeof space.key === "string" ? space.key.trim() : "";
+        const name = typeof space.name === "string" ? space.name.trim() : "";
+        if (id && key && name) {
+          spaces.push({ id, key, name });
+        }
+      }
+
+      if (batch.length < pageSize) {
+        break;
+      }
+      start += batch.length;
+    }
+
+    return spaces;
   }
 
   private buildPageHtmlUrl(

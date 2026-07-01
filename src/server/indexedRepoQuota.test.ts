@@ -3,7 +3,8 @@ import {
   FREE_MAX_INDEXED_REPOS,
   autoIndexOnCatalogSync,
   getIndexedRepoQuota,
-  indexedRepoLimitForPlan
+  indexedRepoLimitForPlan,
+  reconcileIndexedRepoQuota
 } from "./indexedRepoQuota";
 import type { OrgStore } from "./orgStore";
 
@@ -41,9 +42,33 @@ async function testFreeOrgCatalogCapped() {
   assert.equal(autoIndexOnCatalogSync("pro"), true);
 }
 
+async function testReconcileFreeOrgTrimsExcess() {
+  const upserts: Array<{ repoId: string; patch: { lightningEnabled: boolean } }> = [];
+  const orgStore = {
+    listOrgRepos: async () => [
+      { repoId: "github:a/old", lightningEnabled: true, lastIndexedAt: "2026-01-01T00:00:00.000Z" },
+      { repoId: "github:a/new1", lightningEnabled: true, lastIndexedAt: "2026-06-01T00:00:00.000Z" },
+      { repoId: "github:a/new2", lightningEnabled: true, lastIndexedAt: "2026-06-02T00:00:00.000Z" },
+      { repoId: "github:a/new3", lightningEnabled: true, lastIndexedAt: "2026-06-03T00:00:00.000Z" }
+    ],
+    upsertOrgRepo: async (_orgId: string, repoId: string, patch: { lightningEnabled: boolean }) => {
+      upserts.push({ repoId, patch });
+      return { repoId, ...patch };
+    }
+  } as unknown as OrgStore;
+
+  const result = await reconcileIndexedRepoQuota(orgStore, "org-free", "free");
+  assert.equal(result.trimmed, 1);
+  assert.deepEqual(result.disabledRepoIds, ["github:a/old"]);
+  assert.equal(upserts.length, 1);
+  assert.equal(upserts[0]?.repoId, "github:a/old");
+  assert.equal(upserts[0]?.patch.lightningEnabled, false);
+}
+
 async function run() {
   await testProOrgCatalogUncapped();
   await testFreeOrgCatalogCapped();
+  await testReconcileFreeOrgTrimsExcess();
   console.log("indexedRepoQuota.test.ts: ok");
 }
 

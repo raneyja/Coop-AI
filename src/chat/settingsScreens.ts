@@ -1,6 +1,8 @@
 export type SettingsScreen =
   | "hub"
   | "account"
+  | "plan-usage"
+  | "indexing"
   | "tools"
   | "code-host-github"
   | "code-host-gitlab"
@@ -29,6 +31,8 @@ export type SettingsDetailScreen = Exclude<SettingsScreen, "hub">;
 
 export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   account: "Account",
+  "plan-usage": "Plan & Usage",
+  indexing: "Indexing",
   tools: "Tools",
   "code-host-github": "GitHub",
   "code-host-gitlab": "GitLab",

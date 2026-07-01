@@ -15,7 +15,7 @@ export default function IntegrationsPage() {
   } = useIntegrations();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="admin-page-title">Integrations</h1>
         <p className="mt-1 text-sm text-coop-muted">
@@ -32,6 +32,7 @@ export default function IntegrationsPage() {
         error={error}
         onRefresh={(provider) => void load({ provider })}
         showFullPageLink={false}
+        hideIntro
       />
     </div>
   );

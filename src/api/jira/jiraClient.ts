@@ -37,6 +37,12 @@ export type JiraEpic = {
   htmlUrl: string;
 };
 
+export type JiraProject = {
+  id: string;
+  key: string;
+  name: string;
+};
+
 export type JiraTransition = {
   date: string;
   fromStatus?: string;
@@ -173,6 +179,36 @@ export class JiraClient {
     });
 
     return (result.issues ?? []).map((issue) => mapJiraIssue(issue, this.siteBaseUrl));
+  }
+
+  public async listProjects(options?: { limit?: number }): Promise<JiraProject[]> {
+    const limit = Math.min(options?.limit ?? 500, 1000);
+    const projects: JiraProject[] = [];
+    let startAt = 0;
+
+    while (projects.length < limit) {
+      const pageSize = Math.min(50, limit - projects.length);
+      const result = await this.request<{
+        values?: Array<{ id?: string; key?: string; name?: string }>;
+        isLast?: boolean;
+      }>(`/project/search?startAt=${startAt}&maxResults=${pageSize}&orderBy=name`);
+
+      for (const project of result.values ?? []) {
+        const id = typeof project.id === "string" ? project.id.trim() : "";
+        const key = typeof project.key === "string" ? project.key.trim() : "";
+        const name = typeof project.name === "string" ? project.name.trim() : "";
+        if (id && key && name) {
+          projects.push({ id, key, name });
+        }
+      }
+
+      if (result.isLast || !result.values?.length) {
+        break;
+      }
+      startAt += result.values.length;
+    }
+
+    return projects;
   }
 
   public async getTransitionHistory(issueKey: string): Promise<JiraTransition[]> {

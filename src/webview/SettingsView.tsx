@@ -9,6 +9,8 @@ import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
 import type { OrgCollectionSummary, SettingsStatePayload, GithubRepoOption, RepoContext } from "../chat/types";
+import type { LightningModeState } from "../indexing/lightningTypes";
+import type { SettingsLightningSummary } from "./components/settings/SettingsHub";
 import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
 import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 
@@ -79,7 +81,8 @@ type InboundMessage =
         saving?: boolean;
         error?: string;
       };
-    };
+    }
+  | { type: "lightning:state"; payload: LightningModeState };
 
 const DEFAULT_PREFS: Preferences = {
   model: "claude-sonnet-4-6",
@@ -120,6 +123,7 @@ const DEFAULT_PREFS: Preferences = {
   confluenceBaseUrl: "https://your-domain.atlassian.net/wiki",
   searchScopeMode: "repo",
   searchCollectionId: "",
+  timezone: "America/Los_Angeles",
   identityDirectory: { ...EMPTY_IDENTITY_DIRECTORY }
 };
 
@@ -184,6 +188,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     loading: false,
     saving: false
   });
+  const [lightningState, setLightningState] = useState<SettingsLightningSummary | null>(null);
   const activeTestRef = useRef<SettingsTestKey | null>(null);
   const activeRefreshRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
@@ -450,6 +455,14 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             loading: Boolean(message.payload.loading),
             saving: Boolean(message.payload.saving),
             error: message.payload.error
+          });
+          break;
+        case "lightning:state":
+          setLightningState({
+            readyRepos: message.payload.readyRepos,
+            indexingRepos: message.payload.indexingRepos,
+            indexedRepoCount: message.payload.indexedRepoCount,
+            indexedRepoLimit: message.payload.indexedRepoLimit
           });
           break;
         default:
@@ -837,6 +850,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onLoadWorkspaceRepos={() => post({ type: "workspace:repos:load" })}
         onSaveWorkspaceRepos={(repoIds) => post({ type: "workspace:repos:save", payload: { repoIds } })}
         workspacePickerState={workspacePickerState}
+        lightningState={lightningState}
       />
       </div>
       <PromptLibraryModal
@@ -845,6 +859,10 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         pinnedIds={promptLibrary.pinnedIds}
         hasWorkspace={promptLibrary.hasWorkspace}
         onClose={() => setPromptModalOpen(false)}
+        onRun={(id) => {
+          setPromptModalOpen(false);
+          post({ type: "prompts:run", payload: { id } });
+        }}
         onCommit={(payload) =>
           post({
             type: "prompts:commit",

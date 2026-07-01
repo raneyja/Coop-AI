@@ -21,7 +21,7 @@ import {
   resolveAuthContext,
   resolveOrgPlanFromDb
 } from "./authMiddleware";
-import { requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
+import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
 import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg, assessGithubConnection } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
@@ -36,8 +36,7 @@ import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore"
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
-import { getIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
-import { ORG_INDEXING_PLANS } from "./planGates";
+import { getIndexedRepoQuota, reconcileIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
 import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceStore";
 import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
@@ -279,8 +278,15 @@ export async function handleOrgApiRequest(
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }
-    const repos = await enrichReposWithIndexProgress(await deps.orgStore.listOrgRepos(auth!.orgId));
-    writeJson(response, 200, { repos });
+    const plan = (await deps.orgStore!.getOrganization(auth!.orgId))?.plan ?? auth!.plan ?? "free";
+    const quotaReconciled = await reconcileIndexedRepoQuota(deps.orgStore!, auth!.orgId, plan);
+    const repos = await enrichReposWithIndexProgress(await deps.orgStore!.listOrgRepos(auth!.orgId));
+    writeJson(response, 200, {
+      repos,
+      ...(quotaReconciled.trimmed > 0
+        ? { quotaReconciled: { trimmed: quotaReconciled.trimmed } }
+        : {})
+    });
     return true;
   }
 

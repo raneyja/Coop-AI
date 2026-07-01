@@ -106,7 +106,7 @@ export type ReindexEmbeddingFailuresResult = {
   skipped: number;
 };
 
-/** Queue fresh index jobs for repos that reached ready but embeddings failed. */
+/** Queue fresh index jobs for repos that reached ready but embeddings failed or were skipped. */
 export async function reindexEmbeddingFailures(
   orgId: string,
   deps: { orgStore: OrgStore; jobQueue: JobQueue }
@@ -116,7 +116,7 @@ export async function reindexEmbeddingFailures(
     (repo) =>
       repo.lightningEnabled &&
       repo.indexStatus === "ready" &&
-      repo.embeddingStatus === "failed"
+      (repo.embeddingStatus === "failed" || repo.embeddingStatus === "skipped")
   );
 
   let queued = 0;
@@ -154,7 +154,7 @@ export async function resumeEmbeddingFailuresForAllOrgs(deps: {
      FROM org_repos
      WHERE lightning_enabled
        AND index_status = 'ready'
-       AND embedding_status = 'failed'`
+       AND embedding_status IN ('failed', 'skipped')`
   );
 
   let discovered = 0;

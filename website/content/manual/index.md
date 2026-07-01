@@ -279,13 +279,21 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 ### Saved prompts in the sidebar
 
-Your top pinned prompts appear as pills in the chat composer footer. Click a pill to run the template with current file/workspace context.
+Click **Prompts** in the chat composer footer to open a dropdown of your pinned prompts. Select a prompt to insert it into the composer with current file and workspace context filled in. Press **Send** when you are ready.
+
+If you already have text in the composer, the saved prompt is appended below it.
 
 ### Pin your top 5
 
-1. **Extension UI** — Open **Settings → Preferences → Prompt library**.
-2. Pin up to **5 prompts** — they appear in the composer footer.
-3. Click **See all** to open the full library modal.
+1. **Extension UI** — Open **Settings → Preferences → Prompt library**, or click **See all prompts…** in the **Prompts** dropdown.
+2. Pin up to **5 prompts** — they appear in the **Prompts** dropdown.
+3. Drag pinned rows to reorder them. Click **Use** on any row to insert it into the composer.
+
+### Save a prompt from chat
+
+1. **Extension UI** — Type a prompt in the chat composer.
+2. Click **Save to library** (shown when you have a workspace open and text in the composer).
+3. Name the prompt and click **Save**. Coop writes it to `.coop/prompts.json` and links a quick action automatically when the text starts with a slash command like `/understand`.
 
 ### Workspace prompts file
 

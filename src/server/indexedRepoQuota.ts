@@ -77,3 +77,59 @@ export async function requireCanEnableMoreRepos(
   writeRepoLimitForbidden(response, plan);
   return false;
 }
+
+export type ReconcileIndexedRepoQuotaResult = {
+  trimmed: number;
+  disabledRepoIds: string[];
+};
+
+/**
+ * Free-plan safety net: if more than the plan cap are Deep-Indexed (legacy data, plan
+ * downgrade, or pre-cap testing), disable the excess. Keeps the most recently indexed repos.
+ */
+export async function reconcileIndexedRepoQuota(
+  orgStore: OrgStore,
+  orgId: string,
+  plan: OrgPlan
+): Promise<ReconcileIndexedRepoQuotaResult> {
+  const limit = indexedRepoLimitForPlan(plan);
+  if (limit === null) {
+    return { trimmed: 0, disabledRepoIds: [] };
+  }
+
+  const repos = await orgStore.listOrgRepos(orgId);
+  const enabled = repos.filter((repo) => repo.lightningEnabled);
+  if (enabled.length <= limit) {
+    return { trimmed: 0, disabledRepoIds: [] };
+  }
+
+  const sorted = [...enabled].sort((a, b) => {
+    const aTime = a.lastIndexedAt ? new Date(a.lastIndexedAt).getTime() : 0;
+    const bTime = b.lastIndexedAt ? new Date(b.lastIndexedAt).getTime() : 0;
+    if (bTime !== aTime) {
+      return bTime - aTime;
+    }
+    return a.repoId.localeCompare(b.repoId);
+  });
+
+  const keep = new Set(sorted.slice(0, limit).map((repo) => repo.repoId));
+  const disabledRepoIds: string[] = [];
+  for (const repo of enabled) {
+    if (keep.has(repo.repoId)) {
+      continue;
+    }
+    await orgStore.upsertOrgRepo(orgId, repo.repoId, {
+      lightningEnabled: false,
+      indexStatus: "disabled"
+    });
+    disabledRepoIds.push(repo.repoId);
+  }
+
+  if (disabledRepoIds.length > 0) {
+    console.log(
+      `[indexed-repo-quota] org=${orgId} plan=${plan} disabled ${disabledRepoIds.length} excess Deep-Indexed repos (limit ${limit})`
+    );
+  }
+
+  return { trimmed: disabledRepoIds.length, disabledRepoIds };
+}

@@ -158,7 +158,12 @@ export type UserPreferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  /** IANA timezone id; defaults to US Pacific (PST). */
+  timezone?: string;
   quotaCredits?: {
+    usedTokens?: number;
+    limitTokens?: number;
+    remainingTokens?: number;
     usedCredits: number;
     limitCredits: number;
     remainingCredits: number;
@@ -452,8 +457,19 @@ export type WebviewOutbound =
   | { type: "chat:delta"; payload: { chunk: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage } }
   | { type: "chat:error"; payload: { message: string } }
+  | {
+      type: "chat:quota-exceeded";
+      payload: {
+        resetsAt: string;
+        upgradeUrl: string;
+        timezone?: string;
+        retryAfterMs?: number;
+      };
+    }
+  | { type: "chat:quota-cleared" }
   | { type: "chat:usage"; payload: ChatUsagePayload }
   | { type: "prompts:list"; payload: PromptLibraryListPayload }
+  | { type: "prompts:insert"; payload: { text: string; actionId?: string } }
   | {
       type: "repo:tree";
       payload: {

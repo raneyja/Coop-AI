@@ -212,7 +212,7 @@ export async function handleChatThreadsApiRequest(
       if (!threadUserId && deps.userStore) {
         const ownerEmail = String(body.ownerEmail ?? "").trim();
         if (ownerEmail) {
-          const owner = await deps.userStore.findActiveUserByOrgEmail(auth.orgId, ownerEmail);
+          const owner = await deps.userStore.findActiveUserByEmail(ownerEmail);
           if (owner && owner.orgId === auth.orgId) {
             threadUserId = owner.id;
           }

@@ -19,7 +19,7 @@ export type UserWorkspaceQuota = {
 };
 
 export function workspaceRepoLimitForPlan(plan: OrgPlan): number | null {
-  if (plan === "pro" || plan === "enterprise") {
+  if (plan === "free" || plan === "pro" || plan === "enterprise") {
     return USER_WORKSPACE_REPO_LIMIT;
   }
   return null;

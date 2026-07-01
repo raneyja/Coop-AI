@@ -464,6 +464,28 @@
           "default": "",
           "description": "Collection id when searchScope.mode is collection."
         },
+        "coopAI.timezone": {
+          "type": "string",
+          "default": "America/Los_Angeles",
+          "enum": [
+            "America/Los_Angeles",
+            "America/Denver",
+            "America/Chicago",
+            "America/New_York",
+            "America/Anchorage",
+            "Pacific/Honolulu",
+            "Europe/London",
+            "Europe/Dublin",
+            "Europe/Paris",
+            "Europe/Berlin",
+            "Europe/Amsterdam",
+            "Europe/Rome",
+            "Europe/Madrid",
+            "Europe/Athens",
+            "Europe/Helsinki"
+          ],
+          "description": "Timezone for Coop timestamps and quota reset labels. US options use PST/MST/CST/EST; European options use GMT offsets."
+        },
         "coopAI.defaultCodeHost": {
           "type": "string",
           "enum": [
@@ -722,12 +744,12 @@
             "enterprise"
           ],
           "default": "free",
-          "description": "Subscription plan (devMode only). Lightning Mode requires Pro or Enterprise from the API in production."
+          "description": "Subscription plan (devMode only). Production plan comes from the Coop API (/v1/me)."
         },
         "coopAI.lightning.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable Deep-Code Graph indexing (Pro plan). When false, chat uses local file and integration context only."
+          "description": "Enable Deep-Code Graph indexing. When false, chat uses local file and integration context only."
         },
         "coopAI.lightning.autoIndexOnEnable": {
           "type": "boolean",
@@ -796,7 +818,9 @@
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
+    "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
+    "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineCompletionApi.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",

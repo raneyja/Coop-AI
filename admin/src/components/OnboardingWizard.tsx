@@ -272,7 +272,6 @@ export function OnboardingWizard({
                 onRefresh={(provider) => void load({ provider })}
                 compact
                 showFullPageLink={false}
-                hideScopePanel
               />
             </div>
           )}
@@ -287,7 +286,6 @@ export function OnboardingWizard({
               </div>
               <OnboardingScopeStep
                 integrations={integrations}
-                orgPlan={orgPlan}
                 onRefresh={(provider) => void load({ provider })}
               />
             </div>

@@ -34,6 +34,7 @@ import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
 import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import { requireRemoteCodePlan } from "../server/planGates";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import type { GitHubAppService } from "../server/githubAppService";
@@ -59,7 +60,7 @@ import { handleSlackAppApiRequest } from "../server/slackAppApi";
 import { loadAtlassianAppConfig } from "../server/atlassianAppConfig";
 import { createAtlassianAppService } from "../server/atlassianAppService";
 import { handleAtlassianAppApiRequest } from "../server/atlassianAppApi";
-import { loadNotionAppConfig } from "../server/notionAppConfig";
+import { loadNotionAppConfig, isNotionOAuthConfig } from "../server/notionAppConfig";
 import { createNotionAppService } from "../server/notionAppService";
 import { handleNotionAppApiRequest } from "../server/notionAppApi";
 import { loadGoogleDocsAppConfig } from "../server/googleDocsAppConfig";
@@ -228,7 +229,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
   const notionAppConfig = loadNotionAppConfig();
   const notionApp =
-    notionAppConfig && serverConfig.credentialsEncryptionKey
+    notionAppConfig &&
+    isNotionOAuthConfig(notionAppConfig) &&
+    serverConfig.credentialsEncryptionKey
       ? createNotionAppService(
           notionAppConfig.clientId,
           notionAppConfig.clientSecret,
@@ -662,7 +665,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           writeJson(response, 503, { error: "organization database not configured" });
           return;
         }
-        if (!(await requireOrgPlan(orgStore, auth!, response, "pro", "enterprise"))) {
+        if (!(await requireRemoteCodePlan(orgStore, auth!, response))) {
           return;
         }
         const [repoId, query] = parseGraphPath(parsed.pathname);

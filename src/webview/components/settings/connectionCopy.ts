@@ -137,24 +137,81 @@ export function displayOrgName(prefs: Pick<Preferences, "orgName">): string | un
   return name;
 }
 
-export function accountHubSubtitle(prefs: Preferences): string {
+export function displayPlanLabel(prefs: Pick<Preferences, "plan">): string {
+  switch (prefs.plan) {
+    case "enterprise":
+      return "Enterprise";
+    case "pro":
+      return "Pro";
+    default:
+      return "Developer (free)";
+  }
+}
+
+export function displayIdentitySubtitle(prefs: Preferences): string | undefined {
+  if (!prefs.hasApiKey) {
+    return undefined;
+  }
   const orgName = displayOrgName(prefs);
+  const plan = displayPlanLabel(prefs);
+  return orgName ? `${orgName} · ${plan}` : plan;
+}
+
+export function accountHubSubtitle(prefs: Preferences): string {
   if (!prefs.hasApiKey) {
     return "Not signed in";
   }
-  if (prefs.plan === "free" && prefs.quotaCredits) {
-    const { remainingCredits, limitCredits } = prefs.quotaCredits;
-    const credits = `${remainingCredits} of ${limitCredits} AI credits left`;
-    return orgName ? `${orgName} · ${credits}` : credits;
-  }
-  if (orgName) {
-    return orgName;
-  }
   try {
-    return `Signed in · ${new URL(prefs.apiBaseUrl).host}`;
+    return `API key configured · ${new URL(prefs.apiBaseUrl).host}`;
   } catch {
-    return "Signed in";
+    return "API key configured";
   }
+}
+
+export function formatQuotaUsageSummary(quota: {
+  usedCredits: number;
+  limitCredits: number;
+  remainingCredits: number;
+  windowHours: number;
+}): string {
+  const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
+  return `${used}K of ${quota.limitCredits}K AI credits used - ${quota.windowHours}-hour rolling window`;
+}
+
+export function planUsageHubSubtitle(prefs: Preferences): string {
+  if (!prefs.hasApiKey) {
+    return "Sign in to view plan";
+  }
+  const plan = displayPlanLabel(prefs);
+  if (prefs.plan === "free" && prefs.quotaCredits) {
+    const used =
+      prefs.quotaCredits.usedCredits ??
+      Math.max(0, prefs.quotaCredits.limitCredits - prefs.quotaCredits.remainingCredits);
+    return `${plan} · ${used}K of ${prefs.quotaCredits.limitCredits}K used`;
+  }
+  return plan;
+}
+
+export function indexingHubSubtitle(
+  prefs: Preferences,
+  lightningState?: { readyRepos: number; indexingRepos: number; indexedRepoCount?: number; indexedRepoLimit?: number | null } | null
+): string {
+  if (!prefs.hasApiKey) {
+    return "Sign in to view indexing";
+  }
+  if (!lightningState) {
+    return "Loading status…";
+  }
+  if (lightningState.indexingRepos > 0) {
+    return `${lightningState.readyRepos} ready · ${lightningState.indexingRepos} building`;
+  }
+  if (lightningState.indexedRepoLimit != null && lightningState.indexedRepoCount != null) {
+    return `${lightningState.indexedRepoCount}/${lightningState.indexedRepoLimit} Deep-Indexed repos`;
+  }
+  if (lightningState.readyRepos > 0) {
+    return `${lightningState.readyRepos} ready`;
+  }
+  return "No repos indexed yet";
 }
 
 export function preferencesHubSubtitle(prefs: Preferences, pinnedCount: number): string {

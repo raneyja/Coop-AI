@@ -14,59 +14,23 @@ export type InviteEmailParams = {
   invitedBy?: string;
 };
 
+type PlanWelcomeContent = {
+  subject: string;
+  html: string;
+  text: string;
+};
+
 export class EmailService {
   public constructor(private readonly config: BillingConfig) {}
 
   public async sendWelcome(params: WelcomeEmailParams): Promise<void> {
-    const subject = `Welcome to CoopAI — ${params.orgName}`;
-    const loginUrl = params.adminPortalUrl;
-    const html = `
-<!DOCTYPE html>
-<html lang="en">
-<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#24292f;line-height:1.5;">
-  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-    <div style="background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:32px;">
-      <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
-      <p style="margin:0 0 16px;font-size:16px;"><strong>${escapeHtml(params.orgName)}</strong> is set up on CoopAI Pro. Use the admin portal to connect tools, invite your team, and manage billing.</p>
-      <p style="margin:0 0 24px;">
-        <a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#3FB950;color:#0D1117;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:600;font-size:14px;">
-          Open admin portal
-        </a>
-      </p>
-      <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Your admin API key</p>
-      <p style="margin:0 0 8px;font-size:13px;color:#57606a;">Copy this key now — it is shown once and cannot be retrieved later.</p>
-      <pre style="margin:0 0 24px;background:#f6f8fa;padding:16px;border-radius:6px;border:1px solid #d0d7de;word-break:break-all;font-size:13px;white-space:pre-wrap;">${escapeHtml(params.apiKey)}</pre>
-      <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Next steps</p>
-      <ol style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
-        <li style="margin-bottom:6px;">Sign in to the admin portal with the API key above.</li>
-        <li style="margin-bottom:6px;">Connect GitHub, Slack, and other tools in <strong>Integrations</strong>.</li>
-        <li style="margin-bottom:6px;">Invite teammates from <strong>Users</strong>.</li>
-        <li>Have developers install the CoopAI VS Code extension and sign in.</li>
-      </ol>
-    </div>
-    <p style="margin:24px 0 0;font-size:12px;color:#57606a;text-align:center;">
-      Didn't request this? Contact <a href="mailto:hello@coop-ai.dev" style="color:#0969da;">hello@coop-ai.dev</a>
-    </p>
-  </div>
-</body>
-</html>`;
-    const text = [
-      `${params.orgName} is set up on CoopAI Pro.`,
-      "",
-      "Open admin portal:",
-      loginUrl,
-      "",
-      "Your admin API key (shown once — copy now):",
-      params.apiKey,
-      "",
-      "Next steps:",
-      "1. Sign in to the admin portal with the API key above.",
-      "2. Connect GitHub, Slack, and other tools in Integrations.",
-      "3. Invite teammates from Users.",
-      "4. Have developers install the CoopAI VS Code extension and sign in."
-    ].join("\n");
+    const content = buildPlanWelcomeEmail(params, "pro");
+    await this.send(params.to, content.subject, content.html, content.text);
+  }
 
-    await this.send(params.to, subject, html, text);
+  public async sendFreeSignupWelcome(params: WelcomeEmailParams): Promise<void> {
+    const content = buildPlanWelcomeEmail(params, "free");
+    await this.send(params.to, content.subject, content.html, content.text);
   }
 
   public async sendInvite(params: InviteEmailParams): Promise<void> {
@@ -113,4 +77,62 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free"): PlanWelcomeContent {
+  const loginUrl = params.adminPortalUrl;
+  const planLabel = plan === "pro" ? "CoopAI Pro" : "CoopAI Free";
+  const intro =
+    plan === "pro"
+      ? `<strong>${escapeHtml(params.orgName)}</strong> is set up on CoopAI Pro. Use the admin portal to connect tools, invite your team, and manage billing.`
+      : `<strong>${escapeHtml(params.orgName)}</strong> is set up on CoopAI Free. Use the admin portal to connect tools and manage your workspace.`;
+  const subject =
+    plan === "pro" ? `Welcome to CoopAI — ${params.orgName}` : `Welcome to CoopAI Free — ${params.orgName}`;
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#24292f;line-height:1.5;">
+  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+    <div style="background:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
+      <p style="margin:0 0 16px;font-size:16px;">${intro}</p>
+      <p style="margin:0 0 24px;">
+        <a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#3FB950;color:#0D1117;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:600;font-size:14px;">
+          Open admin portal
+        </a>
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Your admin API key</p>
+      <p style="margin:0 0 8px;font-size:13px;color:#57606a;">Copy this key now — it is shown once and cannot be retrieved later.</p>
+      <pre style="margin:0 0 24px;background:#f6f8fa;padding:16px;border-radius:6px;border:1px solid #d0d7de;word-break:break-all;font-size:13px;white-space:pre-wrap;">${escapeHtml(params.apiKey)}</pre>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Next steps</p>
+      <ol style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
+        <li style="margin-bottom:6px;">Sign in to the admin portal with the API key above.</li>
+        <li style="margin-bottom:6px;">Connect GitHub, Slack, and other tools in <strong>Integrations</strong>.</li>
+        <li style="margin-bottom:6px;">Invite teammates from <strong>Users</strong>.</li>
+        <li>Have developers install the CoopAI VS Code extension and sign in.</li>
+      </ol>
+    </div>
+    <p style="margin:24px 0 0;font-size:12px;color:#57606a;text-align:center;">
+      Didn't request this? Contact <a href="mailto:hello@coop-ai.dev" style="color:#0969da;">hello@coop-ai.dev</a>
+    </p>
+  </div>
+</body>
+</html>`;
+  const text = [
+    `${params.orgName} is set up on ${planLabel}.`,
+    "",
+    "Open admin portal:",
+    loginUrl,
+    "",
+    "Your admin API key (shown once — copy now):",
+    params.apiKey,
+    "",
+    "Next steps:",
+    "1. Sign in to the admin portal with the API key above.",
+    "2. Connect GitHub, Slack, and other tools in Integrations.",
+    "3. Invite teammates from Users.",
+    "4. Have developers install the CoopAI VS Code extension and sign in."
+  ].join("\n");
+
+  return { subject, html, text };
 }

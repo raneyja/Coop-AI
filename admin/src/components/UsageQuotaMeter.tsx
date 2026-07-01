@@ -7,7 +7,7 @@ type UsageQuotaMeterProps = {
   showUpgradeLink?: boolean;
 };
 
-function formatTokenCount(value: number | undefined): string {
+function formatCreditCount(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return "—";
   }
@@ -65,7 +65,11 @@ function resolveTokenFields(snapshot?: QuotaSnapshot): {
 export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: UsageQuotaMeterProps) {
   const { usedTokens, limitTokens, remainingTokens } = resolveTokenFields(snapshot);
   const resetLabel = formatResetTime(snapshot?.resetsAt);
-  const usedPercent = percentUsed(usedTokens, limitTokens);
+  const exhausted = typeof remainingTokens === "number" && remainingTokens <= 0;
+  const displayUsed =
+    exhausted && typeof limitTokens === "number" ? limitTokens : (usedTokens ?? 0);
+  const displayRemaining = exhausted ? 0 : (remainingTokens ?? 0);
+  const usedPercent = percentUsed(displayUsed, limitTokens);
   const unlimited = Boolean(snapshot?.unlimited);
   const windowHours = snapshot?.windowHours ?? 5;
 
@@ -75,8 +79,8 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
         <div>
           <h2 className="admin-section-label">Usage quota</h2>
           <p className="mt-1 text-sm text-coop-muted">
-            Free plan includes {formatTokenCount(limitTokens ?? 80_000)} tokens per {windowHours}-hour window (GPT-4o
-            mini).
+            Free plan includes {formatCreditCount(limitTokens ?? 80_000)} AI credits per {windowHours}-hour window
+            (GPT-4o mini).
           </p>
         </div>
         {showUpgradeLink ? (
@@ -95,13 +99,16 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
       ) : unlimited ? (
         <div className="space-y-2">
           <p className="text-2xl font-semibold text-white">Unlimited usage</p>
-          <p className="text-sm text-coop-muted">Your current plan does not enforce a token cap.</p>
+          <p className="text-sm text-coop-muted">Your current plan does not enforce an AI credit cap.</p>
         </div>
       ) : typeof limitTokens === "number" ? (
         <div className="space-y-2">
           <p className="text-2xl font-semibold tabular-nums text-white">
-            {formatTokenCount(usedTokens ?? 0)}
-            <span className="text-base font-medium text-coop-muted"> / {formatTokenCount(limitTokens)} tokens</span>
+            {formatCreditCount(displayUsed)}
+            <span className="text-base font-medium text-coop-muted">
+              {" "}
+              / {formatCreditCount(limitTokens)} AI credits
+            </span>
           </p>
           <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div
@@ -110,13 +117,13 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-coop-muted">
-            <span>{formatTokenCount(remainingTokens)} tokens remaining</span>
+            <span>{formatCreditCount(displayRemaining)} AI credits remaining</span>
             <span>{Math.round(usedPercent)}% used</span>
           </div>
           <p className="text-xs text-coop-muted">
-            {resetLabel
-              ? `Account pauses when exhausted · resets at ${resetLabel}`
-              : `Account pauses when exhausted · resets every ${windowHours} hours`}
+            {exhausted && resetLabel
+              ? `Account paused · resets at ${resetLabel}`
+              : "Account pauses when exhausted"}
           </p>
         </div>
       ) : (

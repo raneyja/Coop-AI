@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PromptLibraryItem } from "./promptLibraryTypes";
 
 type PromptLibraryRowBaseProps = {
@@ -9,6 +10,8 @@ type PromptLibraryRowBaseProps = {
   dragging?: boolean;
   dropTarget?: boolean;
   onSelect?: (prompt: PromptLibraryItem) => void;
+  onRun?: (id: string) => void;
+  runDisabled?: boolean;
   onTogglePin?: (id: string) => void;
   onEdit?: (prompt: PromptLibraryItem) => void;
   onDelete?: (id: string) => void;
@@ -65,20 +68,58 @@ function MoreIcon(): React.ReactElement {
 }
 
 type RowMenuProps = {
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
   prompt: PromptLibraryItem;
   onEdit?: (prompt: PromptLibraryItem) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
 };
 
-function RowMenu({ prompt, onEdit, onDelete, onClose }: RowMenuProps): React.ReactElement {
+function RowMenu({ anchorRef, prompt, onEdit, onDelete, onClose }: RowMenuProps): React.ReactElement | null {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>();
+
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const anchorRect = anchor.getBoundingClientRect();
+      const menuWidth = menuRef.current?.offsetWidth ?? 120;
+      const menuHeight = menuRef.current?.offsetHeight ?? 72;
+      const margin = 4;
+      const spaceBelow = window.innerHeight - anchorRect.bottom;
+      const openUpward = spaceBelow < menuHeight + margin && anchorRect.top > menuHeight + margin;
+
+      setMenuStyle({
+        position: "fixed",
+        left: Math.max(margin, anchorRect.right - menuWidth),
+        top: openUpward ? undefined : anchorRect.bottom + margin,
+        bottom: openUpward ? window.innerHeight - anchorRect.top + margin : undefined,
+        zIndex: 10000
+      });
+    };
+
+    updatePosition();
+    const frame = requestAnimationFrame(updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [anchorRef]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        onClose();
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target) || anchorRef.current?.contains(target)) {
+        return;
       }
+      onClose();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -91,10 +132,15 @@ function RowMenu({ prompt, onEdit, onDelete, onClose }: RowMenuProps): React.Rea
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [anchorRef, onClose]);
 
-  return (
-    <div ref={menuRef} className="coop-prompt-row-menu" role="menu">
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="coop-prompt-row-menu coop-prompt-row-menu--floating"
+      style={menuStyle}
+      role="menu"
+    >
       {onEdit ? (
         <button
           type="button"
@@ -121,7 +167,8 @@ function RowMenu({ prompt, onEdit, onDelete, onClose }: RowMenuProps): React.Rea
           Delete
         </button>
       ) : null}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -130,10 +177,11 @@ export function PromptLibraryRow(props: PromptLibraryRowProps): React.ReactEleme
     prompt,
     pinned,
     pinnedIndex,
-    pinnedCount,
     dragging,
     dropTarget,
     onSelect,
+    onRun,
+    runDisabled,
     onTogglePin,
     onEdit,
     onDelete,
@@ -147,6 +195,7 @@ export function PromptLibraryRow(props: PromptLibraryRowProps): React.ReactEleme
   const isSettings = props.mode === "settings";
   const isDraggable = pinned && (isManage || isSettings) && pinnedIndex !== undefined;
   const [menuOpen, setMenuOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
 
   const rowClassName = [
     "coop-prompt-modal-row",
@@ -213,6 +262,21 @@ export function PromptLibraryRow(props: PromptLibraryRowProps): React.ReactEleme
 
       {showActions ? (
         <div className="coop-prompt-modal-row-actions">
+          {onRun ? (
+            <button
+              type="button"
+              className="coop-text-btn"
+              disabled={runDisabled}
+              aria-label={`Insert ${prompt.title} into composer`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRun(prompt.id);
+              }}
+            >
+              Use
+            </button>
+          ) : null}
+
           {onTogglePin ? (
             <button
               type="button"
@@ -227,6 +291,7 @@ export function PromptLibraryRow(props: PromptLibraryRowProps): React.ReactEleme
           {(onEdit || onDelete) ? (
             <div className="relative">
               <button
+                ref={moreButtonRef}
                 type="button"
                 className="coop-icon-btn coop-prompt-modal-more-btn"
                 aria-label={`Actions for ${prompt.title}`}
@@ -238,6 +303,7 @@ export function PromptLibraryRow(props: PromptLibraryRowProps): React.ReactEleme
               </button>
               {menuOpen ? (
                 <RowMenu
+                  anchorRef={moreButtonRef}
                   prompt={prompt}
                   onEdit={onEdit}
                   onDelete={onDelete}

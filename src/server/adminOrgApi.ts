@@ -83,7 +83,7 @@ export async function handleAdminOrgRequest(
       writeJson(response, 200, { plan, unlimited: true });
       return true;
     }
-    writeJson(response, 200, { plan, ...snapshot });
+    writeJson(response, 200, { ...snapshot, plan });
     return true;
   }
 

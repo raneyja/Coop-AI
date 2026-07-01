@@ -6,25 +6,41 @@ import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./types"
 import { SETTINGS_SCREEN_TITLES, settingsScreenParentLabel } from "./types";
 import {
   accountHubSubtitle,
+  indexingHubSubtitle,
+  planUsageHubSubtitle,
   toolsHubSubtitle,
-  displayOrgName,
+  displayIdentitySubtitle,
   preferencesHubSubtitle,
   workspaceHubSubtitle
 } from "./subtitles";
 
+export type SettingsLightningSummary = {
+  readyRepos: number;
+  indexingRepos: number;
+  indexedRepoCount?: number;
+  indexedRepoLimit?: number | null;
+};
+
 type SettingsHubProps = {
   prefs: Preferences;
   pinnedCount: number;
+  lightningState?: SettingsLightningSummary | null;
   onNavigate: (screen: SettingsDetailScreen) => void;
 };
 
 const HUB_ROWS: Array<{
   screen: SettingsDetailScreen;
   title: string;
-  subtitle: (prefs: Preferences, pinnedCount: number) => string;
+  subtitle: (prefs: Preferences, pinnedCount: number, lightningState?: SettingsLightningSummary | null) => string;
   configured?: (prefs: Preferences) => boolean | undefined;
 }> = [
   { screen: "account", title: "Account", subtitle: (p) => accountHubSubtitle(p), configured: (p) => p.hasApiKey },
+  {
+    screen: "plan-usage",
+    title: "Plan & Usage",
+    subtitle: (p) => planUsageHubSubtitle(p),
+    configured: (p) => p.hasApiKey
+  },
   {
     screen: "tools",
     title: "Tools",
@@ -32,27 +48,32 @@ const HUB_ROWS: Array<{
   },
   { screen: "workspace", title: "Workspace", subtitle: (p) => workspaceHubSubtitle(p) },
   {
+    screen: "indexing",
+    title: "Indexing",
+    subtitle: (p, _pinned, lightningState) => indexingHubSubtitle(p, lightningState)
+  },
+  {
     screen: "preferences",
     title: "Preferences",
     subtitle: (p, pinned) => preferencesHubSubtitle(p, pinned)
   }
 ];
 
-export function SettingsHub({ prefs, pinnedCount, onNavigate }: SettingsHubProps): React.ReactElement {
+export function SettingsHub({ prefs, pinnedCount, lightningState, onNavigate }: SettingsHubProps): React.ReactElement {
   return (
     <>
       <AdminOnboardingBanner prefs={prefs} />
       <CoopNavList>
-      {HUB_ROWS.map((row) => (
-        <CoopNavRow
-          key={row.screen}
-          title={row.title}
-          subtitle={row.subtitle(prefs, pinnedCount)}
-          configured={row.configured?.(prefs)}
-          onClick={() => onNavigate(row.screen)}
-        />
-      ))}
-    </CoopNavList>
+        {HUB_ROWS.map((row) => (
+          <CoopNavRow
+            key={row.screen}
+            title={row.title}
+            subtitle={row.subtitle(prefs, pinnedCount, lightningState)}
+            configured={row.configured?.(prefs)}
+            onClick={() => onNavigate(row.screen)}
+          />
+        ))}
+      </CoopNavList>
     </>
   );
 }
@@ -72,12 +93,12 @@ export function SettingsNavHeader({
 }: SettingsNavHeaderProps): React.ReactElement {
   const isHub = screen === "hub";
   const title = isHub ? "Settings" : SETTINGS_SCREEN_TITLES[screen];
-  const orgName = isHub ? displayOrgName(prefs) : undefined;
+  const identitySubtitle = displayIdentitySubtitle(prefs);
 
   return (
     <CoopPanelHeader
       title={title}
-      subtitle={orgName}
+      subtitle={identitySubtitle}
       backLabel={isHub ? undefined : settingsScreenParentLabel(screen)}
       onBack={isHub ? undefined : onBack}
       onClose={onClose}

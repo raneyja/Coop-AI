@@ -4,9 +4,13 @@ const SLACK_AUTHORIZE = "https://slack.com/oauth/v2/authorize";
 const SLACK_TOKEN = "https://slack.com/api/oauth.v2.access";
 
 /** Bot scopes for public channel metadata and history where the app is installed. */
-const SLACK_BOT_SCOPES = ["channels:read", "channels:history", "users:read", "users:read.email"].join(
-  ","
-);
+const SLACK_BOT_SCOPES = [
+  "channels:read",
+  "groups:read",
+  "channels:history",
+  "users:read",
+  "users:read.email"
+].join(",");
 
 /** User scopes for workspace search, presence, and profile lookup (search:read is user-only). */
 const SLACK_USER_SCOPES = [

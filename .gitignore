@@ -25,6 +25,8 @@ scripts/.env
 # OS and editor
 .DS_Store
 * 2.*
+* 3.*
+* 4.*
 *.pem
 
 # Logs

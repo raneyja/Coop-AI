@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IntegrationDefinition, CodeHostProvider } from "@/lib/integrations";
 import { CODE_HOST_PROVIDERS, SCOPABLE_PROVIDERS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
@@ -8,7 +8,7 @@ import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
 import { formatIntegrationError } from "@/lib/integrationErrors";
 import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
-import { IntegrationScopePanel } from "./IntegrationScopePanel";
+import { IntegrationScopeModal } from "./IntegrationScopeModal";
 
 type IntegrationCardProps = {
   definition: IntegrationDefinition;
@@ -19,7 +19,6 @@ type IntegrationCardProps = {
   refreshSuccess?: boolean;
   initialLoading?: boolean;
   compact?: boolean;
-  hideScopePanel?: boolean;
 };
 
 export function IntegrationCard({
@@ -30,11 +29,12 @@ export function IntegrationCard({
   refreshing,
   refreshSuccess,
   initialLoading,
-  compact,
-  hideScopePanel = false
+  compact
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
+  const [awaitingOAuth, setAwaitingOAuth] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const comingSoon = definition.comingSoon;
   const isCodeHost = CODE_HOST_PROVIDERS.includes(definition.id as CodeHostProvider);
@@ -54,11 +54,20 @@ export function IntegrationCard({
     setError(null);
     const result = await fetchInstallUrl(definition.id);
     setConnecting(false);
-    if (!result.ok || !result.data?.url) {
+    if (!result.ok) {
       setError(formatIntegrationError(definition.id, result.status, result.error));
       return;
     }
+    if (result.data?.connected) {
+      onRefresh();
+      return;
+    }
+    if (!result.data?.url) {
+      setError(formatIntegrationError(definition.id, result.status, "Install URL missing."));
+      return;
+    }
     window.open(result.data.url, "_blank", "noopener,noreferrer");
+    setAwaitingOAuth(true);
   }
 
   const installed = status?.installed ?? false;
@@ -67,6 +76,41 @@ export function IntegrationCard({
   const scopeStatus = status?.scopeStatus;
   const scopeActive = scopeStatus === "active";
   const scopeRequired = scopeStatus === "required";
+  const wasConnectedRef = useRef(connected);
+
+  useEffect(() => {
+    if (!awaitingOAuth) {
+      return;
+    }
+    const poll = window.setInterval(() => onRefresh(), 2000);
+    const onFocus = () => onRefresh();
+    window.addEventListener("focus", onFocus);
+    const timeout = window.setTimeout(() => setAwaitingOAuth(false), 120_000);
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [awaitingOAuth, onRefresh]);
+
+  useEffect(() => {
+    if (awaitingOAuth && connected) {
+      setAwaitingOAuth(false);
+    }
+  }, [awaitingOAuth, connected]);
+
+  useEffect(() => {
+    if (!wasConnectedRef.current && connected) {
+      setAwaitingOAuth(false);
+    }
+    wasConnectedRef.current = connected;
+  }, [connected]);
+
+  useEffect(() => {
+    if (scopeRequired && connected) {
+      setScopeOpen(true);
+    }
+  }, [scopeRequired, connected]);
 
   async function handleDisconnect() {
     if (!confirm(`Disconnect ${definition.name} for your entire organization?`)) return;
@@ -140,6 +184,15 @@ export function IntegrationCard({
               {connecting ? "Opening…" : needsReconnect ? "Reconnect" : "Connect"}
             </button>
           )}
+          {isScopable && connected && (
+            <button
+              type="button"
+              className="admin-btn-secondary"
+              onClick={() => setScopeOpen(true)}
+            >
+              Manage access
+            </button>
+          )}
           {!comingSoon && (connected || needsReconnect) && (
             <button
               type="button"
@@ -191,10 +244,12 @@ export function IntegrationCard({
         </div>
       </div>
 
-      {isScopable && !hideScopePanel ? (
-        <IntegrationScopePanel
+      {isScopable ? (
+        <IntegrationScopeModal
+          open={scopeOpen}
+          onClose={() => setScopeOpen(false)}
           provider={definition.id}
-          orgPlan={orgPlan}
+          providerName={definition.name}
           connected={connected}
           onSaved={onRefresh}
         />

@@ -451,9 +451,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("coopAI.runSavedPrompt", async () => {
       const session = resolveSession(provider.session);
-      const { loadWorkspacePrompts, applyPromptTemplate, promptVariablesFromContext } = await import(
-        "./prompts/workspacePromptLibrary"
-      );
+      const { loadWorkspacePrompts } = await import("./prompts/workspacePromptLibrary");
       const { repoContextFromEditor } = await import("./context/intentDetector");
       const prompts = await loadWorkspacePrompts();
       if (prompts.length === 0) {
@@ -476,8 +474,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (editor) {
         session.refreshEditorContext(editor);
       }
-      const text = applyPromptTemplate(pick.entry.template, promptVariablesFromContext(context));
-      await session.sendUserMessage(text, pick.entry.actionId);
+      session.insertPromptLibraryEntry(pick.entry);
     }),
     vscode.commands.registerCommand("coopAI.newChat", () => {
       CoopChatPanel.create(context.extensionUri, context, api, services);
