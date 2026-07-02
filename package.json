@@ -121,6 +121,10 @@
         "title": "CoopAI: Toggle Autocomplete"
       },
       {
+        "command": "coopAI.setAutocompleteEnabled",
+        "title": "CoopAI: Set Autocomplete Enabled (internal)"
+      },
+      {
         "command": "coopAI.autocompleteNext",
         "title": "CoopAI: Next Autocomplete Suggestion"
       },
