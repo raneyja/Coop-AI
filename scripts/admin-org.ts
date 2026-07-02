@@ -10,6 +10,8 @@
  *   npx ts-node scripts/admin-org.ts create-user <orgId> admin@acme.com owner
  *   npx ts-node scripts/admin-org.ts set-user-role <userId> admin
  *   npx ts-node scripts/admin-org.ts seed-repo-access-demo
+ *   npx ts-node scripts/admin-org.ts seed-pro-onboarding
+ *   npx ts-node scripts/admin-org.ts seed-pro-onboarding
  *   npx ts-node scripts/admin-org.ts reindex-estate <orgId> [--include-in-flight]
  */
 
@@ -101,7 +103,7 @@ async function main(): Promise<void> {
       case "create-user": {
         const [orgId, email, role = "member"] = args;
         if (!orgId || !email) {
-          throw new Error("usage: create-user <orgId> <email> [owner|admin|member]");
+          throw new Error("usage: create-user <orgId> <email> [admin|member]");
         }
         const user = await userStore.createUser(orgId, email, role as UserRole);
         console.log(JSON.stringify(user, null, 2));
@@ -110,7 +112,7 @@ async function main(): Promise<void> {
       case "set-user-role": {
         const [userId, role] = args;
         if (!userId || !role) {
-          throw new Error("usage: set-user-role <userId> <owner|admin|member>");
+          throw new Error("usage: set-user-role <userId> <admin|member>");
         }
         const user = await userStore.setUserRole(userId, role as UserRole);
         console.log(JSON.stringify(user, null, 2));
@@ -128,7 +130,7 @@ async function main(): Promise<void> {
         await store.updateRepoAccessMode(org.id, "all_indexed");
 
         const authIdentityStore = new AuthIdentityStore(pool);
-        const admin = await userStore.createUser(org.id, adminEmail, "owner");
+        const admin = await userStore.createUser(org.id, adminEmail, "admin");
         await authIdentityStore.createPasswordIdentity(admin.id, hashPassword(demoPassword));
         const dev = await userStore.createUser(org.id, devEmail, "member");
         await authIdentityStore.createPasswordIdentity(dev.id, hashPassword(demoPassword));
@@ -176,6 +178,80 @@ async function main(): Promise<void> {
               developerGrantsWhenPerUser: ["github:acme/api", "github:acme/web"],
               adminPortalUrl: "http://localhost:3001/login",
               apiBase: "http://localhost:8787"
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
+      case "seed-pro-onboarding": {
+        const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
+        const orgName = "Pro Onboarding Test";
+        const adminEmail = "pro-onboarding@demo.local";
+
+        await pool.query(`DELETE FROM organizations WHERE name IN ($1, $2)`, [
+          "Repo Access Demo",
+          orgName
+        ]);
+
+        const org = await store.createOrganization(orgName, "pro");
+        await store.updateRepoAccessMode(org.id, "all_indexed");
+
+        const authIdentityStore = new AuthIdentityStore(pool);
+        const admin = await userStore.createUser(org.id, adminEmail, "admin");
+        await authIdentityStore.createPasswordIdentity(admin.id, hashPassword(demoPassword));
+
+        console.log(
+          JSON.stringify(
+            {
+              orgId: org.id,
+              orgName: org.name,
+              plan: org.plan,
+              repoAccessMode: "all_indexed",
+              onboardingCompleted: false,
+              indexedRepos: [],
+              admin: { id: admin.id, email: adminEmail, password: demoPassword },
+              adminPortalUrl: "http://localhost:3001/login",
+              apiBase: "http://localhost:8787",
+              note: "Fresh Pro org — no repos, no integrations. Sign in and run setup wizard from scratch."
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
+      case "seed-pro-onboarding": {
+        const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
+        const orgName = "Pro Onboarding Test";
+        const adminEmail = "pro-onboarding@demo.local";
+
+        await pool.query(`DELETE FROM organizations WHERE name IN ($1, $2)`, [
+          "Repo Access Demo",
+          orgName
+        ]);
+
+        const org = await store.createOrganization(orgName, "pro");
+        await store.updateRepoAccessMode(org.id, "all_indexed");
+
+        const authIdentityStore = new AuthIdentityStore(pool);
+        const admin = await userStore.createUser(org.id, adminEmail, "admin");
+        await authIdentityStore.createPasswordIdentity(admin.id, hashPassword(demoPassword));
+
+        console.log(
+          JSON.stringify(
+            {
+              orgId: org.id,
+              orgName: org.name,
+              plan: org.plan,
+              repoAccessMode: "all_indexed",
+              onboardingCompleted: false,
+              indexedRepos: [],
+              admin: { id: admin.id, email: adminEmail, password: demoPassword },
+              adminPortalUrl: "http://localhost:3001/login",
+              apiBase: "http://localhost:8787",
+              note: "Fresh Pro org — no repos, no integrations. Sign in and run setup wizard from scratch."
             },
             null,
             2
@@ -233,7 +309,7 @@ async function main(): Promise<void> {
       }
       default:
         console.error(
-          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, set-repo-access-mode, reindex-estate"
+          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, set-repo-access-mode, reindex-estate"
         );
         process.exit(1);
     }

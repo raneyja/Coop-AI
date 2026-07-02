@@ -300,7 +300,12 @@ export function OnboardingWizard({
                   Invite teammates — they receive an email with install instructions.
                   {memberCount !== null
                     ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
-                    : ""}
+                    : ""}{" "}
+                  Under{" "}
+                  <Link href="/settings" className="admin-link">
+                    Settings → Repository access
+                  </Link>
+                  , choose whether everyone sees all Deep-Indexed repos or only repos you assign per person.
                 </p>
               </div>
             </div>
@@ -411,12 +416,16 @@ export function OnboardingWizard({
               ) : null}
               {currentStepId === "indexing" ? (
                 <>
-                  <Link href="/indexing" className="admin-btn-secondary">
+                  <button
+                    type="button"
+                    className="admin-btn-secondary"
+                    onClick={() => goToStep(step + 1)}
+                  >
+                    {anyCodeHostConnected ? "I'll Configure Later" : "Continue"}
+                  </button>
+                  <Link href="/indexing" className="admin-btn-primary">
                     Open Indexing
                   </Link>
-                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
-                    {anyCodeHostConnected ? "I'll configure repos next" : "Continue"}
-                  </button>
                 </>
               ) : null}
               {currentStepId === "scope" ? (

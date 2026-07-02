@@ -603,6 +603,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         await handleAdminApiRequest(orgParsed, response, {
           orgStore,
           userStore,
+          authTokenStore,
           integrationStore,
           scopePolicyStore,
           serverConfig,

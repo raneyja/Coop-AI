@@ -1801,8 +1801,11 @@ function WorkspaceDetail({
     <>
       <SettingsSection title="Workspace repos">
         <p className="coop-settings-card-desc">
-          Choose up to 3 indexed repos to work in. Coop-Search and the folder picker use these repos.
-          Your first selection is the primary repo for Trace Decision.
+          {prefs.adminControlledRepos
+            ? prefs.repoAccessMode === "per_user"
+              ? "Your org admin assigned which Deep-Indexed repos you can use. Coop-Search and the folder picker are limited to those repos."
+              : "Your org admin controls which repositories are Deep-Indexed. You can use every indexed repo your organization has authorized."
+            : "Choose up to 3 indexed repos to work in. Coop-Search and the folder picker use these repos. Your first selection is the primary repo for Trace Decision."}
         </p>
         {isFreeDeveloperPlan(prefs) ? (
           <p className="coop-settings-card-desc mt-2">
@@ -1836,7 +1839,11 @@ function WorkspaceDetail({
                 GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub).
               </p>
             ) : null}
-            {prefs.hasGitHubAppInstalled ? (
+            {prefs.adminControlledRepos ? (
+              <p className="coop-prompt-modal-muted text-[11px]">
+                Repository access is managed by your organization admin.
+              </p>
+            ) : prefs.hasGitHubAppInstalled ? (
               <button
                 type="button"
                 className="coop-settings-action-btn"

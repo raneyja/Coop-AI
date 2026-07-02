@@ -66,7 +66,7 @@ export async function provisionOrgFromCheckout(
 
   const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);
   if (!existingUser) {
-    await userStore.createUser(org.id, input.adminEmail, "owner");
+    await userStore.createUser(org.id, input.adminEmail, "admin");
   }
 
   await emailService.sendWelcome({

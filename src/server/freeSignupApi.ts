@@ -78,7 +78,7 @@ export async function handleFreeSignupApiRequest(
   }
 
   const org = await deps.orgStore.createOrganization(orgName, "free");
-  const user = await deps.userStore.createUser(org.id, email, "owner");
+  const user = await deps.userStore.createUser(org.id, email, "admin");
   await deps.authIdentityStore.createPasswordIdentity(user.id, hashPassword(password));
 
   const verifyToken = await deps.authTokenStore.createToken(user.id, "email_verify", 24 * 60 * 60 * 1000);

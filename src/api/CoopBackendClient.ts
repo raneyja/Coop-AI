@@ -128,6 +128,7 @@ export type MeResponse = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
   quota?: PlanQuotaCredits;
 };
 
@@ -1256,6 +1257,8 @@ export class CoopBackendClient {
     limit: number | null;
     canAddMore: boolean;
     primaryRepoId?: string;
+    repoAccessMode?: "all_indexed" | "per_user";
+    adminControlled?: boolean;
   }> {
     assertCoopEndpoint(baseUrl);
     const response = await runResilientRequest({

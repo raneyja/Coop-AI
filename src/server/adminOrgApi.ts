@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { resolveOrgPlanFromDb } from "./authMiddleware";
+import { requireTeamPlan } from "./planGates";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 
 type ParsedRequest = {
@@ -53,6 +54,9 @@ export async function handleAdminOrgRequest(
   }
 
   if (parsed.method === "PATCH" && parsed.pathname === "/v1/admin/org/repo-access") {
+    if (!(await requireTeamPlan(deps.orgStore, auth, response))) {
+      return true;
+    }
     const body = asRecord(parsed.body);
     const mode = String(body.repoAccessMode ?? "").trim();
     if (mode !== "all_indexed" && mode !== "per_user") {

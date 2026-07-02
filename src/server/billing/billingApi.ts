@@ -178,7 +178,9 @@ async function handleCreateUpgradeCheckout(
   let fallbackOwnerEmail = "";
   if (!requestedEmail && !billing?.billingEmail?.trim() && !fallbackSessionEmail && deps.userStore) {
     const orgUsers = await deps.userStore.listOrgUsers(auth.orgId);
-    const owner = orgUsers.find((user) => user.role === "owner" && !user.deactivatedAt);
+    const owner = orgUsers.find(
+      (user) => (user.role === "admin" || user.role === "owner") && !user.deactivatedAt
+    );
     fallbackOwnerEmail = owner?.email?.trim().toLowerCase() ?? "";
   }
   const adminEmail =

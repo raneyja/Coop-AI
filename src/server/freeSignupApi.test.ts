@@ -152,7 +152,7 @@ test("free signup rejects existing active email", async () => {
       id: "user-1",
       orgId: "org-1",
       email: "owner@example.com",
-      role: "owner",
+      role: "admin",
       createdAt: new Date()
     })
   };

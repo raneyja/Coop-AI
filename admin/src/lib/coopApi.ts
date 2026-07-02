@@ -59,7 +59,8 @@ function normalizeUser(user: BackendUser): AdminUser {
   const status =
     user.status ??
     (user.active === false ? "deactivated" : "active");
-  return { id: user.id, email: user.email, role: user.role, status, createdAt: user.createdAt };
+  const role = user.role === "owner" ? "admin" : user.role;
+  return { id: user.id, email: user.email, role, status, createdAt: user.createdAt };
 }
 
 export type AdminApiKey = {
@@ -257,6 +258,56 @@ export async function requestPasswordReset(email: string): Promise<ApiResult<{ o
       };
     }
     return { ok: true, status: response.status, data: { ok: Boolean(body.ok ?? true), message: body.message } };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
+}
+
+export type InvitePreviewResponse = {
+  email?: string;
+  orgName?: string;
+  invitedBy?: string;
+};
+
+export async function fetchInvitePreview(token: string): Promise<ApiResult<InvitePreviewResponse>> {
+  try {
+    const response = await fetch(`/api/auth/accept-invite?token=${encodeURIComponent(token.trim())}`, {
+      cache: "no-store"
+    });
+    const body = (await response.json().catch(() => ({}))) as InvitePreviewResponse & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, "This invitation link is invalid or has expired.")
+      };
+    }
+    return { ok: true, status: response.status, data: body };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
+}
+
+export async function acceptInviteWithPassword(
+  token: string,
+  password: string
+): Promise<ApiResult<LoginResponse & MeResponse>> {
+  try {
+    const response = await fetch("/api/auth/accept-invite", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.trim(), password })
+    });
+    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, "Could not accept your invitation.")
+      };
+    }
+    return { ok: true, status: response.status, data: body };
   } catch {
     return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
   }

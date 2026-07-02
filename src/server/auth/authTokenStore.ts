@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { hashApiKey } from "../credentialCrypto";
 
-export type AuthTokenPurpose = "email_verify" | "password_reset" | "refresh" | "auth_code";
+export type AuthTokenPurpose = "email_verify" | "password_reset" | "user_invite" | "refresh" | "auth_code";
 
 export class AuthTokenStore {
   public constructor(private readonly pool: Pool) {}
@@ -22,6 +22,26 @@ export class AuthTokenStore {
       [tokenHash, userId, purpose, metadata ? JSON.stringify(metadata) : null, expiresAt]
     );
     return raw;
+  }
+
+  public async peekToken(
+    rawToken: string,
+    purpose: AuthTokenPurpose
+  ): Promise<{ userId: string; metadata?: Record<string, unknown> } | undefined> {
+    const tokenHash = hashApiKey(rawToken);
+    const result = await this.pool.query(
+      `SELECT user_id, metadata FROM auth_tokens
+       WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > NOW()`,
+      [tokenHash, purpose]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return undefined;
+    }
+    return {
+      userId: String(row.user_id),
+      metadata: row.metadata ? (row.metadata as Record<string, unknown>) : undefined
+    };
   }
 
   public async consumeToken(
@@ -77,6 +97,8 @@ function generateRawToken(purpose: AuthTokenPurpose): string {
         ? "coop_code_"
         : purpose === "password_reset"
           ? "coop_reset_"
-          : "coop_verify_";
+          : purpose === "user_invite"
+            ? "coop_invite_"
+            : "coop_verify_";
   return `${prefix}${randomBytes(32).toString("hex")}`;
 }

@@ -3,7 +3,15 @@ import type { Pool } from "pg";
 import { hashApiKey } from "../credentialCrypto";
 import type { OrgPlan } from "../orgStore";
 
-export type UserRole = "owner" | "admin" | "member";
+export type UserRole = "admin" | "member";
+
+/** Legacy DB rows may still store `owner`; treat as admin everywhere. */
+export function normalizeUserRole(role: string): UserRole {
+  if (role === "admin" || role === "owner") {
+    return "admin";
+  }
+  return "member";
+}
 
 export type UserRecord = {
   id: string;

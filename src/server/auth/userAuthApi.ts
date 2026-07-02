@@ -75,6 +75,12 @@ export async function handleUserAuthApiRequest(
   if (parsed.method === "POST" && parsed.pathname === `${AUTH_PREFIX}/reset-password`) {
     return handleResetPassword(parsed, response, deps);
   }
+  if (parsed.method === "GET" && parsed.pathname === `${AUTH_PREFIX}/accept-invite`) {
+    return handleAcceptInvitePreview(parsed, response, deps);
+  }
+  if (parsed.method === "POST" && parsed.pathname === `${AUTH_PREFIX}/accept-invite`) {
+    return handleAcceptInvite(parsed, response, deps);
+  }
   if (parsed.method === "GET" && parsed.pathname === `${AUTH_PREFIX}/verify-email`) {
     return handleVerifyEmail(parsed, response, deps);
   }
@@ -128,7 +134,7 @@ async function handleRegister(
 
   const orgName = orgNameInput || deriveOrgName(email);
   const org = await deps.orgStore!.createOrganization(orgName, "free");
-  const user = await deps.userStore!.createUser(org.id, email, "owner");
+  const user = await deps.userStore!.createUser(org.id, email, "admin");
   await deps.authIdentityStore!.createPasswordIdentity(user.id, hashPassword(password));
 
   const verifyToken = await deps.authTokenStore!.createToken(user.id, "email_verify", 24 * 60 * 60 * 1000);
@@ -312,6 +318,101 @@ async function handleResetPassword(
   writeJson(response, 200, {
     ok: true,
     message: "Password updated. Sign in with your new password.",
+    adminPortalLoginUrl: adminPortalLoginUrl(deps.authConfig.adminPortalUrl)
+  });
+  return true;
+}
+
+async function handleAcceptInvitePreview(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: UserAuthApiDeps
+): Promise<boolean> {
+  const token = parsed.query?.get("token")?.trim() ?? "";
+  if (!token) {
+    writeJson(response, 400, { error: "missing_token", message: "Invitation link is missing or malformed." });
+    return true;
+  }
+
+  const peeked = await deps.authTokenStore!.peekToken(token, "user_invite");
+  if (!peeked) {
+    writeJson(response, 400, {
+      error: "invalid_token",
+      message: "This invitation link is invalid or has expired."
+    });
+    return true;
+  }
+
+  const user = await deps.userStore!.getUser(peeked.userId);
+  if (!user || user.deactivatedAt) {
+    writeJson(response, 400, { error: "invalid_token", message: "This invitation link is invalid or has expired." });
+    return true;
+  }
+
+  const org = await deps.orgStore!.getOrganization(user.orgId);
+  const metadata = peeked.metadata ?? {};
+  writeJson(response, 200, {
+    email: user.email,
+    orgName: String(metadata.orgName ?? org?.name ?? ""),
+    invitedBy: metadata.invitedBy ? String(metadata.invitedBy) : undefined
+  });
+  return true;
+}
+
+async function handleAcceptInvite(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: UserAuthApiDeps
+): Promise<boolean> {
+  const body = asRecord(parsed.body);
+  const token = String(body.token ?? "").trim();
+  const password = String(body.password ?? "");
+
+  if (!token) {
+    writeJson(response, 400, { error: "missing_token", message: "Invitation link is missing or malformed." });
+    return true;
+  }
+
+  const passwordError = validatePasswordStrength(password, deps.authConfig.passwordMinLength);
+  if (passwordError) {
+    writeJson(response, 400, { error: "weak_password", message: passwordError });
+    return true;
+  }
+
+  const consumed = await deps.authTokenStore!.consumeToken(token, "user_invite");
+  if (!consumed) {
+    writeJson(response, 400, {
+      error: "invalid_token",
+      message: "This invitation link is invalid or has expired."
+    });
+    return true;
+  }
+
+  const user = await deps.userStore!.getUser(consumed.userId);
+  if (!user || user.deactivatedAt) {
+    writeJson(response, 400, { error: "invalid_token", message: "This invitation link is invalid or has expired." });
+    return true;
+  }
+
+  const allowed = await checkAuthMethodAllowed(deps, user.orgId, "password");
+  if (!allowed.ok) {
+    writeJson(response, 403, { error: allowed.error, message: allowed.message });
+    return true;
+  }
+
+  await deps.authIdentityStore!.setPasswordHash(user.id, hashPassword(password));
+  await deps.authIdentityStore!.markEmailVerified(user.id, "password");
+  await audit(deps, user.id, user.orgId, "auth.invite_accepted", { method: "password" });
+
+  const session = await issueSession(deps, user.id, user.orgId, "password");
+  const org = await deps.orgStore!.getOrganization(user.orgId);
+
+  writeJson(response, 200, {
+    ...session,
+    orgId: user.orgId,
+    orgName: org?.name ?? "",
+    email: user.email,
+    plan: org?.plan ?? "free",
     adminPortalLoginUrl: adminPortalLoginUrl(deps.authConfig.adminPortalUrl)
   });
   return true;
@@ -574,7 +675,7 @@ async function resolveGoogleUser(
   if (!user) {
     const orgName = state.orgName?.trim() || deriveOrgName(profile.email);
     const org = await deps.orgStore!.createOrganization(orgName, "free");
-    user = await deps.userStore!.createUser(org.id, profile.email, "owner");
+    user = await deps.userStore!.createUser(org.id, profile.email, "admin");
     await deps.authIdentityStore!.createGoogleIdentity(
       user.id,
       profile.sub,

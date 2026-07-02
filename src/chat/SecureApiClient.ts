@@ -919,6 +919,8 @@ export async function readPreferences(
   let canAddMoreWorkspaceRepos: boolean | undefined;
   let primaryWorkspaceRepoId: string | undefined;
   let workspaceRepoIds: string[] | undefined;
+  let repoAccessMode: UserPreferences["repoAccessMode"];
+  let adminControlledRepos = false;
   let quotaCredits: UserPreferences["quotaCredits"];
   if (await api.hasToken()) {
     try {
@@ -936,6 +938,7 @@ export async function readPreferences(
       workspaceRepoLimit = me.workspaceRepoLimit;
       canAddMoreWorkspaceRepos = me.canAddMoreWorkspaceRepos;
       primaryWorkspaceRepoId = me.primaryWorkspaceRepoId;
+      repoAccessMode = me.repoAccessMode;
       quotaCredits = me.quota;
     } catch {
       // Non-fatal — other preference fields still load.
@@ -947,6 +950,10 @@ export async function readPreferences(
       workspaceRepoLimit = workspace.limit;
       canAddMoreWorkspaceRepos = workspace.canAddMore;
       primaryWorkspaceRepoId = workspace.primaryRepoId;
+      adminControlledRepos = workspace.adminControlled === true;
+      if (workspace.repoAccessMode) {
+        repoAccessMode = workspace.repoAccessMode;
+      }
     } catch {
       // Non-fatal.
     }
@@ -1073,6 +1080,8 @@ export async function readPreferences(
     workspaceRepoLimit,
     canAddMoreWorkspaceRepos,
     primaryWorkspaceRepoId,
+    repoAccessMode,
+    adminControlledRepos,
     quotaCredits
   };
 }

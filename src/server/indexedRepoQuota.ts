@@ -22,9 +22,9 @@ export function indexedRepoLimitForPlan(plan: OrgPlan): number | null {
   return plan === "free" ? FREE_MAX_INDEXED_REPOS : null;
 }
 
-/** Pro/Enterprise auto-queue on catalog sync; free orgs pick repos manually. */
-export function autoIndexOnCatalogSync(plan: OrgPlan): boolean {
-  return plan !== "free";
+/** Admins explicitly choose repos to Deep-Index after catalog discovery. */
+export function autoIndexOnCatalogSync(_plan: OrgPlan): boolean {
+  return false;
 }
 
 export async function countLightningEnabledRepos(orgStore: OrgStore, orgId: string): Promise<number> {

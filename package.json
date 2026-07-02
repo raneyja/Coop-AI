@@ -830,6 +830,7 @@
     "test:autocomplete": "npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
+    "test:repo-access": "npx tsx src/server/resolveAccessibleRepos.test.ts",
     "test:lightning-search-scope": "npx tsx src/indexing/lightningSearchScope.test.ts",
     "test:graph-search-scope": "npx tsx src/indexing/graphSearchScope.test.ts",
     "test:org-api-indexing": "npx tsx src/server/orgApiIndexing.test.ts",
@@ -844,6 +845,10 @@
     "test": "npm run test:integration-scope",
     "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
     "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh",
+    "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",
+    "seed:pro-onboarding": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-pro-onboarding",
+    "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
+    "dev:admin-portal": "bash scripts/dev-admin-portal.sh",
     "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",
     "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
     "dev:admin-portal": "bash scripts/dev-admin-portal.sh"

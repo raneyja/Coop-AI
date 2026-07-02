@@ -2,10 +2,11 @@ import type { ServerResponse } from "node:http";
 import { auditActor } from "./audit/auditLogger";
 import { requireTeamPlan } from "./planGates";
 import { loadBillingConfig } from "./billing/billingConfig";
-import { adminPortalLoginUrl } from "./billing/adminPortalUrl";
+import { adminPortalAcceptInviteUrl } from "./billing/adminPortalUrl";
 import { EmailService } from "./email/emailService";
 import type { AuthContext } from "./orgStore";
 import type { UserRole } from "./users/userStore";
+import { normalizeUserRole } from "./users/userStore";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { getDbPool } from "./db";
 import { UserRepoGrantStore } from "./userRepoGrantStore";
@@ -17,7 +18,7 @@ type ParsedRequest = {
   body: unknown;
 };
 
-const USER_ROLES = new Set<UserRole>(["owner", "admin", "member"]);
+const USER_ROLES = new Set<UserRole>(["admin", "member"]);
 
 export async function handleAdminUsersRequest(
   parsed: ParsedRequest,
@@ -62,7 +63,7 @@ export async function handleAdminUsersRequest(
       return true;
     }
     if (!USER_ROLES.has(role)) {
-      writeJson(response, 400, { error: "role must be owner, admin, or member" });
+      writeJson(response, 400, { error: "role must be admin or member" });
       return true;
     }
     if (deps.orgStore) {
@@ -100,10 +101,20 @@ export async function handleAdminUsersRequest(
     const billingConfig = loadBillingConfig();
     const emailService = new EmailService(billingConfig);
     try {
+      if (!deps.authTokenStore) {
+        throw new Error("auth token store not configured");
+      }
+      const orgName = org?.name ?? "your organization";
+      const inviteToken = await deps.authTokenStore.createToken(
+        user.id,
+        "user_invite",
+        7 * 24 * 60 * 60 * 1000,
+        { orgName, invitedBy: auth.email }
+      );
       await emailService.sendInvite({
         to: email,
-        orgName: org?.name ?? "your organization",
-        adminPortalUrl: adminPortalLoginUrl(billingConfig.adminPortalUrl),
+        orgName,
+        acceptInviteUrl: adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken),
         invitedBy: auth.email
       });
     } catch (error) {
@@ -258,7 +269,7 @@ async function handlePatchUser(
   if (body.role !== undefined) {
     const role = String(body.role).toLowerCase() as UserRole;
     if (!USER_ROLES.has(role)) {
-      writeJson(response, 400, { error: "role must be owner, admin, or member" });
+      writeJson(response, 400, { error: "role must be admin or member" });
       return true;
     }
     const next = await deps.userStore.setUserRole(userId, role);
@@ -318,7 +329,7 @@ function toUserSummary(user: {
   return {
     id: user.id,
     email: user.email,
-    role: user.role,
+    role: normalizeUserRole(user.role),
     active: !user.deactivatedAt,
     createdAt: user.createdAt
   };

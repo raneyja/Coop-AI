@@ -9,7 +9,7 @@ export type WelcomeEmailParams = {
 export type InviteEmailParams = {
   to: string;
   orgName: string;
-  adminPortalUrl: string;
+  acceptInviteUrl: string;
   invitedBy?: string;
 };
 
@@ -45,32 +45,43 @@ export class EmailService {
   }
 
   public async sendInvite(params: InviteEmailParams): Promise<void> {
-    const invitedBy = params.invitedBy ? ` by ${params.invitedBy}` : "";
-    const subject = `You're invited to ${params.orgName} on Coop AI`;
+    const inviterLine = params.invitedBy
+      ? `<strong>${escapeHtml(params.invitedBy)}</strong> invited you to join`
+      : "You've been invited to join";
+    const subject = params.invitedBy
+      ? `${params.invitedBy} invited you to ${params.orgName} on Coop AI`
+      : `Join ${params.orgName} on Coop AI`;
     const html = emailShell({
       title: subject,
       body: `
         <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
         <p style="margin:0 0 16px;font-size:16px;">
-          You've been invited${escapeHtml(invitedBy)} to join
+          ${inviterLine}
           <strong>${escapeHtml(params.orgName)}</strong> on Coop AI.
         </p>
-        <p style="margin:0 0 24px;font-size:15px;color:#57606a;">
-          Sign in with the email address this message was sent to — use your password or continue with Google.
+        <p style="margin:0 0 16px;font-size:15px;color:#57606a;">
+          Coop AI connects your team's tools so everyone can code with full context in VS Code.
         </p>
-        ${primaryButton("Sign in to Coop AI", params.adminPortalUrl)}
-        <p style="margin:24px 0 0;font-size:14px;color:#57606a;">
-          Install the Coop AI VS Code extension and sign in with the same account to start coding with full context.
+        <p style="margin:0 0 24px;font-size:15px;color:#57606a;">
+          Accept this invitation to create your password for
+          <strong>${escapeHtml(params.to)}</strong>, or continue with Google on the next screen.
+        </p>
+        ${primaryButton("Accept invitation", params.acceptInviteUrl)}
+        <p style="margin:24px 0 0;font-size:13px;color:#57606a;">
+          This link expires in 7 days. After you join, install the Coop AI VS Code extension and sign in with the same account.
         </p>
       `
     });
     const text = [
-      `You've been invited to ${params.orgName} on Coop AI.`,
+      params.invitedBy
+        ? `${params.invitedBy} invited you to join ${params.orgName} on Coop AI.`
+        : `You've been invited to join ${params.orgName} on Coop AI.`,
       "",
-      "Sign in with the email this message was sent to:",
-      params.adminPortalUrl,
+      `Accept your invitation and create a password for ${params.to}:`,
+      params.acceptInviteUrl,
       "",
-      "Use your password or continue with Google."
+      "This link expires in 7 days.",
+      "After joining, install the Coop AI VS Code extension and sign in with the same account."
     ].join("\n");
     await this.send(params.to, subject, html, text);
   }

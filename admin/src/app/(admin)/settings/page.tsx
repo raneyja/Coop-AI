@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   clearSession,
@@ -9,7 +10,7 @@ import {
   isAdminRole,
   signOutRemote
 } from "@/lib/auth";
-import { getApiBase } from "@/lib/coopApi";
+import { fetchOrg, getApiBase, updateRepoAccessMode, type OrgRepoAccessMode } from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 
 function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -41,11 +42,50 @@ export default function SettingsPage() {
   const me = getStoredMe();
   const isAdmin = me ? isAdminRole(me) : false;
   const usesPassword = me?.authMethod === "password" || me?.sessionProvider === "password";
+  const [repoAccessMode, setRepoAccessMode] = useState<OrgRepoAccessMode>("all_indexed");
+  const [orgPlan, setOrgPlan] = useState<string>(me?.plan ?? "free");
+  const [savingAccess, setSavingAccess] = useState(false);
+  const [accessMessage, setAccessMessage] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  const showRepoAccess = orgPlan === "pro" || orgPlan === "enterprise";
+
+  const load = useCallback(async () => {
+    const result = await fetchOrg();
+    if (result.ok && result.data) {
+      setOrgPlan(result.data.plan);
+      if (result.data.repoAccessMode) {
+        setRepoAccessMode(result.data.repoAccessMode);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function handleSignOut() {
     await signOutRemote();
     clearSession();
     router.replace("/login");
+  }
+
+  async function handleRepoAccessChange(mode: OrgRepoAccessMode) {
+    setSavingAccess(true);
+    setAccessError(null);
+    setAccessMessage(null);
+    const result = await updateRepoAccessMode(mode);
+    setSavingAccess(false);
+    if (!result.ok) {
+      setAccessError(result.error ?? "Could not update repository access.");
+      return;
+    }
+    setRepoAccessMode(mode);
+    setAccessMessage(
+      mode === "all_indexed"
+        ? "All team members can access every Deep-Indexed repo."
+        : "Assign repository access per user on the Users page."
+    );
   }
 
   return (
@@ -109,12 +149,55 @@ export default function SettingsPage() {
         </dl>
       </section>
 
+      {showRepoAccess ? (
+        <section className="admin-card">
+          <h2 className="admin-section-label">Repository access</h2>
+          <p className="mt-2 text-sm text-coop-muted">
+            Control which Deep-Indexed repos developers can use in VS Code after your admin selects repos to index.
+          </p>
+          <div className="mt-4 space-y-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-coop-border/50 px-4 py-3 hover:bg-white/[0.03]">
+              <input
+                type="radio"
+                name="repoAccessMode"
+                className="mt-1 accent-coop-index"
+                checked={repoAccessMode === "all_indexed"}
+                disabled={savingAccess}
+                onChange={() => void handleRepoAccessChange("all_indexed")}
+              />
+              <span>
+                <span className="block text-sm font-medium text-white">All indexed repos</span>
+                <span className="mt-1 block text-sm text-coop-muted">
+                  Every team member automatically sees all Deep-Indexed repos in the extension.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-coop-border/50 px-4 py-3 hover:bg-white/[0.03]">
+              <input
+                type="radio"
+                name="repoAccessMode"
+                className="mt-1 accent-coop-index"
+                checked={repoAccessMode === "per_user"}
+                disabled={savingAccess}
+                onChange={() => void handleRepoAccessChange("per_user")}
+              />
+              <span>
+                <span className="block text-sm font-medium text-white">Per-user grants</span>
+                <span className="mt-1 block text-sm text-coop-muted">
+                  Assign repos when inviting users or from each user&apos;s row on the Users page.
+                </span>
+              </span>
+            </label>
+          </div>
+          {accessMessage ? <p className="mt-3 text-sm text-emerald-300">{accessMessage}</p> : null}
+          {accessError ? <p className="mt-3 text-sm text-red-300">{accessError}</p> : null}
+        </section>
+      ) : null}
+
       {me?.plan === "enterprise" ? (
         <section className="admin-card">
           <h2 className="admin-section-label">Single sign-on (SSO)</h2>
-          <p className="mt-2 text-sm text-coop-muted">
-            Enterprise SAML SSO is configured by Coop support during onboarding.
-          </p>
+          <p className="mt-2 text-sm text-coop-muted">Enterprise SAML SSO is configured by Coop support during onboarding.</p>
           <div className="admin-panel-inset mt-4 text-sm">
             <p className="font-medium text-white/90">Not configured</p>
             <p className="mt-1 text-coop-muted">
@@ -125,11 +208,9 @@ export default function SettingsPage() {
       ) : null}
 
       <section className="admin-card">
-        <h2 className="admin-section-label">Developer</h2>
-        <p className="mt-2 text-sm text-coop-muted">
-          Backend API this portal uses (set via <code className="text-xs">COOP_API_BASE</code> at build/runtime).
-        </p>
-        <code className="mt-3 inline-block max-w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
+        <h2 className="admin-section-label">API connection</h2>
+        <p className="mt-3 text-sm text-coop-muted">This portal connects to the Coop backend API configured at build/runtime.</p>
+        <code className="mt-3 block rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
           {getApiBase()}
         </code>
       </section>
