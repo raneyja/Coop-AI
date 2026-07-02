@@ -10,7 +10,7 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 
 ## Prerequisites
 
-- Admin API key and access to [admin.coop-ai.dev](https://admin.coop-ai.dev)
+- Admin account with access to [admin.coop-ai.dev](https://admin.coop-ai.dev) (sign in with email/password or Google)
 - Coop operator has configured OAuth apps on the API server (hosted Coop handles this automatically)
 
 ## 5-minute checklist
@@ -57,7 +57,7 @@ Individual developers can paste PATs in **Extension UI** → Settings → Tools 
 | Symptom | Fix |
 | --- | --- |
 | 503 / not configured | Contact Coop operator — OAuth apps not registered on server |
-| 403 admin required | Sign in with admin API key, not developer key |
+| 403 admin required | Sign in with an owner or admin account (not a developer-only account) |
 | Redirect URI mismatch | Operator must fix callback URL in vendor console |
 | Empty search results | Set Workspace owner/repo; ensure indexed content references your repo |
 

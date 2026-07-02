@@ -32,4 +32,4 @@ If your org received a `.vsix` file:
 
 ## Connect after install
 
-Continue to [Getting started](/docs/getting-started) step 3 to paste your API key, or see [Extension settings](/docs/extension-settings) for full configuration.
+Continue to [Getting started](/docs/getting-started) step 3 to sign in, or see [Extension settings](/docs/extension-settings) for full configuration.

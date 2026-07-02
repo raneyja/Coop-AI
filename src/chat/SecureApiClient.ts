@@ -31,7 +31,7 @@ import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
-import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN } from "./types";
+import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN, SECRET_KEY_REFRESH_TOKEN } from "./types";
 
 export type StreamChatParams = {
   message: string;
@@ -75,8 +75,74 @@ export class SecureApiClient {
     return token?.trim() || undefined;
   }
 
+  public async setRefreshToken(token: string): Promise<void> {
+    await this.secrets.store(SECRET_KEY_REFRESH_TOKEN, token.trim());
+  }
+
+  public async clearRefreshToken(): Promise<void> {
+    await this.secrets.delete(SECRET_KEY_REFRESH_TOKEN);
+  }
+
+  public async getRefreshToken(): Promise<string | undefined> {
+    const token = await this.secrets.get(SECRET_KEY_REFRESH_TOKEN);
+    return token?.trim() || undefined;
+  }
+
+  public async storeSession(accessToken: string, refreshToken?: string): Promise<void> {
+    await this.setToken(accessToken);
+    if (refreshToken?.trim()) {
+      await this.setRefreshToken(refreshToken);
+    }
+  }
+
   public async hasToken(): Promise<boolean> {
     return Boolean(await this.getToken());
+  }
+
+  public async isSignedIn(): Promise<boolean> {
+    return this.hasToken();
+  }
+
+  public async logout(baseUrl: string): Promise<void> {
+    const refreshToken = await this.getRefreshToken();
+    try {
+      if (await this.hasToken()) {
+        await this.backend.logout(baseUrl, refreshToken);
+      }
+    } catch {
+      // Local sign-out still proceeds if the server is unreachable.
+    }
+    await this.clearToken();
+    await this.clearRefreshToken();
+  }
+
+  public async loginWithPassword(
+    baseUrl: string,
+    email: string,
+    password: string
+  ): Promise<import("../api/CoopBackendClient").AuthSessionResponse> {
+    return this.backend.loginWithPassword(baseUrl, email, password);
+  }
+
+  public startGoogleAuthUrl(baseUrl: string, redirect?: string): string {
+    return this.backend.startGoogleAuthUrl(baseUrl, redirect);
+  }
+
+  public async refreshSession(
+    baseUrl: string,
+    refreshToken?: string
+  ): Promise<import("../api/CoopBackendClient").AuthSessionResponse> {
+    const token = refreshToken?.trim() || (await this.getRefreshToken());
+    if (!token) {
+      throw new Error("No refresh token saved. Sign in again.");
+    }
+    const session = await this.backend.refreshSession(baseUrl, token);
+    await this.storeSession(session.accessToken, session.refreshToken);
+    return session;
+  }
+
+  public async forgotPassword(baseUrl: string, email: string): Promise<{ ok: boolean; message?: string }> {
+    return this.backend.forgotPassword(baseUrl, email);
   }
 
   public getBackendClient(): CoopBackendClient {
@@ -644,7 +710,7 @@ export class SecureApiClient {
   private async ensureToken(): Promise<void> {
     const token = await this.getToken();
     if (!token) {
-      throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
+      throw new Error("Sign in to Coop first (email, Google, or SSO) in settings.");
     }
   }
 
@@ -688,6 +754,7 @@ export class SecureApiClient {
 
 export function readConfiguration(): Omit<
   UserPreferences,
+  | "isSignedIn"
   | "hasApiKey"
   | "hasGitHubToken"
   | "hasGitLabToken"
@@ -949,6 +1016,7 @@ export async function readPreferences(
     ? Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken)
     : hasAtlassianInstalled ||
       Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
+  const signedIn = await api.isSignedIn();
   return {
     ...base,
     searchScopeMode: resolveDefaultSearchScope(
@@ -956,7 +1024,8 @@ export async function readPreferences(
       plan,
       workspaceRepoCount ?? indexedRepoCount
     ),
-    hasApiKey: await api.hasToken(),
+    hasApiKey: signedIn,
+    isSignedIn: signedIn,
     hasGitHubToken: Boolean(codeHostCreds.githubToken),
     hasGitHubAppInstalled,
     githubNeedsReconnect,

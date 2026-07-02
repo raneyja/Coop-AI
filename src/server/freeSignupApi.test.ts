@@ -17,23 +17,26 @@ function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown 
   return response as ServerResponse & { statusCode?: number; body?: unknown };
 }
 
-test("free signup creates org, owner, key, and sends welcome email with api key", async () => {
+const authConfig = {
+  publicBaseUrl: "http://localhost:8787",
+  oauthStateSecret: "test",
+  accessTtlMs: 3600000,
+  refreshTtlMs: 86400000,
+  passwordMinLength: 12,
+  marketingBaseUrl: "http://localhost:3001",
+  adminPortalUrl: "http://localhost:3001"
+};
+
+test("free signup creates org, owner, session, and sends welcome email", async () => {
   const previousAdminPortalUrl = process.env.COOP_ADMIN_PORTAL_URL;
   process.env.COOP_ADMIN_PORTAL_URL = "https://admin.coop-ai.dev";
 
-  const created: { orgName?: string; plan?: string; ownerEmail?: string; keyLabel?: string } = {};
+  const created: { orgName?: string; plan?: string; ownerEmail?: string } = {};
   const orgStore = {
     createOrganization: async (name: string, plan: "free" | "pro" | "enterprise") => {
       created.orgName = name;
       created.plan = plan;
       return { id: "org-1", name, plan: "free", createdAt: new Date() };
-    },
-    createApiKey: async (_orgId: string, label: string) => {
-      created.keyLabel = label;
-      return {
-        record: { id: "key-1", orgId: "org-1", label, createdAt: new Date() },
-        rawKey: "coop_test_raw_key"
-      };
     }
   };
   const userStore = {
@@ -41,25 +44,32 @@ test("free signup creates org, owner, key, and sends welcome email with api key"
     createUser: async (_orgId: string, email: string, role: string) => {
       created.ownerEmail = email;
       return { id: "user-1", orgId: "org-1", email, role, createdAt: new Date() };
-    }
+    },
+    createSession: async () => ({
+      token: "coop_sess_test",
+      userId: "user-1",
+      orgId: "org-1",
+      expiresAt: new Date(Date.now() + 3600000)
+    })
   };
-  let emailed:
+  const authIdentityStore = {
+    createPasswordIdentity: async () => ({ id: "id-1", userId: "user-1", provider: "password", createdAt: new Date() })
+  };
+  const authTokenStore = {
+    createToken: async () => "coop_refresh_test"
+  };
+  let welcomeEmail:
     | {
         to: string;
         orgName: string;
         adminPortalUrl: string;
-        apiKey: string;
       }
     | undefined;
   const emailService = {
-    sendFreeSignupWelcome: async (payload: {
-      to: string;
-      orgName: string;
-      adminPortalUrl: string;
-      apiKey: string;
-    }) => {
-      emailed = payload;
-    }
+    sendFreeSignupWelcome: async (payload: { to: string; orgName: string; adminPortalUrl: string }) => {
+      welcomeEmail = payload;
+    },
+    sendEmailVerification: async () => undefined
   };
 
   const response = mockResponse();
@@ -67,10 +77,17 @@ test("free signup creates org, owner, key, and sends welcome email with api key"
     {
       method: "POST",
       pathname: "/v1/signup/free",
-      body: { email: "Owner@Example.com" }
+      body: { email: "Owner@Example.com", password: "validpassword12" }
     },
     response,
-    { orgStore: orgStore as never, userStore: userStore as never, emailService: emailService as never }
+    {
+      orgStore: orgStore as never,
+      userStore: userStore as never,
+      authIdentityStore: authIdentityStore as never,
+      authTokenStore: authTokenStore as never,
+      emailService: emailService as never,
+      authConfig
+    }
   );
 
   if (previousAdminPortalUrl === undefined) {
@@ -84,19 +101,16 @@ test("free signup creates org, owner, key, and sends welcome email with api key"
   assert.equal(created.plan, "free");
   assert.equal(created.orgName, "owner");
   assert.equal(created.ownerEmail, "owner@example.com");
-  assert.equal(created.keyLabel, "admin portal");
-  assert.deepEqual(emailed, {
+  assert.deepEqual(welcomeEmail, {
     to: "owner@example.com",
     orgName: "owner",
-    adminPortalUrl: "https://admin.coop-ai.dev/login",
-    apiKey: "coop_test_raw_key"
+    adminPortalUrl: "https://admin.coop-ai.dev/login"
   });
-  assert.deepEqual(response.body, {
-    orgId: "org-1",
-    orgName: "owner",
-    adminPortalLoginUrl: "https://admin.coop-ai.dev/login",
-    apiKey: "coop_test_raw_key"
-  });
+  const body = response.body as Record<string, unknown>;
+  assert.equal(body.orgId, "org-1");
+  assert.equal(body.accessToken, "coop_sess_test");
+  assert.equal(body.refreshToken, "coop_refresh_test");
+  assert.equal(body.apiKey, undefined);
 });
 
 test("free signup rejects invalid email", async () => {
@@ -105,13 +119,16 @@ test("free signup rejects invalid email", async () => {
     {
       method: "POST",
       pathname: "/v1/signup/free",
-      body: { email: "invalid-email" }
+      body: { email: "invalid-email", password: "validpassword12" }
     },
     response,
     {
       orgStore: {} as never,
       userStore: {} as never,
-      emailService: {} as never
+      authIdentityStore: {} as never,
+      authTokenStore: {} as never,
+      emailService: {} as never,
+      authConfig
     }
   );
   assert.equal(handled, true);
@@ -144,21 +161,47 @@ test("free signup rejects existing active email", async () => {
     {
       method: "POST",
       pathname: "/v1/signup/free",
-      body: { email: "owner@example.com", orgName: "Acme" }
+      body: { email: "owner@example.com", orgName: "Acme", password: "validpassword12" }
     },
     response,
     {
       orgStore: orgStore as never,
       userStore: userStore as never,
-      emailService: {} as never
+      authIdentityStore: {} as never,
+      authTokenStore: {} as never,
+      emailService: {} as never,
+      authConfig
     }
   );
   assert.equal(handled, true);
-  assert.equal(response.statusCode, 429);
+  assert.equal(response.statusCode, 409);
   assert.equal(createdOrganization, false);
   assert.deepEqual(response.body, {
     error: "signup_rate_limited",
     code: "email_taken",
-    message: "This email already has an active Coop AI account."
+    message: "This email already has a Coop AI account. Sign in or reset your password."
   });
+});
+
+test("free signup rejects weak password", async () => {
+  const response = mockResponse();
+  const handled = await handleFreeSignupApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/signup/free",
+      body: { email: "owner@example.com", password: "short" }
+    },
+    response,
+    {
+      orgStore: {} as never,
+      userStore: { findActiveUserByEmail: async () => undefined } as never,
+      authIdentityStore: {} as never,
+      authTokenStore: {} as never,
+      emailService: {} as never,
+      authConfig
+    }
+  );
+  assert.equal(handled, true);
+  assert.equal(response.statusCode, 400);
+  assert.equal((response.body as { error?: string }).error, "weak_password");
 });

@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveSession } from "@/lib/auth";
-import { validateApiKey } from "@/lib/coopApi";
+import {
+  defaultHomePath,
+  establishSessionCookie,
+  meFromAuthPayload,
+  saveSession
+} from "@/lib/auth";
+import { validateSession } from "@/lib/coopApi";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -13,19 +18,22 @@ export default function AuthCallbackPage() {
     const hash = window.location.hash.replace(/^#/, "");
     const params = new URLSearchParams(hash);
     const token = params.get("coopToken")?.trim();
+    const refreshToken = params.get("coopRefresh")?.trim();
     if (!token) {
       setError("No session token in callback URL.");
       return;
     }
 
     void (async () => {
-      const result = await validateApiKey(token);
+      const result = await validateSession(token);
       if (!result.ok || !result.data) {
-        setError(result.error ?? "SSO sign-in failed.");
+        setError(result.error ?? "Sign-in failed.");
         return;
       }
-      saveSession(token, result.data);
-      router.replace("/");
+      const me = meFromAuthPayload(result.data);
+      saveSession(token, me, undefined, refreshToken);
+      await establishSessionCookie(token, refreshToken);
+      router.replace(defaultHomePath(me));
     })();
   }, [router]);
 

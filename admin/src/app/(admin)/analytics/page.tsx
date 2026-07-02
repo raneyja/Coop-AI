@@ -614,7 +614,7 @@ export default function AnalyticsPage() {
           {!loading && users.length === 0 ? (
             <PlaceholderCallout
               title="No org members yet"
-              body="This org was set up with an API key only — that does not create a user row. Invite teammates on the Users page to manage seats and see per-user activity. Extension usage via API key is tracked as apikey:… in usage events, not in this table."
+              body="No org members yet. Invite teammates on the Users page so they can sign in with email or Google and appear in per-user activity. Automation API key usage is tracked as apikey:… in usage events, not in this table."
             />
           ) : null}
           <AdminStatRow>

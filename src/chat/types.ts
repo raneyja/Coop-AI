@@ -4,6 +4,7 @@ export const VIEW_ID = "coopAI.sidebar";
 export const CHAT_PANEL_VIEW_TYPE = "coopAI.chatEditor";
 export const SETTINGS_PANEL_VIEW_TYPE = "coopAI.settings";
 export const SECRET_KEY_API_TOKEN = "coopAI.apiToken";
+export const SECRET_KEY_REFRESH_TOKEN = "coopAI.refreshToken";
 export const CACHE_TTL_MS = 5 * 60 * 1000;
 export const DEFAULT_API_BASE = "https://api.coop-ai.dev";
 
@@ -111,6 +112,8 @@ export type UserPreferences = {
   owner: string;
   repo: string;
   branch: string;
+  isSignedIn: boolean;
+  /** @deprecated Use isSignedIn */
   hasApiKey: boolean;
   defaultCodeHost: CodeHostProviderPreference;
   gitlabBaseUrl: string;
@@ -121,7 +124,7 @@ export type UserPreferences = {
   orgName?: string;
   plan?: "free" | "pro" | "enterprise";
   userRole?: string;
-  authMethod?: "api_key" | "sso_session";
+  authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
   canInstallIntegrations?: boolean;
   onboardingCompleted?: boolean;
   adminPortalUrl?: string;
@@ -356,6 +359,9 @@ export type WebviewInbound =
   | { type: "settings:clear-api-key" }
   | { type: "settings:copy-api-key" }
   | { type: "settings:reveal-api-key" }
+  | { type: "settings:sign-in-password"; payload: { email: string; password: string } }
+  | { type: "settings:sign-in-google" }
+  | { type: "settings:forgot-password"; payload: { email: string } }
   | { type: "settings:sign-in-sso"; payload?: { org?: string } }
   | { type: "settings:sign-out" }
   | { type: "settings:test-connection" }

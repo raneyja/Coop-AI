@@ -25,7 +25,7 @@
 
 ### Developer (`canInstallIntegrations: false`)
 
-- As a developer, I sign in with an org API key or SSO, set workspace repo defaults, and use chat — I never see Connect buttons or PAT fields in production mode.
+- As a developer, I sign in with email/password, Google, or org SSO, set workspace repo defaults, and use chat — I never see Connect buttons or PAT fields in production mode.
 - If integrations are missing, I see “Ask your org admin” messaging (existing behavior).
 - Success: chat works when admin has connected tools; no connect affordances in Settings.
 
@@ -38,11 +38,11 @@
 | Step | Surface today | In-product? |
 |------|---------------|-------------|
 | Operator OAuth app + env | `.env.backend`, vendor consoles | Hidden (correct) |
-| Admin sign-in | Admin portal `/login`, extension Account | Yes |
+| Admin sign-in | Admin portal `/login` (email/password, Google, SSO), extension Account | Yes |
 | Connect integrations | Extension Settings → Tools **or** admin `/integrations` | Partial — wizard links out |
 | Enterprise Slack scope | Admin `/integrations` → Manage access | Yes, but not in wizard |
 | Invite users | Admin `/users` | Partial — wizard links out |
-| Issue API keys | Admin `/api-keys` | Yes (manual nav) |
+| Issue automation API keys | Admin `/api-keys` (CI/scripts only) | Yes (manual nav) |
 | Verify / Test | Extension per-tool Test; admin scope Test | Partial — no aggregated health |
 | Mark onboarding done | Wizard “Finish setup” (no gates) | Yes but too permissive |
 
@@ -132,7 +132,7 @@ Welcome → Connect → Scope → Invite → Verify → Done
 
 ### Step 5 — Done
 
-- Summary: connected count, scope status, link to API Keys.
+- Summary: connected count, scope status, link to invite users.
 - **Finish setup** → `POST /v1/admin/onboarding/complete` → hide wizard.
 
 ---
@@ -154,11 +154,11 @@ Welcome → Connect → Scope → Invite → Verify → Done
 
 | # | Item | In extension | Deep link |
 |---|------|--------------|-----------|
-| 1 | Sign in | Account → Test connection | — |
+| 1 | Sign in | Account → email/password or Google → Test connection | — |
 | 2 | Connect tools | Tools list subtitles show status | Admin portal `/integrations` for bulk connect |
 | 3 | Slack scope (Enterprise) | Read-only hint if scope required | `{adminPortalUrl}/integrations` (Manage access) |
 | 4 | Workspace defaults | Workspace → owner/repo/branch | — |
-| 5 | Invite developers | Copy: issue API key from admin | `{adminPortalUrl}/api-keys` |
+| 5 | Invite developers | Copy: invite teammates from admin Users page | `{adminPortalUrl}/users` |
 
 ### PAT / dev token fields
 
@@ -433,9 +433,9 @@ Add `formatIntegrationError(provider, status, body)` in `admin/src/lib/coopApi.t
 | Connect OAuth | **Primary** (wizard + /integrations) | Supported (Settings → Tools) |
 | Enterprise scope | **Only** (Manage access) | Deep link only |
 | Invite users | **Primary** (/users) | — |
-| Issue API keys | **Primary** | — |
+| Issue automation API keys | **Primary** (CI/scripts) | — |
 | Test integration | Verify step + scope panel | Per-tool Test |
 | Workspace repo defaults | — | **Primary** |
-| Developer sign-in | — | **Primary** |
+| Developer sign-in | — | **Primary** (email/password, Google, SSO) |
 
 **Principle:** Admin portal owns org-wide setup; extension owns developer daily use and mirrors connect for admins who live in VS Code.

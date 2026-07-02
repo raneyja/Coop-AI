@@ -31,6 +31,8 @@ export type Preferences = {
   owner: string;
   repo: string;
   branch: string;
+  isSignedIn: boolean;
+  /** @deprecated Use isSignedIn */
   hasApiKey: boolean;
   defaultCodeHost: CodeHostProviderPreference;
   gitlabBaseUrl: string;
@@ -49,7 +51,7 @@ export type Preferences = {
     retryAfterMs: number;
   };
   userRole?: string;
-  authMethod?: "api_key" | "sso_session";
+  authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
   canInstallIntegrations?: boolean;
   onboardingCompleted?: boolean;
   adminPortalUrl?: string;

@@ -1,9 +1,14 @@
+function getAdminPortalBase(): string {
+  const base = process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL?.trim() || "http://localhost:3001";
+  return base.replace(/\/+$/, "").replace(/\/login$/, "").replace(/\/auth\/callback$/, "");
+}
+
 /** Base admin portal URL from env → sign-in page. */
 export function getAdminPortalLoginUrl(): string {
-  const base = process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL?.trim() || "http://localhost:3001";
-  const trimmed = base.replace(/\/+$/, "");
-  if (trimmed.endsWith("/login")) {
-    return trimmed;
-  }
-  return `${trimmed}/login`;
+  return `${getAdminPortalBase()}/login`;
+}
+
+/** OAuth / website session handoff target (hash receives coopToken + coopRefresh). */
+export function getAdminPortalAuthCallbackUrl(): string {
+  return `${getAdminPortalBase()}/auth/callback`;
 }

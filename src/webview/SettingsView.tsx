@@ -99,6 +99,7 @@ const DEFAULT_PREFS: Preferences = {
   repo: "",
   branch: "",
   hasApiKey: false,
+  isSignedIn: false,
   defaultCodeHost: "github",
   gitlabBaseUrl: "https://gitlab.com/api/v4",
   hasGitHubToken: false,
@@ -415,7 +416,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             setConnectionTestOk(false);
           }
           atlassianInstalledRef.current = message.payload.hasAtlassianInstalled;
-          if (!message.payload.hasApiKey) {
+          if (!(message.payload.isSignedIn ?? message.payload.hasApiKey)) {
             setApiKeyDraft("");
             apiKeyBaselineRef.current = null;
           }
@@ -634,6 +635,11 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           }
         }}
         onSignInSso={(org) => post({ type: "settings:sign-in-sso", payload: org ? { org } : undefined })}
+        onSignInPassword={(email, password) =>
+          post({ type: "settings:sign-in-password", payload: { email, password } })
+        }
+        onSignInGoogle={() => post({ type: "settings:sign-in-google" })}
+        onForgotPassword={(email) => post({ type: "settings:forgot-password", payload: { email } })}
         onSignOut={() => post({ type: "settings:sign-out" })}
         onTestConnection={() => {
           beginTest("connection");

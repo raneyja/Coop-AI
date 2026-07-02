@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import { readAutocompleteSettings, onAutocompleteSettingsChanged } from "./autocompleteConfig";
-import { copilotCoexistenceWarning, shouldYieldToCopilot } from "./copilotCoexistence";
 import { analyzeDocumentContext, isFileEligible } from "./contextAnalyzer";
 import { CompletionRouter } from "./completionRouter";
 import { toInlineInsertText } from "./completionFilter";
@@ -53,14 +52,14 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.disposables.push(
       onAutocompleteSettingsChanged(() => {
         this.settings = readAutocompleteSettings();
-        this.publishStatusWithCopilot(this.settings.enabled ? "ready" : "disabled");
+        this.publishStatus(this.settings.enabled ? "ready" : "disabled");
       })
     );
     const unsubscribeTelemetry = this.performance.onEvent((event) =>
       this.options.onTelemetry?.(event)
     );
     this.disposables.push({ dispose: unsubscribeTelemetry });
-    this.publishStatusWithCopilot(this.settings.enabled ? "ready" : "disabled");
+    this.publishStatus(this.settings.enabled ? "ready" : "disabled");
   }
 
   public dispose(): void {
@@ -84,24 +83,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       (this.alternativeIndex + direction + this.lastAlternatives.length) %
       this.lastAlternatives.length;
     void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
-    this.publishStatusWithCopilot("ready", undefined, this.alternativeIndex + 1, this.lastAlternatives.length);
+    this.publishStatus("ready", undefined, this.alternativeIndex + 1, this.lastAlternatives.length);
   }
 
   public getPerformanceSnapshot() {
     return this.performance.snapshot();
-  }
-
-  public handleDidShowCompletionItem(
-    completionItem: vscode.InlineCompletionItem,
-    _updatedInsertText: string
-  ): void {
-    const args = completionItem.command?.arguments;
-    const contextHash = typeof args?.[0] === "string" ? args[0] : "";
-    const languageId = typeof args?.[1] === "string" ? args[1] : undefined;
-    if (!contextHash) {
-      return;
-    }
-    this.trackShownItem(contextHash, languageId ?? "");
   }
 
   public async provideInlineCompletionItems(
@@ -112,11 +98,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   ): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList | null> {
     this.settings = readAutocompleteSettings();
     if (!this.settings.enabled) {
-      this.publishStatusWithCopilot("disabled");
-      return null;
-    }
-    if (shouldYieldToCopilot(this.settings.copilotPolicy)) {
-      this.publishStatusWithCopilot("disabled", "Disabled while GitHub Copilot is installed.");
+      this.publishStatus("disabled");
       return null;
     }
     if (!isFileEligible(document)) {
@@ -248,14 +230,14 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
     this.noteSupersededIfNeeded(extracted.contextHash);
     this.triggerDetector.markRequested(extracted.contextHash);
-    this.publishStatusWithCopilot("processing");
+    this.publishStatus("processing");
 
     const abort = new AbortController();
     const cancelListener = token.onCancellationRequested(() => abort.abort());
     try {
       const result = await this.router.fetchCompletions(extracted, this.settings, abort.signal);
       if (token.isCancellationRequested || result.completions.length === 0) {
-        this.publishStatusWithCopilot("ready", result.latencyMs ? `idle (${result.latencyMs}ms)` : undefined);
+        this.publishStatus("ready", result.latencyMs ? `idle (${result.latencyMs}ms)` : undefined);
         return null;
       }
 
@@ -272,11 +254,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
 
       if (items.length === 0) {
-        this.publishStatusWithCopilot("ready");
+        this.publishStatus("ready");
         return null;
       }
 
-      this.publishStatusWithCopilot(
+      this.publishStatus(
         "ready",
         undefined,
         1,
@@ -284,10 +266,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         result.latencyMs
       );
 
+      this.trackShownItem(extracted.contextHash, extracted.languageId);
       discardContextPayload(extracted);
       return this.settings.showMultipleSuggestions ? items : [items[0]];
     } catch (error) {
-      this.publishStatusWithCopilot(
+      this.publishStatus(
         "error",
         error instanceof Error ? error.message : "Autocomplete failed"
       );
@@ -322,19 +305,16 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     return item;
   }
 
-  private publishStatusWithCopilot(
+  private publishStatus(
     status: AutocompleteStatusState,
     message?: string,
     suggestionIndex?: number,
     suggestionCount?: number,
     latencyMs?: number
   ): void {
-    const copilotWarning = this.settings.enabled ? copilotCoexistenceWarning() : undefined;
-    const combinedMessage =
-      copilotWarning && message ? `${message} · ${copilotWarning}` : copilotWarning ?? message;
     this.options.onStatus?.({
       status,
-      message: combinedMessage,
+      message,
       suggestionIndex,
       suggestionCount,
       latencyMs

@@ -9,7 +9,7 @@ export type PlanCapabilities = {
   chatFeed: boolean;
   showEnterpriseScopeStep: boolean;
   showOnboardingIndexingStep: boolean;
-  showOnboardingApiKeyStep: boolean;
+  showOnboardingExtensionStep: boolean;
   showOnboardingTeamStep: boolean;
   showOnboardingVerifyStep: boolean;
 };
@@ -34,8 +34,8 @@ export function planCapabilities(plan: string | undefined | null): PlanCapabilit
     indexedRepoLimit: isFree ? 3 : null,
     chatFeed: true,
     showEnterpriseScopeStep: isEnterprise,
-    showOnboardingIndexingStep: isFree,
-    showOnboardingApiKeyStep: isFree,
+    showOnboardingIndexingStep: true,
+    showOnboardingExtensionStep: isFree,
     showOnboardingTeamStep: !isFree,
     showOnboardingVerifyStep: !isFree
   };

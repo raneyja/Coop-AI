@@ -27,7 +27,6 @@ function baseSettings(overrides: Partial<AutocompleteSettings> = {}): Autocomple
     debounceMs: 300,
     model: "haiku",
     customModel: "",
-    copilotPolicy: "warn",
     showMultipleSuggestions: false,
     requestTimeoutMs: 400,
     useFim: true,

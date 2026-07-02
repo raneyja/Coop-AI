@@ -29,12 +29,13 @@ export async function GET(
   }
 
   const authorization = request.headers.get("authorization")?.trim();
-  if (!authorization?.startsWith("Bearer coop_")) {
+  const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
+  if (!token.startsWith("coop_") && !token.startsWith("coop_sess_")) {
     return NextResponse.json({ error: "unauthorized", message: "Not signed in." }, { status: 401 });
   }
 
   const response = await fetch(`${apiBase()}/v1/${provider}/app/install-url`, {
-    headers: { Authorization: authorization },
+    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
 

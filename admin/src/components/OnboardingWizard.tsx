@@ -36,7 +36,7 @@ const ONBOARDING_STEP_DEFS: StepDef[] = [
   {
     id: "scope",
     label: "Access",
-    include: (plan) => !planCapabilities(plan).showOnboardingIndexingStep
+    include: (plan) => planCapabilities(plan).showEnterpriseScopeStep
   },
   {
     id: "team",
@@ -49,9 +49,9 @@ const ONBOARDING_STEP_DEFS: StepDef[] = [
     include: (plan) => planCapabilities(plan).showOnboardingVerifyStep
   },
   {
-    id: "api-key",
-    label: "API key",
-    include: (plan) => planCapabilities(plan).showOnboardingApiKeyStep
+    id: "extension",
+    label: "Extension",
+    include: (plan) => planCapabilities(plan).showOnboardingExtensionStep
   },
   { id: "done", label: "Done", include: () => true }
 ];
@@ -239,13 +239,14 @@ export function OnboardingWizard({
                   <>
                     <li>1. Connect a code host (GitHub, GitLab, or Bitbucket)</li>
                     <li>2. Deep-Index up to 3 repos for your org</li>
-                    <li>3. Create an API key for the VS Code extension</li>
+                    <li>3. Install the VS Code extension and sign in</li>
                   </>
                 ) : (
                   <>
                     <li>1. Connect code hosts and collaboration tools</li>
-                    <li>2. Configure access scope (Enterprise)</li>
-                    <li>3. Invite your team and verify connections</li>
+                    <li>2. Choose repositories to Deep-Index (Indexing → Configure GitHub)</li>
+                    <li>3. Configure collaboration access scope (Enterprise)</li>
+                    <li>4. Invite your team and verify connections</li>
                   </>
                 )}
               </ul>
@@ -258,7 +259,7 @@ export function OnboardingWizard({
                 <h3 className="text-lg font-semibold text-white">Connect tools</h3>
                 <p className="mt-2 text-sm text-coop-muted">
                   {isFreePlan
-                    ? "Connect GitHub, GitLab, or Bitbucket — then Deep-Index up to 3 repos org-wide. Collaboration tools (Slack, Jira, Notion) are optional."
+                    ? "Connect GitHub, GitLab, or Bitbucket — then use Indexing → Configure to choose up to 3 repos to Deep-Index. Collaboration tools are optional."
                     : "OAuth opens in a new tab. Return here and refresh each row after approving access."}
                 </p>
               </div>
@@ -320,14 +321,21 @@ export function OnboardingWizard({
           {currentStepId === "indexing" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">Index your repos</h3>
+                <h3 className="text-lg font-semibold text-white">Choose repos to Deep-Index</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  After connecting a code host, open{" "}
+                  Open{" "}
                   <Link href="/indexing" className="admin-link">
                     Indexing
                   </Link>{" "}
-                  to sync your catalog, then choose up to 3 repositories to Deep-Index. Your VS Code workspace can use the same 3
-                  repos for @ mentions and Coop-Search.
+                  and click <span className="text-white">Configure GitHub</span> (or GitLab / Bitbucket) to
+                  browse your repositories and select which ones to Deep-Index. Until you choose repos, the
+                  Indexing page stays empty.
+                  {isFreePlan ? (
+                    <>
+                      {" "}
+                      Free plan allows up to 3 Deep-Indexed repos org-wide.
+                    </>
+                  ) : null}
                 </p>
               </div>
               {!anyCodeHostConnected ? (
@@ -338,19 +346,23 @@ export function OnboardingWizard({
             </div>
           )}
 
-          {currentStepId === "api-key" && (
+          {currentStepId === "extension" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">Issue your API key</h3>
+                <h3 className="text-lg font-semibold text-white">Install the extension</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Open{" "}
-                  <Link href="/api-keys" className="admin-link">
-                    API Keys
-                  </Link>{" "}
-                  to create a key, then paste it into the Coop AI VS Code extension sign-in prompt. Keep keys
-                  private and rotate them if you share a machine.
+                  Install the Coop AI VS Code extension from the marketplace, then sign in with the same email and
+                  password (or Google) you use here. No API key paste required for day-to-day coding.
                 </p>
               </div>
+              <a
+                href="https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-btn-secondary inline-block"
+              >
+                Open VS Code Marketplace
+              </a>
             </div>
           )}
 
@@ -361,20 +373,12 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan ? (
                     <>
-                      Install the Coop AI VS Code extension and paste the API key from signup (or create one under{" "}
-                      <Link href="/api-keys" className="admin-link">
-                        API Keys
-                      </Link>
-                      ). Open any local folder to chat immediately — connect a code host later to Deep-Index up to 3
-                      repos.
+                      Install the Coop AI VS Code extension and sign in with your Coop account. Open any local folder
+                      to chat immediately — connect a code host to Deep-Index up to 3 repos.
                     </>
                   ) : (
                     <>
-                      Developers install the Coop AI VS Code extension and sign in with an API key you issue from{" "}
-                      <Link href="/api-keys" className="admin-link">
-                        API Keys
-                      </Link>
-                      .
+                      Developers install the Coop AI VS Code extension and sign in with their Coop account or SSO.
                     </>
                   )}
                 </p>
@@ -411,7 +415,7 @@ export function OnboardingWizard({
                     Open Indexing
                   </Link>
                   <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
-                    Continue
+                    {anyCodeHostConnected ? "I'll configure repos next" : "Continue"}
                   </button>
                 </>
               ) : null}
@@ -455,15 +459,10 @@ export function OnboardingWizard({
                   Continue
                 </button>
               ) : null}
-              {currentStepId === "api-key" ? (
-                <>
-                  <Link href="/api-keys" className="admin-btn-secondary">
-                    Open API Keys
-                  </Link>
-                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
-                    Continue
-                  </button>
-                </>
+              {currentStepId === "extension" ? (
+                <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                  Continue
+                </button>
               ) : null}
               {currentStepId === "done" ? (
                 <button

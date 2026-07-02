@@ -416,11 +416,12 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         const token = new URLSearchParams(uri.fragment).get("coopToken")?.trim();
+        const refreshToken = new URLSearchParams(uri.fragment).get("coopRefresh")?.trim();
         if (!token) {
           return;
         }
         void (async () => {
-          await api.setToken(token);
+          await api.storeSession(token, refreshToken);
           await refreshAllSessions();
           void vscode.window.showInformationMessage("Signed in to Coop.");
         })();

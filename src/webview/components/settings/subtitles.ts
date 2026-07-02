@@ -56,8 +56,8 @@ export function modelHubSubtitle(prefs: Preferences): string {
 }
 
 export function apiHubSubtitle(prefs: Preferences): string {
-  if (!prefs.hasApiKey) {
-    return "No API key";
+  if (!(prefs.isSignedIn ?? prefs.hasApiKey)) {
+    return "Not signed in";
   }
   try {
     const host = new URL(prefs.apiBaseUrl).host;

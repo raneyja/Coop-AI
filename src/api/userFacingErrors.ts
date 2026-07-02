@@ -69,7 +69,7 @@ export type CoopApiErrorBody = {
 };
 
 const API_ERROR_MESSAGES: Record<string, string> = {
-  unauthorized: "Sign in to Coop first (API key or SSO).",
+  unauthorized: "Sign in with your email or Google in Coop settings.",
   admin_required: "Only your organization admin can connect GitHub. Ask IT to install the GitHub App.",
   repo_limit:
     "You've reached your plan limit for Deep-Indexed repos. Disable another repo or upgrade to Pro for unlimited indexing.",
@@ -125,7 +125,7 @@ export function formatCoopApiError(
     return "You do not have permission for this action.";
   }
   if (status === 401) {
-    return "Sign in to Coop first (API key or SSO).";
+    return "Sign in with your email or Google in Coop settings.";
   }
   return `Request failed (${status}).`;
 }

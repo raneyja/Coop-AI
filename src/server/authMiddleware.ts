@@ -48,7 +48,9 @@ export async function resolveAuthContext(
         plan: session.plan,
         apiKeyId: `session:${session.userId}`,
         userId: session.userId,
-        role: session.role
+        role: session.role,
+        sessionProvider: session.authProvider,
+        email: session.email
       };
     }
   }

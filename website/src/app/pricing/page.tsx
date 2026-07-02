@@ -44,8 +44,8 @@ const tiers: PricingTier[] = [
       "Cloud-hosted"
     ],
     note: "Code hosts, cross-repo search, and Lightning Mode unlock in Pro",
-    cta: "Join waitlist",
-    href: "/demo?intent=waitlist",
+    cta: "Get started free",
+    href: "/signup/free",
     highlighted: false
   },
   {
@@ -62,8 +62,8 @@ const tiers: PricingTier[] = [
     ],
     note: "See Lightning Mode details →",
     recommended: true,
-    cta: "Join waitlist",
-    href: "/demo?intent=waitlist",
+    cta: "Start Pro",
+    href: "/signup",
     highlighted: true
   },
   {
@@ -160,7 +160,11 @@ export default function PricingPage() {
 
           <p className="mt-12 text-center text-sm text-coop-muted">
             Beta participants receive advance notice before any pricing changes at general
-            availability.
+            availability.{" "}
+            <Link href="/login" className="font-medium text-gray-900 hover:underline">
+              Already have an account? Sign in
+            </Link>
+            .
           </p>
         </div>
       </section>

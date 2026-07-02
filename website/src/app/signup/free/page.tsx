@@ -1,179 +1,190 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { Button } from "@/components/Button";
+import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
-import { getAdminPortalLoginUrl } from "@/lib/adminPortal";
-import { marketplaceHref } from "@/lib/site.config";
+import { AuthDivider, AuthFooterLink, GoogleAuthButton } from "@/components/AuthForm";
+import {
+  authErrorClassName,
+  authInputClassName,
+  authSuccessClassName,
+  PASSWORD_MIN_LENGTH,
+  redirectToAdminPortal,
+  validatePasswordClient,
+  type AuthSession
+} from "@/lib/auth";
 
-type SignupResponse = {
-  apiKey?: string;
-  adminPortalLoginUrl?: string;
+type SignupResponse = AuthSession & {
   error?: string;
   code?: string;
+  message?: string;
 };
 
 export default function FreeSignupPage() {
   const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [orgName, setOrgName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [adminPortalLoginUrl, setAdminPortalLoginUrl] = useState<string | null>(null);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
-
-  const fallbackAdminPortalLoginUrl = useMemo(() => getAdminPortalLoginUrl(), []);
-  const installHref = useMemo(() => marketplaceHref() ?? "/manual#get-started", []);
-  const isInstallExternal = installHref.startsWith("http://") || installHref.startsWith("https://");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    setCopyState("idle");
+    setSuccessMessage(null);
+
+    const passwordError = validatePasswordClient(password);
+    if (passwordError) {
+      setSubmitting(false);
+      setError(passwordError);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSubmitting(false);
+      setError("Passwords do not match.");
+      return;
+    }
 
     const response = await fetch("/api/signup/free", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: email.trim(),
-        displayName: displayName.trim() || undefined
+        password,
+        orgName: orgName.trim() || undefined
       })
     });
     const data = (await response.json().catch(() => ({}))) as SignupResponse;
 
-    setSubmitting(false);
-    if (!response.ok || !data.apiKey) {
-      if (data.code === "email_taken") {
-        setError("That email is already registered. Sign in from the admin portal or use a different email.");
+    if (!response.ok || !data.accessToken || !data.refreshToken) {
+      setSubmitting(false);
+      if (data.code === "email_taken" || data.error === "email_taken") {
+        setError("That email is already registered. Sign in or reset your password.");
         return;
       }
-      setError(data.error ?? "We could not create your free account. Please try again.");
+      setError(data.error ?? "We could not create your account. Please try again.");
       return;
     }
 
-    setApiKey(data.apiKey);
-    setAdminPortalLoginUrl(data.adminPortalLoginUrl ?? null);
-    setEmail("");
-    setDisplayName("");
+    setSuccessMessage("Account created. Opening your admin portal…");
+    redirectToAdminPortal({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken
+    });
   }
-
-  async function copyApiKey() {
-    if (!apiKey) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(apiKey);
-      setCopyState("copied");
-      window.setTimeout(() => setCopyState("idle"), 2200);
-    } catch {
-      setCopyState("failed");
-    }
-  }
-
-  const resolvedAdminPortalUrl = adminPortalLoginUrl || fallbackAdminPortalLoginUrl;
 
   return (
     <>
       <PageHeader
         eyebrow="Developer"
         title="Get started free"
-        description="Create your free Coop AI developer account and get your API key immediately."
+        description="Create your Coop AI account with email and password. No credit card required."
         tight
       />
 
       <section className="mx-auto max-w-lg px-6 pb-24">
         <div className="coop-panel space-y-6 p-6">
-          {apiKey ? (
+          {successMessage ? (
+            <p className={authSuccessClassName}>{successMessage}</p>
+          ) : (
             <>
-              <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm leading-relaxed text-coop-foreground">
-                Your API key is shown once. Copy it now and store it securely before leaving this page.
-              </p>
+              <GoogleAuthButton mode="signup" orgName={orgName} disabled={submitting} />
+              <AuthDivider />
 
-              <div>
-                <label className="mb-2 block text-sm text-coop-muted">API key</label>
-                <div className="rounded-sm border border-coop-border bg-gray-50 p-3">
-                  <code className="block break-all font-mono text-xs text-gray-900">{apiKey}</code>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label htmlFor="email" className="mb-1 block text-sm text-coop-muted">
+                    Work email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    className={authInputClassName}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={copyApiKey}
-                    className="inline-flex items-center justify-center rounded-sm border border-coop-border bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:border-gray-400 hover:bg-gray-50"
-                  >
-                    Copy API key
-                  </button>
-                  <p className="text-xs text-coop-muted">
-                    {copyState === "copied" ? (
-                      <span className="text-coop-index">Copied</span>
-                    ) : copyState === "failed" ? (
-                      <span className="text-red-600">Could not copy. Select and copy manually.</span>
-                    ) : (
-                      "Keep this key private."
-                    )}
+
+                <div>
+                  <label htmlFor="password" className="mb-1 block text-sm text-coop-muted">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={PASSWORD_MIN_LENGTH}
+                    className={authInputClassName}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <p className="mt-1 text-xs text-coop-muted">
+                    At least {PASSWORD_MIN_LENGTH} characters.
                   </p>
                 </div>
-              </div>
 
-              <div className="space-y-3 border-t border-coop-border pt-5">
-                <Button href={resolvedAdminPortalUrl} external className="w-full">
-                  Open admin portal
-                </Button>
-                <Button
-                  href={installHref}
-                  variant="secondary"
-                  external={isInstallExternal}
-                  className="w-full"
+                <div>
+                  <label htmlFor="confirmPassword" className="mb-1 block text-sm text-coop-muted">
+                    Confirm password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={PASSWORD_MIN_LENGTH}
+                    className={authInputClassName}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="orgName" className="mb-1 block text-sm text-coop-muted">
+                    Workspace name <span className="text-coop-muted/70">(optional)</span>
+                  </label>
+                  <input
+                    id="orgName"
+                    type="text"
+                    autoComplete="organization"
+                    placeholder="My team"
+                    className={authInputClassName}
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                  />
+                </div>
+
+                {error ? <p className={authErrorClassName}>{error}</p> : null}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
                 >
-                  Install VS Code extension
-                </Button>
-              </div>
+                  {submitting ? "Creating account…" : "Create free account"}
+                </button>
+              </form>
+
+              <AuthFooterLink prompt="Already have an account?" href="/login" label="Sign in" />
             </>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label htmlFor="email" className="mb-1 block text-sm text-coop-muted">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="displayName" className="mb-1 block text-sm text-coop-muted">
-                  Display name / workspace name (optional)
-                </label>
-                <input
-                  id="displayName"
-                  type="text"
-                  className="w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                />
-              </div>
-
-              {error ? (
-                <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700">
-                  {error}
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
-              >
-                {submitting ? "Creating account…" : "Create free account"}
-              </button>
-            </form>
           )}
+
+          <p className="border-t border-coop-border pt-4 text-center text-xs leading-relaxed text-coop-muted">
+            By creating an account you agree to our{" "}
+            <Link href="/terms" className="text-gray-900 hover:underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="text-gray-900 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
       </section>
     </>

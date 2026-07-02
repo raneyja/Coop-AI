@@ -46,22 +46,22 @@ See the [Security page](/security) for architecture details.
 
 ### Developer (free) signup
 
-1. **Browser** — Go to [coop-ai.dev/signup/free](https://coop-ai.dev/signup/free) and enter your work email.
-2. **Browser** — Copy your one-time API key (`coop_…`). It is shown once and not saved in any project file.
-3. **Extension UI** — Install the VS Code extension (see below) and paste the key in **Settings → Account**.
-4. **Browser** — Optional: open the [admin portal](https://admin.coop-ai.dev/login) to manage your personal account.
+1. **Browser** — Go to [coop-ai.dev/signup/free](https://coop-ai.dev/signup/free), enter your work email, and create a password (or continue with Google).
+2. **Browser** — Verify your email if prompted.
+3. **Extension UI** — Install the VS Code extension (see below) and sign in under **Settings → Account** with the same email and password, or **Continue with Google**.
+4. **Browser** — Optional: open the [admin portal](https://admin.coop-ai.dev/login) with the same credentials to manage your personal account.
 
-> **Important:** Save your API key immediately. If you lose it, create a new one from the admin portal.
+> **Forgot your password?** Use [Forgot password](https://coop-ai.dev/forgot-password) on the website or admin portal, or the **Forgot password?** link in the extension.
 
 ### Enterprise checkout
 
 1. **Browser** — Choose a plan on [Pricing](/pricing) and complete Stripe checkout.
 2. **Browser** — On the [Welcome page](/welcome), wait for provisioning (usually under a minute).
-3. **Email** — Check your inbox for the admin API key.
-4. **Browser** — Open the admin portal and sign in with that key.
+3. **Email** — Check your inbox for your account welcome email.
+4. **Browser** — Open the [admin portal](https://admin.coop-ai.dev/login) and sign in with your email and password, **Continue with Google**, or **Sign in with SSO** (Enterprise).
 5. **Admin portal** — Connect GitHub, Slack, and other tools once for your whole org.
 6. **Admin portal** — Invite teammates from the Users page.
-7. **Extension UI** — Developers install Coop AI in VS Code and sign in with their org API key.
+7. **Extension UI** — Developers install Coop AI in VS Code and sign in with their work email (or Google / org SSO).
 
 ### Install the VS Code extension
 
@@ -71,14 +71,16 @@ See the [Security page](/security) for architecture details.
 
 If the extension is not yet published, join the waitlist from the [demo page](/demo?intent=waitlist).
 
-### Connect your API key
+### Sign in
 
 1. **Extension UI** — Open the Coop sidebar → gear icon, or run **Coop AI: Open Settings** from the Command Palette.
-2. **Extension UI** — Go to **Account** and paste your API key (`coop_…`).
+2. **Extension UI** — Go to **Account** and sign in with your email and password, or **Continue with Google**. Enterprise orgs can use **Sign in with SSO**.
 3. **Extension UI** — Set **API base URL** to `https://api.coop-ai.dev` (default) or your self-hosted URL.
 4. **Extension UI** — Click **Test connection** — success shows a green health check calling `GET /health`.
 
-For local development, any key value works if the server has no token configured.
+Use **Forgot password?** in Account settings if you need to reset your password ([coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password)).
+
+**Automation API keys** (`coop_…`) are optional — expand **Automation API key** under Account for scripts and CI only. Most users should sign in with email or Google.
 
 ### Set repository context
 
@@ -139,7 +141,7 @@ Open settings via the sidebar gear icon or **Coop AI: Open Settings**:
 
 | Screen | Purpose |
 | --- | --- |
-| **Account** | API key, API base URL, connection test |
+| **Account** | Sign in (email, Google, SSO), API base URL, connection test; automation API key for CI |
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
 | **Preferences** | Prompt library, model preferences |
@@ -462,7 +464,7 @@ Ask your admin if:
 
 - Quick actions return "integration not connected"
 - You need access to private org repos on Pro
-- Teammates need API keys or seat assignments
+- Teammates need invites or seat assignments
 
 Full admin setup is covered in the [Documentation hub](/docs).
 
@@ -470,11 +472,12 @@ Full admin setup is covered in the [Documentation hub](/docs).
 
 | Problem | Fix |
 | --- | --- |
-| **Test connection fails** | Verify API key, base URL (`https://api.coop-ai.dev`), and network access |
+| **Test connection fails** | Sign in again under Account; verify base URL (`https://api.coop-ai.dev`) and network access |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
 | **No Slack/Jira context** | Ask admin to connect integrations in admin portal |
-| **Lost API key** | Admin portal → API Keys → create new key (old key can be revoked) |
+| **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** in extension Account settings |
+| **Can't sign in** | Verify email is verified; try Google sign-in; Enterprise: use org SSO |
 
 ## Support
 

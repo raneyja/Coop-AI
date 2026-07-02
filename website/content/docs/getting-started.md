@@ -11,26 +11,31 @@ This guide gets you from signup to your first useful chat in Coop AI.
 ## What you'll need
 
 - VS Code 1.85 or later
-- A Coop AI API key ([free signup](/signup/free) or from your org admin)
+- A Coop AI account ([free signup](/signup/free) or invited by your org admin)
 - A local workspace folder open in VS Code
 
 ## Step 1 — Create an account
 
 **Browser** → [coop-ai.dev/signup/free](https://coop-ai.dev/signup/free)
 
-Enter your work email. Copy your one-time API key (`coop_…`) — it is shown once and not saved in any project file.
+Enter your work email and create a password, or continue with Google. Verify your email if prompted.
 
-For Pro or Enterprise, start at [Pricing](/pricing) and follow checkout to the [Welcome page](/welcome).
+For Pro or Enterprise, start at [Pricing](/pricing) and follow checkout to the [Welcome page](/welcome). Sign in with the same email you used at checkout.
+
+**Forgot your password?** → [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password)
 
 ## Step 2 — Install the extension
 
 See [Install the VS Code extension](/docs/install-extension) for marketplace and manual install options.
 
-## Step 3 — Connect your API key
+## Step 3 — Sign in
 
 1. **Extension UI** — Open Coop sidebar → gear icon (or **Coop AI: Open Settings**).
-2. **Account** — Paste your API key and set API base URL to `https://api.coop-ai.dev`.
-3. Click **Test connection** — success calls `GET /health`.
+2. **Account** — Sign in with your email and password, or **Continue with Google**. Enterprise: **Sign in with SSO**.
+3. Set API base URL to `https://api.coop-ai.dev`.
+4. Click **Test connection** — success calls `GET /health`.
+
+API keys are for automation and CI only — expand **Automation API key** under Account if you need one for scripts.
 
 ## Step 4 — Ask your first question
 

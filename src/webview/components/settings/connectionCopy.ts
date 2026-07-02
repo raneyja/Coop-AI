@@ -148,8 +148,12 @@ export function displayPlanLabel(prefs: Pick<Preferences, "plan">): string {
   }
 }
 
+export function preferencesSignedIn(prefs: Pick<Preferences, "isSignedIn" | "hasApiKey">): boolean {
+  return prefs.isSignedIn ?? prefs.hasApiKey;
+}
+
 export function displayIdentitySubtitle(prefs: Preferences): string | undefined {
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return undefined;
   }
   const orgName = displayOrgName(prefs);
@@ -158,13 +162,13 @@ export function displayIdentitySubtitle(prefs: Preferences): string | undefined 
 }
 
 export function accountHubSubtitle(prefs: Preferences): string {
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return "Not signed in";
   }
   try {
-    return `API key configured · ${new URL(prefs.apiBaseUrl).host}`;
+    return `Signed in · ${new URL(prefs.apiBaseUrl).host}`;
   } catch {
-    return "API key configured";
+    return "Signed in";
   }
 }
 
@@ -179,7 +183,7 @@ export function formatQuotaUsageSummary(quota: {
 }
 
 export function planUsageHubSubtitle(prefs: Preferences): string {
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return "Sign in to view plan";
   }
   const plan = displayPlanLabel(prefs);
@@ -196,7 +200,7 @@ export function indexingHubSubtitle(
   prefs: Preferences,
   lightningState?: { readyRepos: number; indexingRepos: number; indexedRepoCount?: number; indexedRepoLimit?: number | null } | null
 ): string {
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return "Sign in to view indexing";
   }
   if (!lightningState) {

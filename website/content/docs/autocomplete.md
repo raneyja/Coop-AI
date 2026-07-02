@@ -92,7 +92,6 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 | `coopAI.autocomplete.trigger` | `auto` | `auto` — debounced while typing; `manual` — hotkey only; `off` — no requests |
 | `coopAI.autocomplete.useFim` | `true` | Send FIM `segments` for Codestral / DeepSeek routing |
 | `coopAI.autocomplete.useGraphContext` | `false` | Include indexed dependency graph context (**Pro**; see below) |
-| `coopAI.autocomplete.copilotPolicy` | `warn` | `warn` — UI warning when Copilot is installed; `disable-when-copilot` — yield to Copilot |
 | `coopAI.autocomplete.model` | `haiku` | Fast preset: `haiku`, `gpt35`, or `custom` |
 | `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
@@ -103,16 +102,11 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 
 See [Extension settings](/docs/extension-settings) for Account, Tools, and Workspace settings.
 
-## GitHub Copilot coexistence
+## GitHub Copilot
 
-If **GitHub Copilot** or **GitHub Copilot Chat** is installed, both extensions can register inline completion providers. VS Code may show competing ghost text.
+When **Coop autocomplete is on**, Coop automatically disables **Copilot inline suggestions** (`github.copilot.enable`) and restores your previous Copilot setting when you turn Coop autocomplete off. No prompt — Copilot chat and other features stay available; only competing inline ghost text is turned off.
 
-| `copilotPolicy` | Behavior |
-| --- | --- |
-| `warn` (default) | Coop autocomplete runs; a one-time warning suggests changing policy |
-| `disable-when-copilot` | Coop autocomplete disables while Copilot extensions are installed |
-
-**Recommendation:** If Copilot is your primary inline tool, set `disable-when-copilot`. If you prefer Coop graph context (Pro + `useGraphContext`), keep `warn` or uninstall Copilot inline.
+When **Coop autocomplete is off**, Copilot inline behavior is unchanged.
 
 ## Graph context (Pro)
 
@@ -166,7 +160,6 @@ Org admins can view completion metrics in the [admin portal](https://admin.coop-
 | --- | --- |
 | **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm API key and **Test connection** |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
-| **Copilot wins** | Set `copilotPolicy` to `disable-when-copilot`, or disable Copilot inline |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
 | **Graph context empty** | Pro plan + indexed repo; check Workspace owner/repo/branch |

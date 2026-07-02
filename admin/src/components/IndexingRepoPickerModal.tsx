@@ -11,7 +11,7 @@ type IndexingRepoPickerModalProps = {
   open: boolean;
   provider: CodeHostProvider;
   repos: OrgRepoRecord[];
-  maxSelect: number;
+  maxSelect: number | null;
   alreadyIndexed: number;
   onClose: () => void;
   onConfirm: (repoIds: string[]) => Promise<void>;
@@ -30,12 +30,22 @@ export function IndexingRepoPickerModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const remainingSlots = Math.max(0, maxSelect - alreadyIndexed);
+  const unlimited = maxSelect == null;
+  const remainingSlots = unlimited ? Number.POSITIVE_INFINITY : Math.max(0, maxSelect - alreadyIndexed);
   const providerRepos = useMemo(
     () => repos.filter((repo) => parseCodeHostFromRepoId(repo.repoId) === provider),
     [provider, repos]
   );
+  const visibleRepos = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return providerRepos;
+    }
+    return providerRepos.filter((repo) => shortRepoName(repo.repoId).toLowerCase().includes(query));
+  }, [providerRepos, searchQuery]);
+  const unindexedCount = providerRepos.filter((repo) => !repo.lightningEnabled).length;
 
   useEffect(() => {
     setMounted(true);
@@ -45,6 +55,7 @@ export function IndexingRepoPickerModal({
     if (!open) {
       setSelected(new Set());
       setError(null);
+      setSearchQuery("");
       return;
     }
     document.body.style.overflow = "hidden";
@@ -77,7 +88,7 @@ export function IndexingRepoPickerModal({
         next.delete(repoId);
         return next;
       }
-      if (next.size >= remainingSlots) {
+      if (!unlimited && next.size >= remainingSlots) {
         return next;
       }
       next.add(repoId);
@@ -87,7 +98,7 @@ export function IndexingRepoPickerModal({
 
   async function handleConfirm() {
     if (selected.size === 0) {
-      setError(`Select at least one repo (up to ${remainingSlots}).`);
+      setError(unlimited ? "Select at least one repo." : `Select at least one repo (up to ${remainingSlots}).`);
       return;
     }
     setSubmitting(true);
@@ -102,6 +113,10 @@ export function IndexingRepoPickerModal({
       setSubmitting(false);
     }
   }
+
+  const selectionLabel = unlimited
+    ? `${selected.size} selected`
+    : `${selected.size} of ${remainingSlots} selected`;
 
   return createPortal(
     <div
@@ -122,29 +137,41 @@ export function IndexingRepoPickerModal({
       >
         <div className="shrink-0 border-b border-coop-border/40 bg-coop-dark px-5 py-4">
           <h2 id="indexing-picker-title" className="text-lg font-semibold text-white">
-            Choose repos to Deep-Index
+            Configure {codeHostLabel(provider)}
           </h2>
           <p className="mt-1 text-sm text-coop-muted">
-            {codeHostLabel(provider)} — {providerRepos.length} repos in catalog
-            {remainingSlots > 0 ? ` · select up to ${remainingSlots} more` : ""}.
+            {providerRepos.length} repositories available
+            {unindexedCount > 0 ? ` · ${unindexedCount} not indexed yet` : ""}. Select which to Deep-Index.
           </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-coop-dark px-5 py-4">
-          {remainingSlots === 0 ? (
+          {providerRepos.length > 8 ? (
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search repositories…"
+              className="admin-input mb-3"
+            />
+          ) : null}
+          {!unlimited && remainingSlots === 0 ? (
             <p className="mb-3 text-sm text-amber-200">
-              You have reached the free plan limit. Turn off Deep-Index on a repo in the table below to
-              free a slot, then select a replacement here.
+              You have reached the plan limit. Turn off Deep-Index on a repo below to free a slot.
             </p>
           ) : null}
           {providerRepos.length === 0 ? (
-            <p className="text-sm text-coop-muted">No repositories discovered yet.</p>
+            <p className="text-sm text-coop-muted">
+              No repositories found. Check your GitHub connection under Integrations, then try again.
+            </p>
+          ) : visibleRepos.length === 0 ? (
+            <p className="text-sm text-coop-muted">No repositories match your search.</p>
           ) : (
             <ul className="space-y-2">
-              {providerRepos.map((repo) => {
+              {visibleRepos.map((repo) => {
                 const indexed = repo.lightningEnabled;
                 const checked = selected.has(repo.repoId);
-                const atCap = !indexed && !checked && selected.size >= remainingSlots;
+                const atCap = !unlimited && !indexed && !checked && selected.size >= remainingSlots;
                 return (
                   <li key={repo.repoId}>
                     <label
@@ -160,7 +187,9 @@ export function IndexingRepoPickerModal({
                         type="checkbox"
                         className="h-4 w-4 shrink-0 accent-coop-index"
                         checked={indexed || checked}
-                        disabled={indexed || atCap || submitting || remainingSlots === 0}
+                        disabled={
+                          indexed || atCap || submitting || (!unlimited && remainingSlots === 0)
+                        }
                         onChange={() => toggleRepo(repo.repoId)}
                       />
                       <span className="font-mono text-sm text-white">{shortRepoName(repo.repoId)}</span>
@@ -178,9 +207,7 @@ export function IndexingRepoPickerModal({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-coop-border/40 bg-coop-dark px-5 py-4">
-          <p className="text-xs text-coop-muted">
-            {selected.size} of {remainingSlots} selected
-          </p>
+          <p className="text-xs text-coop-muted">{selectionLabel}</p>
           <div className="flex gap-2">
             <button type="button" className="admin-btn-secondary" onClick={onClose} disabled={submitting}>
               Cancel
@@ -189,7 +216,7 @@ export function IndexingRepoPickerModal({
               type="button"
               className="admin-btn-primary"
               onClick={() => void handleConfirm()}
-              disabled={submitting || selected.size === 0 || remainingSlots === 0}
+              disabled={submitting || selected.size === 0 || (!unlimited && remainingSlots === 0)}
             >
               {submitting ? "Starting…" : "Deep-Index selected"}
             </button>

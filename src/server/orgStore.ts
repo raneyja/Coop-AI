@@ -6,6 +6,8 @@ import {
   hashApiKey
 } from "./credentialCrypto";
 import { clampSeatCountForPlan } from "./planGates";
+import type { OrgRepoAccessMode } from "./repoAccessTypes";
+import { parseOrgRepoAccessMode } from "./repoAccessTypes";
 
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type IndexStatus = "idle" | "queued" | "indexing" | "cloning" | "ready" | "error" | "disabled";
@@ -14,6 +16,7 @@ export type Organization = {
   id: string;
   name: string;
   plan: OrgPlan;
+  repoAccessMode: OrgRepoAccessMode;
   createdAt: Date;
 };
 
@@ -69,10 +72,14 @@ export type AuthContext = {
   orgName: string;
   plan: OrgPlan;
   apiKeyId: string;
-  /** Human user id — set only for Enterprise SSO sessions; undefined for org API keys. */
+  /** Human user id — set for session-based auth; undefined for org API keys. */
   userId?: string;
-  /** User role from the SSO session (e.g. 'owner' | 'admin' | 'member'). */
+  /** User role from the session (e.g. 'owner' | 'admin' | 'member'). */
   role?: string;
+  /** How the session was created: password, google, or saml. */
+  sessionProvider?: "password" | "google" | "saml";
+  /** User email when authenticated via session. */
+  email?: string;
 };
 
 export class OrgStore {
@@ -92,7 +99,7 @@ export class OrgStore {
 
   public async getOrganization(orgId: string): Promise<Organization | undefined> {
     const result = await this.pool.query(
-      `SELECT id, name, plan, created_at FROM organizations WHERE id = $1`,
+      `SELECT id, name, plan, repo_access_mode, created_at FROM organizations WHERE id = $1`,
       [orgId]
     );
     const row = result.rows[0];
@@ -105,7 +112,7 @@ export class OrgStore {
       return undefined;
     }
     const result = await this.pool.query(
-      `SELECT id, name, plan, created_at FROM organizations WHERE lower(name) = lower($1) LIMIT 2`,
+      `SELECT id, name, plan, repo_access_mode, created_at FROM organizations WHERE lower(name) = lower($1) LIMIT 2`,
       [trimmed]
     );
     if (result.rows.length !== 1) {
@@ -114,10 +121,20 @@ export class OrgStore {
     return rowToOrg(result.rows[0]);
   }
 
+  public async updateRepoAccessMode(orgId: string, mode: OrgRepoAccessMode): Promise<Organization | undefined> {
+    const result = await this.pool.query(
+      `UPDATE organizations SET repo_access_mode = $2 WHERE id = $1
+       RETURNING id, name, plan, repo_access_mode, created_at`,
+      [orgId, mode]
+    );
+    const row = result.rows[0];
+    return row ? rowToOrg(row) : undefined;
+  }
+
   public async setOrganizationPlan(orgId: string, plan: OrgPlan): Promise<Organization | undefined> {
     const result = await this.pool.query(
       `UPDATE organizations SET plan = $2 WHERE id = $1
-       RETURNING id, name, plan, created_at`,
+       RETURNING id, name, plan, repo_access_mode, created_at`,
       [orgId, plan]
     );
     const row = result.rows[0];
@@ -465,6 +482,7 @@ function rowToOrg(row: Record<string, unknown>): Organization {
     id: String(row.id),
     name: String(row.name),
     plan: String(row.plan) as OrgPlan,
+    repoAccessMode: parseOrgRepoAccessMode(row.repo_access_mode) ?? "all_indexed",
     createdAt: new Date(String(row.created_at))
   };
 }

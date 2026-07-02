@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearSession, displayOrgName, getStoredMe, isAdminRole } from "@/lib/auth";
+import {
+  clearSession,
+  displayOrgName,
+  getStoredMe,
+  isAdminRole,
+  signOutRemote
+} from "@/lib/auth";
 import { getApiBase } from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 
@@ -15,12 +21,29 @@ function SettingsRow({ label, children }: { label: string; children: React.React
   );
 }
 
+function signInMethodLabel(me: ReturnType<typeof getStoredMe>): string {
+  switch (me?.authMethod) {
+    case "password":
+      return "Email and password";
+    case "google_oauth":
+      return "Google";
+    case "sso_session":
+      return "SSO";
+    case "api_key":
+      return "Automation API key";
+    default:
+      return "Coop account";
+  }
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const me = getStoredMe();
   const isAdmin = me ? isAdminRole(me) : false;
+  const usesPassword = me?.authMethod === "password" || me?.sessionProvider === "password";
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await signOutRemote();
     clearSession();
     router.replace("/login");
   }
@@ -35,22 +58,31 @@ export default function SettingsPage() {
       <section className="admin-card">
         <h2 className="admin-section-label">Sign-in &amp; access</h2>
         <p className="mt-2 text-sm text-coop-muted">
-          This portal uses your Coop API key — there is no separate password. Your key is stored in this browser
-          session only and is cleared when you sign out.
+          Sign in with your Coop account (email and password or Google). Your session is stored in this browser and
+          cleared when you sign out.
         </p>
         <dl className="mt-4">
+          <SettingsRow label="Signed in as">{me?.email ?? "—"}</SettingsRow>
+          <SettingsRow label="Sign-in method">{signInMethodLabel(me)}</SettingsRow>
           <SettingsRow label="Role">{me?.role ?? "Member"}</SettingsRow>
+          {usesPassword ? (
+            <SettingsRow label="Password">
+              <Link href="/forgot-password" className="admin-link">
+                Change password →
+              </Link>
+            </SettingsRow>
+          ) : null}
           <SettingsRow label="API keys">
             {isAdmin ? (
               <Link href="/api-keys" className="admin-link">
-                Manage API keys →
+                Manage automation keys →
               </Link>
             ) : (
               <span className="text-coop-muted">Contact an org admin to rotate keys.</span>
             )}
           </SettingsRow>
           <SettingsRow label="Session">
-            <button type="button" className="admin-btn-danger !px-3 !py-1.5 text-xs" onClick={handleSignOut}>
+            <button type="button" className="admin-btn-danger !px-3 !py-1.5 text-xs" onClick={() => void handleSignOut()}>
               Sign out
             </button>
           </SettingsRow>

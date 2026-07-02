@@ -8,23 +8,27 @@ function apiBase(): string {
   return base.replace(/\/$/, "");
 }
 
+function isCoopCredential(token: string): boolean {
+  return token.startsWith("coop_") || token.startsWith("coop_sess_");
+}
+
 export async function POST(request: Request) {
-  let body: { apiKey?: string };
+  let body: { apiKey?: string; token?: string };
   try {
-    body = (await request.json()) as { apiKey?: string };
+    body = (await request.json()) as { apiKey?: string; token?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const apiKey = String(body.apiKey ?? "")
+  const token = String(body.token ?? body.apiKey ?? "")
     .trim()
     .replace(/[\u200B-\u200D\uFEFF]/g, "");
-  if (!apiKey.startsWith("coop_")) {
-    return NextResponse.json({ error: "unauthorized", message: "Invalid API key format." }, { status: 401 });
+  if (!isCoopCredential(token)) {
+    return NextResponse.json({ error: "unauthorized", message: "Invalid sign-in token." }, { status: 401 });
   }
 
   const response = await fetch(`${apiBase()}/v1/me`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
 

@@ -196,9 +196,16 @@ export default function SecurityPage() {
 
         <h2>Authentication</h2>
         <p>
-          API access to the Coop server uses bearer token authentication (
-          <code>Authorization: Bearer &lt;COOP_API_TOKEN&gt;</code>). In production,{" "}
-          <code>COOP_REQUIRE_API_AUTH=true</code> validates org API keys against the database.
+          Human sign-in uses email and password (minimum 12 characters), optional Google OAuth, and
+          Enterprise SAML 2.0 SSO. Session tokens are issued server-side and handed off to the admin
+          portal over HTTPS — they are stored as hashes in the database, not as plaintext API keys in
+          email.
+        </p>
+        <p>
+          Programmatic API access to the Coop server uses bearer token authentication (
+          <code>Authorization: Bearer &lt;COOP_API_TOKEN&gt;</code>). Org API keys are created in the
+          admin portal and stored as SHA-256 hashes. In production,{" "}
+          <code>COOP_REQUIRE_API_AUTH=true</code> validates credentials against the database.
         </p>
         <p>
           The VS Code extension stores the Coop API token using VS Code&apos;s SecretStorage API,

@@ -11,9 +11,11 @@ Create this file (copy from `.env.example`):
 ```bash
 # Local backend (docker compose api service)
 NEXT_PUBLIC_COOP_API_BASE=http://localhost:8787
+COOP_API_BASE=http://localhost:8787
 
 # Production
 # NEXT_PUBLIC_COOP_API_BASE=https://api.coop-ai.dev
+# COOP_API_BASE=https://api.coop-ai.dev
 ```
 
 ### 2. Terminal — install and run
@@ -31,24 +33,29 @@ Open **http://localhost:3001** in your browser.
 ### 3. Browser — sign in
 
 1. Go to `/login`
-2. Paste your organization admin API key (`coop_*`)
+2. Sign in with email and password, or **Continue with Google**
 3. On success you are redirected to the dashboard
 
 **Success looks like:** Dashboard shows your org name, plan badge, and integration status grid.
 
-## Authentication (v1)
+Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API keys remain available for scripts and CI.
 
-- API key is stored in **sessionStorage** (`coop_admin_api_token`) for the browser tab session
-- Sign out clears session storage
-- **Phase 2:** SSO cookie auth (no key paste) — not implemented yet
+## Authentication
 
-Login validates the key via `GET /v1/me` and requires `canInstallIntegrations: true` or role `owner` / `admin`.
+- **Primary:** Email/password or Google OAuth via `/api/auth/login` and backend `/v1/auth/*`
+- **Session:** Access token in `sessionStorage` plus httpOnly `coop_session` cookie (set by Next.js API routes)
+- **Refresh:** Refresh token in `sessionStorage`; sign out calls `/api/auth/logout`
+- **Legacy:** Automation API key tab (collapsed under “More sign-in options”) for `coop_…` keys
+
+Login requires `canInstallIntegrations: true` or role `owner` / `admin`.
 
 ## Pages
 
 | Route | Purpose |
 |-------|---------|
-| `/login` | API key sign-in |
+| `/login` | Email/password, Google, SSO, or API key sign-in |
+| `/forgot-password` | Request a password reset email |
+| `/auth/callback` | OAuth / SSO return handler |
 | `/` | Dashboard — org overview, integration grid, stats |
 | `/integrations` | Connect GitHub, Slack, Jira/Confluence, Notion, Google Docs, Teams |
 | `/users` | Invite and manage users (`/v1/admin/users/*`) |
@@ -56,11 +63,13 @@ Login validates the key via `GET /v1/me` and requires `canInstallIntegrations: t
 | `/api-keys` | Create and revoke org API keys (`/v1/admin/api-keys/*`) |
 | `/billing` | Plan, seats, and Stripe billing portal (`/v1/admin/billing/*`) |
 | `/audit` | Admin audit log (`/v1/admin/audit`) |
-| `/settings` | Org info, SSO placeholder |
+| `/settings` | Account, org info, sign-out |
 
 ## API client
 
-`src/lib/coopApi.ts` wraps all backend calls with Bearer auth.
+`src/lib/coopApi.ts` wraps backend calls with Bearer auth from the browser session.
+
+Server routes under `src/app/api/auth/*` proxy sign-in to the Coop API using `COOP_API_BASE`.
 
 Admin routes live at `/v1/admin/*` on the Coop API. If the API is unreachable or returns 404, the UI shows an **“API not available”** banner and falls back to per-provider installation endpoints (`/v1/orgs/{provider}/installation`).
 

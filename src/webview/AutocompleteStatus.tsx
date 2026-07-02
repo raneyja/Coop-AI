@@ -11,10 +11,6 @@ export type AutocompleteStatusProps = {
 const AUTOCOMPLETE_DESCRIPTION =
   "Ghost-text suggestions at the cursor while you type. Tab to accept · Escape to dismiss · Alt+] / Alt+[ cycle alternatives · Cmd+Shift+\\ manual trigger";
 
-function isCopilotCoexistenceMessage(message?: string): boolean {
-  return Boolean(message && /copilot/i.test(message));
-}
-
 function tooltipFor(status: AutocompleteBadgeStatus, message?: string): string {
   if (status === "disabled") {
     return `Enable inline code completions in the editor.\n\n${AUTOCOMPLETE_DESCRIPTION}`;
@@ -38,18 +34,11 @@ export function AutocompleteStatus({
 }: AutocompleteStatusProps): React.ReactElement {
   const enabled = status !== "disabled";
   const tooltip = tooltipFor(status, message);
-  const copilotWarning = isCopilotCoexistenceMessage(message);
 
   return (
     <div className="coop-autocomplete-control" aria-live="polite">
       <span className="coop-autocomplete-label" title={tooltip}>
         Autocomplete
-        {copilotWarning ? (
-          <span className="coop-autocomplete-copilot-warning" title={message}>
-            {" "}
-            · Copilot
-          </span>
-        ) : null}
       </span>
       <button
         type="button"

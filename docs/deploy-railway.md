@@ -106,6 +106,8 @@ Set these on the **`coop-api`** service (**Variables** tab). Source for integrat
 
 `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `SLACK_APP_*`, `ATLASSIAN_APP_*`, `NOTION_APP_*`, `GOOGLE_DOCS_APP_*`, etc.
 
+**User sign-in (Google):** `GOOGLE_AUTH_CLIENT_ID`, `GOOGLE_AUTH_CLIENT_SECRET` — register redirect `https://api.coop-ai.dev/v1/auth/google/callback` in Google Cloud Console. See [google-auth-oauth-setup.md](./google-auth-oauth-setup.md).
+
 Update redirect URIs in each vendor console after the API domain is live — [connect-integrations-production.md](./connect-integrations-production.md).
 
 ### Stripe (Phase 2 — self-serve Pro)

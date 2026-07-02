@@ -101,7 +101,6 @@ const autocompleteSettings: AutocompleteSettings = {
   debounceMs: 300,
   model: "haiku",
   customModel: "",
-  copilotPolicy: "warn",
   showMultipleSuggestions: false,
   requestTimeoutMs: 5_000,
   useFim: true,

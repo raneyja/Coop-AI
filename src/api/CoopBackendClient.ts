@@ -109,8 +109,11 @@ export type MeResponse = {
   canUseLightning: boolean;
   lightningBackend?: string;
   userId?: string;
+  email?: string;
   role?: string;
-  authMethod?: "api_key" | "sso_session";
+  authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
+  sessionProvider?: string;
+  isSignedIn?: boolean;
   canInstallIntegrations?: boolean;
   onboardingCompleted?: boolean;
   adminPortalUrl?: string;
@@ -126,6 +129,16 @@ export type MeResponse = {
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
   quota?: PlanQuotaCredits;
+};
+
+export type AuthSessionResponse = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string;
+  orgId?: string;
+  orgName?: string;
+  email?: string;
+  plan?: "free" | "pro" | "enterprise";
 };
 
 export type CoopBackendClientOptions = {
@@ -249,6 +262,91 @@ export class CoopBackendClient {
       headers: await this.authHeaders()
     });
     return response.data;
+  }
+
+  public async loginWithPassword(
+    baseUrl: string,
+    email: string,
+    password: string
+  ): Promise<AuthSessionResponse> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<AuthSessionResponse & CoopApiErrorBody>(
+      "/v1/auth/login",
+      { email, password },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const accessToken = response.data?.accessToken?.trim();
+    const refreshToken = response.data?.refreshToken?.trim();
+    if (!accessToken || !refreshToken) {
+      throw new Error("Sign-in succeeded but session tokens were not returned.");
+    }
+    return { ...response.data, accessToken, refreshToken };
+  }
+
+  public startGoogleAuthUrl(baseUrl: string, redirect?: string): string {
+    assertCoopEndpoint(baseUrl);
+    const params = new URLSearchParams({ mode: "login" });
+    const sanitized = redirect?.trim();
+    if (sanitized) {
+      params.set("redirect", sanitized);
+    }
+    return `${baseUrl.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
+  }
+
+  public async refreshSession(baseUrl: string, refreshToken: string): Promise<AuthSessionResponse> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<AuthSessionResponse & CoopApiErrorBody>(
+      "/v1/auth/refresh",
+      { refreshToken },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    const accessToken = response.data?.accessToken?.trim();
+    const nextRefreshToken = response.data?.refreshToken?.trim();
+    if (!accessToken || !nextRefreshToken) {
+      throw new Error("Session refresh succeeded but tokens were not returned.");
+    }
+    return { ...response.data, accessToken, refreshToken: nextRefreshToken };
+  }
+
+  public async logout(baseUrl: string, refreshToken?: string): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    await this.http.post(
+      "/v1/auth/logout",
+      refreshToken?.trim() ? { refreshToken: refreshToken.trim() } : {},
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+  }
+
+  public async forgotPassword(baseUrl: string, email: string): Promise<{ ok: boolean; message?: string }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<{ ok?: boolean; message?: string } & CoopApiErrorBody>(
+      "/v1/auth/forgot-password",
+      { email },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return { ok: response.data?.ok ?? true, message: response.data?.message };
   }
 
   public async storeGithubCredential(baseUrl: string, token: string): Promise<void> {

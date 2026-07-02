@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getToken, getStoredMe, isMemberAllowedPath, defaultHomePath, isMemberRole } from "@/lib/auth";
+import { getToken, getStoredMe, isMemberAllowedPath, defaultHomePath, isMemberRole, restoreSessionFromCookie } from "@/lib/auth";
 import { IndexingProgressBar } from "./IndexingProgressBar";
 import { OnboardingProvider } from "./OnboardingProvider";
 import { Sidebar } from "./Sidebar";
@@ -19,16 +19,26 @@ export function AdminShell({ children }: AdminShellProps) {
   const showGlobalIndexingProgress = Boolean(pathname && !pathname.startsWith("/indexing"));
 
   useEffect(() => {
-    if (!getToken()) {
-      router.replace("/login");
-      return;
+    async function guard() {
+      let token = getToken();
+      if (!token) {
+        const restored = await restoreSessionFromCookie();
+        if (!restored) {
+          router.replace("/login");
+          return;
+        }
+        token = getToken();
+      }
+
+      const me = getStoredMe();
+      if (me && isMemberRole(me) && !isMemberAllowedPath(pathname)) {
+        router.replace(defaultHomePath(me));
+        return;
+      }
+      setReady(true);
     }
-    const me = getStoredMe();
-    if (me && isMemberRole(me) && !isMemberAllowedPath(pathname)) {
-      router.replace(defaultHomePath(me));
-      return;
-    }
-    setReady(true);
+
+    void guard();
   }, [router, pathname]);
 
   if (!ready) {

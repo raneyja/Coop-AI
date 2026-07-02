@@ -22,12 +22,16 @@ export type UserRecord = {
  * org context needed to build an AuthContext. `apiKeyId` is intentionally
  * absent — sessions are user-scoped, not key-scoped.
  */
+export type SessionAuthProvider = "password" | "google" | "saml";
+
 export type ResolvedUserSession = {
   userId: string;
   orgId: string;
   orgName: string;
   plan: OrgPlan;
   role: string;
+  email?: string;
+  authProvider?: SessionAuthProvider;
 };
 
 export type IdpLogin = {
@@ -181,15 +185,20 @@ export class UserStore {
   public async createSession(
     userId: string,
     orgId: string,
-    ttlMs: number = DEFAULT_SESSION_TTL_MS
+    options?: number | { ttlMs?: number; authProvider?: SessionAuthProvider }
   ): Promise<CreatedSession> {
+    const ttlMs =
+      typeof options === "number"
+        ? options
+        : (options?.ttlMs ?? DEFAULT_SESSION_TTL_MS);
+    const authProvider = typeof options === "object" ? options.authProvider : undefined;
     const token = generateSessionToken();
     const tokenHash = hashApiKey(token);
     const expiresAt = new Date(Date.now() + ttlMs);
     await this.pool.query(
-      `INSERT INTO user_sessions (token_hash, user_id, org_id, expires_at)
-       VALUES ($1, $2, $3, $4)`,
-      [tokenHash, userId, orgId, expiresAt]
+      `INSERT INTO user_sessions (token_hash, user_id, org_id, expires_at, auth_provider, last_active_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [tokenHash, userId, orgId, expiresAt, authProvider ?? null]
     );
     return { token, userId, orgId, expiresAt };
   }
@@ -203,8 +212,9 @@ export class UserStore {
     const tokenHash = hashApiKey(rawToken);
     const result = await this.pool.query(
       `SELECT u.id AS user_id, u.role AS role, u.deactivated_at AS deactivated_at,
+              u.email AS email,
               o.id AS org_id, o.name AS org_name, o.plan AS plan,
-              s.expires_at AS expires_at
+              s.expires_at AS expires_at, s.auth_provider AS auth_provider
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
        JOIN organizations o ON o.id = s.org_id
@@ -221,13 +231,25 @@ export class UserStore {
     if (new Date(String(row.expires_at)).getTime() <= Date.now()) {
       return undefined;
     }
+    await this.pool.query(
+      `UPDATE user_sessions SET last_active_at = NOW() WHERE token_hash = $1`,
+      [tokenHash]
+    );
+    const authProvider = row.auth_provider ? (String(row.auth_provider) as SessionAuthProvider) : undefined;
     return {
       userId: String(row.user_id),
       orgId: String(row.org_id),
       orgName: String(row.org_name),
       plan: String(row.plan) as OrgPlan,
-      role: String(row.role)
+      role: String(row.role),
+      email: row.email ? String(row.email) : undefined,
+      authProvider: authProvider ?? "saml"
     };
+  }
+
+  public async revokeSessionByToken(rawToken: string): Promise<void> {
+    const tokenHash = hashApiKey(rawToken);
+    await this.pool.query(`DELETE FROM user_sessions WHERE token_hash = $1`, [tokenHash]);
   }
 
   public async revokeUserSessions(userId: string): Promise<void> {

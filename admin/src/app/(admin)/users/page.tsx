@@ -1,9 +1,19 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { fetchUsers, fetchOrg, inviteUser, updateUser, type AdminUser } from "@/lib/coopApi";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  fetchOrg,
+  fetchOrgRepos,
+  fetchUsers,
+  inviteUser,
+  updateUser,
+  type AdminUser,
+  type OrgRepoAccessMode,
+  type OrgRepoRecord
+} from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
-import { PlanUpgradeNotice } from "@/components/PlanUpgradeNotice";
+import { UserRepoGrantsModal } from "@/components/UserRepoGrantsModal";
+import { shortRepoName } from "@/lib/indexingProgress";
 
 const ROLES = ["member", "admin", "owner"];
 
@@ -14,17 +24,35 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRepoIds, setInviteRepoIds] = useState<string[]>([]);
+  const [indexedRepos, setIndexedRepos] = useState<OrgRepoRecord[]>([]);
   const [inviting, setInviting] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [orgPlan, setOrgPlan] = useState<string>("free");
+  const [repoAccessMode, setRepoAccessMode] = useState<OrgRepoAccessMode>("all_indexed");
+  const [grantsUser, setGrantsUser] = useState<AdminUser | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [usersResult, orgResult] = await Promise.all([fetchUsers(), fetchOrg()]);
+    const [usersResult, orgResult, reposResult] = await Promise.all([
+      fetchUsers(),
+      fetchOrg(),
+      fetchOrgRepos()
+    ]);
     setLoading(false);
-    if (orgResult.ok && orgResult.data?.plan) {
+    if (orgResult.ok && orgResult.data) {
       setOrgPlan(orgResult.data.plan);
+      if (orgResult.data.repoAccessMode) {
+        setRepoAccessMode(orgResult.data.repoAccessMode);
+      }
+    }
+    if (reposResult.ok) {
+      setIndexedRepos(
+        (reposResult.data?.repos ?? []).filter(
+          (repo) => repo.lightningEnabled && repo.indexStatus !== "disabled"
+        )
+      );
     }
     const result = usersResult;
     if (result.unavailable) {
@@ -41,22 +69,36 @@ export default function UsersPage() {
   }, []);
 
   const teamInvitesBlocked = orgPlan === "free";
+  const perUserAccess = repoAccessMode === "per_user";
+
+  const inviteRepoOptions = useMemo(() => indexedRepos, [indexedRepos]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  function toggleInviteRepo(repoId: string) {
+    setInviteRepoIds((current) =>
+      current.includes(repoId) ? current.filter((id) => id !== repoId) : [...current, repoId]
+    );
+  }
+
   async function handleInvite(e: FormEvent) {
     e.preventDefault();
     setInviting(true);
     setError(null);
-    const result = await inviteUser(inviteEmail.trim(), inviteRole);
+    const result = await inviteUser(
+      inviteEmail.trim(),
+      inviteRole,
+      perUserAccess ? inviteRepoIds : undefined
+    );
     setInviting(false);
     if (!result.ok) {
       setError(result.error ?? "Invite failed.");
       return;
     }
     setInviteEmail("");
+    setInviteRepoIds([]);
     void load();
   }
 
@@ -87,7 +129,11 @@ export default function UsersPage() {
       <div>
         <h1 className="admin-page-title">Users</h1>
         <p className="mt-1 text-sm text-coop-muted">
-          {teamInvitesBlocked ? "Your personal account — one seat on the free Developer plan." : "Invite teammates and manage roles."}
+          {teamInvitesBlocked
+            ? "Free plan is individual only — one seat per account. Upgrade to Pro to invite teammates."
+            : perUserAccess
+              ? "Invite teammates and assign which Deep-Indexed repos each person can access."
+              : "Invite teammates and manage roles. All members can access every Deep-Indexed repo."}
         </p>
       </div>
 
@@ -96,10 +142,9 @@ export default function UsersPage() {
       <form onSubmit={handleInvite} className="admin-card">
         <h2 className="admin-section-label">Invite user</h2>
         {teamInvitesBlocked ? (
-          <PlanUpgradeNotice
-            className="mb-4"
-            message="Inviting additional users requires a Pro subscription. Upgrade now to invite your team."
-          />
+          <p className="mb-3 text-sm text-coop-muted">
+            Team invites require Pro. The free Developer plan never includes team accounts.
+          </p>
         ) : null}
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
@@ -139,6 +184,36 @@ export default function UsersPage() {
             {inviting ? "Sending…" : "Send invite"}
           </button>
         </div>
+        {perUserAccess && !teamInvitesBlocked ? (
+          <div className="mt-4 space-y-2">
+            <p className="admin-section-label">Repository access</p>
+            {inviteRepoOptions.length === 0 ? (
+              <p className="text-sm text-coop-muted">
+                No Deep-Indexed repos yet. Choose repos on the Indexing page first, or assign access after
+                invite.
+              </p>
+            ) : (
+              <ul className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-coop-border/40 p-3">
+                {inviteRepoOptions.map((repo) => (
+                  <li key={repo.repoId}>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-coop-index"
+                        checked={inviteRepoIds.includes(repo.repoId)}
+                        onChange={() => toggleInviteRepo(repo.repoId)}
+                      />
+                      <span className="font-mono text-white">{shortRepoName(repo.repoId)}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-coop-muted">
+              {inviteRepoIds.length} repo{inviteRepoIds.length === 1 ? "" : "s"} selected for this invite.
+            </p>
+          </div>
+        ) : null}
       </form>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
@@ -186,16 +261,27 @@ export default function UsersPage() {
                   </td>
                   <td className="capitalize">{user.status}</td>
                   <td>
-                    {user.status !== "deactivated" && (
-                      <button
-                        type="button"
-                        className="admin-btn-danger text-xs"
-                        onClick={() => handleDeactivate(user.id)}
-                        disabled={actionId === user.id}
-                      >
-                        Deactivate
-                      </button>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {perUserAccess && user.status !== "deactivated" ? (
+                        <button
+                          type="button"
+                          className="admin-btn-secondary text-xs"
+                          onClick={() => setGrantsUser(user)}
+                        >
+                          Manage repos
+                        </button>
+                      ) : null}
+                      {user.status !== "deactivated" ? (
+                        <button
+                          type="button"
+                          className="admin-btn-danger text-xs"
+                          onClick={() => handleDeactivate(user.id)}
+                          disabled={actionId === user.id}
+                        >
+                          Deactivate
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -203,6 +289,16 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {grantsUser ? (
+        <UserRepoGrantsModal
+          open
+          userId={grantsUser.id}
+          userEmail={grantsUser.email}
+          onClose={() => setGrantsUser(null)}
+          onSaved={() => void load()}
+        />
+      ) : null}
     </div>
   );
 }

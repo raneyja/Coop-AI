@@ -4,8 +4,6 @@ export type AutocompleteTriggerMode = "auto" | "manual" | "off";
 
 export type AutocompleteModelPreset = "haiku" | "gpt35" | "custom";
 
-export type CopilotPolicy = "warn" | "disable-when-copilot";
-
 export type AutocompleteSettings = {
   enabled: boolean;
   trigger: AutocompleteTriggerMode;
@@ -13,7 +11,6 @@ export type AutocompleteSettings = {
   debounceMs: number;
   model: AutocompleteModelPreset;
   customModel: string;
-  copilotPolicy: CopilotPolicy;
   showMultipleSuggestions: boolean;
   requestTimeoutMs: number;
   useFim: boolean;

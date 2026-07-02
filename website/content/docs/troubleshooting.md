@@ -23,7 +23,7 @@ lastUpdated: "2026-06-30"
 | --- | --- |
 | **No ghost text** | Set `coopAI.autocomplete.enabled` to `true` in VS Code settings |
 | **Manual trigger does nothing** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
-| **Competing suggestions with Copilot** | Set `coopAI.autocomplete.copilotPolicy` to `disable-when-copilot`, or disable Copilot inline |
+| **Competing suggestions with Copilot** | Turn Coop autocomplete off, or leave it on — Coop automatically disables Copilot inline when enabled |
 | **Slow or dropped completions** | Increase `requestTimeoutMs` (default 400); check API latency; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **401 on completions** | Verify API key; create new key in admin portal if revoked |
 | **Graph context not applied** | Pro plan required; connect and index repo in admin portal; set Workspace owner/repo/branch |

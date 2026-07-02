@@ -16,7 +16,8 @@ import {
   displayOrgName,
   displayPlanLabel,
   formatQuotaUsageSummary,
-  integrationListSubtitle
+  integrationListSubtitle,
+  preferencesSignedIn
 } from "./connectionCopy";
 import type { SettingsLightningSummary } from "./SettingsHub";
 import { IdentityLinksDetail } from "./IdentityLinksDetail";
@@ -86,6 +87,9 @@ export type SettingsDetailProps = {
   onRevealApiKey: () => void;
   onApiKeyBlurCommit: (value: string) => void;
   onSignInSso: (org?: string) => void;
+  onSignInPassword: (email: string, password: string) => void;
+  onSignInGoogle: () => void;
+  onForgotPassword: (email: string) => void;
   onSignOut: () => void;
   onTestConnection: () => void;
   onTestCodeHost: (provider: CodeHostProviderPreference) => void;
@@ -411,10 +415,10 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
 
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return (
       <SettingsSection>
-        <p className="coop-settings-card-desc">Add your API key under Account to view plan and usage.</p>
+        <p className="coop-settings-card-desc">Sign in under Account to view plan and usage.</p>
       </SettingsSection>
     );
   }
@@ -455,10 +459,10 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
 function IndexingDetail({ prefs, lightningState }: SettingsDetailProps): React.ReactElement {
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
 
-  if (!prefs.hasApiKey) {
+  if (!preferencesSignedIn(prefs)) {
     return (
       <SettingsSection>
-        <p className="coop-settings-card-desc">Add your API key under Account to view indexing status.</p>
+        <p className="coop-settings-card-desc">Sign in under Account to view indexing status.</p>
       </SettingsSection>
     );
   }
@@ -516,6 +520,9 @@ function AccountDetail({
   onRevealApiKey,
   onApiKeyBlurCommit,
   onSignInSso,
+  onSignInPassword,
+  onSignInGoogle,
+  onForgotPassword,
   onSignOut,
   onTestConnection,
   connectionTestMessage,
@@ -524,10 +531,14 @@ function AccountDetail({
   pendingTest,
   testResult
 }: SettingsDetailProps): React.ReactElement {
+  const signedIn = preferencesSignedIn(prefs);
   const [urlDraft, setUrlDraft] = useState(prefs.apiBaseUrl);
   const [urlDirty, setUrlDirty] = useState(false);
   const [urlSaved, setUrlSaved] = useState(false);
   const [ssoOrgDraft, setSsoOrgDraft] = useState(prefs.orgName ?? "");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [automationOpen, setAutomationOpen] = useState(false);
   const urlSavedTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -563,8 +574,174 @@ function AccountDetail({
 
   const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
 
+  const submitPasswordSignIn = () => {
+    onSignInPassword(emailDraft.trim(), passwordDraft);
+    setPasswordDraft("");
+  };
+
   return (
     <SettingsSection>
+      {signedIn ? (
+        <>
+          <p className="coop-prompt-modal-section-title">Signed in</p>
+          <p className="coop-settings-card-desc">
+            {displayOrgName(prefs) ? `${displayOrgName(prefs)} · ` : ""}
+            {displayPlanLabel(prefs)}
+          </p>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
+              Sign out
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="coop-prompt-modal-section-title">Sign in</p>
+          <p className="coop-settings-card-desc">Use your Coop account email and password, or continue with Google.</p>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">Email</span>
+            <input
+              type="email"
+              autoComplete="username"
+              value={emailDraft}
+              placeholder="you@company.com"
+              className="coop-settings-field"
+              onChange={(event) => setEmailDraft(event.target.value)}
+            />
+          </label>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">Password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={passwordDraft}
+              className="coop-settings-field"
+              onChange={(event) => setPasswordDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  submitPasswordSignIn();
+                }
+              }}
+            />
+          </label>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={submitPasswordSignIn}>
+              Sign in
+            </button>
+            <button type="button" className="coop-settings-action-btn" onClick={onSignInGoogle}>
+              Continue with Google
+            </button>
+            <button
+              type="button"
+              className="coop-text-btn"
+              onClick={() => onForgotPassword(emailDraft.trim())}
+              disabled={!emailDraft.trim()}
+            >
+              Forgot password?
+            </button>
+          </div>
+        </>
+      )}
+
+      <p className="coop-prompt-modal-section-title">Organization SSO</p>
+      <p className="coop-settings-card-desc">Enterprise customers can sign in with SAML SSO.</p>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Organization name</span>
+        <input
+          type="text"
+          value={ssoOrgDraft}
+          placeholder="Acme Corp"
+          className="coop-settings-field"
+          onChange={(e) => setSsoOrgDraft(e.target.value)}
+        />
+      </label>
+      <div className="coop-settings-actions">
+        <button
+          type="button"
+          className="coop-settings-action-btn"
+          onClick={() => onSignInSso(ssoOrgDraft.trim() || undefined)}
+        >
+          Sign in with SSO
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className="coop-result-collapsible-toggle coop-prompt-modal-section-title mt-3 w-full text-left"
+        aria-expanded={automationOpen}
+        onClick={() => setAutomationOpen((open) => !open)}
+      >
+        <span className="coop-result-collapsible-chevron" aria-hidden="true">
+          {automationOpen ? "▾" : "▸"}
+        </span>
+        <span className="coop-result-collapsible-title">Automation API key</span>
+      </button>
+      {automationOpen ? (
+        <div className="coop-settings-card-desc">
+          <p className="mb-2">
+            Optional <code>coop_…</code> key for scripts and CI. Most users should sign in with email or Google above.
+          </p>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">Coop API key</span>
+            <ConfiguredSecretInput
+              configured={signedIn && prefs.authMethod === "api_key"}
+              value={apiKeyDraft}
+              placeholder={
+                prefs.devMode ? "Local dev: any value (e.g. dev) then Save" : "coop_… from admin portal API Keys"
+              }
+              onChange={onApiKeyDraftChange}
+              onReveal={signedIn ? onRevealApiKey : undefined}
+              onBlurCommit={onApiKeyBlurCommit}
+              className="coop-settings-field"
+            />
+          </label>
+          <div className="coop-settings-actions">
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onSaveApiKey}
+            >
+              Save API key
+            </button>
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onCopyApiKey}
+              disabled={!signedIn}
+            >
+              Copy API key
+            </button>
+            <TestButton
+              testKey="connection"
+              label="Test connection"
+              pendingTest={pendingTest}
+              testResult={testResult}
+              onClick={onTestConnection}
+            />
+            <SaveFlashLabel show={savedFlashKey === "apiKey"} />
+          </div>
+        </div>
+      ) : null}
+
+      {connectionTestMessage ? (
+        <span
+          className={`coop-settings-card-desc${
+            connectionTestOk === true
+              ? " coop-settings-test-message--ok"
+              : connectionTestOk === false
+                ? " coop-settings-test-message--error"
+                : ""
+          }`}
+        >
+          {connectionTestMessage}
+        </span>
+      ) : null}
+      <p className="coop-settings-card-desc">
+        LLM provider keys are routed server-side; code host tokens stay in VS Code SecretStorage.
+      </p>
+
       <div className="coop-settings-card-desc">
         <p className="coop-prompt-modal-section-title">Timezone</p>
         <label className="coop-settings-field-row">
@@ -590,90 +767,6 @@ function AccountDetail({
           </select>
         </label>
       </div>
-      {prefs.plan === "enterprise" ? (
-        <>
-          <p className="coop-prompt-modal-section-title">Enterprise sign-in</p>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Organization name</span>
-            <input
-              type="text"
-              value={ssoOrgDraft}
-              placeholder="Acme Corp"
-              className="coop-settings-field"
-              onChange={(e) => setSsoOrgDraft(e.target.value)}
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onClick={() => onSignInSso(ssoOrgDraft.trim() || undefined)}
-            >
-              Sign in with SSO
-            </button>
-          </div>
-        </>
-      ) : null}
-      <p className="coop-prompt-modal-section-title">
-        {prefs.plan === "enterprise" ? "API key (admin / automation)" : "Advanced · API key"}
-      </p>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">CoopAI API key</span>
-        <ConfiguredSecretInput
-          configured={prefs.hasApiKey}
-          value={apiKeyDraft}
-          placeholder={prefs.devMode ? "Local dev: any value (e.g. dev) then Save" : "coop_… from admin portal API Keys"}
-          onChange={onApiKeyDraftChange}
-          onReveal={prefs.hasApiKey ? onRevealApiKey : undefined}
-          onBlurCommit={onApiKeyBlurCommit}
-          className="coop-settings-field"
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onMouseDown={(event) => event.preventDefault()} onClick={onSaveApiKey}>
-          Save API key
-        </button>
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onCopyApiKey}
-          disabled={!prefs.hasApiKey}
-        >
-          Copy API key
-        </button>
-        <TestButton
-          testKey="connection"
-          label="Test connection"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          onClick={onTestConnection}
-        />
-        <SaveFlashLabel show={savedFlashKey === "apiKey"} />
-      </div>
-      {prefs.hasApiKey ? (
-        <div className="coop-settings-actions">
-          <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
-      ) : null}
-      {connectionTestMessage ? (
-        <span
-          className={`coop-settings-card-desc${
-            connectionTestOk === true
-              ? " coop-settings-test-message--ok"
-              : connectionTestOk === false
-                ? " coop-settings-test-message--error"
-                : ""
-          }`}
-        >
-          {connectionTestMessage}
-        </span>
-      ) : null}
-      <p className="coop-settings-card-desc">
-        LLM provider keys are routed server-side; code host tokens stay in VS Code SecretStorage.
-      </p>
 
       <label className="coop-settings-field-row">
         <span className="coop-settings-label">API base URL</span>

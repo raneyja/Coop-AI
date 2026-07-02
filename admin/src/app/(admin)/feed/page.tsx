@@ -148,7 +148,7 @@ export default function ChatFeedPage() {
               <p className="px-4 py-6 text-sm text-coop-muted">Loading threads…</p>
             ) : threads.length === 0 ? (
               <p className="px-4 py-6 text-sm text-coop-muted">
-                No synced chats yet. Chats appear here after you use the VS Code extension with your org API key.
+                No synced chats yet. Chats appear here after you sign in to the VS Code extension and start a conversation.
               </p>
             ) : (
               <ul>

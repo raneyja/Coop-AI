@@ -17,7 +17,6 @@ export type ProvisionInput = {
 export type ProvisionResult = {
   orgId: string;
   orgName: string;
-  adminApiKey: string;
 };
 
 export async function provisionOrgFromCheckout(
@@ -42,24 +41,18 @@ export async function provisionOrgFromCheckout(
       seatCount: input.seatCount,
       billingStatus: "active"
     });
-    return { orgId: org.id, orgName: org.name, adminApiKey: "[existing org — key unchanged]" };
+    return { orgId: org.id, orgName: org.name };
   }
 
   const existing = await orgStore.findOrganizationByStripeCustomerId(input.stripeCustomerId);
 
   if (existing) {
-    const keys = await orgStore.listApiKeys(existing.id);
-    if (keys.length > 0) {
-      return { orgId: existing.id, orgName: existing.name, adminApiKey: "[existing org — key not re-sent]" };
-    }
-    const { rawKey } = await orgStore.createApiKey(existing.id, "admin portal");
     await emailService.sendWelcome({
       to: input.adminEmail,
       orgName: existing.name,
-      adminPortalUrl: loginUrl,
-      apiKey: rawKey
+      adminPortalUrl: loginUrl
     });
-    return { orgId: existing.id, orgName: existing.name, adminApiKey: rawKey };
+    return { orgId: existing.id, orgName: existing.name };
   }
 
   const org = await orgStore.createOrganization(input.orgName, "pro");
@@ -71,15 +64,16 @@ export async function provisionOrgFromCheckout(
     billingStatus: "active"
   });
 
-  await userStore.createUser(org.id, input.adminEmail, "owner");
-  const { rawKey } = await orgStore.createApiKey(org.id, "admin portal");
+  const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);
+  if (!existingUser) {
+    await userStore.createUser(org.id, input.adminEmail, "owner");
+  }
 
   await emailService.sendWelcome({
     to: input.adminEmail,
     orgName: org.name,
-    adminPortalUrl: loginUrl,
-    apiKey: rawKey
+    adminPortalUrl: loginUrl
   });
 
-  return { orgId: org.id, orgName: org.name, adminApiKey: rawKey };
+  return { orgId: org.id, orgName: org.name };
 }

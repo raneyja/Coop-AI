@@ -29,7 +29,6 @@ export default function IndexingPage() {
   const [connectedHosts, setConnectedHosts] = useState<CodeHostProvider[]>([]);
   const [orgPlan, setOrgPlan] = useState<string>("free");
   const [initialLoading, setInitialLoading] = useState(true);
-  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -39,7 +38,8 @@ export default function IndexingPage() {
 
   const stats = useMemo(() => computeIndexingStats(repos), [repos]);
   const inFlightCount = stats.inFlight;
-  const indexedCount = useMemo(() => repos.filter((repo) => repo.lightningEnabled).length, [repos]);
+  const indexedRepos = useMemo(() => repos.filter((repo) => repo.lightningEnabled), [repos]);
+  const indexedCount = indexedRepos.length;
   const indexedRepoLimit = orgPlan === "free" ? 3 : null;
 
   const syncableHosts = useMemo(() => {
@@ -49,12 +49,9 @@ export default function IndexingPage() {
     return connectedHosts.filter((provider) => provider === "github");
   }, [connectedHosts, orgPlan]);
 
-  const load = useCallback(async (options?: { silent?: boolean; manual?: boolean }) => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
-    const manual = options?.manual ?? false;
-    if (manual) {
-      setManualRefreshing(true);
-    } else if (!silent) {
+    if (!silent) {
       setInitialLoading(true);
       setError(null);
     }
@@ -65,9 +62,7 @@ export default function IndexingPage() {
       fetchOrg()
     ]);
 
-    if (manual) {
-      setManualRefreshing(false);
-    } else if (!silent) {
+    if (!silent) {
       setInitialLoading(false);
     }
 
@@ -129,31 +124,32 @@ export default function IndexingPage() {
     return () => window.clearTimeout(timer);
   }, [actionMessage]);
 
-  async function handleSync(provider: CodeHostProvider) {
-    setActionId(`sync:${provider}`);
+  async function handleConfigure(provider: CodeHostProvider) {
+    setActionId(`configure:${provider}`);
     setSyncMessage(null);
     setError(null);
     const result = await syncCatalog(provider);
     setActionId(null);
     if (!result.ok) {
-      setError(result.error ?? "Catalog sync failed.");
+      setError(result.error ?? "Could not load repository catalog.");
       return;
     }
     await load({ silent: true });
 
     const latestRepos = await fetchOrgRepos();
+    if (latestRepos.ok && latestRepos.data?.repos) {
+      setRepos(latestRepos.data.repos);
+    }
     const currentIndexed = (latestRepos.data?.repos ?? []).filter((repo) => repo.lightningEnabled).length;
     const label = codeHostLabel(provider);
     const discovered = result.data?.discovered ?? 0;
     const remaining = (indexedRepoLimit ?? 999) - currentIndexed;
     if (indexedRepoLimit != null && remaining <= 0) {
       setSyncMessage(
-        `${label} — catalog synced (${discovered} repos). At the ${indexedRepoLimit}-repo limit — browse catalog or turn off a repo to swap.`
+        `${label} — ${discovered} repos available. At the ${indexedRepoLimit}-repo limit — turn off a repo to swap.`
       );
     } else {
-      setSyncMessage(
-        `${label} — ${discovered} repos discovered. Choose up to ${remaining} to Deep-Index.`
-      );
+      setSyncMessage(`${label} — select repos to Deep-Index.`);
     }
     setPicker({ open: true, provider });
   }
@@ -227,17 +223,9 @@ export default function IndexingPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="admin-page-title flex items-center gap-2">
-            Indexing
-            <span
-              className={`inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-coop-muted/30 border-t-coop-index transition-opacity duration-200 ${
-                manualRefreshing ? "animate-spin opacity-100" : "opacity-0"
-              }`}
-              aria-hidden
-            />
-          </h1>
+          <h1 className="admin-page-title">Indexing</h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Deep-indexed repos across GitHub, GitLab, and Bitbucket. Status updates every 10 seconds.
+            Repositories your org has chosen to Deep-Index. Use Configure to add more from a connected code host.
           </p>
           {syncMessage ? (
             <p className="mt-2 text-sm text-emerald-300">{syncMessage}</p>
@@ -260,29 +248,20 @@ export default function IndexingPage() {
             </button>
           ) : null}
           {syncableHosts.map((provider) => {
-            const syncing = actionId === `sync:${provider}`;
+            const configuring = actionId === `configure:${provider}`;
             return (
               <button
                 key={provider}
                 type="button"
-                className={`admin-btn-secondary min-w-[7.5rem] ${syncing ? "pointer-events-none opacity-60" : ""}`}
+                className={`admin-btn-secondary min-w-[7.5rem] ${configuring ? "pointer-events-none opacity-60" : ""}`}
                 disabled={unavailable || initialLoading}
-                aria-busy={syncing}
-                onClick={() => void handleSync(provider)}
+                aria-busy={configuring}
+                onClick={() => void handleConfigure(provider)}
               >
-                {`Sync ${codeHostLabel(provider)}`}
+                {`Configure ${codeHostLabel(provider)}`}
               </button>
             );
           })}
-          <button
-            type="button"
-            className={`admin-btn-secondary min-w-[5.5rem] ${manualRefreshing ? "pointer-events-none opacity-60" : ""}`}
-            disabled={initialLoading}
-            aria-busy={manualRefreshing}
-            onClick={() => void load({ silent: true, manual: true })}
-          >
-            Refresh
-          </button>
         </div>
       </div>
 
@@ -294,30 +273,31 @@ export default function IndexingPage() {
       {unavailable ? <UnavailableBanner /> : null}
       {!initialLoading && syncableHosts.length === 0 ? (
         <p className="text-sm text-coop-muted">
-          Connect a code host under Integrations to enable catalog sync.
+          Connect a code host under Integrations, then return here to choose repos to Deep-Index.
         </p>
       ) : null}
 
       {!initialLoading && indexedCount === 0 && syncableHosts.length > 0 ? (
-        <p className="text-sm text-coop-muted">
-          Sync a code host above to choose repos for Deep-Index.
-        </p>
+        <div className="rounded-lg border border-coop-border/60 bg-white/[0.02] px-5 py-8 text-center">
+          <p className="text-sm font-medium text-white">No repositories indexed yet</p>
+          <p className="mt-2 text-sm text-coop-muted">
+            Click <span className="text-white">Configure {codeHostLabel(syncableHosts[0])}</span> above to
+            browse your repositories and choose which ones to Deep-Index.
+          </p>
+        </div>
       ) : null}
 
       {initialLoading ? (
         <div className="py-8 text-center text-sm text-coop-muted">Loading repositories…</div>
-      ) : indexedCount > 0 || orgPlan !== "free" ? (
-        !picker.open ? (
-          <IndexingRepoSections
-          repos={repos}
+      ) : indexedCount > 0 ? (
+        <IndexingRepoSections
+          repos={indexedRepos}
           actionId={actionId}
           onReindex={(id) => void handleReindex(id)}
-          onDisable={indexedRepoLimit != null ? (id) => void handleDisable(id) : undefined}
+          onDisable={(id) => void handleDisable(id)}
           indexedRepoLimit={indexedRepoLimit}
           indexedRepoCount={indexedCount}
-          hideUnindexed={indexedRepoLimit != null}
         />
-        ) : null
       ) : null}
 
       <IndexingRepoPickerModal

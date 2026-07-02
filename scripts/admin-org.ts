@@ -9,6 +9,7 @@
  *   npx ts-node scripts/admin-org.ts configure-sso <orgId> okta <idpEntityId> <idpSsoUrl> <certPath>
  *   npx ts-node scripts/admin-org.ts create-user <orgId> admin@acme.com owner
  *   npx ts-node scripts/admin-org.ts set-user-role <userId> admin
+ *   npx ts-node scripts/admin-org.ts seed-repo-access-demo
  *   npx ts-node scripts/admin-org.ts reindex-estate <orgId> [--include-in-flight]
  */
 
@@ -17,9 +18,13 @@ import { getDbPool, closeDbPool } from "../src/server/db";
 import { OrgStore, type OrgPlan } from "../src/server/orgStore";
 import { SsoConfigStore, type SsoProvider } from "../src/server/sso/ssoConfigStore";
 import { UserStore, type UserRole } from "../src/server/users/userStore";
+import { AuthIdentityStore } from "../src/server/auth/authIdentityStore";
+import { hashPassword } from "../src/server/auth/passwordCrypto";
+import { UserRepoGrantStore } from "../src/server/userRepoGrantStore";
 import { loadJobQueueConfig } from "../src/config/jobQueueConfig";
 import { JobQueue } from "../src/jobs/jobQueue";
 import { syncOrgCatalog } from "../src/server/catalogSyncService";
+import type { OrgRepoAccessMode } from "../src/server/repoAccessTypes";
 
 async function main(): Promise<void> {
   const [, , command, ...args] = process.argv;
@@ -111,6 +116,85 @@ async function main(): Promise<void> {
         console.log(JSON.stringify(user, null, 2));
         break;
       }
+      case "seed-repo-access-demo": {
+        const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
+        const orgName = "Repo Access Demo";
+        const adminEmail = "repo-access-admin@demo.local";
+        const devEmail = "repo-access-dev@demo.local";
+
+        await pool.query(`DELETE FROM organizations WHERE name = $1`, [orgName]);
+
+        const org = await store.createOrganization(orgName, "pro");
+        await store.updateRepoAccessMode(org.id, "all_indexed");
+
+        const authIdentityStore = new AuthIdentityStore(pool);
+        const admin = await userStore.createUser(org.id, adminEmail, "owner");
+        await authIdentityStore.createPasswordIdentity(admin.id, hashPassword(demoPassword));
+        const dev = await userStore.createUser(org.id, devEmail, "member");
+        await authIdentityStore.createPasswordIdentity(dev.id, hashPassword(demoPassword));
+
+        const catalogRepos = [
+          "github:acme/api",
+          "github:acme/web",
+          "github:acme/mobile",
+          "github:raneyja/personal-a",
+          "github:raneyja/personal-b"
+        ];
+        const indexedRepos = ["github:acme/api", "github:acme/web", "github:acme/mobile"];
+
+        for (const repoId of catalogRepos) {
+          await store.upsertOrgRepo(org.id, repoId, {
+            lightningEnabled: false,
+            indexStatus: "idle"
+          });
+        }
+        for (const repoId of indexedRepos) {
+          await store.upsertOrgRepo(org.id, repoId, {
+            lightningEnabled: true,
+            indexStatus: "ready",
+            lastIndexedAt: new Date()
+          });
+        }
+
+        const grantStore = new UserRepoGrantStore(pool);
+        await grantStore.setUserRepoGrants(org.id, dev.id, [
+          "github:acme/api",
+          "github:acme/web"
+        ]);
+
+        console.log(
+          JSON.stringify(
+            {
+              orgId: org.id,
+              orgName: org.name,
+              plan: org.plan,
+              repoAccessMode: "all_indexed",
+              admin: { id: admin.id, email: adminEmail, password: demoPassword },
+              developer: { id: dev.id, email: devEmail, password: demoPassword },
+              catalogRepos,
+              indexedRepos,
+              developerGrantsWhenPerUser: ["github:acme/api", "github:acme/web"],
+              adminPortalUrl: "http://localhost:3001/login",
+              apiBase: "http://localhost:8787"
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
+      case "set-repo-access-mode": {
+        const [orgId, mode] = args;
+        if (!orgId || !mode) {
+          throw new Error("usage: set-repo-access-mode <orgId> <all_indexed|per_user>");
+        }
+        if (mode !== "all_indexed" && mode !== "per_user") {
+          throw new Error("mode must be all_indexed or per_user");
+        }
+        const org = await store.updateRepoAccessMode(orgId, mode as OrgRepoAccessMode);
+        console.log(JSON.stringify(org, null, 2));
+        break;
+      }
       case "reindex-estate": {
         const [orgId, ...flags] = args;
         if (!orgId) {
@@ -149,7 +233,7 @@ async function main(): Promise<void> {
       }
       default:
         console.error(
-          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, reindex-estate"
+          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, set-repo-access-mode, reindex-estate"
         );
         process.exit(1);
     }

@@ -5,13 +5,12 @@ import {
   registerCoopAutocomplete,
   type AutocompleteStatusPublisher
 } from "./coopAutocompleteProvider";
-import { readAutocompleteSettings } from "./autocompleteConfig";
+import { readAutocompleteSettings, onAutocompleteSettingsChanged } from "./autocompleteConfig";
 import type { AutocompleteTelemetryEvent } from "./types";
 import {
-  copilotCoexistenceWarning,
-  detectCopilotExtensions,
   isCopilotInstalled,
-  onCopilotExtensionsChanged
+  onCopilotExtensionsChanged,
+  syncCopilotInlineWithCoopAutocomplete
 } from "./copilotCoexistence";
 
 const AUTOCOMPLETE_HELP = [
@@ -23,8 +22,6 @@ const AUTOCOMPLETE_HELP = [
   "Alt+[ — previous suggestion",
   "Cmd+Shift+\\ — manual trigger"
 ].join("\n");
-
-let copilotWarningShown = false;
 
 export function createAutocompleteUsageTelemetryHandler(
   emitUsage: (eventType: string, metadata?: Record<string, unknown>) => void
@@ -38,32 +35,6 @@ export function createAutocompleteUsageTelemetryHandler(
       emitUsage("completion.performance", { ...event.performance });
     }
   };
-}
-
-function maybeWarnCopilotCoexistence(settings = readAutocompleteSettings()): void {
-  if (!settings.enabled || settings.copilotPolicy !== "warn") {
-    return;
-  }
-  if (!isCopilotInstalled()) {
-    copilotWarningShown = false;
-    return;
-  }
-  if (copilotWarningShown) {
-    return;
-  }
-  const warning = copilotCoexistenceWarning();
-  if (!warning) {
-    return;
-  }
-  copilotWarningShown = true;
-  void vscode.window.showWarningMessage(warning, "Open settings").then((choice) => {
-    if (choice === "Open settings") {
-      void vscode.commands.executeCommand(
-        "workbench.action.openSettings",
-        "coopAI.autocomplete.copilotPolicy"
-      );
-    }
-  });
 }
 
 export function registerAutocompleteCommands(
@@ -80,20 +51,25 @@ export function registerAutocompleteCommands(
     }
   };
 
-  const refreshCopilotStatus = () => {
+  const syncCopilotInline = async (enabled: boolean) => {
+    await syncCopilotInlineWithCoopAutocomplete(context, enabled);
+  };
+
+  const refreshAfterCopilotChange = () => {
     const settings = readAutocompleteSettings();
-    const { installed } = detectCopilotExtensions();
-    if (settings.enabled && installed.length > 0) {
-      publishStatus({
-        status: settings.copilotPolicy === "disable-when-copilot" ? "disabled" : "ready",
-        message: copilotCoexistenceWarning()
-      });
-      maybeWarnCopilotCoexistence(settings);
+    if (settings.enabled && isCopilotInstalled()) {
+      void syncCopilotInline(true);
     }
   };
 
-  maybeWarnCopilotCoexistence();
-  context.subscriptions.push(onCopilotExtensionsChanged(refreshCopilotStatus));
+  void syncCopilotInline(readAutocompleteSettings().enabled);
+
+  context.subscriptions.push(
+    onCopilotExtensionsChanged(refreshAfterCopilotChange),
+    onAutocompleteSettingsChanged(() => {
+      void syncCopilotInline(readAutocompleteSettings().enabled);
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -143,18 +119,11 @@ export function registerAutocompleteCommands(
       }
       await config.update("enabled", enabled, vscode.ConfigurationTarget.Global);
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
+      await syncCopilotInline(enabled);
       publishStatus({
         status: enabled ? "ready" : "disabled",
-        message: enabled
-          ? copilotCoexistenceWarning() ?? "Autocomplete enabled"
-          : "Autocomplete disabled"
+        message: enabled ? "Autocomplete enabled" : "Autocomplete disabled"
       });
-      if (enabled) {
-        maybeWarnCopilotCoexistence({ ...readAutocompleteSettings(), enabled: true });
-      }
-      void vscode.window.showInformationMessage(
-        enabled ? "CoopAI autocomplete enabled." : "CoopAI autocomplete disabled."
-      );
     }),
     vscode.commands.registerCommand("coopAI.toggleAutocomplete", async () => {
       const enabled = readAutocompleteSettings().enabled;

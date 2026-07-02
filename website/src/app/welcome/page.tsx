@@ -25,7 +25,7 @@ export default async function WelcomePage({ searchParams }: WelcomePageProps) {
       <PageHeader
         eyebrow="Checkout complete"
         title="You're all set"
-        description="We sent your admin API key and portal link to your email."
+        description="We sent your admin portal link to your email. Sign in with the password you chose at checkout."
         tight
       />
 

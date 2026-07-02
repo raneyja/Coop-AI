@@ -1,6 +1,6 @@
 ---
 title: Admin portal
-description: Sign in, connect integrations, invite users, and manage API keys.
+description: Sign in, connect integrations, invite users, and manage automation API keys.
 section: admin
 order: 1
 lastUpdated: "2026-06-29"
@@ -11,10 +11,13 @@ The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org 
 ## Sign in
 
 1. **Browser** → [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login)
-2. Paste your **admin API key** (`coop_…`) from signup email or checkout.
-3. Success: dashboard loads with org name and integration status.
+2. Sign in with your **email and password**, or click **Continue with Google**.
+3. **Enterprise:** expand **More sign-in options** → **Sign in with SSO** (SAML).
+4. Success: dashboard loads with org name and integration status.
 
-Admin API keys are created during [free signup](/signup/free) or Pro/Enterprise checkout. Developers receive separate keys from the **Users** or **API Keys** pages.
+Accounts are created during [free signup](/signup/free) or Pro/Enterprise checkout. Use the same email you registered with.
+
+**Forgot your password?** → [admin.coop-ai.dev/forgot-password](https://admin.coop-ai.dev/forgot-password)
 
 ## Dashboard
 
@@ -42,17 +45,17 @@ Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces
 - Assign roles (admin vs developer)
 - Revoke access
 
-Developers sign into the VS Code extension with their org API key — not the admin key.
+Developers sign into the VS Code extension with their work email and password, Google, or org SSO — not an automation API key.
 
-## API keys
+## API keys (automation only)
 
-**API Keys** page:
+**API Keys** page — for scripts, CI, and headless automation:
 
-- Create labeled keys for developers and CI
+- Create labeled keys for automation pipelines
 - Revoke compromised keys
 - View last-used timestamps
 
-Each key is scoped to your org. Keys gate `/v1/chat`, inline completion, and graph endpoints.
+API keys are **not** the primary sign-in method. Developers and admins sign in with email/password, Google, or SSO. Issue API keys only when a teammate needs programmatic access.
 
 ## Billing
 

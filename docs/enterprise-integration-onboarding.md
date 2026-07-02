@@ -14,7 +14,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 |------|-----------|-----------|--------------------------|
 | **Coop platform operator** | Runs `api.coop-ai.dev`, registers OAuth apps *once*, sets `.env.backend` on the server | Once per Coop deployment | Yes — but **not** your customers |
 | **Customer org admin** | Signs in to Coop, clicks **Connect** per tool in VS Code Settings | Once per org per tool | No — browser OAuth only |
-| **Developer** | Installs extension, signs in (SSO or org API key), sets default repo | Once per machine | No |
+| **Developer** | Installs extension, signs in (email/password, Google, or org SSO), sets default repo | Once per machine | No |
 
 **Enterprise-grade behavior today:** org OAuth tokens are stored **encrypted in Postgres** on the Coop server (`org_integration_connections`). Developers never paste Slack/Notion/Google tokens in production mode.
 
@@ -26,7 +26,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 
 After the platform operator has configured the server, a **customer org admin** should complete onboarding in ~15 minutes:
 
-1. **Extension UI** — Install Coop AI → **Settings → Account** → sign in (SSO or org API key) → **Test connection**
+1. **Extension UI** — Install Coop AI → **Settings → Account** → sign in (email/password, Google, or SSO) → **Test connection**
 2. **Extension UI** — **Settings → Tools** → for each tool: **Connect** → approve in browser → **Refresh status** → **Test**
 3. **Extension UI** — **Settings → Workspace** → set default **owner / repo / branch**
 4. **Extension UI** — run a quick action or chat query to validate context
@@ -148,8 +148,13 @@ Give this checklist to the customer's **owner/admin** user (`canInstallIntegrati
 
 **Extension UI** — **Settings → Account**
 
-- SSO: **Sign in with SSO** (if configured), or
-- API key: paste org key from Coop operator → **Save** → **Test connection**
+- Email/password: enter work email and password → **Sign in** → **Test connection**
+- Google: **Continue with Google**
+- Enterprise SSO: **Sign in with SSO** (if configured)
+
+**Forgot password?** Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or the link in Account settings.
+
+Automation API keys (`coop_…`) are for CI and scripts only — not primary sign-in.
 
 ### 2. Connect tools
 
@@ -192,7 +197,7 @@ For each row, same pattern:
 Developers **do not** register OAuth apps or edit server env.
 
 1. Install Coop AI from marketplace (or VSIX from org).
-2. **Settings → Account** — sign in with org SSO or API key issued by admin.
+2. **Settings → Account** — sign in with work email and password, Google, or org SSO (issued by admin invite).
 3. **Settings → Workspace** — set repo (or use workspace defaults from admin).
 4. Use chat and quick actions.
 

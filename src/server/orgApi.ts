@@ -38,11 +38,18 @@ import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
 import { getIndexedRepoQuota, reconcileIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
 import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceStore";
+import { UserRepoGrantStore } from "./userRepoGrantStore";
+import {
+  catalogRepoIsAccessible,
+  indexedOrgRepoIds,
+  resolveAccessibleRepoIds
+} from "./resolveAccessibleRepos";
+import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
 import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
 import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } from "../api/codeHosts/types";
 import { loadGitLabAppConfig, gitlabApiBaseUrl } from "./gitlabAppConfig";
-import { syncOrgCatalog, runCatalogSyncForProvider, CatalogSyncError } from "./catalogSyncService";
+import { runCatalogSyncForProvider, CatalogSyncError } from "./catalogSyncService";
 import { queueOrgRepoIndex, reindexEmbeddingFailures } from "./queueOrgRepoIndex";
 import type { UsageTracker } from "./usageTracker";
 import type { UserStore } from "./users/userStore";
@@ -194,8 +201,11 @@ export async function handleOrgApiRequest(
       canUseLightning: canUseLightningPlan(plan),
       lightningBackend: "cloud",
       userId: auth.userId,
+      email: auth.email,
       role: auth.role,
-      authMethod: auth.userId ? "sso_session" : "api_key",
+      authMethod: resolveAuthMethod(auth),
+      sessionProvider: auth.sessionProvider,
+      isSignedIn: Boolean(auth.userId),
       canInstallIntegrations: canInstallIntegrations(auth),
       onboardingCompleted: await loadOnboardingCompleted(deps, auth.orgId),
       adminPortalUrl: loadBillingConfig().adminPortalUrl,
@@ -638,31 +648,18 @@ async function handleListCatalogRepos(
   }
 
   const org = await deps.orgStore.getOrganization(auth.orgId);
-  if (org && canUseLightningPlan(org.plan) && deps.jobQueue && discovered.length > 0) {
-    const needsQueue = discovered
-      .map((entry) => entry.repoId)
-      .filter((repoId) => {
-        const indexed = indexedById.get(repoId);
-        return (
-          !indexed?.lightningEnabled ||
-          indexed.indexStatus === "idle" ||
-          indexed.indexStatus === "disabled" ||
-          indexed.indexStatus === "error"
-        );
-      });
-    if (needsQueue.length > 0) {
-      await syncOrgCatalog(auth.orgId, needsQueue, {
-        orgStore: deps.orgStore,
-        jobQueue: deps.jobQueue
-      });
-      for (const entry of repos) {
-        const updated = await deps.orgStore.getOrgRepo(auth.orgId, entry.repoId);
-        if (updated) {
-          entry.lightningEnabled = updated.lightningEnabled;
-          entry.indexStatus = updated.indexStatus;
-        }
-      }
-    }
+  const plan = org?.plan ?? auth.plan ?? "free";
+  if (usesAdminRepoAccessPolicy(plan)) {
+    const pool = await getDbPool();
+    const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
+    const resolution = await resolveAccessibleRepoIds(auth.orgId, authUserId(auth), plan, {
+      orgStore: deps.orgStore,
+      grantStore
+    });
+    const indexedIds = indexedOrgRepoIds([...indexedById.values()]);
+    repos = repos.filter((entry) =>
+      catalogRepoIsAccessible(entry.repoId, indexedIds, resolution)
+    );
   }
 
   writeJson(response, 200, { repos });
@@ -1080,10 +1077,44 @@ async function handleGetWorkspaceRepos(
   userId: string,
   plan: import("./orgStore").OrgPlan
 ): Promise<void> {
-  const selections = await workspaceStore.listUserWorkspaceRepos(orgId, userId);
-  const quota = await workspaceStore.getUserWorkspaceQuota(orgId, userId, plan);
   const orgRepos = await deps.orgStore!.listOrgRepos(orgId);
   const orgRepoById = new Map(orgRepos.map((repo) => [repo.repoId, repo]));
+
+  if (usesAdminRepoAccessPolicy(plan)) {
+    const pool = await getDbPool();
+    const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
+    const resolution = await resolveAccessibleRepoIds(orgId, userId, plan, {
+      orgStore: deps.orgStore!,
+      grantStore
+    });
+    const repos = resolution.repoIds.map((repoId, index) => {
+      const orgRepo = orgRepoById.get(repoId);
+      const parsed = parseRepoId(repoId);
+      return {
+        repoId,
+        owner: parsed.owner,
+        name: parsed.repo,
+        defaultBranch: "main",
+        indexStatus: orgRepo?.indexStatus,
+        lightningEnabled: orgRepo?.lightningEnabled,
+        isPrimary: index === 0,
+        sortOrder: index
+      };
+    });
+    writeJson(response, 200, {
+      repos,
+      selectedCount: repos.length,
+      limit: null,
+      canAddMore: false,
+      primaryRepoId: repos[0]?.repoId,
+      repoAccessMode: resolution.repoAccessMode,
+      adminControlled: true
+    });
+    return;
+  }
+
+  const selections = await workspaceStore.listUserWorkspaceRepos(orgId, userId);
+  const quota = await workspaceStore.getUserWorkspaceQuota(orgId, userId, plan);
   const repos = selections.map((selection, index) => {
     const orgRepo = orgRepoById.get(selection.repoId);
     const parsed = parseRepoId(selection.repoId);
@@ -1103,7 +1134,8 @@ async function handleGetWorkspaceRepos(
     selectedCount: quota.selectedCount,
     limit: quota.limit,
     canAddMore: quota.canAddMore,
-    primaryRepoId: quota.primaryRepoId
+    primaryRepoId: quota.primaryRepoId,
+    adminControlled: false
   });
 }
 
@@ -1123,6 +1155,14 @@ async function handlePutWorkspaceRepos(
     return;
   }
   const repoIds = rawRepoIds.map((entry) => String(entry).trim()).filter(Boolean);
+  if (usesAdminRepoAccessPolicy(plan)) {
+    writeJson(response, 403, {
+      error: "admin_controlled_repos",
+      message:
+        "Your organization admin controls repository access. Contact an admin to change which repos you can use."
+    });
+    return;
+  }
   const limit = workspaceRepoLimitForPlan(plan);
   if (limit === null && repoIds.length > 0) {
     writeJson(response, 403, {
@@ -2139,6 +2179,19 @@ async function buildIntegrationHealthSummary(
     }
   }
   return { connected, scopeRequired };
+}
+
+function resolveAuthMethod(auth: AuthContext): "api_key" | "sso_session" | "password" | "google_oauth" {
+  if (!auth.userId) {
+    return "api_key";
+  }
+  if (auth.sessionProvider === "password") {
+    return "password";
+  }
+  if (auth.sessionProvider === "google") {
+    return "google_oauth";
+  }
+  return "sso_session";
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

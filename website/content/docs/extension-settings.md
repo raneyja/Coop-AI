@@ -54,7 +54,6 @@ Inline ghost-text completions are **off by default**. See the full guide: [Inlin
 | `coopAI.autocomplete.trigger` | `auto` | `auto` \| `manual` \| `off` — when to request completions |
 | `coopAI.autocomplete.useFim` | `true` | FIM `segments` for Codestral / DeepSeek routing |
 | `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (**Pro** plan) |
-| `coopAI.autocomplete.copilotPolicy` | `warn` | `warn` \| `disable-when-copilot` — Copilot coexistence |
 | `coopAI.autocomplete.model` | `haiku` | Fast model preset: `haiku` \| `gpt35` \| `custom` |
 | `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
 | `coopAI.autocomplete.debounceMs` | `300` | Ms after typing before auto-trigger (0–2000) |

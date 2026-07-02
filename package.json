@@ -375,15 +375,6 @@
           "default": "",
           "description": "Model id when coopAI.autocomplete.model is custom."
         },
-        "coopAI.autocomplete.copilotPolicy": {
-          "type": "string",
-          "enum": [
-            "warn",
-            "disable-when-copilot"
-          ],
-          "default": "warn",
-          "description": "How to behave when GitHub Copilot extensions are installed: warn in the UI, or disable Coop autocomplete."
-        },
         "coopAI.autocomplete.showMultipleSuggestions": {
           "type": "boolean",
           "default": false,
@@ -822,6 +813,7 @@
     "watch:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --watch",
     "watch:webview:js": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --watch",
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json",
+    "test:auth": "npx tsx src/server/auth/passwordCrypto.test.ts && npx tsx src/server/freeSignupApi.test.ts",
     "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",
     "test:slash-commands": "npx tsx src/context/slashCommands.test.ts",
     "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
@@ -851,7 +843,10 @@
     "test:integration-scope": "npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts",
     "test": "npm run test:integration-scope",
     "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
-    "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh"
+    "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh",
+    "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",
+    "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
+    "dev:admin-portal": "bash scripts/dev-admin-portal.sh"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

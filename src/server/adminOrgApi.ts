@@ -2,7 +2,6 @@ import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { resolveOrgPlanFromDb } from "./authMiddleware";
-import { createPlanQuotaService } from "./planQuota";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 
 type ParsedRequest = {
@@ -44,10 +43,35 @@ export async function handleAdminOrgRequest(
       id: org.id,
       name: org.name,
       plan,
+      repoAccessMode: org.repoAccessMode,
       createdAt: org.createdAt,
       memberCount: activeMemberCount,
       integrationSummary,
       onboardingCompleted: Boolean(billing?.onboardingCompletedAt)
+    });
+    return true;
+  }
+
+  if (parsed.method === "PATCH" && parsed.pathname === "/v1/admin/org/repo-access") {
+    const body = asRecord(parsed.body);
+    const mode = String(body.repoAccessMode ?? "").trim();
+    if (mode !== "all_indexed" && mode !== "per_user") {
+      writeJson(response, 400, {
+        error: "invalid_repo_access_mode",
+        message: "repoAccessMode must be all_indexed or per_user."
+      });
+      return true;
+    }
+    const org = await deps.orgStore!.updateRepoAccessMode(auth.orgId, mode);
+    if (!org) {
+      writeJson(response, 404, { error: "organization not found" });
+      return true;
+    }
+    writeJson(response, 200, {
+      id: org.id,
+      name: org.name,
+      plan: org.plan,
+      repoAccessMode: org.repoAccessMode
     });
     return true;
   }
@@ -71,47 +95,7 @@ export async function handleAdminOrgRequest(
     return true;
   }
 
-  if (parsed.method === "GET" && parsed.pathname === "/v1/admin/quota") {
-    const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
-    if (plan !== "free") {
-      writeJson(response, 200, { plan, unlimited: true });
-      return true;
-    }
-    const planQuota = createPlanQuotaService(deps.usageTracker);
-    const snapshot = await planQuota.getSnapshot(auth.orgId, plan);
-    if (!snapshot) {
-      writeJson(response, 200, { plan, unlimited: true });
-      return true;
-    }
-    writeJson(response, 200, { ...snapshot, plan });
-    return true;
-  }
-
-  if (parsed.method === "POST" && parsed.pathname === "/v1/admin/enterprise-upgrade-request") {
-    const body = asRecord(parsed.body);
-    const name = String(body.name ?? "").trim();
-    const email = String(body.email ?? "").trim();
-    const orgName = String(body.orgName ?? auth.orgName ?? "").trim();
-    const notes = String(body.notes ?? "").trim();
-    if (!name || !email || !orgName) {
-      writeJson(response, 400, { error: "name, email, and orgName are required" });
-      return true;
-    }
-    await deps.auditLogger?.record({
-      orgId: auth.orgId,
-      action: "billing.enterprise_upgrade_request",
-      metadata: { name, email, orgName, notes: notes || undefined }
-    });
-    console.info("[admin] enterprise upgrade request", { orgId: auth.orgId, name, email, orgName, notes });
-    writeJson(response, 200, { ok: true });
-    return true;
-  }
-
   return false;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 async function buildIntegrationSummary(deps: AdminApiDeps, orgId: string) {
@@ -136,4 +120,8 @@ async function buildIntegrationSummary(deps: AdminApiDeps, orgId: string) {
     totalProviders: TRACKED_PROVIDERS.length,
     installed
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }

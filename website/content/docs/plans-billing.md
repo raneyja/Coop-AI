@@ -28,9 +28,9 @@ See current pricing at [coop-ai.dev/pricing](/pricing).
 
 ## Developer (free)
 
-1. **Browser** → [Signup free](/signup/free)
-2. Receive API key + personal admin portal access
-3. Install extension → paste key → chat with local workspace
+1. **Browser** → [Signup free](/signup/free) — email and password, or Google
+2. Personal admin portal access with the same account
+3. Install extension → sign in → chat with local workspace
 
 Free tier does **not** connect org-wide GitHub or Lightning Mode. Unlimited personal integrations in dev mode.
 

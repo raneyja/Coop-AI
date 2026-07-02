@@ -341,6 +341,7 @@ export class CoopChatSession {
       repo: "",
       branch: "",
       hasApiKey: false,
+      isSignedIn: false,
       defaultCodeHost: "github",
       gitlabBaseUrl: "https://gitlab.com/api/v4",
       hasGitHubToken: false,
@@ -1031,11 +1032,20 @@ export class CoopChatSession {
         }
         return;
       }
+      case "settings:sign-in-password":
+        await this.handleSignInPassword(message.payload.email, message.payload.password);
+        return;
+      case "settings:sign-in-google":
+        await this.handleSignInGoogle();
+        return;
+      case "settings:forgot-password":
+        await this.handleForgotPassword(message.payload.email);
+        return;
       case "settings:sign-in-sso":
         await this.handleSignInSso(message.payload?.org);
         return;
       case "settings:sign-out":
-        await this.options.api.clearToken();
+        await this.options.api.logout(this.preferences.apiBaseUrl);
         await this.refreshAllSessionsPreferences();
         void vscode.window.showInformationMessage("Signed out of Coop.");
         return;
@@ -4789,6 +4799,56 @@ export class CoopChatSession {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not open GitHub App install URL.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleSignInPassword(email: string, password: string): Promise<void> {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) {
+      void vscode.window.showErrorMessage("Enter your email and password.");
+      return;
+    }
+    try {
+      const session = await this.options.api.loginWithPassword(
+        this.preferences.apiBaseUrl,
+        trimmedEmail,
+        password
+      );
+      await this.options.api.storeSession(session.accessToken, session.refreshToken);
+      await this.refreshAllSessionsPreferences();
+      void vscode.window.showInformationMessage("Signed in to Coop.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not sign in.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleSignInGoogle(): Promise<void> {
+    const redirectUri = vscode.Uri.parse("vscode://coop-ai.coop-ai/auth/callback").toString();
+    try {
+      const url = this.options.api.startGoogleAuthUrl(this.preferences.apiBaseUrl, redirectUri);
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showInformationMessage("Complete sign-in in your browser, then return to VS Code.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start Google sign-in.";
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private async handleForgotPassword(email: string): Promise<void> {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      void vscode.window.showErrorMessage("Enter your email address.");
+      return;
+    }
+    try {
+      const result = await this.options.api.forgotPassword(this.preferences.apiBaseUrl, trimmedEmail);
+      void vscode.window.showInformationMessage(
+        result.message ?? "If an account exists for that email, we sent a reset link."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not send password reset email.";
       void vscode.window.showErrorMessage(message);
     }
   }

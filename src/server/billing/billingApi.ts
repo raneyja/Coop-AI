@@ -12,6 +12,9 @@ import { adminPortalLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
+import type { AuthIdentityStore } from "../auth/authIdentityStore";
+import type { AuthTokenStore } from "../auth/authTokenStore";
+import type { AuthConfig } from "../auth/authConfig";
 
 type ParsedRequest = {
   method: string;
@@ -30,6 +33,9 @@ export type BillingApiDeps = {
   serverConfig: ServerConfig;
   stripeService?: StripeService;
   pool?: Pool | null;
+  authIdentityStore?: AuthIdentityStore;
+  authTokenStore?: AuthTokenStore;
+  authConfig?: AuthConfig;
 };
 
 export async function handleBillingApiRequest(
@@ -55,7 +61,10 @@ export async function handleBillingApiRequest(
       {
         orgStore: deps.orgStore,
         userStore: deps.userStore,
-        emailService: deps.emailService
+        emailService: deps.emailService,
+        authIdentityStore: deps.authIdentityStore,
+        authTokenStore: deps.authTokenStore,
+        authConfig: deps.authConfig
       }
     )
   ) {

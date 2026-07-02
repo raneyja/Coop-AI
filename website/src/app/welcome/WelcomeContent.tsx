@@ -12,7 +12,7 @@ type WelcomeContentProps = {
 };
 
 const STEPS = [
-  "Open the admin portal and sign in with the API key from your email.",
+  "Open the admin portal and sign in with your email and password.",
   "Connect GitHub, Slack, and other tools once for your whole org.",
   "Invite teammates from the Users page.",
   "Developers install Coop AI in VS Code and sign in."
@@ -116,8 +116,8 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
         )}
 
         {state === "ready" && orgName && (
-          <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm text-white/90">
-            <strong>{orgName}</strong> is ready. Check your email for your admin API key.
+          <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm text-gray-900">
+            <strong>{orgName}</strong> is ready. Sign in with the email and password you used at checkout.
           </p>
         )}
 
@@ -144,7 +144,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
           </Button>
           {showProvisioning && (
             <p className="text-center text-xs text-coop-muted">
-              You can open the portal now — sign in once your API key email arrives.
+              You can open the portal now — sign in once provisioning finishes.
             </p>
           )}
           <p className="text-center text-xs leading-relaxed text-coop-muted">

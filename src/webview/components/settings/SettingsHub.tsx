@@ -34,12 +34,12 @@ const HUB_ROWS: Array<{
   subtitle: (prefs: Preferences, pinnedCount: number, lightningState?: SettingsLightningSummary | null) => string;
   configured?: (prefs: Preferences) => boolean | undefined;
 }> = [
-  { screen: "account", title: "Account", subtitle: (p) => accountHubSubtitle(p), configured: (p) => p.hasApiKey },
+  { screen: "account", title: "Account", subtitle: (p) => accountHubSubtitle(p), configured: (p) => p.isSignedIn ?? p.hasApiKey },
   {
     screen: "plan-usage",
     title: "Plan & Usage",
     subtitle: (p) => planUsageHubSubtitle(p),
-    configured: (p) => p.hasApiKey
+    configured: (p) => p.isSignedIn ?? p.hasApiKey
   },
   {
     screen: "tools",
@@ -105,7 +105,7 @@ export function SettingsNavHeader({
       closeAriaLabel="Close settings"
       meta={
         isHub ? (
-          prefs.hasApiKey ? (
+          prefs.isSignedIn ?? prefs.hasApiKey ? (
             <span className="shrink-0 text-[11px] text-[var(--vscode-testing-iconPassed,#22c55e)]">
               Signed in
             </span>

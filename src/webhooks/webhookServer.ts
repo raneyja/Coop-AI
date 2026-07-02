@@ -77,6 +77,11 @@ import { handleBillingApiRequest } from "../server/billing/billingApi";
 import { loadBillingConfig } from "../server/billing/billingConfig";
 import { EmailService } from "../server/email/emailService";
 import { applyCors, loadCorsOrigins } from "../server/cors";
+import { loadAuthConfig } from "../server/auth/authConfig";
+import { AuthIdentityStore } from "../server/auth/authIdentityStore";
+import { AuthTokenStore } from "../server/auth/authTokenStore";
+import { GoogleAuthService } from "../server/auth/googleAuthService";
+import { handleUserAuthApiRequest } from "../server/auth/userAuthApi";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -133,6 +138,24 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
   // Per-user identity, SSO, and audit logging (Enterprise). All no-op without a DB pool.
   const userStore = pool ? new UserStore(pool) : undefined;
+  const authIdentityStore = pool ? new AuthIdentityStore(pool) : undefined;
+  const authTokenStore = pool ? new AuthTokenStore(pool) : undefined;
+  const authConfig = loadAuthConfig();
+  const googleAuth =
+    authConfig.googleClientId && authConfig.googleClientSecret
+      ? new GoogleAuthService({
+          clientId: authConfig.googleClientId,
+          clientSecret: authConfig.googleClientSecret,
+          stateSecret: authConfig.oauthStateSecret
+        })
+      : undefined;
+  if (googleAuth) {
+    console.log(
+      `[auth] Google sign-in enabled (callback ${authConfig.publicBaseUrl}/v1/auth/google/callback)`
+    );
+  } else {
+    console.warn("[auth] Google sign-in disabled — set GOOGLE_AUTH_CLIENT_ID and GOOGLE_AUTH_CLIENT_SECRET");
+  }
   const ssoConfigStore = pool ? new SsoConfigStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
   const usageTracker = new UsageTracker(pool ?? null);
@@ -456,6 +479,33 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (
+        await handleUserAuthApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            query: parsed.query,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          {
+            orgStore,
+            userStore,
+            authIdentityStore,
+            authTokenStore,
+            emailService,
+            googleAuth,
+            authConfig,
+            auditLogger,
+            serverConfig,
+            pool
+          }
+        )
+      ) {
+        return;
+      }
+
+      if (
         await handleSamlApiRequest(
           {
             method: parsed.method,
@@ -543,7 +593,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         await handleBillingApiRequest(
           { ...orgParsed, rawBody: parsed.rawBody },
           response,
-          { orgStore, userStore, emailService, auditLogger, serverConfig, pool }
+          { orgStore, userStore, emailService, auditLogger, serverConfig, pool, authIdentityStore, authTokenStore, authConfig }
         )
       ) {
         return;

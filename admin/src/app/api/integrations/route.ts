@@ -8,9 +8,17 @@ function apiBase(): string {
   return base.replace(/\/$/, "");
 }
 
+function isBearerCredential(authorization: string | null | undefined): authorization is string {
+  if (!authorization?.startsWith("Bearer ")) {
+    return false;
+  }
+  const token = authorization.slice("Bearer ".length).trim();
+  return token.startsWith("coop_") || token.startsWith("coop_sess_");
+}
+
 export async function GET(request: Request): Promise<NextResponse> {
   const authorization = request.headers.get("authorization")?.trim();
-  if (!authorization?.startsWith("Bearer coop_")) {
+  if (!isBearerCredential(authorization)) {
     return NextResponse.json({ error: "unauthorized", message: "Not signed in." }, { status: 401 });
   }
 

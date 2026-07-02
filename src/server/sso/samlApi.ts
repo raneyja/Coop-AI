@@ -229,7 +229,10 @@ async function handleCallback(
     idpProvider: assertion.idpProvider
   });
 
-  const session = await deps.userStore!.createSession(user.id, relay.orgId, deps.serverConfig.ssoSessionTtlMs);
+  const session = await deps.userStore!.createSession(user.id, relay.orgId, {
+    ttlMs: deps.serverConfig.ssoSessionTtlMs,
+    authProvider: "saml"
+  });
 
   await deps.auditLogger?.record({
     orgId: relay.orgId,

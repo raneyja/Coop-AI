@@ -51,13 +51,13 @@ Suggested scopes: `repo`, `read:org`.
 | Symptom | Fix |
 | --- | --- |
 | "GitHub is not configured on the Coop server" | Operator must add GitHub App/OAuth creds |
-| "Sign in to Coop first" | Save org API key under Account |
+| "Sign in to Coop first" | Sign in under **Settings → Account** (email/password, Google, or SSO) |
 | Callback fails | Callback URL must match vendor console exactly |
 | Still see PAT field | Disable `coopAI.devMode` for production |
 
-## Coop API key vs GitHub
+## Coop sign-in vs GitHub
 
-- **Coop API key** — identifies your org to the Coop backend
+- **Coop sign-in** — email/password, Google, or SSO identifies you to the Coop backend
 - **Connect GitHub** — authorizes GitHub; stores tokens on the server
 
-Both are required in production mode.
+Both are required in production mode. Automation API keys are optional and for CI/scripts only.

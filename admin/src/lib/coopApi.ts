@@ -26,7 +26,16 @@ export type ApiResult<T> = {
 export type MeResponse = StoredMe & {
   canUseLightning?: boolean;
   userId?: string;
-  authMethod?: "api_key" | "sso_session";
+  isSignedIn?: boolean;
+};
+
+export type LoginResponse = {
+  accessToken: string;
+  refreshToken: string;
+  email: string;
+  orgName: string;
+  plan: string;
+  authMethod?: MeResponse["authMethod"];
 };
 
 export type AdminUser = {
@@ -129,7 +138,9 @@ function getToken(): string | null {
 }
 
 function formatError(status: number, body: ApiError | undefined, fallback: string): string {
-  if (status === 401) return "Invalid API key. Check that your key starts with coop_ and has not been revoked.";
+  if (status === 401) {
+    return body?.message ?? body?.error ?? "Sign-in failed. Check your credentials and try again.";
+  }
   if (status === 403) return body?.message ?? body?.error ?? "You do not have permission for this action.";
   if (status === 404) return fallback;
   return body?.message ?? body?.error ?? fallback;
@@ -177,26 +188,116 @@ export async function coopFetch<T>(
   }
 }
 
-export async function validateApiKey(token: string): Promise<ApiResult<MeResponse>> {
+export async function validateSession(token: string): Promise<ApiResult<MeResponse>> {
   const normalized = normalizeApiKeyInput(token);
+  if (!normalized) {
+    return { ok: false, status: 401, error: "Not signed in." };
+  }
   try {
     const response = await fetch("/api/validate-key", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: normalized })
+      body: JSON.stringify({ apiKey: normalized, token: normalized })
     });
     const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, "Invalid API key.")
+        error: formatError(response.status, body, "Sign-in validation failed.")
       };
     }
     return { ok: true, status: response.status, data: body };
   } catch {
     return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
   }
+}
+
+/** @deprecated Use validateSession */
+export const validateApiKey = validateSession;
+
+export async function loginWithPassword(
+  email: string,
+  password: string
+): Promise<ApiResult<LoginResponse & MeResponse>> {
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+    });
+    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, "Sign-in failed.")
+      };
+    }
+    return { ok: true, status: response.status, data: body };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
+}
+
+export async function requestPasswordReset(email: string): Promise<ApiResult<{ ok: boolean; message?: string }>> {
+  try {
+    const response = await fetch(`${getApiBase()}/v1/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim().toLowerCase() })
+    });
+    const body = (await response.json().catch(() => ({}))) as { ok?: boolean; message?: string } & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, "Could not send reset email.")
+      };
+    }
+    return { ok: true, status: response.status, data: { ok: Boolean(body.ok ?? true), message: body.message } };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
+}
+
+export async function registerWithPassword(
+  email: string,
+  password: string,
+  orgName?: string
+): Promise<ApiResult<LoginResponse & MeResponse>> {
+  try {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password,
+        orgName: orgName?.trim() || undefined
+      })
+    });
+    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: formatError(response.status, body, "Could not create your account.")
+      };
+    }
+    return { ok: true, status: response.status, data: body };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
+  }
+}
+
+export function startGoogleAuthUrl(mode: "login" | "signup" = "login", orgName?: string): string {
+  const params = new URLSearchParams({ mode });
+  if (orgName?.trim()) {
+    params.set("orgName", orgName.trim());
+  }
+  return `/api/auth/google/start?${params.toString()}`;
 }
 
 async function fetchIntegrationStatus(provider: IntegrationProvider): Promise<IntegrationStatus> {
@@ -317,15 +418,44 @@ export async function fetchUsers(): Promise<ApiResult<{ users: AdminUser[] }>> {
   };
 }
 
-export async function inviteUser(email: string, role: string): Promise<ApiResult<{ user: AdminUser }>> {
+export async function inviteUser(
+  email: string,
+  role: string,
+  repoIds?: string[]
+): Promise<ApiResult<{ user: AdminUser }>> {
   const result = await coopFetch<{ user: BackendUser }>("/v1/admin/users/invite", {
     method: "POST",
-    body: JSON.stringify({ email, role })
+    body: JSON.stringify({
+      email,
+      role,
+      ...(repoIds && repoIds.length > 0 ? { repoIds } : {})
+    })
   });
   if (!result.ok || !result.data?.user) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
   return { ok: true, status: result.status, data: { user: normalizeUser(result.data.user) } };
+}
+
+export async function fetchUserRepoGrants(
+  userId: string
+): Promise<ApiResult<{ userId: string; repoIds: string[] }>> {
+  return coopFetch<{ userId: string; repoIds: string[] }>(
+    `/v1/admin/users/${encodeURIComponent(userId)}/repo-grants`
+  );
+}
+
+export async function saveUserRepoGrants(
+  userId: string,
+  repoIds: string[]
+): Promise<ApiResult<{ userId: string; repoIds: string[] }>> {
+  return coopFetch<{ userId: string; repoIds: string[] }>(
+    `/v1/admin/users/${encodeURIComponent(userId)}/repo-grants`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ repoIds })
+    }
+  );
 }
 
 export async function updateUser(
@@ -386,12 +516,24 @@ export type OrgSummary = {
   id: string;
   name: string;
   plan: string;
+  repoAccessMode?: "all_indexed" | "per_user";
   onboardingCompleted?: boolean;
   memberCount?: number;
 };
 
+export type OrgRepoAccessMode = "all_indexed" | "per_user";
+
 export async function fetchOrg(): Promise<ApiResult<OrgSummary>> {
   return coopFetch<OrgSummary>("/v1/admin/org");
+}
+
+export async function updateRepoAccessMode(
+  repoAccessMode: OrgRepoAccessMode
+): Promise<ApiResult<OrgSummary>> {
+  return coopFetch<OrgSummary>("/v1/admin/org/repo-access", {
+    method: "PATCH",
+    body: JSON.stringify({ repoAccessMode })
+  });
 }
 
 export async function completeOnboarding(): Promise<ApiResult<{ ok: boolean }>> {

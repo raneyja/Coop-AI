@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 
 export default function SignupPage() {
@@ -87,6 +88,12 @@ export default function SignupPage() {
           >
             {loading ? "Redirecting to Stripe…" : "Continue to checkout"}
           </button>
+          <p className="text-center text-sm text-coop-muted">
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-gray-900 hover:underline">
+              Sign in
+            </Link>
+          </p>
         </form>
       </section>
     </>

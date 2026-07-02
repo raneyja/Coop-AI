@@ -26,6 +26,7 @@ function test(name: string, fn: () => void): void {
 }
 
 const basePrefs = {
+  isSignedIn: true,
   hasApiKey: true,
   apiBaseUrl: "http://localhost:8787"
 } as Preferences;
@@ -48,14 +49,14 @@ test("displayIdentitySubtitle combines org and plan when signed in", () => {
     displayIdentitySubtitle({ ...basePrefs, orgName: "Acme Corp", plan: "pro" }),
     "Acme Corp · Pro"
   );
-  assert.equal(displayIdentitySubtitle({ ...basePrefs, hasApiKey: false }), undefined);
+  assert.equal(displayIdentitySubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), undefined);
 });
 
-test("accountHubSubtitle reports API connection status", () => {
-  assert.equal(accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp" }), "API key configured · localhost:8787");
+test("accountHubSubtitle reports sign-in connection status", () => {
+  assert.equal(accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp" }), "Signed in · localhost:8787");
   assert.equal(
     accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp", plan: "free", quotaCredits: { remainingCredits: 3, limitCredits: 10, usedCredits: 7, windowHours: 24, resetsAt: "", retryAfterMs: 0 } }),
-    "API key configured · localhost:8787"
+    "Signed in · localhost:8787"
   );
 });
 
@@ -70,7 +71,7 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
     }),
     "Developer (free) · 56K of 80K used"
   );
-  assert.equal(planUsageHubSubtitle({ ...basePrefs, hasApiKey: false }), "Sign in to view plan");
+  assert.equal(planUsageHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Sign in to view plan");
 });
 
 test("formatQuotaUsageSummary shows used credits in K format", () => {
@@ -86,7 +87,7 @@ test("formatQuotaUsageSummary shows used credits in K format", () => {
 });
 
 test("indexingHubSubtitle summarizes lightning state", () => {
-  assert.equal(indexingHubSubtitle({ ...basePrefs, hasApiKey: false }), "Sign in to view indexing");
+  assert.equal(indexingHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Sign in to view indexing");
   assert.equal(
     indexingHubSubtitle({ ...basePrefs }, { readyRepos: 2, indexingRepos: 1, indexedRepoCount: 2, indexedRepoLimit: 3 }),
     "2 ready · 1 building"
@@ -94,8 +95,8 @@ test("indexingHubSubtitle summarizes lightning state", () => {
 });
 
 test("accountHubSubtitle falls back without org name", () => {
-  assert.equal(accountHubSubtitle(basePrefs), "API key configured · localhost:8787");
-  assert.equal(accountHubSubtitle({ ...basePrefs, hasApiKey: false }), "Not signed in");
+  assert.equal(accountHubSubtitle(basePrefs), "Signed in · localhost:8787");
+  assert.equal(accountHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Not signed in");
 });
 
 console.log(`\nconnectionCopy: ${passed} passed, ${failed} failed`);

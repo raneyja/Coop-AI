@@ -1,11 +1,6 @@
 import type { JobQueue } from "../jobs/jobQueue";
-import type { OrgPlan, OrgStore } from "./orgStore";
+import type { OrgStore } from "./orgStore";
 import { queueOrgRepoIndex } from "./queueOrgRepoIndex";
-import {
-  countLightningEnabledRepos,
-  autoIndexOnCatalogSync,
-  indexedRepoLimitForPlan
-} from "./indexedRepoQuota";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import { GitHubClient } from "../api/codeHosts/githubClient";
@@ -28,23 +23,6 @@ export type CatalogSyncProviderResult = CatalogSyncResult & {
   provider: CodeHostProvider;
 };
 
-export function isIndexingPlan(plan: OrgPlan | undefined): boolean {
-  return plan === "free" || plan === "pro" || plan === "enterprise";
-}
-
-function canSyncProvider(plan: OrgPlan, provider: CodeHostProvider): boolean {
-  if (!isIndexingPlan(plan)) {
-    return false;
-  }
-  if (provider === "github") {
-    return true;
-  }
-  if (provider === "gitlab" || provider === "bitbucket") {
-    return plan === "free" || plan === "enterprise";
-  }
-  return false;
-}
-
 export function codeHostDisplayName(provider: CodeHostProvider): string {
   switch (provider) {
     case "gitlab":
@@ -57,63 +35,58 @@ export function codeHostDisplayName(provider: CodeHostProvider): string {
 }
 
 /**
- * Register repos discovered on a code host. Pro/Enterprise also queue Deep-Index jobs;
- * free orgs register the catalog only — admins enable up to 3 repos manually.
+ * Register discovered repos in the org catalog without starting Deep-Index.
+ * Admins explicitly enable indexing from the Indexing page.
  */
-export async function syncOrgCatalog(
+export async function registerDiscoveredRepos(
   orgId: string,
   repoIds: string[],
-  deps: { orgStore: OrgStore; jobQueue?: JobQueue; force?: boolean; plan?: OrgPlan }
+  deps: { orgStore: OrgStore }
 ): Promise<CatalogSyncResult> {
-  const plan = deps.plan ?? "pro";
-  const autoIndex = autoIndexOnCatalogSync(plan);
-
   if (repoIds.length === 0) {
     return { discovered: 0, queued: 0, skipped: 0 };
   }
 
-  if (autoIndex && (!deps.jobQueue || repoIds.length === 0)) {
-    return { discovered: repoIds.length, queued: 0, skipped: repoIds.length };
-  }
-
-  const repoLimit = indexedRepoLimitForPlan(plan);
-  let enabledCount =
-    autoIndex && repoLimit !== null ? await countLightningEnabledRepos(deps.orgStore, orgId) : 0;
-
-  let queued = 0;
-  let skipped = 0;
   let registered = 0;
+  let skipped = 0;
 
   for (const repoId of repoIds) {
     const existing = await deps.orgStore.getOrgRepo(orgId, repoId);
-
-    if (!autoIndex) {
-      if (!existing) {
-        await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-          lightningEnabled: false,
-          indexStatus: "idle"
-        });
-        registered += 1;
-      } else {
-        skipped += 1;
-      }
-      continue;
-    }
-
-    const wouldEnableNew = !existing?.lightningEnabled;
-
-    if (repoLimit !== null && !existing) {
-      await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-        lightningEnabled: false,
-        indexStatus: "idle"
-      });
-    }
-
-    if (repoLimit !== null && wouldEnableNew && enabledCount >= repoLimit) {
+    if (existing) {
       skipped += 1;
       continue;
     }
+    await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+      lightningEnabled: false,
+      indexStatus: "idle"
+    });
+    registered += 1;
+  }
 
+  console.log(
+    `[catalog-sync] org=${orgId} discovered=${repoIds.length} registered=${registered} skipped=${skipped}`
+  );
+
+  return { discovered: repoIds.length, queued: registered, skipped };
+}
+
+/**
+ * Queue Deep-Code Graph indexing for explicitly selected repo ids.
+ */
+export async function queueSelectedReposForIndexing(
+  orgId: string,
+  repoIds: string[],
+  deps: { orgStore: OrgStore; jobQueue?: JobQueue; force?: boolean }
+): Promise<CatalogSyncResult> {
+  if (!deps.jobQueue || repoIds.length === 0) {
+    return { discovered: repoIds.length, queued: 0, skipped: repoIds.length };
+  }
+
+  let queued = 0;
+  let skipped = 0;
+
+  for (const repoId of repoIds) {
+    const existing = await deps.orgStore.getOrgRepo(orgId, repoId);
     if (
       !deps.force &&
       existing?.lightningEnabled &&
@@ -127,7 +100,7 @@ export async function syncOrgCatalog(
 
     const queueResult = await queueOrgRepoIndex(orgId, repoId, {
       orgStore: deps.orgStore,
-      jobQueue: deps.jobQueue!,
+      jobQueue: deps.jobQueue,
       bypassRateLimit: true
     });
     if (queueResult.outcome === "skipped") {
@@ -140,17 +113,23 @@ export async function syncOrgCatalog(
       continue;
     }
 
-    if (wouldEnableNew && repoLimit !== null) {
-      enabledCount += 1;
-    }
     queued += 1;
   }
 
   console.log(
-    `[catalog-sync] org=${orgId} plan=${plan} discovered=${repoIds.length} registered=${registered} queued=${queued} skipped=${skipped}`
+    `[catalog-sync] org=${orgId} selected=${repoIds.length} queued=${queued} skipped=${skipped}`
   );
 
   return { discovered: repoIds.length, queued, skipped };
+}
+
+/** @deprecated Use registerDiscoveredRepos or queueSelectedReposForIndexing. */
+export async function syncOrgCatalog(
+  orgId: string,
+  repoIds: string[],
+  deps: { orgStore: OrgStore; jobQueue?: JobQueue; force?: boolean }
+): Promise<CatalogSyncResult> {
+  return queueSelectedReposForIndexing(orgId, repoIds, deps);
 }
 
 /** Lists accessible repositories on a code host and returns normalized repo ids. */
@@ -203,8 +182,7 @@ export async function discoverCatalogRepoIds(
 }
 
 /**
- * After OAuth connect, queue indexing for all repos the org can access on this host.
- * Fire-and-forget — callers should void this from OAuth callbacks.
+ * After OAuth connect, register repos the org can access on this host (catalog only).
  */
 export async function runCodeHostCatalogSyncAfterConnect(
   orgId: string,
@@ -213,16 +191,19 @@ export async function runCodeHostCatalogSyncAfterConnect(
   deps: { orgStore: OrgStore; jobQueue?: JobQueue; gitlabHostRoot?: string }
 ): Promise<CatalogSyncResult> {
   const org = await deps.orgStore.getOrganization(orgId);
-  if (!org || !canSyncProvider(org.plan, provider)) {
+  if (!org || (org.plan !== "pro" && org.plan !== "enterprise" && org.plan !== "free")) {
+    return { discovered: 0, queued: 0, skipped: 0 };
+  }
+  if ((provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
     return { discovered: 0, queued: 0, skipped: 0 };
   }
 
   try {
     const gitlabApiBase = deps.gitlabHostRoot ? gitlabApiBaseUrl(deps.gitlabHostRoot) : undefined;
     const repoIds = await discoverCatalogRepoIds(provider, accessToken, { gitlabApiBase });
-    const result = await syncOrgCatalog(orgId, repoIds, { ...deps, plan: org.plan });
+    const result = await registerDiscoveredRepos(orgId, repoIds, { orgStore: deps.orgStore });
     console.log(
-      `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} queued=${result.queued} skipped=${result.skipped}`
+      `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} registered=${result.queued} skipped=${result.skipped}`
     );
     return result;
   } catch (error) {
@@ -247,8 +228,8 @@ export class CatalogSyncError extends Error {
 }
 
 /**
- * Discover repos on a connected code host and queue Deep-Code Graph indexing.
- * Uses GitHub App installation API when available; otherwise OAuth/token discovery.
+ * Discover repos on a connected code host and register them in the org catalog.
+ * Deep-Index starts only when an admin selects repos on the Indexing page.
  */
 export async function runCatalogSyncForProvider(
   orgId: string,
@@ -262,18 +243,15 @@ export async function runCatalogSyncForProvider(
   }
 ): Promise<CatalogSyncProviderResult> {
   const org = await deps.orgStore.getOrganization(orgId);
-  if (!org || !canSyncProvider(org.plan, provider)) {
-    if (org && (provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
-      throw new CatalogSyncError(
-        `${codeHostDisplayName(provider)} catalog sync requires an Enterprise plan.`,
-        "plan_required"
-      );
-    }
+  if (!org || (org.plan !== "pro" && org.plan !== "enterprise" && org.plan !== "free")) {
     return { provider, discovered: 0, queued: 0, skipped: 0 };
   }
 
-  if (!deps.jobQueue) {
-    throw new CatalogSyncError("Indexing queue is not configured on this server.", "indexing_unavailable");
+  if ((provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
+    throw new CatalogSyncError(
+      `${codeHostDisplayName(provider)} catalog sync requires an Enterprise plan.`,
+      "plan_required"
+    );
   }
 
   const installation = await deps.orgStore.getCodeHostInstallation(orgId, provider);
@@ -317,14 +295,9 @@ export async function runCatalogSyncForProvider(
   const gitlabConfig = loadGitLabAppConfig();
   const gitlabApiBase = gitlabConfig ? gitlabApiBaseUrl(gitlabConfig.gitlabBaseUrl) : undefined;
   const repoIds = await discoverCatalogRepoIds(provider, token, { gitlabApiBase });
-  const result = await syncOrgCatalog(orgId, repoIds, {
-    orgStore: deps.orgStore,
-    jobQueue: deps.jobQueue,
-    force: deps.force,
-    plan: org.plan
-  });
+  const result = await registerDiscoveredRepos(orgId, repoIds, { orgStore: deps.orgStore });
   console.log(
-    `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} queued=${result.queued} skipped=${result.skipped}`
+    `[catalog-sync] provider=${provider} org=${orgId} discovered=${result.discovered} registered=${result.queued} skipped=${result.skipped}`
   );
   return { provider, ...result };
 }
