@@ -28,6 +28,9 @@ export function formatIntegrationError(
     }
     return `You do not have permission to connect ${name}.`;
   }
+  if (status === 401 || /^unauthorized$/i.test(message)) {
+    return "Session expired. Sign in again to connect integrations.";
+  }
   if (/API token is invalid|unauthorized.*notion/i.test(message)) {
     return `${name} token is invalid. Copy the Internal integration secret from notion.so/my-integrations → Configuration into NOTION_INTEGRATION_TOKEN in .env.backend, then restart the API.`;
   }

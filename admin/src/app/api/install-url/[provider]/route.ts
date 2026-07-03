@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { backendFetch } from "@/lib/serverCoopApi";
 
 const ALLOWED = new Set([
   "github",
@@ -11,14 +12,6 @@ const ALLOWED = new Set([
   "teams"
 ]);
 
-function apiBase(): string {
-  const base =
-    process.env.COOP_API_BASE?.trim() ||
-    process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() ||
-    "https://api.coop-ai.dev";
-  return base.replace(/\/$/, "");
-}
-
 export async function GET(
   request: Request,
   context: { params: Promise<{ provider: string }> }
@@ -28,17 +21,7 @@ export async function GET(
     return NextResponse.json({ error: "unknown provider" }, { status: 400 });
   }
 
-  const authorization = request.headers.get("authorization")?.trim();
-  const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
-  if (!token.startsWith("coop_") && !token.startsWith("coop_sess_")) {
-    return NextResponse.json({ error: "unauthorized", message: "Not signed in." }, { status: 401 });
-  }
-
-  const response = await fetch(`${apiBase()}/v1/${provider}/app/install-url`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store"
-  });
-
+  const response = await backendFetch(`/v1/${provider}/app/install-url`, request);
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   return NextResponse.json(data, { status: response.status });
 }

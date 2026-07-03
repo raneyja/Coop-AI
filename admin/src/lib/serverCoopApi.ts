@@ -39,6 +39,48 @@ export async function readSessionToken(): Promise<string | null> {
   return token && isCoopCredential(token) ? token : null;
 }
 
+/** Bearer token from Authorization header, or httpOnly session cookie when absent. */
+export async function resolveRequestBearerToken(request: Request): Promise<string | null> {
+  const authorization = request.headers.get("authorization")?.trim();
+  if (authorization?.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length).trim();
+    if (isCoopCredential(token)) {
+      return token;
+    }
+  }
+  return readSessionToken();
+}
+
+export async function backendFetch(
+  path: string,
+  request: Request,
+  init: RequestInit = {}
+): Promise<Response> {
+  const primaryToken = await resolveRequestBearerToken(request);
+  if (!primaryToken) {
+    return new Response(JSON.stringify({ error: "unauthorized", message: "Not signed in." }), {
+      status: 401,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${primaryToken}`);
+
+  let response = await fetch(`${serverApiBase()}${path}`, { ...init, headers, cache: "no-store" });
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const cookieToken = await readSessionToken();
+  if (!cookieToken || cookieToken === primaryToken) {
+    return response;
+  }
+
+  headers.set("Authorization", `Bearer ${cookieToken}`);
+  return fetch(`${serverApiBase()}${path}`, { ...init, headers, cache: "no-store" });
+}
+
 export async function fetchMe(token: string): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const response = await fetch(`${serverApiBase()}/v1/me`, {
     headers: { Authorization: `Bearer ${token}` },

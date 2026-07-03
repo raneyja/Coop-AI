@@ -22,10 +22,15 @@ async function testRequiresConnectedCodeHost() {
   );
 }
 
-async function testEnterpriseRequiredForGitLab() {
+async function testGitLabAllowedOnPro() {
   const orgStore = {
     getOrganization: async () => ({ id: "org-1", name: "Test", plan: "pro", createdAt: new Date() }),
-    getCodeHostInstallation: async () => ({ installationId: 1, createdAt: new Date() })
+    getCodeHostInstallation: async () => ({
+      installationId: 1,
+      tokenExpiresAt: new Date(Date.now() + 3_600_000),
+      createdAt: new Date()
+    }),
+    getInstallationToken: async () => undefined
   } as unknown as OrgStore;
 
   await assert.rejects(
@@ -36,7 +41,7 @@ async function testEnterpriseRequiredForGitLab() {
       }),
     (error: unknown) => {
       assert.ok(error instanceof CatalogSyncError);
-      assert.equal(error.code, "plan_required");
+      assert.equal(error.code, "code_host_token_unavailable");
       return true;
     }
   );
@@ -44,7 +49,7 @@ async function testEnterpriseRequiredForGitLab() {
 
 async function run() {
   await testRequiresConnectedCodeHost();
-  await testEnterpriseRequiredForGitLab();
+  await testGitLabAllowedOnPro();
   console.log("catalogSyncService: 2/2 tests passed");
 }
 

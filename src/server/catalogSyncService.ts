@@ -194,9 +194,6 @@ export async function runCodeHostCatalogSyncAfterConnect(
   if (!org || (org.plan !== "pro" && org.plan !== "enterprise" && org.plan !== "free")) {
     return { discovered: 0, queued: 0, skipped: 0 };
   }
-  if ((provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
-    return { discovered: 0, queued: 0, skipped: 0 };
-  }
 
   try {
     const gitlabApiBase = deps.gitlabHostRoot ? gitlabApiBaseUrl(deps.gitlabHostRoot) : undefined;
@@ -245,13 +242,6 @@ export async function runCatalogSyncForProvider(
   const org = await deps.orgStore.getOrganization(orgId);
   if (!org || (org.plan !== "pro" && org.plan !== "enterprise" && org.plan !== "free")) {
     return { provider, discovered: 0, queued: 0, skipped: 0 };
-  }
-
-  if ((provider === "gitlab" || provider === "bitbucket") && org.plan === "pro") {
-    throw new CatalogSyncError(
-      `${codeHostDisplayName(provider)} catalog sync requires an Enterprise plan.`,
-      "plan_required"
-    );
   }
 
   const installation = await deps.orgStore.getCodeHostInstallation(orgId, provider);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { IntegrationDefinition, CodeHostProvider } from "@/lib/integrations";
-import { CODE_HOST_PROVIDERS, SCOPABLE_PROVIDERS } from "@/lib/integrations";
+import type { IntegrationDefinition } from "@/lib/integrations";
+import { SCOPABLE_PROVIDERS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
 import { formatIntegrationError } from "@/lib/integrationErrors";
@@ -19,6 +19,7 @@ type IntegrationCardProps = {
   refreshSuccess?: boolean;
   initialLoading?: boolean;
   compact?: boolean;
+  readOnly?: boolean;
 };
 
 export function IntegrationCard({
@@ -29,7 +30,8 @@ export function IntegrationCard({
   refreshing,
   refreshSuccess,
   initialLoading,
-  compact
+  compact,
+  readOnly = false
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
   const [awaitingOAuth, setAwaitingOAuth] = useState(false);
@@ -37,19 +39,11 @@ export function IntegrationCard({
   const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const comingSoon = definition.comingSoon;
-  const isCodeHost = CODE_HOST_PROVIDERS.includes(definition.id as CodeHostProvider);
-  const requiresEnterprise =
-    isCodeHost && definition.id !== "github" && orgPlan === "pro";
-  const planBlocked = requiresEnterprise;
   const isScopable = SCOPABLE_PROVIDERS.includes(
     definition.id as (typeof SCOPABLE_PROVIDERS)[number]
   );
 
   async function handleConnect() {
-    if (planBlocked) {
-      setError("GitLab and Bitbucket require an Enterprise plan.");
-      return;
-    }
     setConnecting(true);
     setError(null);
     const result = await fetchInstallUrl(definition.id);
@@ -129,9 +123,6 @@ export function IntegrationCard({
     if (comingSoon) {
       return <AdminChip>Coming soon</AdminChip>;
     }
-    if (requiresEnterprise) {
-      return <AdminChip variant="plan-enterprise">Enterprise</AdminChip>;
-    }
     if (needsReconnect) {
       return <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />;
     }
@@ -166,25 +157,20 @@ export function IntegrationCard({
           {status?.scopeSummary ? (
             <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
           ) : null}
-          {requiresEnterprise && !connected ? (
-            <p className="mt-1 text-xs text-coop-muted">
-              GitLab and Bitbucket on Pro require Enterprise. Upgrade to connect {definition.name}.
-            </p>
-          ) : null}
           {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {!comingSoon && (!connected || needsReconnect) && (
+          {!readOnly && !comingSoon && (!connected || needsReconnect) && (
             <button
               type="button"
               className="admin-btn-primary"
               onClick={handleConnect}
-              disabled={connecting || planBlocked}
+              disabled={connecting}
             >
               {connecting ? "Opening…" : needsReconnect ? "Reconnect" : "Connect"}
             </button>
           )}
-          {isScopable && connected && (
+          {!readOnly && isScopable && connected && (
             <button
               type="button"
               className="admin-btn-secondary"
@@ -193,7 +179,7 @@ export function IntegrationCard({
               Manage access
             </button>
           )}
-          {!comingSoon && (connected || needsReconnect) && (
+          {!readOnly && !comingSoon && (connected || needsReconnect) && (
             <button
               type="button"
               className="admin-btn-danger"

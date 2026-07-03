@@ -21,7 +21,7 @@ export function writeCodeHostPlanForbidden(
   const message =
     provider === "github"
       ? "GitHub is available on Free, Pro, and Enterprise plans. If this persists, verify your organization plan and try again."
-      : "Code host tools are not available on your current plan. GitLab and Bitbucket require an Enterprise plan.";
+      : "GitLab and Bitbucket are available on Free, Pro, and Enterprise plans.";
   response.writeHead(403, { "content-type": "application/json; charset=utf-8" });
   response.end(
     JSON.stringify({
@@ -81,7 +81,7 @@ export function writeCodeHostPlanForbiddenHtml(
   const message =
     provider === "github"
       ? "GitHub is available on Free, Pro, and Enterprise plans. If this persists, verify your organization plan and try again."
-      : "This code host requires an Enterprise plan.";
+      : "GitLab and Bitbucket are available on Free, Pro, and Enterprise plans.";
   response.writeHead(403, { "content-type": "text/html; charset=utf-8" });
   response.end(`<!DOCTYPE html><html><body><p>${message}</p><p>Required plan: ${required.join(" or ")}.</p></body></html>`);
 }

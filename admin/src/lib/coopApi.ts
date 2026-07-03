@@ -9,6 +9,7 @@ import type {
   SlackScopePolicy
 } from "./integrations";
 import type { StoredMe } from "./auth";
+import { restoreSessionFromCookie } from "./auth";
 
 export type ApiError = {
   error?: string;
@@ -145,6 +146,9 @@ function getToken(): string | null {
 
 function formatError(status: number, body: ApiError | undefined, fallback: string): string {
   if (status === 401) {
+    if (body?.error === "unauthorized" || body?.message === "Not signed in.") {
+      return "Session expired. Sign in again to connect integrations.";
+    }
     return body?.message ?? body?.error ?? "Sign-in failed. Check your credentials and try again.";
   }
   if (status === 403) return body?.message ?? body?.error ?? "You do not have permission for this action.";
@@ -156,18 +160,17 @@ export async function coopFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiResult<T>> {
-  const token = getToken();
+  let token = getToken();
   if (!token) {
     return { ok: false, status: 401, error: "Not signed in." };
   }
 
-  const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  try {
+  const run = async (activeToken: string) => {
+    const headers = new Headers(options.headers);
+    headers.set("Authorization", `Bearer ${activeToken}`);
+    if (options.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
     const response = await fetch(`${getApiBase()}${path}`, { ...options, headers });
     const text = await response.text();
     let body: (T & ApiError) | undefined;
@@ -176,6 +179,20 @@ export async function coopFetch<T>(
         body = JSON.parse(text) as T & ApiError;
       } catch {
         body = undefined;
+      }
+    }
+    return { response, body };
+  };
+
+  try {
+    let { response, body } = await run(token);
+
+    if (response.status === 401 && typeof window !== "undefined") {
+      const restored = await restoreSessionFromCookie();
+      const refreshed = getToken();
+      if (restored && refreshed && refreshed !== token) {
+        token = refreshed;
+        ({ response, body } = await run(token));
       }
     }
 
@@ -386,6 +403,39 @@ async function fetchIntegrationStatus(provider: IntegrationProvider): Promise<In
   return { provider, installed, detail };
 }
 
+async function fetchWithSessionRetry(
+  input: string,
+  init: RequestInit
+): Promise<{ response: Response; body: Record<string, unknown> }> {
+  const token = getToken();
+  if (!token) {
+    return {
+      response: new Response(null, { status: 401 }),
+      body: { error: "unauthorized", message: "Not signed in." }
+    };
+  }
+
+  const run = async (activeToken: string) => {
+    const response = await fetch(input, {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${activeToken}` },
+      cache: "no-store"
+    });
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    return { response, body };
+  };
+
+  let result = await run(token);
+  if (result.response.status === 401 && typeof window !== "undefined") {
+    const restored = await restoreSessionFromCookie();
+    const refreshed = getToken();
+    if (restored && refreshed && refreshed !== token) {
+      result = await run(refreshed);
+    }
+  }
+  return result;
+}
+
 export async function fetchIntegrations(options?: {
   refresh?: boolean;
 }): Promise<ApiResult<IntegrationStatus[]>> {
@@ -397,27 +447,23 @@ export async function fetchIntegrations(options?: {
   const refreshSuffix = options?.refresh ? "?refresh=true" : "";
 
   try {
-    const response = await fetch(`/api/integrations${refreshSuffix}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store"
+    const { response, body } = await fetchWithSessionRetry(`/api/integrations${refreshSuffix}`, {
+      method: "GET"
     });
-    const body = (await response.json().catch(() => ({}))) as {
-      integrations?: BackendIntegrationStatus[];
-    } & ApiError;
 
     if (!response.ok) {
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, `Request failed (${response.status}).`)
+        error: formatError(response.status, body as ApiError, `Request failed (${response.status}).`)
       };
     }
 
-    if (body.integrations) {
+    if (Array.isArray(body.integrations)) {
       return {
         ok: true,
         status: response.status,
-        data: body.integrations.map(normalizeIntegrationStatus)
+        data: (body.integrations as BackendIntegrationStatus[]).map(normalizeIntegrationStatus)
       };
     }
   } catch {
@@ -437,37 +483,31 @@ export async function fetchInstallUrl(
   }
 
   try {
-    const response = await fetch(`/api/install-url/${provider}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store"
+    const { response, body } = await fetchWithSessionRetry(`/api/install-url/${provider}`, {
+      method: "GET"
     });
-    const body = (await response.json().catch(() => ({}))) as {
-      url?: string;
-      connected?: boolean;
-      workspaceName?: string;
-    } & ApiError;
     if (!response.ok) {
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, `Request failed (${response.status}).`)
+        error: formatError(response.status, body as ApiError, `Request failed (${response.status}).`)
       };
     }
     if (body.connected) {
       return {
         ok: true,
         status: response.status,
-        data: { connected: true, workspaceName: body.workspaceName }
+        data: { connected: true, workspaceName: body.workspaceName as string | undefined }
       };
     }
     if (!body.url) {
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, `Request failed (${response.status}).`)
+        error: formatError(response.status, body as ApiError, `Request failed (${response.status}).`)
       };
     }
-    return { ok: true, status: response.status, data: { url: body.url.trim() } };
+    return { ok: true, status: response.status, data: { url: String(body.url).trim() } };
   } catch {
     return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
   }
