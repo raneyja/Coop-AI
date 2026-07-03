@@ -42,7 +42,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const router = useRouter();
   const me = getStoredMe();
   const plan = me?.plan ?? "free";
-  const isAdmin = me ? isAdminRole(me) : true;
+  const isAdmin = me ? isAdminRole(me) : false;
   const stepLabels = plan === "free" ? FREE_STEP_LABELS : FULL_STEP_LABELS;
 
   const [showSetup, setShowSetup] = useState(false);

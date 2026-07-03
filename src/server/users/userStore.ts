@@ -17,12 +17,22 @@ export type UserRecord = {
   id: string;
   orgId: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  timezone?: string;
+  memberOnboardingCompletedAt?: Date;
   idpSubject?: string;
   idpProvider?: string;
   role: string;
   lastLoginAt?: Date;
   deactivatedAt?: Date;
   createdAt: Date;
+};
+
+export type UserProfileUpdate = {
+  firstName?: string;
+  lastName?: string;
+  timezone?: string;
 };
 
 /**
@@ -62,6 +72,9 @@ const DEFAULT_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 function generateSessionToken(): string {
   return `coop_sess_${randomBytes(32).toString("hex")}`;
 }
+
+const USER_COLUMNS =
+  "id, org_id, email, first_name, last_name, timezone, member_onboarding_completed_at, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at";
 
 export class UserStore {
   public constructor(private readonly pool: Pool) {}
@@ -126,12 +139,35 @@ export class UserStore {
 
   public async getUser(userId: string): Promise<UserRecord | undefined> {
     const result = await this.pool.query(
-      `SELECT id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at
-       FROM users WHERE id = $1`,
+      `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,
       [userId]
     );
     const row = result.rows[0];
     return row ? rowToUser(row) : undefined;
+  }
+
+  public async updateUserProfile(
+    userId: string,
+    profile: UserProfileUpdate
+  ): Promise<UserRecord | undefined> {
+    const updated = await this.pool.query(
+      `UPDATE users SET
+         first_name = COALESCE($2, first_name),
+         last_name = COALESCE($3, last_name),
+         timezone = COALESCE($4, timezone)
+       WHERE id = $1
+       RETURNING ${USER_COLUMNS}`,
+      [userId, profile.firstName ?? null, profile.lastName ?? null, profile.timezone ?? null]
+    );
+    const row = updated.rows[0];
+    return row ? rowToUser(row) : undefined;
+  }
+
+  public async markMemberOnboardingComplete(userId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE users SET member_onboarding_completed_at = NOW() WHERE id = $1`,
+      [userId]
+    );
   }
 
   public async listOrgUsers(orgId: string): Promise<UserRecord[]> {
@@ -330,6 +366,12 @@ function rowToUser(row: Record<string, unknown>): UserRecord {
     id: String(row.id),
     orgId: String(row.org_id),
     email: String(row.email),
+    firstName: row.first_name ? String(row.first_name) : undefined,
+    lastName: row.last_name ? String(row.last_name) : undefined,
+    timezone: row.timezone ? String(row.timezone) : undefined,
+    memberOnboardingCompletedAt: row.member_onboarding_completed_at
+      ? new Date(String(row.member_onboarding_completed_at))
+      : undefined,
     idpSubject: row.idp_subject ? String(row.idp_subject) : undefined,
     idpProvider: row.idp_provider ? String(row.idp_provider) : undefined,
     role: String(row.role),

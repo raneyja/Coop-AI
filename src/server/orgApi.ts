@@ -63,6 +63,9 @@ import type { UserStore } from "./users/userStore";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { resolveIntegrationScope } from "./resolveIntegrationScope";
 import type { IntegrationProvider } from "./integrationConnectionStore";
+import { handleMeAnalyticsRequest } from "./meAnalyticsApi";
+import { handleMeAuditRequest } from "./meAuditApi";
+import { listOrgIntegrations } from "./adminIntegrationsApi";
 
 export type OrgApiDeps = {
   orgStore?: OrgStore;
@@ -201,6 +204,8 @@ export async function handleOrgApiRequest(
         // Non-fatal when workspace table is unavailable (pre-migration environments).
       }
     }
+    const profileUser =
+      deps.userStore && auth.userId ? await deps.userStore.getUser(auth.userId) : undefined;
     writeJson(response, 200, {
       orgId: auth.orgId,
       orgName: auth.orgName,
@@ -209,6 +214,10 @@ export async function handleOrgApiRequest(
       lightningBackend: "cloud",
       userId: auth.userId,
       email: auth.email,
+      firstName: profileUser?.firstName,
+      lastName: profileUser?.lastName,
+      timezone: profileUser?.timezone,
+      memberOnboardingCompleted: Boolean(profileUser?.memberOnboardingCompletedAt),
       role: auth.role,
       authMethod: resolveAuthMethod(auth),
       sessionProvider: auth.sessionProvider,
@@ -226,6 +235,26 @@ export async function handleOrgApiRequest(
       primaryWorkspaceRepoId: workspaceRepoQuota?.primaryRepoId,
       quota
     });
+    return true;
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/me/onboarding/complete") {
+    if (!deps.userStore || !auth.userId) {
+      writeJson(response, 400, { error: "not_applicable", message: "Member onboarding is not available." });
+      return true;
+    }
+    await deps.userStore.markMemberOnboardingComplete(auth.userId);
+    writeJson(response, 200, { ok: true });
+    return true;
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/me/integrations") {
+    if (!deps.orgStore || auth.orgId === "legacy") {
+      writeJson(response, 503, { error: "organization database not configured" });
+      return true;
+    }
+    const integrations = await listOrgIntegrations(deps, auth.orgId);
+    writeJson(response, 200, { integrations });
     return true;
   }
 
@@ -248,6 +277,13 @@ export async function handleOrgApiRequest(
       return true;
     }
     writeJson(response, 405, { error: "method_not_allowed" });
+    return true;
+  }
+
+  if (await handleMeAnalyticsRequest(parsed, response, deps, auth)) {
+    return true;
+  }
+  if (await handleMeAuditRequest(parsed, response, deps, auth)) {
     return true;
   }
 
@@ -283,6 +319,9 @@ export async function handleOrgApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/orgs/credentials/github") {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireCodeHostPlan(deps.orgStore, auth!, response, "github"))) {
       return true;
     }
@@ -336,6 +375,9 @@ export async function handleOrgApiRequest(
 
   const enableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/enable$/);
   if (parsed.method === "POST" && enableMatch) {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
@@ -358,6 +400,9 @@ export async function handleOrgApiRequest(
 
   const disableMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/lightning\/disable$/);
   if (parsed.method === "POST" && disableMatch) {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
       return true;
     }
@@ -390,6 +435,9 @@ export async function handleOrgApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/collections") {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }
@@ -408,6 +456,9 @@ export async function handleOrgApiRequest(
 
   const addRepoMatch = parsed.pathname.match(/^\/v1\/collections\/([^/]+)\/repos$/);
   if (parsed.method === "POST" && addRepoMatch) {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }
@@ -419,6 +470,9 @@ export async function handleOrgApiRequest(
 
   const removeRepoMatch = parsed.pathname.match(/^\/v1\/collections\/([^/]+)\/repos\/([^/]+)$/);
   if (parsed.method === "DELETE" && removeRepoMatch) {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }

@@ -92,7 +92,11 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-8">
       <div>
         <h1 className="admin-page-title">Settings</h1>
-        <p className="mt-1 text-sm text-coop-muted">Manage your account, organization, and portal preferences.</p>
+        <p className="mt-1 text-sm text-coop-muted">
+          {isAdmin
+            ? "Manage your account, organization, and portal preferences."
+            : "Your account and portal preferences."}
+        </p>
       </div>
 
       <section className="admin-card">
@@ -103,6 +107,12 @@ export default function SettingsPage() {
         </p>
         <dl className="mt-4">
           <SettingsRow label="Signed in as">{me?.email ?? "—"}</SettingsRow>
+          {me?.firstName || me?.lastName ? (
+            <SettingsRow label="Name">
+              {[me.firstName, me.lastName].filter(Boolean).join(" ")}
+            </SettingsRow>
+          ) : null}
+          {me?.timezone ? <SettingsRow label="Timezone">{me.timezone}</SettingsRow> : null}
           <SettingsRow label="Sign-in method">{signInMethodLabel(me)}</SettingsRow>
           <SettingsRow label="Role">{me?.role ?? "Member"}</SettingsRow>
           {usesPassword ? (
@@ -149,7 +159,7 @@ export default function SettingsPage() {
         </dl>
       </section>
 
-      {showRepoAccess ? (
+      {isAdmin && showRepoAccess ? (
         <section className="admin-card">
           <h2 className="admin-section-label">Repository access</h2>
           <p className="mt-2 text-sm text-coop-muted">
@@ -194,7 +204,7 @@ export default function SettingsPage() {
         </section>
       ) : null}
 
-      {me?.plan === "enterprise" ? (
+      {isAdmin && me?.plan === "enterprise" ? (
         <section className="admin-card">
           <h2 className="admin-section-label">Single sign-on (SSO)</h2>
           <p className="mt-2 text-sm text-coop-muted">Enterprise SAML SSO is configured by Coop support during onboarding.</p>

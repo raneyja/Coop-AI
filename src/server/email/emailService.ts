@@ -39,6 +39,46 @@ export class EmailService {
     await this.send(params.to, content.subject, content.html, content.text);
   }
 
+  public async sendProUpgradeWelcome(params: WelcomeEmailParams): Promise<void> {
+    const loginUrl = params.adminPortalUrl;
+    const billingUrl = billingPortalUrl(params.adminPortalUrl);
+    const subject = `${params.orgName} is now on Coop AI Pro`;
+    const html = emailShell({
+      title: subject,
+      body: `
+        <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
+        <p style="margin:0 0 16px;font-size:16px;">
+          Your upgrade is complete — <strong>${escapeHtml(params.orgName)}</strong> is now on
+          <strong>Coop AI Pro</strong>.
+        </p>
+        <p style="margin:0 0 16px;font-size:15px;color:#57606a;">
+          You now have unlimited AI usage, unlimited Deep-Index repositories, team user management,
+          and priority support.
+        </p>
+        ${primaryButton("Open Coop AI", loginUrl)}
+        <p style="margin:0 0 8px;font-size:14px;font-weight:600;">What's unlocked</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
+          <li style="margin-bottom:6px;">Unlimited AI credits for chat and autocomplete.</li>
+          <li style="margin-bottom:6px;">Unlimited Deep-Index repositories.</li>
+          <li style="margin-bottom:6px;">Invite and manage teammates from <strong>Users</strong>.</li>
+          <li>View invoices and manage billing in your <a href="${escapeHtml(billingUrl)}" style="color:#0969da;">billing portal</a>.</li>
+        </ul>
+      `
+    });
+    const text = [
+      `${params.orgName} is now on Coop AI Pro.`,
+      "",
+      "You now have unlimited AI usage, unlimited Deep-Index repositories, team user management, and priority support.",
+      "",
+      "Open Coop AI:",
+      loginUrl,
+      "",
+      "Manage billing:",
+      billingUrl
+    ].join("\n");
+    await this.send(params.to, subject, html, text);
+  }
+
   public async sendFreeSignupWelcome(params: WelcomeEmailParams): Promise<void> {
     const content = buildPlanWelcomeEmail(params, "free");
     await this.send(params.to, content.subject, content.html, content.text);
@@ -63,8 +103,8 @@ export class EmailService {
           Coop AI connects your team's tools so everyone can code with full context in VS Code.
         </p>
         <p style="margin:0 0 24px;font-size:15px;color:#57606a;">
-          Accept this invitation to create your password for
-          <strong>${escapeHtml(params.to)}</strong>, or continue with Google on the next screen.
+          Accept this invitation to set up your profile and password for
+          <strong>${escapeHtml(params.to)}</strong>.
         </p>
         ${primaryButton("Accept invitation", params.acceptInviteUrl)}
         <p style="margin:24px 0 0;font-size:13px;color:#57606a;">
@@ -220,6 +260,11 @@ function emailShell(options: { title: string; body: string }): string {
   </div>
 </body>
 </html>`;
+}
+
+function billingPortalUrl(adminPortalUrl: string): string {
+  const trimmed = adminPortalUrl.trim().replace(/\/+$/, "").replace(/\/login$/, "");
+  return `${trimmed || adminPortalUrl}/billing`;
 }
 
 function primaryButton(label: string, href: string): string {

@@ -2,9 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getToken, getStoredMe, isMemberAllowedPath, defaultHomePath, isMemberRole, restoreSessionFromCookie } from "@/lib/auth";
+import {
+  getToken,
+  getStoredMe,
+  isAdminRole,
+  isMemberAllowedPath,
+  defaultHomePath,
+  isMemberRole,
+  restoreSessionFromCookie
+} from "@/lib/auth";
 import { IndexingProgressBar } from "./IndexingProgressBar";
 import { OnboardingProvider } from "./OnboardingProvider";
+import { MemberOnboardingProvider } from "./MemberOnboardingProvider";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -16,7 +25,10 @@ export function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
-  const showGlobalIndexingProgress = Boolean(pathname && !pathname.startsWith("/indexing"));
+  const me = getStoredMe();
+  const showGlobalIndexingProgress = Boolean(
+    pathname && !pathname.startsWith("/indexing") && me && isAdminRole(me)
+  );
 
   useEffect(() => {
     async function guard() {
@@ -51,16 +63,18 @@ export function AdminShell({ children }: AdminShellProps) {
 
   return (
     <OnboardingProvider>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
-          {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
-          <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
-            {children}
-          </main>
+      <MemberOnboardingProvider>
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <TopBar />
+            {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
+            <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </MemberOnboardingProvider>
     </OnboardingProvider>
   );
 }

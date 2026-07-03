@@ -11,7 +11,8 @@ import {
   restoreSessionFromCookie,
   saveSession
 } from "@/lib/auth";
-import { acceptInviteWithPassword, fetchInvitePreview, startGoogleAuthUrl, validateSession } from "@/lib/coopApi";
+import { acceptInviteWithPassword, fetchInvitePreview, validateSession } from "@/lib/coopApi";
+import { timezoneOptionsWithDefault, detectBrowserTimezone } from "@/lib/timezones";
 import { BrandMark } from "@/components/BrandMark";
 
 const PASSWORD_MIN_LENGTH = 12;
@@ -33,10 +34,14 @@ function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => searchParams.get("token")?.trim() ?? "", [searchParams]);
+  const timezoneOptions = useMemo(() => timezoneOptionsWithDefault(), []);
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(true);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [timezone, setTimezone] = useState(detectBrowserTimezone);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +110,17 @@ function AcceptInviteContent() {
     e.preventDefault();
     setError(null);
 
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    if (!trimmedFirst || !trimmedLast) {
+      setError("First and last name are required.");
+      return;
+    }
+    if (!timezone.trim()) {
+      setError("Select your timezone.");
+      return;
+    }
+
     const passwordError = validatePassword(password);
     if (passwordError) {
       setError(passwordError);
@@ -116,7 +132,11 @@ function AcceptInviteContent() {
     }
 
     setLoading(true);
-    const result = await acceptInviteWithPassword(token, password);
+    const result = await acceptInviteWithPassword(token, password, {
+      firstName: trimmedFirst,
+      lastName: trimmedLast,
+      timezone: timezone.trim()
+    });
     setLoading(false);
 
     if (!result.ok || !result.data) {
@@ -170,31 +190,99 @@ function AcceptInviteContent() {
     : `You've been invited to join ${preview.orgName}.`;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4 py-10">
+      <div className="w-full max-w-lg">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size="md" />
-          <h1 className="mt-6 text-xl font-medium">Accept invitation</h1>
+          <h1 className="mt-6 text-xl font-medium">Join your team</h1>
           <p className="mt-2 text-sm text-coop-muted">{inviterLine}</p>
         </div>
 
         <div className="rounded-md border border-coop-border p-5">
-          <p className="mb-4 text-sm text-coop-muted">
-            Create a password for <span className="text-white">{preview.email}</span>, or continue with Google using
-            the same email.
+          <p className="mb-5 text-sm text-coop-muted">
+            Create your Coop account to access repositories, connect your tools, and install the VS Code
+            extension.
           </p>
 
-          <a href={startGoogleAuthUrl()} className="admin-btn-secondary block w-full py-2.5 text-center">
-            Continue with Google
-          </a>
-
-          <div className="my-4 flex items-center gap-3">
-            <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
-            <span className="text-xs text-coop-muted">or</span>
-            <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="firstName" className="admin-label">
+                  First name
+                </label>
+                <input
+                  id="firstName"
+                  type="text"
+                  className="admin-input"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="lastName" className="admin-label">
+                  Last name
+                </label>
+                <input
+                  id="lastName"
+                  type="text"
+                  className="admin-input"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="admin-label">
+                Work email
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="admin-input bg-white/[0.03] text-coop-muted"
+                value={preview.email}
+                readOnly
+                aria-readonly
+              />
+            </div>
+
+            <div>
+              <label htmlFor="company" className="admin-label">
+                Company
+              </label>
+              <input
+                id="company"
+                type="text"
+                className="admin-input bg-white/[0.03] text-coop-muted"
+                value={preview.orgName}
+                readOnly
+                aria-readonly
+              />
+            </div>
+
+            <div>
+              <label htmlFor="timezone" className="admin-label">
+                Timezone
+              </label>
+              <select
+                id="timezone"
+                className="admin-input"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                required
+              >
+                {timezoneOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label htmlFor="password" className="admin-label">
                 Password
@@ -211,6 +299,7 @@ function AcceptInviteContent() {
               />
               <p className="mt-1 text-xs text-coop-muted">At least {PASSWORD_MIN_LENGTH} characters.</p>
             </div>
+
             <div>
               <label htmlFor="confirmPassword" className="admin-label">
                 Confirm password
@@ -234,7 +323,7 @@ function AcceptInviteContent() {
             ) : null}
 
             <button type="submit" className="admin-btn-primary w-full py-2.5" disabled={loading}>
-              {loading ? "Joining…" : "Create account and join"}
+              {loading ? "Creating your account…" : "Create account and continue"}
             </button>
           </form>
         </div>

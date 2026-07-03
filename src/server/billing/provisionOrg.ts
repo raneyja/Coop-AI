@@ -41,6 +41,11 @@ export async function provisionOrgFromCheckout(
       seatCount: input.seatCount,
       billingStatus: "active"
     });
+    await emailService.sendProUpgradeWelcome({
+      to: input.adminEmail,
+      orgName: org.name,
+      adminPortalUrl: loginUrl
+    });
     return { orgId: org.id, orgName: org.name };
   }
 

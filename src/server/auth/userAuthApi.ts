@@ -367,9 +367,22 @@ async function handleAcceptInvite(
   const body = asRecord(parsed.body);
   const token = String(body.token ?? "").trim();
   const password = String(body.password ?? "");
+  const firstName = String(body.firstName ?? "").trim();
+  const lastName = String(body.lastName ?? "").trim();
+  const timezone = String(body.timezone ?? "").trim();
 
   if (!token) {
     writeJson(response, 400, { error: "missing_token", message: "Invitation link is missing or malformed." });
+    return true;
+  }
+
+  if (!firstName || !lastName) {
+    writeJson(response, 400, { error: "missing_profile", message: "First and last name are required." });
+    return true;
+  }
+
+  if (!timezone) {
+    writeJson(response, 400, { error: "missing_timezone", message: "Select your timezone." });
     return true;
   }
 
@@ -402,6 +415,7 @@ async function handleAcceptInvite(
 
   await deps.authIdentityStore!.setPasswordHash(user.id, hashPassword(password));
   await deps.authIdentityStore!.markEmailVerified(user.id, "password");
+  await deps.userStore!.updateUserProfile(user.id, { firstName, lastName, timezone });
   await audit(deps, user.id, user.orgId, "auth.invite_accepted", { method: "password" });
 
   const session = await issueSession(deps, user.id, user.orgId, "password");
@@ -615,7 +629,19 @@ async function completeGoogleOAuth(
     };
   }
 
-  const sessionResult = await resolveGoogleUser(deps, profile, state);
+  let sessionResult;
+  try {
+    sessionResult = await resolveGoogleUser(deps, profile, state);
+  } catch (err) {
+    console.error("[auth] google sign-in failed after token exchange:", err);
+    return {
+      ok: false,
+      status: 500,
+      error: "google_signin_failed",
+      message: err instanceof Error ? err.message : "Google sign-in failed.",
+      redirect: clientRedirect ?? fallbackLogin
+    };
+  }
   if (!sessionResult.ok) {
     return {
       ok: false,
@@ -682,11 +708,15 @@ async function resolveGoogleUser(
       profile.emailVerified ? new Date() : new Date()
     );
     const loginUrl = adminPortalLoginUrl(deps.authConfig.adminPortalUrl);
-    await deps.emailService?.sendFreeSignupWelcome({
-      to: profile.email,
-      orgName: org.name,
-      adminPortalUrl: loginUrl
-    });
+    try {
+      await deps.emailService?.sendFreeSignupWelcome({
+        to: profile.email,
+        orgName: org.name,
+        adminPortalUrl: loginUrl
+      });
+    } catch (err) {
+      console.error("[auth] welcome email failed after google signup:", err);
+    }
     await audit(deps, user.id, org.id, "auth.register", { method: "google" });
   } else {
     const allowed = await checkAuthMethodAllowed(deps, user.orgId, "google");

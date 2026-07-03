@@ -8,6 +8,10 @@ export type StoredMe = {
   orgName: string;
   plan: "free" | "pro" | "enterprise";
   role?: string;
+  firstName?: string;
+  lastName?: string;
+  timezone?: string;
+  memberOnboardingCompleted?: boolean;
   canInstallIntegrations?: boolean;
   email?: string;
   authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
@@ -89,6 +93,10 @@ export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
       orgName: data.orgName,
       plan: data.plan,
       role: data.role,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      timezone: data.timezone,
+      memberOnboardingCompleted: data.memberOnboardingCompleted,
       canInstallIntegrations: data.canInstallIntegrations,
       email: data.email,
       authMethod: data.authMethod,
@@ -150,18 +158,21 @@ export function canAccessAdminPages(me: StoredMe): boolean {
 
 export function defaultHomePath(me: StoredMe | null): string {
   if (me && isMemberRole(me)) {
-    return "/feed";
+    return "/";
   }
   return "/";
 }
 
-const MEMBER_ALLOWED_PREFIXES = ["/feed", "/settings"];
+const MEMBER_ALLOWED_PREFIXES = ["/", "/feed", "/settings", "/my-usage", "/my-activity", "/integrations"];
 
 export function isMemberAllowedPath(pathname: string): boolean {
-  if (pathname === "/feed" || pathname.startsWith("/feed/")) {
+  if (pathname === "/" || pathname === "/feed" || pathname.startsWith("/feed/")) {
     return true;
   }
   if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+    return true;
+  }
+  if (pathname === "/integrations" || pathname.startsWith("/integrations/")) {
     return true;
   }
   return MEMBER_ALLOWED_PREFIXES.some(
@@ -175,6 +186,10 @@ export function meFromAuthPayload(data: Record<string, unknown>): StoredMe {
     orgName: String(data.orgName ?? ""),
     plan: (data.plan as StoredMe["plan"]) ?? "free",
     role: typeof data.role === "string" ? data.role : undefined,
+    firstName: typeof data.firstName === "string" ? data.firstName : undefined,
+    lastName: typeof data.lastName === "string" ? data.lastName : undefined,
+    timezone: typeof data.timezone === "string" ? data.timezone : undefined,
+    memberOnboardingCompleted: data.memberOnboardingCompleted === true,
     canInstallIntegrations: data.canInstallIntegrations === true,
     email: typeof data.email === "string" ? data.email : undefined,
     authMethod: data.authMethod as StoredMe["authMethod"],

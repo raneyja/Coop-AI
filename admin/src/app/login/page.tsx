@@ -69,11 +69,12 @@ export default function LoginPage() {
     token: string,
     payload: Record<string, unknown>,
     refreshToken?: string,
-    orgNameOverride?: string
+    orgNameOverride?: string,
+    options?: { adminOnly?: boolean }
   ) {
     const me = meFromAuthPayload(payload);
-    if (!isAdminRole(me)) {
-      setError("This account does not have admin permissions. Use an owner or admin account.");
+    if (options?.adminOnly && !isAdminRole(me)) {
+      setError("Automation API keys require an admin account.");
       return;
     }
     saveSession(token, me, orgNameOverride, refreshToken);
@@ -135,7 +136,7 @@ export default function LoginPage() {
       return;
     }
 
-    await finishSignIn(token, result.data, undefined, orgName);
+    await finishSignIn(token, result.data, undefined, orgName, { adminOnly: true });
   }
 
   return (
@@ -144,7 +145,7 @@ export default function LoginPage() {
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size="md" />
           <h1 className="mt-6 text-xl font-medium">Sign in</h1>
-          <p className="mt-2 text-sm text-coop-muted">Organization admin console</p>
+          <p className="mt-2 text-sm text-coop-muted">Sign in to your organization workspace</p>
         </div>
 
         <div className="rounded-md border border-coop-border p-5">

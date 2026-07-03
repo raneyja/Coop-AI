@@ -16,6 +16,7 @@ type IntegrationsStepProps = {
   compact?: boolean;
   showFullPageLink?: boolean;
   hideIntro?: boolean;
+  readOnly?: boolean;
 };
 
 export function IntegrationsStep({
@@ -28,13 +29,16 @@ export function IntegrationsStep({
   onRefresh,
   compact,
   showFullPageLink = true,
-  hideIntro = false
+  hideIntro = false,
+  readOnly = false
 }: IntegrationsStepProps) {
   return (
     <div className="space-y-4">
       {!hideIntro ? (
         <p className="text-sm text-coop-muted">
-          Connect tools your team uses. OAuth opens in a new tab — return here and refresh status.
+          {readOnly
+            ? "Organization tools connected by your admin. Link personal accounts in the VS Code extension."
+            : "Connect tools your team uses. OAuth opens in a new tab — return here and refresh status."}
         </p>
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
@@ -50,6 +54,7 @@ export function IntegrationsStep({
             refreshSuccess={refreshSuccessProvider === def.id}
             initialLoading={initialLoading}
             compact={compact}
+            readOnly={readOnly}
           />
         ))}
       </div>
