@@ -260,7 +260,7 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm text-coop-muted">
                   {isFreePlan
                     ? "Connect GitHub, GitLab, or Bitbucket — then use Indexing → Configure to choose up to 3 repos to Deep-Index. Collaboration tools are optional."
-                    : "OAuth opens in a new tab. Return here and refresh each row after approving access."}
+                    : "Install the Coop GitHub App on your organization (or authorize via OAuth if App is unavailable). Return here and refresh each row after approving access."}
                 </p>
               </div>
               <IntegrationsStep

@@ -11,6 +11,9 @@ import { loadServerConfig } from "../server/serverConfig";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import { GitHubConnector } from "../server/codeHostConnectors/githubConnector";
+import { loadGitHubOAuthConfig } from "../server/githubOAuthConfig";
+import { createGitHubOAuthConnector } from "../server/codeHostConnectors/githubOAuthConnector";
+import { RoutingGitHubConnector } from "../server/codeHostConnectors/routingGithubConnector";
 import { loadGitLabAppConfig } from "../server/gitlabAppConfig";
 import { createGitLabConnector } from "../server/codeHostConnectors/gitlabConnector";
 import { loadBitbucketAppConfig } from "../server/bitbucketAppConfig";
@@ -34,8 +37,25 @@ async function main(): Promise<void> {
     githubAppConfig && serverConfig.credentialsEncryptionKey
       ? createGithubAppService(githubAppConfig, serverConfig.credentialsEncryptionKey)
       : undefined;
-  if (githubApp && githubAppConfig) {
-    registerConnector(new GitHubConnector(githubApp, githubAppConfig));
+  const githubOAuthConfig = loadGitHubOAuthConfig();
+  const githubAppConnector =
+    githubApp && githubAppConfig ? new GitHubConnector(githubApp, githubAppConfig) : undefined;
+  const githubOAuthConnector =
+    githubOAuthConfig && orgStore && serverConfig.credentialsEncryptionKey
+      ? createGitHubOAuthConnector(
+          githubOAuthConfig,
+          serverConfig.credentialsEncryptionKey,
+          orgStore
+        )
+      : undefined;
+  if (githubAppConnector || githubOAuthConnector) {
+    registerConnector(
+      new RoutingGitHubConnector({
+        appConnector: githubAppConnector,
+        oauthConnector: githubOAuthConnector,
+        orgStore
+      })
+    );
   }
 
   const gitlabAppConfig = loadGitLabAppConfig();

@@ -35,7 +35,8 @@ Add to **File** — `.env.backend` on the API host (see [`.env.backend.example`]
 | Provider | Variables |
 |----------|-----------|
 | Core | `CREDENTIALS_ENCRYPTION_KEY`, `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` |
-| GitHub App | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` |
+| GitHub App (Pro+ / Enterprise) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` |
+| GitHub OAuth (Free / fallback) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
 | Slack | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` |
 | Atlassian | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` |
@@ -54,7 +55,7 @@ docker compose up -d --build api
 
 | Tool | Console | Redirect URI |
 |------|---------|--------------|
-| GitHub | [github.com/settings/apps](https://github.com/settings/apps) or OAuth Apps | `/v1/github/app/callback` |
+| GitHub | [github.com/settings/apps](https://github.com/settings/apps) (App) or OAuth Apps (Free) | `/v1/github/app/callback` |
 | Slack | [api.slack.com/apps](https://api.slack.com/apps) | `/v1/slack/app/callback` |
 | Atlassian | [developer.atlassian.com/console/myapps](https://developer.atlassian.com/console/myapps/) | `/v1/atlassian/app/callback` |
 | Notion | [notion.so/my-integrations](https://www.notion.so/my-integrations) — type **OAuth** | `/v1/notion/app/callback` |

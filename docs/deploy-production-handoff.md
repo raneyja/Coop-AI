@@ -102,7 +102,7 @@ Open agent chats from [enterprise-estate-tonight-build-plan.md](./enterprise-est
 
 **Merge order:** P1 → E2 → E4 (see estate plan conflict hotspots).
 
-**Pro works with current GitHub OAuth** (`GITHUB_OAUTH_*`) — no GitHub App required for Pro.
+**Production Pro and Enterprise require GitHub App** (`GITHUB_APP_*`) — org admin installs once; the server keeps tokens fresh. **OAuth** (`GITHUB_OAUTH_*`) is for local dev / Free tier only; do not rely on it for hosted `api.coop-ai.dev`.
 
 ---
 
@@ -140,7 +140,7 @@ E1 **requires GitHub App**, not OAuth-only:
 | `GITHUB_APP_PRIVATE_KEY` | App settings → PEM |
 | `GITHUB_APP_SLUG` | App slug |
 
-Keep `GITHUB_OAUTH_*` for Pro self-serve Connect if desired — both can coexist.
+Optional: keep `GITHUB_OAUTH_*` for local dev or Free-tier smoke tests — production Connect must use the GitHub App install flow.
 
 ### Step 3b — Terminal — enterprise test org
 

@@ -36,7 +36,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "Repositories, PRs, and code context",
+    description: "Install the GitHub App for org-wide access (Pro+) or authorize via OAuth (Free)",
     category: "code"
   },
   {

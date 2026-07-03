@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchIntegrations, fetchOrg } from "@/lib/coopApi";
+import { getStoredMe } from "@/lib/auth";
 import type { IntegrationProvider, IntegrationStatus } from "@/lib/integrations";
 
 export function useIntegrations() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [orgPlan, setOrgPlan] = useState<string>("free");
+  const [orgPlan, setOrgPlan] = useState<string>(getStoredMe()?.plan ?? "free");
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshingProvider, setRefreshingProvider] = useState<IntegrationProvider | null>(null);
   const [refreshSuccessProvider, setRefreshSuccessProvider] = useState<IntegrationProvider | null>(
@@ -26,7 +27,10 @@ export function useIntegrations() {
       setError(null);
     }
 
-    const [integrationsResult, orgResult] = await Promise.all([fetchIntegrations(), fetchOrg()]);
+    const [integrationsResult, orgResult] = await Promise.all([
+      fetchIntegrations({ refresh: Boolean(provider) }),
+      fetchOrg()
+    ]);
 
     if (options?.initial) {
       setInitialLoading(false);
@@ -45,6 +49,11 @@ export function useIntegrations() {
     setIntegrations(integrationsResult.data ?? []);
     if (orgResult.ok && orgResult.data?.plan) {
       setOrgPlan(orgResult.data.plan);
+    } else {
+      const me = getStoredMe();
+      if (me?.plan) {
+        setOrgPlan(me.plan);
+      }
     }
   }, []);
 

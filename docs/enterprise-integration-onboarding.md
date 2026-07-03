@@ -96,8 +96,9 @@ docker compose up -d --build api
 
 ### GitHub
 
-- **Production:** GitHub **App** (org-wide install). Setup URL = callback above.
-- **Customer admin:** **Connect GitHub** → install/authorize → **Test GitHub**.
+- **Production (Pro+):** GitHub **App** (org-wide install). Setup URL = callback above. OAuth remains available for Free-tier orgs when `GITHUB_OAUTH_*` is configured.
+- **Customer admin:** **Connect GitHub** → install/authorize → **Refresh** row to live-test → **Test GitHub**.
+- Admin API returns `metadata.connectionKind` (`oauth` | `github_app`) on `GET /v1/admin/integrations`.
 - Detail: [github-connect.md](./github-connect.md).
 
 ### Slack

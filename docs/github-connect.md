@@ -9,7 +9,7 @@ Coop supports **two server-side options** (configure one in `.env.backend`):
 | **GitHub OAuth App** | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` | Local dev, small teams |
 | **GitHub App** | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` | Production / org-wide install |
 
-If both are set, **GitHub App** takes precedence for the install URL.
+If both are set, **GitHub App** takes precedence for the install URL. OAuth and App can coexist on the same deployment — Pro orgs may connect via OAuth while Enterprise orgs install the GitHub App.
 
 ## Quick start — GitHub OAuth App (local)
 

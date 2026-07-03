@@ -3,6 +3,7 @@ import { auditActor } from "./audit/auditLogger";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { assessGithubConnection } from "./codeHostCredentialResolver";
+import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 import { testAdminIntegration } from "./adminIntegrationTest";
@@ -121,11 +122,17 @@ export async function handleAdminIntegrationsRequest(
       integrations.push(await buildHealthEntry(deps, auth.orgId, orgPlan, status, refresh));
     }
 
+    const integrationUsable = (entry: IntegrationHealthEntry) =>
+      entry.installed &&
+      entry.health !== "degraded" &&
+      entry.health !== "not_connected";
+
     const githubOrToolConnected =
-      statuses.some((entry) => entry.provider === "github" && entry.installed) ||
-      statuses.some(
+      integrations.some((entry) => entry.provider === "github" && integrationUsable(entry)) ||
+      integrations.some(
         (entry) =>
-          INTEGRATION_PROVIDERS.includes(entry.provider as IntegrationProvider) && entry.installed
+          INTEGRATION_PROVIDERS.includes(entry.provider as IntegrationProvider) &&
+          integrationUsable(entry)
       );
 
     const slack = statuses.find((entry) => entry.provider === "slack");
@@ -143,7 +150,9 @@ export async function handleAdminIntegrationsRequest(
       !integrations.some(
         (entry) =>
           entry.installed &&
-          (entry.health === "not_configured" || entry.health === "scope_required")
+          (entry.health === "not_configured" ||
+            entry.health === "scope_required" ||
+            entry.health === "degraded")
       );
 
     writeJson(response, 200, {
@@ -162,19 +171,50 @@ export async function handleAdminIntegrationsRequest(
     return false;
   }
 
-  const orgPlan = await loadOrgPlan(deps, auth.orgId);
+  const refresh = parsed.query?.get("refresh") === "true";
+  const integrations = await listOrgIntegrations(deps, auth.orgId, { refresh });
+  writeJson(response, 200, { integrations });
+  return true;
+}
 
-  const integrations = [
-    ...(await Promise.all(CODE_HOST_PROVIDERS.map((provider) => loadCodeHostStatus(deps, auth.orgId, provider)))),
+export async function listOrgIntegrations(
+  deps: Pick<AdminApiDeps, "orgStore" | "integrationStore" | "scopePolicyStore" | "serverConfig">,
+  orgId: string,
+  options?: { refresh?: boolean }
+) {
+  const orgPlan = await loadOrgPlan(deps as AdminApiDeps, orgId);
+  const statuses = [
+    ...(await Promise.all(
+      CODE_HOST_PROVIDERS.map((provider) => loadCodeHostStatus(deps as AdminApiDeps, orgId, provider))
+    )),
     ...(await Promise.all(
       INTEGRATION_PROVIDERS.map((provider) =>
-        loadIntegrationStatus(deps, auth.orgId, provider, orgPlan)
+        loadIntegrationStatus(deps as AdminApiDeps, orgId, provider, orgPlan)
       )
     ))
   ];
 
-  writeJson(response, 200, { integrations });
-  return true;
+  if (!options?.refresh) {
+    return statuses;
+  }
+
+  return Promise.all(
+    statuses.map(async (status) => {
+      if (!status.installed) {
+        return status;
+      }
+      const test = await testAdminIntegration(orgId, status.provider, deps as AdminApiDeps);
+      if (!test.ok) {
+        return {
+          ...status,
+          needsReconnect: status.provider === "github" ? true : status.needsReconnect,
+          liveTestOk: false,
+          liveTestMessage: test.message
+        };
+      }
+      return { ...status, liveTestOk: true, liveTestMessage: test.message };
+    })
+  );
 }
 
 async function loadOrgPlan(deps: AdminApiDeps, orgId: string): Promise<string> {
@@ -186,6 +226,12 @@ async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: C
   const installation = await deps.orgStore!.getCodeHostInstallation(orgId, provider);
   if (provider === "github") {
     const connection = await assessGithubConnection(deps.orgStore!, orgId);
+    const connectionKind =
+      installation && isGithubOAuthInstallation(orgId, installation.installationId)
+        ? "oauth"
+        : installation
+          ? "github_app"
+          : undefined;
     return {
       provider,
       installed: connection.installed && connection.tokenValid,
@@ -196,7 +242,8 @@ async function loadCodeHostStatus(deps: AdminApiDeps, orgId: string, provider: C
             installationId: installation.installationId,
             tokenExpiresAt: installation.tokenExpiresAt,
             connectedAt: installation.createdAt,
-            hasRefreshToken: connection.hasRefreshToken
+            hasRefreshToken: connection.hasRefreshToken,
+            connectionKind
           }
         : {}
     };
@@ -320,11 +367,12 @@ async function buildHealthEntry(
         configured: false
       };
     }
+    const reconnectRequired = !test.ok && status.provider === "github";
     return {
       provider: status.provider,
       installed: true,
       health: test.ok ? "healthy" : "degraded",
-      message: test.message,
+      message: reconnectRequired ? "Reconnect required." : test.message,
       scopeStatus,
       configured: true
     };

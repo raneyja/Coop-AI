@@ -2,6 +2,7 @@ import type { OrgStore } from "./orgStore";
 import { GitHubAppService } from "./githubAppService";
 import type { GitHubAppConfig } from "./githubAppConfig";
 import type { CodeHostConnector } from "./codeHostConnectors/types";
+import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -32,12 +33,22 @@ export async function assessGithubConnection(
   const hasRefreshToken = Boolean(await orgStore.getCredential(orgId, "github:refresh"));
   const accessValid =
     installation.tokenExpiresAt.getTime() - Date.now() > TOKEN_REFRESH_BUFFER_MS;
-  // GitHub App installation tokens expire hourly but are minted on demand — not a user reconnect.
-  const tokenValid = accessValid || hasRefreshToken || Boolean(installation.installationId);
 
+  if (isGithubOAuthInstallation(orgId, installation.installationId)) {
+    const tokenValid = accessValid || hasRefreshToken;
+    return {
+      installed: true,
+      tokenValid,
+      needsReconnect: !tokenValid,
+      hasRefreshToken,
+      tokenExpiresAt: installation.tokenExpiresAt
+    };
+  }
+
+  // GitHub App installation tokens expire hourly but are minted on demand — not a user reconnect.
   return {
     installed: true,
-    tokenValid,
+    tokenValid: true,
     needsReconnect: false,
     hasRefreshToken,
     tokenExpiresAt: installation.tokenExpiresAt

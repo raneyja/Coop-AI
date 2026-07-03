@@ -96,6 +96,8 @@ type BackendIntegrationStatus = {
   detail?: string;
   scopeStatus?: IntegrationStatus["scopeStatus"];
   scopeSummary?: string;
+  liveTestOk?: boolean;
+  liveTestMessage?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -111,12 +113,15 @@ function integrationDetail(raw: BackendIntegrationStatus): string | undefined {
 }
 
 function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationStatus {
+  const detail =
+    integrationDetail(raw) ??
+    (raw.liveTestOk === false && raw.liveTestMessage ? raw.liveTestMessage : undefined);
   return {
     provider: raw.provider,
     installed: raw.installed,
-    needsReconnect: raw.needsReconnect,
+    needsReconnect: raw.needsReconnect ?? (raw.liveTestOk === false),
     scopeNeedsReconnect: raw.scopeNeedsReconnect,
-    detail: integrationDetail(raw),
+    detail,
     scopeStatus: raw.scopeStatus,
     scopeSummary: raw.scopeSummary
   };
@@ -290,14 +295,21 @@ export async function fetchInvitePreview(token: string): Promise<ApiResult<Invit
 
 export async function acceptInviteWithPassword(
   token: string,
-  password: string
+  password: string,
+  profile: { firstName: string; lastName: string; timezone: string }
 ): Promise<ApiResult<LoginResponse & MeResponse>> {
   try {
     const response = await fetch("/api/auth/accept-invite", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: token.trim(), password })
+      body: JSON.stringify({
+        token: token.trim(),
+        password,
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        timezone: profile.timezone.trim()
+      })
     });
     const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
     if (!response.ok) {
@@ -374,14 +386,18 @@ async function fetchIntegrationStatus(provider: IntegrationProvider): Promise<In
   return { provider, installed, detail };
 }
 
-export async function fetchIntegrations(): Promise<ApiResult<IntegrationStatus[]>> {
+export async function fetchIntegrations(options?: {
+  refresh?: boolean;
+}): Promise<ApiResult<IntegrationStatus[]>> {
   const token = getToken();
   if (!token) {
     return { ok: false, status: 401, error: "Not signed in." };
   }
 
+  const refreshSuffix = options?.refresh ? "?refresh=true" : "";
+
   try {
-    const response = await fetch("/api/integrations", {
+    const response = await fetch(`/api/integrations${refreshSuffix}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store"
     });
@@ -589,6 +605,37 @@ export async function updateRepoAccessMode(
 
 export async function completeOnboarding(): Promise<ApiResult<{ ok: boolean }>> {
   return coopFetch<{ ok: boolean }>("/v1/admin/onboarding/complete", { method: "POST" });
+}
+
+export async function fetchMe(): Promise<ApiResult<MeResponse>> {
+  return coopFetch<MeResponse>("/v1/me");
+}
+
+export async function completeMemberOnboarding(): Promise<ApiResult<{ ok: boolean }>> {
+  return coopFetch<{ ok: boolean }>("/v1/me/onboarding/complete", { method: "POST" });
+}
+
+export type WorkspaceRepo = {
+  repoId: string;
+  owner: string;
+  name: string;
+  indexStatus?: string;
+  lightningEnabled?: boolean;
+  isPrimary?: boolean;
+};
+
+export type WorkspaceReposResponse = {
+  repos: WorkspaceRepo[];
+  selectedCount: number;
+  limit: number | null;
+  canAddMore: boolean;
+  primaryRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
+  adminControlled?: boolean;
+};
+
+export async function fetchMeWorkspaceRepos(): Promise<ApiResult<WorkspaceReposResponse>> {
+  return coopFetch<WorkspaceReposResponse>("/v1/me/workspace-repos");
 }
 
 export type IntegrationHealthValue =
@@ -971,6 +1018,49 @@ export async function fetchAnalyticsCompletions(
   to: string
 ): Promise<ApiResult<AnalyticsCompletions>> {
   return coopFetch<AnalyticsCompletions>(`/v1/admin/analytics/completions${analyticsQuery(from, to)}`);
+}
+
+export type MeAnalyticsOverview = {
+  totalEvents: number;
+  eventsByDay: Array<{ day: string; count: number }>;
+};
+
+export type MeAnalyticsChat = {
+  chatMessages: number;
+  quickActions: Array<{ eventType: string; count: number }>;
+  eventsByDay: Array<{ day: string; count: number }>;
+};
+
+export async function fetchMeAnalyticsOverview(
+  from: string,
+  to: string
+): Promise<ApiResult<MeAnalyticsOverview>> {
+  return coopFetch<MeAnalyticsOverview>(`/v1/me/analytics/overview${analyticsQuery(from, to)}`);
+}
+
+export async function fetchMeAnalyticsChat(
+  from: string,
+  to: string
+): Promise<ApiResult<MeAnalyticsChat>> {
+  return coopFetch<MeAnalyticsChat>(`/v1/me/analytics/chat${analyticsQuery(from, to)}`);
+}
+
+export async function fetchMeAnalyticsCompletions(
+  from: string,
+  to: string
+): Promise<ApiResult<AnalyticsCompletions>> {
+  return coopFetch<AnalyticsCompletions>(`/v1/me/analytics/completions${analyticsQuery(from, to)}`);
+}
+
+export async function fetchMeAudit(
+  options?: { cursor?: string; limit?: number }
+): Promise<ApiResult<{ entries: AuditEntry[]; nextCursor?: string }>> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options?.limit ?? 50));
+  if (options?.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  return coopFetch<{ entries: AuditEntry[]; nextCursor?: string }>(`/v1/me/audit?${params.toString()}`);
 }
 
 export type OrgRepoRecord = {

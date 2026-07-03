@@ -46,6 +46,10 @@ export function githubOAuthSyntheticInstallationId(orgId: string): number {
   return parseInt(hash.slice(0, 11), 16);
 }
 
+export function isGithubOAuthInstallation(orgId: string, installationId: number): boolean {
+  return installationId === githubOAuthSyntheticInstallationId(orgId);
+}
+
 export function createGitHubOAuthConnector(
   config: GitHubOAuthConfig,
   stateSecret: string,

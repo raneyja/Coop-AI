@@ -42,6 +42,7 @@ import { handleGitHubAppApiRequest } from "../server/githubAppApi";
 import { loadGitHubOAuthConfig } from "../server/githubOAuthConfig";
 import { createGitHubOAuthService } from "../server/githubOAuthService";
 import { createGitHubOAuthConnector } from "../server/codeHostConnectors/githubOAuthConnector";
+import { RoutingGitHubConnector } from "../server/codeHostConnectors/routingGithubConnector";
 import { loadGitLabAppConfig } from "../server/gitlabAppConfig";
 import type { GitLabAppConfig } from "../server/gitlabAppConfig";
 import { GitLabAppService, createGitLabAppService } from "../server/gitlabAppService";
@@ -192,11 +193,23 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
   // Register connectors once per server instance so the generic
   // resolveCodeHostTokenForOrg can refresh tokens for any provider.
-  if (githubApp && githubAppConfig) {
-    registerConnector(new GitHubConnector(githubApp, githubAppConfig));
-  } else if (githubOAuth && githubOAuthConfig && orgStore && serverConfig.credentialsEncryptionKey) {
+  const githubAppConnector =
+    githubApp && githubAppConfig ? new GitHubConnector(githubApp, githubAppConfig) : undefined;
+  const githubOAuthConnector =
+    githubOAuth && githubOAuthConfig && orgStore && serverConfig.credentialsEncryptionKey
+      ? createGitHubOAuthConnector(
+          githubOAuthConfig,
+          serverConfig.credentialsEncryptionKey,
+          orgStore
+        )
+      : undefined;
+  if (githubAppConnector || githubOAuthConnector) {
     registerConnector(
-      createGitHubOAuthConnector(githubOAuthConfig, serverConfig.credentialsEncryptionKey, orgStore)
+      new RoutingGitHubConnector({
+        appConnector: githubAppConnector,
+        oauthConnector: githubOAuthConnector,
+        orgStore
+      })
     );
   }
   if (gitlabApp && gitlabAppConfig && orgStore && serverConfig.credentialsEncryptionKey) {
