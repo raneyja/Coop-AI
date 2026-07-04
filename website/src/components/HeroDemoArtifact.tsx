@@ -145,8 +145,10 @@ const TIMING = {
   afterQuestionMs: 850,
   stage2Ms: 1900,
   stage3Ms: 2100,
-  responseCharMs: 14,
-  codeCharMs: 12,
+  /** Start response stream this long before stage 4 so text is moving but no large hidden chunk appears. */
+  responsePrefetchMs: 550,
+  responseCharsPerSec: 72,
+  codeCharsPerSec: 88,
   beforeCodeMs: 180,
   /** Min/max dwell after response finishes streaming (ms) */
   responseHoldMinMs: 2200,
@@ -159,13 +161,6 @@ function stageClass(active: boolean) {
   return active ? "hero-demo-stage-visible" : "hero-demo-stage-hidden";
 }
 
-function streamDelay(char: string, baseMs: number): number {
-  let delay = baseMs;
-  if (/[.!?]/.test(char)) delay += 50;
-  if (char === "\n") delay += 25;
-  return delay;
-}
-
 /** Brief beat after stream ends — scales with length, capped so loops don't feel stuck. */
 function completedResponseHoldMs(summary: string, code?: string): number {
   const totalChars = summary.length + (code?.length ?? 0);
@@ -173,35 +168,94 @@ function completedResponseHoldMs(summary: string, code?: string): number {
   return Math.min(TIMING.responseHoldMaxMs, Math.max(TIMING.responseHoldMinMs, scaled));
 }
 
+/** Hide a trailing lone `*` while the opening `**` is still being typed. */
+function hidePartialBoldMarker(text: string): string {
+  if (text.endsWith("*") && !text.endsWith("**")) {
+    return text.slice(0, -1);
+  }
+  return text;
+}
+
 /** Renders `**bold**` markers in streamed text (Coop-style section headings). */
 function renderStreamedBoldText(text: string): React.ReactNode {
+  const sanitized = hidePartialBoldMarker(text);
   const nodes: React.ReactNode[] = [];
   let i = 0;
   let key = 0;
 
-  while (i < text.length) {
-    const open = text.indexOf("**", i);
+  while (i < sanitized.length) {
+    const open = sanitized.indexOf("**", i);
     if (open === -1) {
-      nodes.push(text.slice(i));
+      nodes.push(sanitized.slice(i));
       break;
     }
-    if (open > i) nodes.push(text.slice(i, open));
+    if (open > i) nodes.push(sanitized.slice(i, open));
 
-    const close = text.indexOf("**", open + 2);
+    const close = sanitized.indexOf("**", open + 2);
     if (close === -1) {
-      nodes.push(text.slice(open));
+      // Still streaming inside a heading — render as bold immediately (no visible **).
+      const content = sanitized.slice(open + 2);
+      if (content) {
+        nodes.push(
+          <strong key={key++} className="font-semibold text-gray-900">
+            {content}
+          </strong>
+        );
+      }
       break;
     }
 
     nodes.push(
       <strong key={key++} className="font-semibold text-gray-900">
-        {text.slice(open + 2, close)}
+        {sanitized.slice(open + 2, close)}
       </strong>
     );
     i = close + 2;
   }
 
   return nodes;
+}
+
+/** Smooth constant-rate text reveal via rAF (avoids per-char setTimeout stutter). */
+function streamTextSmooth(
+  text: string,
+  charsPerSec: number,
+  onUpdate: (slice: string) => void,
+  isActive: () => boolean,
+  onRaf: (id: number) => void
+): Promise<void> {
+  if (!text) return Promise.resolve();
+
+  onUpdate(text.slice(0, 1));
+  let lastLen = 1;
+  const start = performance.now();
+
+  return new Promise((resolve) => {
+    const tick = (now: number) => {
+      if (!isActive()) {
+        resolve();
+        return;
+      }
+
+      const targetLen = Math.min(
+        text.length,
+        Math.max(1, Math.floor(((now - start) / 1000) * charsPerSec))
+      );
+
+      if (targetLen > lastLen) {
+        lastLen = targetLen;
+        onUpdate(text.slice(0, targetLen));
+      }
+
+      if (targetLen < text.length) {
+        onRaf(requestAnimationFrame(tick));
+      } else {
+        resolve();
+      }
+    };
+
+    onRaf(requestAnimationFrame(tick));
+  });
 }
 
 export function HeroDemoArtifact() {
@@ -214,6 +268,7 @@ export function HeroDemoArtifact() {
   const [paused, setPaused] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const responseStreamTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const responseRafRef = useRef<number | null>(null);
   const typeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pausedRef = useRef(false);
   const questionRunIdRef = useRef(0);
@@ -250,6 +305,10 @@ export function HeroDemoArtifact() {
     responseRunIdRef.current += 1;
     responseStreamTimersRef.current.forEach(clearTimeout);
     responseStreamTimersRef.current = [];
+    if (responseRafRef.current != null) {
+      cancelAnimationFrame(responseRafRef.current);
+      responseRafRef.current = null;
+    }
   }, []);
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
@@ -269,6 +328,10 @@ export function HeroDemoArtifact() {
       const runId = ++responseRunIdRef.current;
       responseStreamTimersRef.current.forEach(clearTimeout);
       responseStreamTimersRef.current = [];
+      if (responseRafRef.current != null) {
+        cancelAnimationFrame(responseRafRef.current);
+        responseRafRef.current = null;
+      }
 
       const { summary, code } = SCENARIOS[index].response;
       let cancelled = false;
@@ -287,6 +350,11 @@ export function HeroDemoArtifact() {
         }
       };
 
+      const isActive = () => !cancelled && runId === responseRunIdRef.current;
+      const trackRaf = (id: number) => {
+        responseRafRef.current = id;
+      };
+
       async function streamResponse() {
         setStreamedSummary("");
         setStreamedCode("");
@@ -296,35 +364,34 @@ export function HeroDemoArtifact() {
           setStreamedCode(code ?? "");
           setResponseStreaming(false);
           await wait(completedResponseHoldMs(summary, code));
-          if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+          if (isActive()) advanceScenario();
           return;
         }
 
         setResponseStreaming(true);
-        setStreamedSummary(summary.slice(0, 1));
 
-        for (let i = 2; i <= summary.length; i++) {
-          if (cancelled || runId !== responseRunIdRef.current) return;
-          await wait(streamDelay(summary[i - 2] ?? "", TIMING.responseCharMs));
-          if (cancelled || runId !== responseRunIdRef.current) return;
-          setStreamedSummary(summary.slice(0, i));
-        }
+        await streamTextSmooth(
+          summary,
+          TIMING.responseCharsPerSec,
+          setStreamedSummary,
+          isActive,
+          trackRaf
+        );
+        if (!isActive()) return;
 
         if (code) {
           await wait(TIMING.beforeCodeMs);
-          for (let i = 1; i <= code.length; i++) {
-            if (cancelled || runId !== responseRunIdRef.current) return;
-            await wait(streamDelay(code[i - 1] ?? "", TIMING.codeCharMs));
-            if (cancelled || runId !== responseRunIdRef.current) return;
-            setStreamedCode(code.slice(0, i));
-          }
+          if (!isActive()) return;
+          await streamTextSmooth(code, TIMING.codeCharsPerSec, setStreamedCode, isActive, trackRaf);
         }
 
+        if (!isActive()) return;
+        responseRafRef.current = null;
         setResponseStreaming(false);
         await waitWhilePaused();
-        if (cancelled || runId !== responseRunIdRef.current) return;
+        if (!isActive()) return;
         await wait(completedResponseHoldMs(summary, code));
-        if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+        if (isActive()) advanceScenario();
       }
 
       streamResponse();
@@ -353,22 +420,22 @@ export function HeroDemoArtifact() {
     setResponseStreaming(false);
 
     const scheduleStagesAfterQuestion = () => {
+      const stage3At = TIMING.afterQuestionMs + TIMING.stage2Ms;
+      const stage4At = stage3At + TIMING.stage3Ms;
+      const streamAt = Math.max(stage3At, stage4At - TIMING.responsePrefetchMs);
+
       addTimer(() => setStage(2), TIMING.afterQuestionMs);
-      addTimer(() => {
-        setStage(3);
-        startResponseStream(scenarioIndex);
-      }, TIMING.afterQuestionMs + TIMING.stage2Ms);
-      addTimer(() => setStage(4), TIMING.afterQuestionMs + TIMING.stage2Ms + TIMING.stage3Ms);
+      addTimer(() => setStage(3), stage3At);
+      addTimer(() => startResponseStream(scenarioIndex), streamAt);
+      addTimer(() => setStage(4), stage4At);
     };
 
     if (reduceMotionRef.current) {
       setTypedQuestion(query);
       setStage(1);
       addTimer(() => setStage(2), 0);
-      addTimer(() => {
-        setStage(3);
-        startResponseStream(scenarioIndex);
-      }, 300);
+      addTimer(() => setStage(3), 300);
+      addTimer(() => startResponseStream(scenarioIndex), 450);
       addTimer(() => setStage(4), 600);
       return clearQuestionTimers;
     }
