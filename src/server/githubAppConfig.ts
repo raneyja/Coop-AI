@@ -41,5 +41,5 @@ function readPrivateKey(raw: string | undefined): string | undefined {
   if (!key.includes("BEGIN")) {
     key = Buffer.from(key, "base64").toString("utf8");
   }
-  return key.includes("BEGIN PRIVATE KEY") ? key : undefined;
+  return /-----BEGIN (?:RSA )?PRIVATE KEY-----/.test(key) ? key : undefined;
 }
