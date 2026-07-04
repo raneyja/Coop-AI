@@ -213,11 +213,11 @@ export function HeroDemoArtifact() {
   const [responseStreaming, setResponseStreaming] = useState(false);
   const [paused, setPaused] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const responseStreamTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const typeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pausedRef = useRef(false);
   const questionRunIdRef = useRef(0);
   const responseRunIdRef = useRef(0);
-  const prevStageRef = useRef<Stage>(1);
   const reduceMotionRef = useRef(false);
 
   const scenario = SCENARIOS[scenarioIndex];
@@ -248,6 +248,8 @@ export function HeroDemoArtifact() {
 
   const cancelResponseStream = useCallback(() => {
     responseRunIdRef.current += 1;
+    responseStreamTimersRef.current.forEach(clearTimeout);
+    responseStreamTimersRef.current = [];
   }, []);
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
@@ -261,6 +263,74 @@ export function HeroDemoArtifact() {
     setStage(1);
     setScenarioIndex((i) => (i + 1) % SCENARIOS.length);
   }, [cancelResponseStream]);
+
+  const startResponseStream = useCallback(
+    (index: number) => {
+      const runId = ++responseRunIdRef.current;
+      responseStreamTimersRef.current.forEach(clearTimeout);
+      responseStreamTimersRef.current = [];
+
+      const { summary, code } = SCENARIOS[index].response;
+      let cancelled = false;
+
+      const wait = (ms: number) =>
+        new Promise<void>((resolve) => {
+          const id = setTimeout(() => {
+            if (!cancelled && runId === responseRunIdRef.current) resolve();
+          }, ms);
+          responseStreamTimersRef.current.push(id);
+        });
+
+      const waitWhilePaused = async () => {
+        while (pausedRef.current && !cancelled && runId === responseRunIdRef.current) {
+          await wait(120);
+        }
+      };
+
+      async function streamResponse() {
+        setStreamedSummary("");
+        setStreamedCode("");
+
+        if (reduceMotionRef.current) {
+          setStreamedSummary(summary);
+          setStreamedCode(code ?? "");
+          setResponseStreaming(false);
+          await wait(completedResponseHoldMs(summary, code));
+          if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+          return;
+        }
+
+        setResponseStreaming(true);
+        setStreamedSummary(summary.slice(0, 1));
+
+        for (let i = 2; i <= summary.length; i++) {
+          if (cancelled || runId !== responseRunIdRef.current) return;
+          await wait(streamDelay(summary[i - 2] ?? "", TIMING.responseCharMs));
+          if (cancelled || runId !== responseRunIdRef.current) return;
+          setStreamedSummary(summary.slice(0, i));
+        }
+
+        if (code) {
+          await wait(TIMING.beforeCodeMs);
+          for (let i = 1; i <= code.length; i++) {
+            if (cancelled || runId !== responseRunIdRef.current) return;
+            await wait(streamDelay(code[i - 1] ?? "", TIMING.codeCharMs));
+            if (cancelled || runId !== responseRunIdRef.current) return;
+            setStreamedCode(code.slice(0, i));
+          }
+        }
+
+        setResponseStreaming(false);
+        await waitWhilePaused();
+        if (cancelled || runId !== responseRunIdRef.current) return;
+        await wait(completedResponseHoldMs(summary, code));
+        if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
+      }
+
+      streamResponse();
+    },
+    [advanceScenario]
+  );
 
   const selectScenario = useCallback(
     (index: number) => {
@@ -284,7 +354,10 @@ export function HeroDemoArtifact() {
 
     const scheduleStagesAfterQuestion = () => {
       addTimer(() => setStage(2), TIMING.afterQuestionMs);
-      addTimer(() => setStage(3), TIMING.afterQuestionMs + TIMING.stage2Ms);
+      addTimer(() => {
+        setStage(3);
+        startResponseStream(scenarioIndex);
+      }, TIMING.afterQuestionMs + TIMING.stage2Ms);
       addTimer(() => setStage(4), TIMING.afterQuestionMs + TIMING.stage2Ms + TIMING.stage3Ms);
     };
 
@@ -292,7 +365,10 @@ export function HeroDemoArtifact() {
       setTypedQuestion(query);
       setStage(1);
       addTimer(() => setStage(2), 0);
-      addTimer(() => setStage(3), 300);
+      addTimer(() => {
+        setStage(3);
+        startResponseStream(scenarioIndex);
+      }, 300);
       addTimer(() => setStage(4), 600);
       return clearQuestionTimers;
     }
@@ -318,81 +394,12 @@ export function HeroDemoArtifact() {
     typeIntervalRef.current = setInterval(typeNext, TIMING.questionCharMs);
 
     return clearQuestionTimers;
-  }, [scenarioIndex, addTimer, clearQuestionTimers]);
-
-  useEffect(() => {
-    const justEnteredStage4 = stage === 4 && prevStageRef.current !== 4;
-    prevStageRef.current = stage;
-    if (!justEnteredStage4) return;
-
-    const runId = ++responseRunIdRef.current;
-    const { summary, code } = SCENARIOS[scenarioIndex].response;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let cancelled = false;
-
-    const wait = (ms: number) =>
-      new Promise<void>((resolve) => {
-        const id = setTimeout(() => {
-          if (!cancelled && runId === responseRunIdRef.current) resolve();
-        }, ms);
-        timers.push(id);
-      });
-
-    const waitWhilePaused = async () => {
-      while (pausedRef.current && !cancelled && runId === responseRunIdRef.current) {
-        await wait(120);
-      }
-    };
-
-    async function streamResponse() {
-      setStreamedSummary("");
-      setStreamedCode("");
-      setResponseStreaming(true);
-
-      if (reduceMotionRef.current) {
-        setStreamedSummary(summary);
-        setStreamedCode(code ?? "");
-        setResponseStreaming(false);
-        await wait(completedResponseHoldMs(summary, code));
-        if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
-        return;
-      }
-
-      for (let i = 1; i <= summary.length; i++) {
-        await waitWhilePaused();
-        if (cancelled || runId !== responseRunIdRef.current) return;
-        setStreamedSummary(summary.slice(0, i));
-        await wait(streamDelay(summary[i - 1] ?? "", TIMING.responseCharMs));
-      }
-
-      if (code) {
-        await wait(TIMING.beforeCodeMs);
-        for (let i = 1; i <= code.length; i++) {
-          await waitWhilePaused();
-          if (cancelled || runId !== responseRunIdRef.current) return;
-          setStreamedCode(code.slice(0, i));
-          await wait(streamDelay(code[i - 1] ?? "", TIMING.codeCharMs));
-        }
-      }
-
-      setResponseStreaming(false);
-      await waitWhilePaused();
-      if (cancelled || runId !== responseRunIdRef.current) return;
-      await wait(completedResponseHoldMs(summary, code));
-      if (!cancelled && runId === responseRunIdRef.current) advanceScenario();
-    }
-
-    streamResponse();
-
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    };
-  }, [stage, scenarioIndex, advanceScenario]);
+  }, [scenarioIndex, addTimer, clearQuestionTimers, startResponseStream]);
 
   const summaryComplete = streamedSummary.length >= scenario.response.summary.length;
   const codeText = scenario.response.code ?? "";
-  const showSummaryCursor = stage === 4 && responseStreaming && !summaryComplete;
+  const showSummaryCursor =
+    stage === 4 && responseStreaming && streamedSummary.length > 0 && !summaryComplete;
   const showCodeCursor =
     stage === 4 && responseStreaming && summaryComplete && codeText.length > 0 && streamedCode.length < codeText.length;
 
@@ -469,7 +476,7 @@ export function HeroDemoArtifact() {
               </span>
             ) : null}
           </div>
-          <div className="hero-demo-response-card hero-demo-context-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="hero-demo-response-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
               {renderStreamedBoldText(streamedSummary)}
               {showSummaryCursor ? (
