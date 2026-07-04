@@ -4,6 +4,7 @@ import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
+import { storeGithubInstallHint } from "./githubRelinkService";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 import { testAdminIntegration } from "./adminIntegrationTest";
@@ -83,6 +84,12 @@ export async function handleAdminIntegrationsRequest(
       return true;
     }
     if (provider === "github" || provider === "gitlab" || provider === "bitbucket") {
+      if (provider === "github") {
+        const installation = await deps.orgStore!.getCodeHostInstallation(auth.orgId, "github");
+        if (installation) {
+          await storeGithubInstallHint(deps, auth.orgId, installation.installationId);
+        }
+      }
       await deps.orgStore!.deleteCodeHostInstallation(auth.orgId, provider);
       if (provider === "github") {
         await deps.orgStore!.deleteCredential(auth.orgId, "github:refresh");

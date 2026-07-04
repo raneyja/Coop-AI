@@ -1,6 +1,6 @@
 # Production handoff — launch with Deep-Code Graph
 
-**Updated:** June 15, 2026  
+**Updated:** July 4, 2026  
 **Launch definition:** Public launch **after** Pro (3-repo) + Enterprise (estate) indexing works in production — not integrations-only.
 
 **Product priority (confirmed):**
@@ -132,15 +132,21 @@ After P1+E2+E4 merge and `npm run build:webview`:
 
 ### Step 3a — Browser — Railway (GitHub App for Enterprise)
 
-E1 **requires GitHub App**, not OAuth-only:
+E1 **requires GitHub App**, not OAuth-only. Full create/install steps: [github-connect.md](./github-connect.md).
 
-| Variable | Source |
+**Browser** — Railway → **coop-api** → **Variables**:
+
+| Variable | Value |
 |----------|--------|
-| `GITHUB_APP_ID` | [github.com/settings/apps](https://github.com/settings/apps) |
-| `GITHUB_APP_PRIVATE_KEY` | App settings → PEM |
-| `GITHUB_APP_SLUG` | App slug |
+| `GITHUB_APP_ID` | `4216192` |
+| `GITHUB_APP_SLUG` | `coopai-production` |
+| `GITHUB_APP_PRIVATE_KEY` | App settings → PEM (paste full file) |
+| `GITHUB_WEBHOOK_SECRET` | `baileythedog123098654` — same string in GitHub App → Webhook → Secret |
+| `COOP_PUBLIC_BASE_URL` | `https://api.coop-ai.dev` |
 
-Optional: keep `GITHUB_OAUTH_*` for local dev or Free-tier smoke tests — production Connect must use the GitHub App install flow.
+**Clear on Railway:** `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` (OAuth is local dev only; causes 8h token expiry and redirect_uri errors in prod).
+
+Redeploy **coop-api** after saving.
 
 ### Step 3b — Terminal — enterprise test org
 
@@ -213,3 +219,4 @@ Only after **Step 0 + Step 2** pass.
 - Railway Phase 2: [deploy-railway-phase2-lightning.md](./deploy-railway-phase2-lightning.md)
 - Stripe live (last): [deploy-stripe-live.md](./deploy-stripe-live.md)
 - Integrations: [connect-integrations-production.md](./connect-integrations-production.md)
+- GitHub org testing: [github-org-testing.md](./github-org-testing.md)

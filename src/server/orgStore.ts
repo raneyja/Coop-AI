@@ -292,6 +292,31 @@ export class OrgStore {
     return row ? String(row.org_id) : undefined;
   }
 
+  /** Reverse lookup for encrypted org_credentials (e.g. github:install-hint after disconnect). */
+  public async findOrgIdByCredentialValue(
+    provider: string,
+    value: string
+  ): Promise<string | undefined> {
+    if (!this.credentialsEncryptionKey) {
+      return undefined;
+    }
+    const needle = value.trim();
+    if (!needle) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT org_id, encrypted_token FROM org_credentials WHERE provider = $1`,
+      [provider]
+    );
+    for (const row of result.rows) {
+      const decrypted = decryptCredential(String(row.encrypted_token), this.credentialsEncryptionKey);
+      if (decrypted.trim() === needle) {
+        return String(row.org_id);
+      }
+    }
+    return undefined;
+  }
+
   public async deleteCodeHostInstallation(orgId: string, provider: string): Promise<void> {
     await this.pool.query(
       `DELETE FROM code_host_installations WHERE org_id = $1 AND provider = $2`,

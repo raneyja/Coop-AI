@@ -6,6 +6,7 @@ import { SCOPABLE_PROVIDERS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
 import { formatIntegrationError } from "@/lib/integrationErrors";
+import { GitHubConnectHandoff } from "./GitHubConnectHandoff";
 import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
 import { IntegrationScopeModal } from "./IntegrationScopeModal";
@@ -35,6 +36,7 @@ export function IntegrationCard({
 }: IntegrationCardProps) {
   const [connecting, setConnecting] = useState(false);
   const [awaitingOAuth, setAwaitingOAuth] = useState(false);
+  const [githubHandoffAwaiting, setGithubHandoffAwaiting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,9 @@ export function IntegrationCard({
   );
 
   async function handleConnect() {
+    if (definition.id === "github") {
+      return;
+    }
     setConnecting(true);
     setError(null);
     const result = await fetchInstallUrl(definition.id);
@@ -72,30 +77,38 @@ export function IntegrationCard({
   const scopeRequired = scopeStatus === "required";
   const wasConnectedRef = useRef(connected);
 
+  const isGitHub = definition.id === "github";
+  const awaitingConnect = awaitingOAuth || githubHandoffAwaiting;
+
   useEffect(() => {
-    if (!awaitingOAuth) {
+    if (!awaitingConnect) {
       return;
     }
     const poll = window.setInterval(() => onRefresh(), 2000);
     const onFocus = () => onRefresh();
     window.addEventListener("focus", onFocus);
-    const timeout = window.setTimeout(() => setAwaitingOAuth(false), 120_000);
+    const timeout = window.setTimeout(() => {
+      setAwaitingOAuth(false);
+      setGithubHandoffAwaiting(false);
+    }, 120_000);
     return () => {
       window.clearInterval(poll);
       window.clearTimeout(timeout);
       window.removeEventListener("focus", onFocus);
     };
-  }, [awaitingOAuth, onRefresh]);
+  }, [awaitingConnect, onRefresh]);
 
   useEffect(() => {
-    if (awaitingOAuth && connected) {
+    if (awaitingConnect && connected) {
       setAwaitingOAuth(false);
+      setGithubHandoffAwaiting(false);
     }
-  }, [awaitingOAuth, connected]);
+  }, [awaitingConnect, connected]);
 
   useEffect(() => {
     if (!wasConnectedRef.current && connected) {
       setAwaitingOAuth(false);
+      setGithubHandoffAwaiting(false);
     }
     wasConnectedRef.current = connected;
   }, [connected]);
@@ -126,6 +139,9 @@ export function IntegrationCard({
     if (needsReconnect) {
       return <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />;
     }
+    if (githubHandoffAwaiting && !connected) {
+      return <StatusBadge connected={false} label="Waiting for GitHub install" showWhenDisconnected />;
+    }
     if (connected && scopeRequired) {
       return <StatusBadge connected={false} label="Scope required" showWhenDisconnected />;
     }
@@ -154,13 +170,23 @@ export function IntegrationCard({
           {status?.detail ? (
             <p className="mt-1 text-xs text-coop-muted">Connected as {status.detail}</p>
           ) : null}
+          {isGitHub && !readOnly && !comingSoon ? (
+            <GitHubConnectHandoff
+              connected={connected}
+              needsReconnect={needsReconnect}
+              connectionKind={status?.connectionKind}
+              compact={compact}
+              onRefresh={onRefresh}
+              onAwaitingChange={setGithubHandoffAwaiting}
+            />
+          ) : null}
           {status?.scopeSummary ? (
             <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
           ) : null}
           {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {!readOnly && !comingSoon && (!connected || needsReconnect) && (
+          {!readOnly && !comingSoon && !isGitHub && (!connected || needsReconnect) && (
             <button
               type="button"
               className="admin-btn-primary"

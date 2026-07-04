@@ -157,6 +157,42 @@ export class GitHubAppService {
     return catalog;
   }
 
+  public async getInstallation(
+    installationId: number
+  ): Promise<{ id: number; htmlUrl?: string; suspendedAt?: string | null; accountLogin?: string } | undefined> {
+    const jwt = this.createAppJwt();
+    const response = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "coop-ai-backend"
+      }
+    });
+    if (response.status === 404) {
+      return undefined;
+    }
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`GitHub get installation failed (${response.status}): ${body}`);
+    }
+    const data = (await response.json()) as {
+      id?: number;
+      html_url?: string;
+      suspended_at?: string | null;
+      account?: { login?: string };
+    };
+    if (!data.id) {
+      return undefined;
+    }
+    return {
+      id: data.id,
+      htmlUrl: data.html_url,
+      suspendedAt: data.suspended_at ?? null,
+      accountLogin: data.account?.login
+    };
+  }
+
   public createAppJwt(): string {
     const now = Math.floor(Date.now() / 1000);
     const header = base64UrlJson({ alg: "RS256", typ: "JWT" });

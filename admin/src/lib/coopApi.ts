@@ -124,15 +124,26 @@ function normalizeIntegrationStatus(raw: BackendIntegrationStatus): IntegrationS
     scopeNeedsReconnect: raw.scopeNeedsReconnect,
     detail,
     scopeStatus: raw.scopeStatus,
-    scopeSummary: raw.scopeSummary
+    scopeSummary: raw.scopeSummary,
+    connectionKind:
+      raw.metadata?.connectionKind === "oauth" || raw.metadata?.connectionKind === "github_app"
+        ? raw.metadata.connectionKind
+        : undefined
   };
 }
 
 const DEFAULT_API_BASE = "https://api.coop-ai.dev";
 
+function resolveCoopApiBase(configured: string | undefined): string {
+  const trimmed = configured?.trim().replace(/\/$/, "") ?? "";
+  if (!trimmed || trimmed.includes("://admin.")) {
+    return DEFAULT_API_BASE;
+  }
+  return trimmed;
+}
+
 export function getApiBase(): string {
-  const base = process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() || DEFAULT_API_BASE;
-  return base.replace(/\/$/, "");
+  return resolveCoopApiBase(process.env.NEXT_PUBLIC_COOP_API_BASE);
 }
 
 export function normalizeApiKeyInput(value: string): string {
@@ -475,15 +486,30 @@ export async function fetchIntegrations(options?: {
 }
 
 export async function fetchInstallUrl(
-  provider: IntegrationProvider
-): Promise<ApiResult<{ url?: string; connected?: boolean; workspaceName?: string }>> {
+  provider: IntegrationProvider,
+  options?: { mode?: "app" | "oauth" }
+): Promise<
+  ApiResult<{
+    url?: string;
+    connected?: boolean;
+    relinked?: boolean;
+    reconnect?: boolean;
+    reconnectMessage?: string;
+    workspaceName?: string;
+    kind?: "github_app" | "oauth";
+    oauthAvailable?: boolean;
+    githubAppAvailable?: boolean;
+  }>
+> {
   const token = getToken();
   if (!token) {
     return { ok: false, status: 401, error: "Not signed in." };
   }
 
+  const query = options?.mode ? `?mode=${encodeURIComponent(options.mode)}` : "";
+
   try {
-    const { response, body } = await fetchWithSessionRetry(`/api/install-url/${provider}`, {
+    const { response, body } = await fetchWithSessionRetry(`/api/install-url/${provider}${query}`, {
       method: "GET"
     });
     if (!response.ok) {
@@ -497,7 +523,11 @@ export async function fetchInstallUrl(
       return {
         ok: true,
         status: response.status,
-        data: { connected: true, workspaceName: body.workspaceName as string | undefined }
+        data: {
+          connected: true,
+          relinked: body.relinked === true,
+          workspaceName: body.workspaceName as string | undefined
+        }
       };
     }
     if (!body.url) {
@@ -507,7 +537,18 @@ export async function fetchInstallUrl(
         error: formatError(response.status, body as ApiError, `Request failed (${response.status}).`)
       };
     }
-    return { ok: true, status: response.status, data: { url: String(body.url).trim() } };
+    return {
+      ok: true,
+      status: response.status,
+      data: {
+        url: String(body.url).trim(),
+        kind: body.kind === "oauth" || body.kind === "github_app" ? body.kind : undefined,
+        oauthAvailable: body.oauthAvailable === true,
+        githubAppAvailable: body.githubAppAvailable === true,
+        reconnect: body.reconnect === true,
+        reconnectMessage: typeof body.reconnectMessage === "string" ? body.reconnectMessage : undefined
+      }
+    };
   } catch {
     return { ok: false, status: 0, error: "Could not reach the Coop API. Check your network and API base URL." };
   }

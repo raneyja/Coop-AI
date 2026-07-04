@@ -11,10 +11,22 @@ import { requireInstallAdmin } from "./authMiddleware";
 import { requireCodeHostPlan, requireCodeHostPlanForOrg } from "./planGates";
 import type { OrgStore } from "./orgStore";
 import type { AuthContext } from "./orgStore";
-import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
+import { resolveOAuthSuccessRedirectUrl, resolveGithubConnectSuccessRedirectUrl } from "./oauthCallbackRedirect";
 import { createEstateSyncService, type EstateSyncService } from "./estateSyncService";
 import { runCodeHostCatalogSyncAfterConnect } from "./catalogSyncService";
 import type { JobQueue } from "../jobs/jobQueue";
+import {
+  buildGithubOAuthRedirectUri,
+  githubConnectCapabilities,
+  resolveGithubInstallUrl,
+  type GithubInstallUrlMode
+} from "./githubInstallUrl";
+import {
+  linkGithubInstallation,
+  readGithubInstallHint,
+  resolveOrgIdForGithubCallback,
+  tryRelinkGithubInstallation
+} from "./githubRelinkService";
 
 export type GitHubAppApiDeps = {
   orgStore?: OrgStore;
@@ -67,21 +79,59 @@ async function handleInstallUrl(
   if (!(await requireCodeHostPlan(deps.orgStore, auth, response, "github"))) {
     return true;
   }
-  if (deps.githubApp && deps.githubAppConfig) {
-    const url = deps.githubApp.buildInstallUrl(deps.githubAppConfig.slug, auth.orgId);
-    writeJson(response, 200, { url });
+
+  const capabilities = githubConnectCapabilities(deps);
+  const modeParam = parsed.query.get("mode")?.trim().toLowerCase();
+  const mode: GithubInstallUrlMode =
+    modeParam === "oauth" ? "oauth" : modeParam === "app" ? "app" : "auto";
+
+  if (mode !== "oauth") {
+    const relink = await tryRelinkGithubInstallation(deps, auth.orgId);
+    if (relink.outcome === "linked") {
+      writeJson(response, 200, {
+        connected: true,
+        relinked: true,
+        kind: "github_app",
+        githubAppAvailable: capabilities.githubAppAvailable,
+        oauthAvailable: capabilities.oauthAvailable
+      });
+      return true;
+    }
+  }
+
+  const resolved = resolveGithubInstallUrl(deps, auth.orgId, mode);
+  if (resolved) {
+    const installHint = await readGithubInstallHint(deps, auth.orgId);
+    writeJson(response, 200, {
+      url: resolved.url,
+      kind: resolved.kind,
+      githubAppAvailable: resolved.githubAppAvailable,
+      oauthAvailable: resolved.oauthAvailable,
+      reconnect: Boolean(installHint),
+      reconnectMessage: installHint
+        ? "GitHub App is still installed on GitHub. If a new tab opens, click Save on that page to finish reconnecting, then return here."
+        : undefined
+    });
     return true;
   }
-  if (deps.githubOAuth && deps.githubOAuthConfig) {
-    const redirectUri = buildOAuthRedirectUri(deps.githubOAuthConfig);
-    const url = deps.githubOAuth.buildAuthorizeUrl(redirectUri, auth.orgId);
-    writeJson(response, 200, { url });
+
+  if (mode === "oauth" && !capabilities.oauthAvailable) {
+    writeJson(response, 503, {
+      error: "github_oauth_not_configured",
+      message:
+        "GitHub OAuth is not configured on this server. Use GitHub App install or ask your Coop operator to set GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET.",
+      githubAppAvailable: capabilities.githubAppAvailable,
+      oauthAvailable: false
+    });
     return true;
   }
+
   writeJson(response, 503, {
     error: "github_not_configured",
     message:
-      "GitHub is not configured on this server. Set GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY (GitHub App) or GITHUB_OAUTH_CLIENT_ID + GITHUB_OAUTH_CLIENT_SECRET (OAuth App)."
+      "GitHub is not configured on this server. Set GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY (GitHub App) or GITHUB_OAUTH_CLIENT_ID + GITHUB_OAUTH_CLIENT_SECRET (OAuth App).",
+    githubAppAvailable: capabilities.githubAppAvailable,
+    oauthAvailable: capabilities.oauthAvailable
   });
   return true;
 }
@@ -110,9 +160,13 @@ async function handleCallback(
     return true;
   }
 
-  const orgId = deps.githubApp.verifyAndParseState(state);
+  const orgId = await resolveOrgIdForGithubCallback(deps, state, installationId);
   if (!orgId) {
-    writeHtml(response, 400, "Invalid or expired install state. Return to CoopAI and try again.");
+    writeHtml(
+      response,
+      400,
+      "Invalid or expired install state. Return to the Coop admin portal → Integrations and click Connect (GitHub App) again."
+    );
     return true;
   }
   if (!(await requireCodeHostPlanForOrg(deps.orgStore, orgId, response, "github", true))) {
@@ -120,23 +174,14 @@ async function handleCallback(
   }
 
   try {
-    const token = await deps.githubApp.createInstallationAccessToken(installationId);
-    await deps.orgStore.upsertCodeHostInstallation(
-      orgId,
-      "github",
-      installationId,
-      token.token,
-      token.expiresAt
-    );
-    await maybeRunCatalogSync(deps, orgId, installationId);
-    const redirect =
-      deps.githubAppConfig?.publicBaseUrl.replace(/\/$/, "") ??
-      "https://coop-ai.dev";
+    await linkGithubInstallation(deps, orgId, installationId);
+    const redirect = resolveGithubConnectSuccessRedirectUrl();
+    const actionLabel = setupAction === "update" ? "reconnected" : "installed";
     writeHtml(
       response,
       200,
-      `GitHub App installed successfully (${setupAction ?? "install"}). You can close this tab and return to VS Code.`,
-      resolveOAuthSuccessRedirectUrl(redirect, "github=installed")
+      `GitHub App ${actionLabel} successfully. Returning to the Coop admin portal…`,
+      redirect
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Installation failed";
@@ -174,7 +219,7 @@ async function handleOAuthCallback(
   }
 
   try {
-    const redirectUri = buildOAuthRedirectUri(deps.githubOAuthConfig);
+    const redirectUri = buildGithubOAuthRedirectUri(deps.githubOAuthConfig!);
     const tokens = await deps.githubOAuth.exchangeCode(code, redirectUri);
     const installationId = githubOAuthSyntheticInstallationId(orgId);
 
@@ -206,10 +251,6 @@ async function handleOAuthCallback(
     writeHtml(response, 500, message);
   }
   return true;
-}
-
-function buildOAuthRedirectUri(config: GitHubOAuthConfig): string {
-  return `${config.publicBaseUrl}/v1/github/app/callback`;
 }
 
 async function handleInstallationStatus(
@@ -264,31 +305,4 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-async function maybeRunCatalogSync(
-  deps: GitHubAppApiDeps,
-  orgId: string,
-  installationId: number
-): Promise<void> {
-  const org = await deps.orgStore?.getOrganization(orgId);
-  if (!org || (org.plan !== "enterprise" && org.plan !== "pro" && org.plan !== "free")) {
-    return;
-  }
-  const estateSync =
-    deps.estateSync ??
-    createEstateSyncService({
-      orgStore: deps.orgStore,
-      githubApp: deps.githubApp,
-      jobQueue: deps.jobQueue
-    });
-  if (!estateSync) {
-    return;
-  }
-  try {
-    await estateSync.syncInstallation(orgId, installationId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[github-app] catalog sync failed for org=${orgId}: ${message}`);
-  }
 }

@@ -21,7 +21,11 @@ export async function GET(
     return NextResponse.json({ error: "unknown provider" }, { status: 400 });
   }
 
-  const response = await backendFetch(`/v1/${provider}/app/install-url`, request);
+  const query = new URL(request.url).searchParams.toString();
+  const path = query
+    ? `/v1/${provider}/app/install-url?${query}`
+    : `/v1/${provider}/app/install-url`;
+  const response = await backendFetch(path, request);
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   return NextResponse.json(data, { status: response.status });
 }

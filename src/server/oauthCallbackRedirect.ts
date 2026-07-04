@@ -19,3 +19,11 @@ export function resolveOAuthSuccessRedirectUrl(
     return undefined;
   }
 }
+
+/** After GitHub App install/reconnect, send admins back to Integrations. */
+export function resolveGithubConnectSuccessRedirectUrl(
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const adminPortal = env.COOP_ADMIN_PORTAL_URL?.trim() || "http://localhost:3001";
+  return `${adminPortal.replace(/\/$/, "")}/integrations?github=connected`;
+}

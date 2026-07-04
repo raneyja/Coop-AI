@@ -36,7 +36,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "Install the GitHub App for org-wide access (Pro+) or authorize via OAuth (Free)",
+    description: "GitHub App for org-wide indexing (recommended). OAuth fallback for limited personal access.",
     category: "code"
   },
   {
@@ -92,6 +92,7 @@ export type IntegrationStatus = {
   scopeStatus?: "none" | "required" | "active";
   scopeSummary?: string;
   scopeNeedsReconnect?: boolean;
+  connectionKind?: "github_app" | "oauth";
 };
 
 export type SlackScopeChannel = {
