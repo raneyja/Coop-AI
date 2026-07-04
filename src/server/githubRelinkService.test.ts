@@ -128,3 +128,61 @@ test("tryRelinkGithubInstallation discovers a sole organization installation", a
   assert.deepEqual(result, { outcome: "linked", installationId, relinked: true });
   assert.ok(installations.has(`${orgId}:github`));
 });
+
+test("tryRelinkGithubInstallation prefers org install over stale personal install hint", async () => {
+  const orgId = "org-corp";
+  const stalePersonalId = 111;
+  const orgInstallationId = 900002;
+  const hints = new Map<string, string>();
+  const installations = new Map<string, { installationId: number; token: string; expiresAt: Date }>();
+
+  const orgStore = {
+    async getCodeHostInstallation(_org: string, provider: string) {
+      return installations.get(`${_org}:${provider}`);
+    },
+    async getCredential(_org: string, provider: string) {
+      return hints.get(`${_org}:${provider}`);
+    },
+    async deleteCredential(_org: string, provider: string) {
+      hints.delete(`${_org}:${provider}`);
+    },
+    async storeCredential(_org: string, provider: string, value: string) {
+      hints.set(`${_org}:${provider}`, value);
+    },
+    async upsertCodeHostInstallation(
+      _org: string,
+      provider: string,
+      id: number,
+      token: string,
+      expiresAt: Date
+    ) {
+      installations.set(`${_org}:${provider}`, { installationId: id, token, expiresAt });
+    }
+  };
+
+  hints.set(`${orgId}:github:install-hint`, String(stalePersonalId));
+
+  const githubApp = {
+    async listAppInstallations() {
+      return [{ id: orgInstallationId, accountLogin: "CoopAI-Corp", accountType: "Organization" }];
+    },
+    async getInstallation(id: number) {
+      if (id === orgInstallationId) {
+        return { id, accountLogin: "CoopAI-Corp", accountType: "Organization" };
+      }
+      if (id === stalePersonalId) {
+        return { id, accountLogin: "raneyja", accountType: "User" };
+      }
+      return undefined;
+    },
+    async createInstallationAccessToken(id: number) {
+      assert.equal(id, orgInstallationId);
+      return { token: "ghs_test", expiresAt: new Date(Date.now() + 3_600_000) };
+    }
+  };
+
+  const result = await tryRelinkGithubInstallation({ orgStore, githubApp, jobQueue: undefined }, orgId);
+
+  assert.deepEqual(result, { outcome: "linked", installationId: orgInstallationId, relinked: true });
+  assert.equal(installations.get(`${orgId}:github`)?.installationId, orgInstallationId);
+});

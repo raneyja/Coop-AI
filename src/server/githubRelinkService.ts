@@ -94,54 +94,93 @@ export async function tryRelinkGithubInstallation(
     return { outcome: "none" };
   }
 
-  const installationId =
-    (await readGithubInstallHint(deps, orgId)) ??
-    (await discoverRelinkInstallationId(deps));
+  const candidates = await resolveRelinkInstallationCandidates(deps, orgId);
+  for (const installationId of candidates) {
+    if (isGithubOAuthInstallation(orgId, installationId)) {
+      continue;
+    }
 
-  if (!installationId || isGithubOAuthInstallation(orgId, installationId)) {
-    return { outcome: "none" };
+    let installation: { id: number } | undefined;
+    try {
+      installation = await deps.githubApp.getInstallation(installationId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[github-relink] org=${orgId} installation=${installationId} lookup failed: ${message}`);
+      continue;
+    }
+
+    if (!installation) {
+      continue;
+    }
+
+    try {
+      await linkGithubInstallation(deps, orgId, installationId);
+      return { outcome: "linked", installationId, relinked: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[github-relink] org=${orgId} installation=${installationId} failed: ${message}`);
+    }
   }
 
-  let installation: { id: number } | undefined;
-  try {
-    installation = await deps.githubApp.getInstallation(installationId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[github-relink] org=${orgId} installation=${installationId} lookup failed: ${message}`);
-    return { outcome: "none" };
-  }
-
-  if (!installation) {
-    await clearGithubInstallHint(deps, orgId);
-    return { outcome: "none" };
-  }
-
-  try {
-    await linkGithubInstallation(deps, orgId, installationId);
-    return { outcome: "linked", installationId, relinked: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[github-relink] org=${orgId} installation=${installationId} failed: ${message}`);
-    return { outcome: "none" };
-  }
+  await clearGithubInstallHint(deps, orgId);
+  return { outcome: "none" };
 }
 
-/** When install hint is missing, link a sole org installation already on GitHub. */
-async function discoverRelinkInstallationId(deps: GitHubAppApiDeps): Promise<number | undefined> {
+async function resolveRelinkInstallationCandidates(
+  deps: GitHubAppApiDeps,
+  orgId: string
+): Promise<number[]> {
+  const ordered: number[] = [];
+  const seen = new Set<number>();
+
+  const push = (installationId: number | undefined) => {
+    if (!installationId || !Number.isFinite(installationId) || seen.has(installationId)) {
+      return;
+    }
+    seen.add(installationId);
+    ordered.push(installationId);
+  };
+
+  // Prefer GitHub Organization installs (company flow) over stale personal install hints.
+  for (const row of await listOrganizationInstallations(deps)) {
+    push(row.id);
+  }
+
+  const hint = await readGithubInstallHint(deps, orgId);
+  if (hint) {
+    let installation:
+      | { id: number; accountType?: string; accountLogin?: string }
+      | undefined;
+    try {
+      installation = await deps.githubApp?.getInstallation(hint);
+    } catch {
+      installation = undefined;
+    }
+    if (installation?.accountType === "Organization") {
+      push(installation.id);
+    } else if (installation) {
+      push(installation.id);
+    }
+  }
+
+  return ordered;
+}
+
+async function listOrganizationInstallations(
+  deps: GitHubAppApiDeps
+): Promise<Array<{ id: number; accountLogin: string }>> {
   if (!deps.githubApp) {
-    return undefined;
+    return [];
   }
   try {
     const installations = await deps.githubApp.listAppInstallations();
-    const orgInstalls = installations.filter((row) => row.accountType === "Organization");
-    if (orgInstalls.length === 1) {
-      return orgInstalls[0]!.id;
-    }
-    return undefined;
+    return installations
+      .filter((row) => row.accountType === "Organization")
+      .map((row) => ({ id: row.id, accountLogin: row.accountLogin }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[github-relink] list app installations failed: ${message}`);
-    return undefined;
+    return [];
   }
 }
 
