@@ -94,7 +94,7 @@ Subscribe to events: **Installation**, **Installation repositories**, **Push**, 
 
 ### 5. Railway — API variables (production)
 
-**Browser** — Railway → **coop-api** service → **Variables**:
+**Browser** — Railway → **Coop-AI** service → **Variables**:
 
 | Variable | Value |
 |----------|--------|
@@ -109,7 +109,7 @@ Subscribe to events: **Installation**, **Installation repositories**, **Push**, 
 - `GITHUB_OAUTH_CLIENT_ID`
 - `GITHUB_OAUTH_CLIENT_SECRET`
 
-Redeploy **coop-api** after saving.
+Redeploy **Coop-AI** after saving.
 
 **Success looks like:** Admin → Integrations → Connect opens `github.com/apps/{slug}/installations/…` (not `login/oauth/authorize?client_id=Ov23…`).
 

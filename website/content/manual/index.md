@@ -1,7 +1,7 @@
 ---
 title: "Coop AI Owner's Manual"
 description: "Install, configure, and use Coop AI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-04"
 ---
 
 Congratulations on choosing Coop AI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -59,7 +59,7 @@ See the [Security page](/security) for architecture details.
 2. **Browser** — On the [Welcome page](/welcome), wait for provisioning (usually under a minute).
 3. **Email** — Check your inbox for your account welcome email.
 4. **Browser** — Open the [admin portal](https://admin.coop-ai.dev/login) and sign in with your email and password, **Continue with Google**, or **Sign in with SSO** (Enterprise).
-5. **Admin portal** — Connect GitHub, Slack, and other tools once for your whole org.
+5. **Admin portal** — Connect GitHub (GitHub App on company org — use **Send link to GitHub admin** if IT owns GitHub), Slack, and other tools once for your whole org.
 6. **Admin portal** — Invite teammates from the Users page.
 7. **Extension UI** — Developers install Coop AI in VS Code and sign in with their work email (or Google / org SSO).
 
@@ -168,7 +168,7 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 - **Multi-line** completions activate after `{`, `=>`, `(`, or inside blocks (up to 200 tokens)
 - **Pro:** optional graph context via `coopAI.autocomplete.useGraphContext` — dependents and ownership from indexed repos
 
-**Copilot:** if GitHub Copilot is installed, set `coopAI.autocomplete.copilotPolicy` to `warn` (default) or `disable-when-copilot`.
+**Copilot:** when Coop autocomplete is **on**, Coop automatically disables Copilot **inline** ghost text (`github.copilot.enable`) and restores your prior setting when you turn Coop autocomplete off. Copilot chat and other features stay available.
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 

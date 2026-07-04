@@ -40,10 +40,14 @@ export async function GET(request: Request) {
   };
 
   if (!exchangeResponse.ok || !exchangeData.accessToken) {
+    const detail =
+      exchangeData.message?.trim() ||
+      exchangeData.error?.trim() ||
+      (exchangeResponse.status ? `Sign-in request failed (${exchangeResponse.status}).` : "");
     return loginRedirect(
       adminOrigin,
       exchangeData.error ?? "google_exchange_failed",
-      exchangeData.message ?? "Google sign-in failed."
+      detail || "Google sign-in failed."
     );
   }
 

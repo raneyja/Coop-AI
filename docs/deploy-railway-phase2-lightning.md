@@ -39,7 +39,7 @@ API service gets: `ZOEKT_URL=http://coop-zoekt.railway.internal:6070` (or Railwa
 3. **Settings → Deploy**
    - **Build:** Dockerfile (same as API)
    - **Start command:** `node dist/workerEntry.js`
-4. **Variables** — copy from **coop-api** (API service):
+4. **Variables** — copy from **Coop-AI** (API service):
    - `DATABASE_URL` (reference Postgres)
    - `CREDENTIALS_ENCRYPTION_KEY`
    - GitHub / integration vars needed for cloning private repos
@@ -74,7 +74,7 @@ Zoekt is built into the Docker image (see `Dockerfile`).
 
 ## Part 4 — Browser — link API to Zoekt
 
-1. Open **coop-api** service → **Variables**
+1. Open **Coop-AI** service → **Variables**
 2. Add:
    ```
    ZOEKT_URL=http://coop-zoekt.railway.internal:6070

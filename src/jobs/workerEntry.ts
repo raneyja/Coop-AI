@@ -113,6 +113,19 @@ async function main(): Promise<void> {
     });
   }
 
+  if (pool) {
+    if (!serverConfig.credentialsEncryptionKey) {
+      console.warn(
+        "[workers] CREDENTIALS_ENCRYPTION_KEY is missing — private repo clones will fail (copy from Coop-AI)"
+      );
+    }
+    if (!githubApp) {
+      console.warn(
+        "[workers] GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY not configured — cannot refresh GitHub tokens (copy from Coop-AI)"
+      );
+    }
+  }
+
   console.log("[workers] CoopAI job workers started");
 
   const shutdown = async () => {

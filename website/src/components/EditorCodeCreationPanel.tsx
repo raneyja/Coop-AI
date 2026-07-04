@@ -9,7 +9,7 @@ const TOKEN_COLOR: Record<CodeToken["t"], string> = {
   type: "text-[#4ec9b0]",
   string: "text-[#ce9178]",
   comment: "text-[#6a9955]",
-  plain: "text-[#d4d4d4]"
+  plain: "text-darkUi-plain"
 };
 
 export type CompletePhase = "idle" | "ghost" | "accepted" | "hold";
@@ -154,11 +154,11 @@ function CompleteEditorBody({
         <CodeEditorLineRow key={line.n} line={line} />
       ))}
       <div className="flex gap-2 rounded-sm pr-4">
-        <span className="w-4 shrink-0 select-none text-right text-[#858585]">{story.cursorLine}</span>
+        <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{story.cursorLine}</span>
         <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
           <span className={TOKEN_COLOR.plain}>{story.typedPrefix}</span>
           {visibleGhost ? (
-            <span className={accepted ? "text-[#d4d4d4]" : "text-white/35"}>{visibleGhost}</span>
+            <span className={accepted ? "text-darkUi-plain" : "text-white/35"}>{visibleGhost}</span>
           ) : null}
           {(phase === "idle" || !showGhost || ghostVisibleChars < story.ghostSuffix.length) && !accepted ? (
             <span className="story-cursor ml-0.5 inline-block h-3.5 w-1 bg-coop-index" aria-hidden />
@@ -220,7 +220,7 @@ function CodeEditorLineRow({
 
   return (
     <div className={`flex gap-2 rounded-sm pr-4 ${rowClass}`}>
-      <span className="w-4 shrink-0 select-none text-right text-[#858585]">{line.n}</span>
+      <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{line.n}</span>
       <span className="min-w-0 flex-1">
         {line.tokens.length === 0 ? (
           <span>&nbsp;</span>

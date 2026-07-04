@@ -1,11 +1,14 @@
 import type { Config } from "tailwindcss";
 import typography from "@tailwindcss/typography";
+import { siteDarkUiText, siteGray } from "./src/lib/siteColors";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
       colors: {
+        gray: siteGray,
+        darkUi: siteDarkUiText,
         coop: {
           blue: "#1F6FEB",
           accent: "#58A6FF",
@@ -14,10 +17,10 @@ const config: Config = {
           dark: "#ffffff",
           surface: "#f9fafb",
           border: "#e5e7eb",
-          muted: "#6b7280",
+          muted: siteGray[500],
           editor: "#ffffff",
-          foreground: "#1f2937",
-          "foreground-secondary": "#6b7280"
+          foreground: siteGray[800],
+          "foreground-secondary": siteGray[500]
         }
       },
       fontFamily: {

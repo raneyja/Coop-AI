@@ -58,6 +58,17 @@ Creates org **Repo Access Demo** (Pro) with:
 
 Developer pre-grants (used when you switch to per-user): `acme/api`, `acme/web` only.
 
+### Fresh Pro org (onboarding / GitHub connect testing)
+
+**Terminal:**
+
+```bash
+docker compose up -d api postgres
+npm run seed:pro-onboarding
+```
+
+Creates **Pro Onboarding Test** with admin `pro-onboarding@demo.local` / `DemoPassword12!` — no repos or integrations pre-seeded. Use for admin portal onboarding and GitHub org install tests ([github-org-testing.md](./github-org-testing.md)).
+
 ---
 
 ## Start admin portal
@@ -92,10 +103,12 @@ Open **http://localhost:3001/login** and sign in as the demo admin.
 
 The demo seed uses fake repo IDs. To test live discovery:
 
-1. **Integrations** → Connect GitHub (OAuth or App in `.env.backend`)
-2. **Indexing** → **Configure GitHub** → picker opens with discovered repos
+1. **Browser** — Admin portal → **Integrations** → **Connect (GitHub App)** (or **Send link to GitHub admin** for org install)
+2. **Browser** — **Indexing** → **Configure GitHub** → picker opens with discovered repos
 3. Select **company repos only** → **Deep-Index selected**
 4. Confirm personal repos stay in **Deep index off** until you explicitly select them
+
+See [github-connect.md](./github-connect.md) and [github-org-testing.md](./github-org-testing.md).
 
 ---
 

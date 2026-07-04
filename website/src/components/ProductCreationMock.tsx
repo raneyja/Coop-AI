@@ -238,7 +238,7 @@ export function ProductCreationMock({
             <div className="flex min-h-full w-full flex-col justify-end gap-3">
               {showUserBubble && (
                 <div className="story-bubble-in max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
-                  <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{story.question}</p>
+                  <p className="text-[13px] leading-relaxed text-darkUi-body">{story.question}</p>
                 </div>
               )}
 
@@ -249,7 +249,7 @@ export function ProductCreationMock({
                   }`}
                 >
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
+                    <span className="text-[11px] font-medium text-darkUi-muted">CoopAI</span>
                     {phase === "searching" && (
                       <Loader2 className="h-3 w-3 animate-spin text-coop-index" aria-hidden />
                     )}

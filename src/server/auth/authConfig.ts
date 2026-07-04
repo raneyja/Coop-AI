@@ -1,7 +1,10 @@
+export type GoogleOAuthCredentialSource = "GOOGLE_AUTH" | "GOOGLE_DOCS_APP";
+
 export type AuthConfig = {
   publicBaseUrl: string;
   googleClientId?: string;
   googleClientSecret?: string;
+  googleOAuthCredentialSource?: GoogleOAuthCredentialSource;
   oauthStateSecret: string;
   accessTtlMs: number;
   refreshTtlMs: number;
@@ -9,6 +12,25 @@ export type AuthConfig = {
   marketingBaseUrl: string;
   adminPortalUrl: string;
 };
+
+/** Load client ID + secret as a matched pair (never mix AUTH id with DOCS secret). */
+export function loadGoogleOAuthCredentials(
+  env: NodeJS.ProcessEnv = process.env
+): { clientId: string; clientSecret: string; source: GoogleOAuthCredentialSource } | undefined {
+  const authId = env.GOOGLE_AUTH_CLIENT_ID?.trim();
+  const authSecret = env.GOOGLE_AUTH_CLIENT_SECRET?.trim();
+  if (authId && authSecret) {
+    return { clientId: authId, clientSecret: authSecret, source: "GOOGLE_AUTH" };
+  }
+
+  const docsId = env.GOOGLE_DOCS_APP_CLIENT_ID?.trim();
+  const docsSecret = env.GOOGLE_DOCS_APP_CLIENT_SECRET?.trim();
+  if (docsId && docsSecret) {
+    return { clientId: docsId, clientSecret: docsSecret, source: "GOOGLE_DOCS_APP" };
+  }
+
+  return undefined;
+}
 
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   const publicBaseUrl =
@@ -20,15 +42,13 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     env.CREDENTIALS_ENCRYPTION_KEY?.trim() ||
     "dev-oauth-state-secret-change-me";
 
-  const googleClientId =
-    env.GOOGLE_AUTH_CLIENT_ID?.trim() || env.GOOGLE_DOCS_APP_CLIENT_ID?.trim() || undefined;
-  const googleClientSecret =
-    env.GOOGLE_AUTH_CLIENT_SECRET?.trim() || env.GOOGLE_DOCS_APP_CLIENT_SECRET?.trim() || undefined;
+  const googleOAuth = loadGoogleOAuthCredentials(env);
 
   return {
     publicBaseUrl: publicBaseUrl.replace(/\/$/, ""),
-    googleClientId,
-    googleClientSecret,
+    googleClientId: googleOAuth?.clientId,
+    googleClientSecret: googleOAuth?.clientSecret,
+    googleOAuthCredentialSource: googleOAuth?.source,
     oauthStateSecret: stateSecret,
     accessTtlMs: readPositiveInt(env.AUTH_ACCESS_TTL_MS, 7 * 24 * 60 * 60 * 1000),
     refreshTtlMs: readPositiveInt(env.AUTH_REFRESH_TTL_MS, 30 * 24 * 60 * 60 * 1000),

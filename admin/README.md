@@ -2,6 +2,8 @@
 
 Organization admin console for managing integrations, users, and API keys. Separate from the marketing site (`website/`) and the VS Code extension.
 
+Production: [admin.coop-ai.dev](https://admin.coop-ai.dev)
+
 ## Quick start
 
 ### 1. File — `admin/.env.local`
@@ -43,27 +45,45 @@ Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API
 ## Authentication
 
 - **Primary:** Email/password or Google OAuth via `/api/auth/login` and backend `/v1/auth/*`
+- **Invites:** Email link → `/accept-invite?token=…` → set password and profile → signed in
 - **Session:** Access token in `sessionStorage` plus httpOnly `coop_session` cookie (set by Next.js API routes)
 - **Refresh:** Refresh token in `sessionStorage`; sign out calls `/api/auth/logout`
 - **Legacy:** Automation API key tab (collapsed under “More sign-in options”) for `coop_…` keys
 
-Login requires `canInstallIntegrations: true` or role `owner` / `admin`.
+Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admin pages. **Members** (developer role) see a reduced nav: dashboard, integrations (read-only status), chat feed, personal usage, and settings.
 
 ## Pages
 
-| Route | Purpose |
-|-------|---------|
-| `/login` | Email/password, Google, SSO, or API key sign-in |
-| `/forgot-password` | Request a password reset email |
-| `/auth/callback` | OAuth / SSO return handler |
-| `/` | Dashboard — org overview, integration grid, stats |
-| `/integrations` | Connect GitHub, Slack, Jira/Confluence, Notion, Google Docs, Teams |
-| `/users` | Invite and manage users (`/v1/admin/users/*`) |
-| `/analytics` | Usage analytics — DAU, chat, quick actions, CSV export (`/v1/admin/analytics/*`) |
-| `/api-keys` | Create and revoke org API keys (`/v1/admin/api-keys/*`) |
-| `/billing` | Plan, seats, and Stripe billing portal (`/v1/admin/billing/*`) |
-| `/audit` | Admin audit log (`/v1/admin/audit`) |
-| `/settings` | Account, org info, sign-out |
+| Route | Who | Purpose |
+|-------|-----|---------|
+| `/login` | All | Email/password, Google, SSO, or API key sign-in |
+| `/forgot-password` | All | Request a password reset email |
+| `/accept-invite` | Invited users | Accept invite, set password, complete profile |
+| `/auth/callback` | All | OAuth / SSO return handler |
+| `/` | All | Dashboard — admin overview or member welcome + workspace repos |
+| `/integrations` | All | Connect GitHub, Slack, Jira/Confluence, Notion, Google Docs, Teams |
+| `/indexing` | Admin | Repo catalog, Deep-Index enable/disable, estate sync |
+| `/collections` | Pro/Ent admin | Repo groupings |
+| `/users` | Admin | Invite and manage users; per-user repo grants |
+| `/analytics` | Admin | Org usage — DAU, chat, completions, CSV export |
+| `/my-usage` | Member | Personal usage analytics (overview, chat, completions) |
+| `/my-activity` | Member | Personal audit log |
+| `/feed` | All | Chat thread browser |
+| `/api-keys` | Admin | Create and revoke org API keys |
+| `/billing` | Admin | Plan, seats, and Stripe billing portal |
+| `/audit` | Admin | Org admin audit log |
+| `/settings` | All | Account, org info, repository access mode, sign-out |
+
+### GitHub connect (admin)
+
+On **Integrations → GitHub**:
+
+- **Connect (GitHub App)** — opens GitHub install on company org (requires org owner or handoff)
+- **Send link to GitHub admin** — copy signed install URL for IT
+- **Limited connect (OAuth)** — fallback when App install is not possible (server must have `GITHUB_OAUTH_*`)
+- **Waiting for GitHub** — shown after Connect until callback completes; auto-relink if App already installed
+
+Detail: [docs/github-connect.md](../docs/github-connect.md)
 
 ## API client
 
@@ -74,6 +94,17 @@ Server routes under `src/app/api/auth/*` proxy sign-in to the Coop API using `CO
 Admin routes live at `/v1/admin/*` on the Coop API. If the API is unreachable or returns 404, the UI shows an **“API not available”** banner and falls back to per-provider installation endpoints (`/v1/orgs/{provider}/installation`).
 
 **CORS:** The API must allow your portal origin. For local dev, `http://localhost:3001` is allowed by default. For production, set `COOP_CORS_ORIGINS=https://admin.coop-ai.dev` in `.env.backend` and restart the API.
+
+## Seed commands (local Docker)
+
+**Terminal** — repo root, API + Postgres running:
+
+```bash
+npm run seed:pro-onboarding      # Fresh Pro org for onboarding / GitHub connect tests
+npm run seed:repo-access-demo    # Pro org with admin + dev + repo grants demo
+```
+
+See [docs/repo-access-smoke-test.md](../docs/repo-access-smoke-test.md) and [docs/github-org-testing.md](../docs/github-org-testing.md).
 
 ## Build
 

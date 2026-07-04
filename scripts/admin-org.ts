@@ -4,6 +4,7 @@
  * Usage:
  *   npx ts-node scripts/admin-org.ts create-org "Acme Corp" enterprise
  *   npx ts-node scripts/admin-org.ts set-plan <orgId> enterprise
+ *   npx ts-node scripts/admin-org.ts upgrade-user-by-email <email> [seats]
  *   npx ts-node scripts/admin-org.ts list-orgs
  *   npx ts-node scripts/admin-org.ts create-api-key <orgId> "primary"
  *   npx ts-node scripts/admin-org.ts configure-sso <orgId> okta <idpEntityId> <idpSsoUrl> <certPath>
@@ -58,6 +59,44 @@ async function main(): Promise<void> {
         }
         const org = await store.setOrganizationPlan(orgId, plan as OrgPlan);
         console.log(JSON.stringify(org, null, 2));
+        break;
+      }
+      case "upgrade-user-by-email": {
+        const [email, seatsArg = "5"] = args;
+        if (!email) {
+          throw new Error("usage: upgrade-user-by-email <email> [seats]");
+        }
+        const seats = Math.max(1, Number(seatsArg) || 5);
+        const user = await userStore.findActiveUserByEmail(email);
+        if (!user) {
+          throw new Error(`No active user found for ${email}`);
+        }
+        const org = await store.getOrganization(user.orgId);
+        if (!org) {
+          throw new Error(`Organization not found for user ${user.id}`);
+        }
+        const upgraded = await store.setOrganizationPlan(org.id, "pro");
+        await store.updateOrganizationBilling(org.id, {
+          billingEmail: email.trim().toLowerCase(),
+          seatCount: seats,
+          billingStatus: "active"
+        });
+        console.log(
+          JSON.stringify(
+            {
+              userId: user.id,
+              email: user.email,
+              orgId: org.id,
+              orgName: org.name,
+              previousPlan: org.plan,
+              plan: upgraded?.plan ?? "pro",
+              seatCount: seats,
+              billingStatus: "active"
+            },
+            null,
+            2
+          )
+        );
         break;
       }
       case "list-orgs": {
@@ -309,7 +348,7 @@ async function main(): Promise<void> {
       }
       default:
         console.error(
-          "Commands: create-org, set-plan, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, set-repo-access-mode, reindex-estate"
+          "Commands: create-org, set-plan, upgrade-user-by-email, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, set-repo-access-mode, reindex-estate"
         );
         process.exit(1);
     }

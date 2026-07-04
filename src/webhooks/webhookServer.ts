@@ -151,11 +151,15 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         })
       : undefined;
   if (googleAuth) {
+    const clientSuffix = authConfig.googleClientId?.slice(-12) ?? "unknown";
     console.log(
-      `[auth] Google sign-in enabled (callback ${authConfig.publicBaseUrl}/v1/auth/google/callback)`
+      `[auth] Google sign-in enabled via ${authConfig.googleOAuthCredentialSource ?? "unknown"} ` +
+        `(client …${clientSuffix}, callback ${authConfig.publicBaseUrl}/v1/auth/google/callback)`
     );
   } else {
-    console.warn("[auth] Google sign-in disabled — set GOOGLE_AUTH_CLIENT_ID and GOOGLE_AUTH_CLIENT_SECRET");
+    console.warn(
+      "[auth] Google sign-in disabled — set GOOGLE_AUTH_CLIENT_* or GOOGLE_DOCS_APP_CLIENT_* as a matched pair"
+    );
   }
   const ssoConfigStore = pool ? new SsoConfigStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);

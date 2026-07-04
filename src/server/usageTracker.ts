@@ -115,6 +115,23 @@ export class UsageTracker {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  public async countEventsForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange
+  ): Promise<number> {
+    if (!this.pool) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1 AND principal = $2 AND created_at >= $3 AND created_at < $4`,
+      [orgId, principal, range.from, range.to]
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
   public async countDistinctPrincipals(orgId: string, range: UsageDateRange): Promise<number> {
     if (!this.pool) {
       return 0;
@@ -162,6 +179,35 @@ export class UsageTracker {
     }));
   }
 
+  public async eventsByDayForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange,
+    eventTypePrefix?: string
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const prefixFilter = eventTypePrefix ? ` AND event_type LIKE $5` : "";
+    const params: Array<string | Date> = [orgId, principal, range.from, range.to];
+    if (eventTypePrefix) {
+      params.push(`${eventTypePrefix}%`);
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1 AND principal = $2 AND created_at >= $3 AND created_at < $4${prefixFilter}
+       GROUP BY 1
+       ORDER BY 1`,
+      params
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
   public async eventsByType(orgId: string, range: UsageDateRange): Promise<Array<{ eventType: string; count: number }>> {
     if (!this.pool) {
       return [];
@@ -173,6 +219,28 @@ export class UsageTracker {
        GROUP BY event_type
        ORDER BY count DESC`,
       [orgId, range.from, range.to]
+    );
+    return result.rows.map((row) => ({
+      eventType: String(row.event_type),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  public async eventsByTypeForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange
+  ): Promise<Array<{ eventType: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT event_type, COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1 AND principal = $2 AND created_at >= $3 AND created_at < $4
+       GROUP BY event_type
+       ORDER BY count DESC`,
+      [orgId, principal, range.from, range.to]
     );
     return result.rows.map((row) => ({
       eventType: String(row.event_type),
@@ -222,6 +290,41 @@ export class UsageTracker {
          AND (metadata->>$4) ~ '^\\d+(\\.\\d+)?$'
        ORDER BY value`,
       [orgId, range.from, range.to, metadataKey, eventType]
+    );
+    const values = result.rows
+      .map((row) => Number(row.value))
+      .filter((value) => Number.isFinite(value));
+    if (values.length === 0) {
+      return { p50: null, p95: null, sampleCount: 0 };
+    }
+    return {
+      p50: percentile(values, 0.5),
+      p95: percentile(values, 0.95),
+      sampleCount: values.length
+    };
+  }
+
+  public async latencyPercentilesForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange,
+    eventType: string,
+    metadataKey: string
+  ): Promise<{ p50: number | null; p95: number | null; sampleCount: number }> {
+    if (!this.pool) {
+      return { p50: null, p95: null, sampleCount: 0 };
+    }
+    const result = await this.pool.query(
+      `SELECT (metadata->>$5)::double precision AS value
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = $2
+         AND created_at >= $3
+         AND created_at < $4
+         AND event_type = $6
+         AND (metadata->>$5) ~ '^\\d+(\\.\\d+)?$'
+       ORDER BY value`,
+      [orgId, principal, range.from, range.to, metadataKey, eventType]
     );
     const values = result.rows
       .map((row) => Number(row.value))

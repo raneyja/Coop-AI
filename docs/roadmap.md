@@ -72,7 +72,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 - [x] Honor `coopAI.autocomplete.enabled` (default **off**)
 - [x] Zero-retention headers (`x-use-case: code-completion-only`)
 - [x] Strip markdown fences from model output
-- [x] Copilot coexistence policy (`coopAI.autocomplete.copilotPolicy`)
+- [x] Copilot coexistence (auto-disable Copilot inline when Coop autocomplete is on)
 - [x] Accept/reject telemetry (Tab accept, Escape reject, superseded)
 
 **Prompt shape:** Narrow completion system prompt in `systemPrompts.ts` (`inline_completion`).

@@ -249,7 +249,7 @@ export function FileContextGraph({
               <p className="relative truncate font-mono text-[1.55cqw] font-semibold text-gray-900">
                 {scenario.file.name}
               </p>
-              <p className="relative mt-0.5 truncate font-mono text-[1.05cqw] text-[#9ca4ad]">
+              <p className="relative mt-0.5 truncate font-mono text-[1.05cqw] text-darkUi-sublabel">
                 {scenario.file.path}
                 {scenario.file.symbol ? ` · ${scenario.file.symbol}` : ""}
               </p>
@@ -432,7 +432,7 @@ function OrbitNodeCard({
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center px-[5%] py-[5%]">
           <p className="truncate text-[1.22cqw] font-medium leading-tight text-gray-900">{node.label}</p>
-          <p className="mt-0.5 truncate text-[1cqw] leading-snug text-[#9ca4ad]">{node.sublabel}</p>
+          <p className="mt-0.5 truncate text-[1cqw] leading-snug text-darkUi-sublabel">{node.sublabel}</p>
         </div>
       </div>
 

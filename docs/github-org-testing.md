@@ -44,7 +44,7 @@ Set password via admin portal signup flow or existing auth tooling.
 
 ### Option 2 — Production (Railway Postgres)
 
-**Terminal** — point at production DB (Railway Postgres → Connect → `DATABASE_URL`), same encryption key as **coop-api**:
+**Terminal** — point at production DB (Railway Postgres → Connect → `DATABASE_URL`), same encryption key as **Coop-AI**:
 
 ```bash
 cd "/Users/jonraney/Desktop/Coop AI"
@@ -95,6 +95,37 @@ See [github-connect.md](./github-connect.md) for App env vars and handoff detail
 3. Save / enable Deep-Index
 
 **Success looks like:** Repos appear in the list (not only `yourusername/...` personal repos). Status moves **queued → indexing → ready** when **coop-worker** is running on Railway.
+
+### Troubleshooting — clone failed: `could not read Username for 'https://github.com'`
+
+The worker tried to clone **without** a GitHub App token (unauthenticated HTTPS). Public repos like `yourusername/Coop-AI` may still succeed; **private** org repos will fail.
+
+**Do this now:**
+
+1. **Browser** — Railway → **coop-worker** → **Variables**
+2. Confirm these match **Coop-AI** exactly (use **Reference variable** where Railway supports it):
+   - `CREDENTIALS_ENCRYPTION_KEY` — decrypts installation tokens stored by the API
+   - `GITHUB_APP_ID`
+   - `GITHUB_APP_PRIVATE_KEY`
+   - `GITHUB_APP_SLUG` = `coopai-for-vs-code`
+   - `DATABASE_URL`
+   - `OPENAI_API_KEY` (for embeddings after clone succeeds)
+3. **Browser** — Redeploy **coop-worker** → **Deployments** → latest → **View logs**
+   - **Success looks like:** no `[workers] CREDENTIALS_ENCRYPTION_KEY is missing` or `GITHUB_APP_ID` warnings at startup
+4. **Browser** — Admin → **Indexing** → **Reindex** on the failed repo
+
+### Troubleshooting — `repository not found` on a personal repo (`raneyja/...`)
+
+Coop is linked to your **company org** GitHub App install (e.g. **CoopAI-Corp**). That installation token can only clone repos the app was granted on **that org** — not your personal account repos.
+
+| Symptom | Meaning |
+|---------|---------|
+| `CoopAI-Corp/...` indexes **Ready** | Org install + worker env are correct |
+| `raneyja/repp` → `repository not found` | Repo is outside the org install (expected for org-only testing) |
+
+**Do this now:** Admin → **Indexing** → **Turn off** on personal repos you do not need (`raneyja/repp`, etc.). Keep only org repos enabled.
+
+**Only if you need personal repos indexed too:** **Browser** — [github.com/settings/installations](https://github.com/settings/installations) → install Coop on your **personal** account → Coop admin → **Integrations** → reconnect (note: one Coop org typically links to one GitHub install — prefer org install for company testing).
 
 **Verify org install before Configure GitHub:** **Browser** → `github.com/organizations/YOUR-ORG/settings/installations` — you must see **CoopAI for VS Code** listed. If it says *“No installed GitHub Apps”*, Coop is not connected to the company org yet (even if Integrations shows Connected — that may be a personal install).
 

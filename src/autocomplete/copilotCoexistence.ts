@@ -40,7 +40,7 @@ function readCopilotEnable(): CopilotEnableValue | undefined {
   return vscode.workspace.getConfiguration().get<CopilotEnableValue>(COPILOT_INLINE_ENABLE_SETTING);
 }
 
-function isCopilotInlineDisabled(value: CopilotEnableValue | undefined): boolean {
+export function isCopilotInlineDisabled(value: CopilotEnableValue | undefined): boolean {
   if (value === false) {
     return true;
   }

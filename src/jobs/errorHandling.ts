@@ -67,11 +67,19 @@ export function backoffDelayMs(retryCount: number, policy: RetryPolicy): number 
   return policy.backoffMs * Math.pow(2, retryCount);
 }
 
+/** Strip tokens from git/API errors before persisting or returning to clients. */
+export function redactSecretsFromErrorMessage(message: string): string {
+  return message
+    .replace(/x-access-token:[^@\s]+@/gi, "x-access-token:***@")
+    .replace(/oauth2:[^@\s]+@/gi, "oauth2:***@")
+    .replace(/x-token-auth:[^@\s]+@/gi, "x-token-auth:***@")
+    .replace(/\bgh[opsur]_[A-Za-z0-9]+\b/g, (match) => `${match.slice(0, 4)}***`)
+    .replace(/\bgithub_pat_[A-Za-z0-9_]+\b/g, "github_pat_***");
+}
+
 export function normalizeJobError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+  const raw = error instanceof Error ? error.message : String(error);
+  return redactSecretsFromErrorMessage(raw);
 }
 
 export function buildPartialFailure(

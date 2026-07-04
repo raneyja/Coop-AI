@@ -1,10 +1,6 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
-import {
-  INLINE_MODEL_PRESETS,
-  defaultInlineModelForProvider,
-  resolveInlineModelPreset
-} from "../config/inlineModelPresets";
+import { resetMockConfiguration, setMockConfiguration } from "./test/vscodeMockSetup";
 import { AutocompletePerformanceMonitor } from "./performance";
 import {
   CompletionRouter,
@@ -18,6 +14,7 @@ let failed = 0;
 
 function test(name: string, fn: () => void): void {
   try {
+    resetMockConfiguration();
     fn();
     console.log(`  ✓ ${name}`);
     passed++;
@@ -47,31 +44,31 @@ const sampleContext: ExtractedCodeContext = {
   riskySyntax: false
 };
 
-test("haiku preset targets anthropic haiku with openai fallback", () => {
-  const preset = resolveInlineModelPreset("haiku", "", "anthropic");
-  assert.equal(preset.provider, "anthropic");
-  assert.equal(preset.model, INLINE_MODEL_PRESETS.haiku.model);
-  assert.equal(preset.fallback?.provider, "openai");
-});
+const autocompleteSettings: AutocompleteSettings = {
+  enabled: true,
+  trigger: "auto",
+  maxSuggestionLength: 200,
+  debounceMs: 300,
+  model: "haiku",
+  customModel: "",
+  showMultipleSuggestions: false,
+  requestTimeoutMs: 5_000,
+  useFim: true,
+  useGraphContext: false
+};
 
-test("gpt35 preset targets openai mini with anthropic fallback", () => {
-  const preset = resolveInlineModelPreset("gpt35", "", "openai");
-  assert.equal(preset.provider, "openai");
-  assert.equal(preset.model, INLINE_MODEL_PRESETS.gpt35.model);
-  assert.equal(preset.fallback?.provider, "anthropic");
-});
-
-test("custom preset uses trimmed model id and haiku fallback", () => {
-  const preset = resolveInlineModelPreset("custom", "  my-model  ", "openai");
-  assert.equal(preset.provider, "openai");
-  assert.equal(preset.model, "my-model");
-  assert.ok(preset.fallback);
-});
-
-test("defaultInlineModelForProvider aligns extension and server defaults", () => {
-  assert.equal(defaultInlineModelForProvider("anthropic"), INLINE_MODEL_PRESETS.haiku.model);
-  assert.equal(defaultInlineModelForProvider("openai"), INLINE_MODEL_PRESETS.gpt35.model);
-});
+async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    resetMockConfiguration();
+    await fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ ${name}`);
+    console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+    failed++;
+  }
+}
 
 test("buildFimSegments returns prefix and suffix when useFim enabled", () => {
   const segments = buildFimSegments(sampleContext, true);
@@ -93,31 +90,6 @@ test("synthesizeMessageFromSegments builds chat-fallback prompt from FIM segment
   assert.match(message, /SUFFIX:/);
   assert.match(message, /TASK:/);
 });
-
-const autocompleteSettings: AutocompleteSettings = {
-  enabled: true,
-  trigger: "auto",
-  maxSuggestionLength: 200,
-  debounceMs: 300,
-  model: "haiku",
-  customModel: "",
-  showMultipleSuggestions: false,
-  requestTimeoutMs: 5_000,
-  useFim: true,
-  useGraphContext: false
-};
-
-async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn();
-    console.log(`  ✓ ${name}`);
-    passed++;
-  } catch (err) {
-    console.error(`  ✗ ${name}`);
-    console.error(`    ${err instanceof Error ? err.message : String(err)}`);
-    failed++;
-  }
-}
 
 async function runAsyncTests(): Promise<void> {
   await asyncTest("reuses in-flight promise for prefix-compatible extension", async () => {
@@ -197,6 +169,113 @@ async function runAsyncTests(): Promise<void> {
     await router.fetchCompletions(ctxB, autocompleteSettings);
 
     assert.equal(requestCount, 2);
+  });
+
+  await asyncTest("includes graph context fields when useGraphContext is enabled", async () => {
+    setMockConfiguration("coopAI", "defaultOwner", "acme");
+    setMockConfiguration("coopAI", "defaultRepo", "app");
+    setMockConfiguration("coopAI", "defaultCodeHost", "github");
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    await router.fetchCompletions(sampleContext, {
+      ...autocompleteSettings,
+      useGraphContext: true
+    });
+
+    assert.equal(capturedBody?.useGraphContext, true);
+    assert.equal(capturedBody?.repoId, "github:acme/app");
+    assert.equal(capturedBody?.file, "src/app.ts");
+  });
+
+  await asyncTest("omits graph context fields when useGraphContext is disabled", async () => {
+    setMockConfiguration("coopAI", "defaultOwner", "acme");
+    setMockConfiguration("coopAI", "defaultRepo", "app");
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    await router.fetchCompletions(sampleContext, autocompleteSettings);
+
+    assert.equal(capturedBody?.useGraphContext, undefined);
+    assert.equal(capturedBody?.repoId, undefined);
+  });
+
+  await asyncTest("falls back to secondary provider when primary request fails", async () => {
+    let attempt = 0;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: { provider: string }) => {
+        attempt += 1;
+        if (body.provider === "anthropic") {
+          throw new Error("primary failed");
+        }
+        return { text: "fallback;", alternatives: [], model: "mini", provider: "openai" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const result = await router.fetchCompletions(sampleContext, autocompleteSettings);
+    assert.equal(attempt, 2);
+    assert.equal(result.completions[0]?.text, "fallback;");
+    assert.equal(result.provider, "openai");
+  });
+
+  await asyncTest("returns cached completions without a network request", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        return { text: "cached;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const context: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "cache-hash"
+    };
+
+    await router.fetchCompletions(context, autocompleteSettings);
+    const cached = await router.fetchCompletions(context, autocompleteSettings);
+
+    assert.equal(requestCount, 1);
+    assert.equal(cached.fromCache, true);
+    assert.equal(cached.completions[0]?.text, "cached;");
+  });
+
+  await asyncTest("returns empty completions when request times out", async () => {
+    const api = {
+      streamInlineCompletion: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return { text: "late;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    const result = await router.fetchCompletions(sampleContext, {
+      ...autocompleteSettings,
+      requestTimeoutMs: 20
+    });
+
+    assert.equal(result.completions.length, 0);
   });
 }
 

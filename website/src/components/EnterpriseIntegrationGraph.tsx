@@ -173,7 +173,7 @@ function GraphNodeCard({
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center px-[5%] py-[6%]">
           <p className="whitespace-nowrap text-[1.3cqw] font-medium leading-tight text-gray-900">{node.label}</p>
-          <p className="mt-0.5 whitespace-nowrap text-[1.05cqw] leading-snug text-[#9ca4ad]">
+          <p className="mt-0.5 whitespace-nowrap text-[1.05cqw] leading-snug text-darkUi-sublabel">
             {node.categoryLabel}
           </p>
         </div>

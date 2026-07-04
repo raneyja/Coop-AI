@@ -10,19 +10,23 @@ Production mode: `coopAI.devMode: false`. Tokens live on the **Coop server**, no
 
 ## Org admin (5-minute checklist)
 
-**Extension UI** — Coop AI → **Settings**
+**Browser** — [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations)
 
 | # | Step | Success |
 |---|------|---------|
-| 1 | **Account** → sign in (SSO or org API key) → **Test connection** | Connected |
-| 2 | **Tools → GitHub** → **Connect** → browser → **Refresh** → **Test** | Connected |
-| 3 | **Tools → Slack** → same pattern | Connected |
-| 4 | **Tools → Jira** → same + set **Jira site URL** | Connected |
-| 5 | **Tools → Confluence** → same + set **Confluence site URL** | Connected |
-| 6 | **Tools → Notion** → same | Connected |
-| 7 | **Tools → Google Docs** → same | Connected |
-| 8 | **Tools → Microsoft Teams** → same | Connected |
-| 9 | **Workspace** → owner / repo / branch | Saved |
+| 1 | **GitHub** → **Connect (GitHub App)** (or **Send link to GitHub admin** if IT owns the org) → install on company org → **Refresh** → **Test** | Connected |
+| 2 | **Slack** → Connect → approve → Test | Connected |
+| 3 | **Jira** → Connect + set Jira site URL → Test | Connected |
+| 4 | **Confluence** → Connect + set site URL → Test | Connected |
+| 5 | **Notion** → Connect → Test | Connected |
+| 6 | **Google Docs** → Connect → Test | Connected |
+| 7 | **Microsoft Teams** → Connect → Test | Connected |
+| 8 | **Indexing** → Configure GitHub → Deep-Index company repos | Repos **ready** (requires worker on Railway) |
+| 9 | **Extension UI** → **Workspace** → owner / repo / branch | Saved |
+
+GitHub detail: [github-connect.md](./github-connect.md). Org install test flow: [github-org-testing.md](./github-org-testing.md).
+
+**Extension UI** — Coop AI → **Settings → Tools** — admins can also connect here; admin portal is recommended for GitHub App org install and scope.
 
 **Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator must register Azure app — see [deploy-production-handoff.md](./deploy-production-handoff.md).
 
@@ -35,7 +39,7 @@ Add to **File** — `.env.backend` on the API host (see [`.env.backend.example`]
 | Provider | Variables |
 |----------|-----------|
 | Core | `CREDENTIALS_ENCRYPTION_KEY`, `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` |
-| GitHub App (Pro+ / Enterprise) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` |
+| GitHub App (Pro+ / Enterprise) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET` |
 | GitHub OAuth (Free / fallback) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
 | Slack | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` |
 | Atlassian | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` |

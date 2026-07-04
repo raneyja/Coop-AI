@@ -29,7 +29,9 @@ CAR must use **shown** suggestions, not server requests. A request may return te
 ```bash
 npm run test:autocomplete
 npm run test:inline-completion
-npm run test:autocomplete-smoke
+npm run smoke:autocomplete:mock    # ephemeral API + mock LLM (no Docker)
+npm run smoke:autocomplete         # live Docker API + Extension Dev Host checklist
+npm run smoke:autocomplete:live    # live API only (same as smoke script step 1)
 ```
 
 ### Manual (Extension Development Host)
@@ -89,4 +91,5 @@ Extension: on activate, if user has not set `coopAI.autocomplete.enabled` explic
 - Server route: `src/api/inlineCompletionApi.ts`
 - Performance batches: `src/autocomplete/performance.ts`
 - Admin analytics: `src/server/adminAnalyticsApi.ts`
-- Smoke test: `scripts/autocomplete-smoke.mjs`
+- Mock smoke: `scripts/autocomplete-smoke.mjs` (`npm run smoke:autocomplete:mock`)
+- Live smoke: `scripts/autocomplete-smoke-live.mjs` + `scripts/smoke-autocomplete.sh` (`npm run smoke:autocomplete`)

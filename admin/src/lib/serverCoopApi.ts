@@ -3,12 +3,19 @@ import { NextResponse } from "next/server";
 
 export const SESSION_COOKIE = "coop_session";
 
+const DEFAULT_API_BASE = "https://api.coop-ai.dev";
+
+function resolveCoopApiBase(configured: string | undefined): string {
+  const trimmed = configured?.trim().replace(/\/$/, "") ?? "";
+  if (!trimmed || trimmed.includes("://admin.")) {
+    return DEFAULT_API_BASE;
+  }
+  return trimmed;
+}
+
 export function serverApiBase(): string {
-  const base =
-    process.env.COOP_API_BASE?.trim() ||
-    process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() ||
-    "https://api.coop-ai.dev";
-  return base.replace(/\/$/, "");
+  const configured = process.env.COOP_API_BASE?.trim() || process.env.NEXT_PUBLIC_COOP_API_BASE?.trim();
+  return resolveCoopApiBase(configured);
 }
 
 export function isCoopCredential(token: string): boolean {

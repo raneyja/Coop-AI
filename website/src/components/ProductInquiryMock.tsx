@@ -182,7 +182,7 @@ export function ProductInquiryMock({
               <div className="flex min-h-full w-full flex-col justify-end gap-3">
                 {showUserBubble && (
                   <div className="story-bubble-in max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
-                    <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{scenario.question}</p>
+                    <p className="text-[13px] leading-relaxed text-darkUi-body">{scenario.question}</p>
                   </div>
                 )}
 
@@ -193,7 +193,7 @@ export function ProductInquiryMock({
                     }`}
                   >
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
+                      <span className="text-[11px] font-medium text-darkUi-muted">CoopAI</span>
                       {phase === "searching" && (
                         <Loader2 className="h-3 w-3 animate-spin text-coop-index" aria-hidden />
                       )}
@@ -314,14 +314,14 @@ function CodeLine({
     type: "text-[#4ec9b0]",
     string: "text-[#ce9178]",
     comment: "text-[#6a9955]",
-    plain: "text-[#d4d4d4]"
+    plain: "text-darkUi-plain"
   };
 
   return (
     <div
       className={`flex gap-2 rounded-sm pr-28 ${highlight ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""}`}
     >
-      <span className="w-4 shrink-0 select-none text-right text-[#858585]">{n}</span>
+      <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{n}</span>
       <span className="min-w-0 flex-1">
         {tokens.length === 0 ? (
           <span>&nbsp;</span>

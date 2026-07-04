@@ -13,7 +13,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 | Role | Does what | Frequency | Touches vendor consoles? |
 |------|-----------|-----------|--------------------------|
 | **Coop platform operator** | Runs `api.coop-ai.dev`, registers OAuth apps *once*, sets `.env.backend` on the server | Once per Coop deployment | Yes — but **not** your customers |
-| **Customer org admin** | Signs in to Coop, clicks **Connect** per tool in VS Code Settings | Once per org per tool | No — browser OAuth only |
+| **Customer org admin** | Signs in to [admin portal](https://admin.coop-ai.dev), connects integrations org-wide (GitHub App install, Slack, etc.) | Once per org per tool | No — browser OAuth / install only |
 | **Developer** | Installs extension, signs in (email/password, Google, or org SSO), sets default repo | Once per machine | No |
 
 **Enterprise-grade behavior today:** org OAuth tokens are stored **encrypted in Postgres** on the Coop server (`org_integration_connections`). Developers never paste Slack/Notion/Google tokens in production mode.
@@ -26,10 +26,11 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 
 After the platform operator has configured the server, a **customer org admin** should complete onboarding in ~15 minutes:
 
-1. **Extension UI** — Install Coop AI → **Settings → Account** → sign in (email/password, Google, or SSO) → **Test connection**
-2. **Extension UI** — **Settings → Tools** → for each tool: **Connect** → approve in browser → **Refresh status** → **Test**
-3. **Extension UI** — **Settings → Workspace** → set default **owner / repo / branch**
-4. **Extension UI** — run a quick action or chat query to validate context
+1. **Browser** — [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) → sign in (email/password, Google, or SSO)
+2. **Browser** — **Integrations** → connect each tool (see GitHub handoff below)
+3. **Browser** — **Indexing** → enable Deep-Index on company repos (Pro/Enterprise)
+4. **Browser** — **Users** → invite teammates
+5. **Extension UI** — Developers sign in → **Workspace** → pick repos → validate chat/quick actions
 
 No `.env.backend`, no Docker, no Slack/Google/Azure developer portals for the customer.
 
@@ -96,10 +97,8 @@ docker compose up -d --build api
 
 ### GitHub
 
-- **Production (Pro+):** GitHub **App** (org-wide install). Setup URL = callback above. OAuth remains available for Free-tier orgs when `GITHUB_OAUTH_*` is configured.
-- **Customer admin:** **Connect GitHub** → install/authorize → **Refresh** row to live-test → **Test GitHub**.
-- Admin API returns `metadata.connectionKind` (`oauth` | `github_app`) on `GET /v1/admin/integrations`.
-- Detail: [github-connect.md](./github-connect.md).
+- **Production (Pro+):** GitHub **App** (org-wide install). Setup URL = callback above. OAuth remains available as **Limited connect (OAuth)** when `GITHUB_OAUTH_*` is configured.
+- **Customer admin:** Admin portal → **Integrations** → **Connect (GitHub App)** or **Send link to GitHub admin** (if IT owns the GitHub org) → **Refresh** → **Test GitHub**. Detail: [github-connect.md](./github-connect.md), test flow: [github-org-testing.md](./github-org-testing.md).
 
 ### Slack
 
@@ -147,49 +146,57 @@ Give this checklist to the customer's **owner/admin** user (`canInstallIntegrati
 
 ### 1. Sign in
 
-**Extension UI** — **Settings → Account**
+**Browser** — [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login)
 
-- Email/password: enter work email and password → **Sign in** → **Test connection**
-- Google: **Continue with Google**
-- Enterprise SSO: **Sign in with SSO** (if configured)
+- Email/password, **Continue with Google**, or **Sign in with SSO** (Enterprise)
+- Developers invited by email use the link in the invite email → `/accept-invite?token=…`
 
-**Forgot password?** Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or the link in Account settings.
+**Extension UI** (optional for admins testing the extension): **Settings → Account** → same credentials → **Test connection**
+
+**Forgot password?** Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or the link on the login page.
 
 Automation API keys (`coop_…`) are for CI and scripts only — not primary sign-in.
 
 ### 2. Connect tools
 
-**Extension UI** — **Settings → Tools**
+**Browser** — Admin portal → **Integrations**
 
-For each row, same pattern:
+For each row:
 
-1. **Connect {name}**
-2. **Browser** — sign in to the vendor → approve access
-3. Return to VS Code → **Refresh status** → **Test {name}**
+1. **Connect {name}** (GitHub: **Connect (GitHub App)** or **Send link to GitHub admin**)
+2. **Browser** — approve in vendor console
+3. Return to admin → **Refresh** → **Test {name}**
 
-| Tool | Admin also sets |
-|------|-----------------|
-| GitHub / GitLab / Bitbucket | — |
-| Slack | — |
-| Jira | **Jira site URL** on detail screen |
-| Confluence | **Confluence site URL** (often `{site}/wiki`) |
-| Notion | — |
-| Google Docs | — |
-| Teams | Coming soon |
+| Tool | Notes |
+|------|--------|
+| **GitHub** | Prefer GitHub App on company org; **Limited connect (OAuth)** only if org owner cannot install the App |
+| **Slack** | — |
+| **Jira** | Set **Jira site URL** in extension Workspace if needed |
+| **Confluence** | Set **Confluence site URL** (often `{site}/wiki`) |
+| **Notion / Google Docs** | — |
+| **Teams** | Coming soon |
 
-### 3. Default repository
+Admins can also connect from **Extension UI → Settings → Tools** when signed in as owner/admin — admin portal is recommended for GitHub org install and scope management.
 
-**Extension UI** — **Settings → Workspace**
+### 3. Index repos (Pro / Enterprise)
 
-- **Owner**, **repo**, **branch** — used for repo-scoped doc/search queries.
+**Browser** — **Indexing** → **Configure GitHub** → select company repos → **Deep-Index selected**
 
-### 4. Validate
+### 4. Invite team
 
-| Test | Extension UI action |
-|------|---------------------|
-| API + auth | **Account** → Test connection |
-| Each integration | **Tools** → **Test {name}** |
-| Chat context | Ask e.g. *any notion pages for this repo?* or run **Knowledge Gaps** |
+**Browser** — **Users** → invite by email (includes repo grants when per-user access mode is on)
+
+### 5. Default repository (developers)
+
+**Extension UI** — **Settings → Workspace** — **Owner**, **repo**, **branch** for repo-scoped queries; Pro users pick up to 3 workspace repos from the admin’s index.
+
+### 6. Validate
+
+| Test | Where |
+|------|--------|
+| API + auth | Extension **Account** → Test connection, or admin dashboard loads |
+| Each integration | Admin **Integrations** → **Test {name}** |
+| Chat context | Extension: ask e.g. *any notion pages for this repo?* or run **Knowledge Gaps** |
 
 ---
 
@@ -214,7 +221,7 @@ What exists today vs what enterprise self-serve still needs:
 |------|--------|--------|
 | Org OAuth + server token store | Shipped for GitHub, Slack, Atlassian, Notion, Google Docs | Teams UI enablement |
 | Operator env setup | Manual `.env.backend` per deployment | Hosted Coop: pre-configured; self-hosted: single setup guide + validation script |
-| Customer admin UX | **Connect** + **Test** per integration | First-run **setup wizard** with checklist and deep links |
+| Customer admin UX | Admin portal **Integrations** + onboarding wizard + GitHub handoff | First-run wizard with in-app deep links to vendor docs |
 | Operator validation | Manual `curl` / extension test | `GET /health` + `GET /v1/.../install-url` smoke panel or CLI |
 | Docs | `integration-onboarding.md` + this doc + connect quick ref | Per-provider connect guides in Settings UI (in-app links) |
 | Google restricted scopes | Manual consent screen + test users | Published app or Google Workspace domain install |

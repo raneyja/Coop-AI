@@ -359,7 +359,7 @@ export function FileContextStoryDemo({
                   <div className="flex min-h-full w-full flex-col justify-end gap-3">
                     {showUserBubble && (
                       <div className="story-bubble-in max-w-[96%] self-end rounded-xl bg-[#2a2a2a] px-3 py-2.5 ring-1 ring-[#3a3a3a]">
-                        <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{question}</p>
+                        <p className="text-[13px] leading-relaxed text-darkUi-body">{question}</p>
                       </div>
                     )}
 
@@ -370,7 +370,7 @@ export function FileContextStoryDemo({
                         }`}
                       >
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="text-[11px] font-medium text-[#9d9d9d]">CoopAI</span>
+                          <span className="text-[11px] font-medium text-darkUi-muted">CoopAI</span>
                           {phase === "searching" && (
                             <Loader2 className="h-3 w-3 animate-spin text-coop-index" aria-hidden />
                           )}
@@ -469,7 +469,7 @@ function InquiryEditorPreview({
               active && n === 3 ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""
             }`}
           >
-            <span className="w-4 shrink-0 text-right text-[#858585]">{n}</span>
+            <span className="w-4 shrink-0 text-right text-darkUi-lineNumber">{n}</span>
             <span
               className={`h-3 flex-1 rounded-sm ${
                 active && n === 3 ? "bg-coop-index/20" : "bg-white/[0.06]"

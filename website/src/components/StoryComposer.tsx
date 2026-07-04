@@ -26,19 +26,19 @@ export function StoryComposer({
       >
         <div className="px-3 pt-2.5">
           {showComposer ? (
-            <p className="min-h-[2.75rem] text-[13px] leading-relaxed text-[#e5e5e5]">
-              {typedQuestion || <span className="text-[#9d9d9d]">Ask Coop</span>}
+            <p className="min-h-[2.75rem] text-[13px] leading-relaxed text-darkUi-body">
+              {typedQuestion || <span className="text-darkUi-muted">Ask Coop</span>}
               {isTyping ? (
                 <span className="story-cursor ml-px inline-block h-[1em] w-[2px] translate-y-[1px] bg-coop-index" />
               ) : null}
             </p>
           ) : (
-            <p className="min-h-[2.75rem] text-[13px] text-[#9d9d9d]">Ask Coop</p>
+            <p className="min-h-[2.75rem] text-[13px] text-darkUi-muted">Ask Coop</p>
           )}
         </div>
 
         <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
-          <div className="flex items-center gap-0.5 text-[#9d9d9d]">
+          <div className="flex items-center gap-0.5 text-darkUi-muted">
             <span className="flex h-7 w-7 items-center justify-center rounded opacity-50" aria-hidden>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path
@@ -66,8 +66,8 @@ export function StoryComposer({
               isSubmitting && canSend
                 ? "bg-[#0078d4] text-white"
                 : canSend && showComposer
-                  ? "bg-[#333333] text-[#cccccc]"
-                  : "bg-[#2d2d2d] text-[#666666]"
+                  ? "bg-[#333333] text-darkUi-control"
+                  : "bg-[#2d2d2d] text-darkUi-faint"
             }`}
             aria-hidden
           >
@@ -83,7 +83,7 @@ export function StoryComposer({
           </span>
         </div>
       </div>
-      <p className="mt-1 text-center text-[10px] text-[#9d9d9d]/70">
+      <p className="mt-1 text-center text-[10px] text-darkUi-muted/70">
         {typedQuestion.length}/12000 · Shift+Enter for new line
       </p>
     </div>

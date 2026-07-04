@@ -95,6 +95,42 @@ export class AuditLogger {
     return { entries, nextCursor };
   }
 
+  public async listForPrincipal(
+    orgId: string,
+    principal: string,
+    options: { limit: number; cursor?: string }
+  ): Promise<{ entries: AuditLogItem[]; nextCursor?: string }> {
+    if (!this.pool) {
+      return { entries: [] };
+    }
+    const params: unknown[] = [orgId, principal, options.limit + 1];
+    let cursorClause = "";
+    if (options.cursor) {
+      cursorClause = "AND id < $4";
+      params.push(Number(options.cursor));
+    }
+    const result = await this.pool.query(
+      `SELECT id, user_id, principal, action, metadata, created_at
+       FROM audit_log
+       WHERE org_id = $1 AND principal = $2 ${cursorClause}
+       ORDER BY id DESC
+       LIMIT $3`,
+      params
+    );
+    const rows = result.rows.slice(0, options.limit);
+    const entries: AuditLogItem[] = rows.map((row) => ({
+      id: String(row.id),
+      action: String(row.action),
+      principal: row.principal ? String(row.principal) : undefined,
+      userId: row.user_id ? String(row.user_id) : undefined,
+      metadata: (row.metadata ?? {}) as Record<string, unknown>,
+      createdAt: new Date(String(row.created_at)).toISOString()
+    }));
+    const nextCursor =
+      result.rows.length > options.limit ? String(rows[rows.length - 1]?.id) : undefined;
+    return { entries, nextCursor };
+  }
+
   public async record(entry: AuditEntry): Promise<void> {
     if (!this.pool) {
       return;

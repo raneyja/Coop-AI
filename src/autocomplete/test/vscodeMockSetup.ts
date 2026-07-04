@@ -10,8 +10,71 @@ type MockTextDocument = {
   lineAt?: (line: number) => { text: string };
 };
 
+type MockExtension = {
+  id: string;
+  isActive: boolean;
+};
+
+const mockConfigValues = new Map<string, unknown>();
+const mockExtensions = new Map<string, MockExtension>();
+const configUpdates: Array<{ key: string; value: unknown; target: unknown }> = [];
+const globalState = new Map<string, unknown>();
+
+function configKey(section: string | undefined, key: string): string {
+  return `${section ?? ""}:${key}`;
+}
+
+export function setMockConfiguration(section: string | undefined, key: string, value: unknown): void {
+  mockConfigValues.set(configKey(section, key), value);
+}
+
+export function resetMockConfiguration(): void {
+  mockConfigValues.clear();
+  mockExtensions.clear();
+  configUpdates.length = 0;
+  globalState.clear();
+}
+
+export function getMockConfigUpdates(): ReadonlyArray<{ key: string; value: unknown; target: unknown }> {
+  return configUpdates;
+}
+
+export function clearMockConfigUpdates(): void {
+  configUpdates.length = 0;
+}
+
+export function setMockExtension(id: string, options: { isActive?: boolean } = {}): void {
+  mockExtensions.set(id, { id, isActive: options.isActive ?? false });
+}
+
+export function createMockExtensionContext(): {
+  globalState: {
+    get: <T>(key: string, defaultValue?: T) => T | undefined;
+    update: (key: string, value: unknown) => Promise<void>;
+  };
+} {
+  return {
+    globalState: {
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        if (globalState.has(key)) {
+          return globalState.get(key) as T;
+        }
+        return defaultValue;
+      },
+      async update(key: string, value: unknown): Promise<void> {
+        if (value === undefined) {
+          globalState.delete(key);
+        } else {
+          globalState.set(key, value);
+        }
+      }
+    }
+  };
+}
+
 const vscodeMock = {
   InlineCompletionTriggerKind: { Automatic: 0, Invoke: 1 },
+  ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   Uri: {
     file: (path: string) => ({ fsPath: path, scheme: "file", toString: () => path })
   },
@@ -28,18 +91,38 @@ const vscodeMock = {
     ) {}
   },
   workspace: {
-    getWorkspaceFolder: () => undefined,
-    getConfiguration: () => ({
-      get: <T>(_key: string, defaultValue: T) => defaultValue
+    getWorkspaceFolder: () => ({ uri: { fsPath: "/workspace" } }),
+    getConfiguration: (section?: string) => ({
+      get: <T>(key: string, defaultValue: T): T => {
+        const stored = mockConfigValues.get(configKey(section, key));
+        return stored !== undefined ? (stored as T) : defaultValue;
+      },
+      async update(key: string, value: unknown, target: unknown): Promise<void> {
+        configUpdates.push({ key, value, target });
+        mockConfigValues.set(configKey(section, key), value);
+      }
     }),
-    onDidChangeConfiguration: () => ({ dispose: () => undefined })
+    onDidChangeConfiguration: () => ({ dispose: () => undefined }),
+    asRelativePath: (uri: { fsPath?: string } | string) => {
+      const path = typeof uri === "string" ? uri : (uri.fsPath ?? "");
+      return path.replace(/^\/workspace\/?/, "");
+    }
   },
   extensions: {
-    getExtension: () => undefined,
+    getExtension: (id: string) => {
+      const ext = mockExtensions.get(id);
+      if (!ext) {
+        return undefined;
+      }
+      return { id: ext.id, isActive: ext.isActive };
+    },
     onDidChange: () => ({ dispose: () => undefined })
   },
   commands: {
     executeCommand: async () => undefined
+  },
+  window: {
+    visibleTextEditors: [] as Array<{ document: { uri: { fsPath: string } } }>
   },
   languages: {
     registerInlineCompletionItemProvider: () => ({ dispose: () => undefined })

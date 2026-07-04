@@ -9,7 +9,7 @@
 
   ::selection {
     background-color: rgba(0, 0, 0, 0.1);
-    color: #1f2937;
+    color: #1d2633;
   }
 }
 
@@ -224,7 +224,7 @@
   min-width: 0;
   font-size: 13px;
   line-height: 1.55;
-  color: #e5e5e5;
+  color: #d5d5d5;
 }
 
 .story-chat-prose > .story-text-in + .story-text-in {
@@ -235,7 +235,7 @@
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #f3f3f3;
+  color: #e2e2e2;
 }
 
 .story-chat-heading + .story-chat-paragraph,
@@ -290,7 +290,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: #2d2d2d;
   border: 1px solid #3a3a3a;
-  color: #e5e5e5;
+  color: #d5d5d5;
 }
 
 .story-chat-file-link {
@@ -336,7 +336,7 @@
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9d9d9d;
+  color: #929292;
 }
 
 .story-chat-code-block pre {
@@ -348,7 +348,7 @@
 .story-chat-code-block code {
   display: block;
   white-space: pre;
-  color: #d4d4d4;
+  color: #c5c5c5;
 }
 
 .story-chat-citation {
@@ -383,7 +383,7 @@
   white-space: pre;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  color: #d4d4d4;
+  color: #c5c5c5;
 }
 
 /* Hero demo artifact */
@@ -412,7 +412,7 @@
   font-family: Monaco, "Courier New", monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: #5f5f5f;
 }
 
 .hero-demo-scatter-animation {
@@ -477,11 +477,11 @@
 
 .hero-demo-context-item-label {
   font-weight: 500;
-  color: #1f2937;
+  color: #1d2633;
 }
 
 .hero-demo-context-item-desc {
-  color: #6b7280;
+  color: #646a77;
   font-size: 12px;
   margin-top: 2px;
 }

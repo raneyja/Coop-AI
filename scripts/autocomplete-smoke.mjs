@@ -160,6 +160,48 @@ async function main() {
       }
     });
 
+    await step("POST /v1/completions/inline FIM segments (mock)", async () => {
+      const res = await fetch(`${base}/v1/completions/inline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          segments: { prefix: "const value = ", suffix: ";" },
+          languageId: "typescript",
+          file: "src/example.ts"
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || typeof data.text !== "string") {
+        throw new Error(data.error ?? data.message ?? `inline fim ${res.status}`);
+      }
+      if (data.fim !== true) {
+        throw new Error("expected fim=true in mock response");
+      }
+    });
+
+    await step("POST /v1/completions/inline SSE stream (mock)", async () => {
+      const res = await fetch(`${base}/v1/completions/inline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          segments: { prefix: "obj.", suffix: "" },
+          stream: true,
+          languageId: "typescript",
+          file: "src/example.ts"
+        })
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        throw new Error(`inline stream ${res.status}`);
+      }
+      if (!body.includes("data:")) {
+        throw new Error("stream missing SSE data lines");
+      }
+      if (!body.includes('"type":"delta"')) {
+        throw new Error("stream missing delta events");
+      }
+    });
+
     await step("POST /v1/usage/events (completion roundtrip)", async () => {
       const res = await fetch(`${base}/v1/usage/events`, {
         method: "POST",

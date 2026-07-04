@@ -11,7 +11,7 @@ import type { GitHubAppService } from "../server/githubAppService";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
 import { canUseLightningPlan, type OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
-import { buildPartialFailure, JobCancelledError } from "./errorHandling";
+import { buildPartialFailure, JobCancelledError, normalizeJobError } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
 import { runScipIndexer } from "./runScipIndexer";
 import { runZoektIndexer } from "./runZoektIndexer";
@@ -206,6 +206,13 @@ async function indexRepository(
             allowPatFallback: ctx.allowPatFallback ?? false
           })
         : undefined;
+    if (orgId && ctx.orgStore && !token && provider === "github") {
+      throw new Error(
+        "Cannot clone repository: no GitHub installation token. " +
+          "Ensure coop-worker has CREDENTIALS_ENCRYPTION_KEY and GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY " +
+          "(same values as Coop-AI on Railway), then Reindex."
+      );
+    }
     await report(45, "Cloning repository");
     const target = parseRepoId(repoId);
     const clone = await cloneRepository(target, token);
@@ -315,7 +322,15 @@ async function indexRepository(
       embeddingError
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "index failed";
+    let message = normalizeJobError(error);
+    if (/repository .* not found/i.test(message)) {
+      const target = parseRepoId(repoId);
+      message =
+        `GitHub returned "repository not found" for ${target.owner}/${target.repo}. ` +
+        "The connected GitHub App install may not include this repo " +
+        "(for example, personal repos when Coop is linked to a company org). " +
+        "Turn off Deep-Index for this repo, or install the app on the account that owns it.";
+    }
     if (orgId && ctx.orgStore) {
       await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
         indexStatus: "error",
@@ -323,7 +338,7 @@ async function indexRepository(
         error: message
       });
     }
-    throw error;
+    throw error instanceof Error ? new Error(message) : error;
   } finally {
     if (cloneLocalPath) {
       removeRepositoryClone(cloneLocalPath);

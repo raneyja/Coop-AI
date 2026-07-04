@@ -70,9 +70,9 @@ Without this, **no Deep-Code Graph in production**.
 Follow [deploy-railway-phase2-lightning.md](./deploy-railway-phase2-lightning.md):
 
 1. Create **Volume** `zoekt-indexes` at `/zoekt-indexes`
-2. Add **coop-worker** — start `node dist/workerEntry.js`, same env as API, attach volume
+2. Add **coop-worker** — start `node dist/workerEntry.js`, same env as **Coop-AI**, attach volume
 3. Add **coop-zoekt** — start `zoekt-webserver -index /zoekt-indexes -listen 0.0.0.0:$PORT`, same volume
-4. On **coop-api** → `ZOEKT_URL=http://<zoekt-private-host>:6070` → redeploy
+4. On **Coop-AI** → `ZOEKT_URL=http://<zoekt-private-host>:6070` → redeploy
 
 **Success looks like:**
 
@@ -134,7 +134,7 @@ After P1+E2+E4 merge and `npm run build:webview`:
 
 E1 **requires GitHub App**, not OAuth-only. Full create/install steps: [github-connect.md](./github-connect.md).
 
-**Browser** — Railway → **coop-api** → **Variables**:
+**Browser** — Railway → **Coop-AI** → **Variables**:
 
 | Variable | Value |
 |----------|--------|
@@ -146,7 +146,7 @@ E1 **requires GitHub App**, not OAuth-only. Full create/install steps: [github-c
 
 **Clear on Railway:** `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` (OAuth is local dev only; causes 8h token expiry and redirect_uri errors in prod).
 
-Redeploy **coop-api** after saving.
+Redeploy **Coop-AI** after saving.
 
 ### Step 3b — Terminal — enterprise test org
 

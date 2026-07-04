@@ -279,7 +279,7 @@ Mirror Sourcegraph's export shape where applicable:
 | Registration | Shipped | `src/extension.ts` `registerCoopAutocomplete` |
 | Settings | Default **off** | `coopAI.autocomplete.enabled` in `package.json` |
 | Accept/reject telemetry | Shipped | Tab accept command, Escape reject keybinding, superseded tracking |
-| Copilot coexistence | Shipped | `copilotCoexistence.ts`, `coopAI.autocomplete.copilotPolicy` |
+| Copilot coexistence | Shipped | `copilotCoexistence.ts` — disables `github.copilot.enable` inline when Coop autocomplete is on |
 | Keybinding context | Shipped | `setContext` on activate + setting change |
 | Tests | Shipped | `test:autocomplete`, `test:inline-completion` |
 | Docs | Updated | `roadmap.md`, `production-readiness-assessment.md`, `api-v1.md` |

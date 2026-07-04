@@ -3,7 +3,7 @@ title: Inline autocomplete
 description: Enable ghost-text code completions in VS Code — FIM, streaming, graph context, and Copilot coexistence.
 section: extension
 order: 2
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-04"
 ---
 
 Coop AI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
@@ -152,7 +152,7 @@ See [Zero-retention LLM routing](/docs/zero-retention).
 | `completion.rejected` | Extension | Escape or superseded suggestion |
 | `completion.performance` | Extension | Batched client p50/p95 snapshots |
 
-Org admins can view completion metrics in the [admin portal](https://admin.coop-ai.dev/analytics) → **Completions** tab.
+Org admins can view org completion metrics in the [admin portal](https://admin.coop-ai.dev/analytics) → **Completions** tab. Members see personal usage on **My Usage** → **Completions**.
 
 ## Troubleshooting
 
