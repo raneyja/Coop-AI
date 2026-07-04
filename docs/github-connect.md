@@ -54,12 +54,13 @@ For org-wide installation (recommended for hosted Coop):
 
 | Field | Value |
 |-------|--------|
+| GitHub App name | **CoopAI for VS Code** (display name in GitHub UI) |
 | Homepage URL | `https://coop-ai.dev` |
 | **Setup URL** (post-install redirect) | `https://api.coop-ai.dev/v1/github/app/callback` |
 | Callback URL | Leave **empty** |
 | **Request user authorization (OAuth) during installation** | **Unchecked** |
 | **Expire user authorization tokens** | **Unchecked** (only applies if OAuth during install is on — Coop does not use it) |
-| Where can this app be installed? | **Any account** |
+| Where can this app be installed? | **Any account** (set at create time; see below to change later) |
 
 Local testing: use `http://localhost:8787/v1/github/app/callback` for Setup URL instead.
 
@@ -87,8 +88,8 @@ Subscribe to events: **Installation**, **Installation repositories**, **Push**, 
 
 ### 4. Browser — After create
 
-1. Note **App ID** (numeric) and **slug** from `github.com/apps/{slug}`.
-2. **Private keys** → Generate → download `.pem` to **Downloads** (e.g. `coopai-production.2026-07-04.private-key.pem`). GitHub shows only a **SHA256 fingerprint** on the settings page — that is **not** the key; open the downloaded file in TextEdit or VS Code.
+1. Note **App ID** (numeric) and **slug** from `github.com/apps/{slug}`. Production slug is still **`coopai-for-vs-code`** even if the display name is **CoopAI for VS Code** — `GITHUB_APP_SLUG` must match the slug, not the display name.
+2. **Private keys** → Generate → download `.pem` to **Downloads** (e.g. `coopai-for-vs-code.2026-07-04.private-key.pem`). GitHub shows only a **SHA256 fingerprint** on the settings page — that is **not** the key; open the downloaded file in TextEdit or VS Code.
 3. **Install App** → choose org → select repos (or all) → Install.
 
 ### 5. Railway — API variables (production)
@@ -98,8 +99,8 @@ Subscribe to events: **Installation**, **Installation repositories**, **Push**, 
 | Variable | Value |
 |----------|--------|
 | `GITHUB_APP_ID` | `4216192` |
-| `GITHUB_APP_SLUG` | `coopai-production` |
-| `GITHUB_APP_PRIVATE_KEY` | Full PEM from Downloads file **or** base64-encode: `base64 -i ~/Downloads/coopai-production*.pem \| tr -d '\n'` |
+| `GITHUB_APP_SLUG` | `coopai-for-vs-code` |
+| `GITHUB_APP_PRIVATE_KEY` | Full PEM from Downloads file **or** base64-encode: `base64 -i ~/Downloads/coopai-for-vs-code*.pem \| tr -d '\n'` |
 | `GITHUB_WEBHOOK_SECRET` | `baileythedog123098654` (must match GitHub webhook secret exactly) |
 | `COOP_PUBLIC_BASE_URL` | `https://api.coop-ai.dev` |
 
@@ -157,10 +158,25 @@ Org-wide testing flow: [github-org-testing.md](./github-org-testing.md).
 | “GitHub is not configured on the Coop server” | Add OAuth or App creds to `.env.backend` and restart API |
 | “Invalid or expired install state” | Start Connect from admin portal (or **Send link to GitHub admin**) — do not bookmark GitHub’s install URL alone |
 | App installed on GitHub but Coop not connected | **Connect (GitHub App)** again → Save on GitHub → Refresh (see **Auto-relink** above) |
+| **Connected** but org repo missing in Configure GitHub | Check `github.com/organizations/ORG/settings/installations` — if **no apps listed**, the App was never installed on the org (Coop may be linked to personal). Install on org, uninstall from personal, Disconnect → Connect in admin. |
+| Configure GitHub shows only `yourusername/*` repos | Coop is linked to a **personal** App install — uninstall on personal GitHub, install/configure on **company org**, reconnect in admin |
+| **Install App** lists only personal account (no org) | **Browser** — [github.com/settings/apps/coopai-for-vs-code](https://github.com/settings/apps/coopai-for-vs-code) → **Advanced** → **Danger zone** → **Make public** → Save. Then **Install App** (left sidebar) → **CoopAI-Corp**. (GitHub no longer shows “Where can this GitHub App be installed?” on **General** after create — visibility is **Advanced** → public/private.) |
 | `GITHUB_APP_PRIVATE_KEY` rejected after paste | GitHub downloads **RSA PEM** (`BEGIN RSA PRIVATE KEY`) or PKCS#8 (`BEGIN PRIVATE KEY`) — paste the full downloaded file; base64-encoding the PEM is also supported |
 | “Sign in to Coop first” | Save org API key under **Account** (extension) or sign in to admin portal |
 | Connect opens browser but callback fails | Setup URL must exactly match GitHub App settings (`/v1/github/app/callback`) |
 | Still see PAT field | Workspace `coopAI.devMode` is still `true` — disable under **Workspace** settings |
+
+### Collaborators and teams ≠ GitHub App access
+
+Repo **Settings → Collaborators and teams** controls which **people** can access the repository. Coop does not use that page.
+
+Coop reads repos granted to the **GitHub App installation** on your **organization**:
+
+1. **Browser** — `github.com/organizations/YOUR-ORG/settings/installations`
+2. **CoopAI for VS Code** (or your app slug) → **Configure**
+3. **Repository access** → **All repositories** or select specific repos → **Save**
+
+Private org repos with “0 collaborators” can still appear in Coop once the App installation includes them.
 
 ## Coop API key vs GitHub
 

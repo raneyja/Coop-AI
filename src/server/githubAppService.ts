@@ -159,7 +159,7 @@ export class GitHubAppService {
 
   public async getInstallation(
     installationId: number
-  ): Promise<{ id: number; htmlUrl?: string; suspendedAt?: string | null; accountLogin?: string } | undefined> {
+  ): Promise<{ id: number; htmlUrl?: string; suspendedAt?: string | null; accountLogin?: string; accountType?: string } | undefined> {
     const jwt = this.createAppJwt();
     const response = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
       headers: {
@@ -180,7 +180,7 @@ export class GitHubAppService {
       id?: number;
       html_url?: string;
       suspended_at?: string | null;
-      account?: { login?: string };
+      account?: { login?: string; type?: string };
     };
     if (!data.id) {
       return undefined;
@@ -189,8 +189,63 @@ export class GitHubAppService {
       id: data.id,
       htmlUrl: data.html_url,
       suspendedAt: data.suspended_at ?? null,
-      accountLogin: data.account?.login
+      accountLogin: data.account?.login,
+      accountType: data.account?.type
     };
+  }
+
+  /** Paginate GET /app/installations for this GitHub App (JWT auth). */
+  public async listAppInstallations(): Promise<
+    Array<{ id: number; accountLogin: string; accountType: string }>
+  > {
+    const jwt = this.createAppJwt();
+    const installations: Array<{ id: number; accountLogin: string; accountType: string }> = [];
+    let page = 1;
+
+    while (true) {
+      const url = new URL(`${GITHUB_API}/app/installations`);
+      url.searchParams.set("per_page", "100");
+      url.searchParams.set("page", String(page));
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-backend"
+        }
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`GitHub list app installations failed (${response.status}): ${body}`);
+      }
+
+      const data = (await response.json()) as {
+        installations?: Array<{
+          id?: number;
+          account?: { login?: string; type?: string };
+        }>;
+      };
+      const batch = data.installations ?? [];
+      for (const row of batch) {
+        if (!row.id || !row.account?.login || !row.account?.type) {
+          continue;
+        }
+        installations.push({
+          id: row.id,
+          accountLogin: row.account.login,
+          accountType: row.account.type
+        });
+      }
+
+      if (batch.length < 100) {
+        break;
+      }
+      page += 1;
+    }
+
+    return installations;
   }
 
   public createAppJwt(): string {

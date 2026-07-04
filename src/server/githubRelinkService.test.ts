@@ -82,3 +82,49 @@ test("resolveOrgIdForGithubCallback falls back to install hint when state is mis
   const fromHint = await findOrgIdByInstallHint(orgStore, installationId);
   assert.equal(fromHint, orgId);
 });
+
+test("tryRelinkGithubInstallation discovers a sole organization installation", async () => {
+  const orgId = "org-corp";
+  const installationId = 900001;
+  const installations = new Map<string, { installationId: number; token: string; expiresAt: Date }>();
+
+  const orgStore = {
+    async getCodeHostInstallation(_org: string, provider: string) {
+      return installations.get(`${_org}:${provider}`);
+    },
+    async getCredential() {
+      return undefined;
+    },
+    async deleteCredential() {},
+    async storeCredential() {},
+    async upsertCodeHostInstallation(
+      _org: string,
+      provider: string,
+      id: number,
+      token: string,
+      expiresAt: Date
+    ) {
+      installations.set(`${_org}:${provider}`, { installationId: id, token, expiresAt });
+    }
+  };
+
+  const githubApp = {
+    async listAppInstallations() {
+      return [{ id: installationId, accountLogin: "CoopAI-Corp", accountType: "Organization" }];
+    },
+    async getInstallation(id: number) {
+      return id === installationId
+        ? { id, accountLogin: "CoopAI-Corp", accountType: "Organization" }
+        : undefined;
+    },
+    async createInstallationAccessToken(id: number) {
+      assert.equal(id, installationId);
+      return { token: "ghs_test", expiresAt: new Date(Date.now() + 3_600_000) };
+    }
+  };
+
+  const result = await tryRelinkGithubInstallation({ orgStore, githubApp, jobQueue: undefined }, orgId);
+
+  assert.deepEqual(result, { outcome: "linked", installationId, relinked: true });
+  assert.ok(installations.has(`${orgId}:github`));
+});

@@ -120,7 +120,7 @@ export function GitHubConnectHandoff({
     setHandoffPending(true);
     setConnectHint(
       result.data.reconnect
-        ? reconnectHint(result.data.reconnectMessage)
+        ? "GitHub App is still installed on GitHub. Click Connect again after returning here — Coop may reconnect automatically. If a GitHub tab opens, use Configure → Save on your company org (not personal)."
         : "On GitHub, pick your company organization on the first screen (not your personal account). After install, return here — status updates automatically."
     );
   }

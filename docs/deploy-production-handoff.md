@@ -139,7 +139,7 @@ E1 **requires GitHub App**, not OAuth-only. Full create/install steps: [github-c
 | Variable | Value |
 |----------|--------|
 | `GITHUB_APP_ID` | `4216192` |
-| `GITHUB_APP_SLUG` | `coopai-production` |
+| `GITHUB_APP_SLUG` | `coopai-for-vs-code` |
 | `GITHUB_APP_PRIVATE_KEY` | App settings → PEM (paste full file) |
 | `GITHUB_WEBHOOK_SECRET` | `baileythedog123098654` — same string in GitHub App → Webhook → Secret |
 | `COOP_PUBLIC_BASE_URL` | `https://api.coop-ai.dev` |

@@ -62,7 +62,7 @@ DATABASE_URL='postgres://...' CREDENTIALS_ENCRYPTION_KEY='...' node dist/admin-o
 1. **Browser** — [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations) (or local `http://localhost:3001/integrations`) → sign in as the seeded admin.
 2. GitHub card → **Connect (GitHub App)**.
    - If you are **not** the GitHub org owner: **Send link to GitHub admin** → paste that link to the org owner (it includes Coop’s signed `state`).
-   - **Do not** bookmark or open `github.com/apps/coopai-production/installations/new` by itself.
+   - **Do not** bookmark or open `github.com/apps/coopai-for-vs-code/installations/new` by itself.
 3. On GitHub you should land on **“Where do you want to install this app?”** with your personal account **and** any orgs you own.
    - If you only see **personal account** permissions (no switcher): GitHub auto-selected personal because the org is not an available target — see **Troubleshooting** below.
    - To retry the account picker: open the full Coop link from **Send link to GitHub admin** (includes `?state=...`) or edit the URL to `…/installations/new?state=…` (remove `/permissions` if present).
@@ -79,9 +79,10 @@ DATABASE_URL='postgres://...' CREDENTIALS_ENCRYPTION_KEY='...' node dist/admin-o
 |-------|-----|
 | Not org **owner** | **Browser** — `github.com/orgs/coop-test-org/people` → your role must be **Owner** (Member is not enough). |
 | Org on another GitHub account | Sign into GitHub as the account that created the org, or transfer org ownership. |
-| Stuck on personal (app already on personal account) | **Browser** — [github.com/settings/installations](https://github.com/settings/installations) → CoopAI Production → **Configure** → **Uninstall**. Then **Connect** from Coop again using the link with `state=`. |
+| Stuck on personal (app already on personal account) | **Browser** — [github.com/settings/installations](https://github.com/settings/installations) → CoopAI for VS Code → **Configure** → **Uninstall**. Then **Connect** from Coop again using the link with `state=`. |
+| **Install App** shows only `raneyja`, not your org | App is **private** (personal-only) — [github.com/settings/apps/coopai-for-vs-code](https://github.com/settings/apps/coopai-for-vs-code) → **Advanced** → **Danger zone** → **Make public**. Then **Install App** → install on **CoopAI-Corp**. |
 | Org owner, still no org in list | **Browser** — `github.com/organizations/coop-test-org/settings/oauth_application_policy` → allow GitHub Apps (or ask org owner). |
-| You created the GitHub App (developer settings) | **Browser** — [github.com/settings/apps/coopai-production](https://github.com/settings/apps/coopai-production) → **Install App** (left sidebar) → **Install** next to `coop-test-org`. You still need Coop’s `state` in the callback — use **Send link to GitHub admin** URL; if GitHub omits `state`, return to Coop admin and click **Connect** again after org install completes (relink may apply). |
+| You created the GitHub App (developer settings) | **Browser** — [github.com/settings/apps/coopai-for-vs-code](https://github.com/settings/apps/coopai-for-vs-code) → **Install App** (left sidebar) → **Install** next to `coop-test-org`. You still need Coop’s `state` in the callback — use **Send link to GitHub admin** URL; if GitHub omits `state`, return to Coop admin and click **Connect** again after org install completes (relink may apply). |
 
 See [github-connect.md](./github-connect.md) for App env vars and handoff details.
 
@@ -90,10 +91,31 @@ See [github-connect.md](./github-connect.md) for App env vars and handoff detail
 ## Part D — Browser — Index org repos
 
 1. **Indexing → Configure GitHub**
-2. Select `coop-test-org/widget` (and other org repos)
+2. Select org repos (e.g. `CoopAI-Corp/coop-test-org-widget`)
 3. Save / enable Deep-Index
 
 **Success looks like:** Repos appear in the list (not only `yourusername/...` personal repos). Status moves **queued → indexing → ready** when **coop-worker** is running on Railway.
+
+**Verify org install before Configure GitHub:** **Browser** → `github.com/organizations/YOUR-ORG/settings/installations` — you must see **CoopAI for VS Code** listed. If it says *“No installed GitHub Apps”*, Coop is not connected to the company org yet (even if Integrations shows Connected — that may be a personal install).
+
+---
+
+**Collaborators and teams is not the control.** That page manages **people** who can clone or push. Coop uses a **GitHub App installation** — a separate permission layer.
+
+| What you checked | What actually matters |
+|------------------|----------------------|
+| Repo → **Settings → Collaborators and teams** | Org → **Settings → Installed GitHub Apps** → Coop → **Configure** → **Repository access** |
+| “0 users have organization access” on the repo | Whether the **App** is installed on the **org** (not your personal account) and includes this repo |
+
+**Do this now:**
+
+1. **Browser** — [github.com/organizations/CoopAI-Corp/settings/installations](https://github.com/organizations/CoopAI-Corp/settings/installations) (use your org slug) → **CoopAI for VS Code** → **Configure**
+   - **Repository access:** **All repositories**, or **Only select repositories** with `coop-test-org-widget` checked → **Save**
+2. **Browser** — [github.com/settings/installations](https://github.com/settings/installations) — if Coop is installed on your **personal** account, **Uninstall** it there (Coop should use the **org** install only).
+3. **Browser** — Admin → **Integrations** → **Disconnect** → **Connect (GitHub App)** (relink is OK if org install already exists).
+4. **Browser** — **Indexing → Configure GitHub** again.
+
+**Verify which install Coop uses:** the picker should list `CoopAI-Corp/...` repos. If you only see `raneyja/...`, Coop is linked to your personal GitHub App install — repeat step 2.
 
 ---
 
@@ -115,7 +137,7 @@ See [github-connect.md](./github-connect.md) for App env vars and handoff detail
 | Coop Pro org + admin user | Terminal or signup | Can sign in to admin portal |
 | GitHub Connected via admin **Connect** | Admin Integrations | Connected (not direct GitHub URL) |
 | App on org | GitHub org settings | Installed GitHub Apps → Coop |
-| Org repos in Configure GitHub | Admin Indexing | `coop-test-org/*` listed |
+| Org repos in Configure GitHub | Admin Indexing | `YourOrg/*` listed (not only personal repos) |
 | Index completes | Admin Indexing | **ready** (worker + `OPENAI_API_KEY` on Railway) |
 
 ---

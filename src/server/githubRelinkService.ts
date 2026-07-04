@@ -94,7 +94,10 @@ export async function tryRelinkGithubInstallation(
     return { outcome: "none" };
   }
 
-  const installationId = await readGithubInstallHint(deps, orgId);
+  const installationId =
+    (await readGithubInstallHint(deps, orgId)) ??
+    (await discoverRelinkInstallationId(deps));
+
   if (!installationId || isGithubOAuthInstallation(orgId, installationId)) {
     return { outcome: "none" };
   }
@@ -120,6 +123,25 @@ export async function tryRelinkGithubInstallation(
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[github-relink] org=${orgId} installation=${installationId} failed: ${message}`);
     return { outcome: "none" };
+  }
+}
+
+/** When install hint is missing, link a sole org installation already on GitHub. */
+async function discoverRelinkInstallationId(deps: GitHubAppApiDeps): Promise<number | undefined> {
+  if (!deps.githubApp) {
+    return undefined;
+  }
+  try {
+    const installations = await deps.githubApp.listAppInstallations();
+    const orgInstalls = installations.filter((row) => row.accountType === "Organization");
+    if (orgInstalls.length === 1) {
+      return orgInstalls[0]!.id;
+    }
+    return undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[github-relink] list app installations failed: ${message}`);
+    return undefined;
   }
 }
 
