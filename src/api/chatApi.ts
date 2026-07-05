@@ -374,6 +374,7 @@ function readUseCase(value: unknown): UseCase {
     "knowledge_gaps",
     "integration",
     "chat",
+    "code_edit",
     "inline_completion"
   ];
   if (typeof value === "string" && (allowed as string[]).includes(value)) {

@@ -1,9 +1,10 @@
 import type { QuickActionId } from "../webview/types";
-import type { IntegrationChatProvider } from "../chat/types";
+import type { ComposerMode, IntegrationChatProvider } from "../chat/types";
 
 export type SlashCommandTarget =
   | { kind: "action"; actionId: QuickActionId }
-  | { kind: "integration"; provider: IntegrationChatProvider };
+  | { kind: "integration"; provider: IntegrationChatProvider }
+  | { kind: "composer-mode"; mode: Exclude<ComposerMode, "ask"> };
 
 export type SlashCommandDef = {
   /** Canonical command token, without the leading slash. */
@@ -44,6 +45,9 @@ const QUICK_ACTION_DISPLAY: Record<QuickActionId, (typeof QUICK_ACTION_SLASH_HIN
 export function slashCommandDisplayToken(def: SlashCommandDef): string {
   if (def.target.kind === "action") {
     return QUICK_ACTION_DISPLAY[def.target.actionId];
+  }
+  if (def.target.kind === "composer-mode") {
+    return def.name;
   }
   return def.name;
 }
@@ -100,6 +104,13 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     target: { kind: "action", actionId: "knowledge-gaps" },
     label: "Knowledge gaps",
     description: "Missing docs, unclear ownership, open questions"
+  },
+  {
+    name: "edit",
+    aliases: ["patch", "fix"],
+    target: { kind: "composer-mode", mode: "edit" },
+    label: "Edit code",
+    description: "Generate search-replace patches for code changes"
   },
   {
     name: "slack",

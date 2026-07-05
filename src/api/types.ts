@@ -14,6 +14,7 @@ export type UseCase =
   | "knowledge_gaps"
   | "integration"
   | "chat"
+  | "code_edit"
   | "inline_completion";
 
 export type FinishReason = "stop" | "length" | "error" | "cancelled";
@@ -34,7 +35,15 @@ export type ModelRuntimeConfig = {
 export type ChatHistoryMessage = {
   role: "user" | "assistant";
   content: string;
+  /** Resolved model payload for prior user turns when replaying history. */
+  modelContent?: string;
   attachments?: ChatImageAttachment[];
+};
+
+export type ProjectInstructionPayload = {
+  path: string;
+  content: string;
+  kind: "agents-md" | "cursor-rule";
 };
 
 export type ChatContextPayload = {
@@ -45,6 +54,7 @@ export type ChatContextPayload = {
   selectedLines?: [number, number];
   languageId?: string;
   contextBundle?: unknown;
+  projectInstructions?: ProjectInstructionPayload[];
 };
 
 export type ChatOrgPlan = "free" | "pro" | "enterprise";

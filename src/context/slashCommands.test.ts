@@ -117,6 +117,22 @@ test("parses integration commands", () => {
   assert.equal(parsed!.args, "who decided to drop redis");
 });
 
+test("parses edit composer-mode command with args", () => {
+  const parsed = parseSlashCommand("/edit add null check to login handler");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.target.kind, "composer-mode");
+  if (parsed!.def.target.kind === "composer-mode") {
+    assert.equal(parsed!.def.target.mode, "edit");
+  }
+  assert.equal(parsed!.args, "add null check to login handler");
+});
+
+test("parses edit alias patch", () => {
+  const parsed = parseSlashCommand("/patch fix typo");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.name, "edit");
+});
+
 // ── parseSlashCommand: passthrough safety ────────────────────────────────────
 test("returns null for unknown commands (sent as normal chat)", () => {
   assert.equal(parseSlashCommand("/explaineverything"), null);
@@ -171,7 +187,7 @@ test("slashMenuQuery returns null once a space is typed or not slash-prefixed", 
 
 // ── matchSlashCommands ───────────────────────────────────────────────────────
 test("matchSlashCommands returns all commands for an empty query", () => {
-  assert.equal(matchSlashCommands("").length, 11);
+  assert.equal(matchSlashCommands("").length, 12);
 });
 
 test("matchSlashCommands includes integration commands like slack", () => {

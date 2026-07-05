@@ -509,4 +509,10 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ---
 
+## Future: agent loop (Phase 5 scaffold)
+
+Plain chat today uses a single-shot evidence fetch. A read-only **agent loop** (`src/api/agent/AgentOrchestrator.ts`, gated by `coopAI.chat.agentMode`) will iteratively call `search_code` and `read_file` tools against the existing graph/org APIs. Default: **off**.
+
+---
+
 *Last updated to reflect the ChatProse output contract and Cursor-style response renderer (2026).*

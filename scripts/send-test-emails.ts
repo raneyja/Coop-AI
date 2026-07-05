@@ -83,7 +83,7 @@ async function main(): Promise<void> {
         emailService.sendPasswordReset({
           to,
           orgName: SAMPLE_ORG,
-          resetUrl: `${loginUrl.replace(/\/login$/, "")}/reset-password?token=preview-reset-token`
+          resetUrl: `${marketingBase}/reset-password?token=preview-reset-token`
         })
     }
   ];

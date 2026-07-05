@@ -87,6 +87,17 @@ test("inline_completion excludes audience and output contract", () => {
   assert.ok(prompt.includes("code completion engine"));
 });
 
+test("code_edit use case uses patch output contract without Summary template", () => {
+  const prompt = systemPromptForUseCase("code_edit");
+  assert.ok(prompt.includes(AUDIENCE_MARKER));
+  assert.ok(prompt.includes("## Patch output format (required)"));
+  assert.ok(prompt.includes("<<<<<<< SEARCH"));
+  assert.ok(prompt.includes(">>>>>>> REPLACE"));
+  assert.ok(prompt.includes("edit mode"));
+  assert.equal(prompt.includes("Uniform response template"), false);
+  assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
+});
+
 test("buildUserMessageWithContext renders jira_tickets from context bundle", () => {
   const message = buildUserMessageWithContext("List Jira tickets for this repo.", {
     owner: "acme",
@@ -305,6 +316,28 @@ test("buildUserMessageWithContext renders repo entry files from context bundle",
   assert.ok(message.includes("Representative repository entry points"));
   assert.ok(message.includes("package.json"));
   assert.ok(message.includes("activate()"));
+});
+
+test("buildUserMessageWithContext renders project instructions and dedupes AGENTS.md entry files", () => {
+  const message = buildUserMessageWithContext("How should I work in this repo?", {
+    contextBundle: [
+      {
+        type: "file_metadata",
+        data: {
+          entryFiles: [
+            { path: "AGENTS.md", content: "remote agents copy" },
+            { path: "README.md", content: "# Coop" }
+          ]
+        }
+      }
+    ],
+    projectInstructions: [{ path: "AGENTS.md", content: "local agents copy", kind: "agents-md" }]
+  });
+
+  assert.ok(message.includes("<project_instructions>"));
+  assert.ok(message.includes("local agents copy"));
+  assert.ok(message.includes("README.md"));
+  assert.ok(!message.includes("remote agents copy"));
 });
 
 test("buildUserMessageWithContext adds monorepo note when treeOverview has multiple top-level dirs", () => {

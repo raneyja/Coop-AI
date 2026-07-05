@@ -51,6 +51,38 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Never alternate **Open question:** and **What to check:** as peer bullets without the subsection title directly above them.
 `;
 
+export const PATCH_OUTPUT_CONTRACT = `
+## Patch output format (required)
+Edit mode: output concrete code changes as search-replace blocks — not chat summaries or audit sections.
+
+- Do **not** use **Summary**, **Answer**, or other narrative section titles from the ask-mode template.
+- Do **not** use # headings, tables, blockquotes, or README-style markdown layout.
+- At most one short lead sentence when the edit target is ambiguous; then patches only.
+
+For each file change, emit:
+
+File: \`path/to/file.ts\`
+
+\`\`\`patch
+<<<<<<< SEARCH
+<exact existing lines to find — whitespace-sensitive>
+=======
+<replacement lines>
+>>>>>>> REPLACE
+\`\`\`
+
+Rules:
+- SEARCH must match the file exactly (including indentation); copy from attached \`<file_content>\` / \`<local_files>\` when present.
+- One contiguous hunk per block; use multiple blocks for multiple edits in the same file.
+- Multiple files: repeat the File line + patch block per file.
+- If a change cannot be expressed safely, say why in one sentence — do not invent a patch.
+- Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
+`;
+
+function withPatchOutputContract(prompt: string): string {
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n${PATCH_OUTPUT_CONTRACT}`;
+}
+
 const COMPREHENSION_ACTIVE_FILE_SECTION = `
 **How the open file fits**
 Keep this section brief (4-6 bullets max) — contextualize the open editor file within the repository. Do **not** replace repository-wide **Architecture** / **Key subsystems** with a file-only deep dive.
@@ -316,6 +348,17 @@ When \`<jira_tickets>\` is attached, respect the match attribute: match="none" m
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`, "chat");
 
+export const CODE_EDIT_SYSTEM = withPatchOutputContract(`You are CoopAI in edit mode — a code generation assistant inside the user's editor.
+
+TASK: Produce minimal, correct patches for the user's request using the search-replace block format below.
+
+RULES:
+- Prefer the smallest change that satisfies the request; match surrounding style and conventions.
+- When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as authoritative source — never invent symbols or branches not in the attachment.
+- When \`<project_instructions>\` is attached, follow those rules alongside this prompt.
+- When the active editor file is in scope but content is missing, say what file content you need — do not guess.
+- Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`);
+
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
   decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
@@ -324,6 +367,7 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   knowledge_gaps: KNOWLEDGE_GAPS_SYSTEM,
   integration: INTEGRATION_SYSTEM,
   chat: GENERAL_CHAT_SYSTEM,
+  code_edit: CODE_EDIT_SYSTEM,
   inline_completion: `You are a code completion engine. The user is typing code.
 
 TASK: Complete the current line or the next 2-3 lines of code.
@@ -341,6 +385,13 @@ RULES:
 export type SystemPromptOptions = {
   activeFile?: string;
 };
+
+export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): string {
+  if (!hasInstructions) {
+    return "";
+  }
+  return `\n\nWhen \`<project_instructions>\` is attached, follow those rules alongside this system prompt. Nested AGENTS.md and directory-scoped rules override general repo guidance when they conflict.`;
+}
 
 export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
   if (useCase === "comprehension" && options?.activeFile?.trim()) {
@@ -368,10 +419,14 @@ export function useCaseFromQuickAction(quickAction: string | undefined): UseCase
 
 export function resolveChatUseCase(
   quickAction: string | undefined,
-  integrationProvider?: IntegrationChatProvider
+  integrationProvider?: IntegrationChatProvider,
+  composerMode?: "ask" | "edit"
 ): UseCase {
   if (integrationProvider) {
     return "integration";
+  }
+  if (composerMode === "edit") {
+    return "code_edit";
   }
   return useCaseFromQuickAction(quickAction);
 }
@@ -451,6 +506,49 @@ export function formatChatMessageWithMentionFiles(options: {
   return lines.join("\n");
 }
 
+type ProjectInstructionSnippet = {
+  path: string;
+  content: string;
+  kind: "agents-md" | "cursor-rule";
+};
+
+function normalizeInstructionPathForDedup(filePath: string): string {
+  return filePath.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+}
+
+function messageHasAttachedContext(message: string): boolean {
+  return message.trimStart().startsWith("<attached_context>");
+}
+
+function messageHasProjectInstructions(message: string): boolean {
+  return message.includes("<project_instructions>");
+}
+
+function formatProjectInstructionsBlock(instructions: ProjectInstructionSnippet[]): string[] {
+  const lines: string[] = ["<project_instructions>"];
+  lines.push(
+    "Persistent project rules and agent guides from the local workspace (AGENTS.md and Cursor alwaysApply rules)."
+  );
+  for (const file of instructions) {
+    lines.push(`<instruction path="${file.path}" kind="${file.kind}">`);
+    lines.push(file.content);
+    lines.push("</instruction>");
+  }
+  lines.push("</project_instructions>");
+  return lines;
+}
+
+function injectProjectInstructions(message: string, instructions: ProjectInstructionSnippet[]): string {
+  if (!instructions.length || messageHasProjectInstructions(message)) {
+    return message;
+  }
+  const block = formatProjectInstructionsBlock(instructions).join("\n");
+  if (messageHasAttachedContext(message)) {
+    return message.replace("<attached_context>", `<attached_context>\n${block}`);
+  }
+  return ["<attached_context>", block, "</attached_context>", "", message.trim()].join("\n");
+}
+
 export function buildUserMessageWithContext(
   message: string,
   context?: {
@@ -461,9 +559,22 @@ export function buildUserMessageWithContext(
     selectedLines?: [number, number];
     languageId?: string;
     contextBundle?: unknown;
+    projectInstructions?: ProjectInstructionSnippet[];
   }
 ): string {
-  const repoSummarySnippets = extractRepoSummaryEntryFiles(context?.contextBundle);
+  const projectInstructions = context?.projectInstructions ?? [];
+  if (messageHasAttachedContext(message)) {
+    if (projectInstructions.length && !messageHasProjectInstructions(message)) {
+      return injectProjectInstructions(message, projectInstructions);
+    }
+    return message;
+  }
+
+  const instructionPaths = new Set(projectInstructions.map((file) => normalizeInstructionPathForDedup(file.path)));
+  const repoSummarySnippets = extractRepoSummaryEntryFiles(context?.contextBundle).filter(
+    (file) => !instructionPaths.has(normalizeInstructionPathForDedup(file.path))
+  );
+  const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
   const jiraTickets = extractJiraSearchTickets(context?.contextBundle);
   const slackMessages = extractSlackSearchMessages(context?.contextBundle);
@@ -476,7 +587,9 @@ export function buildUserMessageWithContext(
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
+    projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
+    repoSemanticSnippets.length === 0 &&
     localSnippets.length === 0 &&
     !jiraTickets &&
     !slackMessages &&
@@ -503,6 +616,9 @@ export function buildUserMessageWithContext(
         ? ` lines="${context.selectedLines[0]}-${context.selectedLines[1]}"`
         : "";
     lines.push(`<file path="${context.file}"${range} />`);
+  }
+  if (projectInstructions.length > 0) {
+    lines.push(...formatProjectInstructionsBlock(projectInstructions));
   }
   const treeOverview = extractTreeOverview(context?.contextBundle);
   if (treeOverview) {
@@ -534,6 +650,19 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</repo_entry_files>");
+  }
+  if (repoSemanticSnippets.length > 0) {
+    lines.push("<repo_semantic_files>");
+    lines.push(
+      "Indexed repository files retrieved from the user's question (semantic / full-text search). Use for implementation detail; prefer @-attached files when both cover the same path."
+    );
+    for (const file of repoSemanticSnippets) {
+      const truncated = file.truncated ? ' truncated="true"' : "";
+      lines.push(`<file_content path="${file.path}" repo="${file.repoId}"${truncated}>`);
+      lines.push(file.content);
+      lines.push("</file_content>");
+    }
+    lines.push("</repo_semantic_files>");
   }
   if (jiraTickets) {
     lines.push(...formatJiraTicketsForLlm(jiraTickets));
@@ -622,6 +751,25 @@ function extractRepoSummaryEntryFiles(bundle: unknown): ManifestSnippet[] {
     }
     const data = (entry as { data?: { entryFiles?: ManifestSnippet[] } }).data;
     const files = data?.entryFiles;
+    if (files?.length) {
+      return files.filter((file) => file.path && file.content);
+    }
+  }
+  return [];
+}
+
+type RepoSemanticSnippet = ManifestSnippet & { repoId?: string; truncated?: boolean };
+
+function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const files = (entry as { data?: { repoSemanticSearch?: { files?: RepoSemanticSnippet[] } } }).data
+      ?.repoSemanticSearch?.files;
     if (files?.length) {
       return files.filter((file) => file.path && file.content);
     }
@@ -1038,6 +1186,7 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         notionSearch?: { pages: unknown[] };
         googleDocsSearch?: { documents: unknown[] };
         entryFiles?: Array<{ path: string; content: string; truncated?: boolean }>;
+        repoSemanticSearch?: { files?: Array<{ path: string; repoId?: string; content: string; truncated?: boolean }> };
       };
     };
     const source = record.data;
@@ -1055,6 +1204,19 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         byteLength: file.content?.length ?? 0,
         ...(file.truncated ? { truncated: true } : {})
       }));
+    }
+
+    if (source.repoSemanticSearch?.files?.length) {
+      mutated = true;
+      data.repoSemanticSearch = {
+        ...source.repoSemanticSearch,
+        files: source.repoSemanticSearch.files.map((file) => ({
+          path: file.path,
+          repoId: file.repoId,
+          byteLength: file.content?.length ?? 0,
+          ...(file.truncated ? { truncated: true } : {})
+        }))
+      };
     }
 
     if (source.localFiles?.files?.length) {

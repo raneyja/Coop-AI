@@ -14,6 +14,7 @@ import { buildContextRequests, ContextFetchRequest } from "./requestBatcher";
 import { shouldFetchSlackContext } from "./slackContext";
 import { shouldFetchTeamsContext } from "./teamsContext";
 import type { CodeHostProviderPreference } from "../chat/types";
+import { gateOptionsFromRequest, shouldRunRepoSemanticRetrieval } from "./repoSemanticRetrieval";
 
 export const CONTEXT_GATHERING_STEP_MS = 850;
 
@@ -221,6 +222,13 @@ function manualChatMessages(event: IntentEvent, options: ContextGatheringMessage
   }
 
   messages.push(REQUEST_TYPE_MESSAGES.chat_context);
+  const chatRequest = requests.find((request) => request.type === "chat_context");
+  if (
+    chatRequest &&
+    shouldRunRepoSemanticRetrieval(gateOptionsFromRequest(chatRequest, { enabled: true }))
+  ) {
+    messages.push("Searching indexed codebase…");
+  }
   messages.push(...integrationMessagesForRequests(requests, resolved));
   messages.push("Preparing your answer…");
 

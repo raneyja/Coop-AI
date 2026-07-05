@@ -39,7 +39,7 @@ import type { LightningModeState } from "../indexing/lightningTypes";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
-import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
+import type { ChatFileMention, ChatImageAttachment, ComposerMode, MentionSearchResult } from "../chat/types";
 import { appendFileMention } from "./lib/fileMentionUtils";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
@@ -343,6 +343,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [promptMenuOpen, setPromptMenuOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [pendingPromptActionId, setPendingPromptActionId] = useState<QuickActionId | undefined>();
+  const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [savePromptDraft, setSavePromptDraft] = useState({ title: "", template: "" });
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
@@ -870,7 +871,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       quickAction?: QuickActionId,
       pendingAttachments: ChatImageAttachment[] = attachments,
       pendingMentions: ChatFileMention[] = mentions,
-      options?: { slashUserArgs?: string }
+      options?: { slashUserArgs?: string; composerMode?: ComposerMode }
     ) => {
       const message = prompt.trim();
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
@@ -880,6 +881,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setError(`Prompt exceeds ${INPUT_MAX} characters.`);
         return;
       }
+      const mode = options?.composerMode ?? composerMode;
       setError("");
       setAttachmentError("");
       setIsStreaming(true);
@@ -890,6 +892,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           message,
           quickAction,
           slashUserArgs: options?.slashUserArgs,
+          composerMode: mode === "edit" ? "edit" : undefined,
           attachments: pendingAttachments.length ? pendingAttachments : undefined,
           mentions: pendingMentions.length ? pendingMentions.slice(0, 3) : undefined
         }
@@ -900,8 +903,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionResults([]);
       setMentionError("");
       setPendingPromptActionId(undefined);
+      setComposerMode("ask");
     },
-    [attachments, mentions, post]
+    [attachments, composerMode, mentions, post]
   );
 
   const handleMentionSearch = useCallback(
@@ -979,6 +983,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (command: string) => {
       launchIntro.skip();
       setLaunchIntroConsumed(true);
+      if (command === "edit") {
+        setComposerMode("edit");
+      }
       setInput(`/${command} `);
     },
     [launchIntro]
@@ -1201,6 +1208,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         launchIntroVisibleLength={launchIntro.visibleLength}
         launchIntroFlashIndex={launchIntro.flashIndex}
         onLaunchIntroSkip={launchIntro.skip}
+        repoContext={context}
+        showContextPreview
       />
     </div>
   );
