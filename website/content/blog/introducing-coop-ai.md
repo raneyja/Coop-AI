@@ -1,12 +1,13 @@
 ---
 title: "Introducing CoopAI: Your codebase, finally explained"
+seoTitle: "Introducing CoopAI: Your Codebase, Finally Explained | CoopAI"
 description: "Why we built a zero-clone code intelligence layer that connects your repo graph, history, Slack, and tickets — directly inside VS Code."
-publishedAt: "2026-06-08"
+publishedAt: "2026-06-01"
 author: "CoopAI Team"
 category: product
 featured: true
 quote: "Every engineering team has the same hidden tax: time spent reconstructing context."
-draft: true
+waitlistUrl: "/demo"
 ---
 
 Every engineering team has the same hidden tax: **time spent reconstructing context**.
