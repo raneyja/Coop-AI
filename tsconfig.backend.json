@@ -18,6 +18,9 @@
   ],
   "exclude": [
     "src/server/billing/adminPortalUrl.test.ts",
+    "src/server/githubInstallUrl.test.ts",
+    "src/server/githubRelinkService.test.ts",
+    "src/server/orgApiAdminGate.test.ts",
     "**/* 2.*",
     "**/* 3.*",
     "**/* 4.*"

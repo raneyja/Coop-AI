@@ -88,6 +88,8 @@ export type Preferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
+  adminControlledRepos?: boolean;
   timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
 };

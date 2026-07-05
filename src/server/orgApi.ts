@@ -45,13 +45,6 @@ import {
   resolveAccessibleRepoIds
 } from "./resolveAccessibleRepos";
 import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
-import { UserRepoGrantStore } from "./userRepoGrantStore";
-import {
-  catalogRepoIsAccessible,
-  indexedOrgRepoIds,
-  resolveAccessibleRepoIds
-} from "./resolveAccessibleRepos";
-import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
 import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
 import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } from "../api/codeHosts/types";

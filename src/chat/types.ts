@@ -166,6 +166,8 @@ export type UserPreferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
+  adminControlledRepos?: boolean;
   /** IANA timezone id; defaults to US Pacific (PST). */
   timezone?: string;
   quotaCredits?: {

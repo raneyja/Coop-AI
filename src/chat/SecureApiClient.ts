@@ -26,7 +26,6 @@ import type {
   ChatFileMention,
   OrgCollectionSummary
 } from "./types";
-import { isCoopDevMode } from "../config/lightningConfig";
 import { DEFAULT_TIMEZONE_ID } from "./timezone";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -232,6 +231,8 @@ export class SecureApiClient {
     limit: number | null;
     canAddMore: boolean;
     primaryRepoId?: string;
+    repoAccessMode?: "all_indexed" | "per_user";
+    adminControlled?: boolean;
   }> {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();

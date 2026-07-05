@@ -214,7 +214,12 @@ export async function listOrgIntegrations(
       if (!test.ok) {
         return {
           ...status,
-          needsReconnect: status.provider === "github" ? true : status.needsReconnect,
+          needsReconnect:
+            status.provider === "github"
+              ? true
+              : "needsReconnect" in status
+                ? status.needsReconnect
+                : undefined,
           liveTestOk: false,
           liveTestMessage: test.message
         };

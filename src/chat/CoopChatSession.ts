@@ -195,6 +195,7 @@ import {
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import { buildRepoId } from "./buildRepoId";
+import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import {
   buildTraceDecisionSearchSeeds,
   mergeTraceDecisionIntegrationEvidence
@@ -1680,7 +1681,7 @@ export class CoopChatSession {
     result: ContextFetchResult,
     request: ContextFetchRequest
   ): Promise<ContextFetchResult> {
-    const activeRepoId = request.params.repoId ?? this.currentContext.repoId;
+    const activeRepoId = request.params.repoId ?? buildRepoId(this.preferences, this.currentContext);
     const inScopeMentionCount = partitionMentionsForTraceDecision(
       this.pendingMentionRefs,
       activeRepoId
