@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type GitHubOAuthConfig = {
   clientId: string;
   clientSecret: string;
@@ -12,7 +14,7 @@ export type GitHubOAuthConfig = {
  *   GITHUB_OAUTH_CLIENT_SECRET
  *
  * Callback URL to register on the OAuth app:
- *   {WEBHOOK_DOMAIN}/v1/github/app/callback
+ *   {COOP_PUBLIC_BASE_URL}/v1/github/app/callback
  */
 export function loadGitHubOAuthConfig(env: NodeJS.ProcessEnv = process.env): GitHubOAuthConfig | undefined {
   const clientId = env.GITHUB_OAUTH_CLIENT_ID?.trim();
@@ -20,14 +22,10 @@ export function loadGitHubOAuthConfig(env: NodeJS.ProcessEnv = process.env): Git
   if (!clientId || !clientSecret) {
     return undefined;
   }
-  const publicBaseUrl =
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_BASE_URL?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`;
+  const publicBaseUrl = resolvePublicBaseUrl(env);
   return {
     clientId,
     clientSecret,
-    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+    publicBaseUrl
   };
 }

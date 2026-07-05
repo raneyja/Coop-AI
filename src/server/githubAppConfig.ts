@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type GitHubAppConfig = {
   appId: string;
   privateKeyPem: string;
@@ -14,17 +16,13 @@ export function loadGitHubAppConfig(env: NodeJS.ProcessEnv = process.env): GitHu
   if (!appId || !privateKeyPem) {
     return undefined;
   }
-  const publicBaseUrl =
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_BASE_URL?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`;
+  const publicBaseUrl = resolvePublicBaseUrl(env);
   return {
     appId,
     privateKeyPem,
     slug,
     webhookSecret: env.GITHUB_WEBHOOK_SECRET?.trim(),
-    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+    publicBaseUrl: publicBaseUrl
   };
 }
 

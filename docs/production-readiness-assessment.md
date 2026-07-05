@@ -16,7 +16,7 @@ Coop AI has moved well beyond prototype: the **core product is real** — a VS C
 | Dimension | Readiness | Verdict |
 |-----------|-----------|---------|
 | Core extension + chat | ~78% | Strong MVP |
-| Integrations (OAuth) | ~72% | Teams UI + Slack scopes block |
+| Integrations (OAuth) | ~78% | Slack scopes still block search |
 | Code indexing (Lightning) | ~70% | Works; plan-gating TODO |
 | Backend API + auth | ~65% | Auth disabled in compose |
 | Billing + self-serve Pro | ~62% | Code complete; env + tests missing |
@@ -93,9 +93,9 @@ Migrations auto-apply only on **fresh** Postgres volumes via `docker-entrypoint-
 
 Server requests scopes without `search:read` (`slackAppService.ts`). Docs and `SlackClient.searchMessages` require it. Production Connect likely fails for message search. Also: no Slack token refresh branch in `integrationApi.ts`; bot token discarded after OAuth.
 
-### 5. Teams Connect UI disabled
+### 5. Microsoft Teams Connect (shipped)
 
-Backend fully wired (`teamsAppApi.ts`, `CoopChatSession.ts` handlers). Settings UI shows "Coming soon" (`SettingsDetailViews.tsx`). Largest integration gap for enterprise buyers expecting Microsoft stack.
+Admin portal and extension Settings expose **Connect** for Microsoft Teams on all subscription levels. Backend OAuth (`teamsAppApi.ts`) and chat handlers (`CoopChatSession.ts`) are wired. Requires work/school M365; `ChannelMessage.Read.All` may need tenant admin consent — see [teams-connect.md](./teams-connect.md).
 
 ### 6. Zero CI/CD
 
@@ -137,7 +137,7 @@ Untracked macOS duplicates across `src/`, `migrations/`, `docs/`. Risk of drift 
 | Jira + Confluence | Ready | Live API only | Connect + manual site URL | Site URL not auto-filled from OAuth |
 | Notion | Ready | Live API only | Connect + Test | None critical |
 | Google Docs | Ready | Live API only | Connect + Test | Google consent screen for prod |
-| Microsoft Teams | Backend ready | Live API only | **Coming soon** | UI disabled |
+| Microsoft Teams | Ready | Live API only | Connect + Test | Admin consent in some tenants |
 
 Architecture note: integration content (Slack messages, Jira tickets, Confluence pages) is fetched **on-demand at chat time**, not background-indexed. Code repos are the only indexed content (SCIP/Zoekt/embeddings).
 
@@ -218,14 +218,13 @@ Do these before any public traffic:
 
 ### Phase 2 — Self-serve Pro MVP (~2 weeks)
 
-1. Enable Teams Connect UI (remove "Coming soon"; wire existing handlers)
-2. Deploy admin portal to `admin.coop-ai.dev`; fix port defaults (3001 vs 3002)
-3. Wire website env: `COOP_API_BASE`, `NEXT_PUBLIC_ADMIN_PORTAL_URL`
-4. Fix admin bugs: `lastUsed`/`lastUsedAt`, audit pagination, update README
-5. Implement seat enforcement on user invites
-6. Add Sentry or Datadog + Docker HEALTHCHECK on `/health`
-7. Replace or document `PlaceholderWebhookClient`
-8. Stripe dashboard: webhook endpoint + events configured
+1. Deploy admin portal to `admin.coop-ai.dev`; fix port defaults (3001 vs 3002)
+2. Wire website env: `COOP_API_BASE`, `NEXT_PUBLIC_ADMIN_PORTAL_URL`
+3. Fix admin bugs: `lastUsed`/`lastUsedAt`, audit pagination, update README
+4. Implement seat enforcement on user invites
+5. Add Sentry or Datadog + Docker HEALTHCHECK on `/health`
+6. Replace or document `PlaceholderWebhookClient`
+7. Stripe dashboard: webhook endpoint + events configured
 
 ### Phase 3 — Enterprise + differentiation (~4+ weeks)
 

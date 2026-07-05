@@ -56,7 +56,7 @@ sequenceDiagram
 | **Confluence** | Same Atlassian token | CQL (`confluenceContext.ts`) | CQL from repo terms | No space allowlist |
 | **Notion** | OAuth read content (`notionAppService.ts`) | Workspace search (`notionContext.ts`) | OAuth page selection at connect; search is workspace-scoped to token | Admin cannot change page set without re-connect |
 | **Google Docs** | `drive.readonly` (`googleDocsAppService.ts`) | Drive query (`googleDocsContext.ts`) | Query terms only | No folder/shared-drive allowlist |
-| **Teams** | Graph delegated (`teamsAppService.ts`) | Channel message search (`teamsContext.ts`) | Query terms only | No channel allowlist; UI coming soon |
+| **Teams** | Graph delegated (`teamsAppService.ts`) | Channel message search (`teamsContext.ts`) | Query terms only | No channel allowlist yet |
 | **GitHub** | App install per repo | Code search (`codeHostContext.ts`) | Installation repos | Already repo-scoped at connect |
 
 ---

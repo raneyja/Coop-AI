@@ -54,5 +54,4 @@ curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
 ## Known gaps
 
 - Jira/Notion/Google scope enforcement: UI stubs only (coming soon).
-- Teams Connect: coming soon in product UI.
 - Inline user invite in wizard: links to `/users` (MVP).

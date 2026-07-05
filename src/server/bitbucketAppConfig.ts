@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type BitbucketAppConfig = {
   clientId: string;
   clientSecret: string;
@@ -14,7 +16,7 @@ export type BitbucketAppConfig = {
  *   BITBUCKET_APP_SECRET  – OAuth consumer secret (client_secret)
  *
  * Optional:
- *   WEBHOOK_DOMAIN / COOP_PUBLIC_API_URL – Public API base URL for the callback redirect
+ *   WEBHOOK_DOMAIN / COOP_PUBLIC_BASE_URL – Public API base URL for the callback redirect
  *
  * Auth model: OAuth 2.0 authorization code (not Bitbucket Connect JWT).
  * Register the callback URL in your Bitbucket OAuth consumer settings:
@@ -26,13 +28,9 @@ export function loadBitbucketAppConfig(env: NodeJS.ProcessEnv = process.env): Bi
   if (!clientId || !clientSecret) {
     return undefined;
   }
-  const publicBaseUrl =
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`;
   return {
     clientId,
     clientSecret,
-    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+    publicBaseUrl: resolvePublicBaseUrl(env)
   };
 }

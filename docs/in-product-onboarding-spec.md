@@ -405,7 +405,6 @@ Add `formatIntegrationError(provider, status, body)` in `admin/src/lib/coopApi.t
 
 - Customer-facing OAuth app registration
 - Per-org BYO OAuth client ID (Phase C enterprise doc)
-- Teams Connect UI enablement (unless trivial)
 - Full inline invite form (link to `/users` is sufficient for MVP)
 - Jira/Notion/Google scope **enforcement** changes (stubs only)
 - Operator validation CLI / smoke panel

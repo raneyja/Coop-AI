@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type GitLabAppConfig = {
   clientId: string;
   clientSecret: string;
@@ -30,7 +32,7 @@ export function gitlabApiBaseUrl(hostRoot: string = DEFAULT_GITLAB_HOST): string
  *
  * Optional:
  *   GITLAB_BASE_URL    – Root URL for self-hosted GitLab (default https://gitlab.com)
- *   WEBHOOK_DOMAIN / COOP_PUBLIC_API_URL – Public API base URL for the callback redirect
+ *   WEBHOOK_DOMAIN / COOP_PUBLIC_BASE_URL – Public API base URL for the callback redirect
  */
 export function loadGitLabAppConfig(env: NodeJS.ProcessEnv = process.env): GitLabAppConfig | undefined {
   const clientId = env.GITLAB_APP_ID?.trim();
@@ -38,14 +40,11 @@ export function loadGitLabAppConfig(env: NodeJS.ProcessEnv = process.env): GitLa
   if (!clientId || !clientSecret) {
     return undefined;
   }
-  const publicBaseUrl =
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`;
+  const publicBaseUrl = resolvePublicBaseUrl(env);
   return {
     clientId,
     clientSecret,
     gitlabBaseUrl: (env.GITLAB_BASE_URL?.trim() || DEFAULT_GITLAB_HOST).replace(/\/$/, ""),
-    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+    publicBaseUrl
   };
 }

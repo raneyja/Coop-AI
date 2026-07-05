@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type GoogleDocsAppConfig = {
   clientId: string;
   clientSecret: string;
@@ -17,13 +19,9 @@ export function loadGoogleDocsAppConfig(env: NodeJS.ProcessEnv = process.env): G
   if (!clientId || !clientSecret) {
     return undefined;
   }
-  const publicBaseUrl =
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`;
   return {
     clientId,
     clientSecret,
-    publicBaseUrl: publicBaseUrl.replace(/\/$/, "")
+    publicBaseUrl: resolvePublicBaseUrl(env)
   };
 }

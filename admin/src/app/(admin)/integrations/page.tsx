@@ -6,9 +6,24 @@ import { getStoredMe, isMemberRole } from "@/lib/auth";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "@/components/IntegrationsStep";
 
+import type { IntegrationProvider } from "@/lib/integrations";
+
+const OAUTH_RETURN_BANNERS: Array<{
+  param: string;
+  label: string;
+  provider?: IntegrationProvider;
+}> = [
+  { param: "github", label: "GitHub connected successfully.", provider: "github" },
+  { param: "slack", label: "Slack connected successfully.", provider: "slack" },
+  { param: "atlassian", label: "Atlassian connected successfully.", provider: "atlassian" },
+  { param: "notion", label: "Notion connected successfully.", provider: "notion" },
+  { param: "google-docs", label: "Google Docs connected successfully.", provider: "google-docs" },
+  { param: "teams", label: "Microsoft Teams connected successfully.", provider: "teams" }
+];
+
 export default function IntegrationsPage() {
   const searchParams = useSearchParams();
-  const [githubBanner, setGithubBanner] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const me = getStoredMe();
   const readOnly = me ? isMemberRole(me) : false;
   const {
@@ -22,14 +37,19 @@ export default function IntegrationsPage() {
   } = useIntegrations();
 
   useEffect(() => {
-    if (searchParams.get("github") !== "connected") {
-      return;
+    for (const entry of OAUTH_RETURN_BANNERS) {
+      if (searchParams.get(entry.param) !== "connected") {
+        continue;
+      }
+      setSuccessBanner(entry.label);
+      if (entry.provider) {
+        void load({ provider: entry.provider });
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete(entry.param);
+      window.history.replaceState({}, "", url.pathname + url.search);
+      break;
     }
-    setGithubBanner("GitHub connected successfully.");
-    void load({ provider: "github" });
-    const url = new URL(window.location.href);
-    url.searchParams.delete("github");
-    window.history.replaceState({}, "", url.pathname + url.search);
   }, [searchParams, load]);
 
   return (
@@ -41,9 +61,9 @@ export default function IntegrationsPage() {
             ? "Organization tools connected by your admin. Link your personal accounts in the VS Code extension."
             : "Connect tools your team uses. For GitHub, install the App on your company org (or send the link to your GitHub admin). Return here and refresh after install."}
         </p>
-        {githubBanner ? (
+        {successBanner ? (
           <p className="mt-3 rounded-lg border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-coop-index">
-            {githubBanner}
+            {successBanner}
           </p>
         ) : null}
       </div>

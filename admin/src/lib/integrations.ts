@@ -78,9 +78,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
   {
     id: "teams",
     name: "Microsoft Teams",
-    description: "Channels and enterprise chat",
-    category: "collaboration",
-    comingSoon: true
+    description: "Channel messages and enterprise chat (work/school M365)",
+    category: "collaboration"
   }
 ];
 

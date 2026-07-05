@@ -11,7 +11,7 @@ assert.equal(
 
 assert.equal(
   resolveOAuthSuccessRedirectUrl("https://api.coop-ai.dev", "slack=connected"),
-  "https://coop-ai.dev/docs?slack=connected"
+  "https://admin.coop-ai.dev/integrations?slack=connected"
 );
 
 assert.equal(

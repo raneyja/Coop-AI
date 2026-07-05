@@ -80,7 +80,7 @@ Copy from [`.env.backend.example`](../.env.backend.example). **Never commit** li
 | Jira + Confluence | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` | [developer.atlassian.com](https://developer.atlassian.com/console/myapps/) |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` | [notion.so/my-integrations](https://www.notion.so/my-integrations) — **OAuth** connection type |
 | Google Docs | `GOOGLE_DOCS_APP_CLIENT_ID`, `GOOGLE_DOCS_APP_CLIENT_SECRET` | Google Cloud OAuth client (Web) + Drive API + `drive.readonly` scope |
-| Teams | `TEAMS_APP_CLIENT_ID`, `TEAMS_APP_CLIENT_SECRET` | Azure App registration — **coming soon** in product UI |
+| Teams | `TEAMS_APP_CLIENT_ID`, `TEAMS_APP_CLIENT_SECRET` | Azure App registration — see [teams-connect.md](./teams-connect.md) |
 | LLM | `ANTHROPIC_API_KEY`, etc. | Provider consoles — see [llm-provider-keys.md](./llm-provider-keys.md) |
 
 After any env change: **Terminal** (on the server host):
@@ -134,9 +134,11 @@ docker compose up -d --build api
 
 ### Microsoft Teams
 
-- Backend OAuth is implemented; extension UI shows **Coming soon**.
-- Operator runbook (when enabled): Azure app, delegated Graph permissions `User.Read`, `Team.ReadBasic.All`, `ChannelMessage.Read.All`.
-- Requires work/school Teams with channels (personal Teams/Community is not sufficient for search).
+- **Entra app registration** (Microsoft Graph OAuth) — not a Teams Store manifest. Full steps: [teams-connect.md](./teams-connect.md).
+- Delegated Graph permissions: `User.Read`, `Team.ReadBasic.All`, `ChannelMessage.Read.All`, `offline_access`.
+- Redirect URI = `/v1/teams/app/callback`.
+- Requires work/school Microsoft 365 with Teams channels (personal Teams/Community is not sufficient).
+- **Customer admin:** **Connect Microsoft Teams** → approve (admin consent if required) → **Test Teams**.
 
 ---
 
@@ -174,7 +176,7 @@ For each row:
 | **Jira** | Set **Jira site URL** in extension Workspace if needed |
 | **Confluence** | Set **Confluence site URL** (often `{site}/wiki`) |
 | **Notion / Google Docs** | — |
-| **Teams** | Coming soon |
+| **Teams** | Work/school M365 required; admin consent may be needed — see [teams-connect.md](./teams-connect.md) |
 
 Admins can also connect from **Extension UI → Settings → Tools** when signed in as owner/admin — admin portal is recommended for GitHub org install and scope management.
 
@@ -219,7 +221,7 @@ What exists today vs what enterprise self-serve still needs:
 
 | Area | Today | Target |
 |------|--------|--------|
-| Org OAuth + server token store | Shipped for GitHub, Slack, Atlassian, Notion, Google Docs | Teams UI enablement |
+| Org OAuth + server token store | Shipped for GitHub, Slack, Atlassian, Notion, Google Docs, Teams | Per-org BYO OAuth client (enterprise IT) |
 | Operator env setup | Manual `.env.backend` per deployment | Hosted Coop: pre-configured; self-hosted: single setup guide + validation script |
 | Customer admin UX | Admin portal **Integrations** + onboarding wizard + GitHub handoff | First-run wizard with in-app deep links to vendor docs |
 | Operator validation | Manual `curl` / extension test | `GET /health` + `GET /v1/.../install-url` smoke panel or CLI |
@@ -245,9 +247,9 @@ What exists today vs what enterprise self-serve still needs:
 - Allow per-org OAuth client override (BYO OAuth app) for customers who cannot use Coop’s shared apps.  
 - Document “bring your own client ID” for regulated industries.
 
-**Phase D — Teams + polish**  
-- Enable Teams Connect in UI when channel OAuth is validated on work tenants.  
+**Phase D — Polish**
 - Operator script: `coop-cli integrations verify` hitting all install-url endpoints.
+- Per-integration scope allowlists beyond Slack (Jira, Notion, Google Docs, Teams).
 
 ---
 
@@ -272,4 +274,4 @@ Revocation: customer removes app access in vendor console; org admin can re-conn
 | “Only your organization admin can connect…” | Customer org admin / owner |
 | Connect works but search returns nothing | Customer admin: repo settings + vendor content access |
 | Google 403 insufficient scopes | Re-connect after operator added `drive.readonly`; revoke old grant |
-| Teams Coming soon | Product — use Slack/Jira/Confluence/Notion/Docs for Trace Decision |
+| Teams admin consent required | Customer Microsoft 365 admin — see [teams-connect.md](./teams-connect.md) |

@@ -1,20 +1,24 @@
 /**
- * Optional post-OAuth browser redirect. Local API servers have no /docs route;
- * skip auto-redirect so users stay on the success page instead of seeing JSON 404.
+ * Optional post-OAuth browser redirect. Local API servers skip auto-redirect so
+ * users stay on the success page. Production sends admins back to Integrations.
  */
 export function resolveOAuthSuccessRedirectUrl(
   publicBaseUrl: string,
-  query: string
+  query: string,
+  env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   try {
     const host = new URL(publicBaseUrl).hostname.toLowerCase();
     if (host === "localhost" || host === "127.0.0.1") {
       return undefined;
     }
-    if (host === "api.coop-ai.dev") {
-      return `https://coop-ai.dev/docs?${query}`;
+    const adminPortal =
+      env.COOP_ADMIN_PORTAL_URL?.trim() ||
+      (host === "api.coop-ai.dev" ? "https://admin.coop-ai.dev" : undefined);
+    if (adminPortal) {
+      return `${adminPortal.replace(/\/$/, "")}/integrations?${query}`;
     }
-    return `${publicBaseUrl.replace(/\/$/, "")}/docs?${query}`;
+    return `${publicBaseUrl.replace(/\/$/, "")}/integrations?${query}`;
   } catch {
     return undefined;
   }

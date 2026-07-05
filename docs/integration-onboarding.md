@@ -115,7 +115,7 @@ Server operator must register OAuth apps once — see [enterprise-integration-on
 | Jira + Confluence | Yes (one Atlassian OAuth) |
 | Notion | Yes |
 | Google Docs | Yes |
-| Microsoft Teams | **Coming soon** (UI); backend OAuth wired |
+| Microsoft Teams | Yes (work/school M365; admin consent may be required) |
 
 ### Slack (developer mode only)
 
@@ -254,9 +254,13 @@ Set `GOOGLE_DOCS_DEMO_GITHUB_OWNER` (or reuse `JIRA_DEMO_GITHUB_OWNER`) to match
 
 ### Microsoft Teams
 
-**Coming soon** in Settings UI. Backend OAuth is implemented; production Connect not exposed yet.
+Production: **Connect Microsoft Teams** in the admin portal or **Settings → Tools → Microsoft Teams** → approve in browser → **Refresh status** → **Test Teams**.
 
-Developer mode (legacy): paste a Microsoft Graph access token manually.
+Requires work/school Microsoft 365 with Teams channels. Full operator setup: [teams-connect.md](./teams-connect.md).
+
+Developer mode (legacy): paste a Microsoft Graph access token manually in **Settings → Tools → Microsoft Teams**.
+
+**In chat:** `/teams` or ask about Teams threads after connecting.
 
 ---
 
@@ -280,6 +284,7 @@ Not configured in the extension UI. See:
 |-----|--------|
 | [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md) | Operator vs org admin vs developer; rollout phases |
 | [connect-integrations-production.md](./connect-integrations-production.md) | Org admin Connect checklist + redirect URIs |
+| [teams-connect.md](./teams-connect.md) | Microsoft Teams Entra app + Connect |
 | [github-connect.md](./github-connect.md) | GitHub App vs OAuth App |
 | [api-v1.md](./api-v1.md) | Coop API auth (`COOP_API_TOKEN`) |
 | [webhook-backend.md](./webhook-backend.md) | GitHub/GitLab/Slack inbound webhooks |
@@ -311,7 +316,6 @@ Not configured in the extension UI. See:
 Tracked in [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md#honest-gap-analysis-product--docs):
 
 - No first-run setup wizard in the extension
-- Teams Connect UI coming soon
 - Operator validation CLI / health panel for all OAuth apps
 - In-app scope documentation on Connect cards
 - License key has no settings field (`coopAI.licenseKey` in code only)

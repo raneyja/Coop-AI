@@ -28,7 +28,7 @@ GitHub detail: [github-connect.md](./github-connect.md). Org install test flow: 
 
 **Extension UI** — Coop AI → **Settings → Tools** — admins can also connect here; admin portal is recommended for GitHub App org install and scope.
 
-**Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator must register Azure app — see [deploy-production-handoff.md](./deploy-production-handoff.md).
+**Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator: Azure Entra app registration — see [teams-connect.md](./teams-connect.md).
 
 ---
 
@@ -45,7 +45,7 @@ Add to **File** — `.env.backend` on the API host (see [`.env.backend.example`]
 | Atlassian | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` |
 | Google Docs | `GOOGLE_DOCS_APP_CLIENT_ID`, `GOOGLE_DOCS_APP_CLIENT_SECRET` |
-| Teams (when enabled) | `TEAMS_APP_CLIENT_ID`, `TEAMS_APP_CLIENT_SECRET` |
+| Teams | `TEAMS_APP_CLIENT_ID`, `TEAMS_APP_CLIENT_SECRET` |
 
 **Terminal** — after saving:
 
@@ -64,7 +64,7 @@ docker compose up -d --build api
 | Atlassian | [developer.atlassian.com/console/myapps](https://developer.atlassian.com/console/myapps/) | `/v1/atlassian/app/callback` |
 | Notion | [notion.so/my-integrations](https://www.notion.so/my-integrations) — type **OAuth** | `/v1/notion/app/callback` |
 | Google | [console.cloud.google.com](https://console.cloud.google.com) — OAuth Web client | `/v1/google-docs/app/callback` |
-| Teams | [portal.azure.com](https://portal.azure.com) — App registrations | `/v1/teams/app/callback` |
+| Teams | [portal.azure.com](https://portal.azure.com) — App registrations | `/v1/teams/app/callback` — see [teams-connect.md](./teams-connect.md) |
 
 ---
 
@@ -74,7 +74,7 @@ docker compose up -d --build api
 |---------|-----|
 | 503 / not configured on server | Operator: env vars + API restart |
 | 403 admin required | User must be org **owner** or **admin**, or use org API key auth |
-| Redirect URI mismatch | Operator: callback URL must match exactly in vendor console |
+| Redirect URI mismatch | Operator: callback URL must match exactly in vendor console. Production base is `https://api.coop-ai.dev` — set `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` on Railway, then register `{base}/v1/{provider}/app/callback` in each vendor app (Slack, Atlassian, etc.). |
 | Google insufficient scopes | Revoke app at [myaccount.google.com/permissions](https://myaccount.google.com/permissions), re-Connect |
 | Notion / Google paste warnings | Remove unusual line terminators in `.env.backend` after copy-paste |
 | Search returns empty | Set **Workspace** repo; ensure docs/messages mention `github:owner/repo` |

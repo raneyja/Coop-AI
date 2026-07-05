@@ -53,7 +53,7 @@
 | 4 | Estate sync (enterprise only) | **Agents E1** | § E1 — needs `GITHUB_APP_*` |
 | 5 | Admin indexing dashboard | **Agents E3** | § E3 |
 | 6 | Smoke scripts + env template | **Agents OPS** | § OPS |
-| 7 | GitHub/Teams UI fixes (local) | **Agents** → PR | Merge before P1 UI work |
+| 7 | GitHub UI fixes (local) | **Agents** → PR | Teams Connect UI shipped |
 | 8 | Stripe live | **You** | [deploy-stripe-live.md](./deploy-stripe-live.md) — **last** |
 | 9 | MCP server | **Later** | § M |
 

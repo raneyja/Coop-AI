@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from "./publicBaseUrl";
+
 export type NotionOAuthConfig = {
   mode: "oauth";
   clientId: string;
@@ -26,11 +28,7 @@ export type NotionAppConfig = NotionOAuthConfig | NotionInternalConfig;
  * Do not put the OAuth client secret in NOTION_INTEGRATION_TOKEN.
  */
 export function loadNotionAppConfig(env: NodeJS.ProcessEnv = process.env): NotionAppConfig | undefined {
-  const publicBaseUrl = (
-    env.WEBHOOK_DOMAIN?.trim() ||
-    env.COOP_PUBLIC_API_URL?.trim() ||
-    `http://localhost:${env.PORT ?? "8787"}`
-  ).replace(/\/$/, "");
+  const publicBaseUrl = resolvePublicBaseUrl(env);
 
   const integrationToken = env.NOTION_INTEGRATION_TOKEN?.trim();
   if (integrationToken) {
