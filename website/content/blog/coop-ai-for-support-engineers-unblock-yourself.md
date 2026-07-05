@@ -25,6 +25,8 @@ In this post, we walk through four workflows where CoopAI helps customer-facing 
 
 The example prompts below use a **typical CoopAI enterprise deployment**: Docker Compose locally (`postgres`, `api`, `worker`, `zoekt`) with Railway in production — the same stack our design partners run when onboarding GitHub orgs, webhook indexing, and cross-repo search.
 
+![Four-panel diagram showing CoopAI support workflows: retrieve docs, trace code paths, find owner, and explain platform behavior inside VS Code](/blog/support-engineers/workflows-overview.jpg)
+
 ## Retrieve documentation — and spot what's missing
 
 > When a customer deploys Coop via Docker Compose, does our runbook document how to monitor Postgres volume growth when `GRAPH_CACHE_BACKEND=postgres`?
@@ -45,6 +47,8 @@ CoopAI's **Understand Repo** and graph-backed search let you ask about behavior 
 
 **Try it:** Right-click `src/server/authMiddleware.ts` → **Understand Repo**, or ask Coop to trace callers of a symbol across connected repos.
 
+![Two-column diagram comparing scattered Slack, Jira, GitHub, and Confluence tabs today versus CoopAI delivering unified context into VS Code](/blog/support-engineers/unified-context-diagram.jpg)
+
 ## Find the owner before you escalate
 
 > Who owns `internal/auth/token_validator.ts`, and who should review a change to empty-payload handling before we advise a customer on a workaround?
@@ -62,6 +66,8 @@ That is the difference between a fast escalation and a day lost to routing.
 > We deploy Coop via Docker Compose with separate `api` and `worker` services plus a `zoekt` search container. What's the difference between the API and worker — and when did we split background indexing from the request path?
 
 Infrastructure questions from customers are rarely pure trivia. They come with history: a tradeoff documented in a PR, a constraint raised in `#platform-ops`, a Jira epic that scoped what you ship today.
+
+![Architecture diagram of a typical CoopAI deployment with postgres, api, worker, and zoekt services connected via Docker Compose and Railway](/blog/support-engineers/deployment-diagram.jpg)
 
 CoopAI's **Trace Decision** pulls rationale from commits, pull requests, and connected Slack and Jira context — not just what `docker-compose.yml` says, but **why** `JOBS_WORKERS=0` on the API and indexing runs in a dedicated worker with a shared `/zoekt-indexes` volume. For support engineers, that means you can explain nuanced deployment and architecture questions with confidence, and cite the sources behind the answer.
 
