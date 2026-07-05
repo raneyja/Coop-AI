@@ -60,6 +60,24 @@ export class GitHubClient implements CodeHostClient {
     }
   }
 
+  /** GitHub App installation tokens cannot call GET /user — use installation scope instead. */
+  public async testInstallationConnection(): Promise<{ ok: boolean; message: string }> {
+    try {
+      await codeHostRequestJson<{ total_count?: number }>(
+        `${GITHUB_API}/installation/repositories?per_page=1`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      return { ok: true, message: "GitHub App installation is valid." };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GitHub App test failed.";
+      return { ok: false, message };
+    }
+  }
+
   public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
     const repos = await paginatedCodeHostFetch<GitHubRepoListItem>({
       firstUrl: `${GITHUB_API}/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member`,

@@ -137,6 +137,9 @@ export function IntegrationCard({
       return <AdminChip>Coming soon</AdminChip>;
     }
     if (needsReconnect) {
+      if (isGitHub && installed) {
+        return <StatusBadge connected={false} label="Health check failed" showWhenDisconnected />;
+      }
       return <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />;
     }
     if (githubHandoffAwaiting && !connected) {
@@ -167,12 +170,13 @@ export function IntegrationCard({
             {connectionBadge()}
           </div>
           <p className="mt-1 text-sm text-coop-muted">{definition.description}</p>
-          {status?.detail ? (
+          {connected && status?.detail ? (
             <p className="mt-1 text-xs text-coop-muted">Connected as {status.detail}</p>
           ) : null}
           {isGitHub && !readOnly && !comingSoon ? (
             <GitHubConnectHandoff
               connected={connected}
+              installed={installed}
               needsReconnect={needsReconnect}
               connectionKind={status?.connectionKind}
               compact={compact}

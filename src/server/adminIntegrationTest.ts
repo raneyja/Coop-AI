@@ -7,6 +7,7 @@ import { NotionClient } from "../api/notion/notionClient";
 import { SlackClient } from "../api/slack/slackClient";
 import { TeamsClient } from "../api/teams/teamsClient";
 import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
+import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import { getConnector } from "./codeHostConnectors/registry";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { resolveOrgIntegrationAccessToken, type IntegrationApiDeps } from "./integrationApi";
@@ -60,8 +61,14 @@ async function testCodeHost(
   }
 
   switch (provider) {
-    case "github":
-      return new GitHubClient({ token }).testConnection();
+    case "github": {
+      const installation = await deps.orgStore.getCodeHostInstallation(orgId, "github");
+      const client = new GitHubClient({ token });
+      if (!installation || isGithubOAuthInstallation(orgId, installation.installationId)) {
+        return client.testConnection();
+      }
+      return client.testInstallationConnection();
+    }
     case "gitlab":
       return new GitLabClient({ token }).testConnection();
     case "bitbucket":

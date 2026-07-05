@@ -13,6 +13,7 @@ import { StatusBadge } from "./StatusBadge";
 
 type GitHubConnectHandoffProps = {
   connected: boolean;
+  installed: boolean;
   needsReconnect: boolean;
   connectionKind?: "github_app" | "oauth";
   compact?: boolean;
@@ -29,6 +30,7 @@ function reconnectHint(reconnectMessage?: string): string {
 
 export function GitHubConnectHandoff({
   connected,
+  installed,
   needsReconnect,
   connectionKind,
   compact,
@@ -194,6 +196,29 @@ export function GitHubConnectHandoff({
       );
     }
     return null;
+  }
+
+  if (installed && needsReconnect) {
+    return (
+      <div className="mt-3 space-y-3">
+        <p className="text-xs text-coop-muted">
+          GitHub App is linked to your organization, but the last health check did not pass. Click{" "}
+          <span className="text-white/90">Reconnect</span> below — if repos appear under Indexing,
+          the connection is working.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="admin-btn-primary"
+            onClick={() => void handleConnectApp()}
+            disabled={connecting}
+          >
+            {connecting ? "Opening…" : "Reconnect (GitHub App)"}
+          </button>
+        </div>
+        {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      </div>
+    );
   }
 
   return (
