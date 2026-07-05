@@ -3,7 +3,7 @@ import type { URLSearchParams } from "node:url";
 import { requireInstallAdmin } from "./authMiddleware";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
-import type { TeamsAppConfig } from "./teamsAppConfig";
+import { describeTeamsAppConfigProblem, type TeamsAppConfig } from "./teamsAppConfig";
 import type { TeamsAppService } from "./teamsAppService";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
 
@@ -51,7 +51,10 @@ async function handleInstallUrl(
     return true;
   }
   if (!deps.teamsApp || !deps.teamsAppConfig) {
-    writeJson(response, 503, { error: "Teams App is not configured on this server" });
+    const configProblem = describeTeamsAppConfigProblem();
+    writeJson(response, 503, {
+      error: configProblem ?? "Teams App is not configured on this server"
+    });
     return true;
   }
   const redirectUri = buildRedirectUri(deps.teamsAppConfig);

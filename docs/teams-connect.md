@@ -107,6 +107,7 @@ docker compose up -d --build api
 
 | Symptom | Fix |
 |---------|-----|
+| `AADSTS700016` — application identifier `jVw8Q~…` not found | **`TEAMS_APP_CLIENT_ID` is set to the client secret.** Azure Entra → App registrations → **Overview** → copy **Application (client) ID** (UUID) into `TEAMS_APP_CLIENT_ID`. Put the secret **Value** (contains `~`) in `TEAMS_APP_CLIENT_SECRET` only. Redeploy API. |
 | 503 / not configured on server | Set `TEAMS_APP_CLIENT_ID` and `TEAMS_APP_CLIENT_SECRET`; redeploy API |
 | `redirect_uri` mismatch | Azure → Authentication → Web redirect URI must match exactly (`https://api.coop-ai.dev/v1/teams/app/callback`) |
 | `AADSTS50011` redirect URI error | Same as above — check trailing slash and `http` vs `https` |
