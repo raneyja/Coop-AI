@@ -36,6 +36,16 @@ test("quick actions without integration provider use ownership use case", () => 
   assert.equal(resolveChatUseCase("find-owner"), "ownership");
 });
 
+test("composer edit mode routes to code_edit use case", () => {
+  assert.equal(resolveChatUseCase(undefined, undefined, "edit"), "code_edit");
+  assert.equal(resolveChatUseCase("find-owner", undefined, "edit"), "code_edit");
+  assert.equal(resolveChatUseCase(undefined, undefined, "ask"), "chat");
+});
+
+test("integration provider takes precedence over composer edit mode", () => {
+  assert.equal(resolveChatUseCase(undefined, "slack", "edit"), "integration");
+});
+
 console.log(`\nquickActionIntegrationRouting: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

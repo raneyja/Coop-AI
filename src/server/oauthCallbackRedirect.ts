@@ -1,3 +1,5 @@
+import { resolveAdminPortalUrl } from "../config/publicUrls";
+
 /**
  * Optional post-OAuth browser redirect. Local API servers skip auto-redirect so
  * users stay on the success page. Production sends admins back to Integrations.
@@ -12,13 +14,8 @@ export function resolveOAuthSuccessRedirectUrl(
     if (host === "localhost" || host === "127.0.0.1") {
       return undefined;
     }
-    const adminPortal =
-      env.COOP_ADMIN_PORTAL_URL?.trim() ||
-      (host === "api.coop-ai.dev" ? "https://admin.coop-ai.dev" : undefined);
-    if (adminPortal) {
-      return `${adminPortal.replace(/\/$/, "")}/integrations?${query}`;
-    }
-    return `${publicBaseUrl.replace(/\/$/, "")}/integrations?${query}`;
+    const adminPortal = resolveAdminPortalUrl(env, publicBaseUrl);
+    return `${adminPortal.replace(/\/$/, "")}/integrations?${query}`;
   } catch {
     return undefined;
   }
@@ -28,6 +25,8 @@ export function resolveOAuthSuccessRedirectUrl(
 export function resolveGithubConnectSuccessRedirectUrl(
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  const adminPortal = env.COOP_ADMIN_PORTAL_URL?.trim() || "http://localhost:3001";
+  const publicBase =
+    env.COOP_PUBLIC_BASE_URL?.trim() || env.WEBHOOK_DOMAIN?.trim() || "http://localhost:8787";
+  const adminPortal = resolveAdminPortalUrl(env, publicBase);
   return `${adminPortal.replace(/\/$/, "")}/integrations?github=connected`;
 }

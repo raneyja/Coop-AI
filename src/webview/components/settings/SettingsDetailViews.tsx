@@ -768,26 +768,34 @@ function AccountDetail({
         </label>
       </div>
 
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">API base URL</span>
-        <input
-          type="url"
-          value={urlDraft}
-          placeholder="http://localhost:8787"
-          className="coop-settings-field"
-          onChange={(e) => {
-            setUrlDraft(e.target.value);
-            setUrlDirty(true);
-            setUrlSaved(false);
-          }}
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button type="button" className="coop-settings-action-btn" onClick={saveUrl} disabled={!urlDirty}>
-          Save URL
-        </button>
-        <SaveFlashLabel show={urlSaved} />
-      </div>
+      {prefs.devMode ? (
+        <>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">API base URL</span>
+            <input
+              type="url"
+              value={urlDraft}
+              placeholder="http://localhost:8787"
+              className="coop-settings-field"
+              onChange={(e) => {
+                setUrlDraft(e.target.value);
+                setUrlDirty(true);
+                setUrlSaved(false);
+              }}
+            />
+          </label>
+          <div className="coop-settings-actions">
+            <button type="button" className="coop-settings-action-btn" onClick={saveUrl} disabled={!urlDirty}>
+              Save URL
+            </button>
+            <SaveFlashLabel show={urlSaved} />
+          </div>
+          <p className="coop-settings-card-desc mt-2">
+            Internal use only (<code>coopAI.devMode</code>). Production always uses{" "}
+            <code>https://api.coop-ai.dev</code>.
+          </p>
+        </>
+      ) : null}
     </SettingsSection>
   );
 }

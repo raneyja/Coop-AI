@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isCoopDevMode } from "../config/lightningConfig";
 import { DEFAULT_API_BASE } from "../chat/types";
 
 let jobsBaseUrlWarningShown = false;
@@ -15,7 +16,11 @@ export type ResolvedBaseUrl = {
 export function resolveCoopBaseUrl(
   config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration("coopAI")
 ): ResolvedBaseUrl {
-  const apiBaseUrl = (config.get<string>("apiBaseUrl", DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const configuredBaseUrl = (config.get<string>("apiBaseUrl", DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(
+    /\/$/,
+    ""
+  );
+  const apiBaseUrl = isCoopDevMode() ? configuredBaseUrl : DEFAULT_API_BASE;
   const jobsBaseUrl = config.get<string>("jobsBaseUrl")?.replace(/\/$/, "");
 
   if (jobsBaseUrl && jobsBaseUrl !== apiBaseUrl && !jobsBaseUrlWarningShown) {

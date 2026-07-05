@@ -1,3 +1,5 @@
+import { resolveAdminPortalUrl, resolveMarketingBaseUrl } from "../../config/publicUrls";
+
 export type GoogleOAuthCredentialSource = "GOOGLE_AUTH" | "GOOGLE_DOCS_APP";
 
 export type AuthConfig = {
@@ -35,8 +37,8 @@ export function loadGoogleOAuthCredentials(
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   const publicBaseUrl =
     env.COOP_PUBLIC_BASE_URL?.trim() || env.WEBHOOK_DOMAIN?.trim() || "http://localhost:8787";
-  const marketingBase = env.COOP_MARKETING_BASE_URL?.trim() || "https://coop-ai.dev";
-  const adminPortal = env.COOP_ADMIN_PORTAL_URL?.trim() || "http://localhost:3001";
+  const marketingBase = resolveMarketingBaseUrl(env, publicBaseUrl);
+  const adminPortal = resolveAdminPortalUrl(env, publicBaseUrl);
   const stateSecret =
     env.COOP_OAUTH_STATE_SECRET?.trim() ||
     env.CREDENTIALS_ENCRYPTION_KEY?.trim() ||
@@ -53,8 +55,8 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     accessTtlMs: readPositiveInt(env.AUTH_ACCESS_TTL_MS, 7 * 24 * 60 * 60 * 1000),
     refreshTtlMs: readPositiveInt(env.AUTH_REFRESH_TTL_MS, 30 * 24 * 60 * 60 * 1000),
     passwordMinLength: readPositiveInt(env.AUTH_PASSWORD_MIN_LENGTH, 12),
-    marketingBaseUrl: marketingBase.replace(/\/$/, ""),
-    adminPortalUrl: adminPortal.replace(/\/$/, "")
+    marketingBaseUrl: marketingBase,
+    adminPortalUrl: adminPortal
   };
 }
 

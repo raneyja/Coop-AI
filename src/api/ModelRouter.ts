@@ -7,9 +7,23 @@ import type { CompletionRequest, CompletionResponse, LlmAuditEvent, StreamChunk 
 import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type LlmServerConfig } from "./llmServerConfig";
 import { createProviderClient, createFimClient } from "./providers";
 import { selectFimProvider } from "./fimRouter";
-import { buildUserMessageWithContext, systemPromptForUseCase } from "../prompts/systemPrompts";
+import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT } from "./requestFormatter";
+
+function buildChatSystemContent(request: CompletionRequest, overridePrompt?: string): string {
+  if (overridePrompt) {
+    return `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${overridePrompt}`;
+  }
+  const basePrompt = systemPromptForUseCase(request.useCase, {
+    activeFile: request.context?.file
+  });
+  const instructionsBlock =
+    request.useCase !== "inline_completion"
+      ? buildProjectInstructionsSystemBlock((request.context?.projectInstructions?.length ?? 0) > 0)
+      : "";
+  return `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${basePrompt}${instructionsBlock}`;
+}
 
 export type ModelRouterOptions = {
   config?: LlmServerConfig;
@@ -42,9 +56,7 @@ export class ModelRouter {
     const messages: ChatRequestMessage[] = [
       {
         role: "system",
-        content: `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
-          activeFile: request.context?.file
-        })}`
+        content: buildChatSystemContent(request)
       },
       ...request.history.map((entry) => ({
         role: entry.role,
@@ -318,10 +330,8 @@ export class ModelRouter {
     const provider = route.provider;
     const userContent = buildUserMessageWithContext(request.message, request.context);
     const systemContent = extraSystemPrompt
-      ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${extraSystemPrompt}`
-      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
-          activeFile: request.context?.file
-        })}`;
+      ? buildChatSystemContent(request, extraSystemPrompt)
+      : buildChatSystemContent(request);
 
     const messages: ChatRequestMessage[] = [
       { role: "system", content: systemContent },
@@ -412,10 +422,8 @@ export class ModelRouter {
     const provider = route.provider;
     const userContent = buildUserMessageWithContext(request.message, request.context);
     const systemContent = extraSystemPrompt
-      ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${extraSystemPrompt}`
-      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${systemPromptForUseCase(request.useCase, {
-          activeFile: request.context?.file
-        })}`;
+      ? buildChatSystemContent(request, extraSystemPrompt)
+      : buildChatSystemContent(request);
 
     const messages: ChatRequestMessage[] = [
       { role: "system", content: systemContent },

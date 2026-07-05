@@ -11,6 +11,7 @@ import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { CoopBackendClient } from "../api/CoopBackendClient";
 import { clampSearchScopeModeForPlan } from "../license/licenseChecker";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
+import { isCoopDevMode } from "../config/lightningConfig";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import type { UseCase } from "../api/types";
@@ -25,7 +26,6 @@ import type {
   ChatFileMention,
   OrgCollectionSummary
 } from "./types";
-import { isCoopDevMode } from "../config/lightningConfig";
 import { DEFAULT_TIMEZONE_ID } from "./timezone";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -35,7 +35,10 @@ import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN, SECRET_KEY_REFRESH_TOKEN } from
 
 export type StreamChatParams = {
   message: string;
-  context: RepoContext & { contextBundle?: unknown };
+  context: RepoContext & {
+    contextBundle?: unknown;
+    projectInstructions?: Array<{ path: string; content: string; kind: "agents-md" | "cursor-rule" }>;
+  };
   history: ChatMessage[];
   attachments?: ChatImageAttachment[];
   mentions?: ChatFileMention[];
@@ -228,6 +231,8 @@ export class SecureApiClient {
     limit: number | null;
     canAddMore: boolean;
     primaryRepoId?: string;
+    repoAccessMode?: "all_indexed" | "per_user";
+    adminControlled?: boolean;
   }> {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
@@ -620,7 +625,8 @@ export class SecureApiClient {
           file: body.context.file,
           selectedLines: body.context.selectedLines,
           languageId: body.context.languageId,
-          contextBundle: body.context.contextBundle
+          contextBundle: body.context.contextBundle,
+          projectInstructions: body.context.projectInstructions
         },
         attachments: body.attachments,
         mentions: body.mentions?.map((mention) => ({
@@ -1116,7 +1122,7 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   if (updates.includeActiveFile !== undefined) {
     ops.push(["includeActiveFile", updates.includeActiveFile]);
   }
-  if (updates.apiBaseUrl !== undefined) {
+  if (updates.apiBaseUrl !== undefined && isCoopDevMode()) {
     ops.push(["apiBaseUrl", updates.apiBaseUrl]);
   }
   if (updates.owner !== undefined) {
@@ -1150,8 +1156,20 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
     ops.push(["timezone", updates.timezone]);
   }
   for (const [key, value] of ops) {
-    await config.update(key, value, vscode.ConfigurationTarget.Global);
+    const target = resolveConfigurationUpdateTarget(config, key);
+    await config.update(key, value, target);
   }
+}
+
+function resolveConfigurationUpdateTarget(
+  config: vscode.WorkspaceConfiguration,
+  key: string
+): vscode.ConfigurationTarget {
+  const inspected = config.inspect(key);
+  if (inspected?.workspaceFolderValue !== undefined || inspected?.workspaceValue !== undefined) {
+    return vscode.ConfigurationTarget.Workspace;
+  }
+  return vscode.ConfigurationTarget.Global;
 }
 
 function resolveDefaultSearchScope(

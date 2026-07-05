@@ -65,6 +65,7 @@ import type {
   ChatImageAttachment,
   ChatMessage,
   ChatPersistedArtifact,
+  ComposerMode,
   ConflictResolutionState,
   ConflictSummary,
   DegradationNotificationPayload,
@@ -114,9 +115,11 @@ import {
   teamsSearchFromBundle,
   type RepoSummaryEvidence
 } from "../context/contextBundleEvidence";
-import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
+import { loadProjectInstructionsCached } from "../context/projectInstructionsCache";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
+import { buildModelHistory } from "./buildModelHistory";
+import { hydrateContextBundleFromArtifacts } from "./hydrateContextBundleFromArtifacts";
 import {
   buildMissingIntentClarificationResponse,
   shouldClarifyFirstChatTurn
@@ -143,6 +146,7 @@ import {
   plainChatHistoryContent,
   plainChatRefersToAttachedFile,
   partitionMentionsForQuickAction,
+  partitionMentionsForTraceDecision,
   type MentionScopeQuickAction
 } from "../prompts/mentionScope";
 import {
@@ -191,6 +195,7 @@ import {
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import { buildRepoId } from "./buildRepoId";
+import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import {
   buildTraceDecisionSearchSeeds,
   mergeTraceDecisionIntegrationEvidence
@@ -215,6 +220,10 @@ import {
   type LocalFileContextPayload
 } from "../context/localFileContext";
 import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../context/localContextMerge";
+import {
+  mergeRepoSemanticContext,
+  searchRepoForChat
+} from "../context/repoSemanticRetrieval";
 import { localFilesFromContextData } from "../context/localFileContext";
 import {
   readActiveEditorFileForChat,
@@ -309,6 +318,7 @@ export class CoopChatSession {
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
+  private pendingMentionRefs: QuickActionMentionRef[] = [];
   private editorContextSuppressedUntil = 0;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
@@ -435,6 +445,7 @@ export class CoopChatSession {
       const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.chatHistory.push(...active.messages);
       this.threadArtifacts = [...(active.artifacts ?? [])];
+      this.lastContextBundle = hydrateContextBundleFromArtifacts(this.threadArtifacts);
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
       if (active.repoContext) {
@@ -560,6 +571,7 @@ export class CoopChatSession {
     this.abortActiveJob();
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
+    this.lastContextBundle = [];
     this.sessionCostUsd = 0;
     this.pinnedContextFile = undefined;
     this.setThreadTitle("New Chat");
@@ -609,8 +621,10 @@ export class CoopChatSession {
     this.pinnedContextFile = undefined;
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
+    this.lastContextBundle = [];
     this.chatHistory.push(...thread.messages);
     this.threadArtifacts = [...(thread.artifacts ?? [])];
+    this.lastContextBundle = hydrateContextBundleFromArtifacts(this.threadArtifacts);
     this.sessionCostUsd = thread.sessionCostUsd;
     if (thread.repoContext) {
       this.currentContext = stripStaleContextWarning(
@@ -855,7 +869,8 @@ export class CoopChatSession {
             historyContent: message.payload.historyContent,
             mentions: message.payload.mentions,
             slashUserArgs: message.payload.slashUserArgs,
-            targetFile: message.payload.targetFile
+            targetFile: message.payload.targetFile,
+            composerMode: message.payload.composerMode
           }
         );
         return;
@@ -1643,6 +1658,8 @@ export class CoopChatSession {
         });
       }
       return this.lastContextBundle;
+    } finally {
+      this.pendingMentionRefs = [];
     }
   }
 
@@ -1652,11 +1669,37 @@ export class CoopChatSession {
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
+      result = await this.enrichChatContextWithRepoSemantic(result, request);
     } else {
       result = await this.buildBaseContextResult(request);
     }
 
     return this.enrichChatContextWithIntegrations(result, request);
+  }
+
+  private async enrichChatContextWithRepoSemantic(
+    result: ContextFetchResult,
+    request: ContextFetchRequest
+  ): Promise<ContextFetchResult> {
+    const activeRepoId = request.params.repoId ?? buildRepoId(this.preferences, this.currentContext);
+    const inScopeMentionCount = partitionMentionsForTraceDecision(
+      this.pendingMentionRefs,
+      activeRepoId
+    ).inRepo.length;
+
+    try {
+      const semantic = await searchRepoForChat({
+        request,
+        indexBackend: this.options.indexBackend,
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+        inScopeMentionCount
+      });
+      return mergeRepoSemanticContext(result, semantic);
+    } catch {
+      return result;
+    }
   }
 
   private async buildBaseContextResult(
@@ -2207,6 +2250,8 @@ export class CoopChatSession {
       slashUserArgs?: string;
       /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
       targetFile?: string;
+      /** Edit mode — routes to code_edit use case and patch-oriented system prompt. */
+      composerMode?: ComposerMode;
     }
   ): Promise<void> {
     // Slash-command routing applies only to manually typed messages — never to
@@ -2251,6 +2296,7 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
     this.pendingChatLocalFiles = quickAction === "understand-repo" ? undefined : this.loadLocalFilesSyncForChat();
+    this.pendingMentionRefs = this.quickActionMentionRefs(options?.mentions);
 
     if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
@@ -2338,7 +2384,8 @@ export class CoopChatSession {
         }
         await this.postEvidenceCardsFromBundle(quickAction);
         await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
-          mentions: options?.mentions
+          mentions: options?.mentions,
+          composerMode: options?.composerMode
         });
         return;
       }
@@ -2361,7 +2408,8 @@ export class CoopChatSession {
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
       sourceHint: options?.sourceHint,
       integrationProvider,
-      mentions: options?.mentions
+      mentions: options?.mentions,
+      composerMode: options?.composerMode
     });
   }
 
@@ -2435,6 +2483,23 @@ export class CoopChatSession {
     const { def, args } = parsed;
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const slashUserArgs = args.trim() || undefined;
+
+    if (def.target.kind === "composer-mode") {
+      const historyContent = slashCommandHistoryContent(def, args);
+      const userText =
+        slashUserArgs ??
+        (this.currentContext.file?.trim()
+          ? `Edit \`${this.currentContext.file.trim()}\` per the request.`
+          : "Apply edits to the active file or attached context.");
+      await this.handleChatSend(userText, undefined, attachments, {
+        historyContent,
+        mentions,
+        slashUserArgs,
+        composerMode: def.target.mode,
+        sourceHint: "edit-mode"
+      });
+      return;
+    }
 
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
@@ -2872,6 +2937,7 @@ export class CoopChatSession {
       sourceHint?: string;
       integrationProvider?: IntegrationChatProvider;
       mentions?: ChatFileMention[];
+      composerMode?: ComposerMode;
     }
   ): Promise<void> {
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
@@ -3130,6 +3196,9 @@ export class CoopChatSession {
 
       const mentionFiles =
         mentionsToResolve.length > 0 ? await this.resolveMentionFiles(mentionsToResolve) : [];
+      const projectInstructions = loadProjectInstructionsCached({
+        activeFile: this.currentContext.file
+      });
       const apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -3139,30 +3208,21 @@ export class CoopChatSession {
               repo: this.currentContext.repo,
               branch: this.currentContext.branch
             })
-          : useContextBundle || !localPayload?.files.length
-            ? buildUserMessageWithContext(llmMessage, {
-                owner: this.currentContext.owner,
-                repo: this.currentContext.repo,
-                branch: this.currentContext.branch,
-                file:
-                  effectiveQuickAction === "understand-repo" || integrationProvider
+          : buildUserMessageWithContext(llmMessage, {
+              owner: this.currentContext.owner,
+              repo: this.currentContext.repo,
+              branch: this.currentContext.branch,
+              file:
+                effectiveQuickAction === "understand-repo" || integrationProvider
+                  ? undefined
+                  : allMentionsOutOfScope
                     ? undefined
-                    : allMentionsOutOfScope
-                      ? undefined
-                      : this.currentContext.file,
-                selectedLines: this.currentContext.selectedLines,
-                languageId: this.currentContext.languageId,
-                contextBundle
-              })
-            : formatChatMessageWithLocalFiles({
-                message: llmMessage,
-                files: localPayload.files,
-                file: this.currentContext.file,
-                selectedLines: this.currentContext.selectedLines,
-                owner: this.currentContext.owner,
-                repo: this.currentContext.repo,
-                branch: this.currentContext.branch
-              });
+                    : this.currentContext.file,
+              selectedLines: this.currentContext.selectedLines,
+              languageId: this.currentContext.languageId,
+              contextBundle,
+              projectInstructions
+            });
 
       const entryFileCount = contextBundle
         .flatMap((entry) => {
@@ -3223,7 +3283,13 @@ export class CoopChatSession {
         this.postContext();
       }
 
-      const priorHistory = this.chatHistory.slice(0, -1);
+      const priorHistory = buildModelHistory(this.chatHistory);
+      const lastUserIndex = this.chatHistory.length - 1;
+      const lastUserMessage = this.chatHistory[lastUserIndex];
+      if (lastUserIndex >= 0 && lastUserMessage?.role === "user") {
+        this.chatHistory[lastUserIndex] = { ...lastUserMessage, modelContent: apiMessage };
+        this.persistActiveThread();
+      }
       let clearedIntentForOutput = false;
       const outputGate = createChatOutputGate({
         startedAt: this.chatTurnStartedAt,
@@ -3250,14 +3316,15 @@ export class CoopChatSession {
             repo: this.currentContext.repo,
             branch: this.currentContext.branch,
             file:
-              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined
+              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined,
+            projectInstructions: projectInstructions.length ? projectInstructions : undefined
           },
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,
           mentions: options?.mentions,
           model: this.preferences.model,
           provider: this.preferences.llmProvider,
-          useCase: resolveChatUseCase(effectiveQuickAction, integrationProvider),
+          useCase: resolveChatUseCase(effectiveQuickAction, integrationProvider, options?.composerMode),
           temperature: this.preferences.temperature,
           maxTokens: this.preferences.maxTokens
         },

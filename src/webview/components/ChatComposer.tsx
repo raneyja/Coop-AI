@@ -23,6 +23,8 @@ import {
 } from "../attachmentUtils";
 import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
+import { ContextPreviewStrip } from "./ContextPreviewStrip";
+import type { RepoContext } from "../types";
 
 type ChatComposerProps = {
   value: string;
@@ -51,6 +53,8 @@ type ChatComposerProps = {
   mentionLoading?: boolean;
   mentionError?: string;
   mentionHint?: string;
+  repoContext?: RepoContext;
+  showContextPreview?: boolean;
 };
 
 const MAX_MENTIONS = 3;
@@ -156,7 +160,9 @@ export function ChatComposer({
   mentionResults = [],
   mentionLoading = false,
   mentionError,
-  mentionHint
+  mentionHint,
+  repoContext,
+  showContextPreview = true
 }: ChatComposerProps): React.ReactElement {
   const isChat = variant === "chat";
   const launchIntroActive = !isChat && launchIntroPhase !== "done";
@@ -522,6 +528,9 @@ export function ChatComposer({
               </ul>
             </div>
           </div>
+        ) : null}
+        {showContextPreview && repoContext ? (
+          <ContextPreviewStrip context={repoContext} draftMessage={value} mentions={mentions} />
         ) : null}
         {mentions.length > 0 ? (
           <div

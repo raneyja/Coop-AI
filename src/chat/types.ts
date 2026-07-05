@@ -16,6 +16,9 @@ export type DecisionIntegrationProvider = "slack" | "jira" | "teams";
 export type DocIntegrationProvider = "confluence" | "notion" | "google-docs";
 export type IntegrationChatProvider = DecisionIntegrationProvider | DocIntegrationProvider;
 
+/** Composer mode for chat sends — edit routes to the code_edit use case. */
+export type ComposerMode = "ask" | "edit";
+
 export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
 
 export type RepoContext = {
@@ -58,6 +61,8 @@ export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Full payload sent to the model for this user turn (may differ from visible bubble). */
+  modelContent?: string;
   timestamp: number;
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
@@ -161,6 +166,8 @@ export type UserPreferences = {
   workspaceRepoLimit?: number | null;
   canAddMoreWorkspaceRepos?: boolean;
   primaryWorkspaceRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
+  adminControlledRepos?: boolean;
   /** IANA timezone id; defaults to US Pacific (PST). */
   timezone?: string;
   quotaCredits?: {
@@ -288,6 +295,7 @@ export type WebviewInbound =
         mentions?: ChatFileMention[];
         historyContent?: string;
         slashUserArgs?: string;
+        composerMode?: ComposerMode;
         /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
         targetFile?: string;
       };

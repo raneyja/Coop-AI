@@ -449,7 +449,7 @@
         "coopAI.apiBaseUrl": {
           "type": "string",
           "default": "https://api.coop-ai.dev",
-          "description": "Base URL for the CoopAI cloud API (HTTPS only)."
+          "description": "Coop API base URL (coopAI.devMode only). Production always uses https://api.coop-ai.dev."
         },
         "coopAI.jobsBaseUrl": {
           "type": "string",
