@@ -107,13 +107,17 @@ If integrations are not connected, Coop still works for code-only questions. Ask
 
 The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **Quick Action** grid and a hint to type `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps`.
 
+<!-- figures -->
 ![Coop sidebar in VS Code (light theme) — quick actions and chat composer](/screenshots/docs/extension-sidebar-light.png)
 
-*Light theme: select the Coop icon in the activity bar, then use quick actions or the composer at the bottom.*
+*Light theme*
 
 ![Coop sidebar in VS Code (dark theme)](/screenshots/docs/extension-sidebar-dark.png)
 
-*Dark theme: same layout — quick actions, slash hints, and composer.*
+*Dark theme*
+<!-- /figures -->
+
+Select the Coop icon in the activity bar, then use quick actions or the composer at the bottom. Layout is the same in both VS Code themes.
 
 ### Chat composer
 

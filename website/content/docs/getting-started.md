@@ -39,9 +39,17 @@ API keys are for automation and CI only — expand **Automation API key** under 
 
 ## Step 4 — Ask your first question
 
+<!-- figures -->
 ![Coop sidebar in VS Code (light theme) — quick actions and chat composer](/screenshots/docs/extension-sidebar-light.png)
 
-*Open the Coop icon in the activity bar. Click a quick action or type in the composer.*
+*Light theme*
+
+![Coop sidebar in VS Code (dark theme)](/screenshots/docs/extension-sidebar-dark.png)
+
+*Dark theme*
+<!-- /figures -->
+
+Open the Coop icon in the activity bar. Click a quick action or type in the composer.
 
 1. Open a file in your workspace.
 2. **Extension UI** — Type in the chat composer or click **Understand Repo**.

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Children, isValidElement, useRef } from "react";
+import { Children, isValidElement, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DocsFigureGrid } from "@/components/DocsFigureGrid";
+import { splitDocsContent } from "@/lib/docsFigures";
 import {
   docsFigureCaptionClassName,
   docsFigureClassName,
@@ -26,7 +28,7 @@ function isEmOnlyParagraph(children: React.ReactNode): boolean {
   return items[0].type === "em";
 }
 
-export function DocsMarkdown({ content }: DocsMarkdownProps) {
+function DocsMarkdownBlock({ content }: { content: string }) {
   const afterImageRef = useRef(false);
 
   return (
@@ -98,5 +100,21 @@ export function DocsMarkdown({ content }: DocsMarkdownProps) {
     >
       {content}
     </ReactMarkdown>
+  );
+}
+
+export function DocsMarkdown({ content }: DocsMarkdownProps) {
+  const segments = useMemo(() => splitDocsContent(content), [content]);
+
+  return (
+    <>
+      {segments.map((segment, index) => {
+        if (segment.type === "figures") {
+          return <DocsFigureGrid key={`figures-${index}`} items={segment.items} />;
+        }
+
+        return <DocsMarkdownBlock key={`md-${index}`} content={segment.content} />;
+      })}
+    </>
   );
 }

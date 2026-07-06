@@ -19,9 +19,18 @@ export const docsInlineLinkClassName =
   "text-coop-index no-underline transition-colors hover:text-coop-blue";
 
 export const docsFigureClassName =
-  "not-prose my-6 block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+  "not-prose my-6 mx-auto block max-w-xl overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
 
 export const docsFigureCaptionClassName =
-  "not-prose -mt-4 mb-8 text-center text-sm text-gray-500";
+  "not-prose -mt-4 mb-8 max-w-xl mx-auto text-center text-sm text-gray-500";
+
+export const docsFigureGridClassName =
+  "not-prose my-6 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2";
+
+export const docsFigureTileClassName =
+  "block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+
+export const docsFigureGridCaptionClassName =
+  "mt-2 text-center text-xs leading-relaxed text-gray-500";
 
 export const docsSectionLabelClassName = "mb-4 font-mono text-xs text-gray-500";
