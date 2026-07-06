@@ -5,12 +5,14 @@ import { DocsSearch } from "@/components/DocsSearch";
 import { DocsSidebar } from "@/components/DocsSidebar";
 import { docsInlineLinkClassName } from "@/lib/docsStyles";
 import { getDocNav, getDocsSections } from "@/lib/docs";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Documentation",
-  description:
-    "Coop AI documentation — getting started, admin portal, integrations, API reference, and enterprise deployment."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/docs",
+  siteConfig.seo.pages.docs.title,
+  siteConfig.seo.pages.docs.description
+);
 
 const hubCards = [
   {

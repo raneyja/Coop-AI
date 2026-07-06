@@ -1,0 +1,48 @@
+# CoopAI
+
+> Deep code intelligence for VS Code — organizational context from your code graph, Slack, Jira, and docs.
+
+CoopAI helps engineering teams understand existing codebases, trace decisions, find owners, and write graph-grounded completions without cloning entire monorepos.
+
+## Product
+
+- Homepage: https://coop-ai.dev
+- Product: https://coop-ai.dev/product
+- Enterprise: https://coop-ai.dev/enterprise
+- Integrations: https://coop-ai.dev/integrations
+- Pricing: https://coop-ai.dev/pricing
+- Security: https://coop-ai.dev/security
+- Book a demo: https://coop-ai.dev/demo
+
+## Documentation
+
+- Docs hub: https://coop-ai.dev/docs
+- Getting started: https://coop-ai.dev/docs/getting-started
+- Connect integrations: https://coop-ai.dev/docs/connect-integrations
+- Security architecture: https://coop-ai.dev/docs/security-architecture
+- Enterprise deployment: https://coop-ai.dev/docs/enterprise-deployment
+- API reference: https://coop-ai.dev/docs/api-reference
+- FAQ: https://coop-ai.dev/docs/faq
+- Owner's Manual: https://coop-ai.dev/manual
+
+## Key capabilities
+
+- Understand Repo — architecture, ownership, and key files
+- Trace Decision — rationale from commits, PRs, Slack, and tickets
+- Find Owner — CODEOWNERS, blame history, and escalation paths
+- Blast Radius — impact analysis before you ship
+- Knowledge Gaps — missing docs and blind spots
+- Inline complete and edit selection — graph-grounded craftsmanship in VS Code
+
+## Enterprise
+
+- Zero-clone indexing architecture
+- Zero-retention LLM routing with BYOK
+- Self-hosted and cloud deployment options
+- Audit logging and compliance documentation
+
+## Contact
+
+- General: hello@coop-ai.dev
+- Security: security@coop-ai.dev
+- Privacy: privacy@coop-ai.dev

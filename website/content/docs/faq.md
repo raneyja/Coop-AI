@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Frequently asked questions about Coop AI plans, privacy, and features.
+description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
 lastUpdated: "2026-06-29"
@@ -8,13 +8,13 @@ lastUpdated: "2026-06-29"
 
 ## General
 
-### What is Coop AI?
+### What is CoopAI?
 
-Coop AI is a VS Code extension that connects your code graph, Slack, Jira, and docs to answer deep engineering questions and write graph-grounded completions — without cloning entire monorepos.
+CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and docs to answer deep engineering questions and write graph-grounded completions — without cloning entire monorepos.
 
-### How is Coop different from GitHub Copilot or Cursor?
+### How is CoopAI different from GitHub Copilot or Cursor?
 
-Coop focuses on **understanding existing codebases** — ownership, decision history, blast radius, knowledge gaps — with cross-tool context from Slack and tickets. Inline complete and edit selection are craftsmanship tools, not autonomous agents rewriting your tree.
+CoopAI focuses on **understanding existing codebases** — ownership, decision history, blast radius, knowledge gaps — with cross-tool context from Slack and tickets. Inline complete and edit selection are craftsmanship tools, not autonomous agents rewriting your tree.
 
 ### Is my code used to train models?
 

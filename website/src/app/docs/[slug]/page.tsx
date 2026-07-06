@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { BreadcrumbSchema } from "@/components/BreadcrumbSchema";
 import { DocsArticleLayout } from "@/components/DocsArticleLayout";
+import { FaqPageSchema } from "@/components/FaqPageSchema";
 import { getAdjacentDocs, getAllDocs, getDocBySlug, getDocNav, getDocsSections } from "@/lib/docs";
+import { extractFaqPairs } from "@/lib/faqSchema";
 import { buildPageMetadata } from "@/lib/pageMetadata";
 
 const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
@@ -85,9 +88,18 @@ export default async function DocsArticlePage({ params }: PageProps) {
   const sections = getDocsSections();
   const navPages = getDocNav();
   const { prev, next } = getAdjacentDocs(docSlug);
+  const faqPairs = docSlug === "faq" ? extractFaqPairs(doc.content) : [];
 
   return (
-    <DocsArticleLayout
+    <>
+      <BreadcrumbSchema
+        items={[
+          { name: "Documentation", href: "/docs" },
+          { name: doc.title, href: `/docs/${docSlug}` }
+        ]}
+      />
+      {faqPairs.length > 0 ? <FaqPageSchema pairs={faqPairs} /> : null}
+      <DocsArticleLayout
       title={doc.title}
       description={doc.description}
       lastUpdated={doc.lastUpdated}
@@ -99,5 +111,6 @@ export default async function DocsArticlePage({ params }: PageProps) {
       next={next}
       nextStepLinks={nextStepsBySlug[docSlug]}
     />
+    </>
   );
 }

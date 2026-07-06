@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/LegalLayout";
+import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "How CoopAI collects, uses, and protects your data."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/privacy",
+  siteConfig.seo.pages.privacy.title,
+  siteConfig.seo.pages.privacy.description
+);
 
 export default function PrivacyPage() {
   return (

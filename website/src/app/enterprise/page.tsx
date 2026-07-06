@@ -4,20 +4,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { EnterpriseIntegrationGraph } from "@/components/EnterpriseIntegrationGraph";
 import { SectionHeading } from "@/components/SectionHeading";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Enterprise",
-  description:
-    "CoopAI Enterprise: Zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment.",
-  openGraph: {
-    description:
-      "Enterprise code intelligence. Zero-clone architecture. BYOK. SOC 2. Self-hosted or cloud."
-  },
-  twitter: {
-    description:
-      "Enterprise code intelligence. Zero-clone architecture. BYOK. SOC 2. Self-hosted or cloud."
-  }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/enterprise",
+  siteConfig.seo.pages.enterprise.title,
+  siteConfig.seo.pages.enterprise.description
+);
 
 const securityFeatures = [
   {

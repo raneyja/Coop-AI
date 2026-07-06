@@ -3,20 +3,14 @@ import Link from "next/link";
 import { LegalLayout } from "@/components/LegalLayout";
 import { TrustBadges } from "@/components/TrustBadges";
 import { CTASection } from "@/components/CTASection";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Security",
-  description:
-    "CoopAI security: Zero-retention routing, BYOK, audit-ready logging, data residency.",
-  openGraph: {
-    description:
-      "How CoopAI protects your code and context. Enterprise-grade security architecture."
-  },
-  twitter: {
-    description:
-      "How CoopAI protects your code and context. Enterprise-grade security architecture."
-  }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/security",
+  siteConfig.seo.pages.security.title,
+  siteConfig.seo.pages.security.description
+);
 
 export default function SecurityPage() {
   return (
@@ -282,6 +276,13 @@ export default function SecurityPage() {
         <p>
           A zero-retention DPA addendum template is available for enterprise customers undergoing
           legal review.
+        </p>
+        <p>
+          We provide architecture documentation, subprocessors lists, and retention attestation
+          reports during enterprise evaluation. SOC 2 Type II certification is on our compliance
+          roadmap — contact{" "}
+          <a href={`mailto:${siteConfig.securityEmail}`}>{siteConfig.securityEmail}</a> for current
+          status and security questionnaire support.
         </p>
         <p>
           We are happy to discuss your security requirements during an enterprise evaluation and

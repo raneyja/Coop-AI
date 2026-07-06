@@ -12,7 +12,7 @@ export function Footer() {
               <BrandMark size="sm" />
             </Link>
             <p className="mt-4 text-sm leading-relaxed text-coop-muted">
-              Deep Code Intelligence for VS Code
+              {siteConfig.seo.defaultDescription}
             </p>
           </div>
 
@@ -22,6 +22,11 @@ export function Footer() {
               <li>
                 <Link href="/product" className="text-sm text-coop-muted hover:text-gray-900">
                   Features
+                </Link>
+              </li>
+              <li>
+                <Link href="/integrations" className="text-sm text-coop-muted hover:text-gray-900">
+                  Integrations
                 </Link>
               </li>
               <li>

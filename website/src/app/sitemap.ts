@@ -3,12 +3,13 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { siteConfig } from "@/lib/site.config";
 
-const HIGH_PRIORITY_PATHS = new Set(["/", "/product", "/enterprise", "/pricing", "/manual"]);
+const HIGH_PRIORITY_PATHS = new Set(["/", "/product", "/enterprise", "/pricing", "/integrations", "/manual"]);
 
 const STATIC_PATHS = [
   "/",
   "/product",
   "/enterprise",
+  "/integrations",
   "/pricing",
   "/manual",
   "/docs",
@@ -18,6 +19,22 @@ const STATIC_PATHS = [
   "/terms",
   "/demo"
 ] as const;
+
+/** Approximate last-updated dates for static marketing pages. Update when page content changes. */
+const STATIC_LAST_MODIFIED: Partial<Record<(typeof STATIC_PATHS)[number], string>> = {
+  "/": "2026-07-06",
+  "/product": "2026-07-06",
+  "/enterprise": "2026-07-06",
+  "/integrations": "2026-07-06",
+  "/pricing": "2026-07-06",
+  "/manual": "2026-06-29",
+  "/docs": "2026-06-29",
+  "/security": "2026-07-06",
+  "/blog": "2026-07-06",
+  "/privacy": "2026-05-29",
+  "/terms": "2026-05-29",
+  "/demo": "2026-06-29"
+};
 
 function toLastModified(value?: string): Date | undefined {
   if (!value) {
@@ -32,7 +49,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const staticEntries: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
     url: path === "/" ? base : `${base}${path}`,
-    lastModified: new Date(),
+    lastModified: toLastModified(STATIC_LAST_MODIFIED[path]) ?? new Date(),
     changeFrequency: HIGH_PRIORITY_PATHS.has(path) ? "weekly" : "monthly",
     priority: HIGH_PRIORITY_PATHS.has(path) ? 1 : 0.7
   }));

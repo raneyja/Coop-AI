@@ -5,8 +5,28 @@ import { Testimonial } from "@/components/Testimonial";
 import { CTASection } from "@/components/CTASection";
 import { FileContextGraph } from "@/components/FileContextGraph";
 import { QuickActionList } from "@/components/QuickActionList";
+import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+const homeTitle = `${siteConfig.name} — ${siteConfig.tagline}`;
+const homeMetadata = buildPageMetadata("/", siteConfig.name, siteConfig.seo.defaultDescription);
+
+export const metadata: Metadata = {
+  ...homeMetadata,
+  title: {
+    absolute: homeTitle
+  },
+  openGraph: {
+    ...homeMetadata.openGraph,
+    title: homeTitle
+  },
+  twitter: {
+    ...homeMetadata.twitter,
+    title: homeTitle
+  }
+};
 
 const COMMANDS: Record<string, string> = {
   "inline-complete": "coop complete",

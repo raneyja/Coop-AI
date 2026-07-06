@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/LegalLayout";
+import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Terms of Service",
-  description: "Terms governing use of CoopAI services."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/terms",
+  siteConfig.seo.pages.terms.title,
+  siteConfig.seo.pages.terms.description
+);
 
 export default function TermsPage() {
   return (

@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { FileContextStoryDemo } from "@/components/FileContextStoryDemo";
+import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 
-export const metadata: Metadata = {
-  title: "File Context Story — Preview",
-  description: "Auto-playing demo: deep questions, inline complete, and in-file edit in VS Code.",
-  robots: { index: false, follow: false }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/file-context-demo",
+  "File Context Story — Preview",
+  "Auto-playing demo: deep questions, inline complete, and in-file edit in VS Code.",
+  { robots: noIndexRobots }
+);
 
 export default function FileContextDemoPage() {
   return (

@@ -7,22 +7,15 @@ import { ProductShowcaseCarousel } from "@/components/ProductShowcaseCarousel";
 import { QuickActionList } from "@/components/QuickActionList";
 import { CapabilitiesMatrix } from "@/components/CapabilitiesMatrix";
 import { SectionHeading } from "@/components/SectionHeading";
+import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 import { productCapabilityGroups } from "@/lib/productCapabilities";
 
-export const metadata: Metadata = {
-  title: "Product",
-  description:
-    "CoopAI features: understand-repo, trace-decision, find-owner, blast-radius, knowledge-gaps. Deep codebase context.",
-  openGraph: {
-    description:
-      "Explore CoopAI's capabilities: graph-grounded code understanding without monorepo clones."
-  },
-  twitter: {
-    description:
-      "Explore CoopAI's capabilities: graph-grounded code understanding without monorepo clones."
-  }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/product",
+  siteConfig.seo.pages.product.title,
+  siteConfig.seo.pages.product.description
+);
 
 export default function ProductPage() {
   return (

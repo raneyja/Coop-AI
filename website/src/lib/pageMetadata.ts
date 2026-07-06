@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/lib/site.config";
 
-/** Build metadata with an explicit apex-domain canonical URL. */
+const DEFAULT_OG_IMAGE_PATH = "/opengraph-image";
+
+/** Build metadata with an explicit apex-domain canonical URL and default social preview. */
 export function buildPageMetadata(
   pathname: string,
   title: string,
@@ -10,6 +12,12 @@ export function buildPageMetadata(
 ): Metadata {
   const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
   const canonical = path === "/" ? siteConfig.url : `${siteConfig.url}${path}`;
+  const ogImage = {
+    url: DEFAULT_OG_IMAGE_PATH,
+    width: 1200,
+    height: 630,
+    alt: siteConfig.seo.ogImageAlt
+  };
 
   return {
     title,
@@ -22,12 +30,14 @@ export function buildPageMetadata(
       description,
       url: canonical,
       siteName: siteConfig.name,
-      type: "website"
+      type: "website",
+      images: [ogImage]
     },
     twitter: {
       card: "summary_large_image",
       title,
-      description
+      description,
+      images: [DEFAULT_OG_IMAGE_PATH]
     },
     ...(options?.robots ? { robots: options.robots } : {})
   };

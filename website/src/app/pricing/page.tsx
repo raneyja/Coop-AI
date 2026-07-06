@@ -3,18 +3,14 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { Button } from "@/components/Button";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Pricing",
-  description:
-    "CoopAI pricing: Developer free, Pro ($20/user), Enterprise. Org-wide context for code teams.",
-  openGraph: {
-    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
-  },
-  twitter: {
-    description: "Choose your CoopAI plan. Free, Pro ($20/user), or Enterprise context for teams."
-  }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/pricing",
+  siteConfig.seo.pages.pricing.title,
+  siteConfig.seo.pages.pricing.description
+);
 
 type PricingTier = {
   name: string;

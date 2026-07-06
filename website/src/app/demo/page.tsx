@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { ContactForm } from "@/components/ContactForm";
 import { InstallExtensionButton } from "@/components/Button";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Book a Demo",
-  description: "Schedule a demo or join the CoopAI waitlist."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/demo",
+  siteConfig.seo.pages.demo.title,
+  siteConfig.seo.pages.demo.description
+);
 
 type DemoPageProps = {
   searchParams: Promise<{ intent?: string; prompt?: string }>;

@@ -58,7 +58,7 @@ export function getAllPosts(includeDrafts = false): BlogPostMeta[] {
 
   return fs
     .readdirSync(postsDirectory)
-    .filter((filename) => filename.endsWith(".md"))
+    .filter((filename) => filename.endsWith(".md") && !/ \d+\.md$/.test(filename))
     .map((filename) => {
       const post = readPostFile(filename);
       return {
