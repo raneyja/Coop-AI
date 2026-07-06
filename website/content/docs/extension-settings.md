@@ -3,19 +3,34 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the Coop AI extension.
 section: extension
 order: 1
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-06"
 ---
 
 Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
 
 ## Account
 
+Sign in with your Coop account — the same credentials you use at [coop-ai.dev/signup/free](/signup/free) or the admin portal.
+
+| Method | When to use |
+| --- | --- |
+| **Email + password** | Default for free and Pro accounts |
+| **Continue with Google** | Same Google account you used at signup |
+| **Sign in with SSO** | Enterprise orgs with SAML (enter organization name) |
+
+After sign-in:
+
 | Field | Value |
 | --- | --- |
-| **Coop AI API key** | Bearer token from free signup or org admin |
 | **API base URL** | `https://api.coop-ai.dev` (default) or your self-hosted URL |
 
 Click **Test connection** to verify `GET /health`.
+
+**Forgot password?** Use the link in Account settings or [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password).
+
+### Automation API key (optional)
+
+Expand **Automation API key** only for scripts and CI — not for everyday sign-in. Issue keys from the admin portal **API Keys** page if you need headless access.
 
 ## Tools
 

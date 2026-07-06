@@ -99,7 +99,12 @@ export function workspaceHubSubtitle(prefs: Preferences): string {
   const repo =
     prefs.owner && prefs.repo ? `${prefs.owner}/${prefs.repo}` : "No repo set";
   const branch = prefs.branch || "main";
-  return `${repo} · ${branch}`;
+  const agentsHint = prefs.projectInstructions?.hasAgentsMd
+    ? " · AGENTS.md ✓"
+    : prefs.projectInstructions?.status !== "disabled" && prefs.projectInstructions?.status !== "no_git"
+      ? " · Add AGENTS.md"
+      : "";
+  return `${repo} · ${branch}${agentsHint}`;
 }
 
 export function identityLinksHubSubtitle(prefs: Preferences): string {

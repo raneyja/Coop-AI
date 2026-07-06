@@ -17,12 +17,12 @@ export const metadata: Metadata = buildPageMetadata(
 const hubCards = [
   {
     title: "Getting started",
-    description: "Install the extension, connect your API key, and run your first chat in five minutes.",
+    description: "Install the extension, sign in with email or Google, and run your first chat in five minutes.",
     href: "/docs/getting-started"
   },
   {
     title: "Admin portal",
-    description: "Connect integrations org-wide, invite teammates, and manage API keys.",
+    description: "Connect integrations org-wide, invite teammates, and issue automation API keys for CI.",
     href: "/docs/admin-portal"
   },
   {

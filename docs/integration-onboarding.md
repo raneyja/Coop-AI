@@ -23,7 +23,7 @@ In production, developers do **not** paste Slack, Notion, or Google tokens. Org 
 
 | Step | What | Required? |
 |------|------|-----------|
-| 1 | [Coop API key](#1-coop-api) | Yes |
+| 1 | [Coop account sign-in](#1-coop-account) | Yes |
 | 2 | [Code host](#2-code-hosts-github--gitlab--bitbucket) — **Connect** (production) or PAT (dev mode) | Yes for repo features |
 | 3 | [Repository](#3-repository) owner / repo / branch | Recommended |
 | 4 | [Integrations](#4-integrations-slack--jira--confluence--notion--google-docs--teams) | Optional — Trace Decision, Knowledge Gaps |
@@ -32,18 +32,19 @@ Production checklist: [connect-integrations-production.md](./connect-integration
 
 ---
 
-## 1. Coop API
+## 1. Coop account
 
-**Settings section:** API connection
+**Settings section:** Account
 
 | Field | Value |
 |-------|-------|
-| CoopAI API key | Bearer token from your Coop operator |
-| API base URL | Default `https://api.coop-ai.dev`; use `http://localhost:8787` for local dev |
+| Sign in | Email and password, Google, or SSO (Enterprise) |
 
-**Local dev:** any value works (e.g. `dev`) if the server has no token configured.
+**Success:** Account shows your org name and plan after sign-in.
 
-**Test:** **Test connection** → calls `GET /health`.
+Self-hosted or local API: set `coopAI.apiBaseUrl` in VS Code settings (defaults to `https://api.coop-ai.dev`).
+
+Automation API keys (`coop_…`) are for CI and scripts only — create them in the admin portal, not in the extension.
 
 ---
 
@@ -115,7 +116,7 @@ Server operator must register OAuth apps once — see [enterprise-integration-on
 | Jira + Confluence | Yes (one Atlassian OAuth) |
 | Notion | Yes |
 | Google Docs | Yes |
-| Microsoft Teams | Yes (work/school M365; admin consent may be required) |
+| Microsoft Teams | **Coming soon** (UI); backend OAuth wired |
 
 ### Slack (developer mode only)
 
@@ -254,13 +255,9 @@ Set `GOOGLE_DOCS_DEMO_GITHUB_OWNER` (or reuse `JIRA_DEMO_GITHUB_OWNER`) to match
 
 ### Microsoft Teams
 
-Production: **Connect Microsoft Teams** in the admin portal or **Settings → Tools → Microsoft Teams** → approve in browser → **Refresh status** → **Test Teams**.
+**Coming soon** in Settings UI. Backend OAuth is implemented; production Connect not exposed yet.
 
-Requires work/school Microsoft 365 with Teams channels. Full operator setup: [teams-connect.md](./teams-connect.md).
-
-Developer mode (legacy): paste a Microsoft Graph access token manually in **Settings → Tools → Microsoft Teams**.
-
-**In chat:** `/teams` or ask about Teams threads after connecting.
+Developer mode (legacy): paste a Microsoft Graph access token manually.
 
 ---
 
@@ -284,7 +281,6 @@ Not configured in the extension UI. See:
 |-----|--------|
 | [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md) | Operator vs org admin vs developer; rollout phases |
 | [connect-integrations-production.md](./connect-integrations-production.md) | Org admin Connect checklist + redirect URIs |
-| [teams-connect.md](./teams-connect.md) | Microsoft Teams Entra app + Connect |
 | [github-connect.md](./github-connect.md) | GitHub App vs OAuth App |
 | [api-v1.md](./api-v1.md) | Coop API auth (`COOP_API_TOKEN`) |
 | [webhook-backend.md](./webhook-backend.md) | GitHub/GitLab/Slack inbound webhooks |
@@ -316,6 +312,7 @@ Not configured in the extension UI. See:
 Tracked in [enterprise-integration-onboarding.md](./enterprise-integration-onboarding.md#honest-gap-analysis-product--docs):
 
 - No first-run setup wizard in the extension
+- Teams Connect UI coming soon
 - Operator validation CLI / health panel for all OAuth apps
 - In-app scope documentation on Connect cards
 - License key has no settings field (`coopAI.licenseKey` in code only)

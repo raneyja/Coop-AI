@@ -16,10 +16,21 @@ export type DecisionIntegrationProvider = "slack" | "jira" | "teams";
 export type DocIntegrationProvider = "confluence" | "notion" | "google-docs";
 export type IntegrationChatProvider = DecisionIntegrationProvider | DocIntegrationProvider;
 
-/** Composer mode for chat sends — edit routes to the code_edit use case. */
-export type ComposerMode = "ask" | "edit";
-
 export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
+
+export type ProjectInstructionsStatus = "loaded" | "missing" | "disabled" | "no_git";
+
+export type ProjectInstructionsState = {
+  status: ProjectInstructionsStatus;
+  /** Repo root when git-backed workspace is open. */
+  gitRoot?: string;
+  /** Instruction file paths loaded on each chat turn. */
+  sources?: string[];
+  /** True when AGENTS.md is present (attached or in repo). */
+  hasAgentsMd?: boolean;
+  /** Basename of a user-attached AGENTS.md file, when set. */
+  attachedAgentsMdLabel?: string;
+};
 
 export type RepoContext = {
   provider?: CodeHostProviderPreference;
@@ -37,6 +48,7 @@ export type RepoContext = {
   /** Repo-relative paths for open editor tabs. */
   openEditors?: string[];
   languageId?: string;
+  projectInstructions?: ProjectInstructionsState;
 };
 
 export type ChatImageAttachment = {
@@ -57,6 +69,8 @@ export type ChatFileMention = {
 };
 
 export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
+
+export type ComposerMode = "ask" | "edit";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -185,6 +199,7 @@ export type UserPreferences = {
 
 export type SettingsStatePayload = UserPreferences & {
   identityDirectory: IdentityDirectory;
+  projectInstructions?: ProjectInstructionsState;
 };
 
 export type ChatUsagePayload = {
@@ -295,7 +310,6 @@ export type WebviewInbound =
         mentions?: ChatFileMention[];
         historyContent?: string;
         slashUserArgs?: string;
-        composerMode?: ComposerMode;
         /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
         targetFile?: string;
       };
@@ -427,6 +441,10 @@ export type WebviewInbound =
       };
     }
   | { type: "context:dismiss-warning" }
+  | { type: "agents:create-skeleton" }
+  | { type: "agents:start-from-template" }
+  | { type: "agents:attach" }
+  | { type: "agents:open" }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | { type: "ownership:copy-draft"; payload: { text: string } }

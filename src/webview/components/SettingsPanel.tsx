@@ -122,6 +122,9 @@ type SettingsPanelProps = {
     error?: string;
   };
   lightningState?: SettingsLightningSummary | null;
+  onAttachAgentsMd: () => void;
+  onOpenAgentsMd: () => void;
+  onStartFromAgentsMdTemplate: () => void;
 };
 
 export function SettingsPanel({

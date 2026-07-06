@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-07-06"
 ---
 
 ## General
@@ -36,9 +36,17 @@ Yes. Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev). See [Enterprise depl
 
 ## Setup
 
-### Where do I get an API key?
+### How do I sign in?
 
-[Free signup](/signup/free) or from your org admin after Pro/Enterprise checkout.
+Create an account at [free signup](/signup/free) (email + password or Google), or accept an invite from your org admin. Then sign in in the **extension** or **admin portal** with the same method:
+
+- Email and password
+- **Continue with Google**
+- **Sign in with SSO** (Enterprise)
+
+### Do I need an API key?
+
+No for normal use. **Automation API keys** (`coop_…`) are optional — for CI and scripts only. Create them in the admin portal **API Keys** page if needed.
 
 ### Who connects Slack and GitHub?
 

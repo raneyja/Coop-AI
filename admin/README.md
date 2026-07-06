@@ -40,7 +40,7 @@ Open **http://localhost:3001** in your browser.
 
 **Success looks like:** Dashboard shows your org name, plan badge, and integration status grid.
 
-Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API keys remain available for scripts and CI.
+Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API keys are created on **API Keys** for CI and scripts — not for portal sign-in.
 
 ## Authentication
 
@@ -48,7 +48,6 @@ Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API
 - **Invites:** Email link → `/accept-invite?token=…` → set password and profile → signed in
 - **Session:** Access token in `sessionStorage` plus httpOnly `coop_session` cookie (set by Next.js API routes)
 - **Refresh:** Refresh token in `sessionStorage`; sign out calls `/api/auth/logout`
-- **Legacy:** Automation API key tab (collapsed under “More sign-in options”) for `coop_…` keys
 
 Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admin pages. **Members** (developer role) see a reduced nav: dashboard, integrations (read-only status), chat feed, personal usage, and settings.
 
@@ -56,7 +55,7 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 
 | Route | Who | Purpose |
 |-------|-----|---------|
-| `/login` | All | Email/password, Google, SSO, or API key sign-in |
+| `/login` | All | Email/password, Google, or SSO sign-in |
 | `/forgot-password` | All | Request a password reset email |
 | `/accept-invite` | Invited users | Accept invite, set password, complete profile |
 | `/auth/callback` | All | OAuth / SSO return handler |

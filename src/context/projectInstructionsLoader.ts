@@ -216,6 +216,23 @@ export function loadProjectInstructions(options: LoadProjectInstructionsOptions)
   return { files, sourcePaths };
 }
 
+export function formatProjectInstructionsBlock(files: ProjectInstructionFile[]): string {
+  if (!files.length) {
+    return "";
+  }
+  const lines: string[] = ["<project_instructions>"];
+  lines.push(
+    "Persistent project rules and agent guides from the local workspace (AGENTS.md and Cursor alwaysApply rules)."
+  );
+  for (const file of files) {
+    lines.push(`<instruction path="${file.path}" kind="${file.kind}">`);
+    lines.push(file.content);
+    lines.push("</instruction>");
+  }
+  lines.push("</project_instructions>");
+  return lines.join("\n");
+}
+
 export function resolveProjectInstructionsGitRoot(options: {
   activeFile?: string;
   resolveAbsolutePath?: (relativePath: string) => string | undefined;

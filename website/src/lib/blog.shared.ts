@@ -15,7 +15,6 @@ export type BlogPostMeta = {
   heroImage?: string;
   heroImageAlt?: string;
   ogImage?: string;
-  waitlistUrl?: string;
   draft?: boolean;
 };
 

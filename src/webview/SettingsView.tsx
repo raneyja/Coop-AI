@@ -857,6 +857,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onSaveWorkspaceRepos={(repoIds) => post({ type: "workspace:repos:save", payload: { repoIds } })}
         workspacePickerState={workspacePickerState}
         lightningState={lightningState}
+        onAttachAgentsMd={() => post({ type: "agents:attach" })}
+        onOpenAgentsMd={() => post({ type: "agents:open" })}
+        onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
       />
       </div>
       <PromptLibraryModal

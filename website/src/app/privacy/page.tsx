@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/LegalLayout";
-import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = buildPageMetadata(
-  "/privacy",
-  siteConfig.seo.pages.privacy.title,
-  siteConfig.seo.pages.privacy.description
-);
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "How CoopAI collects, uses, and protects your data."
+};
 
 export default function PrivacyPage() {
   return (
@@ -24,8 +22,8 @@ export default function PrivacyPage() {
       <p>When you visit {siteConfig.domain}, we may collect:</p>
       <ul>
         <li>
-          <strong>Contact information</strong> you submit through demo requests, waitlist forms, or
-          chat widgets (name, email, company, role, message)
+          <strong>Contact information</strong> you submit through demo requests or chat widgets
+          (name, email, company, role, message)
         </li>
         <li>
           <strong>Usage analytics</strong> via Vercel Analytics — aggregated page views, referrers,
@@ -72,7 +70,7 @@ export default function PrivacyPage() {
         <li>Provide, operate, and improve the Services</li>
         <li>Route inference requests to LLM providers on your behalf</li>
         <li>Build and maintain repository knowledge graphs</li>
-        <li>Respond to demo requests, support inquiries, and waitlist signups</li>
+        <li>Respond to demo requests and support inquiries</li>
         <li>Monitor service health, security, and performance</li>
         <li>Comply with legal obligations</li>
       </ul>

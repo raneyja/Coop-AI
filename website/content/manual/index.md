@@ -1,25 +1,25 @@
 ---
-title: "Coop AI Owner's Manual"
-description: "Install, configure, and use Coop AI in VS Code — quick actions, prompt library, and team conventions."
+title: "CoopAI Owner's Manual"
+description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
 lastUpdated: "2026-07-04"
 ---
 
-Congratulations on choosing Coop AI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
+Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
 
 ## Why Coop
 
 ### The context gap
 
-Most AI coding tools only see the file you have open. Coop AI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software — not just the current buffer.
+Most AI coding tools only see the file you have open. CoopAI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software — not just the current buffer.
 
 > By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions… I spend at least 6 hours each week answering questions and cut that in half this past week.
 > — Senior Engineer, Row Labs
 
-### Zero-clone graph intelligence
+### Lightning Intelligence
 
-Coop AI uses a **zero-clone** architecture. Repository metadata, ownership, and dependency graphs are built from webhooks and index jobs — not full monorepo copies on every laptop. Your source stays on your infrastructure.
+CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs — not full monorepo copies on every laptop. Your source stays on your infrastructure.
 
-**Developer (free)** uses local workspace files with AI credits and unlimited tool integrations. **Pro** adds GitHub connections, team seats, and Lightning Mode for faster cross-repo search.
+**Developer (free)** uses local workspace files with AI credits. Personal tool integrations are unlimited in **developer mode** (`coopAI.devMode: true`); in production, org admins connect integrations once in the admin portal. **Pro** adds GitHub connections, team seats, and Lightning Mode for faster cross-repo search.
 
 ### Quick actions at a glance
 
@@ -61,26 +61,20 @@ See the [Security page](/security) for architecture details.
 4. **Browser** — Open the [admin portal](https://admin.coop-ai.dev/login) and sign in with your email and password, **Continue with Google**, or **Sign in with SSO** (Enterprise).
 5. **Admin portal** — Connect GitHub (GitHub App on company org — use **Send link to GitHub admin** if IT owns GitHub), Slack, and other tools once for your whole org.
 6. **Admin portal** — Invite teammates from the Users page.
-7. **Extension UI** — Developers install Coop AI in VS Code and sign in with their work email (or Google / org SSO).
+7. **Extension UI** — Developers install CoopAI in VS Code and sign in with their work email (or Google / org SSO).
 
 ### Install the VS Code extension
 
-1. **Browser** — Open the [VS Code Marketplace listing](https://marketplace.visualstudio.com/) for Coop AI (or use the install button on [coop-ai.dev](https://coop-ai.dev)).
+1. **Browser** — Open the [VS Code Marketplace listing](https://marketplace.visualstudio.com/) for CoopAI (or use the install button on [coop-ai.dev](https://coop-ai.dev)).
 2. **Extension UI** — Click **Install**, then reload VS Code if prompted.
 3. **Extension UI** — Open the Coop sidebar from the activity bar (Coop icon).
 
-If the extension is not yet published, join the waitlist from the [demo page](/demo?intent=waitlist).
-
 ### Sign in
 
-1. **Extension UI** — Open the Coop sidebar → gear icon, or run **Coop AI: Open Settings** from the Command Palette.
+1. **Extension UI** — Open the Coop sidebar → gear icon, or run **CoopAI Settings** from the Command Palette.
 2. **Extension UI** — Go to **Account** and sign in with your email and password, or **Continue with Google**. Enterprise orgs can use **Sign in with SSO**.
-3. **Extension UI** — Set **API base URL** to `https://api.coop-ai.dev` (default) or your self-hosted URL.
-4. **Extension UI** — Click **Test connection** — success shows a green health check calling `GET /health`.
 
 Use **Forgot password?** in Account settings if you need to reset your password ([coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password)).
-
-**Automation API keys** (`coop_…`) are optional — expand **Automation API key** under Account for scripts and CI only. Most users should sign in with email or Google.
 
 ### Set repository context
 
@@ -107,18 +101,6 @@ If integrations are not connected, Coop still works for code-only questions. Ask
 
 The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **Quick Action** grid and a hint to type `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps`.
 
-<!-- figures -->
-![Coop sidebar in VS Code (light theme) — quick actions and chat composer](/screenshots/docs/extension-sidebar-light.png)
-
-*Light theme*
-
-![Coop sidebar in VS Code (dark theme)](/screenshots/docs/extension-sidebar-dark.png)
-
-*Dark theme*
-<!-- /figures -->
-
-Select the Coop icon in the activity bar, then use quick actions or the composer at the bottom. Layout is the same in both VS Code themes.
-
 ### Chat composer
 
 Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations.
@@ -129,8 +111,8 @@ Type free-form questions in the composer. Coop streams answers grounded in your 
 
 ### @-mentions and attachments
 
-- Type `@` to search files in your workspace (up to 3 attachments per message).
-- Paste or attach images for UI review tasks.
+- Type `@` to search files in your workspace (up to 3 @-mentions per message).
+- Use the paperclip to attach files — images, PDFs, or text (up to 4 per message).
 - Selected lines in the editor are included automatically as context.
 
 ### Slash commands
@@ -149,13 +131,15 @@ Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/d
 
 ### Settings overview
 
-Open settings via the sidebar gear icon or **Coop AI: Open Settings**:
+Open settings via the sidebar gear icon or **CoopAI Settings**:
 
 | Screen | Purpose |
 | --- | --- |
-| **Account** | Sign in (email, Google, SSO), API base URL, connection test; automation API key for CI |
+| **Account** | Sign in (email, Google, SSO), timezone |
+| **Plan & Usage** | Current plan, credits, upgrade path |
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
+| **Indexing** | Lightning Mode status and indexed repos (Pro) |
 | **Preferences** | Prompt library, model preferences |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, **Understand Repo**, or **Knowledge Gaps**.
@@ -419,7 +403,7 @@ This Owner's Manual (what you're reading) is product documentation. Your repo's 
 
 ### How Coop uses it
 
-Coop's **Understand Repo** action treats `AGENTS.md` as a repo entry file alongside `README.md` and `package.json`. Keep the top-level file general; add subtree-specific `AGENTS.md` files for large monorepos.
+When project instructions are enabled, Coop loads `AGENTS.md` (and subtree-specific files in large monorepos) on **every chat turn** — not only for Understand Repo. If no `AGENTS.md` is found, the composer shows an **Attach AGENTS.md** prompt. Keep the top-level file general; add subtree-specific `AGENTS.md` files for large monorepos.
 
 ### Cursor rules and webview UI
 

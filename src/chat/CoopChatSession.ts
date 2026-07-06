@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { readAutocompleteSettings } from "../autocomplete/autocompleteConfig";
 import { activeThemeMode } from "./themeMode";
@@ -65,9 +67,9 @@ import type {
   ChatImageAttachment,
   ChatMessage,
   ChatPersistedArtifact,
-  ComposerMode,
   ConflictResolutionState,
   ConflictSummary,
+  ComposerMode,
   DegradationNotificationPayload,
   IntentFeedbackState,
   MentionSearchResult,
@@ -115,11 +117,9 @@ import {
   teamsSearchFromBundle,
   type RepoSummaryEvidence
 } from "../context/contextBundleEvidence";
-import { loadProjectInstructionsCached } from "../context/projectInstructionsCache";
+import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
-import { buildModelHistory } from "./buildModelHistory";
-import { hydrateContextBundleFromArtifacts } from "./hydrateContextBundleFromArtifacts";
 import {
   buildMissingIntentClarificationResponse,
   shouldClarifyFirstChatTurn
@@ -146,7 +146,6 @@ import {
   plainChatHistoryContent,
   plainChatRefersToAttachedFile,
   partitionMentionsForQuickAction,
-  partitionMentionsForTraceDecision,
   type MentionScopeQuickAction
 } from "../prompts/mentionScope";
 import {
@@ -195,7 +194,6 @@ import {
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import { buildRepoId } from "./buildRepoId";
-import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import {
   buildTraceDecisionSearchSeeds,
   mergeTraceDecisionIntegrationEvidence
@@ -220,10 +218,6 @@ import {
   type LocalFileContextPayload
 } from "../context/localFileContext";
 import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../context/localContextMerge";
-import {
-  mergeRepoSemanticContext,
-  searchRepoForChat
-} from "../context/repoSemanticRetrieval";
 import { localFilesFromContextData } from "../context/localFileContext";
 import {
   readActiveEditorFileForChat,
@@ -238,6 +232,17 @@ import {
   resolveLocalAbsolutePath,
   searchLocalWorkspaceFiles
 } from "../context/localFileResolver";
+import { AGENTS_MD_FILENAME, AGENTS_MD_SKELETON } from "../context/agentsMdSkeleton";
+import {
+  getAttachedAgentsMdPath,
+  setAttachedAgentsMdPath
+} from "../context/agentsMdAttachmentStore";
+import {
+  formatProjectInstructionsBlock,
+  loadProjectInstructions
+} from "../context/projectInstructionsLoader";
+import { resolveProjectInstructionsState } from "../context/projectInstructionsStatus";
+import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
 import {
   MENTION_SEARCH_LIMIT,
   WORKSPACE_LOCAL_REPO_ID,
@@ -318,7 +323,6 @@ export class CoopChatSession {
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
-  private pendingMentionRefs: QuickActionMentionRef[] = [];
   private editorContextSuppressedUntil = 0;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
@@ -445,7 +449,6 @@ export class CoopChatSession {
       const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.chatHistory.push(...active.messages);
       this.threadArtifacts = [...(active.artifacts ?? [])];
-      this.lastContextBundle = hydrateContextBundleFromArtifacts(this.threadArtifacts);
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
       if (active.repoContext) {
@@ -571,7 +574,6 @@ export class CoopChatSession {
     this.abortActiveJob();
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
-    this.lastContextBundle = [];
     this.sessionCostUsd = 0;
     this.pinnedContextFile = undefined;
     this.setThreadTitle("New Chat");
@@ -621,10 +623,8 @@ export class CoopChatSession {
     this.pinnedContextFile = undefined;
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
-    this.lastContextBundle = [];
     this.chatHistory.push(...thread.messages);
     this.threadArtifacts = [...(thread.artifacts ?? [])];
-    this.lastContextBundle = hydrateContextBundleFromArtifacts(this.threadArtifacts);
     this.sessionCostUsd = thread.sessionCostUsd;
     if (thread.repoContext) {
       this.currentContext = stripStaleContextWarning(
@@ -854,6 +854,16 @@ export class CoopChatSession {
         this.postContext();
         void this.persistRepoContext();
         return;
+      case "agents:create-skeleton":
+      case "agents:start-from-template":
+        await this.startFromAgentsMdTemplate();
+        return;
+      case "agents:attach":
+        await this.attachAgentsMd();
+        return;
+      case "agents:open":
+        await this.openAgentsMd();
+        return;
       case "autocomplete:toggle":
         await vscode.commands.executeCommand("coopAI.toggleAutocomplete");
         return;
@@ -869,8 +879,7 @@ export class CoopChatSession {
             historyContent: message.payload.historyContent,
             mentions: message.payload.mentions,
             slashUserArgs: message.payload.slashUserArgs,
-            targetFile: message.payload.targetFile,
-            composerMode: message.payload.composerMode
+            targetFile: message.payload.targetFile
           }
         );
         return;
@@ -1658,8 +1667,6 @@ export class CoopChatSession {
         });
       }
       return this.lastContextBundle;
-    } finally {
-      this.pendingMentionRefs = [];
     }
   }
 
@@ -1669,37 +1676,11 @@ export class CoopChatSession {
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
-      result = await this.enrichChatContextWithRepoSemantic(result, request);
     } else {
       result = await this.buildBaseContextResult(request);
     }
 
     return this.enrichChatContextWithIntegrations(result, request);
-  }
-
-  private async enrichChatContextWithRepoSemantic(
-    result: ContextFetchResult,
-    request: ContextFetchRequest
-  ): Promise<ContextFetchResult> {
-    const activeRepoId = request.params.repoId ?? buildRepoId(this.preferences, this.currentContext);
-    const inScopeMentionCount = partitionMentionsForTraceDecision(
-      this.pendingMentionRefs,
-      activeRepoId
-    ).inRepo.length;
-
-    try {
-      const semantic = await searchRepoForChat({
-        request,
-        indexBackend: this.options.indexBackend,
-        api: this.options.api,
-        apiBaseUrl: this.preferences.apiBaseUrl,
-        branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
-        inScopeMentionCount
-      });
-      return mergeRepoSemanticContext(result, semantic);
-    } catch {
-      return result;
-    }
   }
 
   private async buildBaseContextResult(
@@ -2250,7 +2231,6 @@ export class CoopChatSession {
       slashUserArgs?: string;
       /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
       targetFile?: string;
-      /** Edit mode — routes to code_edit use case and patch-oriented system prompt. */
       composerMode?: ComposerMode;
     }
   ): Promise<void> {
@@ -2296,7 +2276,6 @@ export class CoopChatSession {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
     this.pendingChatLocalFiles = quickAction === "understand-repo" ? undefined : this.loadLocalFilesSyncForChat();
-    this.pendingMentionRefs = this.quickActionMentionRefs(options?.mentions);
 
     if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
@@ -2484,23 +2463,6 @@ export class CoopChatSession {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const slashUserArgs = args.trim() || undefined;
 
-    if (def.target.kind === "composer-mode") {
-      const historyContent = slashCommandHistoryContent(def, args);
-      const userText =
-        slashUserArgs ??
-        (this.currentContext.file?.trim()
-          ? `Edit \`${this.currentContext.file.trim()}\` per the request.`
-          : "Apply edits to the active file or attached context.");
-      await this.handleChatSend(userText, undefined, attachments, {
-        historyContent,
-        mentions,
-        slashUserArgs,
-        composerMode: def.target.mode,
-        sourceHint: "edit-mode"
-      });
-      return;
-    }
-
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
       if (isQuickActionBlocked(actionId, this.currentContext)) {
@@ -2521,6 +2483,23 @@ export class CoopChatSession {
         mentions,
         slashUserArgs
       });
+      return;
+    }
+
+    if (def.target.kind === "composer-mode") {
+      const historyContent = slashCommandHistoryContent(def, args);
+      const userText =
+        args.trim() || "Generate search-replace patches for the requested changes.";
+      await this.handleChatSend(userText, undefined, attachments, {
+        historyContent,
+        mentions,
+        slashUserArgs: slashUserArgs,
+        composerMode: def.target.mode
+      });
+      return;
+    }
+
+    if (def.target.kind !== "integration") {
       return;
     }
 
@@ -3196,10 +3175,7 @@ export class CoopChatSession {
 
       const mentionFiles =
         mentionsToResolve.length > 0 ? await this.resolveMentionFiles(mentionsToResolve) : [];
-      const projectInstructions = loadProjectInstructionsCached({
-        activeFile: this.currentContext.file
-      });
-      const apiMessage =
+      let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
               message: llmMessage,
@@ -3208,21 +3184,34 @@ export class CoopChatSession {
               repo: this.currentContext.repo,
               branch: this.currentContext.branch
             })
-          : buildUserMessageWithContext(llmMessage, {
-              owner: this.currentContext.owner,
-              repo: this.currentContext.repo,
-              branch: this.currentContext.branch,
-              file:
-                effectiveQuickAction === "understand-repo" || integrationProvider
-                  ? undefined
-                  : allMentionsOutOfScope
+          : useContextBundle || !localPayload?.files.length
+            ? buildUserMessageWithContext(llmMessage, {
+                owner: this.currentContext.owner,
+                repo: this.currentContext.repo,
+                branch: this.currentContext.branch,
+                file:
+                  effectiveQuickAction === "understand-repo" || integrationProvider
                     ? undefined
-                    : this.currentContext.file,
-              selectedLines: this.currentContext.selectedLines,
-              languageId: this.currentContext.languageId,
-              contextBundle,
-              projectInstructions
-            });
+                    : allMentionsOutOfScope
+                      ? undefined
+                      : this.currentContext.file,
+                selectedLines: this.currentContext.selectedLines,
+                languageId: this.currentContext.languageId,
+                contextBundle
+              })
+            : formatChatMessageWithLocalFiles({
+                message: llmMessage,
+                files: localPayload.files,
+                file: this.currentContext.file,
+                selectedLines: this.currentContext.selectedLines,
+                owner: this.currentContext.owner,
+                repo: this.currentContext.repo,
+                branch: this.currentContext.branch
+              });
+      const projectInstructionsBlock = this.buildProjectInstructionsBlock();
+      if (projectInstructionsBlock) {
+        apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
+      }
 
       const entryFileCount = contextBundle
         .flatMap((entry) => {
@@ -3283,13 +3272,7 @@ export class CoopChatSession {
         this.postContext();
       }
 
-      const priorHistory = buildModelHistory(this.chatHistory);
-      const lastUserIndex = this.chatHistory.length - 1;
-      const lastUserMessage = this.chatHistory[lastUserIndex];
-      if (lastUserIndex >= 0 && lastUserMessage?.role === "user") {
-        this.chatHistory[lastUserIndex] = { ...lastUserMessage, modelContent: apiMessage };
-        this.persistActiveThread();
-      }
+      const priorHistory = this.chatHistory.slice(0, -1);
       let clearedIntentForOutput = false;
       const outputGate = createChatOutputGate({
         startedAt: this.chatTurnStartedAt,
@@ -3316,8 +3299,7 @@ export class CoopChatSession {
             repo: this.currentContext.repo,
             branch: this.currentContext.branch,
             file:
-              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined,
-            projectInstructions: projectInstructions.length ? projectInstructions : undefined
+              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined
           },
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,
@@ -4420,6 +4402,10 @@ export class CoopChatSession {
 
   private postContext(): void {
     this.currentContext = normalizeRepoContext(this.currentContext);
+    this.currentContext = {
+      ...this.currentContext,
+      projectInstructions: this.resolveProjectInstructionsContext()
+    };
     this.syncDescription();
     const repoId = buildRepoId(this.preferences, this.currentContext);
     this.options.lightningStatusBar.setCurrentRepo(repoId);
@@ -5298,11 +5284,133 @@ export class CoopChatSession {
     this.postToChat(message);
   }
 
+  private resolveProjectInstructionsContext() {
+    return resolveProjectInstructionsState({
+      activeFile: this.currentContext.file,
+      workspaceRoots: vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath),
+      resolveAbsolutePath: resolveLocalAbsolutePath,
+      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext)
+    });
+  }
+
+  private buildProjectInstructionsBlock(): string | undefined {
+    const state = this.currentContext.projectInstructions;
+    if (!readProjectInstructionsEnabled() || state?.status !== "loaded" || !state.gitRoot) {
+      return undefined;
+    }
+    const loaded = loadProjectInstructions({
+      gitRoot: state.gitRoot,
+      activeFile: this.currentContext.file
+    });
+    return formatProjectInstructionsBlock(loaded.files);
+  }
+
+  private async attachAgentsMd(): Promise<void> {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: "Upload",
+      filters: { Markdown: ["md"] },
+      title: "Upload AGENTS.md"
+    });
+    if (!picked?.[0]) {
+      return;
+    }
+    const fsPath = picked[0].fsPath;
+    if (!fsPath.toLowerCase().endsWith(".md")) {
+      void vscode.window.showWarningMessage("Choose a Markdown (.md) file.");
+      return;
+    }
+    try {
+      await setAttachedAgentsMdPath(this.options.extensionContext, fsPath);
+      this.postContext();
+      await this.pushSettingsState();
+      void vscode.window.showInformationMessage(`Uploaded ${path.basename(fsPath)} for Coop chat.`);
+    } catch (error) {
+      console.error("[CoopAI] attachAgentsMd failed", error);
+      void vscode.window.showErrorMessage("Could not upload AGENTS.md.");
+    }
+  }
+
+  private async openAgentsMd(): Promise<void> {
+    const attached = getAttachedAgentsMdPath(this.options.extensionContext);
+    if (attached && fs.existsSync(attached)) {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(attached));
+      await vscode.window.showTextDocument(doc);
+      return;
+    }
+
+    const gitRoot =
+      this.currentContext.projectInstructions?.gitRoot ??
+      this.resolveProjectInstructionsContext().gitRoot;
+    if (!gitRoot) {
+      void vscode.window.showWarningMessage("Attach AGENTS.md or open a git repository folder first.");
+      return;
+    }
+
+    const target = path.join(gitRoot, AGENTS_MD_FILENAME);
+    if (!fs.existsSync(target)) {
+      void vscode.window.showWarningMessage(`No ${AGENTS_MD_FILENAME} found. Use Attach AGENTS.md to pick a file.`);
+      return;
+    }
+
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
+    await vscode.window.showTextDocument(doc);
+  }
+
+  private async startFromAgentsMdTemplate(): Promise<void> {
+    const gitRoot =
+      this.currentContext.projectInstructions?.gitRoot ?? this.resolveProjectInstructionsContext().gitRoot;
+
+    try {
+      if (gitRoot) {
+        const target = path.join(gitRoot, AGENTS_MD_FILENAME);
+        if (fs.existsSync(target)) {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
+          await vscode.window.showTextDocument(doc);
+          void vscode.window.showInformationMessage(`${AGENTS_MD_FILENAME} already exists — opened for editing.`);
+        } else {
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(target), Buffer.from(AGENTS_MD_SKELETON, "utf8"));
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
+          await vscode.window.showTextDocument(doc);
+          void vscode.window.showInformationMessage(`Created ${AGENTS_MD_FILENAME} from template at the repo root.`);
+        }
+        this.postContext();
+        await this.pushSettingsState();
+        return;
+      }
+
+      const defaultFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const picked = await vscode.window.showSaveDialog({
+        defaultUri: defaultFolder
+          ? vscode.Uri.joinPath(defaultFolder, AGENTS_MD_FILENAME)
+          : undefined,
+        filters: { Markdown: ["md"] },
+        saveLabel: "Create AGENTS.md",
+        title: "Save AGENTS.md template"
+      });
+      if (!picked) {
+        return;
+      }
+
+      await vscode.workspace.fs.writeFile(picked, Buffer.from(AGENTS_MD_SKELETON, "utf8"));
+      await setAttachedAgentsMdPath(this.options.extensionContext, picked.fsPath);
+      const doc = await vscode.workspace.openTextDocument(picked);
+      await vscode.window.showTextDocument(doc);
+      void vscode.window.showInformationMessage(`Created ${path.basename(picked.fsPath)} from template.`);
+      this.postContext();
+      await this.pushSettingsState();
+    } catch (error) {
+      console.error("[CoopAI] startFromAgentsMdTemplate failed", error);
+      void vscode.window.showErrorMessage("Could not create AGENTS.md from template.");
+    }
+  }
+
   private async pushSettingsState(): Promise<void> {
     const identityDirectory = await this.options.identityDirectoryStore.load(this.preferences.apiBaseUrl);
     const payload: SettingsStatePayload = {
       ...this.preferences,
-      identityDirectory
+      identityDirectory,
+      projectInstructions: this.resolveProjectInstructionsContext()
     };
     const message: WebviewOutbound = { type: "settings:state", payload };
     this.postToChat(message);

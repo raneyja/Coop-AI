@@ -1,6 +1,7 @@
 import React from "react";
 import { QUICK_ACTION_SLASH_HINTS } from "../../context/slashCommands";
 import { QuickActionGrid } from "./QuickActionGrid";
+import { shouldPromptForAgentsMd } from "../lib/agentsMdStatus";
 import { QuickActionId, RepoContext } from "../types";
 
 type EmptyStateProps = {
@@ -9,6 +10,8 @@ type EmptyStateProps = {
   onAction: (actionId: QuickActionId, prompt: string) => void;
   onSlashCommand?: (command: (typeof QUICK_ACTION_SLASH_HINTS)[number]) => void;
   launchIntroDone?: boolean;
+  onAttachAgentsMd?: () => void;
+  onStartFromAgentsMdTemplate?: () => void;
 };
 
 export function EmptyState({
@@ -16,7 +19,9 @@ export function EmptyState({
   disabled,
   onAction,
   onSlashCommand,
-  launchIntroDone = true
+  launchIntroDone = true,
+  onAttachAgentsMd,
+  onStartFromAgentsMdTemplate
 }: EmptyStateProps): React.ReactElement {
   return (
     <div className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
@@ -29,6 +34,29 @@ export function EmptyState({
           <h2 className="mx-auto max-w-[280px] text-center text-lg font-semibold leading-relaxed tracking-tight text-[var(--coop-panel-foreground)] sm:text-xl">
             CoopAI
           </h2>
+
+          {shouldPromptForAgentsMd(context.projectInstructions) ? (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                disabled={disabled || !onStartFromAgentsMdTemplate}
+                className="coop-settings-action-btn"
+                onClick={onStartFromAgentsMdTemplate}
+              >
+                Create AGENTS.md
+              </button>
+              {onAttachAgentsMd ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  className="coop-text-btn mt-2 block w-full"
+                  onClick={onAttachAgentsMd}
+                >
+                  Upload AGENTS.md
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-6">
             <QuickActionGrid

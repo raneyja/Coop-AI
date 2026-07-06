@@ -92,6 +92,7 @@ export type Preferences = {
   adminControlledRepos?: boolean;
   timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
+  projectInstructions?: import("../../../chat/types").ProjectInstructionsState;
 };
 
 export type SettingsCollectionSummary = {

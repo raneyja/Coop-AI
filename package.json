@@ -416,25 +416,10 @@
           "minimum": 0,
           "description": "Minutes away from CoopAI before the sidebar opens on a fresh thread instead of restoring the last one. Prior threads stay in the thread list. Set to 0 to always restore the last thread."
         },
-        "coopAI.chat.semanticRetrieval": {
-          "type": "boolean",
-          "default": true,
-          "description": "In plain chat, search the indexed repository for files related to your question and attach relevant snippets (when you have not already @-attached multiple in-scope files)."
-        },
         "coopAI.projectInstructions.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Attach local AGENTS.md and Cursor alwaysApply rules (.cursor/rules/*.mdc) to chat context."
-        },
-        "coopAI.chat.agentMode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "auto",
-            "on"
-          ],
-          "default": "off",
-          "description": "Read-only agent exploration loop for complex plain chat (off by default)."
+          "description": "Attach AGENTS.md on every chat turn (from your repo or a file you attach in Settings)."
         },
         "coopAI.includeSelection": {
           "type": "boolean",
@@ -449,7 +434,7 @@
         "coopAI.apiBaseUrl": {
           "type": "string",
           "default": "https://api.coop-ai.dev",
-          "description": "Coop API base URL (coopAI.devMode only). Production always uses https://api.coop-ai.dev."
+          "description": "Base URL for the CoopAI cloud API (HTTPS only)."
         },
         "coopAI.jobsBaseUrl": {
           "type": "string",
@@ -842,9 +827,8 @@
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
     "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
-    "test:build-model-history": "npx tsx src/chat/buildModelHistory.test.ts",
     "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
-    "test:context-preview": "npx tsx src/context/contextPreviewSummary.test.ts",
+    "test:project-instructions": "npx tsx src/context/projectInstructionsStatus.test.ts && npx tsx src/webview/lib/agentsMdStatus.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineGraphContext.test.ts && npx tsx src/api/inlineCompletionApi.test.ts",
     "test:autocomplete-smoke": "npx tsx scripts/autocomplete-smoke.mjs",
@@ -866,7 +850,7 @@
     "test:error-handling": "npx tsx src/jobs/errorHandling.test.ts",
     "test:indexing-progress": "npx tsx admin/src/lib/indexingProgress.test.ts",
     "test:user-facing-errors": "npx tsx src/api/userFacingErrors.test.ts",
-    "test:integration-scope": "npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/codeHostCredentialResolver.test.ts && npx tsx src/server/codeHostConnectors/routingGithubConnector.test.ts && npx tsx src/api/codeHosts/githubClient.test.ts && npx tsx src/server/adminIntegrationTest.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts",
+    "test:integration-scope": "npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/codeHostCredentialResolver.test.ts && npx tsx src/server/codeHostConnectors/routingGithubConnector.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts",
     "test": "npm run test:integration-scope",
     "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
     "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh",

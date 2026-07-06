@@ -2,10 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
-type FormType = "demo" | "waitlist";
-
 type ContactFormProps = {
-  type: FormType;
   title: string;
   description: string;
   submitLabel: string;
@@ -14,7 +11,6 @@ type ContactFormProps = {
 };
 
 export function ContactForm({
-  type,
   title,
   description,
   submitLabel,
@@ -36,7 +32,7 @@ export function ContactForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type,
+          type: "demo",
           email: data.get("email"),
           name: data.get("name"),
           company: data.get("company"),
@@ -63,11 +59,7 @@ export function ContactForm({
     return (
       <div className="coop-panel p-8 text-center">
         <p className="text-lg font-medium text-gray-900">Thanks — we&apos;ll be in touch soon.</p>
-        <p className="mt-2 text-sm text-coop-muted">
-          {type === "demo"
-            ? "Our team will reach out to schedule your demo."
-            : "You're on the waitlist. We'll notify you when the extension is available."}
-        </p>
+        <p className="mt-2 text-sm text-coop-muted">Our team will reach out to schedule your demo.</p>
       </div>
     );
   }
@@ -86,22 +78,20 @@ export function ContactForm({
           <Field label="Company" name="company" />
           <Field label="Role" name="role" placeholder="e.g. Staff Engineer" />
         </div>
-        {type === "demo" && (
-          <div>
-            <label htmlFor="message" className="block text-sm font-medium text-gray-900">
-              What would you like to explore?
-            </label>
-            <textarea
-              id="message"
-              name="message"
-              rows={3}
-              defaultValue={defaultMessage}
-              key={defaultMessage ?? "message-empty"}
-              className="mt-1.5 w-full rounded-sm border border-coop-border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
-              placeholder="Team size, repos, security requirements..."
-            />
-          </div>
-        )}
+        <div>
+          <label htmlFor="message" className="block text-sm font-medium text-gray-900">
+            What would you like to explore?
+          </label>
+          <textarea
+            id="message"
+            name="message"
+            rows={3}
+            defaultValue={defaultMessage}
+            key={defaultMessage ?? "message-empty"}
+            className="mt-1.5 w-full rounded-sm border border-coop-border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+            placeholder="Team size, repos, security requirements..."
+          />
+        </div>
 
         {status === "error" && (
           <p className="text-sm text-red-600" role="alert">

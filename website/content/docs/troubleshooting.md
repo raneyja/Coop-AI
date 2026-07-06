@@ -3,15 +3,17 @@ title: Troubleshooting
 description: Common issues and fixes for Coop AI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-06"
 ---
 
 ## Extension
 
 | Problem | Fix |
 | --- | --- |
-| **Test connection fails** | Verify API key, base URL (`https://api.coop-ai.dev`), network access |
-| **401 unauthorized** | Create new API key in admin portal; revoke old key |
+| **Not signed in** | **Settings → Account** — sign in with email/password, Google, or SSO (Enterprise) |
+| **Test connection fails** | Confirm you are signed in; check API base URL (`https://api.coop-ai.dev`) and network |
+| **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
+| **SSO required** | Your org requires SAML — use **Sign in with SSO** and enter your organization name |
 | **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
@@ -25,7 +27,7 @@ lastUpdated: "2026-06-30"
 | **Manual trigger does nothing** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Competing suggestions with Copilot** | Turn Coop autocomplete off, or leave it on — Coop automatically disables Copilot inline when enabled |
 | **Slow or dropped completions** | Increase `requestTimeoutMs` (default 400); check API latency; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
-| **401 on completions** | Verify API key; create new key in admin portal if revoked |
+| **401 on completions** | Sign in again under **Settings → Account**; automation API keys do not replace user sign-in |
 | **Graph context not applied** | Pro plan required; connect and index repo in admin portal; set Workspace owner/repo/branch |
 | **FIM not used** | Ensure `coopAI.autocomplete.useFim` is `true`; operator sets `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` on API server |
 
@@ -35,7 +37,8 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 
 | Problem | Fix |
 | --- | --- |
-| **Cannot sign in** | Use admin API key from signup email, not developer key |
+| **Cannot sign in** | Use email/password or Google from signup or invite — not an automation API key |
+| **Invite link expired** | Ask admin to resend invite from **Users** |
 | **503 on Connect** | Coop operator must configure OAuth apps on API server |
 | **403 admin required** | User needs org owner/admin role |
 | **Integration shows Connected but search empty** | Configure scope → Save → Test |
@@ -56,7 +59,7 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | --- | --- |
 | **Checkout link invalid** | Start fresh from [Pricing](/pricing) |
 | **Welcome page stuck provisioning** | Wait 1–2 minutes; check email; [contact support](/demo) |
-| **Missing API key email** | Check spam; create key in admin portal |
+| **No welcome email** | Check spam; sign in at [admin portal login](https://admin.coop-ai.dev/login) with checkout email |
 
 ## Self-hosted
 

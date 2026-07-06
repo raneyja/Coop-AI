@@ -10,7 +10,7 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 
 ## Prerequisites
 
-- Admin account with access to [admin.coop-ai.dev](https://admin.coop-ai.dev) (sign in with email/password or Google)
+- Admin account with access to [admin.coop-ai.dev](https://admin.coop-ai.dev) (sign in with email/password, Google, or SSO)
 - Coop operator has configured OAuth apps on the API server (hosted Coop handles this automatically)
 
 ## 5-minute checklist

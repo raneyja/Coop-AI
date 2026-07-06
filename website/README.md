@@ -15,7 +15,7 @@ This folder is self-contained — it does not share dependencies with the VS Cod
 | `/security` | Security architecture and honest trust posture |
 | `/privacy` | Privacy Policy |
 | `/terms` | Terms of Service |
-| `/demo` | Book a demo + extension waitlist forms |
+| `/demo` | Book a demo + install extension panel |
 | `/docs` | Documentation placeholder (coming soon) |
 | `/blog` | Blog index |
 | `/blog/[slug]` | Individual blog posts (Markdown in `content/blog/`) |
@@ -113,7 +113,7 @@ We use **Vercel Analytics** and **Vercel Speed Insights** — free on Vercel hob
 
 ---
 
-## Google Sheets setup (waitlist + demo forms)
+## Google Sheets setup (demo form)
 
 Form submissions POST to `/api/submit`, which forwards JSON to your Google Apps Script web app.
 
@@ -392,8 +392,8 @@ No. `TawkChat.tsx` already loads the same URL. Pasting again would duplicate the
 **Are these IDs secret?**  
 No. Anyone can see them in the browser. Env vars keep config out of git and let you change IDs without a code change.
 
-**Does this replace demo/waitlist forms?**  
-No. Forms still go to Google Sheets via `/api/submit`. Chat is for live questions; forms are for structured leads.
+**Does this replace demo forms?**  
+No. The demo form still goes to Google Sheets via `/api/submit`. Chat is for live questions; the form is for structured leads.
 
 **CoopAI production IDs (reference)** — if this doc matches your live Tawk embed:
 
@@ -404,15 +404,13 @@ No. Forms still go to Google Sheets via `/api/submit`. Chat is for live question
 
 ## VS Code Marketplace link
 
-Until the extension is published, the site shows **"Join waitlist for extension"** instead of an install button.
+Install buttons link to the VS Code Marketplace. The default URL is `https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai`.
 
-When published, set:
+Override with:
 
 ```
 NEXT_PUBLIC_VSCODE_MARKETPLACE_URL=https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai
 ```
-
-(Update the item name to match your actual listing.)
 
 ---
 

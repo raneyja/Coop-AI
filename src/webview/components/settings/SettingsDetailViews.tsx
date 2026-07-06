@@ -26,6 +26,8 @@ import type { IdentityDirectory } from "../../../identity/types";
 import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
+import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
+import { agentsMdAttached } from "../../lib/agentsMdStatus";
 import { codeHostConfigured, identityLinksHubSubtitle, integrationConfigured } from "./subtitles";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
@@ -185,6 +187,9 @@ export type SettingsDetailProps = {
     error?: string;
   };
   lightningState?: SettingsLightningSummary | null;
+  onAttachAgentsMd: () => void;
+  onOpenAgentsMd: () => void;
+  onStartFromAgentsMdTemplate: () => void;
 };
 
 export function SettingsDetailView({
@@ -513,64 +518,22 @@ function IndexingDetail({ prefs, lightningState }: SettingsDetailProps): React.R
 function AccountDetail({
   prefs,
   onUpdate,
-  apiKeyDraft,
-  onApiKeyDraftChange,
-  onSaveApiKey,
-  onCopyApiKey,
-  onRevealApiKey,
-  onApiKeyBlurCommit,
   onSignInSso,
   onSignInPassword,
   onSignInGoogle,
   onForgotPassword,
-  onSignOut,
-  onTestConnection,
-  connectionTestMessage,
-  connectionTestOk,
-  savedFlashKey,
-  pendingTest,
-  testResult
+  onSignOut
 }: SettingsDetailProps): React.ReactElement {
   const signedIn = preferencesSignedIn(prefs);
-  const [urlDraft, setUrlDraft] = useState(prefs.apiBaseUrl);
-  const [urlDirty, setUrlDirty] = useState(false);
-  const [urlSaved, setUrlSaved] = useState(false);
   const [ssoOrgDraft, setSsoOrgDraft] = useState(prefs.orgName ?? "");
   const [emailDraft, setEmailDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
-  const [automationOpen, setAutomationOpen] = useState(false);
-  const urlSavedTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!urlDirty) {
-      setUrlDraft(prefs.apiBaseUrl);
-    }
-  }, [prefs.apiBaseUrl, urlDirty]);
 
   useEffect(() => {
     if (prefs.orgName) {
       setSsoOrgDraft(prefs.orgName);
     }
   }, [prefs.orgName]);
-
-  useEffect(
-    () => () => {
-      if (urlSavedTimer.current !== null) {
-        window.clearTimeout(urlSavedTimer.current);
-      }
-    },
-    []
-  );
-
-  const saveUrl = () => {
-    onUpdate({ apiBaseUrl: urlDraft.trim() });
-    setUrlDirty(false);
-    setUrlSaved(true);
-    if (urlSavedTimer.current !== null) {
-      window.clearTimeout(urlSavedTimer.current);
-    }
-    urlSavedTimer.current = window.setTimeout(() => setUrlSaved(false), 2000);
-  };
 
   const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
 
@@ -665,79 +628,6 @@ function AccountDetail({
         </button>
       </div>
 
-      <button
-        type="button"
-        className="coop-result-collapsible-toggle coop-prompt-modal-section-title mt-3 w-full text-left"
-        aria-expanded={automationOpen}
-        onClick={() => setAutomationOpen((open) => !open)}
-      >
-        <span className="coop-result-collapsible-chevron" aria-hidden="true">
-          {automationOpen ? "▾" : "▸"}
-        </span>
-        <span className="coop-result-collapsible-title">Automation API key</span>
-      </button>
-      {automationOpen ? (
-        <div className="coop-settings-card-desc">
-          <p className="mb-2">
-            Optional <code>coop_…</code> key for scripts and CI. Most users should sign in with email or Google above.
-          </p>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Coop API key</span>
-            <ConfiguredSecretInput
-              configured={signedIn && prefs.authMethod === "api_key"}
-              value={apiKeyDraft}
-              placeholder={
-                prefs.devMode ? "Local dev: any value (e.g. dev) then Save" : "coop_… from admin portal API Keys"
-              }
-              onChange={onApiKeyDraftChange}
-              onReveal={signedIn ? onRevealApiKey : undefined}
-              onBlurCommit={onApiKeyBlurCommit}
-              className="coop-settings-field"
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onSaveApiKey}
-            >
-              Save API key
-            </button>
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onCopyApiKey}
-              disabled={!signedIn}
-            >
-              Copy API key
-            </button>
-            <TestButton
-              testKey="connection"
-              label="Test connection"
-              pendingTest={pendingTest}
-              testResult={testResult}
-              onClick={onTestConnection}
-            />
-            <SaveFlashLabel show={savedFlashKey === "apiKey"} />
-          </div>
-        </div>
-      ) : null}
-
-      {connectionTestMessage ? (
-        <span
-          className={`coop-settings-card-desc${
-            connectionTestOk === true
-              ? " coop-settings-test-message--ok"
-              : connectionTestOk === false
-                ? " coop-settings-test-message--error"
-                : ""
-          }`}
-        >
-          {connectionTestMessage}
-        </span>
-      ) : null}
       <p className="coop-settings-card-desc">
         LLM provider keys are routed server-side; code host tokens stay in VS Code SecretStorage.
       </p>
@@ -767,35 +657,6 @@ function AccountDetail({
           </select>
         </label>
       </div>
-
-      {prefs.devMode ? (
-        <>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">API base URL</span>
-            <input
-              type="url"
-              value={urlDraft}
-              placeholder="http://localhost:8787"
-              className="coop-settings-field"
-              onChange={(e) => {
-                setUrlDraft(e.target.value);
-                setUrlDirty(true);
-                setUrlSaved(false);
-              }}
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={saveUrl} disabled={!urlDirty}>
-              Save URL
-            </button>
-            <SaveFlashLabel show={urlSaved} />
-          </div>
-          <p className="coop-settings-card-desc mt-2">
-            Internal use only (<code>coopAI.devMode</code>). Production always uses{" "}
-            <code>https://api.coop-ai.dev</code>.
-          </p>
-        </>
-      ) : null}
     </SettingsSection>
   );
 }
@@ -1721,7 +1582,10 @@ function WorkspaceDetail({
   onRequestCollections,
   onLoadWorkspaceRepos,
   onSaveWorkspaceRepos,
-  workspacePickerState
+  workspacePickerState,
+  onAttachAgentsMd,
+  onOpenAgentsMd,
+  onStartFromAgentsMdTemplate
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
   const [dirty, setDirty] = useState(false);
@@ -1807,6 +1671,60 @@ function WorkspaceDetail({
 
   return (
     <>
+      <SettingsSection title="AGENTS.md">
+        <div className="coop-settings-card space-y-2">
+          {prefs.projectInstructions?.status === "disabled" ? (
+            <p className="coop-settings-card-desc">
+              Disabled in VS Code settings (<span className="font-medium">coopAI.projectInstructions.enabled</span>).
+            </p>
+          ) : (
+            <>
+              <div className="coop-agents-md-settings-row">
+                {agentsMdAttached(prefs.projectInstructions) ? (
+                  <button
+                    type="button"
+                    className="coop-agents-md-chip coop-agents-md-chip--attached coop-agents-md-chip--clickable"
+                    onClick={onOpenAgentsMd}
+                    aria-label="Open AGENTS.md"
+                  >
+                    <span className="coop-agents-md-chip-icon" aria-hidden="true">
+                      ✓
+                    </span>
+                    AGENTS.md
+                  </button>
+                ) : (
+                  <span className="coop-agents-md-chip coop-agents-md-chip--missing coop-agents-md-chip--static">
+                    <span className="coop-agents-md-chip-icon" aria-hidden="true">
+                      ✕
+                    </span>
+                    AGENTS.md
+                  </span>
+                )}
+                {agentsMdAttached(prefs.projectInstructions) ? (
+                  <button type="button" className="coop-settings-action-btn ml-auto" onClick={onAttachAgentsMd}>
+                    Upload AGENTS.md
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="coop-settings-action-btn ml-auto"
+                    onClick={onStartFromAgentsMdTemplate}
+                  >
+                    Create AGENTS.md
+                  </button>
+                )}
+              </div>
+              {!agentsMdAttached(prefs.projectInstructions) ? (
+                <button type="button" className="coop-agents-md-guide-link" onClick={onAttachAgentsMd}>
+                  Upload AGENTS.md
+                </button>
+              ) : null}
+              <p className="coop-settings-card-desc !mb-0">Loaded on every message.</p>
+              <AgentsMdTemplateGuide className="mt-1" />
+            </>
+          )}
+        </div>
+      </SettingsSection>
       <SettingsSection title="Workspace repos">
         <p className="coop-settings-card-desc">
           {prefs.adminControlledRepos
@@ -1969,7 +1887,7 @@ function WorkspaceDetail({
                 <button type="button" className="coop-text-btn" onClick={() => onRequestCollections()}>
                   refresh
                 </button>
-                . Use the same Coop API key in Account as you use to sign into admin.
+                . Sign in with your Coop account in Account settings to load collections.
               </p>
             ) : null}
           </>

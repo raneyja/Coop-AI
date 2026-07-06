@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { marketplaceHref } from "@/lib/site.config";
+import { installExtensionHref } from "@/lib/site.config";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
@@ -40,19 +40,12 @@ export function Button({ href, children, variant = "primary", external, classNam
 }
 
 export function InstallExtensionButton({ className = "" }: { className?: string }) {
-  const marketplace = marketplaceHref();
-
-  if (marketplace) {
-    return (
-      <Button href={marketplace} variant="secondary" external className={className}>
-        Install extension
-      </Button>
-    );
-  }
+  const href = installExtensionHref();
+  const external = href.startsWith("http");
 
   return (
-    <Button href="/demo?intent=waitlist" variant="secondary" className={className}>
-      Join waitlist for extension
+    <Button href={href} variant="secondary" external={external} className={className}>
+      Install extension
     </Button>
   );
 }

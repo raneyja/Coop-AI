@@ -77,7 +77,10 @@ Coop processes push and PR events to update the code graph.
 
 ## Admin portal
 
-Set `NEXT_PUBLIC_ADMIN_PORTAL_URL` to your admin portal deployment. Developers and admins use this for org configuration.
+- **API server** — set `COOP_ADMIN_PORTAL_URL` to your admin portal origin (used in emails and redirects).
+- **Admin Next.js deploy** — set `NEXT_PUBLIC_ADMIN_PORTAL_URL` to the same origin (client-side links).
+
+Developers and admins use the portal for org configuration.
 
 ## Next steps
 

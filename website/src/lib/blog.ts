@@ -45,7 +45,6 @@ function readPostFile(filename: string): BlogPost {
     heroImage,
     heroImageAlt: data.heroImageAlt ? String(data.heroImageAlt) : undefined,
     ogImage: data.ogImage ? String(data.ogImage) : heroImage,
-    waitlistUrl: data.waitlistUrl ? String(data.waitlistUrl) : undefined,
     draft: Boolean(data.draft),
     content
   };
@@ -58,7 +57,7 @@ export function getAllPosts(includeDrafts = false): BlogPostMeta[] {
 
   return fs
     .readdirSync(postsDirectory)
-    .filter((filename) => filename.endsWith(".md") && !/ \d+\.md$/.test(filename))
+    .filter((filename) => filename.endsWith(".md"))
     .map((filename) => {
       const post = readPostFile(filename);
       return {
@@ -75,7 +74,6 @@ export function getAllPosts(includeDrafts = false): BlogPostMeta[] {
         heroImage: post.heroImage,
         heroImageAlt: post.heroImageAlt,
         ogImage: post.ogImage,
-        waitlistUrl: post.waitlistUrl,
         draft: post.draft
       };
     })

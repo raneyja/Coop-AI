@@ -1851,6 +1851,68 @@
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
 
+  .coop-agents-md-chip {
+    @apply inline-flex max-w-full shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium;
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+  }
+
+  .coop-agents-md-chip--attached {
+    background: color-mix(in srgb, var(--vscode-testing-iconPassed, #73c991) 14%, var(--coop-pill-surface));
+    border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #73c991) 45%, var(--coop-pill-border));
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-agents-md-chip--missing {
+    background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #cca700) 12%, var(--coop-pill-surface));
+    border-color: color-mix(in srgb, var(--vscode-editorWarning-foreground, #cca700) 45%, var(--coop-pill-border));
+    color: var(--coop-panel-foreground);
+    cursor: pointer;
+  }
+
+  .coop-agents-md-chip--missing:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #cca700) 18%, var(--coop-pill-surface));
+  }
+
+  .coop-agents-md-chip--missing:disabled {
+    cursor: default;
+    opacity: 0.65;
+  }
+
+  .coop-agents-md-chip--static {
+    cursor: default;
+  }
+
+  .coop-agents-md-chip-icon {
+    @apply inline-flex w-3.5 shrink-0 items-center justify-center text-[10px] leading-none;
+  }
+
+  .coop-agents-md-settings-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .coop-agents-md-guide-link {
+    @apply block p-0 text-left text-[11px];
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .coop-agents-md-guide-link:hover {
+    text-decoration: underline;
+  }
+
+  .coop-agents-md-chip--attached.coop-agents-md-chip--clickable {
+    cursor: pointer;
+  }
+
+  .coop-agents-md-chip--attached.coop-agents-md-chip--clickable:hover {
+    background: color-mix(in srgb, var(--vscode-testing-iconPassed, #73c991) 20%, var(--coop-pill-surface));
+  }
+
+  .coop-agents-md-guide-list {
+    @apply space-y-1 pl-0 text-[11px] leading-relaxed;
+    color: var(--coop-panel-muted);
+    list-style: none;
+  }
+
   .coop-workspace-picker-meta {
     @apply flex flex-wrap items-center justify-between gap-2 px-4 pb-2;
   }

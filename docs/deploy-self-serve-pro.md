@@ -132,7 +132,7 @@ Dev server: **http://localhost:3001** (matches `billingConfig.ts` default).
 
 Deploy `admin/` to Vercel (or host) at `https://admin.coop-ai.dev`. Ensure `COOP_CORS_ORIGINS` on the API includes that origin.
 
-**Success looks like:** `/login` accepts a `coop_` API key and dashboard loads org name + plan badge.
+**Success looks like:** `/login` accepts email/password or Google and dashboard loads org name + plan badge.
 
 ---
 
@@ -140,13 +140,13 @@ Deploy `admin/` to Vercel (or host) at `https://admin.coop-ai.dev`. Ensure `COOP
 
 1. **Browser** → [coop-ai.dev/pricing](https://coop-ai.dev/pricing) → start Pro checkout (use Stripe test card `4242 4242 4242 4242` in test mode)
 2. After payment → redirect to `/welcome?session_id=cs_...`
-3. **Email** — welcome message with admin API key and portal link (Resend; check spam)
-4. **Browser** → admin portal `/login` → paste API key
+3. **Email** — welcome message with portal link (Resend; check spam). Set your password from the link if this is your first sign-in.
+4. **Browser** → admin portal `/login` → sign in with the same email and password used at checkout (or **Continue with Google**)
 5. **Browser** → admin **Billing** → “Manage subscription” opens Stripe customer portal
 
 **Success criteria:**
 
-- Email with `coop_` admin key arrives within ~1 minute
+- Welcome email arrives within ~1 minute with a portal sign-in link
 - Admin login works; integrations grid loads
 - Billing portal session returns a Stripe URL
 - Audit log shows `billing.checkout.completed` under the correct org (not Stripe customer ID)

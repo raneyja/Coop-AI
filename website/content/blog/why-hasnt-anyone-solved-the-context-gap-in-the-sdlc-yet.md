@@ -1,16 +1,15 @@
 ---
 title: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet?"
-seoTitle: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet? | CoopAI"
+seoTitle: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet? | Coop"
 description: "Enterprise engineering teams generate enormous institutional knowledge across Slack, Jira, Notion, and GitHub. None of it reaches the editor. Here is why the context gap in the SDLC remains unsolved and what we are building to fix it."
 publishedAt: "2026-06-08"
-author: "CoopAI Team"
+author: "Coop"
 category: ideas
 featured: true
 quote: "The context gap is not inevitable. It is an engineering problem, and it has a solution."
 heroImage: "/blog/context-gap-sdlc/hero.jpg"
 heroImageAlt: "Fragmented engineering tools converging into a unified context layer inside a code editor"
 ogImage: "/blog/context-gap-sdlc/hero.jpg"
-waitlistUrl: "/demo?intent=waitlist"
 ---
 
 The tools engineering teams use every day generate enormous amounts of institutional knowledge. Almost none of it reaches the editor.
@@ -73,8 +72,8 @@ For enterprise teams, Coop includes SAML 2.0 SSO, admin controls, multi-repo col
 
 The context gap is not inevitable. It is an engineering problem, and it has a solution.
 
-## Join the waitlist
+## Get started
 
-We are opening early access to engineering teams now. If your organization is spending engineering cycles reconstructing context that already exists somewhere in your stack, we would like to talk to you.
+Install the free CoopAI extension from the VS Code Marketplace, or book a demo if your organization wants a team walkthrough.
 
-[Join the Coop Waitlist](/demo?intent=waitlist)
+[Install extension](https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai)

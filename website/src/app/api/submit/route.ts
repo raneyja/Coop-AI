@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { postToGoogleAppsScript } from "@/lib/googleAppsScriptWebhook";
 
 type FormPayload = {
-  type: "demo" | "waitlist";
+  type: "demo";
   email: string;
   name?: string;
   company?: string;
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
   }
 
-  if (body.type !== "demo" && body.type !== "waitlist") {
+  if (body.type !== "demo") {
     return NextResponse.json({ error: "Invalid form type." }, { status: 400 });
   }
 

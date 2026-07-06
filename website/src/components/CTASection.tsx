@@ -10,7 +10,7 @@ type CTASectionProps = {
 
 export function CTASection({
   title = "See CoopAI on your codebase",
-  description = "Book a demo with our team or join the waitlist for the free VS Code extension.",
+  description = "Book a demo with our team or install the free VS Code extension from the Marketplace.",
   primaryLabel = "Book a demo",
   primaryHref = "/demo",
   showInstall = true

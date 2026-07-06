@@ -3,7 +3,7 @@ title: Security architecture
 description: Zero-clone indexing, credential storage, and data handling.
 section: enterprise
 order: 1
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-07-06"
 ---
 
 Coop AI is built for teams that cannot send full repo clones to third-party AI services.
@@ -20,7 +20,8 @@ Your source code stays on your infrastructure (GitHub, GitLab, self-hosted git).
 | --- | --- | --- |
 | Repo metadata & graph | Coop server (or your self-hosted instance) | Quick actions, search, completions |
 | Integration tokens | Encrypted on Coop server | OAuth for Slack, Jira, etc. |
-| API keys | Hashed in database | Authentication |
+| API keys | Hashed in database | Automation API access (optional) |
+| User sessions | Server-side / token | Extension and admin portal sign-in |
 | Chat prompts/responses | Session/stream only | Not used for model training |
 
 See the full [Security page](/security) for evaluators.
@@ -31,9 +32,11 @@ Integration OAuth tokens are encrypted at rest with `CREDENTIALS_ENCRYPTION_KEY`
 
 ## Authentication
 
-- **Org API keys** — Bearer tokens for extension and API access
-- **Admin portal** — admin API keys with elevated permissions
-- **OAuth** — per-integration browser consent flows
+- **Email + password** — default sign-in for extension, admin portal, and website
+- **Google OAuth** — same account as signup
+- **SSO (SAML)** — Enterprise orgs; configured in admin portal
+- **Automation API keys** — optional Bearer tokens for CI/scripts and direct API calls; not the primary sign-in method
+- **Integration OAuth** — per-integration browser consent flows (Slack, GitHub, etc.)
 
 ## Network boundaries
 

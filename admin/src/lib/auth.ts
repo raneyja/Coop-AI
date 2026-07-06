@@ -23,7 +23,7 @@ export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
 
-/** @deprecated Use getToken — kept for API key tab backward compatibility. */
+/** @deprecated Use getToken — kept for older automation-key session storage. */
 export const getApiToken = getToken;
 
 export function getRefreshToken(): string | null {

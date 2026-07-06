@@ -12,7 +12,7 @@ You do **not** paste LLM keys into the extension’s **Model** settings. Model s
 |-------|----------------|--------|
 | **API keys** for Claude, ChatGPT, Gemini, etc. | You (or your admin) create them at each AI company’s website | Given to your **Coop server administrator** — not stored in the extension |
 | **Which provider and model to use** | You | Coop AI extension → **Settings** → **Model** |
-| **Coop API key** (login to Coop’s backend) | You | Coop AI extension → **Settings** → **API connection** |
+| **Coop account sign-in** | You | Coop AI extension → **Settings** → **Account** (email, Google, or SSO) |
 
 Think of it like electricity: you pick which appliance to plug in (Model settings), but the power company connection (API keys) is configured at the building level (the server).
 
@@ -158,7 +158,7 @@ If something fails, see [Troubleshooting](#troubleshooting).
 ### I pasted a key into Settings → Model and it did nothing
 
 - **Cause:** LLM keys do **not** go in Model settings.
-- **Fix:** Give the key to your server administrator. Use **Settings → API connection** only for the **Coop API key** (different from Claude/OpenAI keys).
+- **Fix:** Give the key to your server administrator. Sign in under **Settings → Account** for Coop access (different from Claude/OpenAI keys).
 
 ### Chat works but answers feel fake or mention “mock”
 
@@ -265,11 +265,12 @@ If `mockMode` is still `true`, the server did not load your keys — recheck `.e
 
 Each developer (including you):
 
-1. **Settings → API connection**
-   - **API base URL:** `http://localhost:8787` (local) or your production URL
-   - **CoopAI API key:** if `COOP_REQUIRE_API_AUTH=false` in `.env.backend`, any value (e.g. `dev`) works after **Save**; if auth is on, use `COOP_API_TOKEN` or an org API key from `npm run admin:org -- create-api-key`
+1. **Settings → Account**
+   - Sign in with email and password, Google, or SSO
 2. **Settings → Model** — pick provider (Anthropic, OpenAI, Gemini, or DeepSeek) and a model; keys are already on the server.
-3. **Test connection**, then send a chat message.
+3. Send a chat message to confirm the session works.
+
+For local servers, set `coopAI.apiBaseUrl` to `http://localhost:8787` in VS Code settings. Org API keys from `npm run admin:org -- create-api-key` are for automation only.
 
 ---
 
@@ -301,4 +302,4 @@ Technical references: [webhook-backend.md](./webhook-backend.md), [api-v1.md](./
 | Coop extension setting | Purpose |
 |------------------------|---------|
 | **Settings → Model** | Choose provider and model (no LLM keys here) |
-| **Settings → API connection** | Coop server login key and API URL — not Claude/OpenAI keys |
+| **Settings → Account** | Sign in to Coop — not Claude/OpenAI keys |

@@ -5,7 +5,7 @@ import { buildPageMetadata } from "@/lib/pageMetadata";
 
 export function generateMetadata(): Metadata {
   const manual = getManual();
-  return buildPageMetadata("/manual", "Owner's Manual", manual.description);
+  return buildPageMetadata("/manual", manual.title, manual.description);
 }
 
 export default function ManualPage() {

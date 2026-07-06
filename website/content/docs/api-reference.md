@@ -3,18 +3,28 @@ title: API reference
 description: Coop AI API v1 — chat, inline completion, health, and authentication.
 section: api
 order: 1
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-06"
 ---
 
 All routes are served from your API base URL (`https://api.coop-ai.dev` or self-hosted).
 
 ## Authentication
 
+### Extension and admin portal
+
+Users sign in with **email + password**, **Google**, or **SSO (SAML)**. The extension stores a session token after sign-in — not a pasted API key.
+
+### Automation and API access
+
+For scripts, CI, and direct HTTP calls to the API:
+
 ```http
 Authorization: Bearer <org-api-key>
 ```
 
-Org API keys are created in the admin portal or during signup. Chat and inline completion require a valid key when `COOP_REQUIRE_API_AUTH=true` (production default).
+Org API keys (`coop_…`) are created in the admin portal **API Keys** page. They are optional for developers using the VS Code extension.
+
+When `COOP_REQUIRE_API_AUTH=true` (production default), `/v1/chat` and `/v1/completions/inline` accept either a valid user session (extension) or a Bearer org API key (automation).
 
 ## Health
 

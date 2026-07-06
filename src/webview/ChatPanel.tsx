@@ -11,6 +11,8 @@ import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
+import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
+import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
@@ -39,7 +41,7 @@ import type { LightningModeState } from "../indexing/lightningTypes";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
-import type { ChatFileMention, ChatImageAttachment, ComposerMode, MentionSearchResult } from "../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
 import { appendFileMention } from "./lib/fileMentionUtils";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
@@ -300,6 +302,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const cached = (vscode.getState() as PersistedWebviewState | null) || null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [context, setContext] = useState<RepoContext>({});
+  const [dismissedAgentsNoticeFor, setDismissedAgentsNoticeFor] = useState<string | undefined>();
   const [input, setInput] = useState(cached?.draftInput || "");
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
@@ -343,7 +346,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [promptMenuOpen, setPromptMenuOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [pendingPromptActionId, setPendingPromptActionId] = useState<QuickActionId | undefined>();
-  const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [savePromptDraft, setSavePromptDraft] = useState({ title: "", template: "" });
   const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
@@ -616,6 +618,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "context:update":
           setContext(message.payload);
+          if (message.payload.projectInstructions?.hasAgentsMd) {
+            setDismissedAgentsNoticeFor(undefined);
+          }
           break;
         case "chat:history": {
           const payload = message.payload;
@@ -871,7 +876,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       quickAction?: QuickActionId,
       pendingAttachments: ChatImageAttachment[] = attachments,
       pendingMentions: ChatFileMention[] = mentions,
-      options?: { slashUserArgs?: string; composerMode?: ComposerMode }
+      options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
@@ -881,7 +886,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setError(`Prompt exceeds ${INPUT_MAX} characters.`);
         return;
       }
-      const mode = options?.composerMode ?? composerMode;
       setError("");
       setAttachmentError("");
       setIsStreaming(true);
@@ -892,7 +896,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           message,
           quickAction,
           slashUserArgs: options?.slashUserArgs,
-          composerMode: mode === "edit" ? "edit" : undefined,
           attachments: pendingAttachments.length ? pendingAttachments : undefined,
           mentions: pendingMentions.length ? pendingMentions.slice(0, 3) : undefined
         }
@@ -903,9 +906,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionResults([]);
       setMentionError("");
       setPendingPromptActionId(undefined);
-      setComposerMode("ask");
     },
-    [attachments, composerMode, mentions, post]
+    [attachments, mentions, post]
   );
 
   const handleMentionSearch = useCallback(
@@ -983,9 +985,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (command: string) => {
       launchIntro.skip();
       setLaunchIntroConsumed(true);
-      if (command === "edit") {
-        setComposerMode("edit");
-      }
       setInput(`/${command} `);
     },
     [launchIntro]
@@ -1208,14 +1207,24 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         launchIntroVisibleLength={launchIntro.visibleLength}
         launchIntroFlashIndex={launchIntro.flashIndex}
         onLaunchIntroSkip={launchIntro.skip}
-        repoContext={context}
-        showContextPreview
       />
     </div>
   );
 
   const composerStack = (
     <>
+      {shouldPromptForAgentsMd(context.projectInstructions) &&
+      dismissedAgentsNoticeFor !== (context.projectInstructions?.gitRoot ?? "workspace") ? (
+        <ProjectInstructionsNotice
+          state={context.projectInstructions}
+          onAttach={() => post({ type: "agents:attach" })}
+          onStartFromTemplate={() => post({ type: "agents:start-from-template" })}
+          onDismiss={() =>
+            setDismissedAgentsNoticeFor(context.projectInstructions?.gitRoot ?? "workspace")
+          }
+          className="mb-2"
+        />
+      ) : null}
       {commandConfirm ? (
         <CoopNotice
           tone="info"
@@ -1243,33 +1252,41 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onRun={insertPromptLibraryEntry}
           onSeeAll={openPromptLibrary}
         />
-        {promptLibrary.hasWorkspace && input.trim() && !isStreaming ? (
-          <button
-            type="button"
-            className="coop-text-btn ml-auto shrink-0"
-            onClick={() => {
-              setSavePromptDraft({ title: "", template: input.trim() });
-              setSavePromptOpen(true);
-            }}
-          >
-            Save to library
-          </button>
-        ) : null}
-        {context.file || (context.owner && context.repo) ? (
-          <ContextScopeLabel
-            context={context}
-            onOpenExplorer={openExplorer}
-            onOpenFile={
-              context.file
-                ? () => {
-                    if (context.file) {
-                      handleOpenFile(context.file, undefined, { preserveContext: false });
+        <AgentsMdStatusChip
+          state={context.projectInstructions}
+          disabled={isStreaming}
+          onCreate={() => post({ type: "agents:start-from-template" })}
+          onOpen={() => post({ type: "agents:open" })}
+        />
+        <div className="ml-auto flex min-w-0 items-center gap-2">
+          {promptLibrary.hasWorkspace && input.trim() && !isStreaming ? (
+            <button
+              type="button"
+              className="coop-text-btn shrink-0"
+              onClick={() => {
+                setSavePromptDraft({ title: "", template: input.trim() });
+                setSavePromptOpen(true);
+              }}
+            >
+              Save to library
+            </button>
+          ) : null}
+          {context.file || (context.owner && context.repo) ? (
+            <ContextScopeLabel
+              context={context}
+              onOpenExplorer={openExplorer}
+              onOpenFile={
+                context.file
+                  ? () => {
+                      if (context.file) {
+                        handleOpenFile(context.file, undefined, { preserveContext: false });
+                      }
                     }
-                  }
-                : undefined
-            }
-          />
-        ) : null}
+                  : undefined
+              }
+            />
+          ) : null}
+        </div>
       </div>
       {composerInner}
     </>
@@ -1432,6 +1449,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onAction={handleQuickAction}
             onSlashCommand={insertSlashCommand}
             launchIntroDone={launchIntroDone}
+            onAttachAgentsMd={() => post({ type: "agents:attach" })}
+            onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
           />
           <div className="relative z-20 shrink-0 pb-2">
             <p

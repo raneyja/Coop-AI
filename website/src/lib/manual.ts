@@ -10,7 +10,7 @@ export function getManual(): ManualContent {
   const { data, content } = matter(fileContents);
 
   return {
-    title: String(data.title ?? "Coop AI Owner's Manual"),
+    title: String(data.title ?? "CoopAI Owner's Manual"),
     description: String(data.description ?? ""),
     lastUpdated: String(data.lastUpdated ?? ""),
     content,

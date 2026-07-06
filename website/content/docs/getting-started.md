@@ -3,7 +3,7 @@ title: Getting started
 description: Install Coop AI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-06-30"
+lastUpdated: "2026-07-06"
 ---
 
 This guide gets you from signup to your first useful chat in Coop AI.

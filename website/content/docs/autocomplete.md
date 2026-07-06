@@ -3,7 +3,7 @@ title: Inline autocomplete
 description: Enable ghost-text code completions in VS Code — FIM, streaming, graph context, and Copilot coexistence.
 section: extension
 order: 2
-lastUpdated: "2026-07-04"
+lastUpdated: "2026-07-06"
 ---
 
 Coop AI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
@@ -28,7 +28,7 @@ Run **CoopAI: Toggle Autocomplete** to flip `coopAI.autocomplete.enabled` withou
 
 ### Prerequisites
 
-- Valid Coop API key in **Settings → Account**
+- Signed in under **Settings → Account** (email, Google, or SSO)
 - **Test connection** succeeds (`GET /health`)
 - File type is supported (code files; sensitive files such as `.env` are skipped)
 
@@ -158,7 +158,7 @@ Org admins can view org completion metrics in the [admin portal](https://admin.c
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm API key and **Test connection** |
+| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm you are signed in and **Test connection** succeeds |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |

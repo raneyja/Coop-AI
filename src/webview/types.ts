@@ -20,6 +20,7 @@ export type RepoContext = {
   contextWarning?: string;
   selectedLines?: [number, number];
   languageId?: string;
+  projectInstructions?: import("../chat/types").ProjectInstructionsState;
 };
 
 export type IntentFeedbackState = {

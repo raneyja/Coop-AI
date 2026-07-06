@@ -675,7 +675,7 @@ export class SecureApiClient {
     const result = await this.streamChat(
       {
         message: body.message,
-        context: body.context,
+        context: body.context as StreamChatParams["context"],
         history: body.history,
         model: body.model || llm.model,
         provider: llm.llmProvider,
