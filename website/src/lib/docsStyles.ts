@@ -18,4 +18,10 @@ export function docsNavLinkClass(isActive: boolean): string {
 export const docsInlineLinkClassName =
   "text-coop-index no-underline transition-colors hover:text-coop-blue";
 
+export const docsFigureClassName =
+  "not-prose my-6 block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+
+export const docsFigureCaptionClassName =
+  "not-prose -mt-4 mb-8 text-center text-sm text-gray-500";
+
 export const docsSectionLabelClassName = "mb-4 font-mono text-xs text-gray-500";
