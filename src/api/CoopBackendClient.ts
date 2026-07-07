@@ -132,6 +132,18 @@ export type MeResponse = {
   quota?: PlanQuotaCredits;
 };
 
+export type MeIntegrationsResponse = {
+  integrations: Array<{
+    provider: string;
+    installed: boolean;
+    needsReconnect?: boolean;
+    scopeNeedsReconnect?: boolean;
+    scopeStatus?: "none" | "required" | "active";
+    scopeSummary?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+};
+
 export type AuthSessionResponse = {
   accessToken: string;
   refreshToken: string;
@@ -263,6 +275,19 @@ export class CoopBackendClient {
       headers: await this.authHeaders()
     });
     return response.data;
+  }
+
+  public async fetchMeIntegrations(baseUrl: string): Promise<MeIntegrationsResponse> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.get<MeIntegrationsResponse>("/v1/me/integrations", {
+      baseURL: baseUrl.replace(/\/$/, ""),
+      headers: await this.authHeaders(),
+      validateStatus: () => true
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data ?? { integrations: [] };
   }
 
   public async loginWithPassword(

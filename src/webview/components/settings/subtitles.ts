@@ -1,6 +1,14 @@
 import { identityDirectorySummary } from "../../../identity/identityDirectory";
 import type { IntegrationChatProvider } from "../../../chat/types";
 import type { Preferences } from "./types";
+import {
+  codeHostConfiguredFromFlags,
+  codeHostReady,
+  findOrgIntegrationStatus,
+  integrationConfiguredFromFlags,
+  integrationReady,
+  integrationToOrgProvider
+} from "./integrationStatus";
 export {
   accountHubSubtitle,
   planUsageHubSubtitle,
@@ -10,6 +18,7 @@ export {
   displayIdentitySubtitle,
   preferencesHubSubtitle
 } from "./connectionCopy";
+export { codeHostReady, integrationReady } from "./integrationStatus";
 
 const CODE_HOST_LABELS: Record<Preferences["defaultCodeHost"], string> = {
   github: "GitHub",
@@ -122,16 +131,27 @@ export function promptsHubSubtitle(pinnedCount: number): string {
 }
 
 export function githubIsConfigured(prefs: Preferences): boolean {
+  if (prefs.devMode) {
+    return codeHostConfiguredFromFlags(prefs, "github");
+  }
+  const orgStatus = findOrgIntegrationStatus(prefs, "github");
+  if (orgStatus) {
+    return orgStatus.installed;
+  }
   if (prefs.githubNeedsReconnect) {
     return false;
-  }
-  if (prefs.devMode) {
-    return prefs.hasGitHubAppInstalled || prefs.hasGitHubToken;
   }
   return prefs.hasGitHubAppInstalled;
 }
 
 export function codeHostConfigured(prefs: Preferences, provider: Preferences["defaultCodeHost"] | "github" | "gitlab" | "bitbucket"): boolean {
+  if (prefs.devMode) {
+    return codeHostConfiguredFromFlags(prefs, provider);
+  }
+  const orgStatus = findOrgIntegrationStatus(prefs, provider);
+  if (orgStatus) {
+    return orgStatus.installed;
+  }
   if (provider === "github") {
     return githubIsConfigured(prefs);
   }
@@ -145,20 +165,24 @@ export function integrationConfigured(
   prefs: Preferences,
   provider: IntegrationChatProvider
 ): boolean {
-  if (provider === "slack") {
-    return prefs.devMode ? prefs.hasSlackToken : prefs.hasSlackInstalled;
+  if (prefs.devMode) {
+    return integrationConfiguredFromFlags(prefs, provider);
   }
-  if (provider === "jira") {
-    return prefs.devMode ? prefs.hasJiraCredentials : prefs.hasAtlassianInstalled;
+  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
+  if (orgStatus) {
+    return orgStatus.installed;
+  }
+  if (provider === "slack") {
+    return prefs.hasSlackInstalled;
+  }
+  if (provider === "jira" || provider === "confluence") {
+    return prefs.hasAtlassianInstalled;
   }
   if (provider === "teams") {
-    return prefs.devMode ? prefs.hasTeamsToken : prefs.hasTeamsInstalled;
-  }
-  if (provider === "confluence") {
-    return prefs.devMode ? prefs.hasConfluenceCredentials : prefs.hasAtlassianInstalled;
+    return prefs.hasTeamsInstalled;
   }
   if (provider === "notion") {
-    return prefs.devMode ? prefs.hasNotionToken : prefs.hasNotionInstalled;
+    return prefs.hasNotionInstalled;
   }
-  return prefs.devMode ? prefs.hasGoogleDocsToken : prefs.hasGoogleDocsInstalled;
+  return prefs.hasGoogleDocsInstalled;
 }

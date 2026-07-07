@@ -151,6 +151,7 @@ export type UserPreferences = {
     connected: number;
     scopeRequired: number;
   };
+  orgIntegrationStatuses?: import("../integrationStatusTypes").OrgIntegrationStatusEntry[];
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;

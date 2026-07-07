@@ -26,6 +26,7 @@ import type {
   ChatFileMention,
   OrgCollectionSummary
 } from "./types";
+import type { OrgIntegrationStatusEntry } from "./integrationStatusTypes";
 import { DEFAULT_TIMEZONE_ID } from "./timezone";
 import { readCodeHostProvider } from "../config/codeHostConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -273,6 +274,10 @@ export class SecureApiClient {
 
   public async fetchMe(baseUrl: string) {
     return this.backend.fetchMe(baseUrl);
+  }
+
+  public async fetchMeIntegrations(baseUrl: string) {
+    return this.backend.fetchMeIntegrations(baseUrl);
   }
 
   public async startPublicSamlLogin(
@@ -919,6 +924,7 @@ export async function readPreferences(
   let onboardingCompleted = false;
   let adminPortalUrl: string | undefined;
   let integrationHealthSummary: UserPreferences["integrationHealthSummary"];
+  let orgIntegrationStatuses: OrgIntegrationStatusEntry[] | undefined;
   let indexedRepoCount: number | undefined;
   let workspaceRepoCount: number | undefined;
   let workspaceRepoLimit: number | null | undefined;
@@ -948,6 +954,12 @@ export async function readPreferences(
       quotaCredits = me.quota;
     } catch {
       // Non-fatal — other preference fields still load.
+    }
+    try {
+      const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
+      orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
+    } catch {
+      // Non-fatal — member status cards fall back to per-provider install flags.
     }
     try {
       const workspace = await api.getWorkspaceRepos(base.apiBaseUrl);
@@ -1051,6 +1063,7 @@ export async function readPreferences(
     onboardingCompleted,
     adminPortalUrl,
     integrationHealthSummary,
+    orgIntegrationStatuses,
     hasGitLabToken: Boolean(codeHostCreds.gitlabToken),
     hasGitLabAppInstalled,
     hasBitbucketCredentials: Boolean(
@@ -1170,6 +1183,29 @@ function resolveConfigurationUpdateTarget(
     return vscode.ConfigurationTarget.Workspace;
   }
   return vscode.ConfigurationTarget.Global;
+}
+
+function normalizeOrgIntegrationStatuses(
+  integrations: Array<{
+    provider: string;
+    installed: boolean;
+    needsReconnect?: boolean;
+    scopeNeedsReconnect?: boolean;
+    scopeStatus?: string;
+    scopeSummary?: string;
+  }>
+): OrgIntegrationStatusEntry[] {
+  return integrations.map((entry) => ({
+    provider: entry.provider as OrgIntegrationStatusEntry["provider"],
+    installed: entry.installed,
+    needsReconnect: entry.needsReconnect,
+    scopeNeedsReconnect: entry.scopeNeedsReconnect,
+    scopeStatus:
+      entry.scopeStatus === "required" || entry.scopeStatus === "active" || entry.scopeStatus === "none"
+        ? entry.scopeStatus
+        : undefined,
+    scopeSummary: entry.scopeSummary
+  }));
 }
 
 function resolveDefaultSearchScope(

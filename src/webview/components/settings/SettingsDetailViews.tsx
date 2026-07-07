@@ -29,6 +29,16 @@ import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
 import { agentsMdAttached } from "../../lib/agentsMdStatus";
 import { codeHostConfigured, identityLinksHubSubtitle, integrationConfigured } from "./subtitles";
+import { IntegrationStatusCard, MemberAdminPortalLink } from "./IntegrationStatusCard";
+import {
+  memberToolStatusMeta,
+  memberToolsReadOnly,
+  resolveMemberToolStatus
+} from "./integrationStatus";
+import {
+  codeHostDisplayName
+} from "./connectionCopy";
+import type { OrgIntegrationProvider } from "../../../chat/integrationStatusTypes";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
   return !prefs.plan || prefs.plan === "free";
@@ -693,11 +703,38 @@ function AccountDetail({
   );
 }
 
+function MemberToolDetail({
+  prefs,
+  provider,
+  name,
+  description
+}: {
+  prefs: Preferences;
+  provider: OrgIntegrationProvider;
+  name: string;
+  description: string;
+}): React.ReactElement {
+  return (
+    <SettingsSection>
+      <IntegrationStatusCard
+        name={name}
+        meta={memberToolStatusMeta(prefs, provider)}
+        status={resolveMemberToolStatus(prefs, provider)}
+        description={description}
+      />
+      <MemberAdminPortalLink prefs={prefs} />
+    </SettingsSection>
+  );
+}
+
 function ToolsListDetail({
   prefs,
   onUpdate,
   onNavigate
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return <MemberToolsListDetail prefs={prefs} onUpdate={onUpdate} />;
+  }
   const freePlan = isFreeDeveloperPlan(prefs);
   return (
     <>
@@ -786,6 +823,75 @@ function ToolsListDetail({
   );
 }
 
+function MemberToolsListDetail({
+  prefs,
+  onUpdate
+}: {
+  prefs: Preferences;
+  onUpdate: (partial: Partial<Preferences>) => void;
+}): React.ReactElement {
+  const codeHosts: OrgIntegrationProvider[] = ["github", "gitlab", "bitbucket"];
+  const collaborationProviders: Array<{ provider: OrgIntegrationProvider; name: string; description: string }> = [
+    { provider: "slack", name: "Slack", description: "Search Slack threads and check teammate availability." },
+    { provider: "atlassian", name: "Jira & Confluence", description: "Link Jira tickets and search Confluence pages in chat." },
+    { provider: "teams", name: "Microsoft Teams", description: "Search Teams channel messages for Trace Decision." },
+    { provider: "notion", name: "Notion", description: "Search Notion pages for documentation context." },
+    { provider: "google-docs", name: "Google Docs", description: "Search Google Docs for documentation context." }
+  ];
+
+  return (
+    <>
+      <p className="coop-settings-card-desc px-0.5">
+        Your organization admin connects source code and collaboration tools in the admin portal. Status below
+        reflects what is available to you in chat.
+      </p>
+
+      <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
+      <SettingsSection>
+        <label className="coop-settings-field-row">
+          <span className="coop-settings-label">Default code host</span>
+          <select
+            value={prefs.defaultCodeHost}
+            onChange={(e) => onUpdate({ defaultCodeHost: e.target.value as CodeHostProviderPreference })}
+            className="coop-settings-field"
+          >
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+            <option value="bitbucket">Bitbucket</option>
+          </select>
+        </label>
+        <div className="space-y-3 mt-3">
+          {codeHosts.map((provider) => (
+            <IntegrationStatusCard
+              key={provider}
+              name={codeHostDisplayName(provider)}
+              meta={memberToolStatusMeta(prefs, provider)}
+              status={resolveMemberToolStatus(prefs, provider)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Collaboration</p>
+      <SettingsSection>
+        <div className="space-y-3">
+          {collaborationProviders.map((tool) => (
+            <IntegrationStatusCard
+              key={tool.provider}
+              name={tool.name}
+              meta={memberToolStatusMeta(prefs, tool.provider)}
+              status={resolveMemberToolStatus(prefs, tool.provider)}
+              description={tool.description}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      <MemberAdminPortalLink prefs={prefs} />
+    </>
+  );
+}
+
 function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: SettingsDetailProps): React.ReactElement {
   const pinned = promptLibrary.pinnedIds.length;
   const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
@@ -866,6 +972,16 @@ function GitHubDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="github"
+        name="GitHub"
+        description="Repositories are connected through the Coop GitHub App by your organization admin."
+      />
+    );
+  }
   const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "github");
   return (
@@ -958,6 +1074,16 @@ function GitLabDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="gitlab"
+        name="GitLab"
+        description="Repositories are connected through the Coop GitLab OAuth app by your organization admin."
+      />
+    );
+  }
   const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "gitlab");
   return (
@@ -1053,6 +1179,16 @@ function BitbucketDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="bitbucket"
+        name="Bitbucket"
+        description="Repositories are connected through the Coop Bitbucket OAuth app by your organization admin."
+      />
+    );
+  }
   const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "bitbucket");
   return (
@@ -1149,6 +1285,16 @@ function SlackDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="slack"
+        name="Slack"
+        description="Search Slack threads and check teammate availability for Find Owner and Trace Decision."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell
@@ -1225,6 +1371,16 @@ function JiraDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="atlassian"
+        name="Jira"
+        description="Link Jira tickets to Trace Decision and surface repo-related work in chat."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell
@@ -1327,6 +1483,16 @@ function TeamsDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="teams"
+        name="Microsoft Teams"
+        description="Search Teams channel messages for Trace Decision."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell
@@ -1406,6 +1572,16 @@ function ConfluenceDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="atlassian"
+        name="Confluence"
+        description="Search Confluence pages for Knowledge Gaps and documentation context in chat."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell
@@ -1511,6 +1687,16 @@ function NotionDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="notion"
+        name="Notion"
+        description="Search Notion pages for documentation context in chat and Knowledge Gaps."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell
@@ -1583,6 +1769,16 @@ function GoogleDocsDetail({
   pendingRefresh,
   refreshResult
 }: SettingsDetailProps): React.ReactElement {
+  if (memberToolsReadOnly(prefs)) {
+    return (
+      <MemberToolDetail
+        prefs={prefs}
+        provider="google-docs"
+        name="Google Docs"
+        description="Search Google Docs for documentation context in chat."
+      />
+    );
+  }
   return (
     <SettingsSection>
       <IntegrationConnectionShell

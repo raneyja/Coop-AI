@@ -1,11 +1,10 @@
 import type { IntegrationChatProvider } from "../../../chat/types";
 import type { Preferences } from "./types";
 import {
-  bitbucketIsConfigured,
   codeHostConfigured,
-  githubIsConfigured,
-  gitlabIsConfigured,
-  integrationConfigured
+  codeHostReady,
+  integrationConfigured,
+  integrationReady
 } from "./subtitles";
 
 type CodeHostProvider = "github" | "gitlab" | "bitbucket";
@@ -96,20 +95,21 @@ export function integrationListSubtitle(prefs: Preferences, provider: Integratio
 }
 
 export function toolsHubSubtitle(prefs: Preferences): string {
-  const codeHosts = [githubIsConfigured(prefs), gitlabIsConfigured(prefs), bitbucketIsConfigured(prefs)];
+  const codeHosts = [codeHostReady(prefs, "github"), codeHostReady(prefs, "gitlab"), codeHostReady(prefs, "bitbucket")];
   const collaborationTools = [
-    integrationConfigured(prefs, "slack"),
-    integrationConfigured(prefs, "jira"),
-    integrationConfigured(prefs, "confluence"),
-    integrationConfigured(prefs, "notion"),
-    integrationConfigured(prefs, "google-docs")
+    integrationReady(prefs, "slack"),
+    integrationReady(prefs, "jira"),
+    integrationReady(prefs, "teams"),
+    integrationReady(prefs, "confluence"),
+    integrationReady(prefs, "notion"),
+    integrationReady(prefs, "google-docs")
   ];
-  const connected = [...codeHosts, ...collaborationTools].filter(Boolean).length;
+  const ready = [...codeHosts, ...collaborationTools].filter(Boolean).length;
   const total = codeHosts.length + collaborationTools.length;
-  if (connected === 0) {
-    return "No tools connected yet";
+  if (ready === 0) {
+    return "No tools ready yet";
   }
-  return `${connected} of ${total} connected`;
+  return `${ready} of ${total} ready`;
 }
 
 export function formatQuotaRetryLabel(resetsAtIso: string): string {
