@@ -74,13 +74,7 @@ See the [Security page](/security) for architecture details.
 **Extension UI** → **Settings → Account**
 
 <!-- figures -->
-![Account sign-in in VS Code (light theme) — Continue with Google, email, and SSO](/screenshots/docs/settings-account-light.png)
-
-*Light theme*
-
-![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
-
-*Dark theme*
+![Account sign-in in VS Code — Continue with Google, email, and SSO](/screenshots/docs/settings-account-dark.png)
 <!-- /figures -->
 
 Three sign-in paths appear on one screen:

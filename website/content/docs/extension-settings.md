@@ -13,13 +13,7 @@ Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Ope
 Sign in with your Coop account — the same credentials you use at [coop-ai.dev/signup/free](/signup/free) or the admin portal.
 
 <!-- figures -->
-![Account sign-in in VS Code (light theme)](/screenshots/docs/settings-account-light.png)
-
-*Light theme*
-
-![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
-
-*Dark theme*
+![Account sign-in in VS Code — Continue with Google, email, and SSO](/screenshots/docs/settings-account-dark.png)
 <!-- /figures -->
 
 ### Sign-in options

@@ -34,13 +34,7 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 2. **Account** — Choose a sign-in path:
 
 <!-- figures -->
-![Account sign-in in VS Code (light theme)](/screenshots/docs/settings-account-light.png)
-
-*Light theme*
-
-![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
-
-*Dark theme*
+![Account sign-in in VS Code — Continue with Google, email, and SSO](/screenshots/docs/settings-account-dark.png)
 <!-- /figures -->
 
 | Path | Steps |
