@@ -199,6 +199,12 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 
 ## Quick Actions
 
+Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace`, `/owner`, …), or the **editor context menu** — right-click a selection to see all five actions.
+
+<!-- figures -->
+![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
+<!-- /figures -->
+
 ### When to use each action
 
 | Action | Best for |

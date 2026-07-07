@@ -69,8 +69,13 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 ## Step 5 — Try a quick action
 
-With a file open, right-click the selection and choose **Trace Decision** or type `/trace` in chat.
+With a file open, highlight a few lines of code, then **right-click** the selection. Choose **CoopAI: Trace Decision for Selection** (or **Find Owner**, **Blast Radius**, **Understand Repo**, **Knowledge Gaps**).
 
+<!-- figures -->
+![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
+<!-- /figures -->
+
+You can also type `/trace` in the chat composer for the same action.
 ## Optional — Inline autocomplete
 
 Coop AI can show ghost-text code completions as you type. The feature is **off by default**.
