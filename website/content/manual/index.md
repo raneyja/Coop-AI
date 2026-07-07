@@ -109,6 +109,10 @@ In **production mode** (`coopAI.devMode: false`), org admins connect code hosts 
 
 Integrations (Slack, Jira, Confluence, Notion, Google Docs, Teams) power **Trace Decision** and **Knowledge Gaps** with cross-tool context.
 
+<!-- figures -->
+![Admin portal Integrations page — org admin connects tools once for the whole team](/screenshots/docs/admin-integrations-dark.png)
+<!-- /figures -->
+
 | Mode | Who connects | Where |
 | --- | --- | --- |
 | **Production** | Org admin | [Admin portal](https://admin.coop-ai.dev) → Integrations |

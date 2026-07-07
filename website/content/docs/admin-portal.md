@@ -3,7 +3,7 @@ title: Admin portal
 description: Sign in, connect integrations, invite users, and manage automation API keys.
 section: admin
 order: 1
-lastUpdated: "2026-07-04"
+lastUpdated: "2026-07-07"
 ---
 
 The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure Coop AI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
@@ -29,6 +29,12 @@ Accounts are created during [free signup](/signup/free), Pro/Enterprise checkout
 ## Connect integrations
 
 Go to **Integrations** to connect tools org-wide. See [Connect integrations](/docs/connect-integrations) for the full checklist.
+
+<!-- figures -->
+![Admin portal Integrations page — connect GitHub, Slack, Jira, and other tools org-wide](/screenshots/docs/admin-integrations-dark.png)
+<!-- /figures -->
+
+Each integration shows **Connected** or **Active** when OAuth completes. Use **Manage access** to set scope (channels, projects, pages). **Disconnect** and **Refresh** are on every card.
 
 ### GitHub (all plans)
 

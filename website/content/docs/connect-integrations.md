@@ -3,7 +3,7 @@ title: Connect integrations
 description: Org admin checklist for connecting GitHub, Slack, Jira, and other tools.
 section: integrations
 order: 1
-lastUpdated: "2026-07-05"
+lastUpdated: "2026-07-07"
 ---
 
 In **production mode** (`coopAI.devMode: false`), integration tokens live on the Coop server — not in VS Code. Org admins connect once for the whole organization in the [admin portal](https://admin.coop-ai.dev).
@@ -16,6 +16,10 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 ## 5-minute checklist
 
 **Browser** — Admin portal → [Integrations](https://admin.coop-ai.dev/integrations)
+
+<!-- figures -->
+![Admin portal Integrations page — GitHub, Slack, Jira, Notion, and Google Docs with Connect and Manage access](/screenshots/docs/admin-integrations-dark.png)
+<!-- /figures -->
 
 | # | Integration | Success |
 | --- | --- | --- |
