@@ -2,7 +2,7 @@ import type * as vscode from "vscode";
 
 export type AutocompleteTriggerMode = "auto" | "manual" | "off";
 
-export type AutocompleteModelPreset = "haiku" | "gpt35" | "custom";
+export type AutocompleteModelPreset = "chat" | "haiku" | "gpt35" | "custom";
 
 export type AutocompleteSettings = {
   enabled: boolean;
@@ -61,6 +61,7 @@ export type CompletionRouterResult = {
   fromCache: boolean;
   model?: string;
   provider?: string;
+  error?: string;
 };
 
 export type AutocompleteStatusState =

@@ -1,8 +1,10 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import {
+  ensureInsertSpacing,
   filterAndRankCompletions,
   normalizeCompletionText,
+  sanitizeCompletionForContext,
   stripOverlapWithPrefix,
   toInlineInsertText
 } from "./completionFilter";
@@ -62,14 +64,77 @@ test("filterAndRankCompletions drops trivial completions", () => {
   assert.equal(ranked.length, 0);
 });
 
+test("filterAndRankCompletions drops mismatched string quotes", () => {
+  const ranked = filterAndRankCompletions(["'sessionId\" in state"], context, settings);
+  assert.equal(ranked.length, 0);
+});
+
 test("filterAndRankCompletions keeps valid completion", () => {
   const ranked = filterAndRankCompletions(['"hello";'], context, settings);
   assert.equal(ranked.length, 1);
   assert.equal(ranked[0]?.text, '"hello";');
 });
 
+test("filterAndRankCompletions strips redundant const from mid-assignment", () => {
+  const ranked = filterAndRankCompletions(
+    ["const sessionId = options?.sessionId || createSessionId();"],
+    context,
+    settings
+  );
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "options?.sessionId || createSessionId();");
+});
+
+test("filterAndRankCompletions keeps rhs after stripping duplicate declaration", () => {
+  const ranked = filterAndRankCompletions(["const foo = 1;"], context, settings);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "1;");
+});
+
+test("filterAndRankCompletions drops function restart mid-assignment", () => {
+  const ranked = filterAndRankCompletions(
+    ["function helper() { return 1; }"],
+    context,
+    settings
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("filterAndRankCompletions allows const on fresh indented line", () => {
+  const freshLine = { ...context, currentLinePrefix: "  ", suffixWindow: "" };
+  const ranked = filterAndRankCompletions(["const next = 1;"], freshLine, settings);
+  assert.equal(ranked.length, 1);
+});
+
+test("sanitizeCompletionForContext extracts rhs only", () => {
+  assert.equal(
+    sanitizeCompletionForContext("const sessionId = options?.id;", context),
+    "options?.id;"
+  );
+});
+
 test("stripOverlapWithPrefix removes shared suffix", () => {
   assert.equal(stripOverlapWithPrefix("const val", "value = 1"), "ue = 1");
+});
+
+test("toInlineInsertText adds space after assignment when cursor is right of equals", () => {
+  const noSpaceContext = { ...context, currentLinePrefix: "const value =" };
+  const completion: RankedCompletion = {
+    text: "options?.sessionId || createSessionId();",
+    score: 1,
+    source: "llm"
+  };
+  assert.equal(
+    toInlineInsertText(noSpaceContext, completion),
+    " options?.sessionId || createSessionId();"
+  );
+});
+
+test("ensureInsertSpacing is no-op when prefix already has trailing space", () => {
+  assert.equal(
+    ensureInsertSpacing("const value = ", "options?.id;"),
+    "options?.id;"
+  );
 });
 
 test("toInlineInsertText applies indent on blank line", () => {

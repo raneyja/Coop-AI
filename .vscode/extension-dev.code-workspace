@@ -6,6 +6,10 @@
     }
   ],
   "settings": {
-    "coopAI.devMode": false
+    "coopAI.devMode": false,
+    "coopAI.autocomplete.enabled": true,
+    "coopAI.autocomplete.model": "chat",
+    "coopAI.autocomplete.requestTimeoutMs": 1500,
+    "editor.inlineSuggest.enabled": true
   }
 }

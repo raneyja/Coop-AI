@@ -260,7 +260,30 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(cached.completions[0]?.text, "cached;");
   });
 
-  await asyncTest("returns empty completions when request times out", async () => {
+  await asyncTest("uses chat preferences model when preset is chat", async () => {
+    setMockConfiguration("coopAI", "llmProvider", "openai");
+    setMockConfiguration("coopAI", "defaultModel", "gpt-4o");
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "42;", alternatives: [], model: "gpt-4o", provider: "openai" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    await router.fetchCompletions(sampleContext, {
+      ...autocompleteSettings,
+      model: "chat"
+    });
+
+    assert.equal(capturedBody?.provider, "openai");
+    assert.equal(capturedBody?.model, "gpt-4o");
+  });
+
+  await asyncTest("returns empty completions with timeout error when request times out", async () => {
     const api = {
       streamInlineCompletion: async () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -276,6 +299,7 @@ async function runAsyncTests(): Promise<void> {
     });
 
     assert.equal(result.completions.length, 0);
+    assert.match(result.error ?? "", /timed out/i);
   });
 }
 

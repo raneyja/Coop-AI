@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MODELS_BY_PROVIDER, DEFAULT_MODEL_BY_PROVIDER, formatModelOptionLabel, modelsForProvider } from "../../../config/llmModels";
+import { lowestCreditModelForProvider } from "../../../config/llmModels";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { TestButton, type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -258,11 +258,10 @@ function ModelDetail({
   onUpdate,
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
+  const budgetModel = lowestCreditModelForProvider(prefs.llmProvider);
   const [draft, setDraft] = useState({
     llmProvider: prefs.llmProvider,
-    model: prefs.model,
-    temperature: prefs.temperature,
-    maxTokens: prefs.maxTokens,
+    model: budgetModel.id,
     llmEnabled: prefs.llmEnabled,
     autocompleteEnabled: prefs.autocompleteEnabled
   });
@@ -274,24 +273,15 @@ function ModelDetail({
   // unrelated settings:state push can't clobber what the user is editing.
   useEffect(() => {
     if (!dirty) {
+      const nextBudgetModel = lowestCreditModelForProvider(prefs.llmProvider);
       setDraft({
         llmProvider: prefs.llmProvider,
-        model: prefs.model,
-        temperature: prefs.temperature,
-        maxTokens: prefs.maxTokens,
+        model: nextBudgetModel.id,
         llmEnabled: prefs.llmEnabled,
         autocompleteEnabled: prefs.autocompleteEnabled
       });
     }
-  }, [
-    prefs.llmProvider,
-    prefs.model,
-    prefs.temperature,
-    prefs.maxTokens,
-    prefs.llmEnabled,
-    prefs.autocompleteEnabled,
-    dirty
-  ]);
+  }, [prefs.llmProvider, prefs.llmEnabled, prefs.autocompleteEnabled, dirty]);
 
   useEffect(
     () => () => {
@@ -302,7 +292,10 @@ function ModelDetail({
     []
   );
 
-  const models = useMemo(() => modelsForProvider(draft.llmProvider), [draft.llmProvider]);
+  const settingsModel = useMemo(
+    () => lowestCreditModelForProvider(draft.llmProvider),
+    [draft.llmProvider]
+  );
 
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
@@ -311,18 +304,15 @@ function ModelDetail({
   };
 
   const onProviderChange = (provider: LlmProviderPreference) => {
-    const nextModel = MODELS_BY_PROVIDER[provider].includes(draft.model)
-      ? draft.model
-      : DEFAULT_MODEL_BY_PROVIDER[provider];
-    update({ llmProvider: provider, model: nextModel });
+    update({ llmProvider: provider, model: lowestCreditModelForProvider(provider).id });
   };
 
   const handleSave = () => {
     onUpdate({
       llmProvider: draft.llmProvider,
-      model: draft.model,
-      temperature: draft.temperature,
-      maxTokens: draft.maxTokens,
+      model: settingsModel.id,
+      temperature: prefs.temperature,
+      maxTokens: prefs.maxTokens,
       llmEnabled: draft.llmEnabled,
       autocompleteEnabled: draft.autocompleteEnabled
     });
@@ -351,62 +341,18 @@ function ModelDetail({
           </select>
         </label>
 
-        <label className="coop-settings-field-row">
+        <div className="coop-settings-field-row">
           <span className="coop-settings-label">Model</span>
-          <select
-            value={draft.model}
-            onChange={(e) => update({ model: e.target.value })}
-            className="coop-settings-field"
-          >
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {formatModelOptionLabel(model)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {prefs.plan === "free" ? (
-          <p className="coop-settings-card-desc text-[11px] text-[var(--coop-panel-muted)]">
-            Free plan: billed credits = tokens × model weight (shown above) × 2 for image attachments.
-          </p>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Temperature</span>
-            <input
-              type="number"
-              min={0}
-              max={2}
-              step={0.1}
-              value={draft.temperature}
-              onChange={(e) => update({ temperature: Number(e.target.value) })}
-              className="coop-settings-field"
-            />
-          </label>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Max tokens</span>
-            <input
-              type="number"
-              min={256}
-              max={8192}
-              step={256}
-              value={draft.maxTokens}
-              onChange={(e) => update({ maxTokens: Number(e.target.value) })}
-              className="coop-settings-field"
-            />
-          </label>
+          <span className="text-[13px]">{settingsModel.label}</span>
         </div>
 
         <SettingsCheckboxRow
           title="Enable live LLM chat"
-          description="Routes requests through /v1/chat"
           checked={draft.llmEnabled}
           onChange={(checked) => update({ llmEnabled: checked })}
         />
         <SettingsCheckboxRow
           title="Enable inline autocomplete"
-          description="Ghost-text suggestions via POST /v1/completions/inline (default off)"
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
         />

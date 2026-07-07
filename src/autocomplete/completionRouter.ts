@@ -3,7 +3,7 @@ import { readConfiguration } from "../chat/SecureApiClient";
 import { buildRepoId } from "../chat/buildRepoId";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import { resolveInlineModelPreset } from "../config/inlineModelPresets";
+import { resolveInlineModelPreset, resolveChatModelPreset } from "../config/inlineModelPresets";
 import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
 import { filterAndRankCompletions, normalizeCompletionText } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
@@ -114,7 +114,7 @@ export class CompletionRouter {
     timer.markNetworkStart();
 
     const prefs = readConfiguration();
-    const preset = resolveModelPreset(settings, prefs.llmProvider as LlmProvider);
+    const preset = resolveModelPreset(settings, prefs);
     const multiLine = wantsMultiLineCompletion(safeContext);
     const maxTokens = multiLine ? MULTI_LINE_MAX_TOKENS : SINGLE_LINE_MAX_TOKENS;
 
@@ -184,8 +184,14 @@ export class CompletionRouter {
       if (controller.signal.aborted) {
         return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
       }
-      console.warn("[CoopAI autocomplete]", error instanceof Error ? error.message : error);
-      return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
+      const message = error instanceof Error ? error.message : "Autocomplete failed";
+      console.warn("[CoopAI autocomplete]", message);
+      return {
+        completions: [],
+        latencyMs: breakdown.totalMs,
+        fromCache: false,
+        error: message
+      };
     }
   }
 
@@ -325,9 +331,16 @@ function buildAutocompleteUserMessage(context: ExtractedCodeContext): string {
 
 function resolveModelPreset(
   settings: AutocompleteSettings,
-  defaultProvider: LlmProvider
+  prefs: ReturnType<typeof readConfiguration>
 ): { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } } {
-  return resolveInlineModelPreset(settings.model, settings.customModel, defaultProvider);
+  if (settings.model === "chat") {
+    return resolveChatModelPreset(prefs.llmProvider as LlmProvider, prefs.model);
+  }
+  return resolveInlineModelPreset(
+    settings.model,
+    settings.customModel,
+    prefs.llmProvider as LlmProvider
+  );
 }
 
 function linkAbort(outer: AbortSignal | undefined, inner: AbortSignal): AbortSignal {

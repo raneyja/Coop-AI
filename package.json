@@ -363,12 +363,13 @@
         "coopAI.autocomplete.model": {
           "type": "string",
           "enum": [
+            "chat",
             "haiku",
             "gpt35",
             "custom"
           ],
-          "default": "haiku",
-          "description": "Fast model preset for autocomplete (lower latency over quality)."
+          "default": "chat",
+          "description": "Autocomplete model: chat uses the same provider and model as Preferences (coopAI.llmProvider + coopAI.defaultModel). haiku/gpt35 are fast presets."
         },
         "coopAI.autocomplete.customModel": {
           "type": "string",
@@ -382,10 +383,10 @@
         },
         "coopAI.autocomplete.requestTimeoutMs": {
           "type": "number",
-          "default": 400,
+          "default": 1500,
           "minimum": 100,
-          "maximum": 2000,
-          "description": "Drop slow completion requests after this many milliseconds."
+          "maximum": 5000,
+          "description": "Drop slow completion requests after this many milliseconds. Use 1500+ when autocomplete model is chat (e.g. gpt-4o)."
         },
         "coopAI.autocomplete.useFim": {
           "type": "boolean",
@@ -828,7 +829,7 @@
     "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
-    "test:project-instructions": "npx tsx src/context/projectInstructionsStatus.test.ts && npx tsx src/webview/lib/agentsMdStatus.test.ts",
+    "test:project-instructions": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/projectInstructionsStatus.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/webview/lib/agentsMdStatus.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:inline-completion": "npx tsx src/api/inlineGraphContext.test.ts && npx tsx src/api/inlineCompletionApi.test.ts",
     "test:autocomplete-smoke": "npx tsx scripts/autocomplete-smoke.mjs",
@@ -856,6 +857,7 @@
     "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh",
     "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",
     "seed:pro-onboarding": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-pro-onboarding",
+    "seed:governance-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai -e CREDENTIALS_ENCRYPTION_KEY=change-me-to-a-long-random-secret api node dist/admin-org.js seed-governance-demo",
     "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
     "dev:admin-portal": "bash scripts/dev-admin-portal.sh",
     "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",

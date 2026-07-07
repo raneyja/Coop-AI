@@ -3,16 +3,18 @@ export const MIN_CHAT_RESPONSE_VISIBLE_MS = 3000;
 
 export function remainingMinResponseDelayMs(
   startedAt: number,
-  now = Date.now()
+  now = Date.now(),
+  minVisibleMs = MIN_CHAT_RESPONSE_VISIBLE_MS
 ): number {
-  return Math.max(0, MIN_CHAT_RESPONSE_VISIBLE_MS - (now - startedAt));
+  return Math.max(0, minVisibleMs - (now - startedAt));
 }
 
 export function delayUntilMinResponseVisible(
   startedAt: number,
-  now = Date.now()
+  now = Date.now(),
+  minVisibleMs = MIN_CHAT_RESPONSE_VISIBLE_MS
 ): Promise<void> {
-  const remaining = remainingMinResponseDelayMs(startedAt, now);
+  const remaining = remainingMinResponseDelayMs(startedAt, now, minVisibleMs);
   if (remaining <= 0) {
     return Promise.resolve();
   }
@@ -24,22 +26,31 @@ export function createChatOutputGate(options: {
   startedAt: number;
   isCancelled: () => boolean;
   onChunk: (chunk: string) => void;
+  minVisibleMs?: number;
 }): {
   push: (chunk: string) => void;
   waitUntilOpen: () => Promise<void>;
 } {
-  let open = false;
+  const remaining = remainingMinResponseDelayMs(
+    options.startedAt,
+    Date.now(),
+    options.minVisibleMs ?? MIN_CHAT_RESPONSE_VISIBLE_MS
+  );
+  let open = remaining <= 0;
   const queue: string[] = [];
-  const gate = delayUntilMinResponseVisible(options.startedAt).then(() => {
-    if (options.isCancelled()) {
-      return;
-    }
-    open = true;
-    for (const chunk of queue) {
-      options.onChunk(chunk);
-    }
-    queue.length = 0;
-  });
+  const gate =
+    remaining <= 0
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => setTimeout(resolve, remaining)).then(() => {
+          if (options.isCancelled()) {
+            return;
+          }
+          open = true;
+          for (const chunk of queue) {
+            options.onChunk(chunk);
+          }
+          queue.length = 0;
+        });
 
   return {
     push(chunk: string) {

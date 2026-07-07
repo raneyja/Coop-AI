@@ -1,6 +1,6 @@
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 
-export type InlineModelPresetId = "haiku" | "gpt35" | "custom";
+export type InlineModelPresetId = "chat" | "haiku" | "gpt35" | "custom";
 
 export type InlineModelPresetConfig = {
   provider: LlmProvider;
@@ -38,11 +38,27 @@ export const INLINE_DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
   mistral: FIM_MISTRAL_MODEL
 };
 
+export function resolveChatModelPreset(
+  provider: LlmProvider,
+  chatModel: string
+): InlineModelPresetConfig {
+  const model = chatModel.trim() || defaultInlineModelForProvider(provider);
+  return {
+    provider,
+    model,
+    fallback: INLINE_CUSTOM_FALLBACK
+  };
+}
+
 export function resolveInlineModelPreset(
   preset: InlineModelPresetId,
   customModel: string,
-  defaultProvider: LlmProvider
+  defaultProvider: LlmProvider,
+  chatModel = ""
 ): InlineModelPresetConfig {
+  if (preset === "chat") {
+    return resolveChatModelPreset(defaultProvider, chatModel);
+  }
   if (preset === "custom" && customModel.trim()) {
     return {
       provider: defaultProvider,

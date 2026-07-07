@@ -261,36 +261,69 @@ async function main(): Promise<void> {
         );
         break;
       }
-      case "seed-pro-onboarding": {
+      case "seed-governance-demo": {
         const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
-        const orgName = "Pro Onboarding Test";
-        const adminEmail = "pro-onboarding@demo.local";
-
-        await pool.query(`DELETE FROM organizations WHERE name IN ($1, $2)`, [
-          "Repo Access Demo",
-          orgName
-        ]);
-
-        const org = await store.createOrganization(orgName, "pro");
-        await store.updateRepoAccessMode(org.id, "all_indexed");
-
         const authIdentityStore = new AuthIdentityStore(pool);
-        const admin = await userStore.createUser(org.id, adminEmail, "admin");
-        await authIdentityStore.createPasswordIdentity(admin.id, hashPassword(demoPassword));
+        const demoOrgNames = ["Demo Free", "Demo Pro", "Demo Enterprise"];
+        await pool.query(`DELETE FROM organizations WHERE name = ANY($1::text[])`, [demoOrgNames]);
+
+        async function seedOrg(options: {
+          name: string;
+          plan: OrgPlan;
+          seats?: number;
+          users: Array<{ email: string; role: UserRole }>;
+        }) {
+          const org = await store.createOrganization(options.name, options.plan);
+          await store.updateRepoAccessMode(org.id, "all_indexed");
+          if (options.plan === "pro" || options.plan === "enterprise") {
+            await store.updateOrganizationBilling(org.id, {
+              billingEmail: options.users[0]?.email.trim().toLowerCase(),
+              seatCount: options.seats ?? 5,
+              billingStatus: "active"
+            });
+          }
+          const accounts: Array<{ email: string; role: UserRole; userId: string }> = [];
+          for (const entry of options.users) {
+            const user = await userStore.createUser(org.id, entry.email, entry.role);
+            await authIdentityStore.createPasswordIdentity(user.id, hashPassword(demoPassword));
+            accounts.push({ email: entry.email, role: entry.role, userId: user.id });
+          }
+          return { orgId: org.id, orgName: org.name, plan: org.plan, accounts };
+        }
+
+        const free = await seedOrg({
+          name: "Demo Free",
+          plan: "free",
+          users: [{ email: "free-admin@demo.local", role: "admin" }]
+        });
+        const pro = await seedOrg({
+          name: "Demo Pro",
+          plan: "pro",
+          seats: 5,
+          users: [
+            { email: "pro-admin@demo.local", role: "admin" },
+            { email: "pro-member@demo.local", role: "member" }
+          ]
+        });
+        const enterprise = await seedOrg({
+          name: "Demo Enterprise",
+          plan: "enterprise",
+          seats: 25,
+          users: [{ email: "enterprise-admin@demo.local", role: "admin" }]
+        });
 
         console.log(
           JSON.stringify(
             {
-              orgId: org.id,
-              orgName: org.name,
-              plan: org.plan,
-              repoAccessMode: "all_indexed",
-              onboardingCompleted: false,
-              indexedRepos: [],
-              admin: { id: admin.id, email: adminEmail, password: demoPassword },
+              password: demoPassword,
               adminPortalUrl: "http://localhost:3001/login",
-              apiBase: "http://localhost:8787",
-              note: "Fresh Pro org — no repos, no integrations. Sign in and run setup wizard from scratch."
+              extensionApiBase: "http://localhost:8787",
+              orgs: { free, pro, enterprise },
+              testingNotes: [
+                "Pro admin: pro-admin@demo.local — Connect + Manage access in admin portal",
+                "Pro member: pro-member@demo.local — read-only Tools in extension; no Connect buttons",
+                "Free has no scope gate; Pro/Enterprise require Manage access before chat uses Slack/Jira/etc."
+              ]
             },
             null,
             2
@@ -348,7 +381,7 @@ async function main(): Promise<void> {
       }
       default:
         console.error(
-          "Commands: create-org, set-plan, upgrade-user-by-email, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, set-repo-access-mode, reindex-estate"
+          "Commands: create-org, set-plan, upgrade-user-by-email, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, seed-governance-demo, set-repo-access-mode, reindex-estate"
         );
         process.exit(1);
     }

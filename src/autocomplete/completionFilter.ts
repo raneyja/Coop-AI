@@ -5,6 +5,17 @@ const TRIVIAL_PATTERN = /^[\s;,.)}\]]+$/;
 const FENCE_PATTERN = /^```[\w]*\n?|```$/g;
 const SINGLE_LINE_CAP = 4;
 const MULTI_LINE_CAP = 8;
+const DECL_ASSIGNMENT_PREFIX = /\b(?:const|let|var)\s+\w+\s*=\s*$/;
+const REDUNDANT_DECL_ASSIGNMENT = /^(?:const|let|var)\s+\w+\s*=\s*/;
+const INLINE_STATEMENT_START =
+  /^(?:const|let|var|function\*?\s|async\s+function|class\s|interface\s|type\s|enum\s|import\s|export\s)/;
+
+const JS_LIKE_LANGUAGES = new Set([
+  "typescript",
+  "javascript",
+  "typescriptreact",
+  "javascriptreact"
+]);
 
 export function filterAndRankCompletions(
   raw: string[],
@@ -16,7 +27,7 @@ export function filterAndRankCompletions(
   const ranked: RankedCompletion[] = [];
 
   for (const item of raw) {
-    const cleaned = normalizeCompletionText(item, context);
+    const cleaned = sanitizeCompletionForContext(normalizeCompletionText(item, context), context);
     if (!cleaned || seen.has(cleaned)) {
       continue;
     }
@@ -52,6 +63,54 @@ export function normalizeCompletionText(text: string, context?: ExtractedCodeCon
   return value;
 }
 
+/** Strip duplicate declarations and drop statement restarts mid-line. */
+export function sanitizeCompletionForContext(
+  text: string,
+  context: ExtractedCodeContext
+): string {
+  if (!text || !JS_LIKE_LANGUAGES.has(context.languageId)) {
+    return text;
+  }
+
+  let value = text.trim();
+  if (DECL_ASSIGNMENT_PREFIX.test(context.currentLinePrefix)) {
+    value = value.replace(REDUNDANT_DECL_ASSIGNMENT, "").trimStart();
+  }
+
+  if (rejectsInlineStatementStart(value, context)) {
+    return "";
+  }
+
+  return value;
+}
+
+function rejectsInlineStatementStart(text: string, context: ExtractedCodeContext): boolean {
+  if (!JS_LIKE_LANGUAGES.has(context.languageId)) {
+    return false;
+  }
+
+  const trimmed = text.trimStart();
+  if (!INLINE_STATEMENT_START.test(trimmed)) {
+    return false;
+  }
+
+  const prefix = context.currentLinePrefix;
+  if (DECL_ASSIGNMENT_PREFIX.test(prefix)) {
+    return true;
+  }
+
+  const trimmedPrefix = prefix.trimEnd();
+  if (!trimmedPrefix || trimmedPrefix === context.indent) {
+    return false;
+  }
+
+  if (/[{(\[]\s*$/.test(trimmedPrefix)) {
+    return !/^\s+/.test(text);
+  }
+
+  return !/^\s+/.test(text);
+}
+
 function scoreCompletion(
   text: string,
   context: ExtractedCodeContext,
@@ -80,6 +139,8 @@ function scoreCompletion(
   }
   if (parseLikelyValid(text, context.languageId)) {
     score += 0.2;
+  } else {
+    return { include: false, score: 0 };
   }
   if (fileTextSample && fileTextSample.includes(text.trim())) {
     score += 0.1;
@@ -107,6 +168,9 @@ function matchesIndentation(text: string, indent: string): boolean {
 }
 
 function parseLikelyValid(text: string, languageId: string): boolean {
+  if (hasObviousQuoteMismatch(text, languageId)) {
+    return false;
+  }
   if (languageId === "python") {
     return !/\t/.test(text) || text.includes("\n");
   }
@@ -114,6 +178,20 @@ function parseLikelyValid(text: string, languageId: string): boolean {
     return true;
   }
   return text.length >= 2;
+}
+
+function hasObviousQuoteMismatch(text: string, languageId: string): boolean {
+  if (!JS_LIKE_LANGUAGES.has(languageId)) {
+    return false;
+  }
+  for (const match of text.matchAll(/(['"`])([^\\]*?)(['"`])/g)) {
+    if (match[1] !== match[3]) {
+      return true;
+    }
+  }
+  const singles = (text.match(/'/g) ?? []).length;
+  const doubles = (text.match(/"/g) ?? []).length;
+  return singles % 2 !== 0 || doubles % 2 !== 0;
 }
 
 function isBoilerplate(text: string): boolean {
@@ -144,12 +222,29 @@ export function toInlineInsertText(
   context: ExtractedCodeContext,
   completion: RankedCompletion
 ): string {
-  const stripped = stripOverlapWithPrefix(context.currentLinePrefix, completion.text);
+  let stripped = stripOverlapWithPrefix(context.currentLinePrefix, completion.text);
   if (!stripped) {
     return "";
   }
+  stripped = ensureInsertSpacing(context.currentLinePrefix, stripped);
   if (context.currentLinePrefix.trim() === "" && context.indent && !stripped.startsWith(context.indent)) {
     return context.indent + stripped;
   }
   return stripped;
+}
+
+/** After `=` or `:`, ensure a space before the completion when the user has not typed one yet. */
+export function ensureInsertSpacing(prefix: string, insert: string): string {
+  if (!insert || /^\s/.test(insert)) {
+    return insert;
+  }
+  const trimmedEnd = prefix.trimEnd();
+  const trailingWhitespace = prefix.length - trimmedEnd.length;
+  if (trailingWhitespace > 0) {
+    return insert;
+  }
+  if (/[=:,]$/.test(trimmedEnd)) {
+    return ` ${insert}`;
+  }
+  return insert;
 }

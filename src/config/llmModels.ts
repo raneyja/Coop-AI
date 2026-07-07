@@ -77,6 +77,12 @@ export function modelsForProvider(provider: LlmProvider): ModelDefinition[] {
   return CATALOG.filter((entry) => entry.provider === provider);
 }
 
+/** Budget model shown in settings — lowest credit weight per provider. */
+export function lowestCreditModelForProvider(provider: LlmProvider): ModelDefinition {
+  const models = modelsForProvider(provider);
+  return models.reduce((min, entry) => (entry.creditWeight < min.creditWeight ? entry : min), models[0]);
+}
+
 export function getModelDefinition(provider: LlmProvider, model: string): ModelDefinition | undefined {
   const normalized = model?.trim().toLowerCase() ?? "";
   if (!normalized) {
@@ -113,5 +119,5 @@ export function formatModelCreditWeight(weight: number): string {
 }
 
 export function formatModelOptionLabel(def: ModelDefinition): string {
-  return `${def.label} · ${formatModelCreditWeight(def.creditWeight)}`;
+  return def.label;
 }

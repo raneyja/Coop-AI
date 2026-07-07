@@ -20,6 +20,40 @@ import {
 import { buildTraceDecisionSearchSeeds } from "./traceDecisionSearch";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 
+type IntegrationChatEnrichmentDeps = {
+  shouldFetchConfluenceContext: typeof shouldFetchConfluenceContext;
+  fetchConfluenceSearchContext: typeof fetchConfluenceSearchContext;
+  shouldFetchNotionContext: typeof shouldFetchNotionContext;
+  fetchNotionSearchContext: typeof fetchNotionSearchContext;
+  shouldFetchJiraContext: typeof shouldFetchJiraContext;
+  fetchJiraSearchContext: typeof fetchJiraSearchContext;
+  shouldFetchSlackContext: typeof shouldFetchSlackContext;
+  fetchSlackSearchContext: typeof fetchSlackSearchContext;
+  shouldFetchTeamsContext: typeof shouldFetchTeamsContext;
+  fetchTeamsSearchContext: typeof fetchTeamsSearchContext;
+  shouldFetchGoogleDocsContext: typeof shouldFetchGoogleDocsContext;
+  fetchGoogleDocsSearchContext: typeof fetchGoogleDocsSearchContext;
+  shouldFetchCodeHostContext: typeof shouldFetchCodeHostContext;
+  fetchCodeHostSearchContext: typeof fetchCodeHostSearchContext;
+};
+
+const DEFAULT_INTEGRATION_CHAT_ENRICHMENT_DEPS: IntegrationChatEnrichmentDeps = {
+  shouldFetchConfluenceContext,
+  fetchConfluenceSearchContext,
+  shouldFetchNotionContext,
+  fetchNotionSearchContext,
+  shouldFetchJiraContext,
+  fetchJiraSearchContext,
+  shouldFetchSlackContext,
+  fetchSlackSearchContext,
+  shouldFetchTeamsContext,
+  fetchTeamsSearchContext,
+  shouldFetchGoogleDocsContext,
+  fetchGoogleDocsSearchContext,
+  shouldFetchCodeHostContext,
+  fetchCodeHostSearchContext
+};
+
 export async function enrichChatContextWithIntegrations(options: {
   result: ContextFetchResult;
   request: ContextFetchRequest;
@@ -32,8 +66,13 @@ export async function enrichChatContextWithIntegrations(options: {
   codeHostProvider?: CodeHostProvider;
   codeHostConnected?: boolean;
   integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+  deps?: Partial<IntegrationChatEnrichmentDeps>;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
+  const deps = {
+    ...DEFAULT_INTEGRATION_CHAT_ENRICHMENT_DEPS,
+    ...options.deps
+  };
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
   const base = {
     owner: options.owner,
@@ -47,27 +86,32 @@ export async function enrichChatContextWithIntegrations(options: {
     extraTerms: traceSeeds?.searchTerms
   });
 
-  let confluenceSearch: Awaited<ReturnType<typeof fetchConfluenceSearchContext>> | undefined;
-  if (shouldFetchConfluenceContext(options.request)) {
-    confluenceSearch = await fetchConfluenceSearchContext({
-      secrets: options.secrets,
-      owner: options.owner,
-      repo: options.repo,
-      extraTerms: integrationTerms,
-      integrationScope: options.integrationScopes?.atlassian
-    });
+  const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
+  const shouldFetchNotion = deps.shouldFetchNotionContext(options.request);
+  const [confluenceSearch, notionSearch] = await Promise.all([
+    shouldFetchConfluence
+      ? deps.fetchConfluenceSearchContext({
+          secrets: options.secrets,
+          owner: options.owner,
+          repo: options.repo,
+          extraTerms: integrationTerms,
+          integrationScope: options.integrationScopes?.atlassian
+        })
+      : Promise.resolve(undefined),
+    shouldFetchNotion
+      ? deps.fetchNotionSearchContext({
+          secrets: options.secrets,
+          owner: options.owner,
+          repo: options.repo,
+          extraTerms: integrationTerms,
+          integrationScope: options.integrationScopes?.notion
+        })
+      : Promise.resolve(undefined)
+  ]);
+  if (shouldFetchConfluence) {
     data.confluenceSearch = confluenceSearch;
   }
-
-  let notionSearch: Awaited<ReturnType<typeof fetchNotionSearchContext>> | undefined;
-  if (shouldFetchNotionContext(options.request)) {
-    notionSearch = await fetchNotionSearchContext({
-      secrets: options.secrets,
-      owner: options.owner,
-      repo: options.repo,
-      extraTerms: integrationTerms,
-      integrationScope: options.integrationScopes?.notion
-    });
+  if (shouldFetchNotion) {
     data.notionSearch = notionSearch;
   }
 
@@ -75,49 +119,69 @@ export async function enrichChatContextWithIntegrations(options: {
   const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
   const docExtraTerms = [...integrationTerms, ...crossToolText];
 
-  if (shouldFetchJiraContext(options.request)) {
-    data.jiraSearch = await fetchJiraSearchContext({
-      secrets: options.secrets,
-      ...base,
-      crossToolText: crossToolKeys,
-      codeHostRouter: options.codeHostRouter,
-      codeHostConnected: options.codeHostConnected,
-      integrationScope: options.integrationScopes?.atlassian
-    });
+  const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
+  const shouldFetchGoogleDocs = deps.shouldFetchGoogleDocsContext(options.request);
+  const [jiraSearch, googleDocsSearch] = await Promise.all([
+    shouldFetchJira
+      ? deps.fetchJiraSearchContext({
+          secrets: options.secrets,
+          ...base,
+          crossToolText: crossToolKeys,
+          codeHostRouter: options.codeHostRouter,
+          codeHostConnected: options.codeHostConnected,
+          integrationScope: options.integrationScopes?.atlassian
+        })
+      : Promise.resolve(undefined),
+    shouldFetchGoogleDocs
+      ? deps.fetchGoogleDocsSearchContext({
+          secrets: options.secrets,
+          ...base,
+          crossToolText: crossToolKeys,
+          extraTerms: docExtraTerms,
+          integrationScope: options.integrationScopes?.["google-docs"]
+        })
+      : Promise.resolve(undefined)
+  ]);
+  if (shouldFetchJira) {
+    data.jiraSearch = jiraSearch;
+  }
+  if (shouldFetchGoogleDocs) {
+    data.googleDocsSearch = googleDocsSearch;
   }
   const jiraIssueKeys = (
-    data.jiraSearch as { issues?: Array<{ key?: string }> } | undefined
+    jiraSearch as { issues?: Array<{ key?: string }> } | undefined
   )?.issues
     ?.map((issue) => issue.key?.trim())
     .filter((key): key is string => Boolean(key));
-  if (shouldFetchSlackContext(options.request)) {
-    data.slackSearch = await fetchSlackSearchContext({
-      secrets: options.secrets,
-      ...base,
-      crossToolText: crossToolKeys,
-      jiraIssueKeys,
-      integrationScope: options.integrationScopes?.slack
-    });
+  const shouldFetchSlack = deps.shouldFetchSlackContext(options.request);
+  const shouldFetchTeams = deps.shouldFetchTeamsContext(options.request);
+  const [slackSearch, teamsSearch] = await Promise.all([
+    shouldFetchSlack
+      ? deps.fetchSlackSearchContext({
+          secrets: options.secrets,
+          ...base,
+          crossToolText: crossToolKeys,
+          jiraIssueKeys,
+          integrationScope: options.integrationScopes?.slack
+        })
+      : Promise.resolve(undefined),
+    shouldFetchTeams
+      ? deps.fetchTeamsSearchContext({
+          secrets: options.secrets,
+          ...base,
+          crossToolText: crossToolKeys,
+          jiraIssueKeys
+        })
+      : Promise.resolve(undefined)
+  ]);
+  if (shouldFetchSlack) {
+    data.slackSearch = slackSearch;
   }
-  if (shouldFetchTeamsContext(options.request)) {
-    data.teamsSearch = await fetchTeamsSearchContext({
-      secrets: options.secrets,
-      ...base,
-      crossToolText: crossToolKeys,
-      jiraIssueKeys
-    });
+  if (shouldFetchTeams) {
+    data.teamsSearch = teamsSearch;
   }
-  if (shouldFetchGoogleDocsContext(options.request)) {
-    data.googleDocsSearch = await fetchGoogleDocsSearchContext({
-      secrets: options.secrets,
-      ...base,
-      crossToolText: crossToolKeys,
-      extraTerms: docExtraTerms,
-      integrationScope: options.integrationScopes?.["google-docs"]
-    });
-  }
-  if (shouldFetchCodeHostContext(options.request) && options.codeHostConnected) {
-    data.codeHostSearch = await fetchCodeHostSearchContext({
+  if (deps.shouldFetchCodeHostContext(options.request) && options.codeHostConnected) {
+    data.codeHostSearch = await deps.fetchCodeHostSearchContext({
       router: options.codeHostRouter,
       provider: options.codeHostProvider,
       ...base

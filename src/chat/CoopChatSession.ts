@@ -239,9 +239,9 @@ import {
   setAttachedAgentsMdPath
 } from "../context/agentsMdAttachmentStore";
 import {
-  formatProjectInstructionsBlock,
-  loadProjectInstructions
+  formatProjectInstructionsBlock
 } from "../context/projectInstructionsLoader";
+import { loadProjectInstructionsCached } from "../context/projectInstructionsCache";
 import { resolveProjectInstructionsState } from "../context/projectInstructionsStatus";
 import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
 import {
@@ -262,6 +262,7 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
 import { shouldFetchJiraContext } from "../context/jiraContext";
@@ -1621,11 +1622,16 @@ export class CoopChatSession {
 
     const requests = buildContextRequests(event, requestTypes);
     try {
-      const results = await Promise.all(
+      const baseResults = await Promise.all(
         requests.map((request) =>
           this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
         )
       );
+      const results = await enrichIntentFetchResultsOnce({
+        requests,
+        results: baseResults,
+        enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
+      });
       this.processConflicts(event, results);
 
       if (!options.quiet) {
@@ -1687,7 +1693,7 @@ export class CoopChatSession {
       result = await this.buildBaseContextResult(request);
     }
 
-    return this.enrichChatContextWithIntegrations(result, request);
+    return result;
   }
 
   private async buildBaseContextResult(
@@ -2409,11 +2415,6 @@ export class CoopChatSession {
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
-    if (quickAction === "trace-decision") {
-      this.contextFetchCache.clear();
-      await this.options.degradationCache.clear();
-      await this.options.codeHostRouter.clearDataCache();
-    }
     await this.runIntentFetch(intentEvent);
     this.enrichKnowledgeGapsBundle(quickAction);
     await this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
@@ -2953,6 +2954,7 @@ export class CoopChatSession {
     }
   ): Promise<void> {
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
+    const minResponseVisibleMs = effectiveQuickAction ? 0 : undefined;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
     const cacheKey = JSON.stringify({
@@ -2974,7 +2976,7 @@ export class CoopChatSession {
     if (this.preferences.useCachedResponses && !skipResponseCache) {
       const cached = this.readCache(cacheKey);
       if (cached) {
-        await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+        await delayUntilMinResponseVisible(this.chatTurnStartedAt, Date.now(), minResponseVisibleMs);
         if (token !== this.streamToken) {
           return;
         }
@@ -3309,6 +3311,7 @@ export class CoopChatSession {
       let clearedIntentForOutput = false;
       const outputGate = createChatOutputGate({
         startedAt: this.chatTurnStartedAt,
+        minVisibleMs: minResponseVisibleMs,
         isCancelled: () => token !== this.streamToken,
         onChunk: (chunk) => {
           if (!clearedIntentForOutput) {
@@ -3356,7 +3359,7 @@ export class CoopChatSession {
         return;
       }
 
-      await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+      await delayUntilMinResponseVisible(this.chatTurnStartedAt, Date.now(), minResponseVisibleMs);
       if (token !== this.streamToken) {
         return;
       }
@@ -5313,11 +5316,13 @@ export class CoopChatSession {
     if (!readProjectInstructionsEnabled() || state?.status !== "loaded" || !state.gitRoot) {
       return undefined;
     }
-    const loaded = loadProjectInstructions({
+    const loaded = loadProjectInstructionsCached({
+      enabled: true,
       gitRoot: state.gitRoot,
-      activeFile: this.currentContext.file
+      activeFile: this.currentContext.file,
+      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext)
     });
-    return formatProjectInstructionsBlock(loaded.files);
+    return formatProjectInstructionsBlock(loaded);
   }
 
   private async attachAgentsMd(): Promise<void> {

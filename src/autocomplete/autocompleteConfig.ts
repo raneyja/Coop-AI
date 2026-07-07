@@ -14,10 +14,10 @@ export function readAutocompleteSettings(): AutocompleteSettings {
     trigger: config.get<AutocompleteTriggerMode>("trigger", "auto"),
     maxSuggestionLength: config.get<number>("maxSuggestionLength", 200),
     debounceMs: config.get<number>("debounceMs", 300),
-    model: config.get<AutocompleteModelPreset>("model", "haiku"),
+    model: config.get<AutocompleteModelPreset>("model", "chat"),
     customModel: config.get<string>("customModel", ""),
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
-    requestTimeoutMs: config.get<number>("requestTimeoutMs", 400),
+    requestTimeoutMs: config.get<number>("requestTimeoutMs", 1500),
     useFim: config.get<boolean>("useFim", true),
     useGraphContext: config.get<boolean>("useGraphContext", false)
   };

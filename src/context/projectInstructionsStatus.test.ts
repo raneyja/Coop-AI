@@ -3,15 +3,18 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { clearProjectInstructionsCache, loadProjectInstructionsCached } from "./projectInstructionsCache";
 import { loadProjectInstructions } from "./projectInstructionsLoader";
 import { resolveProjectInstructionsState } from "./projectInstructionsStatus";
 
 function withTempRepo(run: (root: string) => void): void {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-agents-"));
+  clearProjectInstructionsCache();
   try {
     fs.mkdirSync(path.join(root, ".git"));
     run(root);
   } finally {
+    clearProjectInstructionsCache();
     fs.rmSync(root, { recursive: true, force: true });
   }
 }
@@ -85,5 +88,60 @@ test("loadProjectInstructions includes alwaysApply cursor rules", () => {
     const loaded = loadProjectInstructions({ gitRoot: root });
     assert.equal(loaded.files.length, 1);
     assert.equal(loaded.files[0]?.path, ".cursor/rules/style.mdc");
+  });
+});
+
+test("loadProjectInstructionsCached reuses hot-path result for same cache key", () => {
+  withTempRepo((root) => {
+    const agentsPath = path.join(root, "AGENTS.md");
+    fs.writeFileSync(agentsPath, "# Guide\n");
+    const initial = loadProjectInstructionsCached({
+      enabled: true,
+      gitRoot: root,
+      activeFile: "src/index.ts",
+      attachedAgentsMdPath: "/tmp/attached-a.md"
+    });
+    assert.equal(initial.length, 1);
+
+    fs.chmodSync(agentsPath, 0o000);
+    try {
+      const cached = loadProjectInstructionsCached({
+        enabled: true,
+        gitRoot: root,
+        activeFile: "src/index.ts",
+        attachedAgentsMdPath: "/tmp/attached-a.md"
+      });
+      assert.equal(cached.length, 1);
+      assert.equal(cached[0]?.path, "AGENTS.md");
+    } finally {
+      fs.chmodSync(agentsPath, 0o644);
+    }
+  });
+});
+
+test("loadProjectInstructionsCached invalidates when attached path changes", () => {
+  withTempRepo((root) => {
+    const agentsPath = path.join(root, "AGENTS.md");
+    fs.writeFileSync(agentsPath, "# Guide\n");
+    const initial = loadProjectInstructionsCached({
+      enabled: true,
+      gitRoot: root,
+      activeFile: "src/index.ts",
+      attachedAgentsMdPath: "/tmp/attached-a.md"
+    });
+    assert.equal(initial.length, 1);
+
+    fs.chmodSync(agentsPath, 0o000);
+    try {
+      const reloaded = loadProjectInstructionsCached({
+        enabled: true,
+        gitRoot: root,
+        activeFile: "src/index.ts",
+        attachedAgentsMdPath: "/tmp/attached-b.md"
+      });
+      assert.equal(reloaded.length, 0);
+    } finally {
+      fs.chmodSync(agentsPath, 0o644);
+    }
   });
 });

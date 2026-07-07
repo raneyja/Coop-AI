@@ -26,8 +26,8 @@ test("readAutocompleteSettings returns package defaults when unset", () => {
   const settings = readAutocompleteSettings();
   assert.equal(settings.enabled, false);
   assert.equal(settings.trigger, "auto");
-  assert.equal(settings.model, "haiku");
-  assert.equal(settings.requestTimeoutMs, 400);
+  assert.equal(settings.model, "chat");
+  assert.equal(settings.requestTimeoutMs, 1500);
   assert.equal(settings.useFim, true);
   assert.equal(settings.useGraphContext, false);
 });

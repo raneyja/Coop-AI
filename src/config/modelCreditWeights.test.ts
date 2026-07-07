@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { billTokensForQuota } from "./modelCreditWeights";
-import { formatModelOptionLabel, getModelCreditWeight, modelsForProvider } from "./llmModels";
+import {
+  formatModelOptionLabel,
+  getModelCreditWeight,
+  lowestCreditModelForProvider,
+  modelsForProvider
+} from "./llmModels";
 
 void (async () => {
   for (const provider of ["openai", "anthropic", "gemini", "deepseek"] as const) {
@@ -8,9 +13,13 @@ void (async () => {
     assert.ok(models.length >= 2, `${provider} should list multiple models`);
     for (const def of models) {
       assert.equal(getModelCreditWeight(provider, def.id), def.creditWeight);
-      assert.match(formatModelOptionLabel(def), /× credits/);
+      assert.equal(formatModelOptionLabel(def), def.label);
     }
   }
+
+  assert.equal(lowestCreditModelForProvider("openai").id, "gpt-4o-mini");
+  assert.equal(lowestCreditModelForProvider("gemini").id, "gemini-2.0-flash");
+  assert.equal(lowestCreditModelForProvider("deepseek").id, "deepseek-chat");
 
   assert.equal(getModelCreditWeight("openai", "gpt-5-mini"), 1.5);
   assert.equal(getModelCreditWeight("anthropic", "claude-sonnet-4-6"), 4);

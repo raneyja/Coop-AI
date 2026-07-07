@@ -5,6 +5,7 @@ import {
   INLINE_DEFAULT_MODEL_BY_PROVIDER,
   INLINE_MODEL_PRESETS,
   defaultInlineModelForProvider,
+  resolveChatModelPreset,
   resolveInlineModelPreset
 } from "./inlineModelPresets";
 
@@ -22,6 +23,23 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("chat preset uses preferences provider and model", () => {
+  const preset = resolveChatModelPreset("openai", "gpt-4o");
+  assert.equal(preset.provider, "openai");
+  assert.equal(preset.model, "gpt-4o");
+  assert.ok(preset.fallback);
+});
+
+test("chat preset falls back to provider default when model empty", () => {
+  const preset = resolveChatModelPreset("openai", "  ");
+  assert.equal(preset.model, INLINE_MODEL_PRESETS.gpt35.model);
+});
+
+test("resolveInlineModelPreset chat delegates to chat model preset", () => {
+  const preset = resolveInlineModelPreset("chat", "", "openai", "gpt-4o");
+  assert.equal(preset.model, "gpt-4o");
+});
 
 test("haiku preset targets anthropic haiku with openai fallback", () => {
   const preset = resolveInlineModelPreset("haiku", "", "anthropic");

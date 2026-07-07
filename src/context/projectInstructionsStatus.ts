@@ -2,10 +2,10 @@ import { readProjectInstructionsEnabled } from "../config/projectInstructionsCon
 import type { ProjectInstructionsState } from "../chat/types";
 import { attachedAgentsMdLabel } from "./agentsMdAttachmentStore";
 import {
-  loadProjectInstructions,
   resolveProjectInstructionsGitRoot,
   type ProjectInstructionFile
 } from "./projectInstructionsLoader";
+import { loadProjectInstructionsCached } from "./projectInstructionsCache";
 
 export function resolveProjectInstructionsState(options: {
   activeFile?: string;
@@ -26,20 +26,23 @@ export function resolveProjectInstructionsState(options: {
     workspaceRoots: options.workspaceRoots
   });
 
-  const loaded = gitRoot
-    ? loadProjectInstructions({
+  const files = gitRoot
+    ? loadProjectInstructionsCached({
+        enabled: true,
         gitRoot,
-        activeFile: options.activeFile
+        activeFile: options.activeFile,
+        attachedAgentsMdPath: options.attachedAgentsMdPath
       })
-    : { files: [] as ProjectInstructionFile[], sourcePaths: [] as string[] };
-  const sources = loaded.files.map((file) => formatInstructionSourceLabel(file));
-  const hasAgentsMd = sources.some(isAgentsMdPath);
+    : ([] as ProjectInstructionFile[]);
+  const sources = files.map((file) => formatInstructionSourceLabel(file));
+  const hasRepoAgentsMd = sources.some(isAgentsMdPath);
+  const hasAgentsMd = hasRepoAgentsMd || Boolean(attachedLabel);
 
   if (!gitRoot && !hasAgentsMd) {
     return { status: "no_git", hasAgentsMd: false, attachedAgentsMdLabel: attachedLabel };
   }
 
-  if (!loaded.files.length) {
+  if (!files.length && !attachedLabel) {
     return {
       status: "missing",
       gitRoot,

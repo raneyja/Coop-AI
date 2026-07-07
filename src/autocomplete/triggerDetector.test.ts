@@ -126,7 +126,8 @@ test("backoff after rejection suppresses requests", () => {
   assert.equal(decision.reason, "backoff");
 });
 
-test("isImmediateTriggerLine detects property access", () => {
+test("isImmediateTriggerLine detects property access and assignment", () => {
+  assert.equal(isImmediateTriggerLine("const value = "), true);
   assert.equal(isImmediateTriggerLine("foo."), true);
   assert.equal(isImmediateTriggerLine("console.log"), false);
 });
@@ -155,6 +156,32 @@ test("hot streak bypasses rapid typing suppression after accept", () => {
   assert.equal(decision.shouldRequest, true);
   assert.notEqual(decision.reason, "rapid_typing");
   assert.ok(decision.debounceMs <= 50);
+});
+
+test("immediate trigger after equals bypasses rapid typing", () => {
+  const detector = new TriggerDetector();
+  detector.noteKeystroke();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ currentLinePrefix: "const value = ", contextHash: "hash-immediate" }),
+    autoTrigger()
+  );
+  assert.equal(decision.shouldRequest, true);
+  assert.equal(decision.debounceMs, 0);
+  assert.notEqual(decision.reason, "rapid_typing");
+});
+
+test("rapid typing schedules debounced request instead of blocking", () => {
+  const detector = new TriggerDetector();
+  detector.noteKeystroke();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ currentLinePrefix: "console.log", contextHash: "hash-rapid" }),
+    autoTrigger()
+  );
+  assert.equal(decision.shouldRequest, true);
+  assert.equal(decision.reason, "rapid_typing");
+  assert.ok(decision.debounceMs > 0);
 });
 
 console.log(`\ntriggerDetector: ${passed} passed, ${failed} failed`);

@@ -116,6 +116,9 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       p95LatencyMs: this.performance.getRollingP95()
     });
     if (!decision.shouldRequest) {
+      if (decision.reason && decision.reason !== "unchanged_context") {
+        this.publishStatus("ready", this.describeSkipReason(decision.reason));
+      }
       return null;
     }
 
@@ -205,11 +208,27 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     }
 
     return new Promise((resolve) => {
+      let cancelled = false;
+      const cancelListener = token.onCancellationRequested(() => {
+        cancelled = true;
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = undefined;
+        }
+      });
+
       const run = () => {
         void this.executeRequest(document, position, extracted, token).then((items) => {
+          cancelListener.dispose();
+          if (cancelled && items && items.length > 0) {
+            void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+            resolve(null);
+            return;
+          }
           resolve(items);
         });
       };
+
       if (debounceMs <= 0) {
         run();
       } else {
@@ -236,8 +255,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const cancelListener = token.onCancellationRequested(() => abort.abort());
     try {
       const result = await this.router.fetchCompletions(extracted, this.settings, abort.signal);
-      if (token.isCancellationRequested || result.completions.length === 0) {
-        this.publishStatus("ready", result.latencyMs ? `idle (${result.latencyMs}ms)` : undefined);
+      if (token.isCancellationRequested) {
+        return null;
+      }
+      if (result.completions.length === 0) {
+        this.publishStatus("ready", this.describeEmptyResult(result));
         return null;
       }
 
@@ -254,7 +276,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
 
       if (items.length === 0) {
-        this.publishStatus("ready");
+        this.publishStatus("ready", "Filtered low-quality suggestion");
         return null;
       }
 
@@ -270,10 +292,8 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       discardContextPayload(extracted);
       return this.settings.showMultipleSuggestions ? items : [items[0]];
     } catch (error) {
-      this.publishStatus(
-        "error",
-        error instanceof Error ? error.message : "Autocomplete failed"
-      );
+      const message = error instanceof Error ? error.message : "Autocomplete failed";
+      this.publishStatus("error", this.describeErrorMessage(message));
       return null;
     } finally {
       cancelListener.dispose();
@@ -303,6 +323,41 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       arguments: [context.contextHash, context.languageId]
     };
     return item;
+  }
+
+  private describeSkipReason(reason: string): string {
+    switch (reason) {
+      case "backoff":
+        return "Paused after dismissed suggestions";
+      case "manual_only":
+        return "Manual trigger only (Cmd+Shift+\\)";
+      case "in_comment_or_string":
+        return "Skipped in comment or string";
+      case "post_accept_cooldown":
+        return "Ready";
+      default:
+        return reason.replaceAll("_", " ");
+    }
+  }
+
+  private describeEmptyResult(result: { error?: string; latencyMs: number }): string {
+    if (result.error) {
+      return this.describeErrorMessage(result.error);
+    }
+    if (result.latencyMs > 0) {
+      return `No suggestion (${result.latencyMs}ms)`;
+    }
+    return "No suggestion";
+  }
+
+  private describeErrorMessage(message: string): string {
+    if (/api key is missing|sign in|not authenticated/i.test(message)) {
+      return "Sign in to Coop AI to use autocomplete";
+    }
+    if (/timed out/i.test(message)) {
+      return "Autocomplete timed out — try again or increase request timeout";
+    }
+    return message;
   }
 
   private publishStatus(

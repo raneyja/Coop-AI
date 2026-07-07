@@ -1,17 +1,18 @@
 import * as fs from "node:fs";
-import * as vscode from "vscode";
-import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
-import { resolveLocalAbsolutePath } from "./localFileResolver";
 import {
   loadProjectInstructions,
   resolveProjectInstructionsGitRoot,
   type ProjectInstructionFile
 } from "./projectInstructionsLoader";
 
+export const PROJECT_INSTRUCTIONS_CACHE_TTL_MS = 5_000;
+
 type CacheEntry = {
   cacheKey: string;
   files: ProjectInstructionFile[];
+  sourcePaths: string[];
   mtimes: Map<string, number>;
+  expiresAt: number;
 };
 
 const cache: { entry?: CacheEntry } = {};
@@ -24,16 +25,22 @@ function statMtimeMs(absolutePath: string): number | undefined {
   }
 }
 
-function cacheKeyFor(gitRoot: string, activeFile?: string): string {
-  const normalizedFile = activeFile?.trim().replace(/\\/g, "/").replace(/^\.?\//, "") ?? "";
-  return `${gitRoot}::${normalizedFile}`;
+function normalizeCacheKeySegment(value: string | undefined): string {
+  return value?.trim().replace(/\\/g, "/").replace(/^\.?\//, "") ?? "";
 }
 
-function isCacheValid(entry: CacheEntry, sourcePaths: string[]): ProjectInstructionFile[] | undefined {
-  if (sourcePaths.length !== entry.mtimes.size) {
+function cacheKeyFor(gitRoot: string, activeFile?: string, attachedAgentsMdPath?: string): string {
+  return `${normalizeCacheKeySegment(gitRoot)}::${normalizeCacheKeySegment(activeFile)}::${normalizeCacheKeySegment(attachedAgentsMdPath)}`;
+}
+
+function isCacheValid(entry: CacheEntry, now: number): ProjectInstructionFile[] | undefined {
+  if (now > entry.expiresAt) {
     return undefined;
   }
-  for (const sourcePath of sourcePaths) {
+  if (entry.sourcePaths.length !== entry.mtimes.size) {
+    return undefined;
+  }
+  for (const sourcePath of entry.sourcePaths) {
     const mtime = statMtimeMs(sourcePath);
     if (mtime === undefined || entry.mtimes.get(sourcePath) !== mtime) {
       return undefined;
@@ -46,53 +53,57 @@ export function clearProjectInstructionsCache(): void {
   cache.entry = undefined;
 }
 
-export function loadProjectInstructionsCached(options: {
+export type LoadProjectInstructionsCachedOptions = {
   activeFile?: string;
   enabled?: boolean;
-}): ProjectInstructionFile[] {
-  const enabled = options.enabled ?? readProjectInstructionsEnabled();
-  if (!enabled) {
+  attachedAgentsMdPath?: string;
+  gitRoot?: string;
+  resolveAbsolutePath?: (relativePath: string) => string | undefined;
+  workspaceRoots?: string[];
+};
+
+export function loadProjectInstructionsCached(options: LoadProjectInstructionsCachedOptions): ProjectInstructionFile[] {
+  if (options.enabled === false) {
     return [];
   }
 
-  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
-  const gitRoot = resolveProjectInstructionsGitRoot({
-    activeFile: options.activeFile,
-    resolveAbsolutePath: resolveLocalAbsolutePath,
-    workspaceRoots
-  });
+  const gitRoot =
+    options.gitRoot ??
+    resolveProjectInstructionsGitRoot({
+      activeFile: options.activeFile,
+      resolveAbsolutePath: options.resolveAbsolutePath,
+      workspaceRoots: options.workspaceRoots ?? []
+    });
   if (!gitRoot) {
     return [];
   }
 
-  const key = cacheKeyFor(gitRoot, options.activeFile);
-  const loaded = loadProjectInstructions({ gitRoot, activeFile: options.activeFile });
-  if (!loaded.files.length) {
-    cache.entry = undefined;
-    return [];
-  }
-
-  const mtimes = new Map<string, number>();
-  for (const sourcePath of loaded.sourcePaths) {
-    const mtime = statMtimeMs(sourcePath);
-    if (mtime === undefined) {
-      cache.entry = undefined;
-      return loaded.files;
-    }
-    mtimes.set(sourcePath, mtime);
-  }
+  const key = cacheKeyFor(gitRoot, options.activeFile, options.attachedAgentsMdPath);
+  const now = Date.now();
 
   if (cache.entry?.cacheKey === key) {
-    const cached = isCacheValid(cache.entry, loaded.sourcePaths);
+    const cached = isCacheValid(cache.entry, now);
     if (cached) {
       return cached;
     }
   }
 
+  const loaded = loadProjectInstructions({ gitRoot, activeFile: options.activeFile });
+  const mtimes = new Map<string, number>();
+  for (const sourcePath of loaded.sourcePaths) {
+    const mtime = statMtimeMs(sourcePath);
+    if (mtime === undefined) {
+      continue;
+    }
+    mtimes.set(sourcePath, mtime);
+  }
+
   cache.entry = {
     cacheKey: key,
     files: loaded.files,
+    sourcePaths: loaded.sourcePaths,
+    expiresAt: now + PROJECT_INSTRUCTIONS_CACHE_TTL_MS,
     mtimes
   };
-  return loaded.files;
+  return cache.entry.files;
 }

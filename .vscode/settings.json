@@ -1,6 +1,6 @@
 {
   "debug.allowBreakpointsEverywhere": false,
-  "coopAI.devMode": true,
-  "coopAI.apiBaseUrl": "http://localhost:8787",
-  "coopAI.autocomplete.enabled": true
+  "coopAI.devMode": false,
+  "coopAI.autocomplete.enabled": true,
+  "editor.inlineSuggest.enabled": true
 }

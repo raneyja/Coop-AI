@@ -80,20 +80,15 @@ export class TriggerDetector {
       return { shouldRequest: false, debounceMs: 0, reason: "post_accept_cooldown" };
     }
 
-    if (Date.now() < this.rapidTypingUntil && !options.hotStreakActive) {
-      const rapidDebounce = this.resolveDebounceMs(settings.debounceMs, false, options);
-      return { shouldRequest: false, debounceMs: rapidDebounce, reason: "rapid_typing" };
-    }
-
-    const immediate =
-      trigger.kind === "paste" ||
-      trigger.kind === "immediate" ||
-      context.afterDot ||
-      context.afterOpenParen ||
-      /[=,(]\s*$/.test(context.currentLinePrefix);
+    const immediate = isImmediateTriggerContext(context, trigger);
 
     if (trigger.kind === "paste" || Date.now() < this.pasteDetectedUntil) {
       return { shouldRequest: true, debounceMs: 0 };
+    }
+
+    if (Date.now() < this.rapidTypingUntil && !options.hotStreakActive && !immediate) {
+      const rapidDebounce = this.resolveDebounceMs(settings.debounceMs, false, options);
+      return { shouldRequest: true, debounceMs: rapidDebounce, reason: "rapid_typing" };
     }
 
     const debounceMs = immediate
@@ -138,5 +133,18 @@ export function triggerContextFromVscode(
 }
 
 export function isImmediateTriggerLine(prefix: string): boolean {
-  return /[.=(,]\s*$/.test(prefix);
+  return /[=,(]\s*$/.test(prefix) || /[.=(,]$/.test(prefix);
+}
+
+export function isImmediateTriggerContext(
+  context: ExtractedCodeContext,
+  trigger: CompletionTriggerContext
+): boolean {
+  return (
+    trigger.kind === "paste" ||
+    trigger.kind === "immediate" ||
+    context.afterDot ||
+    context.afterOpenParen ||
+    isImmediateTriggerLine(context.currentLinePrefix)
+  );
 }

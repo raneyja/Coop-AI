@@ -18,6 +18,11 @@ test("remainingMinResponseDelayMs respects minimum window", () => {
   assert.equal(remainingMinResponseDelayMs(1000, 5000), 0);
 });
 
+test("remainingMinResponseDelayMs supports custom minimum window", () => {
+  assert.equal(remainingMinResponseDelayMs(1000, 1500, 0), 0);
+  assert.equal(remainingMinResponseDelayMs(1000, 1500, 1000), 500);
+});
+
 void (async () => {
   const startedAt = Date.now() - MIN_CHAT_RESPONSE_VISIBLE_MS;
   const emitted: string[] = [];
@@ -36,6 +41,21 @@ void (async () => {
   assert.deepEqual(emitted, ["a", "b", "c"]);
   passed += 1;
   console.log("ok - createChatOutputGate releases queued chunks after delay");
+
+  const immediate: string[] = [];
+  const immediateGate = createChatOutputGate({
+    startedAt: Date.now(),
+    minVisibleMs: 0,
+    isCancelled: () => false,
+    onChunk: (chunk) => immediate.push(chunk)
+  });
+  immediateGate.push("x");
+  assert.deepEqual(immediate, ["x"]);
+  await immediateGate.waitUntilOpen();
+  immediateGate.push("y");
+  assert.deepEqual(immediate, ["x", "y"]);
+  passed += 1;
+  console.log("ok - createChatOutputGate streams immediately with zero minimum");
 
   console.log(`\n${passed} passed`);
 })();
