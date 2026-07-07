@@ -9,6 +9,64 @@ export const siteConfig = {
     "Instantly understand any codebase with team-wide context from the entire stack.",
   contactEmail: "hello@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
+  securityEmail: "security@coop-ai.dev",
+  seo: {
+    defaultDescription:
+      "CoopAI brings organizational context into VS Code — code graph, Slack, Jira, and docs — with zero-clone indexing and enterprise-ready security.",
+    ogImageAlt: "CoopAI — deep code intelligence for VS Code",
+    pages: {
+      product: {
+        title: "Product",
+        description:
+          "Explore CoopAI for VS Code: understand repos, trace decisions, find owners, assess blast radius, and write graph-grounded completions across your stack."
+      },
+      enterprise: {
+        title: "Enterprise",
+        description:
+          "CoopAI Enterprise: zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment, and self-hosted options for security-conscious teams."
+      },
+      pricing: {
+        title: "Pricing",
+        description:
+          "CoopAI pricing for engineering teams — free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
+      },
+      security: {
+        title: "Security",
+        description:
+          "How CoopAI protects your code and context — zero-clone architecture, zero-retention LLM routing, BYOK, audit logging, and compliance documentation."
+      },
+      blog: {
+        title: "Blog",
+        description:
+          "CoopAI blog — perspectives on code intelligence, organizational context, SDLC tooling, and enterprise developer productivity."
+      },
+      docs: {
+        title: "Documentation",
+        description:
+          "CoopAI documentation — getting started, admin portal, integrations, API reference, security architecture, and enterprise deployment."
+      },
+      demo: {
+        title: "Book a Demo",
+        description:
+          "Schedule a CoopAI demo or join the waitlist. See zero-clone code intelligence, cross-tool context, and enterprise deployment options."
+      },
+      integrations: {
+        title: "Integrations",
+        description:
+          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Notion, Google Docs, and Microsoft Teams for graph-grounded context in VS Code."
+      },
+      privacy: {
+        title: "Privacy Policy",
+        description:
+          "How CoopAI collects, uses, retains, and protects your data across the website, VS Code extension, and backend services."
+      },
+      terms: {
+        title: "Terms of Service",
+        description:
+          "Terms governing use of CoopAI services, including the website, VS Code extension, admin portal, and API."
+      }
+    }
+  },
   links: {
     github: "https://github.com/coop-ai",
     vscodeMarketplace:

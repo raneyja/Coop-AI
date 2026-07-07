@@ -45,7 +45,7 @@ Returns server status, cache, webhooks, jobs, and configured LLM providers.
 }
 ```
 
-Use **Test connection** in the extension to call this endpoint.
+The extension calls this automatically when you are signed in.
 
 ## Chat
 

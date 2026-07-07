@@ -3,17 +3,16 @@ title: Troubleshooting
 description: Common issues and fixes for Coop AI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-07"
 ---
 
 ## Extension
 
 | Problem | Fix |
 | --- | --- |
-| **Not signed in** | **Settings → Account** — sign in with email/password, Google, or SSO (Enterprise) |
-| **Test connection fails** | Confirm you are signed in; check API base URL (`https://api.coop-ai.dev`) and network |
+| **Not signed in** | **Settings → Account** — **Continue with Google**, **Continue with email**, or **Sign in with SSO** |
 | **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
-| **SSO required** | Your org requires SAML — use **Sign in with SSO** and enter your organization name |
+| **SSO required** | Your org requires SAML — click **Sign in with SSO** in Account (admin portal: expand **More sign-in options**) |
 | **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |

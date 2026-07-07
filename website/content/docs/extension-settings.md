@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the Coop AI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-07"
 ---
 
 Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
@@ -12,25 +12,41 @@ Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Ope
 
 Sign in with your Coop account — the same credentials you use at [coop-ai.dev/signup/free](/signup/free) or the admin portal.
 
-| Method | When to use |
+<!-- figures -->
+![Account sign-in in VS Code (light theme)](/screenshots/docs/settings-account-light.png)
+
+*Light theme*
+
+![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
+
+*Dark theme*
+<!-- /figures -->
+
+### Sign-in options
+
+Three paths on one screen, separated by **or** dividers:
+
+| Path | What to do |
 | --- | --- |
-| **Email + password** | Default for free and Pro accounts |
-| **Continue with Google** | Same Google account you used at signup |
-| **Sign in with SSO** | Enterprise orgs with SAML (enter organization name) |
+| **Continue with Google** | Click the top button (Google icon) |
+| **Continue with email** | Enter email → **Continue with email** → password → **Sign in** |
+| **Sign in with SSO** | Click **Sign in with SSO** (Enterprise) |
 
-After sign-in:
+Email sign-in is **two steps**:
 
-| Field | Value |
-| --- | --- |
-| **API base URL** | `https://api.coop-ai.dev` (default) or your self-hosted URL |
+1. Enter your email and click **Continue with email**.
+2. Enter your password and click **Sign in**.
+3. **Forgot password?** resets your password. **← Use a different email** returns to step 1.
 
-Click **Test connection** to verify `GET /health`.
+### Signed in
 
-**Forgot password?** Use the link in Account settings or [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password).
+After sign-in, Account shows your **org and plan** summary and a **Sign out** button.
 
-### Automation API key (optional)
+**Forgot password?** Use the link on the password step or [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password).
 
-Expand **Automation API key** only for scripts and CI — not for everyday sign-in. Issue keys from the admin portal **API Keys** page if you need headless access.
+### Automation API keys
+
+Not in the extension UI. For CI and scripts, create keys in the admin portal **API Keys** page.
 
 ## Tools
 
@@ -55,9 +71,14 @@ Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**
 
 ## Preferences
 
-- **Prompt library** — pin up to 5 prompts for the composer footer
-- **Model preferences** — default provider/model where applicable
-- **Dev mode** — enable PAT-based local integration testing (not for production orgs)
+Profile and chat defaults — moved out of Account:
+
+| Item | Purpose |
+| --- | --- |
+| **Timezone** | Quota reset times and scheduling context in chat |
+| **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
+| **Model & chat** | Default provider/model and chat on/off |
+| **Prompt library** | Pin up to 5 prompts for the composer footer |
 
 ## Autocomplete
 

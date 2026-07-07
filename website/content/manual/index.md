@@ -48,7 +48,7 @@ See the [Security page](/security) for architecture details.
 
 1. **Browser** — Go to [coop-ai.dev/signup/free](https://coop-ai.dev/signup/free), enter your work email, and create a password (or continue with Google).
 2. **Browser** — Verify your email if prompted.
-3. **Extension UI** — Install the VS Code extension (see below) and sign in under **Settings → Account** with the same email and password, or **Continue with Google**.
+3. **Extension UI** — Install the VS Code extension (see below) and sign in under **Settings → Account** — same email, **Continue with Google**, or **Sign in with SSO** (Enterprise).
 4. **Browser** — Optional: open the [admin portal](https://admin.coop-ai.dev/login) with the same credentials to manage your personal account.
 
 > **Forgot your password?** Use [Forgot password](https://coop-ai.dev/forgot-password) on the website or admin portal, or the **Forgot password?** link in the extension.
@@ -71,10 +71,37 @@ See the [Security page](/security) for architecture details.
 
 ### Sign in
 
-1. **Extension UI** — Open the Coop sidebar → gear icon, or run **CoopAI Settings** from the Command Palette.
-2. **Extension UI** — Go to **Account** and sign in with your email and password, or **Continue with Google**. Enterprise orgs can use **Sign in with SSO**.
+**Extension UI** → **Settings → Account**
 
-Use **Forgot password?** in Account settings if you need to reset your password ([coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password)).
+<!-- figures -->
+![Account sign-in in VS Code (light theme) — Continue with Google, email, and SSO](/screenshots/docs/settings-account-light.png)
+
+*Light theme*
+
+![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
+
+*Dark theme*
+<!-- /figures -->
+
+Three sign-in paths appear on one screen:
+
+| Path | Steps |
+| --- | --- |
+| **Continue with Google** | Click the top button (Google icon) |
+| **Continue with email** | Enter email → **Continue with email** → enter password → **Sign in** |
+| **Sign in with SSO** | Click **Sign in with SSO** (Enterprise; org picker coming soon) |
+
+**Email is two steps** (same pattern as ChatGPT / Claude):
+
+1. Enter your email address and click **Continue with email**.
+2. Enter your password and click **Sign in**.
+3. Use **Forgot password?** to reset, or **← Use a different email** to go back.
+
+**After sign-in:** Account shows your org and plan summary, plus **Sign out**.
+
+Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) if you need to reset your password outside the extension.
+
+**Automation API keys** (`coop_…`) are for CI and scripts only — create them in the [admin portal](https://admin.coop-ai.dev) **API Keys** page, not in the extension.
 
 ### Set repository context
 
@@ -135,12 +162,12 @@ Open settings via the sidebar gear icon or **CoopAI Settings**:
 
 | Screen | Purpose |
 | --- | --- |
-| **Account** | Sign in (email, Google, SSO), timezone |
+| **Account** | Sign in (Google, email, SSO); signed-in org/plan + Sign out |
 | **Plan & Usage** | Current plan, credits, upgrade path |
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
 | **Indexing** | Lightning Mode status and indexed repos (Pro) |
-| **Preferences** | Prompt library, model preferences |
+| **Preferences** | Timezone, identity links, prompt library, model preferences |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, **Understand Repo**, or **Knowledge Gaps**.
 
@@ -468,12 +495,12 @@ Full admin setup is covered in the [Documentation hub](/docs).
 
 | Problem | Fix |
 | --- | --- |
-| **Test connection fails** | Sign in again under Account; verify base URL (`https://api.coop-ai.dev`) and network access |
+| **Not signed in** | **Settings → Account** — use Google, **Continue with email**, or **Sign in with SSO** |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
 | **No Slack/Jira context** | Ask admin to connect integrations in admin portal |
-| **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** in extension Account settings |
-| **Can't sign in** | Verify email is verified; try Google sign-in; Enterprise: use org SSO |
+| **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** on the password step |
+| **Can't sign in** | Verify email is verified; try Google; Enterprise: **Sign in with SSO** |
 
 ## Support
 

@@ -62,7 +62,7 @@ Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces
 - Assign roles (admin vs developer)
 - Revoke access
 
-Developers sign into the VS Code extension with their work email and password, Google, or org SSO — not an automation API key.
+Developers sign into the VS Code extension from **Settings → Account** — **Continue with Google**, two-step email sign-in, or **Sign in with SSO**. Not an automation API key.
 
 ## Member pages
 

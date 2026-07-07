@@ -28,8 +28,7 @@ Run **CoopAI: Toggle Autocomplete** to flip `coopAI.autocomplete.enabled` withou
 
 ### Prerequisites
 
-- Signed in under **Settings → Account** (email, Google, or SSO)
-- **Test connection** succeeds (`GET /health`)
+- Signed in under **Settings → Account** (Google, email, or SSO)
 - File type is supported (code files; sensitive files such as `.env` are skipped)
 
 ## How it works
@@ -158,7 +157,7 @@ Org admins can view org completion metrics in the [admin portal](https://admin.c
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm you are signed in and **Test connection** succeeds |
+| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm you are signed in under **Settings → Account** |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |

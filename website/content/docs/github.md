@@ -81,7 +81,7 @@ Suggested scopes: `repo`, `read:org`.
 | "GitHub is not configured on the Coop server" | Operator must add GitHub App/OAuth creds |
 | "Invalid or expired install state" | Start from admin **Connect** or **Send link** — do not open GitHub install URL without Coop’s `state` |
 | No org on GitHub install page | You must be GitHub org **Owner**; uninstall from personal account and retry |
-| "Sign in to Coop first" | Sign in under **Settings → Account** (extension) or admin portal |
+| "Sign in to Coop first" | Sign in under **Settings → Account** (Google, email, or SSO) |
 | Callback fails | Setup URL must match `https://api.coop-ai.dev/v1/github/app/callback` |
 | Still see PAT field | Disable `coopAI.devMode` for production |
 

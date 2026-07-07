@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-07"
 ---
 
 ## General
@@ -38,11 +38,14 @@ Yes. Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev). See [Enterprise depl
 
 ### How do I sign in?
 
-Create an account at [free signup](/signup/free) (email + password or Google), or accept an invite from your org admin. Then sign in in the **extension** or **admin portal** with the same method:
+Create an account at [free signup](/signup/free) (email + password or Google), or accept an invite from your org admin. Then sign in in the **extension** or **admin portal**:
 
-- Email and password
-- **Continue with Google**
-- **Sign in with SSO** (Enterprise)
+| Surface | Sign-in paths |
+| --- | --- |
+| **Extension** → Settings → Account | **Continue with Google** · email (two-step) · **Sign in with SSO** |
+| **Admin portal** | Email/password · Google · SSO under **More sign-in options** |
+
+Email in the extension is two steps: enter email → **Continue with email** → password → **Sign in**.
 
 ### Do I need an API key?
 

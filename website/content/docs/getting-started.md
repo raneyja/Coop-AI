@@ -3,7 +3,7 @@ title: Getting started
 description: Install Coop AI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-07"
 ---
 
 This guide gets you from signup to your first useful chat in Coop AI.
@@ -31,11 +31,27 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 ## Step 3 — Sign in
 
 1. **Extension UI** — Open Coop sidebar → gear icon (or **Coop AI: Open Settings**).
-2. **Account** — Sign in with your email and password, or **Continue with Google**. Enterprise: **Sign in with SSO**.
-3. Set API base URL to `https://api.coop-ai.dev`.
-4. Click **Test connection** — success calls `GET /health`.
+2. **Account** — Choose a sign-in path:
 
-API keys are for automation and CI only — expand **Automation API key** under Account if you need one for scripts.
+<!-- figures -->
+![Account sign-in in VS Code (light theme)](/screenshots/docs/settings-account-light.png)
+
+*Light theme*
+
+![Account sign-in in VS Code (dark theme)](/screenshots/docs/settings-account-dark.png)
+
+*Dark theme*
+<!-- /figures -->
+
+| Path | Steps |
+| --- | --- |
+| **Continue with Google** | Click the Google button at the top |
+| **Continue with email** | Enter email → **Continue with email** → password → **Sign in** |
+| **Sign in with SSO** | Enterprise: click **Sign in with SSO** |
+
+3. **Success:** Account shows your org and plan. Open chat and ask a question.
+
+Automation API keys are for CI/scripts only — create them in the [admin portal](https://admin.coop-ai.dev) if needed, not in the extension.
 
 ## Step 4 — Ask your first question
 
