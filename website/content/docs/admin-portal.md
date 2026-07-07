@@ -56,9 +56,17 @@ In production mode, developers **cannot** paste OAuth tokens in VS Code — admi
 
 **Indexing** (admin only) — enable Deep-Index on repos discovered after code-host connect. All plans use the same cloud index; **free** orgs are limited to **3 Deep-Indexed repos** org-wide. Pro orgs have unlimited indexing. Developers pick workspace repos from this catalog (up to 3).
 
+<!-- figures -->
+![Admin portal Indexing — Deep-Index progress, embeddings status, and reindex controls](/screenshots/docs/admin-indexing-dark.png)
+<!-- /figures -->
+
 ## Integration scope
 
 Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces, etc. Coop can access. See [Integration scope](/docs/integration-scope).
+
+<!-- figures -->
+![Manage Slack access — channel allowlist for least-privilege search](/screenshots/docs/admin-integration-scope-dark.png)
+<!-- /figures -->
 
 ## Users
 

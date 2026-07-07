@@ -100,8 +100,12 @@ Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) if you ne
 ### Set repository context
 
 1. **Extension UI** — Open **Settings → Workspace**.
-2. Set **Owner**, **Repository**, and **Branch** (e.g. `acme`, `api`, `main`).
+2. Pick an indexed repo from your org catalog and set **Primary branch** (e.g. `main`).
 3. Repo-wide quick actions like **Understand Repo** and **Find Owner** use these defaults.
+
+<!-- figures -->
+![Workspace settings — org repos, AGENTS.md, and primary branch](/screenshots/docs/extension-settings-workspace.png)
+<!-- /figures -->
 
 In **production mode** (`coopAI.devMode: false`), org admins connect code hosts in the admin portal — developers do not paste PATs.
 
@@ -158,6 +162,10 @@ Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/d
 
 Open settings via the sidebar gear icon or **CoopAI Settings**:
 
+<!-- figures -->
+![CoopAI Settings hub — Account, Tools, Workspace, Indexing, and Preferences](/screenshots/docs/extension-settings-hub.png)
+<!-- /figures -->
+
 | Screen | Purpose |
 | --- | --- |
 | **Account** | Sign in (Google, email, SSO); signed-in org/plan + Sign out |
@@ -172,6 +180,10 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 ### Inline complete and edit selection
 
 **Inline complete** — Ghost-text autocomplete as you type. Shipped in production; **off by default** (`coopAI.autocomplete.enabled: false`).
+
+<!-- figures -->
+![Inline autocomplete — ghost-text suggestion in the editor](/screenshots/docs/inline-autocomplete.png)
+<!-- /figures -->
 
 | Step | Surface | Action |
 | --- | --- | --- |
@@ -240,6 +252,10 @@ I'm onboarding to coop-backend — where does webhook ingestion start, and how d
 **Requires:** An open file in the editor.
 
 **Default prompt:** "Trace the engineering decision behind this code."
+
+<!-- figures -->
+![Trace Decision result — summary with evidence card and source commit](/screenshots/docs/chat-results-with-evidence-trace-decision.png)
+<!-- /figures -->
 
 **Example:**
 
@@ -329,6 +345,10 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 ### Saved prompts in the sidebar
 
 Click **Prompts** in the chat composer footer to open a dropdown of your pinned prompts. Select a prompt to insert it into the composer with current file and workspace context filled in. Press **Send** when you are ready.
+
+<!-- figures -->
+![Prompt library — search, pin, and create team prompts](/screenshots/docs/prompt-library.png)
+<!-- /figures -->
 
 If you already have text in the composer, the saved prompt is appended below it.
 

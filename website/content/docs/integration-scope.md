@@ -3,7 +3,7 @@ title: Integration scope
 description: Configure which Slack channels, Jira projects, and workspaces Coop can access.
 section: integrations
 order: 2
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-07-07"
 ---
 
 After connecting an integration, Pro and Enterprise orgs configure **scope** — the allowlist of channels, projects, or workspaces Coop can read.
@@ -17,7 +17,11 @@ Coop follows least-privilege access. Even with OAuth connected, Pro and Enterpri
 1. **Browser** → [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations)
 2. Find the connected integration → **Manage access**
 3. Select allowed channels, projects, or folders
-4. **Save scope** → **Test**
+4. **Save access** → **Test**
+
+<!-- figures -->
+![Manage Slack access — choose channels Coop can search](/screenshots/docs/admin-integration-scope-dark.png)
+<!-- /figures -->
 
 **Success:** Scope status shows **Active** (not just Connected).
 

@@ -8,6 +8,10 @@ lastUpdated: "2026-07-07"
 
 Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
 
+<!-- figures -->
+![CoopAI Settings hub — Account, Tools, Workspace, Indexing, and Preferences](/screenshots/docs/extension-settings-hub.png)
+<!-- /figures -->
+
 ## Account
 
 Sign in with your Coop account — the same credentials you use at [coop-ai.dev/signup/free](/signup/free) or the admin portal.
@@ -55,13 +59,19 @@ Supported tools: GitHub, GitLab, Bitbucket, Slack, Jira, Confluence, Notion, Goo
 
 ## Workspace
 
+Pick indexed repos your org admin authorized and set your primary branch.
+
+<!-- figures -->
+![Workspace settings — org repos, AGENTS.md, and primary branch](/screenshots/docs/extension-settings-workspace.png)
+<!-- /figures -->
+
 | Field | Purpose |
 | --- | --- |
-| **Owner** | GitHub/GitLab org or user (e.g. `acme`) |
-| **Repository** | Repo name (e.g. `api`) |
-| **Branch** | Default branch (e.g. `main`) |
+| **Workspace repos** | Deep-Indexed repos your org admin enabled (read-only list) |
+| **Primary branch** | Default branch for repo-wide quick actions (e.g. `main`) |
+| **AGENTS.md** | Project instructions loaded on every message |
 
-Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**) use these defaults.
+Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**) use your selected repo and branch.
 
 ## Preferences
 
@@ -72,7 +82,11 @@ Profile and chat defaults — moved out of Account:
 | **Timezone** | Quota reset times and scheduling context in chat |
 | **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
 | **Model & chat** | Default provider/model and chat on/off |
-| **Prompt library** | Pin up to 5 prompts for the composer footer |
+| **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
+
+<!-- figures -->
+![Prompt library — search, pin, and create team prompts](/screenshots/docs/prompt-library.png)
+<!-- /figures -->
 
 ## Autocomplete
 

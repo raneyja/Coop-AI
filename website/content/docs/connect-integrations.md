@@ -33,6 +33,10 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 | 8 | **Indexing** → Configure GitHub → Deep-Index company repos | Repos **ready** |
 | 9 | **Extension UI** → **Workspace** → owner / repo / branch | Saved |
 
+<!-- figures -->
+![Admin portal Indexing — monitor Deep-Index jobs and embeddings status](/screenshots/docs/admin-indexing-dark.png)
+<!-- /figures -->
+
 For GitHub, company repos must be installed on a **GitHub Organization** — see [GitHub](/docs/github).
 
 Admins with owner/admin role can also connect from **Extension UI → Settings → Tools**; the admin portal is recommended for GitHub org install and scope management.

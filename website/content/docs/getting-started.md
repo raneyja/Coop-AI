@@ -80,6 +80,10 @@ You can also type `/trace` in the chat composer for the same action.
 
 Coop AI can show ghost-text code completions as you type. The feature is **off by default**.
 
+<!-- figures -->
+![Inline autocomplete — ghost-text suggestion in the editor](/screenshots/docs/inline-autocomplete.png)
+<!-- /figures -->
+
 1. **File** — VS Code settings: set `"coopAI.autocomplete.enabled": true`
 2. Type in a code file — ghost text appears after a short pause; **Tab** to accept
 
