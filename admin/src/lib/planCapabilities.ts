@@ -7,7 +7,7 @@ export type PlanCapabilities = {
   showUsageQuota: boolean;
   indexedRepoLimit: number | null;
   chatFeed: boolean;
-  showEnterpriseScopeStep: boolean;
+  showScopeStep: boolean;
   showOnboardingIndexingStep: boolean;
   showOnboardingExtensionStep: boolean;
   showOnboardingTeamStep: boolean;
@@ -24,8 +24,6 @@ export function normalizeOrgPlan(plan: string | undefined | null): OrgPlan {
 export function planCapabilities(plan: string | undefined | null): PlanCapabilities {
   const normalized = normalizeOrgPlan(plan);
   const isFree = normalized === "free";
-  const isEnterprise = normalized === "enterprise";
-
   return {
     plan: normalized,
     showCollections: !isFree,
@@ -33,7 +31,7 @@ export function planCapabilities(plan: string | undefined | null): PlanCapabilit
     showUsageQuota: isFree,
     indexedRepoLimit: isFree ? 3 : null,
     chatFeed: true,
-    showEnterpriseScopeStep: isEnterprise,
+    showScopeStep: !isFree,
     showOnboardingIndexingStep: true,
     showOnboardingExtensionStep: isFree,
     showOnboardingTeamStep: !isFree,

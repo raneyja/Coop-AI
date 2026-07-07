@@ -36,7 +36,7 @@ const ONBOARDING_STEP_DEFS: StepDef[] = [
   {
     id: "scope",
     label: "Access",
-    include: (plan) => planCapabilities(plan).showEnterpriseScopeStep
+    include: (plan) => planCapabilities(plan).showScopeStep
   },
   {
     id: "team",

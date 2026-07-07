@@ -6,6 +6,7 @@ import {
   canUseOrgSearchScope,
   isFreePlan,
   isProOrHigher,
+  requiresIntegrationScope,
   resolveSearchScopeForPlan,
   type ResolvedSearchScope,
   type SubscriptionPlan
@@ -18,6 +19,7 @@ export {
   clampSearchScopeModeForPlan,
   isFreePlan,
   isProOrHigher,
+  requiresIntegrationScope,
   resolveSearchScopeForPlan
 };
 

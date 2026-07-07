@@ -1,3 +1,4 @@
+import { requiresIntegrationScope } from "../license/planSearchScope";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
 import {
@@ -52,10 +53,10 @@ async function resolveSlackScope(
   scopePolicyStore?: IntegrationScopePolicyStore
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "slack";
-  const enterprise = orgPlan === "enterprise";
+  const scopeGated = requiresIntegrationScope(orgPlan);
 
   if (!connected) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -71,7 +72,7 @@ async function resolveSlackScope(
   const slackPolicy = parseSlackIntegrationPolicy(record?.policy);
 
   if (!slackPolicyIsActive(slackPolicy)) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -89,7 +90,7 @@ async function resolveSlackScope(
 
   return {
     provider,
-    enforced: enterprise,
+    enforced: scopeGated,
     allowed: true,
     scopeStatus: "active",
     slack: { channelIds, channelNames }
@@ -103,10 +104,10 @@ async function resolveAtlassianScope(
   scopePolicyStore?: IntegrationScopePolicyStore
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "atlassian";
-  const enterprise = orgPlan === "enterprise";
+  const scopeGated = requiresIntegrationScope(orgPlan);
 
   if (!connected) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -122,7 +123,7 @@ async function resolveAtlassianScope(
   const atlassianPolicy = parseAtlassianIntegrationPolicy(record?.policy);
 
   if (!atlassianPolicyIsActive(atlassianPolicy)) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -144,7 +145,7 @@ async function resolveAtlassianScope(
 
   return {
     provider,
-    enforced: enterprise,
+    enforced: scopeGated,
     allowed: true,
     scopeStatus: "active",
     atlassian: {
@@ -165,10 +166,10 @@ async function resolveNotionScope(
   scopePolicyStore?: IntegrationScopePolicyStore
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "notion";
-  const enterprise = orgPlan === "enterprise";
+  const scopeGated = requiresIntegrationScope(orgPlan);
 
   if (!connected) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -184,7 +185,7 @@ async function resolveNotionScope(
   const notionPolicy = parseNotionIntegrationPolicy(record?.policy);
 
   if (!notionPolicyIsActive(notionPolicy)) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -203,7 +204,7 @@ async function resolveNotionScope(
 
   return {
     provider,
-    enforced: enterprise,
+    enforced: scopeGated,
     allowed: true,
     scopeStatus: "active",
     notion: { resourceIds, resourceTitles, resourceTypes }
@@ -217,10 +218,10 @@ async function resolveGoogleDocsScope(
   scopePolicyStore?: IntegrationScopePolicyStore
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "google-docs";
-  const enterprise = orgPlan === "enterprise";
+  const scopeGated = requiresIntegrationScope(orgPlan);
 
   if (!connected) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -236,7 +237,7 @@ async function resolveGoogleDocsScope(
   const googleDocsPolicy = parseGoogleDocsIntegrationPolicy(record?.policy);
 
   if (!googleDocsPolicyIsActive(googleDocsPolicy)) {
-    if (!enterprise) {
+    if (!scopeGated) {
       return unrestricted(provider, "none");
     }
     return {
@@ -256,7 +257,7 @@ async function resolveGoogleDocsScope(
 
   return {
     provider,
-    enforced: enterprise,
+    enforced: scopeGated,
     allowed: true,
     scopeStatus: "active",
     googleDocs: { folderIds, folderNames, folderKinds, expandedFolderIds }

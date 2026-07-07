@@ -6,11 +6,11 @@ order: 2
 lastUpdated: "2026-06-29"
 ---
 
-After connecting an integration, Enterprise orgs configure **scope** — the allowlist of channels, projects, or workspaces Coop can read.
+After connecting an integration, Pro and Enterprise orgs configure **scope** — the allowlist of channels, projects, or workspaces Coop can read.
 
 ## Why scope matters
 
-Coop follows least-privilege access. Even with OAuth connected, Enterprise plans require explicit scope before Coop searches Slack messages or Jira tickets.
+Coop follows least-privilege access. Even with OAuth connected, Pro and Enterprise plans require explicit scope before Coop searches Slack messages or Jira tickets. Developer (free) orgs can use connected integrations without a separate scope step.
 
 ## Admin portal — Manage access
 

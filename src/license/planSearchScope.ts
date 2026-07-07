@@ -12,6 +12,11 @@ export function isProOrHigher(plan: SubscriptionPlan): boolean {
   return plan === "pro" || plan === "enterprise";
 }
 
+/** Pro and Enterprise require integration allowlist scope before search. */
+export function requiresIntegrationScope(plan: string): boolean {
+  return plan === "pro" || plan === "enterprise";
+}
+
 export function isFreePlan(plan?: SubscriptionPlan): boolean {
   return !plan || plan === "free";
 }

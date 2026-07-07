@@ -15,7 +15,7 @@ lastUpdated: "2026-07-07"
 | **Local workspace context** | Yes | Yes | Yes |
 | **AI credits** | 80k tokens / 5-hour window (model-weighted) | Higher limits | Custom |
 | **Code hosts (GitHub, GitLab, Bitbucket)** | Yes (admin portal) | Yes | Yes |
-| **Collaboration integrations** | Yes (admin portal) | Yes | Org-managed |
+| **Collaboration integrations** | Yes (admin portal) | Yes (scope allowlist) | Yes (scope allowlist) |
 | **Deep-Index / Lightning Mode** | Yes (up to 3 repos org-wide) | Yes (unlimited) | Yes |
 | **Workspace repos** | Up to 3 | Up to 3 per seat | Unlimited |
 | **Team seats** | Individual (1 seat) | Multi-seat | Unlimited |
@@ -44,7 +44,7 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are A
 3. Admin connects GitHub + integrations (same flow as free)
 4. Invite team from admin portal
 
-Pro adds unlimited Deep-Indexed repos, team seats, higher AI limits, Collections, and usage analytics.
+Pro adds unlimited Deep-Indexed repos, team seats, higher AI limits, Collections, usage analytics, and integration scope allowlists (same default-deny policy as Enterprise).
 
 ## Enterprise
 
