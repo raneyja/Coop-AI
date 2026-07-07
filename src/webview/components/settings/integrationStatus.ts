@@ -1,3 +1,4 @@
+import { requiresIntegrationScope } from "../../../license/planSearchScope";
 import type { CodeHostProviderPreference, IntegrationChatProvider } from "../../../chat/types";
 import type {
   MemberToolStatus,
@@ -48,7 +49,7 @@ export function resolveMemberToolStatus(
     return "pending_admin_setup";
   }
   if (
-    prefs.plan === "enterprise" &&
+    requiresIntegrationScope(prefs.plan ?? "free") &&
     SCOPABLE_ORG_PROVIDERS.has(provider) &&
     entry.scopeStatus === "required"
   ) {

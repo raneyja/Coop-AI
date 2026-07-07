@@ -31,6 +31,17 @@ const basePrefs = {
   plan: "enterprise"
 } as Preferences;
 
+test("resolveMemberToolStatus marks pro slack scope required as pending admin setup", () => {
+  const prefs = {
+    ...basePrefs,
+    plan: "pro",
+    orgIntegrationStatuses: [
+      { provider: "slack" as const, installed: true, scopeStatus: "required" as const }
+    ]
+  };
+  assert.equal(resolveMemberToolStatus(prefs, "slack"), "pending_admin_setup");
+});
+
 test("resolveMemberToolStatus marks enterprise slack scope required as pending admin setup", () => {
   const prefs = {
     ...basePrefs,
