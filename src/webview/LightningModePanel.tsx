@@ -277,19 +277,20 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
           <section className="coop-context-mode-details-section">
             <p className="coop-context-mode-details-title">Developer (free)</p>
             <ul className="coop-context-mode-details-list">
-              <li>Local workspace files in VS Code — no code-host connection required.</li>
-              <li>Unlimited tool integrations: Slack, Jira, Teams, Notion, Confluence, Google Docs.</li>
-              <li>Chat and quick actions with AI credits (rolling 5-hour window).</li>
+              <li>Connect GitHub, GitLab, and Bitbucket via the admin portal — same flow as Pro.</li>
+              <li>Deep-Index up to 3 repos org-wide; same cloud Coop-Search as Pro.</li>
+              <li>All collaboration integrations when connected: Slack, Jira, Teams, Notion, Google Docs.</li>
+              <li>Chat and quick actions with AI credits (80,000 tokens per 5-hour window).</li>
               <li>Individual account only — no team seats on the free plan.</li>
             </ul>
           </section>
           <section className="coop-context-mode-details-section">
-            <p className="coop-context-mode-details-title">Pro — code hosts &amp; Lightning Mode</p>
+            <p className="coop-context-mode-details-title">Pro</p>
             <ul className="coop-context-mode-details-list">
-              <li>GitHub connection and workspace repos for cross-repo context.</li>
-              <li>Indexes repos on Coop cloud for symbol-graph cross-repo search.</li>
-              <li>Faster answers on large repos (dependencies, symbols, ownership).</li>
+              <li>Unlimited Deep-Indexed repos (no 3-repo org cap).</li>
               <li>Team seats — invite teammates.</li>
+              <li>Higher AI limits and usage analytics.</li>
+              <li>Collections for advanced cross-repo groupings.</li>
             </ul>
             {onViewPlans ? (
               <p className="mt-2">
@@ -302,7 +303,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
         </div>
       ) : (
         <p className="coop-prompt-modal-muted text-[11px] leading-relaxed">
-          Pro adds code-host connections, team seats, and Lightning Mode for faster cross-repo search.{" "}
+          Free includes code hosts, integrations, and Deep-Index (3-repo cap). Pro adds unlimited indexing, team seats, and higher AI limits.{" "}
           {onViewPlans ? (
             <button type="button" className="coop-text-btn !inline !px-0 !py-0 align-baseline" onClick={onViewPlans}>
               View plans

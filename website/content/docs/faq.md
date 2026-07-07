@@ -24,7 +24,7 @@ No. Your code and prompts are never used to train foundation models. See [Securi
 
 ### What's included in the free Developer plan?
 
-Local workspace context, AI credits, unlimited personal tool integrations (dev mode), and a personal admin portal account. No org-wide GitHub connection or Lightning Mode.
+Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google Docs, Teams) via the admin portal, Deep-Index / Lightning Mode on up to 3 repos org-wide, workspace repos, chat, quick actions, and AI credits (80,000 tokens per 5-hour window). Solo account only — no team invites.
 
 ### How do I upgrade to Pro?
 
@@ -67,7 +67,7 @@ Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius
 
 ### What is Lightning Mode?
 
-Pro/Enterprise feature that indexes repos on Coop infrastructure for faster cross-repo symbol-graph search.
+Deep-Index builds a searchable code graph on Coop infrastructure for faster cross-repo symbol-graph search. Available on **all plans**; free orgs are capped at **3 Deep-Indexed repos** org-wide. Pro adds unlimited indexing.
 
 ### Can I share prompts with my team?
 

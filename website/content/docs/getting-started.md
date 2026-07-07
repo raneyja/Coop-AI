@@ -78,14 +78,14 @@ Coop AI can show ghost-text code completions as you type. The feature is **off b
 1. **File** — VS Code settings: set `"coopAI.autocomplete.enabled": true`
 2. Type in a code file — ghost text appears after a short pause; **Tab** to accept
 
-See [Inline autocomplete](/docs/autocomplete) for FIM, graph context (Pro), Copilot coexistence, and shortcuts.
+See [Inline autocomplete](/docs/autocomplete) for FIM, graph context (indexed repos), Copilot coexistence, and shortcuts.
 
 ## Plans at a glance
 
 | Plan | Best for |
 | --- | --- |
-| **Developer (free)** | Individual use, local workspace, personal integrations |
-| **Pro** | Teams with GitHub + Lightning Mode indexing |
+| **Developer (free)** | Individual use — full integrations, 3-repo Deep-Index cap, solo seat |
+| **Pro** | Teams — unlimited indexing, team seats, higher AI limits |
 | **Enterprise** | Self-hosted, BYOK, zero-retention, compliance |
 
 See [Plans & billing](/docs/plans-billing) for details.

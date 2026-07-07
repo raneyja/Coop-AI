@@ -45,7 +45,7 @@ If the App is on your org but Coop shows not connected, click **Connect (GitHub 
 - Webhook-driven repo indexing (push, PR events)
 - CODEOWNERS and blame for **Find Owner**
 - PR and commit history for **Trace Decision**
-- Symbol graph and dependency analysis (Pro Lightning Mode)
+- Symbol graph and dependency analysis (Deep-Index / Lightning Mode — all plans)
 
 ## GitHub App vs OAuth
 
@@ -60,13 +60,13 @@ Operator setup: see repo `docs/github-connect.md` (platform operators).
 
 ## Workspace settings
 
-After GitHub is connected and repos are indexed, each developer sets **Settings → Workspace** (or picks workspace repos on Pro):
+After GitHub is connected and repos are indexed, each developer sets **Settings → Workspace** (or picks workspace repos):
 
 - Owner (org or user)
 - Repository name
 - Default branch
 
-Pro users select up to **3 repos** from the admin’s indexed catalog.
+All plans select up to **3 workspace repos** from the admin’s indexed catalog. Free orgs can Deep-Index up to **3 repos** org-wide; Pro has no org-wide cap.
 
 ## Developer mode (local only)
 

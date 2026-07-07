@@ -74,7 +74,7 @@ export default function ProductPage() {
                 monorepos isn&apos;t practical.
               </p>
               <p className="mt-6 text-sm text-coop-muted">
-                <span className="font-medium text-gray-900">Available in:</span> Pro and Enterprise plans
+                <span className="font-medium text-gray-900">Available in:</span> All plans (free: up to 3 Deep-Indexed repos org-wide; Pro: unlimited)
               </p>
             </div>
           </div>

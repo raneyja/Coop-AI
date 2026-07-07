@@ -82,6 +82,7 @@ import type {
   WebviewOutbound
 } from "./types";
 import { clearPresenceCaches } from "../api/slack/presenceCheck";
+import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 import { CACHE_TTL_MS } from "./types";
 import {
   deliverableForQuickAction,
@@ -253,7 +254,7 @@ import {
   preferMentionFileContent,
   rankMentionSearchResults
 } from "./mentionSearchMerge";
-import { canUseCodeHosts, canUseRemoteCodeGraph, isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
+import { canUseRemoteCodeGraph, isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
 import { wantsJiraContext } from "../context/jiraContext";
@@ -1070,6 +1071,8 @@ export class CoopChatSession {
         return;
       case "settings:sign-out":
         await this.options.api.logout(this.preferences.apiBaseUrl);
+        await this.options.identityDirectoryStore.clear();
+        clearPresenceCaches();
         await this.refreshAllSessionsPreferences();
         void vscode.window.showInformationMessage("Signed out of Coop.");
         return;
@@ -4828,12 +4831,6 @@ export class CoopChatSession {
   }
 
   private async handleInstallGithubApp(): Promise<void> {
-    if (!canUseCodeHosts(this.preferences.plan)) {
-      void vscode.window.showErrorMessage(
-        "GitHub requires Pro. The free plan works on local workspace files only."
-      );
-      return;
-    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Sign in to Coop before installing the GitHub App.");
       return;
@@ -4927,12 +4924,6 @@ export class CoopChatSession {
   }
 
   private async handleInstallGitlabApp(): Promise<void> {
-    if (!canUseCodeHosts(this.preferences.plan)) {
-      void vscode.window.showErrorMessage(
-        "GitLab requires Pro. The free plan works on local workspace files only."
-      );
-      return;
-    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Add your Coop API key before authorizing GitLab.");
       return;
@@ -4950,12 +4941,6 @@ export class CoopChatSession {
   }
 
   private async handleInstallBitbucketApp(): Promise<void> {
-    if (!canUseCodeHosts(this.preferences.plan)) {
-      void vscode.window.showErrorMessage(
-        "Bitbucket requires Pro. The free plan works on local workspace files only."
-      );
-      return;
-    }
     if (!(await this.options.api.hasToken())) {
       void vscode.window.showErrorMessage("Add your Coop API key before authorizing Bitbucket.");
       return;
@@ -5406,7 +5391,9 @@ export class CoopChatSession {
   }
 
   private async pushSettingsState(): Promise<void> {
-    const identityDirectory = await this.options.identityDirectoryStore.load(this.preferences.apiBaseUrl);
+    const identityDirectory = this.preferences.isSignedIn
+      ? await this.options.identityDirectoryStore.load(this.preferences.apiBaseUrl)
+      : { ...EMPTY_IDENTITY_DIRECTORY };
     const payload: SettingsStatePayload = {
       ...this.preferences,
       identityDirectory,

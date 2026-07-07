@@ -97,7 +97,7 @@ docker compose up -d --build api
 
 ### GitHub
 
-- **Production (Pro+):** GitHub **App** (org-wide install). Setup URL = callback above. OAuth remains available as **Limited connect (OAuth)** when `GITHUB_OAUTH_*` is configured.
+- **Production (all plans):** GitHub **App** (org-wide install). Setup URL = callback above. OAuth remains available as **Limited connect (OAuth)** when `GITHUB_OAUTH_*` is configured.
 - **Customer admin:** Admin portal → **Integrations** → **Connect (GitHub App)** or **Send link to GitHub admin** (if IT owns the GitHub org) → **Refresh** → **Test GitHub**. Detail: [github-connect.md](./github-connect.md), test flow: [github-org-testing.md](./github-org-testing.md).
 
 ### Slack

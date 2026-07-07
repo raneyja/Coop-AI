@@ -3,7 +3,7 @@ title: Plans & billing
 description: Developer, Pro, and Enterprise plans — features, limits, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-07-07"
 ---
 
 ## Plan comparison
@@ -13,11 +13,13 @@ lastUpdated: "2026-06-29"
 | **Price** | Free | $20/seat/month | Custom |
 | **VS Code extension** | Yes | Yes | Yes |
 | **Local workspace context** | Yes | Yes | Yes |
-| **AI credits** | Included | Higher limits | Custom |
-| **Personal tool integrations** | Unlimited | Unlimited | Org-managed |
-| **GitHub org connection** | No | Yes | Yes |
-| **Lightning Mode indexing** | No | Yes (up to 3 repos/seat) | Yes |
-| **Team seats** | Individual | Multi-seat | Unlimited |
+| **AI credits** | 80k tokens / 5-hour window (model-weighted) | Higher limits | Custom |
+| **Code hosts (GitHub, GitLab, Bitbucket)** | Yes (admin portal) | Yes | Yes |
+| **Collaboration integrations** | Yes (admin portal) | Yes | Org-managed |
+| **Deep-Index / Lightning Mode** | Yes (up to 3 repos org-wide) | Yes (unlimited) | Yes |
+| **Workspace repos** | Up to 3 | Up to 3 per seat | Unlimited |
+| **Team seats** | Individual (1 seat) | Multi-seat | Unlimited |
+| **Collections** | No | Yes | Yes |
 | **Admin portal** | Personal account | Full org admin | Full + SSO |
 | **Self-hosted** | No | No | Yes |
 | **BYOK** | No | No | Yes |
@@ -30,18 +32,19 @@ See current pricing at [coop-ai.dev/pricing](/pricing).
 
 1. **Browser** → [Signup free](/signup/free) — email and password, or Google
 2. Personal admin portal access with the same account
-3. Install extension → sign in → chat with local workspace
+3. Connect code hosts and integrations in the [admin portal](/docs/admin-portal)
+4. Deep-Index up to **3 repos** org-wide; use workspace repos, chat, and quick actions in production mode
 
-Free tier does **not** connect org-wide GitHub or Lightning Mode. Unlimited personal integrations in dev mode.
+Free includes the same tool connectivity and cloud indexing as Pro. Limits are AI credits, the 3-repo Deep-Index cap, and solo account (no team invites).
 
 ## Pro
 
 1. **Browser** → [Pricing](/pricing) → checkout
 2. Stripe payment → [Welcome page](/welcome) provisioning
-3. Admin connects GitHub + integrations
+3. Admin connects GitHub + integrations (same flow as free)
 4. Invite team from admin portal
 
-Pro includes Lightning Mode for faster cross-repo search on indexed repos.
+Pro adds unlimited Deep-Indexed repos, team seats, higher AI limits, Collections, and usage analytics.
 
 ## Enterprise
 
@@ -64,7 +67,7 @@ See [Enterprise deployment](/docs/enterprise-deployment) and [Security architect
 
 ## Usage limits
 
-Pro plans include usage analytics in the admin portal. Contact support if you approach credit limits — upgrade paths are available.
+Pro plans include usage analytics in the admin portal. Free plans show a rolling 5-hour AI credit meter. Contact support if you approach credit limits — upgrade paths are available.
 
 ## Next steps
 

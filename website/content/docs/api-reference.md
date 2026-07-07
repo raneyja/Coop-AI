@@ -152,12 +152,12 @@ When `useGraphContext` is `true`, responses may include `x-graph-context: degrad
 
 **Errors:** `400` invalid request, `401` unauthorized, `429` rate limited, `502` provider failure
 
-## Graph (Pro and Enterprise)
+## Graph (all plans)
 
 - `GET /graph/:repoId/search?pattern=handler`
 - `GET /graph/:repoId/ownership?file=...`
 
-Returns `403` with `plan_required` on free plans.
+Available on Free, Pro, and Enterprise when the repo is Deep-Indexed. Free orgs are limited to 3 Deep-Indexed repos org-wide.
 
 ## Zero-clone manifest (all plans)
 

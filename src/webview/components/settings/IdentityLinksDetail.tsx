@@ -5,6 +5,7 @@ import { SettingsSection } from "./SettingsShared";
 
 type IdentityLinksDetailProps = {
   directory: IdentityDirectory;
+  signedIn: boolean;
 };
 
 function emptySelfForm(): PersonIdentityForm {
@@ -50,12 +51,24 @@ function IdentityField({
   );
 }
 
-export function IdentityLinksDetail({ directory }: IdentityLinksDetailProps): React.ReactElement {
+export function IdentityLinksDetail({ directory, signedIn }: IdentityLinksDetailProps): React.ReactElement {
   const selfForm = useMemo(() => {
+    if (!signedIn) {
+      return emptySelfForm();
+    }
     const people = directory.people.map((person) => personFormFromRecord(person));
     const self = people.find((person) => person.isSelf) ?? people[0];
     return self ? { ...self, isSelf: true } : emptySelfForm();
-  }, [directory]);
+  }, [directory, signedIn]);
+
+  if (!signedIn) {
+    return (
+      <p className="coop-settings-card-desc px-0.5">
+        Sign in under Settings → Account to view your linked profile. Identity data is cleared when you
+        sign out.
+      </p>
+    );
+  }
 
   const selfLinked = hasLinkedAccounts(selfForm);
 

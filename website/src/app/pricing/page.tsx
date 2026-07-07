@@ -32,14 +32,14 @@ const tiers: PricingTier[] = [
     period: "during beta",
     audience: "Individual engineers — one account, no team seats",
     features: [
-      "Local workspace files in VS Code (no code-host connection)",
+      "GitHub, GitLab, and Bitbucket via admin portal (same as Pro)",
+      "All collaboration integrations (Slack, Jira, Notion, Teams, Google Docs)",
+      "Deep-Index / Lightning Mode — up to 3 repos org-wide",
+      "Workspace repos, chat, quick actions, and inline complete & edit",
       "AI credits with rolling 5-hour window (model-weighted)",
-      "Unlimited tool integrations (Slack, Jira, Notion, and more)",
-      "Chat, quick actions, inline complete & edit",
-      "Workspace prompt library",
-      "Cloud-hosted"
+      "Cloud-hosted — solo account (1 seat)"
     ],
-    note: "Code hosts, cross-repo search, and Lightning Mode unlock in Pro",
+    note: "Pro adds unlimited Deep-Indexed repos, team seats, and higher AI limits",
     cta: "Get started free",
     href: "/signup/free",
     highlighted: false
@@ -49,11 +49,11 @@ const tiers: PricingTier[] = [
     price: "$20",
     period: "per user / month",
     features: [
-      "Everything in Developer + GitHub code-host connection",
-      "Lightning Mode — instance-wide indexing for instant search across all repos in your organization",
-      "Workspace repos and Deep-Indexed catalog (up to 3 repos per seat)",
+      "Everything in Developer",
+      "Unlimited Deep-Indexed repos (no 3-repo org cap)",
       "Team seats — invite teammates",
-      "Usage visibility & analytics",
+      "Higher AI limits and usage analytics",
+      "Collections for advanced cross-repo groupings",
       "Priority support"
     ],
     note: "See Lightning Mode details →",

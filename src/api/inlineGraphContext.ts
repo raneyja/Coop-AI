@@ -24,10 +24,6 @@ export async function fetchInlineGraphSlice(
   deps: InlineGraphContextDeps,
   options: { repoId: string; file: string; plan: ChatOrgPlan }
 ): Promise<InlineGraphSliceResult> {
-  if (options.plan === "free") {
-    return { status: "skipped" };
-  }
-
   if (!deps.graphQuery) {
     return { status: "degraded" };
   }

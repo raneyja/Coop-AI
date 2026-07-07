@@ -228,7 +228,12 @@ export function SettingsDetailView({
     case "workspace":
       return <WorkspaceDetail {...props} />;
     case "team":
-      return <IdentityLinksDetail directory={props.prefs.identityDirectory} />;
+      return (
+        <IdentityLinksDetail
+          directory={props.prefs.identityDirectory}
+          signedIn={Boolean(props.prefs.isSignedIn ?? props.prefs.hasApiKey)}
+        />
+      );
     case "preferences":
       return <PreferencesListDetail {...props} />;
     case "prompts":

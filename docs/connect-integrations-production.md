@@ -39,8 +39,8 @@ Add to **File** — `.env.backend` on the API host (see [`.env.backend.example`]
 | Provider | Variables |
 |----------|-----------|
 | Core | `CREDENTIALS_ENCRYPTION_KEY`, `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` |
-| GitHub App (Pro+ / Enterprise) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET` |
-| GitHub OAuth (Free / fallback) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
+| GitHub App (all plans) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET` |
+| GitHub OAuth (fallback) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
 | Slack | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` |
 | Atlassian | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` |

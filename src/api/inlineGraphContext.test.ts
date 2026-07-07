@@ -39,7 +39,10 @@ void (async () => {
     { graphQuery },
     { repoId: "github:acme/app", file: "src/foo.ts", plan: "free" }
   );
-  assert.equal(freeResult.status, "skipped");
+  assert.equal(freeResult.status, "ok");
+  if (freeResult.status === "ok") {
+    assert.match(freeResult.block, /src\/user\.ts/);
+  }
   passed++;
 
   const proResult = await fetchInlineGraphSlice(

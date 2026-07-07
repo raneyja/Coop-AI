@@ -235,7 +235,7 @@ void (async () => {
     { graphQuery }
   );
   assert.equal(freeRes.statusCode, 200);
-  assert.equal(freeRes.headers?.["x-graph-context"], undefined, "free plan should silently degrade");
+  assert.equal(freeRes.headers?.["x-graph-context"], undefined, "free plan should use indexed graph when available");
   passed++;
 
   console.log(`inlineCompletionApi: ${passed}/${passed} tests passed`);

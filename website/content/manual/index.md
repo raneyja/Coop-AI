@@ -19,7 +19,7 @@ Most AI coding tools only see the file you have open. CoopAI connects your **cod
 
 CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs — not full monorepo copies on every laptop. Your source stays on your infrastructure.
 
-**Developer (free)** uses local workspace files with AI credits. Personal tool integrations are unlimited in **developer mode** (`coopAI.devMode: true`); in production, org admins connect integrations once in the admin portal. **Pro** adds GitHub connections, team seats, and Lightning Mode for faster cross-repo search.
+**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode — with AI credits capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher AI limits.
 
 ### Quick actions at a glance
 
@@ -160,7 +160,7 @@ Open settings via the sidebar gear icon or **CoopAI Settings**:
 | **Plan & Usage** | Current plan, credits, upgrade path |
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
-| **Indexing** | Lightning Mode status and indexed repos (Pro) |
+| **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
 | **Preferences** | Timezone, identity links, prompt library, model preferences |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, **Understand Repo**, or **Knowledge Gaps**.
@@ -183,7 +183,7 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 - **FIM** (fill-in-the-middle) sends `prefix` + `suffix` segments when `coopAI.autocomplete.useFim` is `true` (default) — routed to Codestral or DeepSeek when configured
 - **Hot Streak** keeps completions snappy after Tab-accept; **Smart Throttle** adapts debounce to typing speed and latency
 - **Multi-line** completions activate after `{`, `=>`, `(`, or inside blocks (up to 200 tokens)
-- **Pro:** optional graph context via `coopAI.autocomplete.useGraphContext` — dependents and ownership from indexed repos
+- **Indexed repos:** optional graph context via `coopAI.autocomplete.useGraphContext` — dependents and ownership from Deep-Indexed repos (all plans)
 
 **Copilot:** when Coop autocomplete is **on**, Coop automatically disables Copilot **inline** ghost text (`github.copilot.enable`) and restores your prior setting when you turn Coop autocomplete off. Copilot chat and other features stay available.
 
@@ -464,23 +464,23 @@ Ask Coop: "Update AGENTS.md based on what I told you in this thread" to generate
 | Feature | Developer (free) | Pro |
 | --- | --- | --- |
 | Local workspace context | Yes | Yes |
-| AI credits | Included | Higher limits |
-| Tool integrations (personal) | Unlimited | Unlimited |
-| GitHub org connection | No | Yes |
-| Lightning Mode | No | Yes |
-| Team seats | Individual only | Multi-seat |
-| Cross-repo search | Local workspace | Indexed repos (up to 3/seat) |
+| AI credits | 80k / 5-hour window | Higher limits |
+| Code hosts & integrations | Yes (admin portal) | Yes |
+| Deep-Index / Lightning Mode | Yes (3 repos org-wide) | Yes (unlimited) |
+| Team seats | Individual only (1 seat) | Multi-seat |
+| Collections | No | Yes |
+| Cross-repo search | Deep-Indexed repos (up to 3) | Unlimited indexed repos |
 
 See [Pricing](/pricing) for current limits and upgrade paths.
 
 ## When to ask your admin
 
-In **production mode**, developers cannot connect Slack, Notion, Google Docs, or org-wide GitHub — org admins do that once in the [admin portal](https://admin.coop-ai.dev).
+In **production mode**, org admins connect code hosts and collaboration tools once in the [admin portal](https://admin.coop-ai.dev). Individual developers sign in to Coop — they do not paste OAuth tokens in VS Code.
 
 Ask your admin if:
 
 - Quick actions return "integration not connected"
-- You need access to private org repos on Pro
+- You need a teammate invited or more than 3 Deep-Indexed repos (upgrade to Pro)
 - Teammates need invites or seat assignments
 
 Full admin setup is covered in the [Documentation hub](/docs).

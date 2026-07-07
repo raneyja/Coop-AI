@@ -43,11 +43,11 @@ export default function SecurityPage() {
           and API key belongs to exactly one org.
         </p>
         <p>
-          CoopAI uses <strong>instance-wide indexing</strong> on Pro and Enterprise plans. When an
-          org admin connects a code host, CoopAI builds a Deep-Code Graph across accessible
-          repositories — symbol metadata, full-text search indexes, and embedding chunks — on Coop
-          infrastructure or your self-hosted deployment. Developers query this graph from VS Code
-          without maintaining full repository clones on every laptop.
+          CoopAI uses <strong>Deep-Index / Lightning Mode</strong> on all plans. When an org admin
+          connects a code host, CoopAI builds a Deep-Code Graph across accessible repositories —
+          symbol metadata, full-text search indexes, and embedding chunks — on Coop infrastructure or
+          your self-hosted deployment (free orgs: up to 3 repos org-wide; Pro: unlimited). Developers
+          query this graph from VS Code without maintaining full repository clones on every laptop.
         </p>
         <p>
           Index jobs use a transient shallow clone on the server to build indexes, then delete the

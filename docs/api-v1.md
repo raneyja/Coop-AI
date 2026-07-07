@@ -127,11 +127,11 @@ Batch or streaming completion for editor ghost text (`useCase: inline_completion
 | `done` | `{ "type": "done", "usage": { ... }, "model": "...", "provider": "...", "finishReason": "stop" }` |
 | `error` | `{ "type": "error", "message": "..." }` |
 
-## Graph (Pro and Enterprise)
+## Graph (all plans)
 
 - `GET /graph/:repoId/search?pattern=handler`
 - `GET /graph/:repoId/ownership?file=...`
-- Returns `403` with `plan_required` on Free plans.
+- Available on Free, Pro, and Enterprise when the repo is Deep-Indexed. Free orgs are limited to 3 Deep-Indexed repos org-wide.
 - See [webhook-backend.md](./webhook-backend.md)
 
 ## Zero-Clone (all plans)

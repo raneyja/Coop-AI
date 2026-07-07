@@ -30,7 +30,7 @@ Accounts are created during [free signup](/signup/free), Pro/Enterprise checkout
 
 Go to **Integrations** to connect tools org-wide. See [Connect integrations](/docs/connect-integrations) for the full checklist.
 
-### GitHub (Pro / Enterprise)
+### GitHub (all plans)
 
 Company repos live under a **GitHub Organization**. Installing the Coop GitHub App requires a **GitHub org owner** — not every Coop admin has that access.
 
@@ -48,7 +48,7 @@ In production mode, developers **cannot** paste OAuth tokens in VS Code — admi
 
 ## Indexing
 
-**Indexing** (admin only) — enable Deep-Index on repos discovered after GitHub connect. Pro and Enterprise orgs index org-wide; developers pick up to 3 workspace repos from this catalog.
+**Indexing** (admin only) — enable Deep-Index on repos discovered after code-host connect. All plans use the same cloud index; **free** orgs are limited to **3 Deep-Indexed repos** org-wide. Pro orgs have unlimited indexing. Developers pick workspace repos from this catalog (up to 3).
 
 ## Integration scope
 

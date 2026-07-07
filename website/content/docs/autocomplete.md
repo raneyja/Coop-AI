@@ -107,13 +107,13 @@ When **Coop autocomplete is on**, Coop automatically disables **Copilot inline s
 
 When **Coop autocomplete is off**, Copilot inline behavior is unchanged.
 
-## Graph context (Pro)
+## Graph context (indexed repos)
 
-When `coopAI.autocomplete.useGraphContext` is `true` and your org is on **Pro** or **Enterprise**:
+When `coopAI.autocomplete.useGraphContext` is `true` and your org has Deep-Indexed the repo:
 
 - The extension sends `useGraphContext: true` with `repoId` and file path
 - The API attaches a short slice of **dependents** and **ownership** from the indexed graph (150 ms budget)
-- Free plans skip graph context server-side
+- Available on **all plans** when the repo is Deep-Indexed (free orgs: up to 3 repos)
 
 Requires a connected, indexed repo in the admin portal. Set **Workspace** owner/repo/branch so `repoId` resolves correctly.
 
