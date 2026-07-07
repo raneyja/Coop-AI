@@ -34,7 +34,7 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 2. **Account** — Choose a sign-in path:
 
 <!-- figures -->
-![Account sign-in in VS Code — Continue with Google, email, and SSO](/screenshots/docs/settings-account-dark.png)
+![Account sign-in in VS Code — Continue with Google, email, and SSO](/screenshots/docs/extension-account-dark.png)
 <!-- /figures -->
 
 | Path | Steps |
