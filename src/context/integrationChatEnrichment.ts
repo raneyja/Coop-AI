@@ -2,7 +2,7 @@ import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
-import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { fetchCodeHostSearchContext, shouldFetchCodeHostContext } from "./codeHostContext";
 import { fetchConfluenceSearchContext, shouldFetchConfluenceContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext, shouldFetchGoogleDocsContext } from "./googleDocsContext";
@@ -31,7 +31,7 @@ export async function enrichChatContextWithIntegrations(options: {
   contextText?: string[];
   codeHostProvider?: CodeHostProvider;
   codeHostConnected?: boolean;
-  integrationScopes?: Partial<Record<"slack", ResolvedIntegrationScope>>;
+  integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
@@ -53,7 +53,8 @@ export async function enrichChatContextWithIntegrations(options: {
       secrets: options.secrets,
       owner: options.owner,
       repo: options.repo,
-      extraTerms: integrationTerms
+      extraTerms: integrationTerms,
+      integrationScope: options.integrationScopes?.atlassian
     });
     data.confluenceSearch = confluenceSearch;
   }
@@ -64,7 +65,8 @@ export async function enrichChatContextWithIntegrations(options: {
       secrets: options.secrets,
       owner: options.owner,
       repo: options.repo,
-      extraTerms: integrationTerms
+      extraTerms: integrationTerms,
+      integrationScope: options.integrationScopes?.notion
     });
     data.notionSearch = notionSearch;
   }
@@ -79,7 +81,8 @@ export async function enrichChatContextWithIntegrations(options: {
       ...base,
       crossToolText: crossToolKeys,
       codeHostRouter: options.codeHostRouter,
-      codeHostConnected: options.codeHostConnected
+      codeHostConnected: options.codeHostConnected,
+      integrationScope: options.integrationScopes?.atlassian
     });
   }
   const jiraIssueKeys = (
@@ -109,7 +112,8 @@ export async function enrichChatContextWithIntegrations(options: {
       secrets: options.secrets,
       ...base,
       crossToolText: crossToolKeys,
-      extraTerms: docExtraTerms
+      extraTerms: docExtraTerms,
+      integrationScope: options.integrationScopes?.["google-docs"]
     });
   }
   if (shouldFetchCodeHostContext(options.request) && options.codeHostConnected) {

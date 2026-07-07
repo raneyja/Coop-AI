@@ -7,6 +7,12 @@ import {
 import { createConfluenceClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  applyConfluenceSpaceScope,
+  confluenceScopeBlockMessage,
+  isConfluenceScopeBlocked
+} from "../integrationScope/atlassianQuery";
 import { buildConfluenceCql, buildRepoOrQuery } from "./docSearchQuery";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
@@ -59,7 +65,17 @@ export async function fetchConfluenceSearchContext(options: {
   repo?: string;
   limit?: number;
   extraTerms?: string[];
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<ConfluenceSearchContext> {
+  if (isConfluenceScopeBlocked(options.integrationScope)) {
+    return {
+      source: "confluence-search",
+      cql: "",
+      pages: [],
+      error: confluenceScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   const auth = resolveConfluenceAuth(creds);
   if (!auth && !creds.atlassianCloudId) {
@@ -71,7 +87,10 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const cql = buildConfluenceCql(options.owner, options.repo, options.extraTerms);
+  const cql = scopeConfluenceCql(
+    buildConfluenceCql(options.owner, options.repo, options.extraTerms),
+    options.integrationScope
+  );
   if (!cql) {
     return {
       source: "confluence-search",
@@ -152,4 +171,21 @@ function truncate(value: string, max: number): string {
     return value;
   }
   return `${value.slice(0, max)}…`;
+}
+
+function scopeConfluenceCql(
+  cql: string | undefined,
+  integrationScope: ResolvedIntegrationScope | undefined
+): string | undefined {
+  if (!cql?.trim()) {
+    return cql;
+  }
+  if (!integrationScope?.enforced || !integrationScope.atlassian) {
+    return cql;
+  }
+  return applyConfluenceSpaceScope(
+    [cql],
+    integrationScope.atlassian.confluenceSpaceIds,
+    integrationScope.atlassian.confluenceSpaceKeys
+  )[0];
 }

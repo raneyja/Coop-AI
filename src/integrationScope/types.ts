@@ -105,6 +105,9 @@ export const SCOPE_GOVERNED_PROVIDERS: IntegrationProvider[] = [
   "google-docs"
 ];
 
+/** Providers with admin allowlist scope enforced in chat context fetchers. */
+export type ScopedIntegrationProvider = (typeof SCOPE_GOVERNED_PROVIDERS)[number];
+
 export function parseSlackIntegrationPolicy(raw: unknown): SlackIntegrationPolicy | undefined {
   if (!raw || typeof raw !== "object") {
     return undefined;

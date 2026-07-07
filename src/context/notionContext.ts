@@ -1,6 +1,12 @@
 import { NotionClient } from "../api/notion/notionClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  filterNotionPagesByScope,
+  isNotionScopeBlocked,
+  notionScopeBlockMessage
+} from "../integrationScope/notionQuery";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 
@@ -52,7 +58,17 @@ export async function fetchNotionSearchContext(options: {
   repo?: string;
   limit?: number;
   extraTerms?: string[];
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<NotionSearchContext> {
+  if (isNotionScopeBlocked(options.integrationScope)) {
+    return {
+      source: "notion-search",
+      query: "",
+      pages: [],
+      error: notionScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   if (!creds.notionToken) {
     return {
@@ -80,7 +96,8 @@ export async function fetchNotionSearchContext(options: {
   const query = terms.join(" OR ");
   const client = new NotionClient({ token: creds.notionToken });
   try {
-    const pages = await searchNotionPagesForTerms(client, terms, options.limit ?? 20);
+    const rawPages = await searchNotionPagesForTerms(client, terms, options.limit ?? 20);
+    const pages = filterScopedNotionPages(rawPages, options.integrationScope);
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -106,16 +123,34 @@ async function searchNotionPagesForTerms(
   client: NotionClient,
   terms: string[],
   limit: number
-): Promise<NotionSearchPage[]> {
-  const seen = new Map<string, NotionSearchPage>();
+): Promise<Array<NotionSearchPage & { parentId?: string }>> {
+  const seen = new Map<string, NotionSearchPage & { parentId?: string }>();
   for (const term of terms) {
     if (seen.size >= limit) {
       break;
     }
     const pages = await client.searchPages(term, limit - seen.size);
     for (const page of pages) {
-      seen.set(page.id, page);
+      seen.set(page.id, {
+        id: page.id,
+        title: page.title,
+        updated: page.updated,
+        htmlUrl: page.htmlUrl,
+        parentId: page.parentId
+      });
     }
   }
   return [...seen.values()].slice(0, limit);
+}
+
+function filterScopedNotionPages(
+  pages: Array<NotionSearchPage & { parentId?: string }>,
+  integrationScope: ResolvedIntegrationScope | undefined
+): NotionSearchPage[] {
+  const resourceIds = integrationScope?.notion?.resourceIds ?? [];
+  const scoped =
+    integrationScope?.enforced && resourceIds.length > 0
+      ? filterNotionPagesByScope(pages, new Set(resourceIds))
+      : pages;
+  return scoped.map(({ id, title, updated, htmlUrl }) => ({ id, title, updated, htmlUrl }));
 }

@@ -262,8 +262,12 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import { shouldFetchConfluenceContext } from "../context/confluenceContext";
+import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
+import { shouldFetchJiraContext } from "../context/jiraContext";
+import { shouldFetchNotionContext } from "../context/notionContext";
 import { shouldFetchSlackContext } from "../context/slackContext";
-import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -1742,16 +1746,42 @@ export class CoopChatSession {
 
   private async resolveIntegrationScopes(
     request: ContextFetchRequest
-  ): Promise<Partial<Record<"slack", ResolvedIntegrationScope>> | undefined> {
-    if (isCoopDevMode() || !shouldFetchSlackContext(request)) {
+  ): Promise<Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>> | undefined> {
+    if (isCoopDevMode()) {
       return undefined;
     }
-    try {
-      const scope = await this.options.api.getIntegrationScope(this.preferences.apiBaseUrl, "slack");
-      return { slack: scope };
-    } catch {
+
+    const providers: ScopedIntegrationProvider[] = [];
+    if (shouldFetchSlackContext(request)) {
+      providers.push("slack");
+    }
+    if (shouldFetchJiraContext(request) || shouldFetchConfluenceContext(request)) {
+      providers.push("atlassian");
+    }
+    if (shouldFetchNotionContext(request)) {
+      providers.push("notion");
+    }
+    if (shouldFetchGoogleDocsContext(request)) {
+      providers.push("google-docs");
+    }
+    if (providers.length === 0) {
       return undefined;
     }
+
+    const scopes: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>> = {};
+    await Promise.all(
+      providers.map(async (provider) => {
+        try {
+          scopes[provider] = await this.options.api.getIntegrationScope(
+            this.preferences.apiBaseUrl,
+            provider
+          );
+        } catch {
+          /* scope optional when API unavailable */
+        }
+      })
+    );
+    return scopes;
   }
 
   private async integrationContextText(

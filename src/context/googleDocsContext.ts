@@ -1,6 +1,12 @@
 import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  filterGoogleDocsHitsByFolder,
+  isGoogleDocsScopeBlocked,
+  googleDocsScopeBlockMessage
+} from "../integrationScope/googleDocsQuery";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
@@ -56,7 +62,17 @@ export async function fetchGoogleDocsSearchContext(options: {
   crossToolText?: string[];
   limit?: number;
   extraTerms?: string[];
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<GoogleDocsSearchContext> {
+  if (isGoogleDocsScopeBlocked(options.integrationScope)) {
+    return {
+      source: "google-docs-search",
+      query: "",
+      documents: [],
+      error: googleDocsScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   if (!creds.googleDocsToken) {
     return {
@@ -86,8 +102,17 @@ export async function fetchGoogleDocsSearchContext(options: {
 
   const query = terms.join(" OR ");
   const client = new GoogleDocsClient({ accessToken: creds.googleDocsToken });
+  const driveScope =
+    options.integrationScope?.enforced && options.integrationScope.googleDocs
+      ? { expandedFolderIds: options.integrationScope.googleDocs.expandedFolderIds }
+      : undefined;
+  const allowedFolderIds = new Set(options.integrationScope?.googleDocs?.expandedFolderIds ?? []);
   try {
-    const documents = await client.searchDocumentsForTerms(terms, options.limit ?? 20);
+    const rawDocuments = await client.searchDocumentsForTerms(terms, options.limit ?? 20, driveScope);
+    const documents =
+      options.integrationScope?.enforced && allowedFolderIds.size > 0
+        ? filterGoogleDocsHitsByFolder(rawDocuments, allowedFolderIds).map(stripGoogleDocParents)
+        : rawDocuments.map(stripGoogleDocParents);
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -107,4 +132,19 @@ export async function fetchGoogleDocsSearchContext(options: {
       error: error instanceof Error ? error.message : "Google Docs search failed."
     };
   }
+}
+
+function stripGoogleDocParents(doc: {
+  id: string;
+  title: string;
+  updated: string;
+  htmlUrl: string;
+  parents?: string[];
+}): GoogleDocsSearchPage {
+  return {
+    id: doc.id,
+    title: doc.title,
+    updated: doc.updated,
+    htmlUrl: doc.htmlUrl
+  };
 }

@@ -3,6 +3,13 @@ import { JiraClient, type JiraIssue } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  applyJiraProjectScope,
+  filterJiraIssuesByProject,
+  isJiraScopeBlocked,
+  jiraScopeBlockMessage
+} from "../integrationScope/atlassianQuery";
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { shouldFetchRepoWideIntegrations, shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
@@ -153,7 +160,17 @@ export async function fetchJiraSearchContext(options: {
   limit?: number;
   codeHostRouter?: CodeHostRouter;
   codeHostConnected?: boolean;
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<JiraSearchContext> {
+  if (isJiraScopeBlocked(options.integrationScope)) {
+    return {
+      source: "jira-search",
+      jql: "",
+      issues: [],
+      error: jiraScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   const client = createJiraClientFromCredentials(creds);
   if (!client) {
@@ -177,7 +194,10 @@ export async function fetchJiraSearchContext(options: {
     await addIssueByKey(client, issuesByKey, key);
   }
 
-  const jql = buildRepoJql(options.owner, options.repo);
+  const jql = scopeJql(
+    buildRepoJql(options.owner, options.repo),
+    options.integrationScope
+  );
   let searchError: string | undefined;
   let textSearchCount = 0;
   if (jql) {
@@ -212,7 +232,7 @@ export async function fetchJiraSearchContext(options: {
   }
 
   const issueKeys = [...discoveredKeys];
-  const keysJql = buildIssueKeysJql(issueKeys);
+  const keysJql = scopeJql(buildIssueKeysJql(issueKeys), options.integrationScope);
   if (keysJql && textSearchCount === 0 && issuesByKey.size < limit) {
     try {
       const keyHits = await client.searchIssues(keysJql, limit);
@@ -267,13 +287,44 @@ export async function fetchJiraSearchContext(options: {
     source: "jira-search",
     jql: jql ?? "",
     repoQuery,
-    issues: mapIssues([...issuesByKey.values()]),
+    issues: filterScopedIssues(mapIssues([...issuesByKey.values()]), options.integrationScope),
     issueKeyHits: issueKeys.length > 0 ? issueKeys : undefined,
     repoKeyHits: repoKeyHits?.length ? repoKeyHits : undefined,
     matchStrategy,
     searchNote,
     error: searchError
   };
+}
+
+function scopeJql(
+  jql: string | undefined,
+  integrationScope: ResolvedIntegrationScope | undefined
+): string | undefined {
+  if (!jql?.trim()) {
+    return jql;
+  }
+  if (!integrationScope?.enforced || !integrationScope.atlassian) {
+    return jql;
+  }
+  return applyJiraProjectScope(
+    [jql],
+    integrationScope.atlassian.jiraProjectIds,
+    integrationScope.atlassian.jiraProjectKeys
+  )[0];
+}
+
+function filterScopedIssues(
+  issues: JiraSearchTicket[],
+  integrationScope: ResolvedIntegrationScope | undefined
+): JiraSearchTicket[] {
+  const keys = integrationScope?.atlassian?.jiraProjectKeys ?? [];
+  if (!integrationScope?.enforced || keys.length === 0) {
+    return issues;
+  }
+  return filterJiraIssuesByProject(
+    issues,
+    new Set(keys.map((key) => key.toUpperCase()))
+  );
 }
 
 async function addIssueByKey(
