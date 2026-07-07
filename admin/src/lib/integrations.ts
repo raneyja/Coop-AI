@@ -17,6 +17,8 @@ export type ScopableProvider = Extract<
   "slack" | "atlassian" | "notion" | "google-docs"
 >;
 
+/** Teams is connectable but not scopable yet — backend lacks TeamsScopePolicy
+ *  (see src/integrationScope/types.ts SCOPE_GOVERNED_PROVIDERS). */
 export const SCOPABLE_PROVIDERS: ScopableProvider[] = [
   "slack",
   "atlassian",

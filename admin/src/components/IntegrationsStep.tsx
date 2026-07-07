@@ -37,7 +37,7 @@ export function IntegrationsStep({
       {!hideIntro ? (
         <p className="text-sm text-coop-muted">
           {readOnly
-            ? "Organization tools connected by your admin. Link personal accounts in the VS Code extension."
+            ? "Organization tools connected by your admin. Active tools are available in the VS Code extension automatically."
             : "Connect tools your team uses. OAuth opens in a new tab — return here and refresh status."}
         </p>
       ) : null}

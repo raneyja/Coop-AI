@@ -7,6 +7,8 @@ import type { IntegrationStatus } from "@/lib/integrations";
 import { disconnectIntegration, fetchInstallUrl } from "@/lib/coopApi";
 import { formatIntegrationError } from "@/lib/integrationErrors";
 import { GitHubConnectHandoff } from "./GitHubConnectHandoff";
+import { ConnectHandoff } from "./ConnectHandoff";
+import { HANDOFF_COPY, HANDOFF_PROVIDERS, type HandoffProvider } from "@/lib/connectHandoff";
 import { AdminChip } from "./AdminChip";
 import { StatusBadge } from "./StatusBadge";
 import { IntegrationScopeModal } from "./IntegrationScopeModal";
@@ -37,6 +39,7 @@ export function IntegrationCard({
   const [connecting, setConnecting] = useState(false);
   const [awaitingOAuth, setAwaitingOAuth] = useState(false);
   const [githubHandoffAwaiting, setGithubHandoffAwaiting] = useState(false);
+  const [connectHandoffAwaiting, setConnectHandoffAwaiting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +47,10 @@ export function IntegrationCard({
   const isScopable = SCOPABLE_PROVIDERS.includes(
     definition.id as (typeof SCOPABLE_PROVIDERS)[number]
   );
+  const isHandoffProvider = HANDOFF_PROVIDERS.includes(definition.id as HandoffProvider);
 
   async function handleConnect() {
-    if (definition.id === "github") {
+    if (definition.id === "github" || isHandoffProvider) {
       return;
     }
     setConnecting(true);
@@ -78,7 +82,7 @@ export function IntegrationCard({
   const wasConnectedRef = useRef(connected);
 
   const isGitHub = definition.id === "github";
-  const awaitingConnect = awaitingOAuth || githubHandoffAwaiting;
+  const awaitingConnect = awaitingOAuth || githubHandoffAwaiting || connectHandoffAwaiting;
 
   useEffect(() => {
     if (!awaitingConnect) {
@@ -90,6 +94,7 @@ export function IntegrationCard({
     const timeout = window.setTimeout(() => {
       setAwaitingOAuth(false);
       setGithubHandoffAwaiting(false);
+      setConnectHandoffAwaiting(false);
     }, 120_000);
     return () => {
       window.clearInterval(poll);
@@ -102,6 +107,7 @@ export function IntegrationCard({
     if (awaitingConnect && connected) {
       setAwaitingOAuth(false);
       setGithubHandoffAwaiting(false);
+      setConnectHandoffAwaiting(false);
     }
   }, [awaitingConnect, connected]);
 
@@ -109,6 +115,7 @@ export function IntegrationCard({
     if (!wasConnectedRef.current && connected) {
       setAwaitingOAuth(false);
       setGithubHandoffAwaiting(false);
+      setConnectHandoffAwaiting(false);
     }
     wasConnectedRef.current = connected;
   }, [connected]);
@@ -144,6 +151,10 @@ export function IntegrationCard({
     }
     if (githubHandoffAwaiting && !connected) {
       return <StatusBadge connected={false} label="Waiting for GitHub install" showWhenDisconnected />;
+    }
+    if (connectHandoffAwaiting && !connected && isHandoffProvider) {
+      const label = HANDOFF_COPY[definition.id as HandoffProvider].waitingLabel;
+      return <StatusBadge connected={false} label={label} showWhenDisconnected />;
     }
     if (connected && scopeRequired) {
       return <StatusBadge connected={false} label="Scope required" showWhenDisconnected />;
@@ -184,13 +195,28 @@ export function IntegrationCard({
               onAwaitingChange={setGithubHandoffAwaiting}
             />
           ) : null}
+          {isHandoffProvider && !readOnly && !comingSoon ? (
+            <ConnectHandoff
+              provider={definition.id as HandoffProvider}
+              connected={connected}
+              needsReconnect={needsReconnect}
+              compact={compact}
+              onRefresh={onRefresh}
+              onAwaitingChange={setConnectHandoffAwaiting}
+            />
+          ) : null}
+          {definition.id === "teams" && connected ? (
+            <p className="mt-2 text-xs text-coop-muted">
+              Channel allowlist scope — coming soon. All accessible Teams channels are indexed today.
+            </p>
+          ) : null}
           {status?.scopeSummary ? (
             <p className="mt-1 text-xs text-coop-index">{status.scopeSummary}</p>
           ) : null}
           {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {!readOnly && !comingSoon && !isGitHub && (!connected || needsReconnect) && (
+          {!readOnly && !comingSoon && !isGitHub && !isHandoffProvider && (!connected || needsReconnect) && (
             <button
               type="button"
               className="admin-btn-primary"

@@ -193,8 +193,9 @@ export function MemberOnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Organization tools</h3>
                 <p className="mt-2 text-sm text-coop-muted">
-                  Your admin connects org-wide integrations. After installing the extension, link your personal
-                  GitHub, Slack, and Jira accounts under Settings → Tools for owner resolution and presence.
+                  Your admin connects org-wide integrations in the admin portal. When a tool shows{" "}
+                  <span className="text-white/90">Active</span>, it is available in the VS Code extension
+                  automatically — no personal linking required.
                 </p>
               </div>
               <IntegrationsStep
