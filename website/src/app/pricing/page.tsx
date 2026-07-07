@@ -29,7 +29,6 @@ const tiers: PricingTier[] = [
   {
     name: "Developer",
     price: "Free",
-    period: "during beta",
     audience: "Individual engineers — one account, no team seats",
     features: [
       "GitHub, GitLab, and Bitbucket via admin portal (same as Pro)",
