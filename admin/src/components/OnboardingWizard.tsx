@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { completeOnboarding, fetchUsers } from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import type { IntegrationStatus } from "@/lib/integrations";
+import { SCOPABLE_PROVIDERS, type IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { OnboardingScopeStep } from "./OnboardingScopeStep";
@@ -65,15 +65,14 @@ function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   return collab.some((provider) => integrations.find((i) => i.provider === provider)?.installed);
 }
 
-function slackScopeGateBlocked(integrations: IntegrationStatus[], orgPlan: string): boolean {
-  if (orgPlan !== "enterprise") {
+function scopableScopeGateBlocked(integrations: IntegrationStatus[], orgPlan: string): boolean {
+  if (orgPlan !== "pro" && orgPlan !== "enterprise") {
     return false;
   }
-  const slack = integrations.find((i) => i.provider === "slack");
-  if (!slack?.installed || slack.needsReconnect) {
-    return false;
-  }
-  return slack.scopeStatus === "required";
+  return SCOPABLE_PROVIDERS.some((provider) => {
+    const status = integrations.find((i) => i.provider === provider);
+    return status?.installed && !status.needsReconnect && status.scopeStatus === "required";
+  });
 }
 
 export function OnboardingWizard({
@@ -108,7 +107,7 @@ export function OnboardingWizard({
   const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
   const bitbucketConnected = integrations.find((i) => i.provider === "bitbucket")?.installed;
   const anyCodeHostConnected = githubConnected || gitlabConnected || bitbucketConnected;
-  const slackScopeGate = slackScopeGateBlocked(integrations, orgPlan);
+  const scopableScopeGate = scopableScopeGateBlocked(integrations, orgPlan);
   const wideStep = currentStepId === "tools";
 
   useEffect(() => {
@@ -245,7 +244,7 @@ export function OnboardingWizard({
                   <>
                     <li>1. Connect code hosts and collaboration tools</li>
                     <li>2. Choose repositories to Deep-Index (Indexing → Configure GitHub)</li>
-                    <li>3. Configure collaboration access scope (Enterprise)</li>
+                    <li>3. Configure collaboration access scope for connected tools</li>
                     <li>4. Invite your team and verify connections</li>
                   </>
                 )}
@@ -430,9 +429,9 @@ export function OnboardingWizard({
               ) : null}
               {currentStepId === "scope" ? (
                 <>
-                  {slackScopeGate ? (
+                  {scopableScopeGate ? (
                     <p className="w-full text-xs text-amber-300 sm:order-first sm:w-auto">
-                      Configure Slack channel scope before continuing.
+                      Set access scope to Active for each connected tool before continuing.
                     </p>
                   ) : null}
                   <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
@@ -442,7 +441,7 @@ export function OnboardingWizard({
                     type="button"
                     className="admin-btn-primary"
                     onClick={() => goToStep(step + 1)}
-                    disabled={slackScopeGate}
+                    disabled={scopableScopeGate}
                   >
                     Continue
                   </button>

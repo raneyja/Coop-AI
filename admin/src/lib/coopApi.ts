@@ -739,7 +739,7 @@ export type IntegrationsHealthResponse = {
   orgPlan: string;
   onboardingGates: {
     githubOrToolConnected: boolean;
-    slackScopeActive: boolean;
+    scopableToolsActive: boolean;
     canCompleteOnboarding: boolean;
   };
   integrations: IntegrationHealthEntry[];

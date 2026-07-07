@@ -98,8 +98,8 @@ export function OnboardingVerifyStep({ onGatesChange }: OnboardingVerifyStepProp
       </div>
       {!canComplete && !loading ? (
         <p className="text-xs text-amber-300">
-          Connect at least GitHub or one collaboration tool. Enterprise orgs with Slack connected need
-          channel scope active before finishing.
+          Connect at least GitHub or one collaboration tool. Pro and Enterprise orgs need every connected
+          scopable tool (Slack, Jira, Notion, Google Docs) set to Active before finishing.
         </p>
       ) : null}
     </div>

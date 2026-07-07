@@ -5,6 +5,7 @@ import type { IntegrationProvider } from "./integrationConnectionStore";
 import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import { storeGithubInstallHint } from "./githubRelinkService";
+import { requiresIntegrationScope } from "../license/planSearchScope";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 import { testAdminIntegration } from "./adminIntegrationTest";
@@ -55,6 +56,8 @@ const INTEGRATION_PROVIDERS: IntegrationProvider[] = [
   "google-docs",
   "teams"
 ];
+
+const SCOPABLE_PROVIDERS: IntegrationProvider[] = ["slack", "atlassian", "notion", "google-docs"];
 
 /**
  * Bulk integration status for the customer admin portal.
@@ -142,18 +145,20 @@ export async function handleAdminIntegrationsRequest(
           integrationUsable(entry)
       );
 
-    const slack = statuses.find((entry) => entry.provider === "slack");
-    const slackScopeStatus =
-      slack && "scopeStatus" in slack ? slack.scopeStatus : undefined;
-    const slackScopeActive =
-      orgPlan !== "enterprise" ||
-      !slack?.installed ||
-      slackScopeStatus === "active" ||
-      slackScopeStatus === "none";
+    const scopableToolsActive =
+      !requiresIntegrationScope(orgPlan) ||
+      SCOPABLE_PROVIDERS.every((provider) => {
+        const status = statuses.find((entry) => entry.provider === provider);
+        if (!status?.installed) {
+          return true;
+        }
+        const scopeStatus = "scopeStatus" in status ? status.scopeStatus : undefined;
+        return scopeStatus === "active" || scopeStatus === "none";
+      });
 
     const canCompleteOnboarding =
       githubOrToolConnected &&
-      slackScopeActive &&
+      scopableToolsActive &&
       !integrations.some(
         (entry) =>
           entry.installed &&
@@ -166,7 +171,7 @@ export async function handleAdminIntegrationsRequest(
       orgPlan,
       onboardingGates: {
         githubOrToolConnected,
-        slackScopeActive,
+        scopableToolsActive,
         canCompleteOnboarding
       },
       integrations
@@ -353,9 +358,9 @@ async function buildHealthEntry(
   }
 
   if (
-    orgPlan === "enterprise" &&
+    requiresIntegrationScope(orgPlan) &&
     scopeStatus === "required" &&
-    ["slack", "atlassian", "notion", "google-docs"].includes(status.provider)
+    SCOPABLE_PROVIDERS.includes(status.provider as IntegrationProvider)
   ) {
     return {
       provider: status.provider,

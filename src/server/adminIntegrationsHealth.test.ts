@@ -94,10 +94,51 @@ test("integrations health marks slack scope required on enterprise", async () =>
   );
   assert.equal(handled, true);
   const body = response.body as {
-    onboardingGates: { slackScopeActive: boolean; canCompleteOnboarding: boolean };
+    onboardingGates: { scopableToolsActive: boolean; canCompleteOnboarding: boolean };
     integrations: Array<{ provider: string; health: string }>;
   };
-  assert.equal(body.onboardingGates.slackScopeActive, false);
+  assert.equal(body.onboardingGates.scopableToolsActive, false);
+  assert.equal(body.onboardingGates.canCompleteOnboarding, false);
+  const slack = body.integrations.find((entry) => entry.provider === "slack");
+  assert.equal(slack?.health, "scope_required");
+});
+
+test("integrations health marks slack scope required on pro", async () => {
+  const orgStore = {
+    getOrganization: async () => ({ id: "org-1", name: "Acme", plan: "pro", createdAt: new Date() }),
+    getCodeHostInstallation: async () => undefined
+  };
+  const integrationStore = {
+    get: async (_orgId: string, provider: string) =>
+      provider === "slack"
+        ? {
+            metadata: { encryptedBotToken: "enc" },
+            tokenExpiresAt: undefined,
+            updatedAt: new Date()
+          }
+        : undefined
+  };
+  const scopePolicyStore = {
+    get: async () => undefined
+  };
+  const response = mockResponse();
+  const handled = await handleAdminIntegrationsRequest(
+    { method: "GET", pathname: "/v1/admin/integrations/health" },
+    response,
+    {
+      orgStore: orgStore as never,
+      integrationStore: integrationStore as never,
+      scopePolicyStore: scopePolicyStore as never,
+      serverConfig: testServerConfig
+    },
+    { ...auth, plan: "pro" }
+  );
+  assert.equal(handled, true);
+  const body = response.body as {
+    onboardingGates: { scopableToolsActive: boolean; canCompleteOnboarding: boolean };
+    integrations: Array<{ provider: string; health: string }>;
+  };
+  assert.equal(body.onboardingGates.scopableToolsActive, false);
   assert.equal(body.onboardingGates.canCompleteOnboarding, false);
   const slack = body.integrations.find((entry) => entry.provider === "slack");
   assert.equal(slack?.health, "scope_required");
