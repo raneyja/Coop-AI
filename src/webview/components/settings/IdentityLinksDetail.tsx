@@ -62,8 +62,8 @@ export function IdentityLinksDetail({ directory }: IdentityLinksDetailProps): Re
   return (
     <>
       <p className="coop-settings-card-desc px-0.5">
-        Your profile links are filled automatically from Tools and sign-in. Coop uses these
-        mappings before any guessed name matching when resolving owners across GitHub, Slack, and Jira.
+        Your profile links are filled automatically from connected integrations and sign-in. Coop uses
+        these mappings before any guessed name matching when resolving owners across GitHub, Slack, and Jira.
       </p>
       <p className="coop-settings-card-desc px-0.5 text-[var(--coop-panel-muted)]">
         Current directory: {identityDirectorySummary(directory)}
@@ -74,7 +74,7 @@ export function IdentityLinksDetail({ directory }: IdentityLinksDetailProps): Re
         description={
           selfLinked
             ? "Synced from your connected accounts — no manual entry needed."
-            : "Connect GitHub, Slack, or Jira in Tools to populate this automatically."
+            : "Connect GitHub, Slack, or Jira under Settings → Tools to populate this automatically."
         }
       >
         <IdentityField label="Display name" value={selfForm.displayName} />

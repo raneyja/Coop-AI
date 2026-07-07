@@ -1535,6 +1535,56 @@
     @apply flex flex-wrap gap-1.5;
   }
 
+  .coop-auth-stack {
+    @apply flex flex-col gap-2;
+  }
+
+  .coop-auth-btn {
+    @apply flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border px-3 py-2 text-[12px] font-medium transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    background: var(--coop-pill-surface);
+    border-color: var(--coop-pill-border);
+    color: var(--coop-pill-text);
+  }
+
+  .coop-auth-btn:hover:not(:disabled) {
+    background: var(--coop-pill-surface-hover);
+    border-color: var(--coop-pill-border-hover);
+  }
+
+  .coop-auth-btn:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .coop-auth-btn--primary {
+    background: var(--coop-panel-foreground);
+    border-color: var(--coop-panel-foreground);
+    color: var(--coop-panel-canvas);
+  }
+
+  .coop-auth-btn--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--coop-panel-foreground) 92%, black 8%);
+    border-color: color-mix(in srgb, var(--coop-panel-foreground) 92%, black 8%);
+  }
+
+  .coop-auth-divider {
+    @apply flex items-center gap-3 py-2;
+  }
+
+  .coop-auth-divider-line {
+    @apply h-px flex-1;
+    background: var(--coop-settings-divider);
+  }
+
+  .coop-auth-divider-text {
+    @apply shrink-0 text-[10px] font-medium uppercase tracking-wide;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-auth-google-icon {
+    @apply h-4 w-4 shrink-0;
+  }
+
   .coop-settings-action-btn {
     @apply inline-flex cursor-pointer items-center rounded-md border px-2.5 py-1 text-[11px] transition-colors duration-150;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];

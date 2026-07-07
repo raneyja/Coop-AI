@@ -515,9 +515,43 @@ function IndexingDetail({ prefs, lightningState }: SettingsDetailProps): React.R
   );
 }
 
+function GoogleMark(): React.ReactElement {
+  return (
+    <svg className="coop-auth-google-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function AuthDivider(): React.ReactElement {
+  return (
+    <div className="coop-auth-divider" role="separator">
+      <span className="coop-auth-divider-line" aria-hidden="true" />
+      <span className="coop-auth-divider-text">or</span>
+      <span className="coop-auth-divider-line" aria-hidden="true" />
+    </div>
+  );
+}
+
+type AccountAuthStep = "choose" | "password";
+
 function AccountDetail({
   prefs,
-  onUpdate,
   onSignInSso,
   onSignInPassword,
   onSignInGoogle,
@@ -525,138 +559,131 @@ function AccountDetail({
   onSignOut
 }: SettingsDetailProps): React.ReactElement {
   const signedIn = preferencesSignedIn(prefs);
-  const [ssoOrgDraft, setSsoOrgDraft] = useState(prefs.orgName ?? "");
   const [emailDraft, setEmailDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
+  const [authStep, setAuthStep] = useState<AccountAuthStep>("choose");
 
-  useEffect(() => {
-    if (prefs.orgName) {
-      setSsoOrgDraft(prefs.orgName);
-    }
-  }, [prefs.orgName]);
-
-  const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
+  const trimmedEmail = emailDraft.trim();
 
   const submitPasswordSignIn = () => {
-    onSignInPassword(emailDraft.trim(), passwordDraft);
+    onSignInPassword(trimmedEmail, passwordDraft);
     setPasswordDraft("");
   };
 
+  const continueWithEmail = () => {
+    if (!trimmedEmail) {
+      return;
+    }
+    setAuthStep("password");
+  };
+
+  const backToChoose = () => {
+    setAuthStep("choose");
+    setPasswordDraft("");
+  };
+
+  if (signedIn) {
+    return (
+      <SettingsSection>
+        <p className="coop-prompt-modal-section-title">Signed in</p>
+        <p className="coop-settings-card-desc">
+          {displayOrgName(prefs) ? `${displayOrgName(prefs)} · ` : ""}
+          {displayPlanLabel(prefs)}
+        </p>
+        <div className="coop-settings-actions">
+          <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      </SettingsSection>
+    );
+  }
+
+  if (authStep === "password") {
+    return (
+      <SettingsSection>
+        <p className="coop-prompt-modal-section-title">Sign in</p>
+        <button type="button" className="coop-text-btn mb-1" onClick={backToChoose}>
+          ← Use a different email
+        </button>
+        <p className="coop-settings-card-desc">{trimmedEmail}</p>
+        <label className="coop-settings-field-row mt-3">
+          <span className="coop-settings-label">Password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={passwordDraft}
+            className="coop-settings-field"
+            onChange={(event) => setPasswordDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                submitPasswordSignIn();
+              }
+            }}
+          />
+        </label>
+        <div className="coop-auth-stack mt-3">
+          <button type="button" className="coop-auth-btn coop-auth-btn--primary" onClick={submitPasswordSignIn}>
+            Sign in
+          </button>
+          <button type="button" className="coop-text-btn self-center" onClick={() => onForgotPassword(trimmedEmail)}>
+            Forgot password?
+          </button>
+        </div>
+      </SettingsSection>
+    );
+  }
+
   return (
     <SettingsSection>
-      {signedIn ? (
-        <>
-          <p className="coop-prompt-modal-section-title">Signed in</p>
-          <p className="coop-settings-card-desc">
-            {displayOrgName(prefs) ? `${displayOrgName(prefs)} · ` : ""}
-            {displayPlanLabel(prefs)}
-          </p>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
-              Sign out
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="coop-prompt-modal-section-title">Sign in</p>
-          <p className="coop-settings-card-desc">Use your Coop account email and password, or continue with Google.</p>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Email</span>
-            <input
-              type="email"
-              autoComplete="username"
-              value={emailDraft}
-              placeholder="you@company.com"
-              className="coop-settings-field"
-              onChange={(event) => setEmailDraft(event.target.value)}
-            />
-          </label>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">Password</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={passwordDraft}
-              className="coop-settings-field"
-              onChange={(event) => setPasswordDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  submitPasswordSignIn();
-                }
-              }}
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={submitPasswordSignIn}>
-              Sign in
-            </button>
-            <button type="button" className="coop-settings-action-btn" onClick={onSignInGoogle}>
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              className="coop-text-btn"
-              onClick={() => onForgotPassword(emailDraft.trim())}
-              disabled={!emailDraft.trim()}
-            >
-              Forgot password?
-            </button>
-          </div>
-        </>
-      )}
+      <p className="coop-prompt-modal-section-title">Sign in</p>
+      <p className="coop-settings-card-desc">Continue to your Coop account.</p>
 
-      <p className="coop-prompt-modal-section-title">Organization SSO</p>
-      <p className="coop-settings-card-desc">Enterprise customers can sign in with SAML SSO.</p>
-      <label className="coop-settings-field-row">
-        <span className="coop-settings-label">Organization name</span>
-        <input
-          type="text"
-          value={ssoOrgDraft}
-          placeholder="Acme Corp"
-          className="coop-settings-field"
-          onChange={(e) => setSsoOrgDraft(e.target.value)}
-        />
-      </label>
-      <div className="coop-settings-actions">
-        <button
-          type="button"
-          className="coop-settings-action-btn"
-          onClick={() => onSignInSso(ssoOrgDraft.trim() || undefined)}
-        >
-          Sign in with SSO
+      <div className="coop-auth-stack mt-3">
+        <button type="button" className="coop-auth-btn" onClick={onSignInGoogle}>
+          <GoogleMark />
+          Continue with Google
         </button>
       </div>
 
-      <p className="coop-settings-card-desc">
+      <AuthDivider />
+
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Email address</span>
+        <input
+          type="email"
+          autoComplete="username"
+          value={emailDraft}
+          placeholder="Email address"
+          className="coop-settings-field"
+          onChange={(event) => setEmailDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              continueWithEmail();
+            }
+          }}
+        />
+      </label>
+      <div className="coop-auth-stack mt-2">
+        <button
+          type="button"
+          className="coop-auth-btn coop-auth-btn--primary"
+          onClick={continueWithEmail}
+          disabled={!trimmedEmail}
+        >
+          Continue with email
+        </button>
+      </div>
+
+      <AuthDivider />
+
+      <button type="button" className="coop-auth-btn" onClick={() => onSignInSso()}>
+        Sign in with SSO
+      </button>
+
+      <p className="coop-settings-card-desc mt-3">
         LLM provider keys are routed server-side; code host tokens stay in VS Code SecretStorage.
       </p>
-
-      <div className="coop-settings-card-desc">
-        <p className="coop-prompt-modal-section-title">Timezone</p>
-        <label className="coop-settings-field-row">
-          <select
-            className="coop-settings-field"
-            value={resolveTimezonePreference(prefs.timezone)}
-            onChange={(event) => onUpdate({ timezone: event.target.value })}
-          >
-            <optgroup label="United States">
-              {US_TIMEZONE_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Europe">
-              {europeanTimezoneOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-      </div>
     </SettingsSection>
   );
 }
@@ -750,25 +777,24 @@ function ToolsListDetail({
           onClick={() => onNavigate("integration-google-docs")}
         />
       </CoopNavList>
-
-      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Identity</p>
-      <CoopNavList>
-        <CoopNavRow
-          title="Identity links"
-          subtitle={identityLinksHubSubtitle(prefs)}
-          configured={prefs.identityDirectory.people.length > 0}
-          onClick={() => onNavigate("team")}
-        />
-      </CoopNavList>
     </>
   );
 }
 
-function PreferencesListDetail({ prefs, promptLibrary, onNavigate }: SettingsDetailProps): React.ReactElement {
+function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: SettingsDetailProps): React.ReactElement {
   const pinned = promptLibrary.pinnedIds.length;
+  const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
+  const timezoneId = resolveTimezonePreference(prefs.timezone);
+  const timezoneLabel =
+    US_TIMEZONE_OPTIONS.find((option) => option.id === timezoneId)?.label ??
+    europeanTimezoneOptions.find((option) => option.id === timezoneId)?.label ??
+    timezoneId;
+
   return (
     <>
-      <p className="coop-settings-card-desc px-0.5">Model defaults and your quick prompt library.</p>
+      <p className="coop-settings-card-desc px-0.5">
+        Model defaults, profile links, timezone, and your quick prompt library.
+      </p>
       <CoopNavList>
         <CoopNavRow
           title="Model & chat"
@@ -780,7 +806,42 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate }: SettingsDet
           subtitle={pinned === 0 ? "No quick prompts pinned" : pinned === 1 ? "1 quick prompt pinned" : `${pinned} quick prompts pinned`}
           onClick={() => onNavigate("prompts")}
         />
+        <CoopNavRow
+          title="Identity links"
+          subtitle={identityLinksHubSubtitle(prefs)}
+          configured={prefs.identityDirectory.people.length > 0}
+          onClick={() => onNavigate("team")}
+        />
       </CoopNavList>
+
+      <div className="mt-4">
+        <SettingsSection title="Timezone">
+          <p className="coop-settings-card-desc">Used for quota reset times and scheduling context in chat.</p>
+          <label className="coop-settings-field-row">
+            <span className="coop-settings-label">Timezone ({timezoneLabel})</span>
+            <select
+              className="coop-settings-field"
+              value={timezoneId}
+              onChange={(event) => onUpdate({ timezone: event.target.value })}
+            >
+              <optgroup label="United States">
+                {US_TIMEZONE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Europe">
+                {europeanTimezoneOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </label>
+        </SettingsSection>
+      </div>
     </>
   );
 }

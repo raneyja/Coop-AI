@@ -27,12 +27,12 @@ test("migrateSettingsScreen maps legacy hub screens", () => {
 test("settingsScreenParent routes provider screens to tools", () => {
   assert.equal(settingsScreenParent("code-host-github"), "tools");
   assert.equal(settingsScreenParent("integration-slack"), "tools");
-  assert.equal(settingsScreenParent("team"), "tools");
 });
 
 test("settingsScreenParent routes preferences children", () => {
   assert.equal(settingsScreenParent("model"), "preferences");
   assert.equal(settingsScreenParent("prompts"), "preferences");
+  assert.equal(settingsScreenParent("team"), "preferences");
 });
 
 test("settingsScreenParent routes plan and indexing to hub", () => {

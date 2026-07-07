@@ -89,12 +89,11 @@ export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
     screen === "integration-teams" ||
     screen === "integration-confluence" ||
     screen === "integration-notion" ||
-    screen === "integration-google-docs" ||
-    screen === "team"
+    screen === "integration-google-docs"
   ) {
     return "tools";
   }
-  if (screen === "model" || screen === "prompts") {
+  if (screen === "model" || screen === "prompts" || screen === "team") {
     return "preferences";
   }
   return "hub";
