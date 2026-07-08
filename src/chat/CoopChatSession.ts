@@ -2417,7 +2417,12 @@ export class CoopChatSession {
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
     await this.runIntentFetch(intentEvent);
     this.enrichKnowledgeGapsBundle(quickAction);
-    await this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+    if (quickAction === "understand-repo") {
+      // Don't block synthesis on graph enrichment for the evidence card.
+      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+    } else {
+      await this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+    }
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
       sourceHint: options?.sourceHint,
       integrationProvider,
@@ -2742,20 +2747,29 @@ export class CoopChatSession {
     let activeFileDependents: string[] | undefined;
     let activeFileSource: string | undefined;
 
-    for (const path of candidatePaths.slice(0, 6)) {
-      try {
-        const result = await this.options.indexBackend.dependents(repoId, path);
-        if (activeFile && path === activeFile) {
-          activeFileDependents = result.dependents;
-          activeFileSource = result.source;
+    const dependentResults = await Promise.all(
+      candidatePaths.slice(0, 6).map(async (path) => {
+        try {
+          const result = await this.options.indexBackend.dependents(repoId, path);
+          return { path, result };
+        } catch {
+          return undefined;
         }
-        if (result.dependents.length > bestDependents.length) {
-          bestDependents = result.dependents;
-          bestEntry = path;
-          source = result.source;
-        }
-      } catch {
-        // try next entry path
+      })
+    );
+    for (const entry of dependentResults) {
+      if (!entry) {
+        continue;
+      }
+      const { path, result } = entry;
+      if (activeFile && path === activeFile) {
+        activeFileDependents = result.dependents;
+        activeFileSource = result.source;
+      }
+      if (result.dependents.length > bestDependents.length) {
+        bestDependents = result.dependents;
+        bestEntry = path;
+        source = result.source;
       }
     }
 

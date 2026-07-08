@@ -51,11 +51,13 @@ const DISCUSSION_INTEGRATIONS = [
 ] as const;
 
 test("repo-wide quick actions are enumerated consistently", () => {
-  assert.deepEqual([...REPO_WIDE_INTEGRATION_QUICK_ACTIONS], [
-    "knowledge-gaps",
-    "understand-repo",
-    "blast-radius"
-  ]);
+  assert.deepEqual([...REPO_WIDE_INTEGRATION_QUICK_ACTIONS], ["knowledge-gaps", "blast-radius"]);
+});
+
+test("understand-repo skips auto integration fetches", () => {
+  assert.equal(shouldFetchRepoWideIntegrations(request("understand-repo")), false);
+  assert.equal(shouldFetchJiraContext(request("understand-repo")), false);
+  assert.equal(shouldFetchSlackContext(request("understand-repo")), false);
 });
 
 for (const action of REPO_WIDE_INTEGRATION_QUICK_ACTIONS) {
