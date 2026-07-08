@@ -675,11 +675,10 @@ function MemberToolDetail({
 
 function ToolsListDetail({
   prefs,
-  onUpdate,
   onNavigate
 }: SettingsDetailProps): React.ReactElement {
   if (memberToolsReadOnly(prefs)) {
-    return <MemberToolsListDetail prefs={prefs} onUpdate={onUpdate} />;
+    return <MemberToolsListDetail prefs={prefs} />;
   }
   const freePlan = isFreeDeveloperPlan(prefs);
   return (
@@ -691,20 +690,9 @@ function ToolsListDetail({
       </p>
 
       <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
-      <SettingsSection>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Default code host</span>
-          <select
-            value={prefs.defaultCodeHost}
-            onChange={(e) => onUpdate({ defaultCodeHost: e.target.value as CodeHostProviderPreference })}
-            className="coop-settings-field"
-          >
-            <option value="github">GitHub</option>
-            <option value="gitlab">GitLab</option>
-            <option value="bitbucket">Bitbucket</option>
-          </select>
-        </label>
-      </SettingsSection>
+      <p className="coop-settings-card-desc px-0.5">
+        Every connected code host is active. Connect one or more below to use their repos in chat.
+      </p>
       <CoopNavList>
         <CoopNavRow
           title="GitHub"
@@ -769,13 +757,7 @@ function ToolsListDetail({
   );
 }
 
-function MemberToolsListDetail({
-  prefs,
-  onUpdate
-}: {
-  prefs: Preferences;
-  onUpdate: (partial: Partial<Preferences>) => void;
-}): React.ReactElement {
+function MemberToolsListDetail({ prefs }: { prefs: Preferences }): React.ReactElement {
   const codeHosts: OrgIntegrationProvider[] = ["github", "gitlab", "bitbucket"];
   const collaborationProviders: Array<{ provider: OrgIntegrationProvider; name: string; description: string }> = [
     { provider: "slack", name: "Slack", description: "Search Slack threads and check teammate availability." },
@@ -793,20 +775,11 @@ function MemberToolsListDetail({
       </p>
 
       <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
+      <p className="coop-settings-card-desc px-0.5">
+        Every code host your admin connects is active. Repos from all connected hosts are available in chat.
+      </p>
       <SettingsSection>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Default code host</span>
-          <select
-            value={prefs.defaultCodeHost}
-            onChange={(e) => onUpdate({ defaultCodeHost: e.target.value as CodeHostProviderPreference })}
-            className="coop-settings-field"
-          >
-            <option value="github">GitHub</option>
-            <option value="gitlab">GitLab</option>
-            <option value="bitbucket">Bitbucket</option>
-          </select>
-        </label>
-        <div className="space-y-3 mt-3">
+        <div className="space-y-3">
           {codeHosts.map((provider) => (
             <IntegrationStatusCard
               key={provider}

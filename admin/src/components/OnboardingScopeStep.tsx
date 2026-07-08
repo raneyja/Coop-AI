@@ -25,8 +25,7 @@ export function OnboardingScopeStep({ integrations, onRefresh }: OnboardingScope
   if (connectedScopable.length === 0) {
     return (
       <p className="text-sm text-coop-muted">
-        No scopable integrations connected yet. Connect Slack, Jira, Notion, or Google Docs on the
-        previous step, then return here to choose what Coop can access.
+        No scopable tools connected yet. Connect Slack, Jira, Notion, or Google Docs on the previous step.
       </p>
     );
   }

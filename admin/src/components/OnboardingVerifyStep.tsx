@@ -65,9 +65,6 @@ export function OnboardingVerifyStep({ onGatesChange }: OnboardingVerifyStepProp
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-coop-muted">
-        Confirm connected tools respond before you finish setup. Run tests to refresh status.
-      </p>
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       <div className="admin-list">
         {entries.map((entry) => (
@@ -98,8 +95,8 @@ export function OnboardingVerifyStep({ onGatesChange }: OnboardingVerifyStepProp
       </div>
       {!canComplete && !loading ? (
         <p className="text-xs text-amber-300">
-          Connect at least GitHub or one collaboration tool. Pro and Enterprise orgs need every connected
-          scopable tool (Slack, Jira, Notion, Google Docs) set to Active before finishing.
+          Connect GitHub or a collaboration tool. Set every connected scopable tool to Active before
+          finishing.
         </p>
       ) : null}
     </div>

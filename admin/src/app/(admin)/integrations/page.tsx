@@ -58,8 +58,8 @@ export default function IntegrationsPage() {
         <h1 className="admin-page-title">Integrations</h1>
         <p className="mt-1 text-sm text-coop-muted">
           {readOnly
-            ? "Organization tools connected by your admin. Link your personal accounts in the VS Code extension."
-            : "Connect tools your team uses. For GitHub, install the App on your company org (or send the link to your GitHub admin). Return here and refresh after install."}
+            ? "Organization tools connected by your admin. Active tools are available in the VS Code extension automatically."
+            : "Connect tools your team uses."}
         </p>
         {successBanner ? (
           <p className="mt-3 rounded-lg border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-coop-index">

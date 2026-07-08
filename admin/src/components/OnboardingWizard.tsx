@@ -230,22 +230,22 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan
                     ? "Connect your personal developer tools once, then keep coding in the Coop VS Code extension with your own API key."
-                    : "Connect your organization's tools once. Every developer inherits access automatically — they install the VS Code extension and sign in; they never register OAuth apps or paste integration tokens."}
+                    : "Connect your organization's tools once — every developer inherits access in the VS Code extension."}
                 </p>
               </div>
               <ul className="space-y-2 text-sm text-coop-muted">
                 {isFreePlan ? (
                   <>
                     <li>1. Connect a code host (GitHub, GitLab, or Bitbucket)</li>
-                    <li>2. Deep-Index up to 3 repos for your org</li>
+                    <li>2. Deep-Index up to 3 of your repos</li>
                     <li>3. Install the VS Code extension and sign in</li>
                   </>
                 ) : (
                   <>
                     <li>1. Connect code hosts and collaboration tools</li>
-                    <li>2. Choose repositories to Deep-Index (Indexing → Configure GitHub)</li>
-                    <li>3. Configure collaboration access scope for connected tools</li>
-                    <li>4. Invite your team and verify connections</li>
+                    <li>2. Choose repos to Deep-Index</li>
+                    <li>3. Set collaboration access scope</li>
+                    <li>4. Invite your team</li>
                   </>
                 )}
               </ul>
@@ -258,8 +258,8 @@ export function OnboardingWizard({
                 <h3 className="text-lg font-semibold text-white">Connect tools</h3>
                 <p className="mt-2 text-sm text-coop-muted">
                   {isFreePlan
-                    ? "Connect GitHub, GitLab, or Bitbucket — then use Indexing → Configure to choose up to 3 repos to Deep-Index. Collaboration tools are optional."
-                    : "Install the Coop GitHub App on your organization (or authorize via OAuth if App is unavailable). Return here and refresh each row after approving access."}
+                    ? "Connect your code hosts to your entire stack."
+                    : "Connect code hosts and collaboration tools for your team."}
                 </p>
               </div>
               <IntegrationsStep
@@ -272,6 +272,7 @@ export function OnboardingWizard({
                 onRefresh={(provider) => void load({ provider })}
                 compact
                 showFullPageLink={false}
+                hideIntro
               />
             </div>
           )}
@@ -281,7 +282,7 @@ export function OnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Manage access</h3>
                 <p className="mt-2 text-sm text-coop-muted">
-                  Configure what Coop can search in each connected tool — not your entire workspace.
+                  Set what Coop can search in each connected tool.
                 </p>
               </div>
               <OnboardingScopeStep
@@ -299,12 +300,7 @@ export function OnboardingWizard({
                   Invite teammates — they receive an email with install instructions.
                   {memberCount !== null
                     ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
-                    : ""}{" "}
-                  Under{" "}
-                  <Link href="/settings" className="admin-link">
-                    Settings → Repository access
-                  </Link>
-                  , choose whether everyone sees all Deep-Indexed repos or only repos you assign per person.
+                    : ""}
                 </p>
               </div>
             </div>
@@ -327,19 +323,28 @@ export function OnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Choose repos to Deep-Index</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Open{" "}
-                  <Link href="/indexing" className="admin-link">
-                    Indexing
-                  </Link>{" "}
-                  and click <span className="text-white">Configure GitHub</span> (or GitLab / Bitbucket) to
-                  browse your repositories and select which ones to Deep-Index. Until you choose repos, the
-                  Indexing page stays empty.
                   {isFreePlan ? (
                     <>
-                      {" "}
-                      Free plan allows up to 3 Deep-Indexed repos org-wide.
+                      Open{" "}
+                      <Link href="/indexing" className="admin-link">
+                        Indexing
+                      </Link>{" "}
+                      and configure a code host to choose repos to Deep-Index. Free plan allows up to 3
+                      repos. Upgrade to{" "}
+                      <Link href="/billing" className="admin-link">
+                        Pro
+                      </Link>{" "}
+                      for unlimited indexing.
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      Open{" "}
+                      <Link href="/indexing" className="admin-link">
+                        Indexing
+                      </Link>{" "}
+                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index.
+                    </>
+                  )}
                 </p>
               </div>
               {!anyCodeHostConnected ? (
@@ -355,8 +360,7 @@ export function OnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Install the extension</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Install the Coop AI VS Code extension from the marketplace, then sign in with the same email and
-                  password (or Google) you use here. No API key paste required for day-to-day coding.
+                  Install the CoopAI VS Code extension from marketplace.
                 </p>
               </div>
               <a
@@ -377,12 +381,12 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan ? (
                     <>
-                      Install the Coop AI VS Code extension and sign in with your Coop account. Open any local folder
-                      to chat immediately — connect a code host to Deep-Index up to 3 repos.
+                      Install the CoopAI extension and begin connecting your tools.
                     </>
                   ) : (
                     <>
-                      Developers install the Coop AI VS Code extension and sign in with their Coop account or SSO.
+                      Your team installs the CoopAI extension and signs in — org tools and repos are ready
+                      automatically.
                     </>
                   )}
                 </p>

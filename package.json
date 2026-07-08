@@ -501,7 +501,7 @@
             "bitbucket"
           ],
           "default": "github",
-          "description": "Default code host for remote explorer and context."
+          "description": "Fallback code host used only when a repo has no explicit provider. All connected code hosts are active; Coop auto-selects this from your connected hosts, so you normally don't set it manually."
         },
         "coopAI.openRepoInEditor": {
           "type": "string",

@@ -38,7 +38,9 @@ export function IntegrationsStep({
         <p className="text-sm text-coop-muted">
           {readOnly
             ? "Organization tools connected by your admin. Active tools are available in the VS Code extension automatically."
-            : "Connect tools your team uses. OAuth opens in a new tab — return here and refresh status."}
+            : orgPlan === "free"
+              ? "Connect the tools you use. OAuth opens in a new tab — return here and refresh status."
+              : "Connect tools your team uses. OAuth opens in a new tab — return here and refresh status."}
         </p>
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

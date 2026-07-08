@@ -30,11 +30,6 @@ function formatModelLabel(model: string): string {
   return model.replace(/-\d{8}$/, "").replace(/-/g, " ");
 }
 
-function countConfigured(flags: boolean[]): string {
-  const configured = flags.filter(Boolean).length;
-  return `${configured}/${flags.length} configured`;
-}
-
 function integrationNames(prefs: Preferences): string {
   const names: string[] = [];
   if (integrationConfigured(prefs, "slack")) {
@@ -91,13 +86,20 @@ export function bitbucketIsConfigured(prefs: Preferences): boolean {
 }
 
 export function codeHostsHubSubtitle(prefs: Preferences): string {
-  const defaultHost = CODE_HOST_LABELS[prefs.defaultCodeHost];
-  const configured = countConfigured([
-    githubIsConfigured(prefs),
-    gitlabIsConfigured(prefs),
-    bitbucketIsConfigured(prefs)
-  ]);
-  return `${defaultHost} default · ${configured}`;
+  const connected: string[] = [];
+  if (githubIsConfigured(prefs)) {
+    connected.push(CODE_HOST_LABELS.github);
+  }
+  if (gitlabIsConfigured(prefs)) {
+    connected.push(CODE_HOST_LABELS.gitlab);
+  }
+  if (bitbucketIsConfigured(prefs)) {
+    connected.push(CODE_HOST_LABELS.bitbucket);
+  }
+  if (connected.length === 0) {
+    return "No code hosts connected";
+  }
+  return `${connected.join(" · ")} active`;
 }
 
 export function integrationsHubSubtitle(prefs: Preferences): string {

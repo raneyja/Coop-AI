@@ -131,14 +131,14 @@ export function MemberOnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Welcome, {greeting}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  You&apos;ve joined <strong className="text-white">{orgName}</strong> on Coop AI. This quick
-                  setup shows your assigned repositories, org tools, and how to install the VS Code extension.
+                  You&apos;ve joined <strong className="text-white">{orgName}</strong>. Review your repos,
+                  org tools, and install the extension.
                 </p>
               </div>
               <ol className="space-y-2 text-sm text-coop-muted">
-                <li>1. Review repositories your admin assigned to you</li>
+                <li>1. Review repositories assigned to you</li>
                 <li>2. See which org tools are connected</li>
-                <li>3. Install the VS Code extension and sign in</li>
+                <li>3. Install the CoopAI extension and sign in</li>
               </ol>
             </div>
           )}
@@ -149,7 +149,7 @@ export function MemberOnboardingWizard({
                 <h3 className="text-lg font-semibold text-white">Your repositories</h3>
                 <p className="mt-2 text-sm text-coop-muted">
                   {adminControlled
-                    ? "These repositories were assigned by your admin. Contact them to request more access."
+                    ? "Assigned by your admin — contact them to request more access."
                     : "Repositories available in your workspace."}
                 </p>
               </div>
@@ -193,9 +193,7 @@ export function MemberOnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Organization tools</h3>
                 <p className="mt-2 text-sm text-coop-muted">
-                  Your admin connects org-wide integrations in the admin portal. When a tool shows{" "}
-                  <span className="text-white/90">Active</span>, it is available in the VS Code extension
-                  automatically — no personal linking required.
+                  Your admin connected these — active tools appear in the VS Code extension automatically.
                 </p>
               </div>
               <IntegrationsStep
@@ -208,6 +206,7 @@ export function MemberOnboardingWizard({
                 onRefresh={(provider) => void load({ provider })}
                 compact
                 showFullPageLink={false}
+                hideIntro
                 readOnly
               />
             </div>
@@ -218,8 +217,7 @@ export function MemberOnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">Install the extension</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Install Coop AI from the VS Code Marketplace, then sign in with{" "}
-                  <span className="text-white">{me?.email}</span>. No API key paste required.
+                  Install the CoopAI VS Code extension from marketplace.
                 </p>
               </div>
               <a
@@ -238,8 +236,7 @@ export function MemberOnboardingWizard({
               <div>
                 <h3 className="text-lg font-semibold text-white">You&apos;re ready</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Open VS Code, install the extension, and sign in. Your dashboard shows assigned repos and
-                  org tool status anytime.
+                  Install the CoopAI extension and sign in — your repos and org tools are ready.
                 </p>
               </div>
               <Link href="/feed" className="admin-link text-sm">

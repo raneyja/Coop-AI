@@ -24,7 +24,8 @@ import type {
   LlmProviderPreference,
   ChatImageAttachment,
   ChatFileMention,
-  OrgCollectionSummary
+  OrgCollectionSummary,
+  CodeHostProviderPreference
 } from "./types";
 import type { OrgIntegrationStatusEntry } from "./integrationStatusTypes";
 import { DEFAULT_TIMEZONE_ID } from "./timezone";
@@ -1042,8 +1043,24 @@ export async function readPreferences(
     : hasAtlassianInstalled ||
       Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
   const signedIn = await api.isSignedIn();
+  const preferredCodeHost = resolvePreferredCodeHost({
+    current: base.defaultCodeHost,
+    github: hasGitHubAppInstalled || (devMode && Boolean(codeHostCreds.githubToken)),
+    gitlab: hasGitLabAppInstalled || (devMode && Boolean(codeHostCreds.gitlabToken)),
+    bitbucket:
+      hasBitbucketAppInstalled ||
+      (devMode && Boolean(codeHostCreds.bitbucketUsername && codeHostCreds.bitbucketAppPassword)),
+    orgStatuses: orgIntegrationStatuses
+  });
+  if (signedIn && preferredCodeHost !== base.defaultCodeHost) {
+    // Persist so the code host router (which reads config directly) and the webview agree on the fallback.
+    void updateConfiguration({ defaultCodeHost: preferredCodeHost }).catch(() => {
+      // Non-fatal — fallback host stays on the previous value until the next refresh.
+    });
+  }
   return {
     ...base,
+    defaultCodeHost: preferredCodeHost,
     searchScopeMode: resolveDefaultSearchScope(
       base.searchScopeMode,
       plan,
@@ -1103,6 +1120,39 @@ export async function readPreferences(
     adminControlledRepos,
     quotaCredits
   };
+}
+
+/**
+ * Chooses the fallback code host used when a repo lookup carries no explicit provider.
+ * All connected hosts remain usable; this only picks the tiebreaker: keep the current
+ * value when it is still connected, otherwise fall back to the first connected host
+ * (GitHub → GitLab → Bitbucket). Never points the fallback at a disconnected host.
+ */
+export function resolvePreferredCodeHost(input: {
+  current: CodeHostProviderPreference;
+  github: boolean;
+  gitlab: boolean;
+  bitbucket: boolean;
+  orgStatuses?: OrgIntegrationStatusEntry[];
+}): CodeHostProviderPreference {
+  const flags: Record<CodeHostProviderPreference, boolean> = {
+    github: input.github,
+    gitlab: input.gitlab,
+    bitbucket: input.bitbucket
+  };
+  const isConnected = (provider: CodeHostProviderPreference): boolean => {
+    const status = input.orgStatuses?.find((entry) => entry.provider === provider);
+    return status ? status.installed : flags[provider];
+  };
+  if (isConnected(input.current)) {
+    return input.current;
+  }
+  for (const provider of ["github", "gitlab", "bitbucket"] as CodeHostProviderPreference[]) {
+    if (isConnected(provider)) {
+      return provider;
+    }
+  }
+  return input.current;
 }
 
 export async function updateConfiguration(updates: Partial<UserPreferences>): Promise<void> {

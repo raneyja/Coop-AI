@@ -38,19 +38,19 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "GitHub App for org-wide indexing (recommended). OAuth fallback for limited personal access.",
+    description: "Repositories, PR's, merge requests, and code context",
     category: "code"
   },
   {
     id: "gitlab",
     name: "GitLab",
-    description: "Repositories, merge requests, and code context",
+    description: "Repositories, PR's, merge requests, and code context",
     category: "code"
   },
   {
     id: "bitbucket",
     name: "Bitbucket",
-    description: "Repositories and pull requests",
+    description: "Repositories, PR's, merge requests, and code context",
     category: "code"
   },
   {
