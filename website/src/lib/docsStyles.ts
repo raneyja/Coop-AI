@@ -27,6 +27,20 @@ export const docsFigureCaptionClassName =
 export const docsFigureGridClassName =
   "not-prose my-6 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2";
 
+// Compact variants: ~20% smaller max widths for the Owner's Manual.
+export const docsFigureCompactClassName =
+  "not-prose my-6 mx-auto block max-w-[28.8rem] overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+
+export const docsFigureCompactCaptionClassName =
+  "not-prose -mt-4 mb-8 max-w-[28.8rem] mx-auto text-center text-sm text-gray-500";
+
+export const docsFigureGridCompactClassName =
+  "not-prose my-6 grid max-w-[44.8rem] grid-cols-1 gap-4 sm:grid-cols-2";
+
+export const docsFigureSingleClassName = "not-prose my-6 max-w-4xl";
+
+export const docsFigureSingleCompactClassName = "not-prose my-6 max-w-[44.8rem]";
+
 export const docsFigureTileClassName =
   "block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
 

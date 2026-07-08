@@ -27,7 +27,7 @@ export function ManualLayout({ manual }: ManualLayoutProps) {
           <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-14">
             <ManualToc entries={manual.toc} />
             <article className={`min-w-0 ${docsProseClassName}`}>
-              <DocsMarkdown content={manual.content} />
+              <DocsMarkdown content={manual.content} compact />
             </article>
           </div>
         </div>

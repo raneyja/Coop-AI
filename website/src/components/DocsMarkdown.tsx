@@ -9,6 +9,8 @@ import { splitDocsContent } from "@/lib/docsFigures";
 import {
   docsFigureCaptionClassName,
   docsFigureClassName,
+  docsFigureCompactCaptionClassName,
+  docsFigureCompactClassName,
   docsHeadingH2ClassName,
   docsHeadingH3ClassName,
   docsInlineLinkClassName
@@ -17,6 +19,7 @@ import { slugifyHeading } from "@/lib/manual.shared";
 
 type DocsMarkdownProps = {
   content: string;
+  compact?: boolean;
 };
 
 function isEmOnlyParagraph(children: React.ReactNode): boolean {
@@ -28,7 +31,7 @@ function isEmOnlyParagraph(children: React.ReactNode): boolean {
   return items[0].type === "em";
 }
 
-function DocsMarkdownBlock({ content }: { content: string }) {
+function DocsMarkdownBlock({ content, compact }: { content: string; compact?: boolean }) {
   const afterImageRef = useRef(false);
 
   return (
@@ -81,7 +84,7 @@ function DocsMarkdownBlock({ content }: { content: string }) {
           afterImageRef.current = true;
 
           return (
-            <span className={docsFigureClassName}>
+            <span className={compact ? docsFigureCompactClassName : docsFigureClassName}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt={alt ?? ""} className="h-auto w-full" loading="lazy" />
             </span>
@@ -90,7 +93,11 @@ function DocsMarkdownBlock({ content }: { content: string }) {
         p: ({ children }) => {
           if (afterImageRef.current && isEmOnlyParagraph(children)) {
             afterImageRef.current = false;
-            return <p className={docsFigureCaptionClassName}>{children}</p>;
+            return (
+              <p className={compact ? docsFigureCompactCaptionClassName : docsFigureCaptionClassName}>
+                {children}
+              </p>
+            );
           }
 
           afterImageRef.current = false;
@@ -103,17 +110,17 @@ function DocsMarkdownBlock({ content }: { content: string }) {
   );
 }
 
-export function DocsMarkdown({ content }: DocsMarkdownProps) {
+export function DocsMarkdown({ content, compact }: DocsMarkdownProps) {
   const segments = useMemo(() => splitDocsContent(content), [content]);
 
   return (
     <>
       {segments.map((segment, index) => {
         if (segment.type === "figures") {
-          return <DocsFigureGrid key={`figures-${index}`} items={segment.items} />;
+          return <DocsFigureGrid key={`figures-${index}`} items={segment.items} compact={compact} />;
         }
 
-        return <DocsMarkdownBlock key={`md-${index}`} content={segment.content} />;
+        return <DocsMarkdownBlock key={`md-${index}`} content={segment.content} compact={compact} />;
       })}
     </>
   );
