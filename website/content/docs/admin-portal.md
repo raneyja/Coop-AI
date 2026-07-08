@@ -20,6 +20,10 @@ Accounts are created during [free signup](/signup/free), Pro/Enterprise checkout
 
 **Forgot your password?** → [admin.coop-ai.dev/forgot-password](https://admin.coop-ai.dev/forgot-password)
 
+<!-- figures -->
+![Admin portal sign-in — email, password, Google, and SSO options](/screenshots/docs/admin-login.png)
+<!-- /figures -->
+
 ## Dashboard
 
 **Org admins** see integration status, onboarding wizard, usage summary, and plan details.
@@ -64,9 +68,19 @@ In production mode, developers **cannot** paste OAuth tokens in VS Code — admi
 
 Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces, etc. Coop can access. See [Integration scope](/docs/integration-scope).
 
-<!-- figures -->
+<!-- figures sm -->
 ![Manage Slack access — channel allowlist for least-privilege search](/screenshots/docs/admin-integration-scope-dark.png)
 <!-- /figures -->
+
+## SAML SSO (Enterprise)
+
+Org admins configure SAML 2.0 in **Settings → Single sign-on (SSO)**:
+
+1. Copy Coop **Service provider** values (Entity ID, ACS URL) into your IdP
+2. Paste IdP Entity ID, SSO URL, and signing certificate
+3. **Test SSO sign-in** before enabling **Require SSO for all users**
+
+Full walkthrough: [SAML SSO](/docs/saml-sso)
 
 ## Users
 

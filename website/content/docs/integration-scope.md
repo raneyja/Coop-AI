@@ -19,7 +19,7 @@ Coop follows least-privilege access. Even with OAuth connected, Pro and Enterpri
 3. Select allowed channels, projects, or folders
 4. **Save access** → **Test**
 
-<!-- figures -->
+<!-- figures sm -->
 ![Manage Slack access — choose channels Coop can search](/screenshots/docs/admin-integration-scope-dark.png)
 <!-- /figures -->
 
