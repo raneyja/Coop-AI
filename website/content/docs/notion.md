@@ -14,6 +14,10 @@ lastUpdated: "2026-06-29"
 
 **Enterprise:** **Manage access** → select workspaces/pages → Save scope.
 
+<!-- figures -->
+![Notion OAuth — connect CoopAI and select pages to share](/screenshots/docs/admin-notion-oath.png)
+<!-- /figures -->
+
 ## Using Notion in chat
 
 Type `/notion` in the composer:

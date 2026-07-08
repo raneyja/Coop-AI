@@ -17,6 +17,10 @@ Jira connects via Atlassian OAuth (shared with Confluence).
 
 **Enterprise:** **Manage access** → select projects → Save scope.
 
+<!-- figures -->
+![Atlassian OAuth — approve CoopAI access to Jira and Confluence](/screenshots/docs/admin-atlassian-oath.png)
+<!-- /figures -->
+
 ## Using Jira in chat
 
 Type `/jira` in the composer:

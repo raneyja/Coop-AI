@@ -18,6 +18,10 @@ Slack connects through browser OAuth. Coop uses both **bot** and **user** tokens
 
 **Success:** Connected (Enterprise: **Active** after scope saved).
 
+<!-- figures -->
+![Slack OAuth — approve CoopAI app permissions for your workspace](/screenshots/docs/admin-slack-oath.png)
+<!-- /figures -->
+
 ## Why both bot and user tokens?
 
 | Token | Used for |

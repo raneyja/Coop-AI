@@ -18,6 +18,10 @@ In production, GitHub connects through the browser — not a pasted PAT in VS Co
 2. **Browser** — On GitHub, choose your **company organization** (not a personal account) → select repos → **Install**
 3. Return to admin portal → **Refresh** until **Connected** → **Test GitHub**
 
+<!-- figures -->
+![GitHub App install — choose your company organization on GitHub](/screenshots/docs/admin-github-oath.png)
+<!-- /figures -->
+
 If you are **not** the GitHub org owner:
 
 1. Click **Send link to GitHub admin**
