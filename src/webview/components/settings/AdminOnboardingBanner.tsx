@@ -8,23 +8,30 @@ import {
   workspaceHubSubtitle
 } from "./subtitles";
 
-const DISMISS_KEY = "coop.adminOnboarding.dismissCount";
+const DISMISS_UNTIL_KEY = "coop.adminOnboarding.dismissedUntil";
+const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
 
 type AdminOnboardingBannerProps = {
   prefs: Preferences;
 };
 
-function readDismissCount(): number {
-  if (typeof sessionStorage === "undefined") {
-    return 0;
+function isDismissed(): boolean {
+  if (typeof localStorage === "undefined") {
+    return false;
   }
-  const raw = sessionStorage.getItem(DISMISS_KEY);
-  const parsed = raw ? Number.parseInt(raw, 10) : 0;
-  return Number.isFinite(parsed) ? parsed : 0;
+  const raw = localStorage.getItem(DISMISS_UNTIL_KEY);
+  const until = raw ? Number.parseInt(raw, 10) : 0;
+  if (!Number.isFinite(until)) {
+    return false;
+  }
+  return Date.now() < until;
 }
 
-function writeDismissCount(count: number): void {
-  sessionStorage.setItem(DISMISS_KEY, String(count));
+function dismissForOneDay(): void {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+  localStorage.setItem(DISMISS_UNTIL_KEY, String(Date.now() + DISMISS_DURATION_MS));
 }
 
 export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): React.ReactElement | null {
@@ -40,7 +47,7 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
     if (prefs.onboardingCompleted) {
       return false;
     }
-    return readDismissCount() < 3;
+    return !isDismissed();
   }, [dismissed, prefs.canInstallIntegrations, prefs.devMode, prefs.onboardingCompleted]);
 
   if (!visible) {
@@ -80,7 +87,7 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
           type="button"
           className="coop-text-btn"
           onClick={() => {
-            writeDismissCount(readDismissCount() + 1);
+            dismissForOneDay();
             setDismissed(true);
           }}
         >
