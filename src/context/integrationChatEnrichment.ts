@@ -67,12 +67,57 @@ export async function enrichChatContextWithIntegrations(options: {
   codeHostConnected?: boolean;
   integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
   deps?: Partial<IntegrationChatEnrichmentDeps>;
+  /**
+   * When set, integration search is bounded to this many milliseconds. Whatever
+   * completes within the budget is included; slower tools are dropped so a single
+   * slow integration cannot block synthesis. In-flight fetches are abandoned, not
+   * cancelled. When unset, all requested integrations are awaited to completion.
+   */
+  budgetMs?: number;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const deps = {
     ...DEFAULT_INTEGRATION_CHAT_ENRICHMENT_DEPS,
     ...options.deps
   };
+
+  const runStages = (): Promise<void> => enrichIntegrationStages(options, data, deps);
+
+  if (options.budgetMs !== undefined && options.budgetMs > 0) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const budget = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, options.budgetMs);
+    });
+    // Swallow late rejections so an abandoned fetch cannot raise unhandled errors.
+    await Promise.race([runStages().catch(() => undefined), budget]);
+    if (timer) {
+      clearTimeout(timer);
+    }
+    // Snapshot so writes from still-in-flight fetches don't mutate the returned bundle.
+    return { ...options.result, data: { ...data } };
+  }
+
+  await runStages();
+  return { ...options.result, data };
+}
+
+async function enrichIntegrationStages(
+  options: {
+    result: ContextFetchResult;
+    request: ContextFetchRequest;
+    secrets: IntegrationSecrets;
+    codeHostRouter: CodeHostRouter;
+    owner?: string;
+    repo?: string;
+    activeFile?: string;
+    contextText?: string[];
+    codeHostProvider?: CodeHostProvider;
+    codeHostConnected?: boolean;
+    integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+  },
+  data: Record<string, unknown>,
+  deps: IntegrationChatEnrichmentDeps
+): Promise<void> {
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
   const base = {
     owner: options.owner,
@@ -187,8 +232,6 @@ export async function enrichChatContextWithIntegrations(options: {
       ...base
     });
   }
-
-  return { ...options.result, data };
 }
 
 async function resolveTraceDecisionSearchSeeds(options: {

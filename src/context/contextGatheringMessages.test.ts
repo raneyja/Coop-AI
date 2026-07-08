@@ -59,7 +59,7 @@ test("understand-repo omits integrations that are not connected", () => {
   assert.ok(!messages.includes("Searching Confluence pages…"));
 });
 
-test("understand-repo skips integration lines even when connected", () => {
+test("understand-repo skips code host estate line when code host is disconnected", () => {
   const messages = contextGatheringMessagesFor(
     event({
       intent: UserIntent.QUICK_ACTION_CLICKED,
@@ -72,7 +72,7 @@ test("understand-repo skips integration lines even when connected", () => {
     }
   );
   assert.ok(!messages.some((message) => message.includes("GitLab estate index")));
-  assert.ok(!messages.includes("Reviewing Jira tickets…"));
+  assert.ok(messages.includes("Reviewing Jira tickets…"));
 });
 
 test("trace-decision uses provider-specific PR search label", () => {

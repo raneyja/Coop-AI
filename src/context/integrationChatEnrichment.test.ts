@@ -184,3 +184,82 @@ test("enrichChatContextWithIntegrations runs staged parallel integration batches
     }
   }
 });
+
+test("enrichChatContextWithIntegrations returns partial results when budget elapses", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const request = {
+      id: "ctx-1",
+      type: "chat_context",
+      params: { quickAction: "understand-repo", file: "src/server/example.ts" },
+      intent: { context: { queryText: "overview" } }
+    } as ContextFetchRequest;
+
+    const result = {
+      requestId: "ctx-1",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult;
+
+    const startedAt = Date.now();
+    const enriched = await enrichChatContextWithIntegrations({
+      result,
+      request,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "acme",
+      repo: "coop-ai",
+      codeHostConnected: false,
+      budgetMs: 40,
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () => ({ pages: [{ title: "Fast Confluence" }] }) as never,
+        shouldFetchNotionContext: () => true,
+        fetchNotionSearchContext: async () => ({ pages: [{ title: "Fast Notion" }] }) as never,
+        // Jira hangs forever — it must be dropped once the budget elapses.
+        shouldFetchJiraContext: () => true,
+        fetchJiraSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchGoogleDocsContext: () => true,
+        fetchGoogleDocsSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchSlackContext: () => true,
+        fetchSlackSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchTeamsContext: () => true,
+        fetchTeamsSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+    const elapsed = Date.now() - startedAt;
+
+    assert.ok(elapsed < 1000, `expected budget to bound latency, took ${elapsed}ms`);
+    const data = enriched.data as Record<string, unknown>;
+    // Stage 1 (Confluence + Notion) resolves immediately and is included.
+    assert.ok(data.confluenceSearch);
+    assert.ok(data.notionSearch);
+    // Stage 2+ tools hang and are dropped by the budget.
+    assert.equal(data.jiraSearch, undefined);
+    assert.equal(data.slackSearch, undefined);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});

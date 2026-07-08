@@ -290,6 +290,13 @@ export type CoopChatSessionOptions = {
   threadScopeKey?: string;
 };
 
+/**
+ * Time budget for Understand Repo's connected-tool search. It queries every
+ * connected integration but drops any that don't return within this window so a
+ * slow tool can't stall the overview.
+ */
+const UNDERSTAND_REPO_INTEGRATION_BUDGET_MS = 10_000;
+
 export class CoopChatSession {
   private webview?: vscode.Webview;
   private settingsWebview?: vscode.Webview;
@@ -1746,7 +1753,13 @@ export class CoopChatSession {
       contextText,
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected(),
-      integrationScopes
+      integrationScopes,
+      // Understand Repo pulls from every connected tool but is time-bounded so a
+      // single slow integration can't block the overview. Slower tools are dropped.
+      budgetMs:
+        request.params.quickAction === "understand-repo"
+          ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
+          : undefined
     });
   }
 
