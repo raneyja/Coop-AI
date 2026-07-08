@@ -85,8 +85,12 @@ Profile and chat defaults — moved out of Account:
 | --- | --- |
 | **Timezone** | Quota reset times and scheduling context in chat |
 | **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
-| **Model & chat** | Default provider/model and chat on/off |
+| **Model & chat** | LLM provider, **Enable live LLM chat**, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
+
+<!-- figures -->
+![Model & chat — Enable inline autocomplete on or off](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+<!-- /figures -->
 
 <!-- figures -->
 ![Prompt library — search, pin, and create team prompts](/screenshots/docs/prompt-library.png)
@@ -94,7 +98,7 @@ Profile and chat defaults — moved out of Account:
 
 ## Autocomplete
 
-Inline ghost-text completions are **off by default**. See the full guide: [Inline autocomplete](/docs/autocomplete).
+Inline ghost-text completions are **off by default**. Turn them on from the chat header (**Autocomplete On/Off**) or **Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. See the full guide: [Inline autocomplete](/docs/autocomplete).
 
 | Setting | Default | Description |
 | --- | --- | --- |

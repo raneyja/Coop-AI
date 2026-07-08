@@ -22,7 +22,20 @@ Click **Autocomplete** in the Coop sidebar header to switch **On** or **Off**. N
 
 **Success:** Label shows **On**. Typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
-### 2. File — VS Code settings (User or Workspace)
+### 2. Extension UI — Settings → Preferences → Model & chat
+
+1. Open **CoopAI Settings** (gear icon in the sidebar title bar).
+2. Go to **Preferences** → **Model & chat**.
+3. Check or uncheck **Enable inline autocomplete**.
+4. Click **Save model settings**.
+
+<!-- figures -->
+![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+<!-- /figures -->
+
+Use this screen when you want autocomplete on or off together with **Enable live LLM chat**, provider, and model. The header toggle updates the same setting.
+
+### 3. File — VS Code settings (User or Workspace)
 
 Add or change:
 
@@ -36,7 +49,7 @@ Add or change:
 ![Inline autocomplete — ghost-text suggestion in the editor with Accept controls](/screenshots/docs/inline-autocomplete.png)
 <!-- /figures -->
 
-### 3. Extension UI — Command Palette (optional)
+### 4. Extension UI — Command Palette (optional)
 
 Run **CoopAI: Toggle Autocomplete** to flip `coopAI.autocomplete.enabled` without opening JSON settings.
 

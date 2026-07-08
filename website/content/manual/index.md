@@ -200,10 +200,16 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 
 **Inline complete** — Ghost-text autocomplete as you type. Shipped in production; **off by default** (`coopAI.autocomplete.enabled: false`).
 
-Toggle **Autocomplete** in the chat header — **On** / **Off** — without opening VS Code settings. When on, ghost text appears as you type; **Tab** to accept, **Escape** to dismiss.
+Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick switch while you code. For a persistent preference (and to set provider/model), use **Settings → Preferences → Model & chat**.
 
 <!-- figures -->
 ![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
+<!-- /figures -->
+
+**Settings path:** Open **CoopAI Settings** → **Preferences** → **Model & chat** → check or uncheck **Enable inline autocomplete** → **Save model settings**. The header toggle and this checkbox stay in sync.
+
+<!-- figures -->
+![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-off.png)
 <!-- /figures -->
 
 <!-- figures -->
@@ -213,6 +219,7 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — without open
 | Step | Surface | Action |
 | --- | --- | --- |
 | Quick toggle | **Extension UI** — chat header | Click **Autocomplete** → **On** or **Off** |
+| Settings | **Extension UI** — Settings → Preferences → Model & chat | **Enable inline autocomplete** → **Save model settings** |
 | Enable | **File** — VS Code settings | Set `"coopAI.autocomplete.enabled": true` |
 | Or toggle | **Extension UI** — Command Palette | **CoopAI: Toggle Autocomplete** |
 | Accept | Editor | **Tab** |
