@@ -3,10 +3,14 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the Coop AI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-07"
+lastUpdated: "2026-07-08"
 ---
 
-Open settings: Coop sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
+Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **Coop AI: Open Settings** from the Command Palette.
+
+<!-- figures -->
+![Settings gear — opens CoopAI Settings in an editor tab](/screenshots/docs/extension-settings-button.png)
+<!-- /figures -->
 
 <!-- figures -->
 ![CoopAI Settings hub — Account, Tools, Workspace, Indexing, and Preferences](/screenshots/docs/extension-settings-hub.png)

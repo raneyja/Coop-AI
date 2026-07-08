@@ -130,6 +130,21 @@ If integrations are not connected, Coop still works for code-only questions. Ask
 
 The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **Quick Action** grid and a hint to type `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps`.
 
+### Start a new chat
+
+Use the chat header at the top of the sidebar:
+
+| Control | Action |
+| --- | --- |
+| **+** (New chat) | Start a fresh thread — empty composer and quick-action grid |
+| **Thread title** dropdown | Switch between saved threads from this workspace |
+
+<!-- figures -->
+![New chat — click + in the Coop sidebar header to start a fresh thread](/screenshots/docs/extension-new-chat-button.png)
+<!-- /figures -->
+
+Previous threads stay in the dropdown until you delete them. Quick actions and slash commands always run in the **active** thread.
+
 ### Chat composer
 
 Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations.
@@ -160,7 +175,11 @@ Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/d
 
 ### Settings overview
 
-Open settings via the sidebar gear icon or **CoopAI Settings**:
+Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a dedicated settings tab). You can also run **CoopAI: Open Settings** from the Command Palette.
+
+<!-- figures -->
+![Settings gear — opens CoopAI Settings in an editor tab](/screenshots/docs/extension-settings-button.png)
+<!-- /figures -->
 
 <!-- figures -->
 ![CoopAI Settings hub — Account, Tools, Workspace, Indexing, and Preferences](/screenshots/docs/extension-settings-hub.png)
@@ -181,12 +200,19 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 
 **Inline complete** — Ghost-text autocomplete as you type. Shipped in production; **off by default** (`coopAI.autocomplete.enabled: false`).
 
+Toggle **Autocomplete** in the chat header — **On** / **Off** — without opening VS Code settings. When on, ghost text appears as you type; **Tab** to accept, **Escape** to dismiss.
+
+<!-- figures -->
+![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
+<!-- /figures -->
+
 <!-- figures -->
 ![Inline autocomplete — ghost-text suggestion in the editor](/screenshots/docs/inline-autocomplete.png)
 <!-- /figures -->
 
 | Step | Surface | Action |
 | --- | --- | --- |
+| Quick toggle | **Extension UI** — chat header | Click **Autocomplete** → **On** or **Off** |
 | Enable | **File** — VS Code settings | Set `"coopAI.autocomplete.enabled": true` |
 | Or toggle | **Extension UI** — Command Palette | **CoopAI: Toggle Autocomplete** |
 | Accept | Editor | **Tab** |
