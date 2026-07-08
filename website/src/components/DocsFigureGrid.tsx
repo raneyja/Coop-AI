@@ -4,25 +4,29 @@ import {
   docsFigureGridCompactClassName,
   docsFigureSingleClassName,
   docsFigureSingleCompactClassName,
+  docsFigureSingleSmallClassName,
   docsFigureTileClassName
 } from "@/lib/docsStyles";
-import type { DocsFigureItem } from "@/lib/docsFigures";
+import type { DocsFigureItem, DocsFigureSize } from "@/lib/docsFigures";
 
 type DocsFigureGridProps = {
   items: DocsFigureItem[];
   compact?: boolean;
+  size?: DocsFigureSize;
 };
 
-export function DocsFigureGrid({ items, compact }: DocsFigureGridProps) {
+export function DocsFigureGrid({ items, compact, size }: DocsFigureGridProps) {
   if (items.length === 0) {
     return null;
   }
 
   const single = items.length === 1;
   const figureClassName = single
-    ? compact
-      ? docsFigureSingleCompactClassName
-      : docsFigureSingleClassName
+    ? size === "sm"
+      ? docsFigureSingleSmallClassName
+      : compact
+        ? docsFigureSingleCompactClassName
+        : docsFigureSingleClassName
     : compact
       ? docsFigureGridCompactClassName
       : docsFigureGridClassName;

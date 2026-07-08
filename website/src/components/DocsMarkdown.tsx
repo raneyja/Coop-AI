@@ -117,7 +117,14 @@ export function DocsMarkdown({ content, compact }: DocsMarkdownProps) {
     <>
       {segments.map((segment, index) => {
         if (segment.type === "figures") {
-          return <DocsFigureGrid key={`figures-${index}`} items={segment.items} compact={compact} />;
+          return (
+            <DocsFigureGrid
+              key={`figures-${index}`}
+              items={segment.items}
+              compact={compact}
+              size={segment.size}
+            />
+          );
         }
 
         return <DocsMarkdownBlock key={`md-${index}`} content={segment.content} compact={compact} />;

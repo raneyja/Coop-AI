@@ -379,7 +379,7 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 Click **Prompts** in the chat composer footer to open a dropdown of your pinned prompts. Select a prompt to insert it into the composer with current file and workspace context filled in. Press **Send** when you are ready.
 
-<!-- figures -->
+<!-- figures sm -->
 ![Prompt library — search, pin, and create team prompts](/screenshots/docs/prompt-library.png)
 <!-- /figures -->
 
@@ -489,9 +489,11 @@ This Owner's Manual (what you're reading) is product documentation. Your repo's 
 
 When project instructions are enabled, Coop loads `AGENTS.md` (and subtree-specific files in large monorepos) on **every chat turn** — not only for Understand Repo. If no `AGENTS.md` is found, the composer shows an **Attach AGENTS.md** prompt. Keep the top-level file general; add subtree-specific `AGENTS.md` files for large monorepos.
 
-### Cursor rules and webview UI
+### Keep it tool-agnostic
 
-If your team uses Cursor, you can add `.cursor/rules/` files for IDE-specific guidance. Coop's extension webview follows design tokens in `globals.css` — see your repo's webview UI policy if you contribute to Coop itself.
+Write `AGENTS.md` so any AI assistant can follow it — plain Markdown, explicit surfaces (**File / Terminal / Browser / Extension UI**), and links to deeper docs in your repo. Avoid editor-specific config syntax so the same file helps every teammate regardless of the tools they use.
+
+For large monorepos, add a nested `AGENTS.md` inside individual service or package folders. Coop loads the nearest file for the code you're working in, so root-level conventions stay general while service-specific notes live next to the code.
 
 ### Example AGENTS.md skeleton
 
