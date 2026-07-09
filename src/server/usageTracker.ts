@@ -220,6 +220,67 @@ export class UsageTracker {
     }));
   }
 
+  /** Chat tab: messages, quick actions, and edit events only (not completions/lightning). */
+  public async eventsByDayForChatActivity(
+    orgId: string,
+    range: UsageDateRange
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND (
+           event_type IN ('chat.message', 'chat.completion')
+           OR event_type LIKE 'quick_action.%'
+           OR event_type LIKE 'edit.%'
+         )
+       GROUP BY 1
+       ORDER BY 1`,
+      [orgId, range.from, range.to]
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  public async eventsByDayForChatActivityForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = $2
+         AND created_at >= $3
+         AND created_at < $4
+         AND (
+           event_type IN ('chat.message', 'chat.completion')
+           OR event_type LIKE 'quick_action.%'
+           OR event_type LIKE 'edit.%'
+         )
+       GROUP BY 1
+       ORDER BY 1`,
+      [orgId, principal, range.from, range.to]
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
   public async eventsByDayForPrincipal(
     orgId: string,
     principal: string,
@@ -272,19 +333,107 @@ export class UsageTracker {
     principal: string,
     range: UsageDateRange
   ): Promise<Array<{ eventType: string; count: number }>> {
-    if (!this.pool) {
+    return this.eventsByTypeForPrincipals(orgId, [principal], range);
+  }
+
+  public async eventsByTypeForPrincipals(
+    orgId: string,
+    principals: string[],
+    range: UsageDateRange
+  ): Promise<Array<{ eventType: string; count: number }>> {
+    if (!this.pool || principals.length === 0) {
       return [];
     }
     const result = await this.pool.query(
       `SELECT event_type, COUNT(*)::int AS count
        FROM usage_events
-       WHERE org_id = $1 AND principal = $2 AND created_at >= $3 AND created_at < $4
+       WHERE org_id = $1 AND principal = ANY($2::text[]) AND created_at >= $3 AND created_at < $4
        GROUP BY event_type
        ORDER BY count DESC`,
-      [orgId, principal, range.from, range.to]
+      [orgId, principals, range.from, range.to]
     );
     return result.rows.map((row) => ({
       eventType: String(row.event_type),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  public async countEventsForPrincipals(
+    orgId: string,
+    principals: string[],
+    range: UsageDateRange
+  ): Promise<number> {
+    if (!this.pool || principals.length === 0) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1 AND principal = ANY($2::text[]) AND created_at >= $3 AND created_at < $4`,
+      [orgId, principals, range.from, range.to]
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  public async eventsByDayForPrincipals(
+    orgId: string,
+    principals: string[],
+    range: UsageDateRange,
+    eventTypePrefix?: string
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool || principals.length === 0) {
+      return [];
+    }
+    const prefixFilter = eventTypePrefix ? ` AND event_type LIKE $5` : "";
+    const params: Array<string | Date | string[]> = [orgId, principals, range.from, range.to];
+    if (eventTypePrefix) {
+      params.push(`${eventTypePrefix}%`);
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = ANY($2::text[])
+         AND created_at >= $3
+         AND created_at < $4${prefixFilter}
+       GROUP BY 1
+       ORDER BY 1`,
+      params
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  public async eventsByDayForChatActivityForPrincipals(
+    orgId: string,
+    principals: string[],
+    range: UsageDateRange
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool || principals.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = ANY($2::text[])
+         AND created_at >= $3
+         AND created_at < $4
+         AND (
+           event_type IN ('chat.message', 'chat.completion')
+           OR event_type LIKE 'quick_action.%'
+           OR event_type LIKE 'edit.%'
+         )
+       GROUP BY 1
+       ORDER BY 1`,
+      [orgId, principals, range.from, range.to]
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
       count: Number(row.count ?? 0)
     }));
   }

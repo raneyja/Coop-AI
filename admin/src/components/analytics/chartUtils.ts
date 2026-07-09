@@ -24,6 +24,8 @@ export const CHART_COLORS = [
   "#79C0FF"
 ] as const;
 
+export const CHART_SVG_CLASS = "mx-auto block h-[220px] w-full max-w-2xl";
+
 export function seriesColor(index: number, override?: string): string {
   if (override) return override;
   return CHART_COLORS[index % CHART_COLORS.length]!;

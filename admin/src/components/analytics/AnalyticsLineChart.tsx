@@ -9,6 +9,7 @@ import {
   niceMax,
   numericValues,
   pickTickIndices,
+  CHART_SVG_CLASS,
   seriesColor,
   yTicks
 } from "./chartUtils";
@@ -122,7 +123,8 @@ export function AnalyticsLineChart({
       <div className="w-full overflow-hidden">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-auto w-full"
+          className={CHART_SVG_CLASS}
+          preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={title ?? "Time series chart"}
         >
@@ -148,7 +150,7 @@ export function AnalyticsLineChart({
                   textAnchor="end"
                   dominantBaseline="middle"
                   fill="#9CA4AD"
-                  fontSize={10}
+                  fontSize={9}
                   fontFamily="ui-monospace, monospace"
                 >
                   {formatAxisNumber(t)}

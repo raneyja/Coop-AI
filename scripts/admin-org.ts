@@ -430,6 +430,18 @@ async function main(): Promise<void> {
         break;
       }
       case "seed-analytics-demo": {
+        const databaseUrl = process.env.DATABASE_URL ?? "";
+        const host = databaseUrl.toLowerCase();
+        if (
+          host.includes("railway") ||
+          host.includes("rlwy.net") ||
+          host.includes("coop-ai.dev") ||
+          (host && !host.includes("localhost") && !host.includes("@postgres:"))
+        ) {
+          throw new Error(
+            "seed-analytics-demo is local-only. Refusing to run against a non-local DATABASE_URL."
+          );
+        }
         const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
         const authIdentityStore = new AuthIdentityStore(pool);
         const demoOrgNames = ["Analytics Demo Co", "Solo Analytics Demo"];

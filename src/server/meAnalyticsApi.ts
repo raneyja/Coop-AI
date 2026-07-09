@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
-import { auditActor } from "./audit/auditLogger";
+import { auditActor, principalForUser } from "./audit/auditLogger";
 import { writeJson } from "./adminApiShared";
 import type { OrgApiDeps } from "./orgApi";
 import { parseAnalyticsRange, productMixFromEventTypes } from "./usageTracker";
@@ -10,6 +10,26 @@ type ParsedRequest = {
   pathname: string;
   query?: URLSearchParams;
 };
+
+async function principalAliases(
+  deps: OrgApiDeps,
+  auth: AuthContext
+): Promise<string[]> {
+  const actor = auditActor(auth);
+  const aliases = new Set<string>([actor.principal]);
+  if (actor.userId) {
+    aliases.add(actor.userId);
+    aliases.add(principalForUser(actor.userId));
+    if (deps.userStore) {
+      const user = await deps.userStore.getUser(actor.userId);
+      if (user?.email) {
+        aliases.add(user.email);
+        aliases.add(user.email.trim().toLowerCase());
+      }
+    }
+  }
+  return [...aliases];
+}
 
 export async function handleMeAnalyticsRequest(
   parsed: ParsedRequest,
@@ -29,12 +49,13 @@ export async function handleMeAnalyticsRequest(
 
   const { principal } = auditActor(auth);
   const range = parseAnalyticsRange(parsed.query ?? new URLSearchParams());
+  const aliases = await principalAliases(deps, auth);
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/me/analytics/overview") {
     const [totalEvents, eventsByDay, byType] = await Promise.all([
-      usageTracker.countEventsForPrincipal(auth.orgId, principal, range),
-      usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range),
-      usageTracker.eventsByTypeForPrincipal(auth.orgId, principal, range)
+      usageTracker.countEventsForPrincipals(auth.orgId, aliases, range),
+      usageTracker.eventsByDayForPrincipals(auth.orgId, aliases, range),
+      usageTracker.eventsByTypeForPrincipals(auth.orgId, aliases, range)
     ]);
     const productMix = productMixFromEventTypes(byType);
     const suggested = byType.find((row) => row.eventType === "completion.suggested")?.count ?? 0;
@@ -56,19 +77,30 @@ export async function handleMeAnalyticsRequest(
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/me/analytics/chat") {
-    const byType = await usageTracker.eventsByTypeForPrincipal(auth.orgId, principal, range);
+    const byType = await usageTracker.eventsByTypeForPrincipals(auth.orgId, aliases, range);
     const chatMessages = byType
       .filter((row) => row.eventType === "chat.message" || row.eventType === "chat.completion")
       .reduce((sum, row) => sum + row.count, 0);
     const quickActions = byType.filter((row) => row.eventType.startsWith("quick_action."));
     const editEvents = byType.filter((row) => row.eventType.startsWith("edit."));
     const editRequested = byType.find((row) => row.eventType === "edit.requested")?.count ?? 0;
+    const editPatchApplied =
+      byType.find((row) => row.eventType === "edit.patch_applied")?.count ?? 0;
+    const editPatchRejected =
+      byType.find((row) => row.eventType === "edit.patch_rejected")?.count ?? 0;
     writeJson(response, 200, {
       chatMessages,
       quickActions,
       editRequested,
+      editPatchApplied,
+      editPatchRejected,
+      editApplyRate: editRequested > 0 ? editPatchApplied / editRequested : null,
       editEvents,
-      eventsByDay: await usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range)
+      eventsByDay: await usageTracker.eventsByDayForChatActivityForPrincipals(
+        auth.orgId,
+        aliases,
+        range
+      )
     });
     return true;
   }
@@ -92,7 +124,7 @@ export async function handleMeAnalyticsRequest(
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/me/analytics/completions") {
-    const byType = await usageTracker.eventsByTypeForPrincipal(auth.orgId, principal, range);
+    const byType = await usageTracker.eventsByTypeForPrincipals(auth.orgId, aliases, range);
     const countFor = (eventType: string) =>
       byType.find((row) => row.eventType === eventType)?.count ?? 0;
     const suggested = countFor("completion.suggested");

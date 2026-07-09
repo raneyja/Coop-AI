@@ -408,6 +408,27 @@ export default function AnalyticsPage() {
               value={loading ? "—" : (chat?.editRequested ?? 0)}
               hint="edit.requested (/edit, /patch)"
             />
+            <AdminStat
+              label="Patches applied"
+              value={loading ? "—" : (chat?.editPatchApplied ?? 0)}
+              hint="edit.patch_applied"
+            />
+            <AdminStat
+              label="Patches rejected"
+              value={loading ? "—" : (chat?.editPatchRejected ?? 0)}
+              hint="edit.patch_rejected"
+            />
+            <AdminStat
+              label="Edit apply rate"
+              value={
+                loading
+                  ? "—"
+                  : chat?.editApplyRate != null
+                    ? `${Math.round(chat.editApplyRate * 100)}%`
+                    : "—"
+              }
+              hint="applied / requested"
+            />
           </AdminStatRow>
 
           <section>
@@ -444,7 +465,7 @@ export default function AnalyticsPage() {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Principal</th>
+                    <th>User</th>
                     <th>Events</th>
                   </tr>
                 </thead>
@@ -464,7 +485,12 @@ export default function AnalyticsPage() {
                   ) : (
                     chat?.topUsers.map((row) => (
                       <tr key={row.principal}>
-                        <td className="font-mono text-xs">{row.principal}</td>
+                        <td>
+                          <div className="text-sm text-white">{row.email ?? row.principal}</div>
+                          {row.email && row.email !== row.principal ? (
+                            <div className="font-mono text-xs text-coop-muted">{row.principal}</div>
+                          ) : null}
+                        </td>
                         <td className="tabular-nums">{row.count}</td>
                       </tr>
                     ))

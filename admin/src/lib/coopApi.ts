@@ -1164,10 +1164,14 @@ export type AnalyticsChat = {
   chatMessages: number;
   quickActions: Array<{ eventType: string; count: number }>;
   editRequested?: number;
+  editPatchApplied?: number;
+  editPatchRejected?: number;
+  editApplyRate?: number | null;
   editEvents?: Array<{ eventType: string; count: number }>;
   eventsByDay: Array<{ day: string; count: number }>;
   topUsers: Array<{
     principal: string;
+    email?: string;
     count: number;
     suggested?: number;
     accepted?: number;
@@ -1304,6 +1308,9 @@ export type MeAnalyticsChat = {
   chatMessages: number;
   quickActions: Array<{ eventType: string; count: number }>;
   editRequested?: number;
+  editPatchApplied?: number;
+  editPatchRejected?: number;
+  editApplyRate?: number | null;
   editEvents?: Array<{ eventType: string; count: number }>;
   eventsByDay: Array<{ day: string; count: number }>;
 };

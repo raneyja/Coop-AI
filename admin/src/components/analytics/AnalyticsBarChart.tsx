@@ -4,6 +4,7 @@ import {
   type BarDatum,
   formatAxisNumber,
   niceMax,
+  CHART_SVG_CLASS,
   seriesColor,
   truncateLabel
 } from "./chartUtils";
@@ -69,7 +70,8 @@ export function AnalyticsBarChart({
         <div className="w-full overflow-hidden">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="h-auto w-full"
+            className={CHART_SVG_CLASS}
+            preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label={title ?? "Bar chart"}
           >
@@ -158,7 +160,9 @@ export function AnalyticsBarChart({
       <div className="w-full overflow-x-auto">
         <svg
           viewBox={`0 0 ${labelCol + chartW + valueCol} ${height}`}
-          className="h-auto w-full min-w-[320px]"
+          className={`${CHART_SVG_CLASS} min-w-[320px]`}
+          style={{ height: Math.max(120, height) }}
+          preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={title ?? "Horizontal bar chart"}
         >
@@ -175,7 +179,7 @@ export function AnalyticsBarChart({
                   textAnchor="end"
                   dominantBaseline="middle"
                   fill="#9CA4AD"
-                  fontSize={11}
+                  fontSize={10}
                   fontFamily="ui-sans-serif, system-ui, sans-serif"
                 >
                   {truncateLabel(d.label, labelMax)}
@@ -197,7 +201,7 @@ export function AnalyticsBarChart({
                   textAnchor="start"
                   dominantBaseline="middle"
                   fill="#e4e4e7"
-                  fontSize={11}
+                  fontSize={10}
                   fontFamily="ui-monospace, monospace"
                 >
                   {formatAxisNumber(d.value)}

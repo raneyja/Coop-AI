@@ -2,6 +2,12 @@ import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import { principalForUser } from "./audit/auditLogger";
 import {
+  buildPrincipalResolver,
+  countDistinctResolvedPrincipals,
+  mergePrincipalCounts,
+  type OrgMemberRef
+} from "./analyticsPrincipals";
+import {
   parseAnalyticsRange,
   productMixFromEventTypes,
   type UsageTracker
@@ -27,20 +33,36 @@ async function buildInactiveUsers(
     lastActiveAt: string | null;
   }>
 > {
+  const members: OrgMemberRef[] = users
+    .filter((user) => !user.deactivatedAt)
+    .map((user) => ({ id: user.id, email: user.email }));
+  const resolver = buildPrincipalResolver(members);
   const [activePrincipals, lastActiveRows] = await Promise.all([
     usageTracker.listActivePrincipals(orgId, range),
     usageTracker.lastActiveAtByPrincipal(orgId)
   ]);
-  const activePrincipalSet = new Set(activePrincipals);
+  const activeMemberKeys = new Set(
+    activePrincipals
+      .map((principal) => resolver.resolve(principal))
+      .filter((resolved) => resolved.kind === "member")
+      .map((resolved) => resolved.key)
+  );
   const lastActiveByPrincipal = new Map(
     lastActiveRows.map((row) => [row.principal, row.lastActiveAt] as const)
   );
   return users
     .filter((user) => !user.deactivatedAt)
-    .filter((user) => !activePrincipalSet.has(principalForUser(user.id)))
+    .filter((user) => !activeMemberKeys.has(principalForUser(user.id)))
     .map((user) => {
       const principal = principalForUser(user.id);
-      const lastActiveAt = lastActiveByPrincipal.get(principal);
+      const aliases = [principal, user.id, user.email, user.email.trim().toLowerCase()];
+      let lastActiveAt: Date | undefined;
+      for (const alias of aliases) {
+        const ts = lastActiveByPrincipal.get(alias);
+        if (ts && (!lastActiveAt || ts > lastActiveAt)) {
+          lastActiveAt = ts;
+        }
+      }
       return {
         userId: user.id,
         email: user.email,
@@ -73,17 +95,24 @@ export async function handleAdminAnalyticsRequest(
     const users = deps.userStore ? await deps.userStore.listOrgUsers(auth.orgId) : [];
     const activeUsers = users.filter((u) => !u.deactivatedAt).length;
     const seats = billing?.seatCount ?? 1;
-    const [totalEvents, dau, eventsByDay, byType, inactiveUsers] = await Promise.all([
-      usageTracker.countEvents(auth.orgId, range),
-      usageTracker.countDistinctPrincipals(auth.orgId, {
-        from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        to: new Date()
-      }),
-      usageTracker.eventsByDay(auth.orgId, range),
-      usageTracker.eventsByType(auth.orgId, range),
-      buildInactiveUsers(usageTracker, auth.orgId, range, users)
-    ]);
-    const mau = await usageTracker.countDistinctPrincipals(auth.orgId, range);
+    const members: OrgMemberRef[] = users
+      .filter((user) => !user.deactivatedAt)
+      .map((user) => ({ id: user.id, email: user.email }));
+    const dauRange = {
+      from: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      to: new Date()
+    };
+    const [totalEvents, dauPrincipals, eventsByDay, byType, inactiveUsers, mauPrincipals] =
+      await Promise.all([
+        usageTracker.countEvents(auth.orgId, range),
+        usageTracker.listActivePrincipals(auth.orgId, dauRange),
+        usageTracker.eventsByDay(auth.orgId, range),
+        usageTracker.eventsByType(auth.orgId, range),
+        buildInactiveUsers(usageTracker, auth.orgId, range, users),
+        usageTracker.listActivePrincipals(auth.orgId, range)
+      ]);
+    const dau = countDistinctResolvedPrincipals(dauPrincipals, members);
+    const mau = countDistinctResolvedPrincipals(mauPrincipals, members);
     const productMix = productMixFromEventTypes(byType);
     const suggested = byType.find((row) => row.eventType === "completion.suggested")?.count ?? 0;
     const accepted = byType.find((row) => row.eventType === "completion.accepted")?.count ?? 0;
@@ -108,21 +137,34 @@ export async function handleAdminAnalyticsRequest(
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/admin/analytics/chat") {
     const byType = await usageTracker.eventsByType(auth.orgId, range);
+    const users = deps.userStore ? await deps.userStore.listOrgUsers(auth.orgId) : [];
+    const members: OrgMemberRef[] = users
+      .filter((user) => !user.deactivatedAt)
+      .map((user) => ({ id: user.id, email: user.email }));
     const chatMessages = byType
       .filter((row) => row.eventType === "chat.message" || row.eventType === "chat.completion")
       .reduce((sum, row) => sum + row.count, 0);
     const quickActions = byType.filter((row) => row.eventType.startsWith("quick_action."));
     const editEvents = byType.filter((row) => row.eventType.startsWith("edit."));
     const editRequested = byType.find((row) => row.eventType === "edit.requested")?.count ?? 0;
-    const [topUsers, carByPrincipal] = await Promise.all([
+    const editPatchApplied =
+      byType.find((row) => row.eventType === "edit.patch_applied")?.count ?? 0;
+    const editPatchRejected =
+      byType.find((row) => row.eventType === "edit.patch_rejected")?.count ?? 0;
+    const [topUsersRaw, carByPrincipal] = await Promise.all([
       usageTracker.topPrincipals(auth.orgId, range),
       usageTracker.completionAcceptanceByPrincipal(auth.orgId, range)
     ]);
+    const topUsersMerged = mergePrincipalCounts(topUsersRaw, members);
     const carByPrincipalMap = new Map(carByPrincipal.map((row) => [row.principal, row] as const));
-    const topUsersWithCar = topUsers.map((user) => {
-      const car = carByPrincipalMap.get(user.principal);
+    const resolver = buildPrincipalResolver(members);
+    const topUsersWithCar = topUsersMerged.map((user) => {
+      const car = carByPrincipalMap.get(user.principal) ??
+        carByPrincipalMap.get(resolver.resolve(user.principal).key);
       return {
-        ...user,
+        principal: user.principal,
+        email: user.email,
+        count: user.count,
         suggested: car?.suggested ?? 0,
         accepted: car?.accepted ?? 0,
         acceptanceRate: car?.acceptanceRate ?? null
@@ -132,8 +174,11 @@ export async function handleAdminAnalyticsRequest(
       chatMessages,
       quickActions,
       editRequested,
+      editPatchApplied,
+      editPatchRejected,
+      editApplyRate: editRequested > 0 ? editPatchApplied / editRequested : null,
       editEvents,
-      eventsByDay: await usageTracker.eventsByDay(auth.orgId, range),
+      eventsByDay: await usageTracker.eventsByDayForChatActivity(auth.orgId, range),
       topUsers: topUsersWithCar
     });
     return true;

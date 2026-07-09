@@ -85,6 +85,7 @@ function mockUsageTracker(): UsageTracker {
     countEvents: async () => 20,
     countDistinctPrincipals: async () => 2,
     eventsByDay: async () => [{ day: "2026-07-01", count: 10 }],
+    eventsByDayForChatActivity: async () => [{ day: "2026-07-01", count: 8 }],
     eventsByType: async () => [
       { eventType: "chat.message", count: 5 },
       { eventType: "chat.completion", count: 2 },
@@ -94,7 +95,9 @@ function mockUsageTracker(): UsageTracker {
       { eventType: "completion.rejected", count: 1 },
       { eventType: "lightning.search", count: 3 },
       { eventType: "quick_action.explain", count: 1 },
-      { eventType: "edit.requested", count: 2 }
+      { eventType: "edit.requested", count: 2 },
+      { eventType: "edit.patch_applied", count: 1 },
+      { eventType: "edit.patch_rejected", count: 1 }
     ],
     listActivePrincipals: async () => ["user:u1"],
     lastActiveAtByPrincipal: async () => [
@@ -201,6 +204,9 @@ void (async () => {
   assert.equal(topUsers[1]?.suggested, 0);
   assert.equal(topUsers[1]?.acceptanceRate, null);
   assert.equal(chatBody.editRequested, 2);
+  assert.equal(chatBody.editPatchApplied, 1);
+  assert.equal(chatBody.editPatchRejected, 1);
+  assert.equal(chatBody.editApplyRate, 0.5);
   assert.equal((chatBody.editEvents as Array<{ eventType: string }>)[0]?.eventType, "edit.requested");
 
   const lightning = await request(deps, "/v1/admin/analytics/lightning");

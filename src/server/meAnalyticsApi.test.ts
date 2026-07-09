@@ -43,19 +43,44 @@ function mockUserStore(): UserStore {
     role: "member"
   };
   return {
-    resolveUserSession: async (token: string) => (token === "sess-member" ? session : undefined)
+    resolveUserSession: async (token: string) => (token === "sess-member" ? session : undefined),
+    getUser: async (userId: string) =>
+      userId === "u1"
+        ? {
+            id: "u1",
+            orgId: "org-test",
+            email: "member@test.com",
+            role: "member",
+            status: "active",
+            createdAt: new Date()
+          }
+        : undefined
   } as unknown as UserStore;
 }
 
 function mockUsageTracker(): UsageTracker {
   const principal = "user:u1";
+  const matches = (p: string, principals: string[]) => principals.includes(p);
   return {
     countEventsForPrincipal: async (_oid: string, p: string, _range: UsageDateRange) =>
       p === principal ? 42 : 0,
+    countEventsForPrincipals: async (_oid: string, principals: string[], _range: UsageDateRange) =>
+      principals.includes(principal) ? 42 : 0,
     eventsByDayForPrincipal: async (_oid: string, p: string, _range: UsageDateRange, prefix?: string) =>
       p === principal
         ? [{ day: "2026-07-01", count: prefix ? 3 : 10 }]
         : [],
+    eventsByDayForPrincipals: async (
+      _oid: string,
+      principals: string[],
+      _range: UsageDateRange,
+      prefix?: string
+    ) => (matches(principal, principals) ? [{ day: "2026-07-01", count: prefix ? 3 : 10 }] : []),
+    eventsByDayForChatActivityForPrincipals: async (
+      _oid: string,
+      principals: string[],
+      _range: UsageDateRange
+    ) => (matches(principal, principals) ? [{ day: "2026-07-01", count: 8 }] : []),
     eventsByTypeForPrincipal: async (_oid: string, p: string) =>
       p === principal
         ? [
@@ -63,6 +88,24 @@ function mockUsageTracker(): UsageTracker {
             { eventType: "chat.completion", count: 2 },
             { eventType: "quick_action.explain", count: 1 },
             { eventType: "edit.requested", count: 2 },
+            { eventType: "edit.patch_applied", count: 1 },
+            { eventType: "edit.patch_rejected", count: 1 },
+            { eventType: "completion.suggested", count: 8 },
+            { eventType: "completion.accepted", count: 4 },
+            { eventType: "completion.requested", count: 6 },
+            { eventType: "completion.rejected", count: 1 },
+            { eventType: "lightning.search", count: 3 }
+          ]
+        : [],
+    eventsByTypeForPrincipals: async (_oid: string, principals: string[]) =>
+      matches(principal, principals)
+        ? [
+            { eventType: "chat.message", count: 5 },
+            { eventType: "chat.completion", count: 2 },
+            { eventType: "quick_action.explain", count: 1 },
+            { eventType: "edit.requested", count: 2 },
+            { eventType: "edit.patch_applied", count: 1 },
+            { eventType: "edit.patch_rejected", count: 1 },
             { eventType: "completion.suggested", count: 8 },
             { eventType: "completion.accepted", count: 4 },
             { eventType: "completion.requested", count: 6 },
@@ -179,6 +222,9 @@ void (async () => {
   assert.ok(Array.isArray(chatBody.quickActions));
   assert.equal((chatBody.quickActions as unknown[]).length, 1);
   assert.equal(chatBody.editRequested, 2);
+  assert.equal(chatBody.editPatchApplied, 1);
+  assert.equal(chatBody.editPatchRejected, 1);
+  assert.equal(chatBody.editApplyRate, 0.5);
   assert.ok(Array.isArray(chatBody.eventsByDay));
   assert.equal("topUsers" in chatBody, false);
 
