@@ -3,7 +3,7 @@ title: Connect integrations
 description: Org admin checklist for connecting GitHub, Slack, Jira, and other tools.
 section: integrations
 order: 1
-lastUpdated: "2026-07-07"
+lastUpdated: "2026-07-09"
 ---
 
 In **production mode** (`coopAI.devMode: false`), integration tokens live on the Coop server — not in VS Code. Org admins connect once for the whole organization in the [admin portal](https://admin.coop-ai.dev).
@@ -12,6 +12,8 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 
 - Admin account with access to [admin.coop-ai.dev](https://admin.coop-ai.dev) (sign in with email/password, Google, or SSO)
 - Coop operator has configured OAuth apps on the API server (hosted Coop handles this automatically)
+
+**Enterprise:** SAML SSO is optional and independent of integrations — you can connect GitHub, Slack, and other tools before or after configuring [SAML SSO](/docs/saml-sso). SSO affects how users **sign in**; integrations affect what context Coop can search.
 
 ## 5-minute checklist
 

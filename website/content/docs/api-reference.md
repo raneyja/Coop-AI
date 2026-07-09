@@ -3,7 +3,7 @@ title: API reference
 description: CoopAI API v1 — chat, inline completion, health, and authentication.
 section: api
 order: 1
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-09"
 ---
 
 All routes are served from your API base URL (`https://api.coop-ai.dev` or self-hosted).
@@ -163,6 +163,137 @@ Available on Free, Pro, and Enterprise when the repo is Deep-Indexed. Free orgs 
 
 - `GET /v1/orgs/repos/:repoId/manifest` — structure-only manifest (paths and symbols)
 
+## SSO configuration (Enterprise)
+
+Org admins configure SAML in the [admin portal](/docs/admin-portal) or via these APIs. All routes require **Enterprise** plan.
+
+### Auth requirements
+
+| Endpoint | Who can call |
+| --- | --- |
+| `GET /v1/sso/config` | Org **admin** or **owner** (session bearer) or org API key on Enterprise (`admin_required` for members) |
+| `GET /v1/sso/policy` | Any signed-in org member (session bearer) or org API key on Enterprise |
+| `PUT /v1/sso/config`, `PUT /v1/sso/policy` | Org **admin** or **owner** only (`admin_required` for members) |
+| `GET /v1/auth/saml/start` | **Public** — no bearer token |
+| `POST /v1/auth/saml/callback` | **Public** — browser POST from your IdP (no Coop bearer) |
+| `GET /v1/auth/saml/metadata` | Enterprise bearer (session or org API key) |
+| `POST /v1/auth/saml/offboard` | Enterprise bearer (session or org API key) |
+
+Session bearer: `Authorization: Bearer coop_sess_…` from extension or admin portal sign-in. Org API keys (`coop_…`) work for automation but do **not** satisfy interactive sign-in when `requireSso` is enabled — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+
+### `GET /v1/sso/config`
+
+Returns IdP configuration and service provider (SP) values for your org. **Admin only** (org API keys also allowed).
+
+**Response** `200` (not configured):
+
+```json
+{
+  "configured": false,
+  "sp": {
+    "entityId": "https://api.coop-ai.dev/v1/auth/saml/metadata",
+    "acsUrl": "https://api.coop-ai.dev/v1/auth/saml/callback",
+    "metadataUrl": "https://api.coop-ai.dev/v1/auth/saml/metadata",
+    "publicStartUrl": "https://api.coop-ai.dev/v1/auth/saml/start"
+  }
+}
+```
+
+**Response** `200` (configured): adds `provider`, `idpEntityId`, `idpSsoUrl`, `enabled`, `hasCertificate`, `updatedAt`. The raw `idpX509Cert` is never returned.
+
+**Errors:** `401` unauthorized, `403` `admin_required` \| `plan_required`, `503` `sso_unavailable`
+
+### `PUT /v1/sso/config`
+
+Save or update IdP settings. **Admin only.**
+
+**Request body:**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `provider` | string | `okta` \| `azuread` \| `saml` |
+| `idpEntityId` | string | IdP entity ID / issuer |
+| `idpSsoUrl` | string | IdP SSO URL (HTTP-Redirect) |
+| `idpX509Cert` | string? | PEM or base64 signing cert; omit on update to keep existing cert |
+| `enabled` | boolean? | Default `true` when saving |
+
+**Errors:** `400` `invalid_request` \| `invalid_certificate` \| `sso_required_active` (cannot disable SAML while **Require SSO** is on), `403` `admin_required` \| `plan_required`, `503` `sso_unavailable`
+
+### `GET /v1/sso/policy`
+
+Returns sign-in policy for the org.
+
+```json
+{
+  "requireSso": false,
+  "allowPassword": true,
+  "allowGoogle": true,
+  "updatedAt": "2026-07-09T12:00:00.000Z"
+}
+```
+
+When `requireSso` is `true`, password and Google sign-in are blocked at login (`sso_required`). Existing sessions remain valid until expiry.
+
+**Errors:** `401` unauthorized, `403` `plan_required`, `503` `sso_unavailable`
+
+### `PUT /v1/sso/policy`
+
+Update sign-in policy. **Admin only.**
+
+**Request body** (all fields optional):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `requireSso` | boolean? | Block password/Google for new sign-ins |
+| `allowPassword` | boolean? | Ignored when `requireSso` is `true` |
+| `allowGoogle` | boolean? | Ignored when `requireSso` is `true` |
+
+**Errors:** `400` `sso_not_configured` when enabling `requireSso` before SSO is saved and enabled, `403` `admin_required` \| `plan_required`, `503` `sso_unavailable`
+
+## SAML authentication (Enterprise)
+
+Coop uses a **shared service provider** for all Enterprise tenants. Your org is resolved from **RelayState** at callback time.
+
+### `GET /v1/auth/saml/start`
+
+Public SSO entry for the extension and admin portal. Redirects (302) to your IdP, or returns JSON when `format=json`.
+
+**Query parameters:**
+
+| Param | Required | Notes |
+| --- | --- | --- |
+| `org` or `orgId` | Yes | Organization name (case-insensitive) or UUID |
+| `redirect` | No | Allowed callback URL after sign-in (admin portal or extension) |
+| `format` | No | `json` → `{ "redirectUrl": "…" }` instead of 302 |
+
+**Errors:** `400` `missing_org`, `403` `plan_required`, `409` `sso_not_configured`, `502` `sso_login_failed`
+
+### `POST /v1/auth/saml/callback`
+
+IdP ACS endpoint. Accepts `application/x-www-form-urlencoded` with `SAMLResponse` and `RelayState`. On success, sets a session cookie/token and redirects to `redirect` from RelayState.
+
+**Errors:** `400` `missing_saml_response` \| `missing_relay_state`, `401` `saml_validation_failed`, `403` `plan_required` \| `sso_not_configured`
+
+### `GET /v1/auth/saml/metadata`
+
+SP metadata XML (`application/samlmetadata+xml`). Same Entity ID and ACS URL for every tenant. **Enterprise bearer required.**
+
+### `POST /v1/auth/saml/offboard`
+
+Deactivate users when they are removed from your IdP. **Enterprise bearer required.**
+
+**Request body** (provide one):
+
+| Body | Behavior |
+| --- | --- |
+| `{ "userId": "…" }` | Deactivate a single user in your org |
+| `{ "idpSubject": "…" }` | Deactivate by IdP NameID / subject |
+| `{ "activeSubjects": ["…", "…"] }` | SCIM-style sync — deactivate everyone else with SAML identities for this provider |
+
+**Response** `200`: `{ "ok": true, … }` with `deactivated` or `deactivatedIds` as applicable.
+
+See [SAML SSO](/docs/saml-sso) for IdP setup and operator smoke-test steps in the repo `docs/sso-smoke-test.md`.
+
 ## Environment variables (self-hosted)
 
 | Variable | Purpose |
@@ -174,5 +305,8 @@ Available on Free, Pro, and Enterprise when the repo is Deep-Indexed. Free orgs 
 | `COOP_LLM_DEFAULT_PROVIDER` | Default provider (`anthropic`) |
 | `COOP_LLM_MOCK` | `true` = mock stream without provider keys |
 | `COOP_REQUIRE_API_AUTH` | Require Bearer token (production: `true`) |
+| `COOP_PUBLIC_BASE_URL` | Public API base — required for SAML SP URLs and callbacks |
+| `COOP_SSO_SP_ENTITY_ID` | Optional SP entity ID override (default: metadata URL) |
+| `COOP_SSO_SESSION_TTL_MS` | SAML session lifetime in ms (default: 12 hours) |
 
-See [Zero-retention LLM routing](/docs/zero-retention) and [Enterprise deployment](/docs/enterprise-deployment).
+See [Zero-retention LLM routing](/docs/zero-retention), [Enterprise deployment](/docs/enterprise-deployment), and [SAML SSO](/docs/saml-sso).

@@ -3,7 +3,7 @@ title: Enterprise deployment
 description: Self-hosted CoopAI on Railway or your infrastructure.
 section: enterprise
 order: 3
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-07-09"
 ---
 
 Enterprise customers can deploy CoopAI on their own infrastructure with full control over data residency and LLM routing.
@@ -82,8 +82,53 @@ Coop processes push and PR events to update the code graph.
 
 Developers and admins use the portal for org configuration.
 
+## SAML SSO (Enterprise)
+
+Enterprise orgs can enable SAML 2.0 for admin portal and extension sign-in. Full walkthrough: [SAML SSO](/docs/saml-sso).
+
+Org admins configure SSO in the admin portal (**Settings → Single sign-on**). End users sign in via the admin portal or VS Code extension only — they never edit server environment variables.
+
+### Required: public API base URL (operators only)
+
+`COOP_PUBLIC_BASE_URL` is a **server-side** environment variable on the API host. It must be the public HTTPS origin your IdP can reach (e.g. `https://api.coop-ai.dev`). SAML service provider URLs are derived from this value — if it is missing or wrong, ACS callbacks and metadata will fail and the admin portal shows **Service provider URLs unavailable**.
+
+Set it in `.env.backend`, then restart the API after changing it. Org admins copy the resulting SP values from the admin portal.
+
+### Service provider URLs
+
+With `COOP_PUBLIC_BASE_URL=https://your-api-host`:
+
+| Value | Pattern |
+| --- | --- |
+| **Entity ID** | `https://your-api-host/v1/auth/saml/metadata` (default; override with `COOP_SSO_SP_ENTITY_ID`) |
+| **ACS URL** | `https://your-api-host/v1/auth/saml/callback` |
+| **Metadata URL** | `https://your-api-host/v1/auth/saml/metadata` (Enterprise admin bearer) |
+| **SSO start** | `https://your-api-host/v1/auth/saml/start?org={orgName}` (public; org name is case-insensitive) |
+
+Org admins copy these from **Settings → Single sign-on** in the admin portal, or download SP metadata from that page.
+
+### Optional SSO env vars
+
+| Variable | Purpose |
+| --- | --- |
+| `COOP_SSO_SP_ENTITY_ID` | Override default SP Entity ID (defaults to metadata URL) |
+| `COOP_SSO_SESSION_TTL_MS` | SSO session lifetime in ms (default `43200000` — 12 hours) |
+
+See `.env.backend.example` for names and defaults.
+
+### Post-deploy smoke test
+
+After the API is running with `COOP_PUBLIC_BASE_URL` set:
+
+```bash
+npm run smoke:sso
+```
+
+This seeds an Enterprise SSO demo org, verifies `/v1/sso/config`, and checks that SAML start returns an IdP redirect. Use the printed portal URL and credentials to complete a browser test.
+
 ## Next steps
 
+- [SAML SSO](/docs/saml-sso)
 - [Connect integrations](/docs/connect-integrations)
 - [Security architecture](/docs/security-architecture)
 - [Enterprise product page](/enterprise)

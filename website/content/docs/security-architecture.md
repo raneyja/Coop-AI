@@ -3,7 +3,7 @@ title: Security architecture
 description: Zero-clone indexing, credential storage, and data handling.
 section: enterprise
 order: 1
-lastUpdated: "2026-07-06"
+lastUpdated: "2026-07-09"
 ---
 
 CoopAI is built for teams that cannot send full repo clones to third-party AI services.
@@ -34,9 +34,52 @@ Integration OAuth tokens are encrypted at rest with `CREDENTIALS_ENCRYPTION_KEY`
 
 - **Email + password** — default sign-in for extension, admin portal, and website
 - **Google OAuth** — same account as signup
-- **SSO (SAML)** — Enterprise orgs; configured in admin portal
+- **SSO (SAML)** — Enterprise orgs; configured in admin portal ([SAML SSO](/docs/saml-sso))
 - **Automation API keys** — optional Bearer tokens for CI/scripts and direct API calls; not the primary sign-in method
 - **Integration OAuth** — per-integration browser consent flows (Slack, GitHub, etc.)
+
+### SAML SSO sessions
+
+Enterprise SAML sign-in issues a Coop session token with these properties:
+
+| Property | Behavior |
+| --- | --- |
+| **TTL** | Default **12 hours** (`COOP_SSO_SESSION_TTL_MS`; falls back to user session default) |
+| **Refresh** | **None** — when the session expires, users re-authenticate through their IdP |
+| **Storage** | Session token hashed server-side; raw token only returned once at sign-in |
+| **Provider tag** | Sessions created via SAML are tagged `authProvider: saml` for audit |
+
+### Shared service provider
+
+Coop runs a **single SAML service provider** for all Enterprise tenants:
+
+- One **Entity ID** and **ACS URL** per Coop deployment (hosted or self-hosted)
+- Tenant org is resolved from **RelayState** on callback (base64url JSON with `orgId`)
+- Each customer IdP application points at the same SP values — org isolation is enforced after assertion validation, not via per-tenant SP URLs
+
+Self-hosted operators set `COOP_PUBLIC_BASE_URL` (and optionally `COOP_SSO_SP_ENTITY_ID`) on the API server.
+
+### SAML audit events
+
+| Action | When |
+| --- | --- |
+| `auth.saml.login` | Successful SAML assertion → session issued (includes `idpProvider`, `email`) |
+| `auth.user.deactivate` | `POST /v1/auth/saml/offboard` by `userId` or `idpSubject` |
+| `auth.user.reconcile_offboarding` | Offboard with `activeSubjects` (SCIM-style sync) |
+
+View audit history in the admin portal **Audit log** (org admins).
+
+### SAML known limits
+
+| Limit | Impact |
+| --- | --- |
+| **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends without a shared cache. Signature, audience, and timestamp checks still apply. |
+| **API key bypass under `requireSso`** | `requireSso` blocks password and Google interactive sign-in only. Valid org API keys still authenticate `/v1/chat` and other automation endpoints — revoke keys for offboarded users. |
+| **JIT provisioning** | First SAML login creates a **member** user; admins must promote roles manually or pre-provision accounts. |
+| **No SCIM** | No IdP-driven user provisioning sync — offboard via admin **Users** or `POST /v1/auth/saml/offboard` |
+| **SP-initiated only** | Login must start from Coop (`/v1/auth/saml/start` or admin **Test sign-in**) so RelayState carries the org id. |
+
+Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 ## Network boundaries
 
@@ -59,6 +102,7 @@ Your code and prompts are **never** used to train foundation models. Coop routes
 
 ## Next steps
 
+- [SAML SSO](/docs/saml-sso) — IdP setup and sign-in policy
 - [Zero-retention LLM routing](/docs/zero-retention)
 - [Enterprise deployment](/docs/enterprise-deployment)
 - [Security page](/security) — full architecture for security reviewers

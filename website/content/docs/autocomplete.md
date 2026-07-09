@@ -3,12 +3,12 @@ title: Inline autocomplete
 description: Enable ghost-text code completions in VS Code — FIM, streaming, graph context, and Copilot coexistence.
 section: extension
 order: 2
-lastUpdated: "2026-07-08"
+lastUpdated: "2026-07-09"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
 
-The feature ships in production but is **off by default**. Enable it when you want Coop-powered completions alongside chat and quick actions.
+The feature ships in production and is **off by default** until your repo is Deep-Indexed. When Lightning index status becomes **ready** for the active workspace repo, Coop **automatically enables** workspace autocomplete (Cody-style) and shows a one-time toast — **Turn off** if you prefer it disabled. Explicit opt-out via the sidebar toggle or **CoopAI: Toggle Autocomplete** suppresses future auto-enable prompts.
 
 ## Enable autocomplete
 
@@ -117,11 +117,11 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 | `coopAI.autocomplete.enabled` | `false` | Master switch for inline ghost-text autocomplete |
 | `coopAI.autocomplete.trigger` | `auto` | `auto` — debounced while typing; `manual` — hotkey only; `off` — no requests |
 | `coopAI.autocomplete.useFim` | `true` | Send FIM `segments` for Codestral / DeepSeek routing |
-| `coopAI.autocomplete.useGraphContext` | `false` | Include indexed dependency graph context (**Pro**; see below) |
-| `coopAI.autocomplete.model` | `haiku` | Fast preset: `haiku`, `gpt35`, or `custom` |
+| `coopAI.autocomplete.useGraphContext` | `false` | Force indexed graph context on; when `false`, graph is still auto-attached when Deep-Index is ready (see below) |
+| `coopAI.autocomplete.model` | `chat` | `chat` uses Preferences provider/model; or fast presets `haiku`, `gpt35`, `custom` |
 | `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
-| `coopAI.autocomplete.requestTimeoutMs` | `400` | Drop slow requests after this many ms (100–2000) |
+| `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000). Use 1500+ when model is `chat`. |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters in one suggestion (8–500) |
 | `coopAI.autocomplete.showMultipleSuggestions` | `false` | Request and cycle ranked alternatives (Alt+[ / Alt+]) |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias project-style completions |
@@ -136,11 +136,13 @@ When **Coop autocomplete is off**, Copilot inline behavior is unchanged.
 
 ## Graph context (indexed repos)
 
-When `coopAI.autocomplete.useGraphContext` is `true` and your org has Deep-Indexed the repo:
+When your workspace repo is **Deep-Indexed** and index status is **ready** (SCIP or Zoekt available), Coop **automatically** attaches graph context to inline completions — even when `coopAI.autocomplete.useGraphContext` is `false` (the default).
 
-- The extension sends `useGraphContext: true` with `repoId` and file path
+- The extension sends `useGraphContext: true` with `repoId` and file path when the index is healthy
 - The API attaches a short slice of **dependents** and **ownership** from the indexed graph (150 ms budget)
 - Available on **all plans** when the repo is Deep-Indexed (free orgs: up to 3 repos)
+
+Set `coopAI.autocomplete.useGraphContext` to `true` to **force** graph context on regardless of index health. Leave at `false` for auto when indexed.
 
 Requires a connected, indexed repo in the admin portal. Set **Workspace** owner/repo/branch so `repoId` resolves correctly.
 
@@ -188,7 +190,7 @@ Org admins can view org completion metrics in the [admin portal](https://admin.c
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
-| **Graph context empty** | Pro plan + indexed repo; check Workspace owner/repo/branch |
+| **Graph context empty** | Deep-Index the repo in admin portal; confirm index status is **ready** in Settings → Indexing; check Workspace owner/repo/branch; set `coopAI.autocomplete.useGraphContext` to `true` to force on |
 
 More fixes: [Troubleshooting](/docs/troubleshooting#autocomplete).
 
@@ -200,4 +202,5 @@ Direct API usage: [API reference — Inline completion](/docs/api-reference#inli
 
 - [Extension settings](/docs/extension-settings)
 - [Getting started](/docs/getting-started)
+- [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
 - [Owner's Manual — Inline complete](/manual#inline-complete-and-edit-selection)

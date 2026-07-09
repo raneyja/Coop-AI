@@ -3,7 +3,7 @@ title: Getting started
 description: Install CoopAI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-07-07"
+lastUpdated: "2026-07-09"
 ---
 
 This guide gets you from signup to your first useful chat in CoopAI.
@@ -41,9 +41,11 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 | --- | --- |
 | **Continue with Google** | Click the Google button at the top |
 | **Continue with email** | Enter email → **Continue with email** → password → **Sign in** |
-| **Sign in with SSO** | Enterprise: click **Sign in with SSO** |
+| **Sign in with SSO** | Enterprise: enter **Organization name** → **Sign in with SSO** → finish in your browser |
 
 3. **Success:** Account shows your org and plan. Open chat and ask a question.
+
+**Enterprise SSO:** Organization name is required before **Sign in with SSO**. Coop opens your system browser for IdP login; VS Code completes the session when you return. Name matching is case-insensitive.
 
 Automation API keys are for CI/scripts only — create them in the [admin portal](https://admin.coop-ai.dev) if needed, not in the extension.
 
@@ -105,7 +107,9 @@ See [Inline autocomplete](/docs/autocomplete) for FIM, graph context (indexed re
 | --- | --- |
 | **Developer (free)** | Individual use — full integrations, 3-repo Deep-Index cap, solo seat |
 | **Pro** | Teams — unlimited indexing, team seats, higher AI limits |
-| **Enterprise** | Self-hosted, BYOK, zero-retention, compliance |
+| **Enterprise** | Self-hosted, BYOK, zero-retention, SAML SSO, compliance |
+
+**Enterprise org admins:** configure SAML in the admin portal before rolling SSO to your team — see [SAML SSO](/docs/saml-sso).
 
 See [Plans & billing](/docs/plans-billing) for details.
 

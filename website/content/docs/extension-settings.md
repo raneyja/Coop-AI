@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-08"
+lastUpdated: "2026-07-09"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -32,13 +32,34 @@ Three paths on one screen, separated by **or** dividers:
 | --- | --- |
 | **Continue with Google** | Click the top button (Google icon) |
 | **Continue with email** | Enter email → **Continue with email** → password → **Sign in** |
-| **Sign in with SSO** | Click **Sign in with SSO** (Enterprise) |
+| **Sign in with SSO** | Enter **Organization name** → **Sign in with SSO** → complete IdP sign-in in your browser |
 
 Email sign-in is **two steps**:
 
 1. Enter your email and click **Continue with email**.
 2. Enter your password and click **Sign in**.
 3. **Forgot password?** resets your password. **← Use a different email** returns to step 1.
+
+### Enterprise SSO
+
+1. Enter your **Organization name** (case-insensitive — must match your Coop org).
+2. Click **Sign in with SSO**.
+3. Your system browser opens for IdP login; VS Code shows a notice to complete sign-in there.
+4. When you return, Account updates with your org and plan.
+
+If your org enforces SSO, password and Google sign-in are blocked — use SSO only.
+
+If the browser redirect fails or you close the tab early, VS Code shows an error from the callback URL (`?error=…&message=…`). Common codes:
+
+| Error | Fix |
+| --- | --- |
+| `sso_not_configured` | Ask your admin to finish **Settings → Single sign-on** in the admin portal |
+| `sso_required` | Use **Sign in with SSO** — password and Google are disabled for your org |
+| `saml_validation_failed` | IdP cert, clock skew, or SP URL mismatch — ask your admin to check IdP config |
+| `missing_org` | Re-enter your **Organization name** before **Sign in with SSO** |
+| No session token | Complete IdP login in the browser; do not close the tab before redirect back to VS Code |
+
+Full error table: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 ### Signed in
 
@@ -105,11 +126,11 @@ Inline ghost-text completions are **off by default**. Turn them on from the chat
 | `coopAI.autocomplete.enabled` | `false` | Enable inline ghost-text autocomplete |
 | `coopAI.autocomplete.trigger` | `auto` | `auto` \| `manual` \| `off` — when to request completions |
 | `coopAI.autocomplete.useFim` | `true` | FIM `segments` for Codestral / DeepSeek routing |
-| `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (**Pro** plan) |
-| `coopAI.autocomplete.model` | `haiku` | Fast model preset: `haiku` \| `gpt35` \| `custom` |
+| `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (all plans when repo is Deep-Indexed) |
+| `coopAI.autocomplete.model` | `chat` | `chat` uses Preferences provider/model; or presets `haiku` \| `gpt35` \| `custom` |
 | `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
 | `coopAI.autocomplete.debounceMs` | `300` | Ms after typing before auto-trigger (0–2000) |
-| `coopAI.autocomplete.requestTimeoutMs` | `400` | Drop slow requests after this many ms (100–2000) |
+| `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters per suggestion (8–500) |
 | `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle alternatives with Alt+[ / Alt+] |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias completions |

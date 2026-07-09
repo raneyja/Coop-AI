@@ -3,7 +3,7 @@ title: Plans & billing
 description: Developer, Pro, and Enterprise plans — features, limits, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-07-07"
+lastUpdated: "2026-07-09"
 ---
 
 ## Plan comparison
@@ -53,9 +53,22 @@ Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev) or [book a demo](/demo) fo
 - Self-hosted deployment on your infrastructure
 - BYOK (bring your own LLM provider keys)
 - Zero-retention LLM routing for confidential code
-- SAML SSO, dedicated onboarding, compliance attestation
+- Dedicated onboarding, compliance attestation, and DPA
 
-See [Enterprise deployment](/docs/enterprise-deployment) and [Security architecture](/docs/security-architecture).
+### SAML single sign-on
+
+Enterprise includes **SAML 2.0 SSO** for the admin portal and VS Code extension:
+
+| Capability | Detail |
+| --- | --- |
+| **IdP support** | Okta, Azure AD / Entra ID, or any SAML 2.0 IdP with signed assertions |
+| **Admin setup** | **Settings → Single sign-on** — copy SP values, paste IdP config, **Test sign-in**, then **Require SSO** |
+| **Sign-in surfaces** | Admin portal (**Continue with SSO**) and extension (**Sign in with SSO** with browser handoff) |
+| **Policy** | Optional **Require SSO** to block password and Google sign-in; org API keys still work for automation |
+
+Setup guide: [SAML SSO](/docs/saml-sso). Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+
+See also [Enterprise deployment](/docs/enterprise-deployment) and [Security architecture](/docs/security-architecture).
 
 ## Billing management
 

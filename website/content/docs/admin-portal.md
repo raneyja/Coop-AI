@@ -72,13 +72,23 @@ Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces
 ![Manage Slack access — channel allowlist for least-privilege search](/screenshots/docs/admin-integration-scope-dark.png)
 <!-- /figures -->
 
-## SAML SSO (Enterprise)
+## Settings
 
-Org admins configure SAML 2.0 in **Settings → Single sign-on** (`/settings/single-sign-on`):
+**Settings** (`/settings`) is a hub for org and account configuration:
+
+| Section | Path | Who |
+| --- | --- | --- |
+| **Account & organization** | `/settings/account` | All members |
+| **Repository access** | `/settings/repository-access` | Pro / Enterprise admins |
+| **Single sign-on** | `/settings/single-sign-on` | Enterprise admins |
+
+### SAML SSO (Enterprise)
+
+Org admins configure SAML 2.0 in **Settings → Single sign-on**:
 
 1. Copy Coop **Service provider** values (Entity ID, ACS URL) into your IdP
-2. Paste IdP Entity ID, SSO URL, and signing certificate
-3. **Test sign-in** before enabling **Require SSO**
+2. Paste IdP Entity ID, SSO URL, and signing certificate → **Save SSO**
+3. **Test sign-in**, then enable **Require SSO** (confirmation modal) when ready
 
 Full walkthrough: [SAML SSO](/docs/saml-sso)
 

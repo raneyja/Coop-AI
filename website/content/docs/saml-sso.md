@@ -17,6 +17,7 @@ Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entr
 - [Configure in admin portal](#configure-in-admin-portal)
 - [IdP setup guides](#provider-specific-notes) — [Okta](#okta) · [Azure AD / Entra ID](#azure-ad-entra-id) · [Generic SAML](#generic-saml)
 - [Enforce SSO-only sign-in](#enforce-sso-only-sign-in)
+- [Known limits](#known-limits)
 - [User lifecycle](#user-lifecycle)
 - [Troubleshooting](#troubleshooting)
 
@@ -33,10 +34,12 @@ SSO is available on the **Enterprise** plan only.
 
 | Surface | Path |
 | --- | --- |
-| **Admin portal** | Login → enter **Organization name** → **Continue with SSO** (inline on the login page) |
-| **VS Code extension** | **Settings → Account** → enter **Organization name** → **Sign in with SSO** |
+| **Admin portal** | [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) → enter **Organization name** → **Continue with SSO** (inline on the login page) |
+| **VS Code extension** | **Settings → Account** → enter **Organization name** → **Sign in with SSO** → browser handoff |
 
 After a successful SAML assertion, Coop issues a session token and redirects back to the admin portal or extension. Extension sign-in opens your system browser; VS Code completes automatically when you return.
+
+**Not supported:** [coop-ai.dev/login](https://coop-ai.dev/login) (marketing site signup) does **not** offer SSO — only the admin portal and extension do.
 
 ## Service provider (Coop) values
 
@@ -48,7 +51,7 @@ Your IdP admin needs these values when creating the SAML application. In the adm
 | **ACS URL** | `https://api.coop-ai.dev/v1/auth/saml/callback` |
 | **Metadata URL** | `https://api.coop-ai.dev/v1/auth/saml/metadata` (requires signed-in Enterprise admin) |
 
-Self-hosted deployments use your API hostname instead of `api.coop-ai.dev`. Set `COOP_PUBLIC_BASE_URL` on the API server — SAML callbacks depend on it.
+Self-hosted deployments use your API hostname instead of `api.coop-ai.dev`. Your Coop **operator** sets `COOP_PUBLIC_BASE_URL` on the API server — org admins copy SP values from the admin portal; end users never configure this variable.
 
 ## IdP requirements
 
@@ -60,12 +63,21 @@ Coop uses a single service provider for all Enterprise tenants. Your org is reso
 
 ## Configure in admin portal
 
-1. Sign in to the [admin portal](https://admin.coop-ai.dev) as an org admin on an Enterprise plan.
-2. Open **Settings → Single sign-on** (`/settings/single-sign-on`).
-3. Choose your provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML**).
-4. Paste your IdP **Entity ID**, **SSO URL**, and **X.509 signing certificate**.
-5. Click **Save SSO**, then **Test sign-in**.
-6. After a successful test, enable **Require SSO** if you want to block password and Google sign-in.
+Sign in to the [admin portal](https://admin.coop-ai.dev) as an org admin on an Enterprise plan. Open **Settings** → **Single sign-on** (`/settings/single-sign-on`).
+
+The panel follows three steps:
+
+### 1. Coop service provider
+
+Copy **Entity ID**, **ACS URL**, and **Metadata URL** (or **Download metadata**) into your IdP SAML application.
+
+### 2. Identity provider
+
+Choose your provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML 2.0**). Paste IdP **Entity ID**, **SSO URL**, and **Signing certificate**. Check **Enable SSO for this organization**, then click **Save SSO**.
+
+### 3. Sign-in policy
+
+Click **Test sign-in** and complete IdP login with an admin account. When SSO works, enable **Require SSO** — a confirmation modal warns that password and Google sign-in will be blocked. You can also toggle **Allow email and password** and **Allow Google** when **Require SSO** is off.
 
 ## Provider-specific notes
 
@@ -91,14 +103,17 @@ Use the same SP values. Any IdP that signs assertions and sends a usable email c
 
 ## Enforce SSO-only sign-in
 
-In **Settings → Single sign-on → Sign-in policy**, enable **Require SSO**.
+In **Settings → Single sign-on → Sign-in policy**, enable **Require SSO** and confirm in the modal.
 
 When enabled:
 
 - Email/password and Google sign-in return `sso_required` for your org
 - Existing password sessions remain valid until they expire or the user signs out
+- Org API keys (`coop_…`) still authenticate automation endpoints — revoke keys for offboarded users
 
-Test SSO with at least one admin account before enforcing.
+Use **Test sign-in** with at least one admin account before enabling **Require SSO**.
+
+To disable SAML while **Require SSO** is on, turn off **Require SSO** first — otherwise **Save SSO** returns `sso_required_active`.
 
 ## User lifecycle
 
@@ -116,10 +131,10 @@ Admin and automation endpoints are documented in [API reference — SSO](/docs/a
 
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
-| `/v1/sso/config` | GET | Read IdP config and SP details |
-| `/v1/sso/config` | PUT | Save IdP config (org admin) |
-| `/v1/sso/policy` | GET | Read sign-in policy |
-| `/v1/sso/policy` | PUT | Update `requireSso`, `allowPassword`, `allowGoogle` |
+| `/v1/sso/config` | GET | Read IdP config and SP details (org admin; org API key allowed) |
+| `/v1/sso/config` | PUT | Save IdP config (org admin; org API key allowed) |
+| `/v1/sso/policy` | GET | Read sign-in policy (any org member) |
+| `/v1/sso/policy` | PUT | Update `requireSso`, `allowPassword`, `allowGoogle` (org admin) |
 | `/v1/auth/saml/start?org={name}` | GET | Public SSO entry (extension + admin) |
 | `/v1/auth/saml/callback` | POST | IdP assertion callback (browser POST) |
 | `/v1/auth/saml/metadata` | GET | SP metadata XML (Enterprise bearer) |
@@ -133,12 +148,25 @@ Quick reference:
 
 | Error | Fix |
 | --- | --- |
-| `sso_not_configured` | Save SSO in admin **Settings** and ensure **SSO enabled** is checked |
+| `sso_not_configured` | Save SSO in admin **Settings** and ensure **Enable SSO for this organization** is checked |
 | `sso_required` | Use SSO sign-in — extension: **Sign in with SSO**; admin portal: **Continue with SSO** |
+| `sso_required_active` | Turn off **Require SSO** before disabling SAML or unchecking **Enable SSO** |
 | `saml_validation_failed` | Check IdP cert expiry, clock skew, Entity ID / ACS URL mismatch |
+| `admin_required` | Only org **admin** or **owner** can read or save SSO config via API |
 | `missing_org` | Enter your organization name before starting SSO |
 | Missing email in assertion | Map `email` attribute in IdP; NameID must be email if no attribute |
-| SSO URLs unavailable | Set `COOP_PUBLIC_BASE_URL` on the API server and restart |
+| SSO URLs unavailable | Operator: set `COOP_PUBLIC_BASE_URL` on the API server and restart |
+
+## Known limits
+
+| Limit | Detail |
+| --- | --- |
+| **SP-initiated only** | Login must start from Coop (admin **Test sign-in**, extension **Sign in with SSO**, or `/v1/auth/saml/start`) — IdP-initiated flows without RelayState fail |
+| **No SCIM** | No automated user provisioning sync from IdP — first SAML login JIT-provisions a **member**; offboard via admin **Users** or `POST /v1/auth/saml/offboard` |
+| **12-hour sessions, no refresh** | SAML sessions expire after TTL (default 12h); users re-authenticate through the IdP |
+| **Shared service provider** | One Entity ID and ACS URL per Coop deployment; org resolved via RelayState |
+| **API keys bypass `requireSso`** | Org API keys authenticate automation even when SSO is required — rotate or revoke for offboarded users |
+| **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends; signature and timestamp checks still apply |
 
 Operator smoke test: repo `docs/sso-smoke-test.md` (`npm run smoke:sso`).
 

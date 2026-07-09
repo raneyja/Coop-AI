@@ -3,7 +3,7 @@ title: GitHub
 description: Connect GitHub for repo indexing, PR history, and CODEOWNERS.
 section: integrations
 order: 3
-lastUpdated: "2026-07-04"
+lastUpdated: "2026-07-09"
 ---
 
 In production, GitHub connects through the browser — not a pasted PAT in VS Code.
@@ -85,13 +85,13 @@ Suggested scopes: `repo`, `read:org`.
 | "GitHub is not configured on the Coop server" | Operator must add GitHub App/OAuth creds |
 | "Invalid or expired install state" | Start from admin **Connect** or **Send link** — do not open GitHub install URL without Coop’s `state` |
 | No org on GitHub install page | You must be GitHub org **Owner**; uninstall from personal account and retry |
-| "Sign in to Coop first" | Sign in under **Settings → Account** (Google, email, or SSO) |
+| "Sign in to Coop first" | Sign in under **Settings → Account** (Google, email, or **Sign in with SSO** for Enterprise) |
 | Callback fails | Setup URL must match `https://api.coop-ai.dev/v1/github/app/callback` |
 | Still see PAT field | Disable `coopAI.devMode` for production |
 
 ## Coop sign-in vs GitHub
 
-- **Coop sign-in** — email/password, Google, or SSO identifies you to the Coop backend
+- **Coop sign-in** — email/password, Google, or **Sign in with SSO** (Enterprise) identifies you to the Coop backend
 - **Connect GitHub** — authorizes GitHub; stores tokens on the server
 
 Both are required in production mode. Automation API keys are optional and for CI/scripts only.
