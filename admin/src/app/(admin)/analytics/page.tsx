@@ -7,19 +7,25 @@ import {
   exportAnalyticsCsv,
   fetchAnalyticsChat,
   fetchAnalyticsCompletions,
+  fetchAnalyticsLightning,
   fetchAnalyticsOverview,
-  type AnalyticsCompletions,
+  fetchAnalyticsUsers,
   fetchIntegrations,
   fetchOrgRepos,
   fetchUsers,
   type AnalyticsChat,
+  type AnalyticsCompletions,
+  type AnalyticsLightning,
   type AnalyticsOverview,
+  type AnalyticsProductMix,
   type AnalyticsRange,
+  type AnalyticsUsers,
   type AdminUser,
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/integrations";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
+import { AnalyticsBarChart, AnalyticsLineChart } from "@/components/analytics";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
@@ -46,48 +52,6 @@ function formatQuickActionLabel(eventType: string): string {
   return suffix.replace(/_/g, " ");
 }
 
-function EventsByDayTable({ rows, emptyLabel }: { rows: Array<{ day: string; count: number }>; emptyLabel: string }) {
-  if (rows.length === 0) {
-    return (
-      <div className="py-8 text-center text-sm text-coop-muted">{emptyLabel}</div>
-    );
-  }
-
-  const maxCount = Math.max(...rows.map((row) => row.count), 1);
-
-  return (
-    <div className="admin-card--table">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Events</th>
-            <th className="w-1/2">Volume</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.day}>
-              <td className="whitespace-nowrap text-xs text-coop-muted">
-                {new Date(`${row.day}T00:00:00Z`).toLocaleDateString()}
-              </td>
-              <td className="tabular-nums">{row.count}</td>
-              <td>
-                <div className="h-2 rounded-sm bg-coop-dark">
-                  <div
-                    className="h-2 rounded-sm bg-coop-index/70"
-                    style={{ width: `${Math.max(4, (row.count / maxCount) * 100)}%` }}
-                  />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function PlaceholderCallout({ title, body }: { title: string; body: string }) {
   return (
     <div className="admin-panel-inset text-sm text-coop-muted">
@@ -97,12 +61,38 @@ function PlaceholderCallout({ title, body }: { title: string; body: string }) {
   );
 }
 
+function approximateProductMix(
+  chat: AnalyticsChat | null,
+  completions: AnalyticsCompletions | null,
+  lightningSearchCount: number | null
+): AnalyticsProductMix {
+  const quickActions = (chat?.quickActions ?? []).reduce((sum, row) => sum + row.count, 0);
+  return {
+    chat: chat?.chatMessages ?? 0,
+    completions: (completions?.suggested ?? 0) + (completions?.accepted ?? 0) + (completions?.requested ?? 0),
+    lightning: lightningSearchCount ?? 0,
+    quickActions
+  };
+}
+
+function productMixBars(mix: AnalyticsProductMix): Array<{ label: string; value: number }> {
+  return [
+    { label: "Chat", value: mix.chat },
+    { label: "Completions", value: mix.completions },
+    { label: "Lightning", value: mix.lightning },
+    { label: "Quick actions", value: mix.quickActions }
+  ];
+}
+
 export default function AnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRange>("30d");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [chat, setChat] = useState<AnalyticsChat | null>(null);
   const [completions, setCompletions] = useState<AnalyticsCompletions | null>(null);
+  const [lightning, setLightning] = useState<AnalyticsLightning | null>(null);
+  const [lightningUnavailable, setLightningUnavailable] = useState(false);
+  const [analyticsUsers, setAnalyticsUsers] = useState<AnalyticsUsers | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [orgRepos, setOrgRepos] = useState<OrgRepoRecord[]>([]);
@@ -117,15 +107,25 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
 
-    const [overviewResult, chatResult, completionsResult, integrationsResult, usersResult, reposResult] =
-      await Promise.all([
-        fetchAnalyticsOverview(from, to),
-        fetchAnalyticsChat(from, to),
-        fetchAnalyticsCompletions(from, to),
-        fetchIntegrations(),
-        fetchUsers(),
-        fetchOrgRepos()
-      ]);
+    const [
+      overviewResult,
+      chatResult,
+      completionsResult,
+      lightningResult,
+      analyticsUsersResult,
+      integrationsResult,
+      usersResult,
+      reposResult
+    ] = await Promise.all([
+      fetchAnalyticsOverview(from, to),
+      fetchAnalyticsChat(from, to),
+      fetchAnalyticsCompletions(from, to),
+      fetchAnalyticsLightning(from, to),
+      fetchAnalyticsUsers(from, to),
+      fetchIntegrations(),
+      fetchUsers(),
+      fetchOrgRepos()
+    ]);
 
     if (integrationsResult.ok) {
       setIntegrations(integrationsResult.data ?? []);
@@ -137,6 +137,23 @@ export default function AnalyticsPage() {
 
     if (reposResult.ok) {
       setOrgRepos(reposResult.data?.repos ?? []);
+    }
+
+    if (lightningResult.unavailable || (!lightningResult.ok && lightningResult.status === 404)) {
+      setLightningUnavailable(true);
+      setLightning(null);
+    } else if (!lightningResult.ok) {
+      setLightningUnavailable(true);
+      setLightning(null);
+    } else {
+      setLightningUnavailable(false);
+      setLightning(lightningResult.data ?? null);
+    }
+
+    if (analyticsUsersResult.ok && !analyticsUsersResult.unavailable) {
+      setAnalyticsUsers(analyticsUsersResult.data ?? null);
+    } else {
+      setAnalyticsUsers(null);
     }
 
     setLoading(false);
@@ -207,6 +224,91 @@ export default function AnalyticsPage() {
     }
     return map;
   }, [chat]);
+
+  const perUserCarMap = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const row of completions?.topUsersByCar ?? []) {
+      if (row.acceptanceRate === undefined) continue;
+      map.set(row.principal, row.acceptanceRate);
+    }
+    for (const row of chat?.topUsers ?? []) {
+      if (row.acceptanceRate === undefined) continue;
+      map.set(row.principal, row.acceptanceRate);
+    }
+    for (const row of analyticsUsers?.users ?? []) {
+      if (row.acceptanceRate === undefined) continue;
+      map.set(row.principal, row.acceptanceRate);
+      if (row.email) map.set(row.email, row.acceptanceRate);
+    }
+    return map;
+  }, [completions, chat, analyticsUsers]);
+
+  const hasPerUserCar = perUserCarMap.size > 0;
+
+  function eventsForUser(user: AdminUser): number {
+    return (
+      userActivityMap.get(user.email) ??
+      userActivityMap.get(`user:${user.id}`) ??
+      userActivityMap.get(user.id) ??
+      0
+    );
+  }
+
+  function carForUser(user: AdminUser): number | null | undefined {
+    if (perUserCarMap.has(user.email)) return perUserCarMap.get(user.email);
+    if (perUserCarMap.has(`user:${user.id}`)) return perUserCarMap.get(`user:${user.id}`);
+    if (perUserCarMap.has(user.id)) return perUserCarMap.get(user.id);
+    return undefined;
+  }
+
+  const orgCar = useMemo(() => {
+    if (overview?.acceptanceRate != null) return overview.acceptanceRate;
+    if (completions?.acceptanceRate != null) return completions.acceptanceRate;
+    return null;
+  }, [overview, completions]);
+
+  const productMix = useMemo(() => {
+    if (overview?.productMix) return overview.productMix;
+    return approximateProductMix(chat, completions, lightning?.searchCount ?? null);
+  }, [overview, chat, completions, lightning]);
+
+  const productMixFromApi = Boolean(overview?.productMix);
+
+  const inactiveCount = useMemo(() => {
+    if (typeof analyticsUsers?.inactiveSeatCount === "number") {
+      return analyticsUsers.inactiveSeatCount;
+    }
+    if (typeof overview?.inactiveSeatCount === "number") {
+      return overview.inactiveSeatCount;
+    }
+    if (typeof analyticsUsers?.inactiveSeats === "number") {
+      return analyticsUsers.inactiveSeats;
+    }
+    if (typeof overview?.inactiveSeats === "number") {
+      return overview.inactiveSeats;
+    }
+    if (Array.isArray(overview?.inactiveUsers)) {
+      return overview.inactiveUsers.length;
+    }
+    if (typeof overview?.inactiveUsers === "number") {
+      return overview.inactiveUsers;
+    }
+    if (Array.isArray(analyticsUsers?.inactiveUsers)) {
+      return analyticsUsers.inactiveUsers.length;
+    }
+    if (typeof analyticsUsers?.inactiveUsers === "number") {
+      return analyticsUsers.inactiveUsers;
+    }
+    // Fallback: members with 0 events in chat.topUsers map for the selected range
+    if (users.length === 0) return null;
+    return users.filter((user) => {
+      if (user.status === "deactivated") return false;
+      return eventsForUser(user) === 0;
+    }).length;
+  }, [analyticsUsers, overview, users, userActivityMap]);
+
+  const lightningSearchCount = lightning?.searchCount ?? null;
+  const lightningHasSeries = (lightning?.eventsByDay ?? []).some((row) => row.count > 0);
 
   async function handleExport() {
     setExporting(true);
@@ -306,6 +408,21 @@ export default function AnalyticsPage() {
               hint={`Selected ${range}`}
             />
             <AdminStat
+              label="Org CAR"
+              value={
+                loading
+                  ? "—"
+                  : orgCar != null
+                    ? formatPercent(orgCar)
+                    : "—"
+              }
+              hint={
+                orgCar != null
+                  ? "Accepted ÷ suggested (completions)"
+                  : "Appears when completion events exist"
+              }
+            />
+            <AdminStat
               label="Est. hours saved"
               value={loading ? "—" : estimatedHoursSaved}
               hint={`${CHAT_MINUTES_SAVED} min/chat + ${QUICK_ACTION_MINUTES_SAVED} min/quick action`}
@@ -317,10 +434,30 @@ export default function AnalyticsPage() {
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
-              <EventsByDayTable
-                rows={overview?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={overview?.eventsByDay ?? []}
                 emptyLabel="No usage events yet. Activity will appear here once your team uses Coop."
               />
+            )}
+          </section>
+
+          <section>
+            <h2 className="admin-section-label mb-4">Product mix</h2>
+            {loading ? (
+              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+            ) : (
+              <>
+                {!productMixFromApi ? (
+                  <p className="mb-3 text-xs text-coop-muted">
+                    Approximate mix from chat, completions, and Lightning search in this range.
+                  </p>
+                ) : null}
+                <AnalyticsBarChart
+                  data={productMixBars(productMix)}
+                  orientation="horizontal"
+                  emptyLabel="No product activity in this range yet."
+                />
+              </>
             )}
           </section>
         </div>
@@ -342,49 +479,29 @@ export default function AnalyticsPage() {
           </AdminStatRow>
 
           <section>
-            <h2 className="admin-section-label mb-4">Quick actions by type</h2>
-            <div className="admin-card--table">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={2} className="py-8 text-center text-coop-muted">
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : (chat?.quickActions ?? []).length === 0 ? (
-                    <tr>
-                      <td colSpan={2} className="py-8 text-center text-coop-muted">
-                        No quick action events yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    chat?.quickActions.map((row) => (
-                      <tr key={row.eventType}>
-                        <td className="capitalize">{formatQuickActionLabel(row.eventType)}</td>
-                        <td className="tabular-nums">{row.count}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section>
             <h2 className="admin-section-label mb-4">Chat activity by day</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
-              <EventsByDayTable
-                rows={chat?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={chat?.eventsByDay ?? []}
                 emptyLabel="No chat activity recorded for this period."
+              />
+            )}
+          </section>
+
+          <section>
+            <h2 className="admin-section-label mb-4">Quick actions by type</h2>
+            {loading ? (
+              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+            ) : (
+              <AnalyticsBarChart
+                data={(chat?.quickActions ?? []).map((row) => ({
+                  label: formatQuickActionLabel(row.eventType),
+                  value: row.count
+                }))}
+                orientation="horizontal"
+                emptyLabel="No quick action events yet."
               />
             )}
           </section>
@@ -431,9 +548,19 @@ export default function AnalyticsPage() {
         <div className="space-y-6">
           <AdminStatRow>
             <AdminStat
-              label="Total usage events"
-              value={loading ? "—" : (overview?.totalEvents ?? 0)}
-              hint="Includes lightning.search, chat.message, and other events"
+              label="Lightning searches"
+              value={
+                loading
+                  ? "—"
+                  : lightningUnavailable
+                    ? "—"
+                    : (lightningSearchCount ?? 0)
+              }
+              hint={
+                lightningUnavailable
+                  ? "lightning.search metrics pending API"
+                  : `Selected ${range}`
+              }
             />
             <AdminStat
               label="Indexed repos"
@@ -445,6 +572,28 @@ export default function AnalyticsPage() {
               }
             />
           </AdminStatRow>
+
+          {loading ? (
+            <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+          ) : lightningUnavailable ? (
+            <PlaceholderCallout
+              title="Lightning search analytics not available yet"
+              body="The admin Lightning endpoint is not deployed. Search volume (lightning.search) will appear here once the API exposes it. Indexed repo status below is still live."
+            />
+          ) : !lightningHasSeries && (lightningSearchCount ?? 0) === 0 ? (
+            <PlaceholderCallout
+              title="No Lightning searches in this range"
+              body="Counts appear when teammates run Lightning search (lightning.search). Indexed repo status below is independent of search volume."
+            />
+          ) : (
+            <section>
+              <h2 className="admin-section-label mb-4">Lightning searches by day</h2>
+              <AnalyticsLineChart
+                data={lightning?.eventsByDay ?? []}
+                emptyLabel="No lightning.search events in this range."
+              />
+            </section>
+          )}
 
           <section>
             <h2 className="admin-section-label mb-4">Repo index status</h2>
@@ -577,8 +726,8 @@ export default function AnalyticsPage() {
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
-              <EventsByDayTable
-                rows={completions?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={completions?.eventsByDay ?? []}
                 emptyLabel="No completion usage events in this range."
               />
             )}
@@ -594,7 +743,6 @@ export default function AnalyticsPage() {
               value={loading ? "—" : connectedIntegrations}
               hint={`of ${INTEGRATIONS.length} available`}
             />
-            <AdminStat label="Integration tests" value="—" hint="Test events not tracked yet" />
           </AdminStatRow>
 
           <section>
@@ -624,6 +772,15 @@ export default function AnalyticsPage() {
               hint={`${overview?.totalUsers ?? 0} total members`}
             />
             <AdminStat
+              label="Inactive seats"
+              value={loading ? "—" : (inactiveCount ?? "—")}
+              hint={
+                inactiveCount != null
+                  ? `0 events in selected ${range}`
+                  : "Computed when member list loads"
+              }
+            />
+            <AdminStat
               label="Seat utilization"
               value={loading ? "—" : formatPercent(overview?.seatUtilization ?? 0)}
               hint={
@@ -649,34 +806,40 @@ export default function AnalyticsPage() {
                     <th>Role</th>
                     <th>Status</th>
                     <th>Events ({range})</th>
+                    {hasPerUserCar ? <th>CAR</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-coop-muted">
+                      <td colSpan={hasPerUserCar ? 5 : 4} className="py-8 text-center text-coop-muted">
                         Loading…
                       </td>
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-coop-muted">
+                      <td colSpan={hasPerUserCar ? 5 : 4} className="py-8 text-center text-coop-muted">
                         No users found.
                       </td>
                     </tr>
                   ) : (
-                    users.map((user) => (
-                      <tr key={user.id}>
-                        <td>{user.email}</td>
-                        <td className="capitalize">{user.role}</td>
-                        <td className="capitalize">{user.status}</td>
-                        <td className="tabular-nums">
-                          {userActivityMap.get(user.email) ??
-                            userActivityMap.get(user.id) ??
-                            0}
-                        </td>
-                      </tr>
-                    ))
+                    users.map((user) => {
+                      const events = eventsForUser(user);
+                      const car = carForUser(user);
+                      return (
+                        <tr key={user.id}>
+                          <td>{user.email}</td>
+                          <td className="capitalize">{user.role}</td>
+                          <td className="capitalize">{user.status}</td>
+                          <td className="tabular-nums">{events}</td>
+                          {hasPerUserCar ? (
+                            <td className="tabular-nums">
+                              {car != null ? formatPercent(car) : "—"}
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

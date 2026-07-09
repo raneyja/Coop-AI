@@ -18,6 +18,47 @@ export type TokenUsageEvent = {
   tokens: number;
 };
 
+export type ProductMix = {
+  chat: number;
+  completions: number;
+  lightning: number;
+  quickActions: number;
+};
+
+export type PrincipalCompletionStats = {
+  principal: string;
+  suggested: number;
+  accepted: number;
+  acceptanceRate: number | null;
+};
+
+export type PrincipalLastActive = {
+  principal: string;
+  lastActiveAt: Date;
+};
+
+/** Aggregate product-surface counts from an events-by-type breakdown. */
+export function productMixFromEventTypes(
+  byType: Array<{ eventType: string; count: number }>
+): ProductMix {
+  let chat = 0;
+  let completions = 0;
+  let lightning = 0;
+  let quickActions = 0;
+  for (const row of byType) {
+    if (row.eventType === "chat.message" || row.eventType === "chat.completion") {
+      chat += row.count;
+    } else if (row.eventType.startsWith("completion.")) {
+      completions += row.count;
+    } else if (row.eventType === "lightning.search") {
+      lightning += row.count;
+    } else if (row.eventType.startsWith("quick_action.")) {
+      quickActions += row.count;
+    }
+  }
+  return { chat, completions, lightning, quickActions };
+}
+
 export class UsageTracker {
   public constructor(private readonly pool?: Pool | null) {}
 
@@ -269,6 +310,187 @@ export class UsageTracker {
       principal: String(row.principal),
       count: Number(row.count ?? 0)
     }));
+  }
+
+  public async countEventsOfType(
+    orgId: string,
+    range: UsageDateRange,
+    eventType: string
+  ): Promise<number> {
+    if (!this.pool) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = $4`,
+      [orgId, range.from, range.to, eventType]
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  public async countEventsOfTypeForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange,
+    eventType: string
+  ): Promise<number> {
+    if (!this.pool) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = $2
+         AND created_at >= $3
+         AND created_at < $4
+         AND event_type = $5`,
+      [orgId, principal, range.from, range.to, eventType]
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  public async eventsByDayForExactEventType(
+    orgId: string,
+    range: UsageDateRange,
+    eventType: string
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = $4
+       GROUP BY 1
+       ORDER BY 1`,
+      [orgId, range.from, range.to, eventType]
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  public async eventsByDayForExactEventTypeForPrincipal(
+    orgId: string,
+    principal: string,
+    range: UsageDateRange,
+    eventType: string
+  ): Promise<Array<{ day: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              COUNT(*)::int AS count
+       FROM usage_events
+       WHERE org_id = $1
+         AND principal = $2
+         AND created_at >= $3
+         AND created_at < $4
+         AND event_type = $5
+       GROUP BY 1
+       ORDER BY 1`,
+      [orgId, principal, range.from, range.to, eventType]
+    );
+    return result.rows.map((row) => ({
+      day: String(row.day),
+      count: Number(row.count ?? 0)
+    }));
+  }
+
+  /** Distinct principals with at least one usage event in the range. */
+  public async listActivePrincipals(orgId: string, range: UsageDateRange): Promise<string[]> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT DISTINCT principal
+       FROM usage_events
+       WHERE org_id = $1 AND created_at >= $2 AND created_at < $3`,
+      [orgId, range.from, range.to]
+    );
+    return result.rows.map((row) => String(row.principal));
+  }
+
+  /**
+   * Latest activity timestamp per principal (any event type), optionally
+   * restricted to a principal list. Used for inactive-seat lastActiveAt.
+   */
+  public async lastActiveAtByPrincipal(
+    orgId: string,
+    principals?: string[]
+  ): Promise<PrincipalLastActive[]> {
+    if (!this.pool) {
+      return [];
+    }
+    if (principals && principals.length === 0) {
+      return [];
+    }
+    const params: Array<string | string[]> = [orgId];
+    let principalFilter = "";
+    if (principals) {
+      params.push(principals);
+      principalFilter = ` AND principal = ANY($2::text[])`;
+    }
+    const result = await this.pool.query(
+      `SELECT principal, MAX(created_at) AS last_active_at
+       FROM usage_events
+       WHERE org_id = $1${principalFilter}
+       GROUP BY principal`,
+      params
+    );
+    return result.rows.map((row) => ({
+      principal: String(row.principal),
+      lastActiveAt: new Date(String(row.last_active_at))
+    }));
+  }
+
+  /**
+   * Per-principal completion acceptance (CAR) for principals with at least one
+   * completion.suggested or completion.accepted event in the range.
+   */
+  public async completionAcceptanceByPrincipal(
+    orgId: string,
+    range: UsageDateRange,
+    limit = 50
+  ): Promise<PrincipalCompletionStats[]> {
+    if (!this.pool) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT principal,
+              COUNT(*) FILTER (WHERE event_type = 'completion.suggested')::int AS suggested,
+              COUNT(*) FILTER (WHERE event_type = 'completion.accepted')::int AS accepted
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type IN ('completion.suggested', 'completion.accepted')
+       GROUP BY principal
+       ORDER BY suggested DESC, accepted DESC
+       LIMIT $4`,
+      [orgId, range.from, range.to, limit]
+    );
+    return result.rows.map((row) => {
+      const suggested = Number(row.suggested ?? 0);
+      const accepted = Number(row.accepted ?? 0);
+      return {
+        principal: String(row.principal),
+        suggested,
+        accepted,
+        acceptanceRate: suggested > 0 ? accepted / suggested : null
+      };
+    });
   }
 
   public async latencyPercentilesForEventType(

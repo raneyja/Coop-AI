@@ -1,12 +1,12 @@
 ---
 title: Extension settings
-description: Account, Tools, Workspace, and Preferences in the Coop AI extension.
+description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
 lastUpdated: "2026-07-08"
 ---
 
-Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **Coop AI: Open Settings** from the Command Palette.
+Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
 
 <!-- figures -->
 ![Settings gear — opens CoopAI Settings in an editor tab](/screenshots/docs/extension-settings-button.png)
@@ -130,9 +130,9 @@ Enterprise customers should keep dev mode **off** in workspace settings.
 
 | Command | Action |
 | --- | --- |
-| **Coop AI: Open Settings** | Settings hub |
-| **Coop AI: Focus Chat** | Open sidebar chat |
-| **Coop AI: Understand Repo** | Run Understand Repo quick action |
-| **Coop AI: Trace Decision** | Run Trace Decision (file required) |
+| **CoopAI: Open Settings** | Settings hub |
+| **CoopAI: Focus Chat** | Open sidebar chat |
+| **CoopAI: Understand Repo** | Run Understand Repo quick action |
+| **CoopAI: Trace Decision** | Run Trace Decision (file required) |
 
 See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. For inline autocomplete, see [Inline autocomplete](/docs/autocomplete).

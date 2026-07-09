@@ -76,6 +76,7 @@ export default function IntegrationsPage() {
         refreshSuccessProvider={refreshSuccessProvider}
         error={error}
         onRefresh={(provider) => void load({ provider })}
+        onSilentRefresh={(provider) => void load({ provider, silent: true })}
         showFullPageLink={false}
         hideIntro
         readOnly={readOnly}

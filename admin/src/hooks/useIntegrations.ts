@@ -15,15 +15,19 @@ export function useIntegrations() {
   );
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (options?: { provider?: IntegrationProvider; initial?: boolean }) => {
+  const load = useCallback(
+    async (options?: { provider?: IntegrationProvider; initial?: boolean; silent?: boolean }) => {
     const provider = options?.provider;
+    // Silent refreshes (background polling, window focus) skip the spinner/checkmark
+    // so the Refresh button doesn't flicker while waiting on an OAuth install.
+    const showProgress = Boolean(provider) && !options?.silent;
     if (options?.initial) {
       setInitialLoading(true);
-    } else if (provider) {
+    } else if (showProgress && provider) {
       setRefreshingProvider(provider);
       setRefreshSuccessProvider(null);
     }
-    if (options?.initial || provider) {
+    if (options?.initial || showProgress) {
       setError(null);
     }
 
@@ -35,7 +39,7 @@ export function useIntegrations() {
     if (options?.initial) {
       setInitialLoading(false);
     }
-    if (provider) {
+    if (showProgress && provider) {
       setRefreshingProvider(null);
       if (integrationsResult.ok) {
         setRefreshSuccessProvider(provider);

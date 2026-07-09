@@ -3,7 +3,7 @@ import type { AuthContext } from "./orgStore";
 import { auditActor } from "./audit/auditLogger";
 import { writeJson } from "./adminApiShared";
 import type { OrgApiDeps } from "./orgApi";
-import { parseAnalyticsRange } from "./usageTracker";
+import { parseAnalyticsRange, productMixFromEventTypes } from "./usageTracker";
 
 type ParsedRequest = {
   method: string;
@@ -31,11 +31,27 @@ export async function handleMeAnalyticsRequest(
   const range = parseAnalyticsRange(parsed.query ?? new URLSearchParams());
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/me/analytics/overview") {
-    const [totalEvents, eventsByDay] = await Promise.all([
+    const [totalEvents, eventsByDay, byType] = await Promise.all([
       usageTracker.countEventsForPrincipal(auth.orgId, principal, range),
-      usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range)
+      usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range),
+      usageTracker.eventsByTypeForPrincipal(auth.orgId, principal, range)
     ]);
-    writeJson(response, 200, { totalEvents, eventsByDay });
+    const productMix = productMixFromEventTypes(byType);
+    const suggested = byType.find((row) => row.eventType === "completion.suggested")?.count ?? 0;
+    const accepted = byType.find((row) => row.eventType === "completion.accepted")?.count ?? 0;
+    writeJson(response, 200, {
+      totalEvents,
+      eventsByDay,
+      productMix,
+      // Flat fields for UI fallbacks that do not read productMix object keys
+      chatMessages: productMix.chat,
+      quickActionCount: productMix.quickActions,
+      completionEvents: productMix.completions,
+      lightningEvents: productMix.lightning,
+      suggested,
+      accepted,
+      acceptanceRate: suggested > 0 ? accepted / suggested : null
+    });
     return true;
   }
 
@@ -49,6 +65,24 @@ export async function handleMeAnalyticsRequest(
       chatMessages,
       quickActions,
       eventsByDay: await usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range)
+    });
+    return true;
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/me/analytics/lightning") {
+    const [lightningSearches, eventsByDay] = await Promise.all([
+      usageTracker.countEventsOfTypeForPrincipal(auth.orgId, principal, range, "lightning.search"),
+      usageTracker.eventsByDayForExactEventTypeForPrincipal(
+        auth.orgId,
+        principal,
+        range,
+        "lightning.search"
+      )
+    ]);
+    writeJson(response, 200, {
+      lightningSearches,
+      searchCount: lightningSearches,
+      eventsByDay
     });
     return true;
   }

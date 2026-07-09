@@ -1036,6 +1036,29 @@ export function planBadgeClass(plan: string): string {
 
 export type AnalyticsRange = "7d" | "30d" | "90d";
 
+/** Product mix buckets (optional on overview when backend provides them). */
+export type AnalyticsProductMix = {
+  chat: number;
+  completions: number;
+  lightning: number;
+  quickActions: number;
+};
+
+export type AnalyticsInactiveUser = {
+  userId: string;
+  email: string;
+  principal: string;
+  lastActiveAt: string | null;
+};
+
+export type AnalyticsPrincipalCar = {
+  principal: string;
+  suggested?: number;
+  accepted?: number;
+  acceptanceRate: number | null;
+  count?: number;
+};
+
 export type AnalyticsOverview = {
   totalUsers: number;
   activeUsers: number;
@@ -1045,13 +1068,51 @@ export type AnalyticsOverview = {
   mau: number;
   totalEvents: number;
   eventsByDay: Array<{ day: string; count: number }>;
+  /** Org completion acceptance rate when backend includes it on overview. */
+  acceptanceRate?: number | null;
+  productMix?: AnalyticsProductMix;
+  /** Backend field name from Agent 1. */
+  inactiveSeatCount?: number;
+  /** @deprecated prefer inactiveSeatCount */
+  inactiveSeats?: number;
+  inactiveUsers?: AnalyticsInactiveUser[] | number;
 };
 
 export type AnalyticsChat = {
   chatMessages: number;
   quickActions: Array<{ eventType: string; count: number }>;
   eventsByDay: Array<{ day: string; count: number }>;
-  topUsers: Array<{ principal: string; count: number }>;
+  topUsers: Array<{
+    principal: string;
+    count: number;
+    suggested?: number;
+    accepted?: number;
+    acceptanceRate?: number | null;
+  }>;
+};
+
+export type AnalyticsLightning = {
+  /** Normalized search count (from lightningSearches or searchCount). */
+  searchCount: number;
+  lightningSearches?: number;
+  eventsByDay: Array<{ day: string; count: number }>;
+};
+
+export type AnalyticsUserActivity = {
+  principal: string;
+  email?: string;
+  eventCount: number;
+  suggested?: number;
+  accepted?: number;
+  acceptanceRate?: number | null;
+  lastActiveAt?: string | null;
+};
+
+export type AnalyticsUsers = {
+  inactiveSeats?: number;
+  inactiveSeatCount?: number;
+  inactiveUsers?: AnalyticsInactiveUser[] | number;
+  users?: AnalyticsUserActivity[];
 };
 
 export function analyticsRangeParams(range: AnalyticsRange): { from: string; to: string } {
@@ -1092,6 +1153,7 @@ export type AnalyticsCompletions = {
   clientLatencyP95Ms: number | null;
   clientLatencySamples: number;
   eventsByDay: Array<{ day: string; count: number }>;
+  topUsersByCar?: AnalyticsPrincipalCar[];
 };
 
 export async function fetchAnalyticsCompletions(
@@ -1101,9 +1163,57 @@ export async function fetchAnalyticsCompletions(
   return coopFetch<AnalyticsCompletions>(`/v1/admin/analytics/completions${analyticsQuery(from, to)}`);
 }
 
+/** Lightning search metrics. Returns unavailable when the endpoint is not deployed yet. */
+export async function fetchAnalyticsLightning(
+  from: string,
+  to: string
+): Promise<ApiResult<AnalyticsLightning>> {
+  const result = await coopFetch<AnalyticsLightning & { lightningSearches?: number; searchCount?: number }>(
+    `/v1/admin/analytics/lightning${analyticsQuery(from, to)}`
+  );
+  if (!result.ok || !result.data) return result;
+  const searchCount =
+    result.data.lightningSearches ?? result.data.searchCount ?? 0;
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      searchCount,
+      lightningSearches: result.data.lightningSearches ?? searchCount
+    }
+  };
+}
+
+/** Optional dedicated users analytics endpoint (may 404; overview carries inactive seats). */
+export async function fetchAnalyticsUsers(
+  from: string,
+  to: string
+): Promise<ApiResult<AnalyticsUsers>> {
+  return coopFetch<AnalyticsUsers>(`/v1/admin/analytics/users${analyticsQuery(from, to)}`);
+}
+
+/**
+ * @deprecated Prefer AnalyticsProductMix object on MeAnalyticsOverview.productMix.
+ * Kept for UI code that still maps { product, count } rows.
+ */
+export type MeAnalyticsProductMixItem = {
+  product: string;
+  count: number;
+};
+
 export type MeAnalyticsOverview = {
   totalEvents: number;
   eventsByDay: Array<{ day: string; count: number }>;
+  /** Optional CAR from completions (accepted ÷ suggested). */
+  acceptanceRate?: number | null;
+  suggested?: number;
+  accepted?: number;
+  /** Backend returns object `{ chat, completions, lightning, quickActions }`; array form is legacy. */
+  productMix?: AnalyticsProductMix | MeAnalyticsProductMixItem[];
+  chatMessages?: number;
+  quickActionCount?: number;
+  completionEvents?: number;
+  lightningEvents?: number;
 };
 
 export type MeAnalyticsChat = {
@@ -1124,6 +1234,25 @@ export async function fetchMeAnalyticsChat(
   to: string
 ): Promise<ApiResult<MeAnalyticsChat>> {
   return coopFetch<MeAnalyticsChat>(`/v1/me/analytics/chat${analyticsQuery(from, to)}`);
+}
+
+export async function fetchMeAnalyticsLightning(
+  from: string,
+  to: string
+): Promise<ApiResult<AnalyticsLightning>> {
+  const result = await coopFetch<AnalyticsLightning & { lightningSearches?: number; searchCount?: number }>(
+    `/v1/me/analytics/lightning${analyticsQuery(from, to)}`
+  );
+  if (!result.ok || !result.data) return result;
+  const searchCount = result.data.lightningSearches ?? result.data.searchCount ?? 0;
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      searchCount,
+      lightningSearches: result.data.lightningSearches ?? searchCount
+    }
+  };
 }
 
 export async function fetchMeAnalyticsCompletions(

@@ -1,12 +1,12 @@
 ---
 title: Enterprise deployment
-description: Self-hosted Coop AI on Railway or your infrastructure.
+description: Self-hosted CoopAI on Railway or your infrastructure.
 section: enterprise
 order: 3
 lastUpdated: "2026-06-29"
 ---
 
-Enterprise customers can deploy Coop AI on their own infrastructure with full control over data residency and LLM routing.
+Enterprise customers can deploy CoopAI on their own infrastructure with full control over data residency and LLM routing.
 
 ## Deployment options
 

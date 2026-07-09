@@ -859,9 +859,6 @@
     "seed:pro-onboarding": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-pro-onboarding",
     "seed:governance-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai -e CREDENTIALS_ENCRYPTION_KEY=change-me-to-a-long-random-secret api node dist/admin-org.js seed-governance-demo",
     "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
-    "dev:admin-portal": "bash scripts/dev-admin-portal.sh",
-    "seed:repo-access-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-repo-access-demo",
-    "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
     "dev:admin-portal": "bash scripts/dev-admin-portal.sh"
   },
   "devDependencies": {

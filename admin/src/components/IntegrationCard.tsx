@@ -23,6 +23,7 @@ type IntegrationCardProps = {
   status?: IntegrationStatus;
   orgPlan?: string;
   onRefresh: () => void;
+  onSilentRefresh?: () => void;
   refreshing?: boolean;
   refreshSuccess?: boolean;
   initialLoading?: boolean;
@@ -35,6 +36,7 @@ export function IntegrationCard({
   status,
   orgPlan = "free",
   onRefresh,
+  onSilentRefresh,
   refreshing,
   refreshSuccess,
   initialLoading,
@@ -42,6 +44,9 @@ export function IntegrationCard({
   readOnly = false
 }: IntegrationCardProps) {
   void orgPlan;
+  // Background polling / focus refreshes use the silent path so the Refresh
+  // button doesn't flicker between "Refresh" and the success checkmark.
+  const backgroundRefresh = onSilentRefresh ?? onRefresh;
   const [connecting, setConnecting] = useState(false);
   const [awaiting, setAwaiting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -85,17 +90,17 @@ export function IntegrationCard({
       const result = await fetchInstallUrl("github", { mode: "app" });
       if (result.ok && result.data?.connected) {
         clearSendLinkPending("github");
-        onRefresh();
+        backgroundRefresh();
       }
     })();
-  }, [isGitHub, connected, onRefresh]);
+  }, [isGitHub, connected, backgroundRefresh]);
 
   useEffect(() => {
     if (!awaiting) {
       return;
     }
-    const poll = window.setInterval(() => onRefresh(), 2000);
-    const onFocus = () => onRefresh();
+    const poll = window.setInterval(() => backgroundRefresh(), 2000);
+    const onFocus = () => backgroundRefresh();
     window.addEventListener("focus", onFocus);
     const timeout = window.setTimeout(() => setAwaiting(false), 120_000);
     return () => {
@@ -103,7 +108,7 @@ export function IntegrationCard({
       window.clearTimeout(timeout);
       window.removeEventListener("focus", onFocus);
     };
-  }, [awaiting, onRefresh]);
+  }, [awaiting, backgroundRefresh]);
 
   useEffect(() => {
     if (!wasConnectedRef.current && connected) {

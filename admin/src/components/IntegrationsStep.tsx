@@ -13,6 +13,7 @@ type IntegrationsStepProps = {
   refreshSuccessProvider: IntegrationProvider | null;
   error: string | null;
   onRefresh: (provider: IntegrationProvider) => void;
+  onSilentRefresh?: (provider: IntegrationProvider) => void;
   compact?: boolean;
   showFullPageLink?: boolean;
   hideIntro?: boolean;
@@ -27,6 +28,7 @@ export function IntegrationsStep({
   refreshSuccessProvider,
   error,
   onRefresh,
+  onSilentRefresh,
   compact,
   showFullPageLink = true,
   hideIntro = false,
@@ -52,6 +54,7 @@ export function IntegrationsStep({
             status={integrations.find((s) => s.provider === def.id)}
             orgPlan={orgPlan}
             onRefresh={() => onRefresh(def.id)}
+            onSilentRefresh={onSilentRefresh ? () => onSilentRefresh(def.id) : undefined}
             refreshing={refreshingProvider === def.id}
             refreshSuccess={refreshSuccessProvider === def.id}
             initialLoading={initialLoading}

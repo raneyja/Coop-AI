@@ -49,7 +49,6 @@ function mockUserStore(): UserStore {
 
 function mockUsageTracker(): UsageTracker {
   const principal = "user:u1";
-  const orgId = "org-test";
   return {
     countEventsForPrincipal: async (_oid: string, p: string, _range: UsageDateRange) =>
       p === principal ? 42 : 0,
@@ -66,8 +65,24 @@ function mockUsageTracker(): UsageTracker {
             { eventType: "completion.suggested", count: 8 },
             { eventType: "completion.accepted", count: 4 },
             { eventType: "completion.requested", count: 6 },
-            { eventType: "completion.rejected", count: 1 }
+            { eventType: "completion.rejected", count: 1 },
+            { eventType: "lightning.search", count: 3 }
           ]
+        : [],
+    countEventsOfTypeForPrincipal: async (
+      _oid: string,
+      p: string,
+      _range: UsageDateRange,
+      eventType: string
+    ) => (p === principal && eventType === "lightning.search" ? 3 : 0),
+    eventsByDayForExactEventTypeForPrincipal: async (
+      _oid: string,
+      p: string,
+      _range: UsageDateRange,
+      eventType: string
+    ) =>
+      p === principal && eventType === "lightning.search"
+        ? [{ day: "2026-07-01", count: 3 }]
         : [],
     latencyPercentilesForPrincipal: async (
       _oid: string,
@@ -141,6 +156,15 @@ void (async () => {
   const overviewBody = parseBody(overview.body);
   assert.equal(overviewBody.totalEvents, 42);
   assert.ok(Array.isArray(overviewBody.eventsByDay));
+  assert.deepEqual(overviewBody.productMix, {
+    chat: 7,
+    completions: 19,
+    lightning: 3,
+    quickActions: 1
+  });
+  assert.equal(overviewBody.chatMessages, 7);
+  assert.equal(overviewBody.lightningEvents, 3);
+  assert.equal(overviewBody.acceptanceRate, 0.5);
   assert.equal("seats" in overviewBody, false);
   assert.equal("topUsers" in overviewBody, false);
   assert.equal("totalUsers" in overviewBody, false);
@@ -155,6 +179,13 @@ void (async () => {
   assert.equal((chatBody.quickActions as unknown[]).length, 1);
   assert.ok(Array.isArray(chatBody.eventsByDay));
   assert.equal("topUsers" in chatBody, false);
+
+  const lightning = await request(deps, "/v1/me/analytics/lightning");
+  assert.equal(lightning.statusCode, 200);
+  const lightningBody = parseBody(lightning.body);
+  assert.equal(lightningBody.lightningSearches, 3);
+  assert.equal(lightningBody.searchCount, 3);
+  assert.ok(Array.isArray(lightningBody.eventsByDay));
 
   const completions = await request(deps, "/v1/me/analytics/completions");
   assert.equal(completions.statusCode, 200);

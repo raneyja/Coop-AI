@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Common issues and fixes for Coop AI extension, admin portal, and integrations.
+description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
 lastUpdated: "2026-07-07"

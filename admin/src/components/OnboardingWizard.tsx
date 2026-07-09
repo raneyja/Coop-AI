@@ -5,11 +5,10 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { completeOnboarding, fetchUsers } from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import { SCOPABLE_PROVIDERS, type IntegrationStatus } from "@/lib/integrations";
+import type { IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { OnboardingScopeStep } from "./OnboardingScopeStep";
-import { OnboardingVerifyStep } from "./OnboardingVerifyStep";
 import { planCapabilities } from "@/lib/planCapabilities";
 
 type OnboardingWizardProps = {
@@ -44,11 +43,6 @@ const ONBOARDING_STEP_DEFS: StepDef[] = [
     include: (plan) => planCapabilities(plan).showOnboardingTeamStep
   },
   {
-    id: "verify",
-    label: "Verify",
-    include: (plan) => planCapabilities(plan).showOnboardingVerifyStep
-  },
-  {
     id: "extension",
     label: "Extension",
     include: (plan) => planCapabilities(plan).showOnboardingExtensionStep
@@ -63,16 +57,6 @@ function stepsForPlan(plan: string) {
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   const collab = ["slack", "atlassian", "notion", "google-docs"] as const;
   return collab.some((provider) => integrations.find((i) => i.provider === provider)?.installed);
-}
-
-function scopableScopeGateBlocked(integrations: IntegrationStatus[], orgPlan: string): boolean {
-  if (orgPlan !== "pro" && orgPlan !== "enterprise") {
-    return false;
-  }
-  return SCOPABLE_PROVIDERS.some((provider) => {
-    const status = integrations.find((i) => i.provider === provider);
-    return status?.installed && !status.needsReconnect && status.scopeStatus === "required";
-  });
 }
 
 export function OnboardingWizard({
@@ -101,13 +85,11 @@ export function OnboardingWizard({
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [memberCount, setMemberCount] = useState<number | null>(null);
-  const [verifyCanComplete, setVerifyCanComplete] = useState(false);
 
   const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
   const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
   const bitbucketConnected = integrations.find((i) => i.provider === "bitbucket")?.installed;
   const anyCodeHostConnected = githubConnected || gitlabConnected || bitbucketConnected;
-  const scopableScopeGate = scopableScopeGateBlocked(integrations, orgPlan);
   const wideStep = currentStepId === "tools";
 
   useEffect(() => {
@@ -180,16 +162,33 @@ export function OnboardingWizard({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="shrink-0 border-b border-coop-border/80 px-5 py-4 sm:px-6">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="admin-section-label">Organization setup</p>
               <h2 id="onboarding-title" className="mt-1 text-lg font-semibold text-white">
                 {orgName}
               </h2>
             </div>
-            <p className="font-mono text-xs text-coop-muted">
-              Step {Math.min(step + 1, steps.length)} of {steps.length}
-            </p>
+            <div className="flex shrink-0 items-center gap-3">
+              <p className="font-mono text-xs text-coop-muted">
+                Step {Math.min(step + 1, steps.length)} of {steps.length}
+              </p>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-coop-muted transition hover:bg-white/10 hover:text-white"
+                onClick={onDismiss}
+                aria-label="Close setup"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M4 4L12 12M12 4L4 12"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
           <nav className="mt-4 flex gap-1" aria-label="Setup progress">
             {steps.map((entry, index) => {
@@ -270,6 +269,7 @@ export function OnboardingWizard({
                 refreshSuccessProvider={refreshSuccessProvider}
                 error={error}
                 onRefresh={(provider) => void load({ provider })}
+                onSilentRefresh={(provider) => void load({ provider, silent: true })}
                 compact
                 showFullPageLink={false}
                 hideIntro
@@ -306,18 +306,6 @@ export function OnboardingWizard({
             </div>
           )}
 
-          {currentStepId === "verify" && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Verify connections</h3>
-                <p className="mt-2 text-sm text-coop-muted">
-                  Confirm connected tools respond before you finish setup.
-                </p>
-              </div>
-              <OnboardingVerifyStep onGatesChange={setVerifyCanComplete} />
-            </div>
-          )}
-
           {currentStepId === "indexing" && (
             <div className="space-y-4">
               <div>
@@ -347,11 +335,6 @@ export function OnboardingWizard({
                   )}
                 </p>
               </div>
-              {!anyCodeHostConnected ? (
-                <p className="text-sm text-amber-300">
-                  Connect a code host on the previous step first, or skip and finish setup later.
-                </p>
-              ) : null}
             </div>
           )}
 
@@ -433,43 +416,23 @@ export function OnboardingWizard({
               ) : null}
               {currentStepId === "scope" ? (
                 <>
-                  {scopableScopeGate ? (
-                    <p className="w-full text-xs text-amber-300 sm:order-first sm:w-auto">
-                      Set access scope to Active for each connected tool before continuing.
-                    </p>
-                  ) : null}
                   <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
                     Skip
                   </button>
-                  <button
-                    type="button"
-                    className="admin-btn-primary"
-                    onClick={() => goToStep(step + 1)}
-                    disabled={scopableScopeGate}
-                  >
+                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
                     Continue
                   </button>
                 </>
               ) : null}
               {currentStepId === "team" ? (
                 <>
-                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
-                    Skip
+                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                    Continue
                   </button>
-                  <Link href="/users" className="admin-btn-primary">
+                  <Link href="/users" className="admin-btn-secondary">
                     Invite users
                   </Link>
                 </>
-              ) : null}
-              {currentStepId === "verify" ? (
-                <button
-                  type="button"
-                  className="admin-btn-primary"
-                  onClick={() => goToStep(step + 1)}
-                  disabled={!verifyCanComplete}
-                >
-                  Continue
-                </button>
               ) : null}
               {currentStepId === "extension" ? (
                 <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>

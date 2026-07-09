@@ -1,6 +1,6 @@
 ---
 title: API reference
-description: Coop AI API v1 — chat, inline completion, health, and authentication.
+description: CoopAI API v1 — chat, inline completion, health, and authentication.
 section: api
 order: 1
 lastUpdated: "2026-07-06"

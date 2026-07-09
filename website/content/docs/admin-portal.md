@@ -6,7 +6,7 @@ order: 1
 lastUpdated: "2026-07-07"
 ---
 
-The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure Coop AI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
+The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure CoopAI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
 
 ## Sign in
 

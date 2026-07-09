@@ -2,8 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { fetchMe } from "@/lib/coopApi";
+import { completeMemberOnboarding, fetchMe } from "@/lib/coopApi";
 import { getStoredMe, isMemberRole } from "@/lib/auth";
+import { clearSetupDismiss, isSetupDismissedToday, recordSetupDismiss } from "@/lib/onboardingDismiss";
 import { MemberOnboardingWizard } from "./MemberOnboardingWizard";
 
 type MemberOnboardingContextValue = {
@@ -31,7 +32,7 @@ export function MemberOnboardingProvider({ children }: MemberOnboardingProviderP
   const isMember = me ? isMemberRole(me) : false;
 
   const [showSetup, setShowSetup] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedToday, setDismissedToday] = useState(() => isSetupDismissedToday("member"));
   const [step, setStep] = useState(0);
   const [ready, setReady] = useState(false);
 
@@ -52,11 +53,19 @@ export function MemberOnboardingProvider({ children }: MemberOnboardingProviderP
     void load();
   }, [load]);
 
-  const overlayVisible = showSetup && pathname === "/" && !dismissed;
-  const showResumeBanner = showSetup && (pathname !== "/" || dismissed);
+  const handleDismiss = useCallback(async () => {
+    const result = recordSetupDismiss("member");
+    setDismissedToday(true);
+    if (result.permanent) {
+      await completeMemberOnboarding();
+      setShowSetup(false);
+      void load();
+    }
+  }, [load]);
+
+  const overlayVisible = showSetup && pathname === "/" && !dismissedToday;
 
   function continueSetup() {
-    setDismissed(false);
     if (pathname !== "/") {
       router.push("/");
     }
@@ -72,13 +81,11 @@ export function MemberOnboardingProvider({ children }: MemberOnboardingProviderP
   return (
     <MemberOnboardingContext.Provider value={ctx}>
       {children}
-      {showResumeBanner ? (
+      {showSetup && pathname !== "/" && !dismissedToday ? (
         <div className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border border-coop-border bg-coop-dark/95 px-4 py-3 shadow-xl shadow-black/40 backdrop-blur-sm">
-          <p className="text-sm text-coop-muted">
-            Finish your member setup to connect tools and install the extension.
-          </p>
+          <p className="text-sm text-coop-muted">Finish your member setup to install the extension.</p>
           <button type="button" className="admin-btn-primary shrink-0" onClick={continueSetup}>
-            {dismissed ? "Resume setup" : "Continue setup"}
+            Continue setup
           </button>
         </div>
       ) : null}
@@ -86,10 +93,11 @@ export function MemberOnboardingProvider({ children }: MemberOnboardingProviderP
         <MemberOnboardingWizard
           step={step}
           onStepChange={setStep}
-          onDismiss={() => setDismissed(true)}
+          onDismiss={() => void handleDismiss()}
           onComplete={() => {
+            clearSetupDismiss("member");
+            setDismissedToday(false);
             setShowSetup(false);
-            setDismissed(false);
             void load();
           }}
         />

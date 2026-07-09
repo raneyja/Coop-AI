@@ -2,8 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { fetchOrg } from "@/lib/coopApi";
+import { completeOnboarding, fetchOrg } from "@/lib/coopApi";
 import { getStoredMe, isAdminRole } from "@/lib/auth";
+import { clearSetupDismiss, isSetupDismissedToday, recordSetupDismiss } from "@/lib/onboardingDismiss";
 import { OnboardingWizard } from "./OnboardingWizard";
 
 const SETUP_HELPER_PATHS = new Set(["/integrations", "/users", "/indexing", "/api-keys"]);
@@ -11,13 +12,13 @@ const SETUP_HELPER_PATHS = new Set(["/integrations", "/users", "/indexing", "/ap
 const FULL_STEP_LABELS = [
   "Welcome",
   "Connect tools",
+  "Index repos",
   "Manage access",
   "Invite team",
-  "Verify",
   "Done"
 ] as const;
 
-const FREE_STEP_LABELS = ["Welcome", "Connect", "Index repos", "API key", "Done"] as const;
+const FREE_STEP_LABELS = ["Welcome", "Connect", "Index repos", "Extension", "Done"] as const;
 
 type OnboardingContextValue = {
   refresh: () => Promise<void>;
@@ -46,7 +47,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const stepLabels = plan === "free" ? FREE_STEP_LABELS : FULL_STEP_LABELS;
 
   const [showSetup, setShowSetup] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedToday, setDismissedToday] = useState(() => isSetupDismissedToday("admin"));
   const [step, setStep] = useState(0);
   const [ready, setReady] = useState(false);
 
@@ -73,12 +74,22 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     }
   }, [step, stepLabels.length]);
 
+  const handleDismiss = useCallback(async () => {
+    const result = recordSetupDismiss("admin");
+    setDismissedToday(true);
+    if (result.permanent) {
+      await completeOnboarding();
+      setShowSetup(false);
+      void load();
+      return;
+    }
+  }, [load]);
+
   const onHelperPage = Boolean(pathname && SETUP_HELPER_PATHS.has(pathname));
-  const overlayVisible = showSetup && !onHelperPage && !dismissed;
-  const showResumeBanner = showSetup && (onHelperPage || dismissed);
+  const overlayVisible = showSetup && !onHelperPage && !dismissedToday;
+  const showResumeBanner = showSetup && onHelperPage && !dismissedToday;
 
   function continueSetup() {
-    setDismissed(false);
     if (pathname !== "/") {
       router.push("/");
     }
@@ -101,7 +112,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
             <span className="text-white">{stepLabels[step] ?? "Setup"}</span>
           </p>
           <button type="button" className="admin-btn-primary shrink-0" onClick={continueSetup}>
-            {dismissed && !onHelperPage ? "Resume setup" : "Continue setup"}
+            Continue setup
           </button>
         </div>
       ) : null}
@@ -109,10 +120,11 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         <OnboardingWizard
           step={step}
           onStepChange={setStep}
-          onDismiss={() => setDismissed(true)}
+          onDismiss={() => void handleDismiss()}
           onComplete={() => {
+            clearSetupDismiss("admin");
+            setDismissedToday(false);
             setShowSetup(false);
-            setDismissed(false);
             void load();
           }}
         />

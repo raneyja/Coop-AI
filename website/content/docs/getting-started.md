@@ -1,17 +1,17 @@
 ---
 title: Getting started
-description: Install Coop AI and run your first chat in five minutes.
+description: Install CoopAI and run your first chat in five minutes.
 section: start
 order: 1
 lastUpdated: "2026-07-07"
 ---
 
-This guide gets you from signup to your first useful chat in Coop AI.
+This guide gets you from signup to your first useful chat in CoopAI.
 
 ## What you'll need
 
 - VS Code 1.85 or later
-- A Coop AI account ([free signup](/signup/free) or invited by your org admin)
+- A CoopAI account ([free signup](/signup/free) or invited by your org admin)
 - A local workspace folder open in VS Code
 
 ## Step 1 — Create an account
@@ -30,7 +30,7 @@ See [Install the VS Code extension](/docs/install-extension) for marketplace and
 
 ## Step 3 — Sign in
 
-1. **Extension UI** — Open Coop sidebar → gear icon (or **Coop AI: Open Settings**).
+1. **Extension UI** — Open Coop sidebar → gear icon (or **CoopAI: Open Settings**).
 2. **Account** — Choose a sign-in path:
 
 <!-- figures -->
@@ -78,7 +78,7 @@ With a file open, highlight a few lines of code, then **right-click** the select
 You can also type `/trace` in the chat composer for the same action.
 ## Optional — Inline autocomplete
 
-Coop AI can show ghost-text code completions as you type. The feature is **off by default**.
+CoopAI can show ghost-text code completions as you type. The feature is **off by default**.
 
 Click **Autocomplete** in the sidebar header for a quick **On** / **Off**, or open **CoopAI Settings** → **Preferences** → **Model & chat** and check **Enable inline autocomplete** → **Save model settings**.
 

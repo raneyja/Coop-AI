@@ -6,7 +6,7 @@ order: 2
 lastUpdated: "2026-07-08"
 ---
 
-Coop AI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
+CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
 
 The feature ships in production but is **off by default**. Enable it when you want Coop-powered completions alongside chat and quick actions.
 

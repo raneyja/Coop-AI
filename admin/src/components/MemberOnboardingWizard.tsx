@@ -112,16 +112,33 @@ export function MemberOnboardingWizard({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="shrink-0 border-b border-coop-border/80 px-5 py-4 sm:px-6">
-          <div className="flex items-baseline justify-between gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="admin-section-label">Member setup</p>
               <h2 id="member-onboarding-title" className="mt-1 text-lg font-semibold text-white">
                 {orgName}
               </h2>
             </div>
-            <p className="font-mono text-xs text-coop-muted">
-              Step {Math.min(step + 1, STEPS.length)} of {STEPS.length}
-            </p>
+            <div className="flex shrink-0 items-center gap-3">
+              <p className="font-mono text-xs text-coop-muted">
+                Step {Math.min(step + 1, STEPS.length)} of {STEPS.length}
+              </p>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-coop-muted transition hover:bg-white/10 hover:text-white"
+                onClick={onDismiss}
+                aria-label="Close setup"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M4 4L12 12M12 4L4 12"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -204,6 +221,7 @@ export function MemberOnboardingWizard({
                 refreshSuccessProvider={refreshSuccessProvider}
                 error={error}
                 onRefresh={(provider) => void load({ provider })}
+                onSilentRefresh={(provider) => void load({ provider, silent: true })}
                 compact
                 showFullPageLink={false}
                 hideIntro

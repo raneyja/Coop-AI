@@ -18,7 +18,7 @@ const MEMBER_NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard" },
   { href: "/feed", label: "Chat Feed" },
   { href: "/integrations", label: "Integrations" },
-  { href: "/my-usage", label: "My Usage" },
+  { href: "/my-usage", label: "My Analytics" },
   { href: "/my-activity", label: "My Activity" },
   { href: "/settings", label: "Settings" }
 ];

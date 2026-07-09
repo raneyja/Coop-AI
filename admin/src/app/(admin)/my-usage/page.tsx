@@ -9,10 +9,18 @@ import {
   type AnalyticsCompletions,
   type AnalyticsRange,
   type MeAnalyticsChat,
-  type MeAnalyticsOverview
+  type MeAnalyticsOverview,
+  type MeAnalyticsProductMixItem
 } from "@/lib/coopApi";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
+import {
+  AnalyticsBarChart,
+  AnalyticsLineChart,
+  AnalyticsSparkline,
+  DonutChart,
+  type BarDatum
+} from "@/components/analytics";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -31,53 +39,123 @@ function formatQuickActionLabel(eventType: string): string {
   return suffix.replace(/_/g, " ");
 }
 
-function EventsByDayTable({ rows, emptyLabel }: { rows: Array<{ day: string; count: number }>; emptyLabel: string }) {
-  if (rows.length === 0) {
-    return (
-      <div className="py-8 text-center text-sm text-coop-muted">{emptyLabel}</div>
-    );
-  }
-
-  const maxCount = Math.max(...rows.map((row) => row.count), 1);
-
-  return (
-    <div className="admin-card--table">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Events</th>
-            <th className="w-1/2">Volume</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.day}>
-              <td className="whitespace-nowrap text-xs text-coop-muted">
-                {new Date(`${row.day}T00:00:00Z`).toLocaleDateString()}
-              </td>
-              <td className="tabular-nums">{row.count}</td>
-              <td>
-                <div className="h-2 rounded-sm bg-coop-dark">
-                  <div
-                    className="h-2 rounded-sm bg-coop-index/70"
-                    style={{ width: `${Math.max(4, (row.count / maxCount) * 100)}%` }}
-                  />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function productLabel(product: string): string {
+  const map: Record<string, string> = {
+    chat: "Chat",
+    completions: "Completions",
+    completion: "Completions",
+    lightning: "Lightning",
+    quick_actions: "Quick actions",
+    quickActions: "Quick actions"
+  };
+  return map[product] ?? product.replace(/_/g, " ");
 }
 
-function PlaceholderCallout({ title, body }: { title: string; body: string }) {
+function mixFromBuckets(mix: {
+  chat: number;
+  completions: number;
+  lightning: number;
+  quickActions: number;
+}): BarDatum[] {
+  return [
+    { label: "Chat", value: mix.chat },
+    { label: "Completions", value: mix.completions },
+    { label: "Lightning", value: mix.lightning },
+    { label: "Quick actions", value: mix.quickActions }
+  ].filter((d) => d.value > 0);
+}
+
+function deriveProductMix(
+  overview: MeAnalyticsOverview | null,
+  chat: MeAnalyticsChat | null,
+  completions: AnalyticsCompletions | null
+): BarDatum[] {
+  const mix = overview?.productMix;
+  if (mix && !Array.isArray(mix)) {
+    return mixFromBuckets(mix);
+  }
+  if (Array.isArray(mix) && mix.length > 0) {
+    return mix.map((item: MeAnalyticsProductMixItem) => ({
+      label: productLabel(item.product),
+      value: item.count
+    }));
+  }
+
+  const chatCount = overview?.chatMessages ?? chat?.chatMessages ?? 0;
+  const quickActions =
+    overview?.quickActionCount ??
+    (chat?.quickActions ?? []).reduce((sum, row) => sum + row.count, 0);
+  const completionCount =
+    overview?.completionEvents ??
+    (completions
+      ? completions.suggested + completions.accepted + completions.requested
+      : 0);
+  const lightningCount = overview?.lightningEvents ?? 0;
+
+  return mixFromBuckets({
+    chat: chatCount,
+    completions: completionCount,
+    lightning: lightningCount,
+    quickActions
+  });
+}
+
+function PlaceholderCallout({ title, body }: { title: string; body: string }): React.ReactElement {
   return (
     <div className="admin-panel-inset text-sm text-coop-muted">
       <p className="font-medium text-white/90">{title}</p>
       <p className="mt-1">{body}</p>
+    </div>
+  );
+}
+
+function CarHero({
+  rate,
+  suggested,
+  accepted,
+  loading,
+  sparkline
+}: {
+  rate: number | null | undefined;
+  suggested: number;
+  accepted: number;
+  loading: boolean;
+  sparkline?: Array<{ day: string; count: number }>;
+}): React.ReactElement {
+  const display = loading ? "—" : rate != null ? formatPercent(rate) : "—";
+  const hint =
+    loading
+      ? "Loading…"
+      : rate != null
+        ? `${accepted} accepted of ${suggested} suggested`
+        : suggested === 0
+          ? "No suggestions in this range"
+          : "Acceptance rate unavailable";
+
+  return (
+    <div className="admin-card border-b border-coop-border/50 pb-6">
+      <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">
+        Completion acceptance rate
+      </p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <p className="text-4xl font-semibold tabular-nums tracking-tight text-coop-index sm:text-5xl">
+            {display}
+          </p>
+          <p className="mb-1 max-w-sm text-sm text-coop-muted">{hint}</p>
+        </div>
+        {!loading && sparkline && sparkline.length > 0 ? (
+          <AnalyticsSparkline
+            data={sparkline}
+            ariaLabel="Completion volume trend"
+            width={120}
+            height={36}
+          />
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs text-coop-muted">
+        CAR = accepted ÷ suggested (ghost text shown in the editor).
+      </p>
     </div>
   );
 }
@@ -147,12 +225,43 @@ export default function MyUsagePage() {
     [chat]
   );
 
+  const carRate = useMemo(() => {
+    if (overview?.acceptanceRate != null) return overview.acceptanceRate;
+    return completions?.acceptanceRate ?? null;
+  }, [overview, completions]);
+
+  const carSuggested = overview?.suggested ?? completions?.suggested ?? 0;
+  const carAccepted = overview?.accepted ?? completions?.accepted ?? 0;
+
+  const productMix = useMemo(
+    () => deriveProductMix(overview, chat, completions),
+    [overview, chat, completions]
+  );
+
+  const productMixTotal = useMemo(
+    () => productMix.reduce((sum, d) => sum + d.value, 0),
+    [productMix]
+  );
+
+  const quickActionBars: BarDatum[] = useMemo(
+    () =>
+      (chat?.quickActions ?? [])
+        .map((row) => ({
+          label: formatQuickActionLabel(row.eventType),
+          value: row.count
+        }))
+        .sort((a, b) => b.value - a.value),
+    [chat]
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="admin-page-title">My Usage</h1>
-          <p className="mt-1 text-sm text-coop-muted">Your Coop activity in this organization.</p>
+          <h1 className="admin-page-title">My Analytics</h1>
+          <p className="mt-1 text-sm text-coop-muted">
+            Your personal Coop activity — events, product mix, and completion acceptance.
+          </p>
         </div>
         <div className="flex rounded-sm border border-coop-border">
           {(["7d", "30d", "90d"] as AnalyticsRange[]).map((option) => (
@@ -197,23 +306,71 @@ export default function MyUsagePage() {
 
       {activeTab === "overview" && (
         <div className="space-y-6">
+          <CarHero
+            rate={carRate}
+            suggested={carSuggested}
+            accepted={carAccepted}
+            loading={loading}
+            sparkline={completions?.eventsByDay}
+          />
+
           <AdminStatRow>
             <AdminStat
               label="Total events"
               value={loading ? "—" : (overview?.totalEvents ?? 0)}
               hint={`Selected ${range}`}
             />
+            <AdminStat
+              label="Chat messages"
+              value={loading ? "—" : (overview?.chatMessages ?? chat?.chatMessages ?? 0)}
+              hint={`Selected ${range}`}
+            />
+            <AdminStat
+              label="Quick actions"
+              value={loading ? "—" : (overview?.quickActionCount ?? quickActionTotal)}
+              hint={`Selected ${range}`}
+            />
+            <AdminStat
+              label="Suggested"
+              value={loading ? "—" : carSuggested}
+              hint="completion.suggested"
+            />
           </AdminStatRow>
 
-          <section>
-            <h2 className="admin-section-label mb-4">Event volume by day</h2>
+          <section className="admin-card">
+            <h2 className="admin-section-label mb-4">Activity by day</h2>
             {loading ? (
-              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="flex h-48 items-center justify-center text-sm text-coop-muted">
+                Loading…
+              </div>
             ) : (
-              <EventsByDayTable
-                rows={overview?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={overview?.eventsByDay ?? []}
                 emptyLabel="No usage events yet. Activity will appear here once you use Coop."
               />
+            )}
+          </section>
+
+          <section className="admin-card">
+            <h2 className="admin-section-label mb-4">Product mix</h2>
+            {loading ? (
+              <div className="flex h-48 items-center justify-center text-sm text-coop-muted">
+                Loading…
+              </div>
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <DonutChart
+                  data={productMix}
+                  centerValue={productMixTotal}
+                  centerLabel="events"
+                  emptyLabel="No product activity in this range yet."
+                />
+                <AnalyticsBarChart
+                  data={productMix}
+                  orientation="horizontal"
+                  emptyLabel="No product activity in this range yet."
+                />
+              </div>
             )}
           </section>
         </div>
@@ -234,49 +391,32 @@ export default function MyUsagePage() {
             />
           </AdminStatRow>
 
-          <section>
+          <section className="admin-card">
             <h2 className="admin-section-label mb-4">Quick actions by type</h2>
-            <div className="admin-card--table">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={2} className="py-8 text-center text-coop-muted">
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : (chat?.quickActions ?? []).length === 0 ? (
-                    <tr>
-                      <td colSpan={2} className="py-8 text-center text-coop-muted">
-                        No quick action events yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    chat?.quickActions.map((row) => (
-                      <tr key={row.eventType}>
-                        <td className="capitalize">{formatQuickActionLabel(row.eventType)}</td>
-                        <td className="tabular-nums">{row.count}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {loading ? (
+              <div className="flex h-40 items-center justify-center text-sm text-coop-muted">
+                Loading…
+              </div>
+            ) : (
+              <AnalyticsBarChart
+                data={quickActionBars}
+                orientation="horizontal"
+                emptyLabel="No quick action events yet."
+                color="#58A6FF"
+              />
+            )}
           </section>
 
-          <section>
+          <section className="admin-card">
             <h2 className="admin-section-label mb-4">Chat activity by day</h2>
             {loading ? (
-              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="flex h-48 items-center justify-center text-sm text-coop-muted">
+                Loading…
+              </div>
             ) : (
-              <EventsByDayTable
-                rows={chat?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={chat?.eventsByDay ?? []}
+                series={[{ key: "count", label: "Chat events", color: "#58A6FF" }]}
                 emptyLabel="No chat activity recorded for this period."
               />
             )}
@@ -292,6 +432,15 @@ export default function MyUsagePage() {
               body="Counts appear when Coop autocomplete is enabled: ghost-text shown (completion.suggested), Tab accept (completion.accepted), and server inline requests (completion.requested)."
             />
           ) : null}
+
+          <CarHero
+            rate={completions?.acceptanceRate}
+            suggested={completions?.suggested ?? 0}
+            accepted={completions?.accepted ?? 0}
+            loading={loading}
+            sparkline={completions?.eventsByDay}
+          />
+
           <AdminStatRow>
             <AdminStat
               label="Suggested"
@@ -309,17 +458,12 @@ export default function MyUsagePage() {
               hint="completion.accepted events"
             />
             <AdminStat
-              label="CAR"
-              value={
-                loading
-                  ? "—"
-                  : completions?.acceptanceRate != null
-                    ? formatPercent(completions.acceptanceRate)
-                    : "—"
-              }
-              hint="Accepted ÷ suggested (shown)"
+              label="Rejected"
+              value={loading ? "—" : (completions?.rejected ?? 0)}
+              hint="completion.rejected events"
             />
           </AdminStatRow>
+
           <AdminStatRow>
             <AdminStat
               label="Server p50"
@@ -366,13 +510,17 @@ export default function MyUsagePage() {
               hint={`${completions?.clientLatencySamples ?? 0} batches`}
             />
           </AdminStatRow>
-          <section>
+
+          <section className="admin-card">
             <h2 className="admin-section-label mb-4">Completion volume by day</h2>
             {loading ? (
-              <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
+              <div className="flex h-48 items-center justify-center text-sm text-coop-muted">
+                Loading…
+              </div>
             ) : (
-              <EventsByDayTable
-                rows={completions?.eventsByDay ?? []}
+              <AnalyticsLineChart
+                data={completions?.eventsByDay ?? []}
+                series={[{ key: "count", label: "Completions", color: "#D29922" }]}
                 emptyLabel="No completion usage events in this range."
               />
             )}

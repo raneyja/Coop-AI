@@ -6,7 +6,7 @@ order: 1
 lastUpdated: "2026-07-06"
 ---
 
-Coop AI is built for teams that cannot send full repo clones to third-party AI services.
+CoopAI is built for teams that cannot send full repo clones to third-party AI services.
 
 ## Zero-clone architecture
 

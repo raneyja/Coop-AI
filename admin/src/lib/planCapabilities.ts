@@ -11,7 +11,6 @@ export type PlanCapabilities = {
   showOnboardingIndexingStep: boolean;
   showOnboardingExtensionStep: boolean;
   showOnboardingTeamStep: boolean;
-  showOnboardingVerifyStep: boolean;
 };
 
 export function normalizeOrgPlan(plan: string | undefined | null): OrgPlan {
@@ -34,7 +33,6 @@ export function planCapabilities(plan: string | undefined | null): PlanCapabilit
     showScopeStep: !isFree,
     showOnboardingIndexingStep: true,
     showOnboardingExtensionStep: isFree,
-    showOnboardingTeamStep: !isFree,
-    showOnboardingVerifyStep: !isFree
+    showOnboardingTeamStep: !isFree
   };
 }

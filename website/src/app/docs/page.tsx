@@ -56,7 +56,7 @@ export default function DocsHubPage() {
       <PageHeader
         eyebrow="Documentation"
         title="CoopAI Docs"
-        description="Everything you need to install, configure, and run Coop AI — from your first chat to enterprise deployment."
+        description="Everything you need to install, configure, and run CoopAI — from your first chat to enterprise deployment."
         tight
       />
 
