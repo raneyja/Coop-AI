@@ -312,6 +312,83 @@ test("PUT /v1/sso/policy rejects requireSso when SSO is not enabled", async () =
   assert.equal(body.error, "sso_not_configured");
 });
 
+test("PUT /v1/sso/config rejects disabling SSO when Require SSO is active", async () => {
+  const ssoConfigStore = mockSsoConfigStore();
+  const authPolicyStore = mockAuthPolicyStore();
+
+  const configResponse = mockResponse();
+  await handleEnterpriseApiRequest(
+    {
+      method: "PUT",
+      pathname: "/v1/sso/config",
+      headers: { authorization: "Bearer coop_sess_test" },
+      body: {
+        provider: "okta",
+        idpEntityId: "https://idp.example.com/entity",
+        idpSsoUrl: "https://idp.example.com/sso",
+        idpX509Cert: VALID_TEST_CERT,
+        enabled: true
+      }
+    },
+    configResponse,
+    {
+      orgStore: mockOrgStore(),
+      ssoConfigStore,
+      authPolicyStore,
+      userStore,
+      serverConfig
+    }
+  );
+  assert.equal(configResponse.statusCode, 200);
+
+  const policyResponse = mockResponse();
+  await handleEnterpriseApiRequest(
+    {
+      method: "PUT",
+      pathname: "/v1/sso/policy",
+      headers: { authorization: "Bearer coop_sess_test" },
+      body: { requireSso: true }
+    },
+    policyResponse,
+    {
+      orgStore: mockOrgStore(),
+      ssoConfigStore,
+      authPolicyStore,
+      userStore,
+      serverConfig
+    }
+  );
+  assert.equal(policyResponse.statusCode, 200);
+
+  const response = mockResponse();
+  await handleEnterpriseApiRequest(
+    {
+      method: "PUT",
+      pathname: "/v1/sso/config",
+      headers: { authorization: "Bearer coop_sess_test" },
+      body: {
+        provider: "okta",
+        idpEntityId: "https://idp.example.com/entity",
+        idpSsoUrl: "https://idp.example.com/sso",
+        enabled: false
+      }
+    },
+    response,
+    {
+      orgStore: mockOrgStore(),
+      ssoConfigStore,
+      authPolicyStore,
+      userStore,
+      serverConfig
+    }
+  );
+
+  assert.equal(response.statusCode, 400);
+  const body = response.body as { error: string; message: string };
+  assert.equal(body.error, "sso_required_active");
+  assert.match(body.message, /Require SSO/i);
+});
+
 test("PUT /v1/sso/policy enforces SSO-only sign-in", async () => {
   const ssoConfigStore = mockSsoConfigStore();
   const configResponse = mockResponse();

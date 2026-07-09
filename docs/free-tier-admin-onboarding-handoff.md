@@ -1,6 +1,7 @@
 # Free-tier admin onboarding — handoff & Pro portal plan
 
 **Created:** July 1, 2026  
+**Updated:** July 9, 2026  
 **Branch shipped:** `feat/in-product-onboarding` → merged to `main` (`9a78209`)  
 **Purpose:** Document everything built for free-user onboarding and admin portal structure in this workstream, and provide a plan for finishing the **Pro** admin portal without repeating enterprise work.
 
@@ -66,7 +67,10 @@ When building free-tier admin, several enterprise patterns already existed but w
 | `/api-keys` | Org API key management |
 | `/billing` | Stripe portal, upgrade checkout |
 | `/audit` | Audit log |
-| `/settings` | Account/org; Enterprise SSO section |
+| `/settings` | Settings hub — links to nested routes below |
+| `/settings/account` | Account, org info, sign-out (all roles) |
+| `/settings/repository-access` | Per-user vs all-indexed repo access mode (Pro/Ent admin) |
+| `/settings/single-sign-on` | SAML IdP config, **Test sign-in**, sign-in policy — Enterprise admin (`sso_required_active` guard) |
 | `/feed` | Member chat thread browser |
 
 ### Auth (added for free tier)
@@ -80,7 +84,7 @@ When building free-tier admin, several enterprise patterns already existed but w
 | `admin/src/app/api/auth/session/route.ts` | Session check |
 | `admin/src/lib/auth.ts` | Stored me, admin vs member roles |
 
-**Role gating:** Admins see full nav (minus Collections on free). Members only see `/feed` and `/settings`.
+**Role gating:** Admins see full nav (minus Collections on free). Members only see `/feed` and `/settings` (hub + `/settings/account`).
 
 ---
 

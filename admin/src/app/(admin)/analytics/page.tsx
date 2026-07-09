@@ -260,7 +260,8 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="admin-page-title">Analytics</h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Team adoption, AI usage, and completion quality. Repo indexing lives on the Indexing page.
+            Organization-wide adoption, AI usage, and completion quality. Switch to My Analytics for
+            your personal activity.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -363,8 +364,8 @@ export default function AnalyticsPage() {
             />
           </AdminStatRow>
 
-          <section>
-            <h2 className="admin-section-label mb-4">Event volume by day</h2>
+          <section className="admin-card p-4">
+            <h2 className="admin-section-label mb-3">Event volume by day</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
@@ -375,8 +376,8 @@ export default function AnalyticsPage() {
             )}
           </section>
 
-          <section>
-            <h2 className="admin-section-label mb-4">Activity mix</h2>
+          <section className="admin-card p-4">
+            <h2 className="admin-section-label mb-3">Activity mix</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
@@ -431,8 +432,8 @@ export default function AnalyticsPage() {
             />
           </AdminStatRow>
 
-          <section>
-            <h2 className="admin-section-label mb-4">Chat activity by day</h2>
+          <section className="admin-card p-4">
+            <h2 className="admin-section-label mb-3">Chat activity by day</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
@@ -443,8 +444,8 @@ export default function AnalyticsPage() {
             )}
           </section>
 
-          <section>
-            <h2 className="admin-section-label mb-4">Quick actions by type</h2>
+          <section className="admin-card p-4">
+            <h2 className="admin-section-label mb-3">Quick actions by type</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
@@ -584,8 +585,8 @@ export default function AnalyticsPage() {
               hint={`${completions?.clientLatencySamples ?? 0} batches`}
             />
           </AdminStatRow>
-          <section>
-            <h2 className="admin-section-label mb-4">Completion volume by day</h2>
+          <section className="admin-card p-4">
+            <h2 className="admin-section-label mb-3">Completion volume by day</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (

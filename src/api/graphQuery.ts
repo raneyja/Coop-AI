@@ -6,6 +6,7 @@ export type GraphQueryName =
   | "getFileTree"
   | "getOwnership"
   | "getDependents"
+  | "getImports"
   | "getTransitiveDependents"
   | "getRecentChanges"
   | "searchFiles"
@@ -53,6 +54,8 @@ export class GraphQueryApi {
         return this.options.cache.getOwnership(request.repoId, required(request.filters?.file, "file"));
       case "getDependents":
         return this.options.cache.getDependents(request.repoId, required(request.filters?.file, "file"));
+      case "getImports":
+        return this.options.cache.getImports(request.repoId, required(request.filters?.file, "file"));
       case "getTransitiveDependents":
         return this.options.cache.getTransitiveDependents(request.repoId, required(request.filters?.file, "file"));
       case "getRecentChanges":

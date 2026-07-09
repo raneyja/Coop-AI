@@ -522,6 +522,7 @@ function AccountDetail({
   const signedIn = preferencesSignedIn(prefs);
   const [emailDraft, setEmailDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
+  const [ssoOrgDraft, setSsoOrgDraft] = useState("");
   const [authStep, setAuthStep] = useState<AccountAuthStep>("choose");
 
   const trimmedEmail = emailDraft.trim();
@@ -638,9 +639,31 @@ function AccountDetail({
 
       <AuthDivider />
 
-      <button type="button" className="coop-auth-btn" onClick={() => onSignInSso()}>
-        Sign in with SSO
-      </button>
+      <label className="coop-settings-field-row">
+        <span className="coop-settings-label">Organization name</span>
+        <input
+          type="text"
+          autoComplete="organization"
+          value={ssoOrgDraft}
+          placeholder="Acme Engineering"
+          className="coop-settings-field"
+          onChange={(event) => setSsoOrgDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && ssoOrgDraft.trim()) {
+              onSignInSso(ssoOrgDraft.trim());
+            }
+          }}
+        />
+      </label>
+      <div className="coop-auth-stack mt-2">
+        <button
+          type="button"
+          className="coop-auth-btn"
+          onClick={() => onSignInSso(ssoOrgDraft.trim() || undefined)}
+        >
+          Sign in with SSO
+        </button>
+      </div>
 
       <p className="coop-settings-card-desc mt-3">
         LLM provider keys are routed server-side; code host tokens stay in VS Code SecretStorage.

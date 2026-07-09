@@ -1,5 +1,7 @@
 # Webhook Backend
 
+**Updated:** July 9, 2026
+
 CoopAI's webhook backend ingests provider events, verifies signatures, normalizes payloads, and updates a remote repository graph without cloning repositories locally.
 
 ## Runtime
@@ -79,7 +81,13 @@ Legacy single-token auth via `COOP_API_TOKEN` remains supported during migration
 - `POST /webhooks/gitlab` accepts GitLab webhook deliveries.
 - `POST /webhooks/slack` accepts Slack Events API deliveries.
 - `GET /graph/:repoId/*` graph queries (Pro+; requires auth in production).
-- `/v1/sso/*` and `/v1/self-host/*` reserved for Enterprise (501 until implemented).
+- `GET /v1/sso/config` and `PUT /v1/sso/config` — read/save SAML IdP configuration (**Enterprise org admin** bearer only; members get `403 admin_required`). `PUT` returns `400 sso_required_active` if disabling SAML while **Require SSO** is on.
+- `GET /v1/sso/policy` and `PUT /v1/sso/policy` — SSO sign-in policy (`requireSso`, `allowPassword`, `allowGoogle`); GET any org member, PUT admin only.
+- `GET /v1/auth/saml/start` — public SP-initiated SSO entry (`?org={name}`; case-insensitive org lookup).
+- `GET /v1/auth/saml/metadata` — SP metadata XML (Enterprise bearer).
+- `POST /v1/auth/saml/callback` — IdP ACS callback (browser POST).
+- `POST /v1/auth/saml/offboard` — deactivate users by IdP subject (Enterprise bearer).
+- `/v1/self-host/*` reserved for Enterprise (501 until implemented).
 - `GET /rate-limits` provider quota state (requires auth in production).
 - `GET /token-pools` token pool metadata (requires auth in production).
 - Job queue API under `/api/jobs` (see [job-queue.md](./job-queue.md)).
@@ -94,6 +102,7 @@ The backend reads environment variables through `src/config/webhookConfig.ts`.
 PORT=8787
 NODE_ENV=production
 COOP_REQUIRE_API_AUTH=true
+COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev
 DATABASE_URL=postgres://coop:coop@localhost:5432/coopai
 JOBS_BACKEND=postgres
 GRAPH_CACHE_BACKEND=postgres
@@ -107,7 +116,11 @@ GRAPH_CACHE_TTL_SECONDS=86400
 GRAPH_CACHE_MAX_REPOS=100
 RATE_LIMIT_WARN_THRESHOLD=0.2
 COOP_API_TOKEN=
+COOP_SSO_SP_ENTITY_ID=
+COOP_SSO_SESSION_TTL_MS=43200000
 ```
+
+`COOP_PUBLIC_BASE_URL` is **operator-only** — the public HTTPS base of this API host. SAML SP Entity ID, ACS URL, and OAuth redirect URIs derive from it; org admins configure IdP values in the admin portal at `/settings/single-sign-on`, not this env var.
 
 See [`.env.backend.example`](../.env.backend.example) for a full template.
 

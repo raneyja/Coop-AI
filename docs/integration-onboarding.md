@@ -1,5 +1,7 @@
 # Integration onboarding
 
+**Updated:** July 9, 2026
+
 How to connect external tools to Coop AI.
 
 Open settings: Coop AI sidebar → gear icon, or Command Palette → **Coop AI: Open Settings**.
@@ -39,6 +41,8 @@ Production checklist: [connect-integrations-production.md](./connect-integration
 | Field | Value |
 |-------|-------|
 | Sign in | Email and password, Google, or SSO (Enterprise) |
+
+Enterprise org admins configure SAML at [admin portal](https://admin.coop-ai.dev) → **Settings → Single sign-on** (`/settings/single-sign-on`). Developers use **Sign in with SSO** in the extension (**Settings → Account**). See [SAML SSO](../website/content/docs/saml-sso.md).
 
 **Success:** Account shows your org name and plan after sign-in.
 

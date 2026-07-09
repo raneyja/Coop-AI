@@ -85,7 +85,10 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   daily_limit_reached:
     "You've used your free AI credits for this 5-hour window. Upgrade to Pro for unlimited usage at https://coop-ai.dev/pricing",
   sso_not_configured: "SSO is not configured for your organization yet. Ask your admin to finish setup.",
+  sso_required: "Your organization requires SSO sign-in. Use Sign in with SSO.",
   sso_unavailable: "Enterprise SSO is not available on this Coop environment.",
+  auth_policy_unavailable:
+    "Unable to verify your organization's sign-in policy. Try again later or contact your administrator.",
   missing_org: "Enter your organization name to sign in with SSO.",
   "GitHub App is not configured on this server":
     "GitHub integration is not configured on the Coop server. Contact your Coop administrator.",

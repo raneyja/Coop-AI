@@ -5,6 +5,8 @@ import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
+export const SEMANTIC_QUERY_MIN_LENGTH = 12;
+export const SEMANTIC_QUERY_MIN_LENGTH_EDIT = 8;
 
 export type RepoSemanticSnippet = {
   path: string;
@@ -22,11 +24,30 @@ export type RepoSemanticSearchContext = {
 
 export type RepoSemanticRetrievalGateOptions = {
   queryText?: string;
+  /** Active editor selection text — supplements short slash args during /edit. */
+  selectionText?: string;
   quickAction?: string;
   intentIsPlainChat?: boolean;
+  /** True when composer mode is edit (/edit slash or edit composer). */
+  codeEditIntent?: boolean;
   inScopeMentionCount?: number;
   enabled?: boolean;
 };
+
+export function semanticRetrievalQueryText(options: RepoSemanticRetrievalGateOptions): string {
+  const query = options.queryText?.trim() ?? "";
+  if (!options.codeEditIntent) {
+    return query;
+  }
+  const selection = options.selectionText?.trim() ?? "";
+  if (!selection) {
+    return query;
+  }
+  if (!query) {
+    return selection;
+  }
+  return `${query}\n${selection}`;
+}
 
 export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGateOptions): boolean {
   if (options.enabled === false) {
@@ -35,11 +56,12 @@ export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGat
   if (options.quickAction) {
     return false;
   }
-  if (options.intentIsPlainChat === false) {
+  if (options.intentIsPlainChat === false && !options.codeEditIntent) {
     return false;
   }
-  const query = options.queryText?.trim() ?? "";
-  if (query.length < 12) {
+  const query = semanticRetrievalQueryText(options);
+  const minLength = options.codeEditIntent ? SEMANTIC_QUERY_MIN_LENGTH_EDIT : SEMANTIC_QUERY_MIN_LENGTH;
+  if (query.length < minLength) {
     return false;
   }
   if ((options.inScopeMentionCount ?? 0) >= 2) {
@@ -60,12 +82,19 @@ export function isPlainChatIntentEvent(event: {
 
 export function gateOptionsFromRequest(
   request: ContextFetchRequest,
-  extras: { inScopeMentionCount?: number; enabled?: boolean } = {}
+  extras: {
+    inScopeMentionCount?: number;
+    enabled?: boolean;
+    codeEditIntent?: boolean;
+    selectionText?: string;
+  } = {}
 ): RepoSemanticRetrievalGateOptions {
   return {
     queryText: request.intent.context.queryText,
+    selectionText: extras.selectionText,
     quickAction: request.params.quickAction,
     intentIsPlainChat: isPlainChatIntentEvent(request.intent),
+    codeEditIntent: extras.codeEditIntent,
     inScopeMentionCount: extras.inScopeMentionCount,
     enabled: extras.enabled
   };
@@ -158,8 +187,12 @@ export type SearchRepoForChatOptions = {
   api: SecureApiClient;
   apiBaseUrl: string;
   branch?: string;
+  collectionId?: string;
+  searchScope?: "indexed" | "org";
   inScopeMentionCount?: number;
   enabled?: boolean;
+  codeEditIntent?: boolean;
+  selectionText?: string;
 };
 
 export async function searchRepoForChat(
@@ -168,12 +201,13 @@ export async function searchRepoForChat(
   const enabled =
     options.enabled ??
     (await import("../config/semanticRetrievalConfig")).readSemanticRetrievalEnabled();
-  if (!shouldRunRepoSemanticRetrieval(gateOptionsFromRequest(options.request, { ...options, enabled }))) {
+  const gateOptions = gateOptionsFromRequest(options.request, { ...options, enabled });
+  if (!shouldRunRepoSemanticRetrieval(gateOptions)) {
     return undefined;
   }
 
   const repoId = options.request.params.repoId?.trim();
-  const query = options.request.intent.context.queryText?.trim();
+  const query = semanticRetrievalQueryText(gateOptions);
   if (!repoId || !query) {
     return undefined;
   }
@@ -209,18 +243,32 @@ export async function searchRepoForChat(
   };
 }
 
+function searchOptionsForSemanticRetrieval(
+  options: SearchRepoForChatOptions
+): import("../indexing/indexBackend").IndexSearchOptions | undefined {
+  const collectionId = options.collectionId?.trim();
+  if (collectionId) {
+    return { collectionId, scope: options.searchScope };
+  }
+  if (options.searchScope) {
+    return { scope: options.searchScope };
+  }
+  return undefined;
+}
+
 async function runRepoSearch(
   options: SearchRepoForChatOptions,
   repoId: string,
   query: string
 ): Promise<LocalSearchResult> {
-  const fromIndex = await options.indexBackend.search(repoId, query);
+  const searchOptions = searchOptionsForSemanticRetrieval(options);
+  const fromIndex = await options.indexBackend.search(repoId, query, searchOptions);
   if (fromIndex.hits.length > 0 || fromIndex.symbols.length > 0) {
     return fromIndex;
   }
 
   try {
-    const remote = (await options.api.graphSearch(options.apiBaseUrl, repoId, query)) as {
+    const remote = (await options.api.graphSearch(options.apiBaseUrl, repoId, query, searchOptions)) as {
       data?: Array<{ path?: string; score?: number }>;
       symbols?: Array<{ file?: string }>;
       freshness?: LocalSearchResult["source"];

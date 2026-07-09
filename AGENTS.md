@@ -40,3 +40,37 @@ When giving setup, env, or test steps (not code review), follow:
 - **`.cursor/rules/user-instructions.mdc`** — which surface (file, terminal, extension UI, browser); add vs change config; similar env vars
 - **`.cursor/rules/clear-user-requests.mdc`** — lead with required vs optional; one happy path; where secrets come from; don't bury the ask
 
+## Boris bar
+
+**Boris bar** is Coop’s quality bar: **Claude Code / Anthropic-grade craft**, not vibe-coded output. When the user says *“make sure this meets the Boris bar”*, treat it as a **ship gate** — would this pass review on a serious agentic coding product, or does it feel like a demo that only works in the happy path?
+
+### Claude Code quality vs vibe code
+
+| Claude Code quality (target) | Vibe code (reject) |
+|------------------------------|---------------------|
+| Correct, minimal diffs; matches repo conventions | Broad refactors, duplicate abstractions, “AI-shaped” boilerplate |
+| Features wired end-to-end on the hot path | Scaffolds, stubs, or code paths that exist but aren’t called |
+| Tested behavior; failures are handled plainly | “It compiles”; silent fallbacks; untested edge cases |
+| UX that respects latency, clarity, and user trust | Marketing copy in product UI; magic that breaks under real repos |
+| Honest scope — ship what works, flag what doesn’t | Oversell parity with competitors; hide quality tradeoffs |
+
+We are building for **daily use by strong engineers**, not for a screenshot or a one-off prompt win.
+
+### Coop-specific bar (on top of craft)
+
+1. **Infrastructure is wired, not orphaned** — Index, retrieval, and graph slices must feed **user-facing paths** (autocomplete, chat, edit, quick actions). “Implemented but never called” fails the bar.
+2. **Codegen is graph-grounded where we claim repo intelligence** — New text should use Lightning/SCIP/Zoekt when the repo is indexed, not buffer-only by default.
+3. **Close the loop** — Output should be **applicable in the IDE** (ghost text, apply patch, runnable command). Chat-only demos fail the bar for codegen.
+4. **Defaults match the story** — Turn on core value when prerequisites are met; off-by-default needs justification.
+5. **Differentiate deliberately** — Moat = cross-tool context + decision workflows; don’t claim Cody-level inline codegen until it’s wired.
+
+### Quick self-check (agent)
+
+Before marking work done:
+
+- Would this feel at home in **Claude Code** (rigorous, shippable), or like **vibe code** (fragile, overscoped, untested)?
+- Would a senior engineer **trust and use** this daily?
+- Did we **test the hot path** (extension build + targeted tests)?
+
+If any answer is no, fix or flag it — don’t oversell.
+

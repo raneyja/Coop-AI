@@ -35,6 +35,8 @@ jobs:
           npm run test:autocomplete
           npm run test:inline-completion
           npm run test:autocomplete-smoke
+          npm run test:sso
+          npm run test:user-facing-errors
 
   docker-build:
     runs-on: ubuntu-latest

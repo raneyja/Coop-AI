@@ -1,6 +1,7 @@
 # In-product integration onboarding — implementation spec
 
 **Status:** Agent 1 research deliverable  
+**Updated:** July 9, 2026  
 **Branch:** `feat/in-product-onboarding`  
 **Goal:** Customer org admins complete Connect → scope → invite → verify **inside the product** (admin portal + extension), without doc-hopping or visible operator steps.
 
@@ -39,6 +40,7 @@
 |------|---------------|-------------|
 | Operator OAuth app + env | `.env.backend`, vendor consoles | Hidden (correct) |
 | Admin sign-in | Admin portal `/login` (email/password, Google, SSO), extension Account | Yes |
+| Enterprise SAML SSO | Admin **Settings → Single sign-on** (`/settings/single-sign-on`) — IdP config, **Test sign-in**, **Require SSO** policy | Yes (Enterprise) |
 | Connect integrations | Extension Settings → Tools **or** admin `/integrations` | Partial — wizard links out |
 | Enterprise Slack scope | Admin `/integrations` → Manage access | Yes, but not in wizard |
 | Invite users | Admin `/users` | Partial — wizard links out |
@@ -52,6 +54,7 @@
 |-----------|------|
 | `OnboardingWizard` | 4 steps; step 1 links to `/integrations` instead of inline connect |
 | `integrations/page.tsx` | Full `IntegrationCard` list with Connect, scope, refresh |
+| `settings/page.tsx` + nested routes | Settings hub; Enterprise SAML at `/settings/single-sign-on` (`SsoSettingsPanel`) |
 | `IntegrationCard` | OAuth via `fetchInstallUrl`, scope via `IntegrationScopePanel` |
 | `IntegrationScopePanel` | Slack (live); Jira/Notion/Google UI with enforcement coming |
 | Dashboard `IntegrationStatusList` | Read-only status summary |
@@ -430,6 +433,7 @@ Add `formatIntegrationError(provider, status, body)` in `admin/src/lib/coopApi.t
 | Action | Admin portal | Extension |
 |--------|--------------|-----------|
 | Connect OAuth | **Primary** (wizard + /integrations) | Supported (Settings → Tools) |
+| Enterprise SAML SSO | **Primary** (`/settings/single-sign-on`) | **Sign in with SSO** (Account) |
 | Enterprise scope | **Only** (Manage access) | Deep link only |
 | Invite users | **Primary** (/users) | — |
 | Issue automation API keys | **Primary** (CI/scripts) | — |

@@ -1,5 +1,7 @@
 # Register your AI models (LLM provider keys)
 
+**Updated:** July 9, 2026
+
 This guide explains how to **sign up for AI services**, **create API keys**, and **hand them to whoever runs your Coop server** so chat works in the Coop AI extension.
 
 You do **not** paste LLM keys into the extension’s **Model** settings. Model settings only choose *which* AI to use; the actual keys live on the **Coop server** (managed by your company’s admin or IT team).
@@ -12,7 +14,7 @@ You do **not** paste LLM keys into the extension’s **Model** settings. Model s
 |-------|----------------|--------|
 | **API keys** for Claude, ChatGPT, Gemini, etc. | You (or your admin) create them at each AI company’s website | Given to your **Coop server administrator** — not stored in the extension |
 | **Which provider and model to use** | You | Coop AI extension → **Settings** → **Model** |
-| **Coop account sign-in** | You | Coop AI extension → **Settings** → **Account** (email, Google, or SSO) |
+| **Coop account sign-in** | You | Coop AI extension → **Settings** → **Account** (email, Google, or org SSO on Enterprise) |
 
 Think of it like electricity: you pick which appliance to plug in (Model settings), but the power company connection (API keys) is configured at the building level (the server).
 
@@ -266,9 +268,11 @@ If `mockMode` is still `true`, the server did not load your keys — recheck `.e
 Each developer (including you):
 
 1. **Settings → Account**
-   - Sign in with email and password, Google, or SSO
+   - Sign in with email and password, Google, or org SSO (Enterprise — org name + **Sign in with SSO**)
 2. **Settings → Model** — pick provider (Anthropic, OpenAI, Gemini, or DeepSeek) and a model; keys are already on the server.
 3. Send a chat message to confirm the session works.
+
+Enterprise org admins configure SAML separately at admin portal **Settings → Single sign-on** (`/settings/single-sign-on`) — not in the extension.
 
 For local servers, set `coopAI.apiBaseUrl` to `http://localhost:8787` in VS Code settings. Org API keys from `npm run admin:org -- create-api-key` are for automation only.
 

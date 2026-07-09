@@ -6,12 +6,15 @@ import { CoopChatSession } from "./chat/CoopChatSession";
 import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
+import { resolveSearchScopeForPlan } from "./license/planSearchScope";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
 import {
   registerCoopAutocomplete,
   registerAutocompleteCommands,
+  registerAutocompleteIndexNotifier,
   createAutocompleteUsageTelemetryHandler
 } from "./autocomplete/registerAutocomplete";
+import { registerPatchCommands } from "./edit/registerPatchCommands";
 import { readAutocompleteSettings } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
@@ -29,6 +32,8 @@ import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
+import { createAgentOrchestrator } from "./api/agent/AgentOrchestrator";
+import { resolveLocalAbsolutePath } from "./context/localFileResolver";
 import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
 import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
 import { buildLiveRepoSummary, resolveRepoSummaryCoords } from "./context/buildRepoSummaryContext";
@@ -110,9 +115,15 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       try {
+        const config = readConfiguration();
+        const searchScope = resolveSearchScopeForPlan({
+          searchScopeMode: config.searchScopeMode,
+          searchCollectionId: config.searchCollectionId
+        });
         const remote = (await api.graphSearch(baseUrl, repoId, query, {
           mention: true,
-          scope: "indexed"
+          scope: searchScope.scope ?? "indexed",
+          collectionId: searchScope.collectionId
         })) as { data?: Array<{ path?: string }> };
         const graphHits = (remote.data ?? [])
           .map((hit) => hit.path?.trim())
@@ -390,6 +401,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);
   const identityDirectoryStore = new IdentityDirectoryStore(context, api.getBackendClient());
   registerIdentityDirectoryProvider(() => identityDirectoryStore.load(readConfiguration().apiBaseUrl));
+  const agentOrchestrator = createAgentOrchestrator({
+    indexBackend,
+    resolveAbsolutePath: resolveLocalAbsolutePath
+  });
   const services = {
     healthMonitor,
     degradationCache,
@@ -399,7 +414,8 @@ export function activate(context: vscode.ExtensionContext): void {
     indexManager,
     indexBackend,
     lightningStatusBar,
-    identityDirectoryStore
+    identityDirectoryStore,
+    agentOrchestrator
   };
   const provider = new CoopSidebarProvider(context.extensionUri, context, api, services);
 
@@ -415,15 +431,41 @@ export function activate(context: vscode.ExtensionContext): void {
         if (uri.path !== "/auth/callback") {
           return;
         }
-        const token = new URLSearchParams(uri.fragment).get("coopToken")?.trim();
-        const refreshToken = new URLSearchParams(uri.fragment).get("coopRefresh")?.trim();
-        if (!token) {
+        const fragmentParams = new URLSearchParams(uri.fragment);
+        const queryParams = new URLSearchParams(uri.query);
+        const readParam = (key: string): string | undefined => {
+          const value = fragmentParams.get(key) ?? queryParams.get(key);
+          const trimmed = value?.trim();
+          return trimmed || undefined;
+        };
+
+        const error = readParam("error");
+        const message = readParam("message");
+        if (error || message) {
+          void vscode.window.showErrorMessage(message ?? error ?? "Sign-in failed.");
           return;
         }
+
+        const token = readParam("coopToken");
+        const refreshToken = readParam("coopRefresh");
+        if (!token) {
+          void vscode.window.showErrorMessage("Sign-in did not return a session token.");
+          return;
+        }
+
         void (async () => {
-          await api.storeSession(token, refreshToken);
-          await refreshAllSessions();
-          void vscode.window.showInformationMessage("Signed in to Coop.");
+          try {
+            await api.storeSession(token, refreshToken);
+            await api.fetchMe(readConfiguration().apiBaseUrl);
+            await refreshAllSessions();
+            void vscode.window.showInformationMessage("Signed in to Coop.");
+          } catch {
+            await api.clearToken();
+            await api.clearRefreshToken();
+            void vscode.window.showErrorMessage(
+              "Sign-in failed: could not verify your session. Try again or contact your admin."
+            );
+          }
         })();
       }
     })
@@ -585,9 +627,12 @@ export function activate(context: vscode.ExtensionContext): void {
     publishAutocompleteStatus,
     createAutocompleteUsageTelemetryHandler((eventType, metadata) => {
       void api.recordUsageEvents(eventType, metadata).catch(() => undefined);
-    })
+    }),
+    indexBackend
   );
   registerAutocompleteCommands(context, api, autocompleteProvider, publishAutocompleteStatus);
+  context.subscriptions.push(registerAutocompleteIndexNotifier(context, indexBackend));
+  registerPatchCommands(context, api, () => provider.session);
 
   void vscode.commands.executeCommand(
     "setContext",

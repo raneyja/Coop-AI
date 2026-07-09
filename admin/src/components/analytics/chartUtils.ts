@@ -24,7 +24,13 @@ export const CHART_COLORS = [
   "#79C0FF"
 ] as const;
 
-export const CHART_SVG_CLASS = "mx-auto block h-[220px] w-full max-w-2xl";
+/** SVG coordinate system — wider viewBox keeps axis text ~11–13px when scaled to full section width. */
+export const CHART_VIEW_WIDTH = 960;
+export const CHART_VIEW_HEIGHT = 260;
+export const CHART_AXIS_FONT_SIZE = 11;
+
+/** Plot area shell: full section width, fixed readable height. */
+export const chartPlotShellClassName = "h-[260px] w-full min-w-0";
 
 export function seriesColor(index: number, override?: string): string {
   if (override) return override;

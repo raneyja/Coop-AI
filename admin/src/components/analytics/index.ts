@@ -1,3 +1,5 @@
+export { AnalyticsSectionNav } from "./AnalyticsSectionNav";
+export { MyAnalyticsPanel } from "./MyAnalyticsPanel";
 export { ChartFrame } from "./ChartFrame";
 export { AnalyticsLineChart } from "./AnalyticsLineChart";
 export { AnalyticsBarChart } from "./AnalyticsBarChart";

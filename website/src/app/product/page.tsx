@@ -104,12 +104,16 @@ export default function ProductPage() {
           <SectionHeading label="features" title="Capabilities" />
           <CapabilitiesMatrix groups={productCapabilityGroups} />
           <p className="mt-8 text-sm text-coop-muted">
-            Inline autocomplete is available opt-in — enable{" "}
+            Inline autocomplete is opt-in — enable{" "}
             <code className="text-gray-600">coopAI.autocomplete.enabled</code> in settings.{" "}
             <a href="/docs/autocomplete" className="text-coop-index hover:underline">
               Autocomplete docs
             </a>
-            . Edit selection is in active development.
+            . Edit selection ships with apply and undo — see{" "}
+            <a href="/docs/edit-mode" className="text-coop-index hover:underline">
+              Edit mode docs
+            </a>
+            .
           </p>
         </div>
       </section>

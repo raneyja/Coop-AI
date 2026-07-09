@@ -351,16 +351,36 @@ export function SsoSettingsPanel() {
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
+          <label
+            className={`flex items-center gap-2 text-sm text-white ${
+              policy?.requireSso && enabled ? "cursor-not-allowed opacity-80" : "cursor-pointer"
+            }`}
+            title={
+              policy?.requireSso && enabled
+                ? "Turn off Require SSO before disabling SAML sign-in."
+                : undefined
+            }
+          >
             <input
               type="checkbox"
               className="accent-coop-index"
               checked={enabled}
-              disabled={saving}
-              onChange={(event) => setEnabled(event.target.checked)}
+              disabled={saving || Boolean(policy?.requireSso && enabled)}
+              onChange={(event) => {
+                if (!event.target.checked && policy?.requireSso) {
+                  return;
+                }
+                setEnabled(event.target.checked);
+              }}
             />
             Enable SSO for this organization
           </label>
+          {policy?.requireSso && enabled ? (
+            <p className="text-xs text-coop-muted">
+              Turn off <span className="text-white/90">Require SSO</span> in sign-in policy before
+              disabling SSO.
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             <button type="submit" className="admin-btn-primary" disabled={saving}>

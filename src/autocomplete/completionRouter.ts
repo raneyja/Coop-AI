@@ -4,8 +4,10 @@ import { buildRepoId } from "../chat/buildRepoId";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveInlineModelPreset, resolveChatModelPreset } from "../config/inlineModelPresets";
+import { resolveEffectiveUseGraphContext } from "./autocompleteConfig";
+import type { IndexBackend } from "../indexing/indexBackend";
 import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
-import { filterAndRankCompletions, normalizeCompletionText } from "./completionFilter";
+import { filterAndRankCompletions, normalizeCompletionText, type SymbolPlausibilityHints } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
 import { applyEdgeCaseFallbacks } from "./edgeCases";
 import { CompletionCache, createLatencyTimer, type AutocompletePerformanceMonitor } from "./performance";
@@ -17,11 +19,19 @@ export type CompletionRouterDeps = {
   api: SecureApiClient;
   performance: AutocompletePerformanceMonitor;
   cache?: CompletionCache;
+  indexBackend?: IndexBackend;
 };
 
 const MAX_FIM_PREFIX_CHARS = 4_000;
 const SINGLE_LINE_MAX_TOKENS = 96;
 const MULTI_LINE_MAX_TOKENS = 200;
+const MANIFEST_SYMBOL_CACHE_TTL_MS = 5 * 60 * 1000;
+const MANIFEST_SYMBOL_FETCH_TIMEOUT_MS = 120;
+
+type ManifestSymbolCacheEntry = {
+  symbols: Set<string>;
+  expiresAt: number;
+};
 
 type InFlightEntry = {
   prefix: string;
@@ -33,6 +43,7 @@ type InFlightEntry = {
 export class CompletionRouter {
   private readonly cache: CompletionCache;
   private readonly inFlightByDoc = new Map<string, InFlightEntry>();
+  private manifestSymbolCache: { repoId: string; entry: ManifestSymbolCacheEntry } | undefined;
 
   public constructor(private readonly deps: CompletionRouterDeps) {
     this.cache = deps.cache ?? new CompletionCache();
@@ -149,12 +160,14 @@ export class CompletionRouter {
       );
       const profile = getProjectStyleProfile(folder ?? undefined);
       const fileSample = safeContext.previousLines.slice(0, 2000);
+      const symbolHints = await this.resolveSymbolHints(context, settings, prefs);
 
       let ranked = filterAndRankCompletions(
         [primary, ...alternatives].filter(Boolean),
         context,
         settings,
-        fileSample
+        fileSample,
+        symbolHints
       );
       ranked = biasCompletionsWithProjectStyle(ranked, context, profile);
       ranked = applyEdgeCaseFallbacks(context, ranked);
@@ -195,6 +208,67 @@ export class CompletionRouter {
     }
   }
 
+  private async resolveSymbolHints(
+    context: ExtractedCodeContext,
+    settings: AutocompleteSettings,
+    prefs: ReturnType<typeof readConfiguration>
+  ): Promise<SymbolPlausibilityHints | undefined> {
+    if (!settings.useGraphContext) {
+      return undefined;
+    }
+
+    const repoId = buildRepoId(prefs);
+    if (repoId.includes("unknown/unknown")) {
+      return undefined;
+    }
+
+    const manifestSymbols = await this.loadManifestSymbols(repoId, prefs.apiBaseUrl);
+    if (!manifestSymbols?.size) {
+      return undefined;
+    }
+    return { manifestSymbols };
+  }
+
+  private async loadManifestSymbols(
+    repoId: string,
+    baseUrl: string
+  ): Promise<Set<string> | undefined> {
+    const cached = this.manifestSymbolCache;
+    if (cached?.repoId === repoId && Date.now() < cached.entry.expiresAt) {
+      return cached.entry.symbols;
+    }
+
+    try {
+      const manifest = await raceWithTimeout(
+        this.deps.api.fetchRepoManifest(baseUrl, repoId),
+        MANIFEST_SYMBOL_FETCH_TIMEOUT_MS,
+        new AbortController().signal
+      );
+      const symbols = new Set<string>();
+      for (const file of manifest.files ?? []) {
+        for (const symbol of file.symbols ?? []) {
+          if (symbol.name) {
+            symbols.add(symbol.name);
+          }
+        }
+      }
+      if (symbols.size > 0) {
+        this.manifestSymbolCache = {
+          repoId,
+          entry: {
+            symbols,
+            expiresAt: Date.now() + MANIFEST_SYMBOL_CACHE_TTL_MS
+          }
+        };
+        return symbols;
+      }
+    } catch {
+      // fail-open — local context penalties still apply
+    }
+
+    return cached?.repoId === repoId ? cached.entry.symbols : undefined;
+  }
+
   private async requestWithFallback(
     prompt: string,
     context: ExtractedCodeContext,
@@ -209,6 +283,11 @@ export class CompletionRouter {
     const chatMessage = segments
       ? synthesizeMessageFromSegments(segments, context, prompt)
       : prompt;
+    const repoId = buildRepoId(prefs);
+    const repoStatus = this.deps.indexBackend
+      ? await this.deps.indexBackend.getRepoStatus(repoId)
+      : undefined;
+    const useGraphContext = resolveEffectiveUseGraphContext(settings, repoStatus);
     const body = {
       message: chatMessage,
       segments,
@@ -218,10 +297,10 @@ export class CompletionRouter {
       model: preset.model,
       maxTokens,
       temperature: 0.15,
-      ...(settings.useGraphContext
+      ...(useGraphContext
         ? {
             useGraphContext: true,
-            repoId: buildRepoId(prefs),
+            repoId,
             file: toRepositoryRelativePath(context.filePath)
           }
         : {})

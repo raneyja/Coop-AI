@@ -1,21 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
 import { fetchIntegrations, fetchMeWorkspaceRepos, type WorkspaceRepo } from "@/lib/coopApi";
 import { displayName } from "@/lib/timezones";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
+import { dedupeWorkspaceRepos } from "@/lib/workspaceRepoStatus";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
+import { IndexedRepoStatusList } from "@/components/IndexedRepoStatusList";
 
 const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode";
-
-function repoLabel(repo: WorkspaceRepo): string {
-  return `${repo.owner}/${repo.name}`;
-}
 
 export function MemberDashboard() {
   const me = getStoredMe();
@@ -50,6 +48,7 @@ export function MemberDashboard() {
     void load();
   }, [load]);
 
+  const uniqueRepos = useMemo(() => dedupeWorkspaceRepos(repos), [repos]);
   const connectedCount = integrations.filter((integration) => integration.installed).length;
   const greeting = displayName(me?.firstName, me?.lastName, me?.email);
 
@@ -72,7 +71,7 @@ export function MemberDashboard() {
         </div>
         <AdminStat
           label="Assigned repositories"
-          value={loading ? "—" : repos.length}
+          value={loading ? "—" : uniqueRepos.length}
           hint={adminControlled ? "Set by your admin" : "Your workspace selection"}
         />
         <AdminStat
@@ -83,43 +82,15 @@ export function MemberDashboard() {
       </AdminStatRow>
 
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="admin-section-label">Your repositories</h2>
-        </div>
+        <h2 className="admin-section-label">
+          Indexed repos{!loading && uniqueRepos.length > 0 ? ` (${uniqueRepos.length})` : ""}
+        </h2>
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
-        <div className="admin-card--table">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Repository</th>
-                <th>Index status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={2} className="py-8 text-center text-coop-muted">
-                    Loading…
-                  </td>
-                </tr>
-              ) : repos.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="py-8 text-center text-coop-muted">
-                    No repositories assigned yet. Ask your admin to grant access from Users → Repository
-                    access.
-                  </td>
-                </tr>
-              ) : (
-                repos.map((repo) => (
-                  <tr key={repo.repoId}>
-                    <td className="font-mono text-sm">{repoLabel(repo)}</td>
-                    <td className="text-sm capitalize text-coop-muted">{repo.indexStatus ?? "—"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <IndexedRepoStatusList
+          repos={repos}
+          loading={loading}
+          emptyMessage="No repositories assigned yet. Ask your admin to grant access from Users → Repository access."
+        />
         {adminControlled ? (
           <p className="text-xs text-coop-muted">
             Repository access is managed by your organization admin. Contact them to request additional repos.

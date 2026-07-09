@@ -27,6 +27,7 @@ import {
 import { isValidPaperclipDataUrl, isAcceptedPaperclipMimeType, isVisionWeightedPaperclipAttachment } from "../chat/paperclipAttachments";
 
 import type { GraphQueryApi } from "./graphQuery";
+import type { InlineGraphFileSnippetFetcher } from "./inlineGraphContext";
 
 export type ChatApiDeps = {
   router?: ModelRouter;
@@ -38,6 +39,7 @@ export type ChatApiDeps = {
   userStore?: UserStore;
   planQuota?: PlanQuotaService;
   graphQuery?: GraphQueryApi;
+  fetchFileSnippet?: InlineGraphFileSnippetFetcher;
 };
 
 type ParsedChatRequest = {
@@ -117,7 +119,7 @@ export async function handleChatApiRequest(
           planQuota
         },
         rawRequest,
-        { graphQuery: deps.graphQuery }
+        { graphQuery: deps.graphQuery, fetchFileSnippet: deps.fetchFileSnippet }
       );
     } finally {
       await deps.auditLogger?.record({

@@ -216,6 +216,41 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(capturedBody?.repoId, undefined);
   });
 
+  await asyncTest("auto-includes graph context when index is healthy", async () => {
+    setMockConfiguration("coopAI", "defaultOwner", "acme");
+    setMockConfiguration("coopAI", "defaultRepo", "app");
+    setMockConfiguration("coopAI", "defaultCodeHost", "github");
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const indexBackend = {
+      getRepoStatus: async () => ({
+        repoId: "github:acme/app",
+        enabled: true,
+        status: "ready" as const,
+        zoektAvailable: true,
+        scipAvailable: false
+      })
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({
+      api: api as never,
+      performance,
+      indexBackend: indexBackend as never
+    });
+
+    await router.fetchCompletions(sampleContext, autocompleteSettings);
+
+    assert.equal(capturedBody?.useGraphContext, true);
+    assert.equal(capturedBody?.repoId, "github:acme/app");
+    assert.equal(capturedBody?.file, "src/app.ts");
+  });
+
   await asyncTest("falls back to secondary provider when primary request fails", async () => {
     let attempt = 0;
     const api = {

@@ -1,5 +1,7 @@
 # CoopAI Roadmap
 
+**Updated:** July 9, 2026
+
 This document tracks what shipped in the Prompt 2 + pre-work pass, what is intentionally deferred, and the recommended order to build next. For API contracts, see [api-v1.md](./api-v1.md).
 
 ## Shipped (current baseline)
@@ -29,11 +31,19 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Workspace prompt library | `.coop/prompts.json` + sidebar chips + Save / Run |
 | API key UX | **Save API key** button (any length for local dev) |
 | Inline autocomplete (T0) | `coopAI.autocomplete.enabled` default **off**; buffer-only ghost text |
+| Autocomplete T1 (partial) | `coopAI.autocomplete.useGraphContext` default **off**; server graph slice when enabled |
+
+### Enterprise
+
+| Capability | Route / module | Notes |
+|------------|----------------|-------|
+| **Enterprise SAML SSO** | `/v1/auth/saml/*`, `/v1/sso/*` | **Shipped** — admin portal self-serve at **Settings → Single sign-on** (`/settings/single-sign-on`) + extension SSO handoff. Policy guard: `sso_required_active` when disabling SAML under **Require SSO**. Tests: `npm run test:sso` (24 tests, in `npm test`). **Known limits:** SP-initiated only (no IdP-initiated); no SCIM; no SAML refresh tokens (12 h session TTL); shared service provider for all Enterprise tenants (org resolved via RelayState). Operator sets `COOP_PUBLIC_BASE_URL`. See [SAML SSO](../website/content/docs/saml-sso.md), [sso-smoke-test.md](./sso-smoke-test.md). |
 
 ### Explicitly not in scope of that pass
 
 - File `@`-mentions in chat
-- Graph-backed completion context (T1)
+- Edit selection inline diff (accept/retry/undo) — Phase 3 codegen
+- Semantic retrieval on chat hot path — Phase 1 codegen (`repoSemanticRetrieval.ts` exists, not wired)
 
 ---
 
@@ -79,17 +89,42 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 ---
 
-### 3. Autocomplete T1 (graph-backed)
+### 3. Autocomplete T1 (graph-backed) — partial
 
 **Goal:** Optional dependents / signature snippets from graph API when completing.
 
-**Trigger to start:** T0 stable in production or dogfood.
+**Status:** Setting + server slice shipped; opt-in (`coopAI.autocomplete.useGraphContext` default **false**). Extension sends `repoId` + `file` when enabled. 150 ms graph budget; `x-graph-context: degraded` on timeout.
 
 **Build list:**
 
-- [ ] Setting: `coopAI.autocomplete.useGraphContext`
-- [ ] Server: include small graph slice in inline request (dependents, path metadata)
-- [ ] Rate limits + degradation when graph offline
+- [x] Setting: `coopAI.autocomplete.useGraphContext`
+- [x] Server: include small graph slice in inline request (dependents, ownership) — `inlineGraphContext.ts`
+- [ ] Rate limits + degradation polish when graph offline at scale
+- [ ] Dogfood CAR ≥25% with graph on
+
+---
+
+### 8. Cody-replacement codegen (Phases 0–5)
+
+**Goal:** Cody-grade generate → accept → edit with repo-grounded intelligence. Plan: `docs/codegen-cody-replacement-plan.md`.
+
+| Phase | Focus | Status |
+|-------|--------|--------|
+| **0** | Doc drift, settings exposure | **Complete** — timeout/model defaults aligned; `coopAI.chat.semanticRetrieval` in `package.json`; manual edit-selection honesty |
+| **1** | Wire semantic retrieval + autocomplete graph on hot path | Next — `repoSemanticRetrieval.ts` exists but not called from `CoopChatSession` |
+| **2** | Telemetry + admin analytics | Partial — completion events exist; edit/quick_action gaps |
+| **3** | Edit loop: parse/apply/undo patches | Not started — no `src/edit/` |
+| **4** | Autocomplete trust (symbol filter, dogfood) | Not started |
+| **5** | Agent tools (opt-in) | Not started |
+
+**Codegen defaults (code truth):**
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `coopAI.autocomplete.enabled` | `false` | Opt-in ghost text |
+| `coopAI.autocomplete.useGraphContext` | `false` | Graph slice when Deep-Indexed |
+| `coopAI.autocomplete.requestTimeoutMs` | `1500` | Docs were stale at 400 |
+| `coopAI.chat.semanticRetrieval` | `true` | Plain-chat index snippets (Phase 1 wires hot path) |
 
 ---
 
@@ -145,8 +180,9 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 ```text
 Now (verified)     →  mock chat + settings + prompts + context menu + Autocomplete T0
-Next               →  @-mentions (files only) + live graph context for quick actions
-Then               →  Autocomplete T1, BYOK on router
+Codegen Phase 0    →  doc/settings audit (complete)
+Next (codegen 1)   →  wire semantic retrieval + graph on chat/edit hot path
+Then               →  @-mentions + edit loop (Phase 3) + telemetry polish
 ```
 
 ```mermaid
@@ -191,3 +227,5 @@ When ready for a row above, use a prompt like:
 | [webhook-backend.md](./webhook-backend.md) | Graph routes, webhooks, health |
 | [job-queue.md](./job-queue.md) | Heavy scans (knowledge gaps, index) |
 | [zero-retention-llm.md](./zero-retention-llm.md) | Enterprise LLM policy |
+| [SAML SSO](../website/content/docs/saml-sso.md) | Enterprise IdP setup, sign-in surfaces, troubleshooting |
+| [sso-smoke-test.md](./sso-smoke-test.md) | Operator smoke test for local/demo SSO |

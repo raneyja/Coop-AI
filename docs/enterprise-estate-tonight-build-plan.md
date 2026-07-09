@@ -1,7 +1,7 @@
 # Enterprise Estate Build — Tonight Parallel Plan
 
 **Created:** June 15, 2026  
-**Updated:** June 15, 2026 — aligned tier model + Pro onboarding + MCP  
+**Updated:** July 9, 2026 — aligned tier model + Pro onboarding + MCP; Enterprise SAML SSO shipped  
 **Goal:** Enterprise = full estate code graph (+ MCP later). Pro = self-serve deep index on chosen repos (max 3/seat).
 
 **Companion docs:**
@@ -27,7 +27,7 @@
 
 **Pricing copy (marketing + in-app):**
 - **Pro:** Org indexes your estate; each developer picks up to 3 **workspace repos** + **Coop-Search** across them
-- **Enterprise:** Same workspace model + MCP + SSO extras
+- **Enterprise:** Same workspace model + MCP + **SAML SSO** (self-serve at admin **Settings → Single sign-on**, `/settings/single-sign-on`)
 
 **MCP:** Enterprise only. Ship **after** estate index (E1) + org search (E2). Not Pro.
 

@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { readAutocompleteSettings } from "../autocomplete/autocompleteConfig";
+import { handlePatchComplete } from "../edit/handlePatchComplete";
+import { setLastEditUserMessage } from "../edit/patchSession";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import {
@@ -147,6 +149,7 @@ import {
   plainChatHistoryContent,
   plainChatRefersToAttachedFile,
   partitionMentionsForQuickAction,
+  partitionMentionsForTraceDecision,
   type MentionScopeQuickAction
 } from "../prompts/mentionScope";
 import {
@@ -206,6 +209,10 @@ import {
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
+import {
+  mergeRepoSemanticContext,
+  searchRepoForChat
+} from "../context/repoSemanticRetrieval";
 import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LightningStatusBar } from "../extension/lightningStatusBar";
@@ -269,6 +276,9 @@ import { shouldFetchJiraContext } from "../context/jiraContext";
 import { shouldFetchNotionContext } from "../context/notionContext";
 import { shouldFetchSlackContext } from "../context/slackContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
+import { readAgentModeSetting } from "../config/agentModeConfig";
+import { shouldUseAgentMode } from "./agentRouting";
+import { shouldTrackEditRequest } from "./editSendRouting";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -283,6 +293,7 @@ export type CoopChatSessionOptions = {
   indexBackend: IndexBackend;
   lightningStatusBar: LightningStatusBar;
   identityDirectoryStore: import("../identity/identityDirectoryStore").IdentityDirectoryStore;
+  agentOrchestrator: import("../api/agent/AgentOrchestrator").AgentOrchestrator;
   onDescriptionChange?: (description: string) => void;
   onTitleChange?: (title: string) => void;
   enforceSidebarMinWidth?: boolean;
@@ -339,6 +350,9 @@ export class CoopChatSession {
   private editorContextSuppressedUntil = 0;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
+  private pendingChatMentions?: ChatFileMention[];
+  /** Set during /edit sends so semantic retrieval uses the edit gate. */
+  private pendingCodeEditIntent = false;
   private readonly threadStore?: ChatThreadStore;
 
   public constructor(
@@ -712,6 +726,10 @@ export class CoopChatSession {
 
   public getChatHistory(): ChatMessage[] {
     return [...this.chatHistory];
+  }
+
+  public async sendEditFollowUp(message: string): Promise<void> {
+    await this.handleChatSend(message, undefined, undefined, { composerMode: "edit" });
   }
 
   public async sendUserMessage(
@@ -1696,11 +1714,49 @@ export class CoopChatSession {
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
+      result = await this.enrichChatContextWithSemanticSearch(request, result);
     } else {
       result = await this.buildBaseContextResult(request);
     }
 
     return result;
+  }
+
+  private async enrichChatContextWithSemanticSearch(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    try {
+      const searchScope = resolveSearchScope(this.preferences);
+      const semantic = await searchRepoForChat({
+        request,
+        indexBackend: this.options.indexBackend,
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+        collectionId: searchScope.mode === "collection" ? searchScope.collectionId : undefined,
+        searchScope: searchScope.scope,
+        inScopeMentionCount: this.countInScopeMentionsForSemanticRetrieval(request),
+        codeEditIntent: this.pendingCodeEditIntent,
+        selectionText: this.pendingCodeEditIntent ? this.selectedCodeSnippet(2000) : undefined
+      });
+      return mergeRepoSemanticContext(result, semantic);
+    } catch {
+      return result;
+    } finally {
+      this.pendingChatMentions = undefined;
+      this.pendingCodeEditIntent = false;
+    }
+  }
+
+  private countInScopeMentionsForSemanticRetrieval(request: ContextFetchRequest): number {
+    const mentions = this.pendingChatMentions;
+    if (!mentions?.length) {
+      return 0;
+    }
+    const activeRepoId = request.params.repoId ?? buildRepoId(this.preferences, this.currentContext);
+    return partitionMentionsForTraceDecision(this.quickActionMentionRefs(mentions), activeRepoId).inRepo
+      .length;
   }
 
   private async buildBaseContextResult(
@@ -1720,7 +1776,8 @@ export class CoopChatSession {
       if (degraded) {
         const merged = applyLocalFallbackToResult(degraded, localPayload);
         this.maybeNotifyDegradation(request, merged);
-        return hybridEnrichContext(request, merged, this.options.indexBackend);
+        const enriched = await hybridEnrichContext(request, merged, this.options.indexBackend);
+        return this.enrichWithAgentToolsIfEnabled(request, enriched);
       }
     }
 
@@ -1733,7 +1790,65 @@ export class CoopChatSession {
       },
       localPayload
     );
-    return hybridEnrichContext(request, base, this.options.indexBackend);
+    const enriched = await hybridEnrichContext(request, base, this.options.indexBackend);
+    return this.enrichWithAgentToolsIfEnabled(request, enriched);
+  }
+
+  private async enrichWithAgentToolsIfEnabled(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    if (request.type !== "chat_context" || request.params.quickAction) {
+      return result;
+    }
+
+    const query = request.intent.context?.queryText;
+    if (!query?.trim()) {
+      return result;
+    }
+
+    if (
+      !shouldUseAgentMode({
+        query,
+        hasQuickAction: false,
+        agentModeSetting: readAgentModeSetting(),
+        contextBundle: [result]
+      })
+    ) {
+      return result;
+    }
+
+    const repoId = request.params.repoId;
+    if (!repoId) {
+      return result;
+    }
+
+    try {
+      const agentResult = await this.options.agentOrchestrator.run({
+        message: query,
+        repoId,
+        maxSteps: 8
+      });
+      if (!agentResult.context) {
+        return result;
+      }
+
+      const baseData =
+        typeof result.data === "object" && result.data !== null
+          ? (result.data as Record<string, unknown>)
+          : {};
+
+      return {
+        ...result,
+        data: {
+          ...baseData,
+          agentTools: agentResult.context,
+          agentSteps: agentResult.steps
+        }
+      };
+    } catch {
+      return result;
+    }
   }
 
   private async enrichChatContextWithIntegrations(
@@ -2269,6 +2384,10 @@ export class CoopChatSession {
     }
   }
 
+  private emitUsageEvent(eventType: string, metadata?: Record<string, unknown>): void {
+    void this.options.api.recordUsageEvents(eventType, metadata).catch(() => undefined);
+  }
+
   private async handleChatSend(
     message: string,
     quickAction?: string,
@@ -2343,6 +2462,10 @@ export class CoopChatSession {
       return;
     }
 
+    if (quickAction) {
+      void this.emitUsageEvent(`quick_action.${quickAction.replace(/-/g, "_")}`);
+    }
+
     if (
       quickAction &&
       ["blast-radius", "find-owner", "trace-decision", "knowledge-gaps"].includes(quickAction) &&
@@ -2376,6 +2499,10 @@ export class CoopChatSession {
             mentionRefs
           )
         : plainChatHistoryContent(message, mentionRefs));
+    if (shouldTrackEditRequest(options, quickAction)) {
+      setLastEditUserMessage(historyContent);
+      void this.emitUsageEvent("edit.requested");
+    }
     const userMessage: ChatMessage = {
       role: "user",
       content: historyContent,
@@ -2428,6 +2555,8 @@ export class CoopChatSession {
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
+    this.pendingChatMentions = options?.mentions;
+    this.pendingCodeEditIntent = options?.composerMode === "edit";
     await this.runIntentFetch(intentEvent);
     this.enrichKnowledgeGapsBundle(quickAction);
     if (quickAction === "understand-repo") {
@@ -3414,6 +3543,9 @@ export class CoopChatSession {
       this.chatHistory.push(finalMessage);
             this.clearIntentFeedback();
       this.post({ type: "chat:complete", payload: { message: finalMessage } });
+      if (options?.composerMode === "edit") {
+        void handlePatchComplete(finalMessage.content);
+      }
       this.postChatHistory();
       this.persistActiveThread();
       if (localPayload?.files.length) {
@@ -4964,9 +5096,17 @@ export class CoopChatSession {
   }
 
   private async handleSignInSso(orgName?: string): Promise<void> {
-    const org = orgName?.trim();
+    let org = orgName?.trim();
     if (!org) {
-      void vscode.window.showErrorMessage("Enter your organization name before signing in with SSO.");
+      org = (
+        await vscode.window.showInputBox({
+          prompt: "Organization name for SSO",
+          placeHolder: "Acme Engineering",
+          ignoreFocusOut: true
+        })
+      )?.trim();
+    }
+    if (!org) {
       return;
     }
     const redirectUri = vscode.Uri.parse("vscode://coop-ai.coop-ai/auth/callback").toString();
@@ -4976,7 +5116,9 @@ export class CoopChatSession {
         redirect: redirectUri
       });
       await vscode.env.openExternal(vscode.Uri.parse(url));
-      void vscode.window.showInformationMessage("Complete sign-in in your browser, then return to VS Code.");
+      void vscode.window.showInformationMessage(
+        "Complete sign-in in your browser. VS Code will finish automatically when you return."
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not start SSO sign-in.";
       void vscode.window.showErrorMessage(message);
@@ -5429,7 +5571,7 @@ export class CoopChatSession {
       const defaultFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
       const picked = await vscode.window.showSaveDialog({
         defaultUri: defaultFolder
-          ? vscode.Uri.joinPath(defaultFolder, AGENTS_MD_FILENAME)
+          ? vscode.Uri.file(path.join(defaultFolder.fsPath, AGENTS_MD_FILENAME))
           : undefined,
         filters: { Markdown: ["md"] },
         saveLabel: "Create AGENTS.md",

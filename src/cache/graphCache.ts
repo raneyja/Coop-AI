@@ -295,6 +295,11 @@ export class GraphCache {
     return entry ? this.result(entry, [...(entry.dependentsIndex.get(file) ?? [])]) : undefined;
   }
 
+  public getImports(repoId: string, file: string): GraphQueryResult<DependencyEdge[]> | undefined {
+    const entry = this.getEntry(repoId);
+    return entry ? this.result(entry, [...(entry.dependenciesIndex.get(file) ?? [])]) : undefined;
+  }
+
   public getTransitiveDependents(repoId: string, file: string): GraphQueryResult<string[]> | undefined {
     const entry = this.getEntry(repoId);
     return entry ? this.result(entry, [...(entry.transitiveDependentsIndex.get(file) ?? [])]) : undefined;

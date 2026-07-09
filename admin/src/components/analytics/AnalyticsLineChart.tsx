@@ -4,12 +4,15 @@ import {
   type ChartSeries,
   type DayCountPoint,
   type MultiSeriesPoint,
+  CHART_AXIS_FONT_SIZE,
+  CHART_VIEW_HEIGHT,
+  CHART_VIEW_WIDTH,
+  chartPlotShellClassName,
   formatAxisNumber,
   formatDayLabel,
   niceMax,
   numericValues,
   pickTickIndices,
-  CHART_SVG_CLASS,
   seriesColor,
   yTicks
 } from "./chartUtils";
@@ -53,7 +56,7 @@ export function AnalyticsLineChart({
   description,
   emptyLabel = "No data for this range.",
   className,
-  height = 220,
+  height = CHART_VIEW_HEIGHT,
   maxXTicks = 6,
   showLegend = true
 }: AnalyticsLineChartProps): React.ReactElement {
@@ -74,8 +77,8 @@ export function AnalyticsLineChart({
   const ticks = yTicks(maxY, 4);
   const xTickIdx = pickTickIndices(points.length, maxXTicks);
 
-  const pad = { top: 12, right: 12, bottom: 28, left: 40 };
-  const width = 640;
+  const width = CHART_VIEW_WIDTH;
+  const pad = { top: 16, right: 16, bottom: 32, left: 48 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
 
@@ -120,17 +123,16 @@ export function AnalyticsLineChart({
         </ul>
       ) : null}
 
-      <div className="w-full overflow-hidden">
+      <div className={chartPlotShellClassName}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className={CHART_SVG_CLASS}
+          className="h-full w-full"
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={title ?? "Time series chart"}
         >
           <title>{title ?? "Time series"}</title>
 
-          {/* Grid + Y axis */}
           {ticks.map((t) => {
             const y = yAt(t);
             return (
@@ -145,12 +147,12 @@ export function AnalyticsLineChart({
                   strokeWidth={1}
                 />
                 <text
-                  x={pad.left - 8}
+                  x={pad.left - 10}
                   y={y}
                   textAnchor="end"
                   dominantBaseline="middle"
                   fill="#9CA4AD"
-                  fontSize={9}
+                  fontSize={CHART_AXIS_FONT_SIZE}
                   fontFamily="ui-monospace, monospace"
                 >
                   {formatAxisNumber(t)}
@@ -159,7 +161,6 @@ export function AnalyticsLineChart({
             );
           })}
 
-          {/* X axis ticks */}
           {xTickIdx.map((i) => {
             const p = points[i];
             if (!p) return null;
@@ -167,10 +168,10 @@ export function AnalyticsLineChart({
               <text
                 key={`x-${p.day}-${i}`}
                 x={xAt(i)}
-                y={height - 8}
+                y={height - 10}
                 textAnchor="middle"
                 fill="#9CA4AD"
-                fontSize={10}
+                fontSize={CHART_AXIS_FONT_SIZE}
                 fontFamily="ui-monospace, monospace"
               >
                 {formatDayLabel(p.day)}
@@ -178,7 +179,6 @@ export function AnalyticsLineChart({
             );
           })}
 
-          {/* Lines */}
           {paths.map((p) => (
             <path
               key={p.key}
@@ -191,14 +191,13 @@ export function AnalyticsLineChart({
             />
           ))}
 
-          {/* End dots for single series readability */}
           {series.length === 1 &&
             points.map((p, i) => (
               <circle
                 key={`dot-${p.day}`}
                 cx={xAt(i)}
                 cy={yAt(p.values[keys[0]!] ?? 0)}
-                r={points.length <= 40 ? 2.5 : 0}
+                r={points.length <= 40 ? 3 : 0}
                 fill={seriesColor(0, series[0]?.color)}
               />
             ))}

@@ -64,8 +64,9 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 | `/indexing` | Admin | Repo catalog, Deep-Index enable/disable, estate sync |
 | `/collections` | Pro/Ent admin | Repo groupings |
 | `/users` | Admin | Invite and manage users; per-user repo grants |
-| `/analytics` | Admin | Org usage — DAU, chat, completions, CSV export |
-| `/my-usage` | Member | Personal usage analytics (overview, chat, completions) |
+| `/analytics` | Admin | Organization usage — DAU, chat, completions, CSV export |
+| `/analytics/my` | All signed-in users | Personal usage analytics (overview, chat, completions) |
+| `/my-usage` | — | Redirects to `/analytics/my` |
 | `/my-activity` | Member | Personal audit log |
 | `/feed` | All | Chat thread browser |
 | `/api-keys` | Admin | Create and revoke org API keys |

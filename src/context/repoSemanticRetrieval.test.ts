@@ -4,10 +4,14 @@ import {
   applySemanticByteBudget,
   gateOptionsFromRequest,
   isPlainChatIntentEvent,
+  mergeRepoSemanticContext,
   rankSearchPaths,
+  semanticRetrievalQueryText,
   shouldRunRepoSemanticRetrieval,
   MAX_SEMANTIC_BYTES,
-  MAX_SEMANTIC_FILES
+  MAX_SEMANTIC_FILES,
+  SEMANTIC_QUERY_MIN_LENGTH,
+  SEMANTIC_QUERY_MIN_LENGTH_EDIT
 } from "./repoSemanticRetrieval";
 
 let passed = 0;
@@ -64,6 +68,94 @@ test("shouldRunRepoSemanticRetrieval rejects short query", () => {
       enabled: true
     }),
     false
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval allows edit intent with 8-char slash args", () => {
+  assert.equal(SEMANTIC_QUERY_MIN_LENGTH_EDIT, 8);
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "add logs",
+      codeEditIntent: true,
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    true
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval rejects edit intent below min without selection", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "fix",
+      codeEditIntent: true,
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval allows edit intent when selection supplements short args", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "fix",
+      selectionText: "function authenticateUser(token: string)",
+      codeEditIntent: true,
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    true
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval keeps 12-char min for plain chat", () => {
+  assert.equal(SEMANTIC_QUERY_MIN_LENGTH, 12);
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "add logs",
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
+test("semanticRetrievalQueryText combines slash args and selection for edit", () => {
+  assert.equal(
+    semanticRetrievalQueryText({
+      queryText: "fix typo",
+      selectionText: "const value = 1;",
+      codeEditIntent: true
+    }),
+    "fix typo\nconst value = 1;"
+  );
+  assert.equal(
+    semanticRetrievalQueryText({
+      queryText: "how does authentication work in this repo?",
+      codeEditIntent: false
+    }),
+    "how does authentication work in this repo?"
+  );
+});
+
+test("gateOptionsFromRequest passes codeEditIntent and selectionText extras", () => {
+  const request = chatRequest("fix bug");
+  const gate = gateOptionsFromRequest(request, {
+    inScopeMentionCount: 0,
+    enabled: true,
+    codeEditIntent: true,
+    selectionText: "export function signIn() {}"
+  });
+  assert.equal(gate.codeEditIntent, true);
+  assert.equal(gate.selectionText, "export function signIn() {}");
+  assert.equal(
+    shouldRunRepoSemanticRetrieval(gate),
+    true
   );
 });
 
@@ -172,7 +264,37 @@ test("applySemanticByteBudget caps file count and total bytes", () => {
   assert.ok(totalBytes <= MAX_SEMANTIC_BYTES, `expected <= ${MAX_SEMANTIC_BYTES}, got ${totalBytes}`);
 });
 
-console.log(`\nrepoSemanticRetrieval: ${passed}/${passed + failed} tests passed`);
-if (failed > 0) {
-  process.exit(1);
+async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ ${name}`);
+    console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+    failed++;
+  }
 }
+
+async function runAsyncTests(): Promise<void> {
+  await asyncTest("mergeRepoSemanticContext attaches repoSemanticSearch to chat context", async () => {
+    const semantic = {
+      source: "repo-semantic-search" as const,
+      query: "how does authentication work in this repository?",
+      files: [{ path: "src/auth.ts", repoId: "acme/app", content: "export function signIn() {}" }]
+    };
+    const merged = mergeRepoSemanticContext(
+      { requestId: "r1", type: "chat_context", fetchedAt: new Date(), data: { context: {} } },
+      semantic
+    );
+    const data = merged.data as { repoSemanticSearch?: { files: Array<{ path: string }> } };
+    assert.equal(data.repoSemanticSearch?.files[0]?.path, "src/auth.ts");
+  });
+}
+
+void runAsyncTests().then(() => {
+  console.log(`\nrepoSemanticRetrieval: ${passed}/${passed + failed} tests passed`);
+  if (failed > 0) {
+    process.exit(1);
+  }
+});

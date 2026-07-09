@@ -8,6 +8,7 @@ import { displayOrgName, getStoredMe } from "@/lib/auth";
 import { displayName } from "@/lib/timezones";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
+import { IndexedRepoStatusList } from "./IndexedRepoStatusList";
 
 const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode";
 
@@ -25,10 +26,6 @@ type MemberOnboardingWizardProps = {
   onComplete: () => void;
   onDismiss: () => void;
 };
-
-function repoLabel(repo: WorkspaceRepo): string {
-  return `${repo.owner}/${repo.name}`;
-}
 
 export function MemberOnboardingWizard({
   step,
@@ -163,45 +160,18 @@ export function MemberOnboardingWizard({
           {currentStep.id === "repos" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">Your repositories</h3>
+                <h3 className="text-lg font-semibold text-white">Indexed repos</h3>
                 <p className="mt-2 text-sm text-coop-muted">
                   {adminControlled
                     ? "Assigned by your admin — contact them to request more access."
                     : "Repositories available in your workspace."}
                 </p>
               </div>
-              <div className="admin-card--table">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Repository</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reposLoading ? (
-                      <tr>
-                        <td colSpan={2} className="py-6 text-center text-coop-muted">
-                          Loading…
-                        </td>
-                      </tr>
-                    ) : repos.length === 0 ? (
-                      <tr>
-                        <td colSpan={2} className="py-6 text-center text-coop-muted">
-                          No repositories assigned yet. Ask your admin to grant access.
-                        </td>
-                      </tr>
-                    ) : (
-                      repos.map((repo) => (
-                        <tr key={repo.repoId}>
-                          <td className="font-mono text-sm">{repoLabel(repo)}</td>
-                          <td className="text-sm capitalize text-coop-muted">{repo.indexStatus ?? "—"}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <IndexedRepoStatusList
+                repos={repos}
+                loading={reposLoading}
+                emptyMessage="No repositories assigned yet. Ask your admin to grant access."
+              />
             </div>
           )}
 

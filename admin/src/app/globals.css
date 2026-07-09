@@ -102,6 +102,18 @@
     @apply bg-coop-muted/50;
   }
 
+  .admin-index-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  .admin-index-dot--ready {
+    @apply bg-coop-index;
+  }
+
+  .admin-index-dot--not-ready {
+    @apply bg-red-400/90;
+  }
+
   .admin-section-label {
     @apply text-xs font-medium uppercase tracking-wide text-coop-muted;
   }

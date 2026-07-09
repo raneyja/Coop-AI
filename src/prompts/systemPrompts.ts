@@ -575,6 +575,8 @@ export function buildUserMessageWithContext(
     (file) => !instructionPaths.has(normalizeInstructionPathForDedup(file.path))
   );
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
+  const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
   const jiraTickets = extractJiraSearchTickets(context?.contextBundle);
   const slackMessages = extractSlackSearchMessages(context?.contextBundle);
@@ -590,6 +592,8 @@ export function buildUserMessageWithContext(
     projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
     repoSemanticSnippets.length === 0 &&
+    agentFileSnippets.length === 0 &&
+    !agentSearch &&
     localSnippets.length === 0 &&
     !jiraTickets &&
     !slackMessages &&
@@ -663,6 +667,25 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</repo_semantic_files>");
+  }
+  if (agentSearch) {
+    lines.push(...formatAgentSearchForLlm(agentSearch));
+  }
+  if (agentFileSnippets.length > 0) {
+    lines.push("<agent_files>");
+    lines.push(
+      "Source files retrieved by the read-only agent loop (search_code → read_file). Treat as authoritative for implementation detail."
+    );
+    for (const file of agentFileSnippets) {
+      const range =
+        file.lineRange && file.lineRange.length === 2
+          ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
+          : "";
+      lines.push(`<file_content path="${file.path}"${range}>`);
+      lines.push(file.content);
+      lines.push("</file_content>");
+    }
+    lines.push("</agent_files>");
   }
   if (jiraTickets) {
     lines.push(...formatJiraTicketsForLlm(jiraTickets));
@@ -1167,6 +1190,89 @@ function extractLocalFileSnippets(bundle: unknown): ManifestSnippet[] {
   return snippets;
 }
 
+type AgentSearchHit = {
+  citation?: string;
+  fileName: string;
+  lineNumber: number;
+  content?: string;
+};
+
+type AgentSearchSummary = {
+  query?: string;
+  repoId?: string;
+  hits: AgentSearchHit[];
+};
+
+function extractAgentFileSnippets(bundle: unknown): ManifestSnippet[] {
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+  const snippets: ManifestSnippet[] = [];
+  const seen = new Set<string>();
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const files = (entry as { data?: { agentTools?: { read_file?: { files?: ManifestSnippet[] } } } }).data
+      ?.agentTools?.read_file?.files;
+    if (!files?.length) {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.path || !file.content || seen.has(file.path)) {
+        continue;
+      }
+      seen.add(file.path);
+      snippets.push(file);
+    }
+  }
+  return snippets;
+}
+
+function extractAgentSearchSummary(bundle: unknown): AgentSearchSummary | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const search = (entry as { data?: { agentTools?: { search_code?: Record<string, unknown> } } }).data?.agentTools
+      ?.search_code;
+    if (!search || typeof search !== "object") {
+      continue;
+    }
+    const hits = Array.isArray(search.hits) ? (search.hits as AgentSearchHit[]) : [];
+    if (!hits.length && !search.query) {
+      continue;
+    }
+    return {
+      query: typeof search.query === "string" ? search.query : undefined,
+      repoId: typeof search.repoId === "string" ? search.repoId : undefined,
+      hits: hits.slice(0, 8)
+    };
+  }
+  return undefined;
+}
+
+function formatAgentSearchForLlm(summary: AgentSearchSummary): string[] {
+  const lines = ["<agent_search>"];
+  if (summary.query) {
+    lines.push(`query: ${summary.query}`);
+  }
+  if (summary.repoId) {
+    lines.push(`repo: ${summary.repoId}`);
+  }
+  lines.push("Top indexed hits from search_code (agent loop step 1):");
+  for (const hit of summary.hits) {
+    const citation = hit.citation ?? `${hit.fileName}:${hit.lineNumber}`;
+    const snippet = hit.content ? ` — ${hit.content.trim().slice(0, 120)}` : "";
+    lines.push(`- ${citation}${snippet}`);
+  }
+  lines.push("</agent_search>");
+  return lines;
+}
+
 function sanitizeContextBundleForLlm(bundle: unknown): unknown {
   if (!Array.isArray(bundle)) {
     return bundle;
@@ -1187,6 +1293,10 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         googleDocsSearch?: { documents: unknown[] };
         entryFiles?: Array<{ path: string; content: string; truncated?: boolean }>;
         repoSemanticSearch?: { files?: Array<{ path: string; repoId?: string; content: string; truncated?: boolean }> };
+        agentTools?: {
+          read_file?: { files?: Array<{ path: string; content: string; lineRange?: [number, number] }> };
+          search_code?: { hits?: unknown[] };
+        };
       };
     };
     const source = record.data;
@@ -1228,6 +1338,35 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
           byteLength: file.content?.length ?? 0,
           ...(file.lineRange ? { lineRange: file.lineRange } : {})
         }))
+      };
+    }
+
+    if (source.agentTools?.read_file?.files?.length) {
+      mutated = true;
+      data.agentTools = {
+        ...source.agentTools,
+        read_file: {
+          ...source.agentTools.read_file,
+          files: source.agentTools.read_file.files.map((file) => ({
+            path: file.path,
+            byteLength: file.content?.length ?? 0,
+            ...(file.lineRange ? { lineRange: file.lineRange } : {})
+          }))
+        },
+        search_code: source.agentTools.search_code
+          ? {
+              ...source.agentTools.search_code,
+              hits: source.agentTools.search_code.hits?.map((hit) =>
+                hit && typeof hit === "object"
+                  ? {
+                      citation: (hit as { citation?: string }).citation,
+                      fileName: (hit as { fileName?: string }).fileName,
+                      lineNumber: (hit as { lineNumber?: number }).lineNumber
+                    }
+                  : hit
+              )
+            }
+          : source.agentTools.search_code
       };
     }
 

@@ -30,6 +30,7 @@ import { loadJobQueueConfig } from "../src/config/jobQueueConfig";
 import { JobQueue } from "../src/jobs/jobQueue";
 import { syncOrgCatalog } from "../src/server/catalogSyncService";
 import type { OrgRepoAccessMode } from "../src/server/repoAccessTypes";
+import { principalForUser } from "../src/server/audit/auditLogger";
 
 /** Public signing cert from https://mocksaml.com/api/saml/metadata (BoxyHQ MockSAML). */
 const MOCKSAML_IDP_CERT = `-----BEGIN CERTIFICATE-----
@@ -485,6 +486,440 @@ async function main(): Promise<void> {
           return d;
         }
 
+        type DemoThreadMessage = {
+          id: string;
+          role: "user" | "assistant";
+          content: string;
+          sortOrder: number;
+          createdAt: Date;
+        };
+
+        type DemoThread = {
+          id: string;
+          title: string;
+          repoOwner?: string;
+          repoName?: string;
+          updatedAt: Date;
+          createdAt: Date;
+          messages: DemoThreadMessage[];
+        };
+
+        function previewFromThreadMessages(messages: DemoThreadMessage[]): string {
+          for (let index = messages.length - 1; index >= 0; index -= 1) {
+            const message = messages[index]!;
+            const trimmed = message.content.trim().replace(/\s+/g, " ");
+            if (trimmed) {
+              return trimmed.length > 240 ? `${trimmed.slice(0, 237)}…` : trimmed;
+            }
+          }
+          return "";
+        }
+
+        async function insertDemoThread(
+          thread: DemoThread & {
+            orgId: string;
+            userId: string;
+            principal: string;
+          }
+        ): Promise<void> {
+          await pool.query(
+            `INSERT INTO chat_threads (
+               id, org_id, user_id, principal, title,
+               repo_owner, repo_name, repo_provider,
+               message_count, preview_text, created_at, updated_at
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'github', $8, $9, $10, $11)`,
+            [
+              thread.id,
+              thread.orgId,
+              thread.userId,
+              thread.principal,
+              thread.title,
+              thread.repoOwner ?? null,
+              thread.repoName ?? null,
+              thread.messages.length,
+              previewFromThreadMessages(thread.messages),
+              thread.createdAt.toISOString(),
+              thread.updatedAt.toISOString()
+            ]
+          );
+          for (const message of thread.messages) {
+            await pool.query(
+              `INSERT INTO chat_messages (id, thread_id, role, content, metadata, sort_order, created_at)
+               VALUES ($1, $2, $3, $4, '{}'::jsonb, $5, $6)`,
+              [
+                message.id,
+                thread.id,
+                message.role,
+                message.content,
+                message.sortOrder,
+                message.createdAt.toISOString()
+              ]
+            );
+          }
+        }
+
+        async function insertAuditBatch(
+          rows: Array<{
+            orgId: string;
+            userId: string;
+            principal: string;
+            action: string;
+            metadata: Record<string, unknown>;
+            createdAt: Date;
+          }>
+        ): Promise<void> {
+          const chunkSize = 200;
+          for (let i = 0; i < rows.length; i += chunkSize) {
+            const chunk = rows.slice(i, i + chunkSize);
+            const values: unknown[] = [];
+            const placeholders: string[] = [];
+            chunk.forEach((row, idx) => {
+              const o = idx * 6;
+              placeholders.push(
+                `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}::jsonb, $${o + 6})`
+              );
+              values.push(
+                row.userId,
+                row.orgId,
+                row.principal,
+                row.action,
+                JSON.stringify(row.metadata),
+                row.createdAt.toISOString()
+              );
+            });
+            await pool.query(
+              `INSERT INTO audit_log (user_id, org_id, principal, action, metadata, created_at)
+               VALUES ${placeholders.join(", ")}`,
+              values
+            );
+          }
+        }
+
+        function buildDemoThreads(options: {
+          prefix: string;
+          repos: Array<{ owner: string; name: string }>;
+          seed: number;
+        }): DemoThread[] {
+          const rand = mulberry32(options.seed);
+          const now = Date.now();
+          const scenarios: Array<{
+            title: string;
+            repoIndex: number;
+            turns: Array<{ user: string; assistant: string }>;
+            daysAgo: number;
+          }> = [
+            {
+              title: "Trace auth middleware flow",
+              repoIndex: 0,
+              daysAgo: 2,
+              turns: [
+                {
+                  user: "Walk me through how a request gets from `webhookServer.ts` to `resolveAuthContext`.",
+                  assistant:
+                    "Incoming requests hit `handleRequest` in `webhookServer.ts`, which routes to the org API stack. Auth resolves in `resolveAuthContext`: session cookie → `userStore.resolveUserSession`, otherwise org API key → `orgStore.resolveAuth`. Failures return 401 before route handlers run."
+                },
+                {
+                  user: "Where would SSO sessions plug in?",
+                  assistant:
+                    "After password/Google login or SAML assertion, `userAuthApi` mints a session token stored in `user_sessions`. The same `resolveUserSession` path loads the user — no separate SSO branch in the router."
+                }
+              ]
+            },
+            {
+              title: "Who owns billing webhook handler?",
+              repoIndex: 1,
+              daysAgo: 5,
+              turns: [
+                {
+                  user: "Who last changed the Stripe webhook handler and who should review a retry change?",
+                  assistant:
+                    "**Alex Chen** owns `billingApi.ts` webhook handling (last commit 12 days ago). For retry semantics, loop in **Blake Diaz** — they added idempotency keys in `billing/checkout` last sprint."
+                }
+              ]
+            },
+            {
+              title: "Blast radius: repo access policy",
+              repoIndex: 0,
+              daysAgo: 8,
+              turns: [
+                {
+                  user: "If we switch from `all_indexed` to `per_user`, what breaks for members?",
+                  assistant:
+                    "Members lose implicit access to all org repos. `resolveAccessibleRepos` returns grant-filtered repos only — dashboard repo list, chat repo context, and Lightning search all shrink to assigned repos. Admins need grants in `user_repo_grants` before flip."
+                }
+              ]
+            },
+            {
+              title: "Add tests for completion router",
+              repoIndex: 2,
+              daysAgo: 11,
+              turns: [
+                {
+                  user: "Suggest test cases for `completionRouter.ts` when graph cache is cold.",
+                  assistant:
+                    "Cover: (1) buffer-only fallback when SCIP unavailable, (2) graph slice attached when cache warm, (3) timeout → degrade without throwing, (4) filter rejects low-confidence ghost text. Mirror patterns in `completionRouter.test.ts`."
+                },
+                {
+                  user: "Draft one test skeleton for the timeout case.",
+                  assistant:
+                    "```ts\nit('degrades to buffer-only when graph query times out', async () => {\n  mockGraphQuery.mockRejectedValue(new TimeoutError());\n  const result = await routeCompletion(ctx);\n  expect(result.source).toBe('buffer');\n});\n```"
+                }
+              ]
+            },
+            {
+              title: "Understand repo layout",
+              repoIndex: 1,
+              daysAgo: 14,
+              turns: [
+                {
+                  user: "Give me a 60-second map of the admin portal app router.",
+                  assistant:
+                    "`admin/src/app/(admin)/` holds authenticated routes: `/` dashboard, `/analytics` org metrics, `/my-usage` personal analytics, `/feed` synced chat threads, `/my-activity` audit log. Shared layout + sidebar live in `(admin)/layout.tsx`."
+                }
+              ]
+            },
+            {
+              title: "Debug CAR drop last week",
+              repoIndex: 0,
+              daysAgo: 18,
+              turns: [
+                {
+                  user: "My completion acceptance rate dipped — what should I check first?",
+                  assistant:
+                    "Compare `completion.suggested` vs `completion.accepted` in My Analytics. If suggested rose but accepted flat, check latency (`completion.performance`) and whether larger suggestions correlate with rejects. Also confirm you didn't change tab-away behavior in the editor."
+                }
+              ]
+            },
+            {
+              title: "Patch applier edge cases",
+              repoIndex: 2,
+              daysAgo: 22,
+              turns: [
+                {
+                  user: "What happens if a patch targets a file that changed since the model read it?",
+                  assistant:
+                    "`patchApplier` re-reads the buffer before apply. Mismatch surfaces as a conflict event — user can retry with fresh context. See `handlePatchComplete` for the user-facing flow."
+                }
+              ]
+            },
+            {
+              title: "Quick action: knowledge gaps",
+              repoIndex: 1,
+              daysAgo: 27,
+              turns: [
+                {
+                  user: "Run a knowledge-gaps pass on the integrations module.",
+                  assistant:
+                    "Gaps found: (1) no doc for OAuth state TTL, (2) Slack thread sync untested when channel archived, (3) Jira webhook signature rotation undocumented. Highest risk: OAuth state — add test in `adminIntegrationsApi.test.ts`."
+                }
+              ]
+            },
+            {
+              title: "SAML cert rotation checklist",
+              repoIndex: 0,
+              daysAgo: 35,
+              turns: [
+                {
+                  user: "We're rotating the IdP signing cert — what do I update in Coop?",
+                  assistant:
+                    "Admin portal → Settings → Single sign-on → paste new **IdP X.509 cert**. Keep old cert until IdP cutover completes. Smoke test with `scripts/smoke-sso.sh` or mocksaml.com before requiring SSO."
+                }
+              ]
+            },
+            {
+              title: "Mobile repo index stuck",
+              repoIndex: 1,
+              daysAgo: 42,
+              turns: [
+                {
+                  user: "Why is `analytics-demo/mobile` stuck in indexing?",
+                  assistant:
+                    "Job queue shows clone succeeded but SCIP index OOM on last attempt. Re-queue from admin Repos or run `reindex-estate` for the org. Until `indexStatus` is `ready`, Lightning search excludes that repo."
+                }
+              ]
+            }
+          ];
+
+          return scenarios.map((scenario, index) => {
+            const repo = options.repos[scenario.repoIndex % options.repos.length]!;
+            const base = new Date(now - scenario.daysAgo * 24 * 60 * 60 * 1000);
+            base.setUTCHours(10 + Math.floor(rand() * 8), Math.floor(rand() * 60), 0, 0);
+            const messages: DemoThreadMessage[] = [];
+            let sortOrder = 0;
+            for (const turn of scenario.turns) {
+              const userAt = new Date(base.getTime() + sortOrder * 90_000);
+              messages.push({
+                id: `${options.prefix}-t${index}-m${sortOrder}`,
+                role: "user",
+                content: turn.user,
+                sortOrder,
+                createdAt: userAt
+              });
+              sortOrder += 1;
+              const assistantAt = new Date(userAt.getTime() + 4_000 + Math.floor(rand() * 8_000));
+              messages.push({
+                id: `${options.prefix}-t${index}-m${sortOrder}`,
+                role: "assistant",
+                content: turn.assistant,
+                sortOrder,
+                createdAt: assistantAt
+              });
+              sortOrder += 1;
+            }
+            const updatedAt = messages[messages.length - 1]?.createdAt ?? base;
+            return {
+              id: `${options.prefix}-thread-${index}`,
+              title: scenario.title,
+              repoOwner: repo.owner,
+              repoName: repo.name,
+              createdAt: messages[0]?.createdAt ?? base,
+              updatedAt,
+              messages
+            };
+          });
+        }
+
+        function buildDemoAuditLog(options: {
+          orgId: string;
+          userId: string;
+          principal: string;
+          repos: Array<{ owner: string; name: string }>;
+          seed: number;
+          daysBack: number;
+        }): Array<{
+          orgId: string;
+          userId: string;
+          principal: string;
+          action: string;
+          metadata: Record<string, unknown>;
+          createdAt: Date;
+        }> {
+          const rand = mulberry32(options.seed);
+          const rows: Array<{
+            orgId: string;
+            userId: string;
+            principal: string;
+            action: string;
+            metadata: Record<string, unknown>;
+            createdAt: Date;
+          }> = [];
+          const filePaths = [
+            "src/server/meAnalyticsApi.ts",
+            "src/autocomplete/completionRouter.ts",
+            "admin/src/app/(admin)/my-usage/page.tsx",
+            "src/chat/CoopChatSession.ts",
+            "src/edit/patchApplier.ts"
+          ];
+          const now = Date.now();
+          for (let dayOffset = 0; dayOffset < options.daysBack; dayOffset += 1) {
+            if (rand() > 0.82) {
+              continue;
+            }
+            const day = new Date(now - dayOffset * 24 * 60 * 60 * 1000);
+            const loginAt = atHour(day, 9, rand() * 20);
+            rows.push({
+              orgId: options.orgId,
+              userId: options.userId,
+              principal: options.principal,
+              action: "auth.login",
+              metadata: { method: "password" },
+              createdAt: loginAt
+            });
+
+            const eventsPerDay = 1 + Math.floor(rand() * 4);
+            for (let i = 0; i < eventsPerDay; i += 1) {
+              const repo = options.repos[Math.floor(rand() * options.repos.length)]!;
+              const createdAt = atHour(day, 9 + Math.floor(rand() * 9), rand() * 60);
+              const roll = rand();
+              if (roll < 0.4) {
+                rows.push({
+                  orgId: options.orgId,
+                  userId: options.userId,
+                  principal: options.principal,
+                  action: "chat.completion",
+                  metadata: {
+                    model: rand() < 0.6 ? "gpt-4o" : "claude-sonnet-4",
+                    totalTokens: 600 + Math.floor(rand() * 3200)
+                  },
+                  createdAt
+                });
+              } else if (roll < 0.65) {
+                rows.push({
+                  orgId: options.orgId,
+                  userId: options.userId,
+                  principal: options.principal,
+                  action: "completion.inline",
+                  metadata: { latencyMs: 70 + Math.floor(rand() * 380) },
+                  createdAt
+                });
+              } else if (roll < 0.85) {
+                rows.push({
+                  orgId: options.orgId,
+                  userId: options.userId,
+                  principal: options.principal,
+                  action: "repo.file.fetch",
+                  metadata: {
+                    repoId: `github.com/${repo.owner}/${repo.name}`,
+                    path: filePaths[Math.floor(rand() * filePaths.length)]
+                  },
+                  createdAt
+                });
+              } else {
+                rows.push({
+                  orgId: options.orgId,
+                  userId: options.userId,
+                  principal: options.principal,
+                  action: "repo.search",
+                  metadata: {
+                    repoId: `github.com/${repo.owner}/${repo.name}`,
+                    query: ["AuthContext", "CompletionRouter", "patchApplier", "auditLogger"][
+                      Math.floor(rand() * 4)
+                    ]
+                  },
+                  createdAt
+                });
+              }
+            }
+          }
+          return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+
+        async function seedMemberPortalExperience(options: {
+          orgId: string;
+          userId: string;
+          email: string;
+          threadPrefix: string;
+          repos: Array<{ owner: string; name: string }>;
+          seed: number;
+          auditDaysBack: number;
+        }): Promise<{ threads: number; auditEntries: number }> {
+          const principal = principalForUser(options.userId);
+          const threads = buildDemoThreads({
+            prefix: options.threadPrefix,
+            repos: options.repos,
+            seed: options.seed
+          });
+          for (const thread of threads) {
+            await insertDemoThread({
+              ...thread,
+              orgId: options.orgId,
+              userId: options.userId,
+              principal
+            });
+          }
+          const auditRows = buildDemoAuditLog({
+            orgId: options.orgId,
+            userId: options.userId,
+            principal,
+            repos: options.repos,
+            seed: options.seed + 91,
+            daysBack: options.auditDaysBack
+          });
+          await insertAuditBatch(auditRows);
+          return { threads: threads.length, auditEntries: auditRows.length };
+        }
+
         async function insertUsageBatch(
           rows: Array<{
             orgId: string;
@@ -747,6 +1182,24 @@ async function main(): Promise<void> {
         }
         await insertUsageBatch(companyRows);
 
+        const companyRepos = [
+          { owner: "analytics-demo", name: "platform" },
+          { owner: "analytics-demo", name: "web" },
+          { owner: "analytics-demo", name: "api" }
+        ];
+        const harperAccount = companyAccounts.find((a) => a.email === "harper.jones@analytics-demo.local");
+        const harperPortal = harperAccount
+          ? await seedMemberPortalExperience({
+              orgId: companyOrg.id,
+              userId: harperAccount.userId,
+              email: harperAccount.email,
+              threadPrefix: "harper",
+              repos: companyRepos,
+              seed: 7707,
+              auditDaysBack: 60
+            })
+          : { threads: 0, auditEntries: 0 };
+
         const demoRepos = [
           { repoId: "github.com/analytics-demo/platform", status: "ready" as const },
           { repoId: "github.com/analytics-demo/web", status: "ready" as const },
@@ -783,6 +1236,16 @@ async function main(): Promise<void> {
           seed: 4242
         });
         await insertUsageBatch(soloRows);
+        const soloRepos = [{ owner: "jordanlee", name: "side-project" }];
+        const soloPortal = await seedMemberPortalExperience({
+          orgId: soloOrg.id,
+          userId: soloUser.id,
+          email: soloEmail,
+          threadPrefix: "jordan",
+          repos: soloRepos,
+          seed: 5150,
+          auditDaysBack: 90
+        });
         await store.upsertOrgRepo(soloOrg.id, "github.com/jordanlee/side-project", {
           lightningEnabled: true,
           indexStatus: "ready",
@@ -812,7 +1275,9 @@ async function main(): Promise<void> {
                   email: companyAccounts.find((a) => a.persona === "regular" && a.role === "member")
                     ?.email,
                   password: demoPassword,
-                  note: "Member — open /my-usage for personal analytics"
+                  note: "Member — /my-usage, /feed, /my-activity",
+                  chatThreads: harperPortal.threads,
+                  auditEntries: harperPortal.auditEntries
                 },
                 inactiveExample: companyAccounts.find((a) => a.persona === "inactive")?.email,
                 personas: {
@@ -831,7 +1296,9 @@ async function main(): Promise<void> {
                 login: {
                   email: soloEmail,
                   password: demoPassword,
-                  note: "Individual power user — 4 months of growing usage; /analytics and /my-usage"
+                  note: "Solo user — /analytics, /my-usage, /feed, /my-activity",
+                  chatThreads: soloPortal.threads,
+                  auditEntries: soloPortal.auditEntries
                 }
               }
             },

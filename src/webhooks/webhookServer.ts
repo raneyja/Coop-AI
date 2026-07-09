@@ -19,6 +19,7 @@ import { maybeEnqueueStructureManifest } from "./manifestOnboardingTrigger";
 import { handleJobsApiRequest } from "../jobs/jobsApi";
 import { createJobRuntime, startJobRuntime, type JobRuntime } from "../jobs/jobRuntime";
 import { createChatRouter, handleChatApiRequest, llmHealthPayload } from "../api/chatApi";
+import { createOrgInlineGraphFileSnippetFetcher } from "../api/inlineGraphFileSnippet";
 import { getDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
@@ -26,6 +27,7 @@ import { handleOrgApiRequest } from "../server/orgApi";
 import { createEstateSyncService } from "../server/estateSyncService";
 import { UserStore } from "../server/users/userStore";
 import { SsoConfigStore } from "../server/sso/ssoConfigStore";
+import { AuthPolicyStore } from "../server/sso/authPolicyStore";
 import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
@@ -162,6 +164,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     );
   }
   const ssoConfigStore = pool ? new SsoConfigStore(pool) : undefined;
+  const authPolicyStore = pool ? new AuthPolicyStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
   const usageTracker = new UsageTracker(pool ?? null);
   const samlService = serverConfig.ssoBaseUrl
@@ -313,6 +316,10 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const rateLimits = new RateLimitTracker({ warnThreshold: config.rateLimit.warnThreshold });
   const tokenPool = new TokenPool(config.tokenPools);
   const graphQuery = new GraphQueryApi({ cache });
+  const inlineGraphFileSnippetFetcher =
+    orgStore && serverConfig
+      ? createOrgInlineGraphFileSnippetFetcher({ orgStore, serverConfig })
+      : undefined;
   const registry = new WebhookRegistry({
     github: new PlaceholderWebhookClient(),
     gitlab: new PlaceholderWebhookClient(),
@@ -584,7 +591,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker, graphQuery },
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker, graphQuery, fetchFileSnippet: inlineGraphFileSnippetFetcher },
           request
         )
       ) {
@@ -631,6 +638,23 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      // Enterprise SSO config/policy must run before handleOrgApiRequest:
+      // the org handler greedily claims every "/v1/*" path and 404s unknowns.
+      if (
+        await handleEnterpriseApiRequest(
+          {
+            method: parsed.method,
+            pathname: parsed.pathname,
+            headers: parsed.headers,
+            body: parsed.body
+          },
+          response,
+          { orgStore, ssoConfigStore, authPolicyStore, userStore, serverConfig }
+        )
+      ) {
+        return;
+      }
+
       if (await handleOrgApiRequest(orgParsed, response, {
         orgStore,
         jobQueue: jobs.queue,
@@ -643,21 +667,6 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         integrationStore,
         scopePolicyStore
       })) {
-        return;
-      }
-
-      if (
-        await handleEnterpriseApiRequest(
-          {
-            method: parsed.method,
-            pathname: parsed.pathname,
-            headers: parsed.headers,
-            body: parsed.body
-          },
-          response,
-          { orgStore, ssoConfigStore, userStore, serverConfig }
-        )
-      ) {
         return;
       }
 

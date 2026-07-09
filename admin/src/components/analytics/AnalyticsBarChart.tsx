@@ -2,9 +2,12 @@
 
 import {
   type BarDatum,
+  CHART_AXIS_FONT_SIZE,
+  CHART_VIEW_HEIGHT,
+  CHART_VIEW_WIDTH,
+  chartPlotShellClassName,
   formatAxisNumber,
   niceMax,
-  CHART_SVG_CLASS,
   seriesColor,
   truncateLabel
 } from "./chartUtils";
@@ -27,6 +30,45 @@ export type AnalyticsBarChartProps = {
   valueLabel?: string;
 };
 
+function HorizontalBarRows({
+  data,
+  max,
+  fill
+}: {
+  data: BarDatum[];
+  max: number;
+  fill: string;
+}): React.ReactElement {
+  const peak = max > 0 ? max : 1;
+  return (
+    <div className="space-y-3 py-1">
+      {data.map((d) => (
+        <div
+          key={d.label}
+          className="grid grid-cols-[minmax(7rem,28%)_1fr_auto] items-center gap-3"
+        >
+          <span className="truncate text-sm text-coop-muted" title={d.label}>
+            {d.label}
+          </span>
+          <div className="h-2.5 min-w-0 rounded-sm bg-coop-dark">
+            <div
+              className="h-2.5 rounded-sm"
+              style={{
+                width: `${Math.max(d.value > 0 ? 4 : 0, (d.value / peak) * 100)}%`,
+                backgroundColor: fill,
+                opacity: 0.85
+              }}
+            />
+          </div>
+          <span className="min-w-[2.5rem] text-right text-sm tabular-nums text-white/90">
+            {formatAxisNumber(d.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AnalyticsBarChart({
   data,
   title,
@@ -36,7 +78,7 @@ export function AnalyticsBarChart({
   orientation = "horizontal",
   color,
   maxBars = 20,
-  rowHeight = 28,
+  rowHeight = 32,
   valueLabel = "Value"
 }: AnalyticsBarChartProps): React.ReactElement {
   const sorted = [...data]
@@ -47,17 +89,9 @@ export function AnalyticsBarChart({
   const empty = sorted.length === 0;
   const max = niceMax(Math.max(0, ...sorted.map((d) => d.value), 0));
   const fill = color ?? seriesColor(0);
-  const labelMax = orientation === "horizontal" ? 32 : 14;
+  const labelMax = 14;
 
-  if (orientation === "vertical") {
-    const pad = { top: 12, right: 8, bottom: 40, left: 40 };
-    const width = 640;
-    const height = 220;
-    const innerW = width - pad.left - pad.right;
-    const innerH = height - pad.top - pad.bottom;
-    const gap = 4;
-    const barW = sorted.length > 0 ? (innerW - gap * (sorted.length - 1)) / sorted.length : 0;
-
+  if (orientation === "horizontal") {
     return (
       <ChartFrame
         title={title}
@@ -67,86 +101,18 @@ export function AnalyticsBarChart({
         className={className}
         ariaLabel={title ?? "Bar chart"}
       >
-        <div className="w-full overflow-hidden">
-          <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className={CHART_SVG_CLASS}
-            preserveAspectRatio="xMidYMid meet"
-            role="img"
-            aria-label={title ?? "Bar chart"}
-          >
-            <title>{title ?? "Bar chart"}</title>
-            {[0, 0.5, 1].map((frac) => {
-              const y = pad.top + innerH - frac * innerH;
-              const v = max * frac;
-              return (
-                <g key={frac}>
-                  <line
-                    x1={pad.left}
-                    x2={width - pad.right}
-                    y1={y}
-                    y2={y}
-                    stroke="#30363D"
-                    strokeOpacity={0.55}
-                    strokeWidth={1}
-                  />
-                  <text
-                    x={pad.left - 8}
-                    y={y}
-                    textAnchor="end"
-                    dominantBaseline="middle"
-                    fill="#9CA4AD"
-                    fontSize={10}
-                    fontFamily="ui-monospace, monospace"
-                  >
-                    {formatAxisNumber(v)}
-                  </text>
-                </g>
-              );
-            })}
-            {sorted.map((d, i) => {
-              const h = (d.value / max) * innerH;
-              const x = pad.left + i * (barW + gap);
-              const y = pad.top + innerH - h;
-              return (
-                <g key={`${d.label}-${i}`}>
-                  <rect
-                    x={x}
-                    y={y}
-                    width={Math.max(1, barW)}
-                    height={Math.max(1, h)}
-                    fill={fill}
-                    fillOpacity={0.85}
-                    rx={2}
-                  >
-                    <title>{`${d.label}: ${d.value}`}</title>
-                  </rect>
-                  <text
-                    x={x + barW / 2}
-                    y={height - 10}
-                    textAnchor="middle"
-                    fill="#9CA4AD"
-                    fontSize={9}
-                    fontFamily="ui-monospace, monospace"
-                  >
-                    {truncateLabel(d.label, labelMax)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
+        <HorizontalBarRows data={sorted} max={max} fill={fill} />
       </ChartFrame>
     );
   }
 
-  // Horizontal (default)
-  const labelCol = 140;
-  const valueCol = 48;
-  const chartW = 420;
-  const padY = 4;
-  const height = Math.max(48, sorted.length * rowHeight + padY * 2);
-  const barMaxW = chartW - 8;
+  const pad = { top: 16, right: 16, bottom: 40, left: 48 };
+  const width = CHART_VIEW_WIDTH;
+  const height = CHART_VIEW_HEIGHT;
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const gap = 6;
+  const barW = sorted.length > 0 ? (innerW - gap * (sorted.length - 1)) / sorted.length : 0;
 
   return (
     <ChartFrame
@@ -157,38 +123,54 @@ export function AnalyticsBarChart({
       className={className}
       ariaLabel={title ?? "Bar chart"}
     >
-      <div className="w-full overflow-x-auto">
+      <div className={chartPlotShellClassName}>
         <svg
-          viewBox={`0 0 ${labelCol + chartW + valueCol} ${height}`}
-          className={`${CHART_SVG_CLASS} min-w-[320px]`}
-          style={{ height: Math.max(120, height) }}
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-full w-full"
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label={title ?? "Horizontal bar chart"}
+          aria-label={title ?? "Bar chart"}
         >
-          <title>{title ?? valueLabel}</title>
-          {sorted.map((d, i) => {
-            const cy = padY + i * rowHeight + rowHeight / 2;
-            const barW = max > 0 ? (d.value / max) * barMaxW : 0;
-            const barH = Math.min(14, rowHeight - 10);
+          <title>{title ?? "Bar chart"}</title>
+          {[0, 0.5, 1].map((frac) => {
+            const y = pad.top + innerH - frac * innerH;
+            const v = max * frac;
             return (
-              <g key={`${d.label}-${i}`}>
+              <g key={frac}>
+                <line
+                  x1={pad.left}
+                  x2={width - pad.right}
+                  y1={y}
+                  y2={y}
+                  stroke="#30363D"
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                />
                 <text
-                  x={labelCol - 8}
-                  y={cy}
+                  x={pad.left - 10}
+                  y={y}
                   textAnchor="end"
                   dominantBaseline="middle"
                   fill="#9CA4AD"
-                  fontSize={10}
-                  fontFamily="ui-sans-serif, system-ui, sans-serif"
+                  fontSize={CHART_AXIS_FONT_SIZE}
+                  fontFamily="ui-monospace, monospace"
                 >
-                  {truncateLabel(d.label, labelMax)}
+                  {formatAxisNumber(v)}
                 </text>
+              </g>
+            );
+          })}
+          {sorted.map((d, i) => {
+            const h = (d.value / max) * innerH;
+            const x = pad.left + i * (barW + gap);
+            const y = pad.top + innerH - h;
+            return (
+              <g key={`${d.label}-${i}`}>
                 <rect
-                  x={labelCol}
-                  y={cy - barH / 2}
-                  width={Math.max(d.value > 0 ? 3 : 0, barW)}
-                  height={barH}
+                  x={x}
+                  y={y}
+                  width={Math.max(1, barW)}
+                  height={Math.max(1, h)}
                   fill={fill}
                   fillOpacity={0.85}
                   rx={2}
@@ -196,15 +178,14 @@ export function AnalyticsBarChart({
                   <title>{`${d.label}: ${d.value}`}</title>
                 </rect>
                 <text
-                  x={labelCol + chartW + 4}
-                  y={cy}
-                  textAnchor="start"
-                  dominantBaseline="middle"
-                  fill="#e4e4e7"
-                  fontSize={10}
+                  x={x + barW / 2}
+                  y={height - 12}
+                  textAnchor="middle"
+                  fill="#9CA4AD"
+                  fontSize={CHART_AXIS_FONT_SIZE}
                   fontFamily="ui-monospace, monospace"
                 >
-                  {formatAxisNumber(d.value)}
+                  {truncateLabel(d.label, labelMax)}
                 </text>
               </g>
             );

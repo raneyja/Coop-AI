@@ -1,6 +1,14 @@
 import * as vscode from "vscode";
 import type { SecureApiClient } from "../chat/SecureApiClient";
-import { readAutocompleteSettings, onAutocompleteSettingsChanged } from "./autocompleteConfig";
+import {
+  findActiveRepoBecameHealthy,
+  hasAutocompleteDiscoveryBeenShown,
+  isAutocompleteUserDisabled,
+  markAutocompleteDiscoveryShown,
+  readAutocompleteSettings,
+  onAutocompleteSettingsChanged,
+  resolveAutocompleteActiveRepoId
+} from "./autocompleteConfig";
 import { analyzeDocumentContext, isFileEligible } from "./contextAnalyzer";
 import { CompletionRouter } from "./completionRouter";
 import { toInlineInsertText } from "./completionFilter";
@@ -8,6 +16,8 @@ import { discardContextPayload } from "./privacy";
 import { AutocompletePerformanceMonitor } from "./performance";
 import { HotStreak } from "./hotStreak";
 import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
+import { readLightningConfiguration } from "../config/lightningConfig";
+import type { IndexBackend } from "../indexing/indexBackend";
 import type {
   AutocompleteStatusState,
   AutocompleteTelemetryEvent,
@@ -25,11 +35,81 @@ export type AutocompleteStatusPublisher = (payload: {
 
 export type CoopAutocompleteProviderOptions = {
   api: SecureApiClient;
+  indexBackend?: IndexBackend;
   onStatus?: AutocompleteStatusPublisher;
   onTelemetry?: (event: AutocompleteTelemetryEvent) => void;
 };
 
 const SHOWN_ITEM_TTL_MS = 30_000;
+const INDEX_READY_POLL_MS = 30_000;
+
+export function registerAutocompleteIndexNotifier(
+  context: vscode.ExtensionContext,
+  indexBackend: IndexBackend
+): vscode.Disposable {
+  if (isAutocompleteUserDisabled(context) || hasAutocompleteDiscoveryBeenShown(context)) {
+    return { dispose: () => undefined };
+  }
+
+  const repoStatuses = new Map<string, string>();
+  let notified = false;
+
+  const poll = async () => {
+    if (
+      notified ||
+      isAutocompleteUserDisabled(context) ||
+      hasAutocompleteDiscoveryBeenShown(context)
+    ) {
+      return;
+    }
+
+    const config = readLightningConfiguration();
+    const statuses = await indexBackend.listRepoStatuses(config);
+    const activeRepoId = resolveAutocompleteActiveRepoId();
+    const becameHealthy = findActiveRepoBecameHealthy(statuses, repoStatuses, activeRepoId);
+
+    for (const status of statuses) {
+      repoStatuses.set(status.repoId, status.status);
+    }
+
+    if (!becameHealthy) {
+      return;
+    }
+
+    notified = true;
+    const settings = readAutocompleteSettings();
+    if (!settings.enabled) {
+      await vscode.commands.executeCommand(
+        "coopAI.setAutocompleteEnabled",
+        true,
+        vscode.ConfigurationTarget.Workspace
+      );
+    }
+    await markAutocompleteDiscoveryShown(context);
+    const choice = await vscode.window.showInformationMessage(
+      "Coop autocomplete enabled — repo is Deep-Indexed",
+      "Turn off"
+    );
+    if (choice === "Turn off") {
+      await vscode.commands.executeCommand(
+        "coopAI.setAutocompleteEnabled",
+        false,
+        vscode.ConfigurationTarget.Workspace
+      );
+    }
+  };
+
+  void poll();
+  const timer = setInterval(() => {
+    void poll();
+  }, INDEX_READY_POLL_MS);
+
+  return {
+    dispose: () => {
+      clearInterval(timer);
+    }
+  };
+}
 
 export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProvider {
   private settings = readAutocompleteSettings();
@@ -48,7 +128,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private readonly disposables: vscode.Disposable[] = [];
 
   public constructor(private readonly options: CoopAutocompleteProviderOptions) {
-    this.router = new CompletionRouter({ api: options.api, performance: this.performance });
+    this.router = new CompletionRouter({
+      api: options.api,
+      performance: this.performance,
+      indexBackend: options.indexBackend
+    });
     this.disposables.push(
       onAutocompleteSettingsChanged(() => {
         this.settings = readAutocompleteSettings();
@@ -381,9 +465,15 @@ export function registerCoopAutocomplete(
   context: vscode.ExtensionContext,
   api: SecureApiClient,
   publishStatus: AutocompleteStatusPublisher,
-  onTelemetry?: (event: AutocompleteTelemetryEvent) => void
+  onTelemetry?: (event: AutocompleteTelemetryEvent) => void,
+  indexBackend?: IndexBackend
 ): CoopAutocompleteProvider {
-  const provider = new CoopAutocompleteProvider({ api, onStatus: publishStatus, onTelemetry });
+  const provider = new CoopAutocompleteProvider({
+    api,
+    indexBackend,
+    onStatus: publishStatus,
+    onTelemetry
+  });
 
   const selector: vscode.DocumentSelector = [
     { scheme: "file" },

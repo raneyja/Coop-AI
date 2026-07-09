@@ -18,7 +18,7 @@ const MEMBER_NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard" },
   { href: "/feed", label: "Chat Feed" },
   { href: "/integrations", label: "Integrations" },
-  { href: "/my-usage", label: "My Analytics" },
+  { href: "/analytics/my", label: "Analytics" },
   { href: "/my-activity", label: "My Activity" },
   { href: "/settings", label: "Settings" }
 ];
@@ -47,6 +47,12 @@ function isActive(pathname: string, href: string): boolean {
   }
   if (href === "/feed") {
     return pathname === "/feed" || pathname.startsWith("/feed/");
+  }
+  if (href === "/analytics" || href === "/analytics/my") {
+    return pathname === "/analytics" || pathname.startsWith("/analytics/");
+  }
+  if (href === "/my-usage") {
+    return pathname === "/my-usage" || pathname.startsWith("/analytics/my");
   }
   return pathname.startsWith(href);
 }

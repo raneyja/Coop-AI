@@ -1,6 +1,6 @@
 # Coop AI — Production Readiness Assessment
 
-**Date:** June 10, 2026  
+**Date:** July 9, 2026  
 **Scope:** Full codebase audit across backend, extension, admin portal, marketing site, infrastructure, and competitive landscape.
 
 **Interactive dashboard:** Open [coop-production-readiness.canvas.tsx](/Users/jonraney/.cursor/projects/Users-jonraney-Desktop-Coop-AI/canvases/coop-production-readiness.canvas.tsx) beside this chat for the visual summary with phased action items.
@@ -20,11 +20,11 @@ Coop AI has moved well beyond prototype: the **core product is real** — a VS C
 | Code indexing (Lightning) | ~70% | Works; plan-gating TODO |
 | Backend API + auth | ~65% | Auth disabled in compose |
 | Billing + self-serve Pro | ~62% | Code complete; env + tests missing |
-| Admin portal | ~58% | Functional MVP; deploy + polish needed |
+| Admin portal | ~70% | Functional MVP; nested settings hub + SAML self-serve at `/settings/single-sign-on` shipped; deploy + polish needed |
 | Marketing funnel | ~55% | Pricing/signup exist; env gaps |
-| CI/CD + tests | ~25% | No workflows; thin server coverage |
+| CI/CD + tests | ~35% | `npm test` includes `test:sso` (24 SAML/SSO tests); broader coverage still thin |
 | Observability | ~20% | Console only |
-| Enterprise SaaS polish | ~35% | No analytics, SCIM, seat enforcement |
+| Enterprise SaaS polish | ~45% | SAML self-serve shipped; no SCIM, seat enforcement, or admin analytics |
 
 ---
 
@@ -59,8 +59,8 @@ Coop AI has moved well beyond prototype: the **core product is real** — a VS C
 
 ### Admin portal (Next.js)
 
-- Login (API key + SSO tab), auth callback, dashboard, integrations, users, API keys, billing, audit, settings
-- Real API client wired to `/v1/admin/*`
+- Login (email/password, Google, inline SAML SSO), auth callback, dashboard, integrations, users, API keys, billing, audit, nested settings hub (`/settings/account`, `/settings/repository-access`, `/settings/single-sign-on`)
+- Real API client wired to `/v1/admin/*` and `/v1/sso/*` (config GET/PUT admin-only; policy GET any member)
 
 **Key files:** `admin/src/app/(admin)/*`, `admin/src/lib/coopApi.ts`
 
@@ -97,9 +97,9 @@ Server requests scopes without `search:read` (`slackAppService.ts`). Docs and `S
 
 Admin portal and extension Settings expose **Connect** for Microsoft Teams on all subscription levels. Backend OAuth (`teamsAppApi.ts`) and chat handlers (`CoopChatSession.ts`) are wired. Requires work/school M365; `ChannelMessage.Read.All` may need tenant admin consent — see [teams-connect.md](./teams-connect.md).
 
-### 6. Zero CI/CD
+### 6. CI/CD baseline improving
 
-No `.github/workflows`. No unified `npm test`. 31 test files exist; only 8 wired to npm scripts. Billing, webhooks, admin APIs, OAuth flows largely untested.
+`.github/workflows/ci.yml` runs lint and `npm run test:sso` (24 SAML/SSO unit tests) alongside other extension/server test scripts. Billing, webhooks, and admin APIs remain largely untested outside SSO.
 
 ### 7. No observability
 
@@ -116,11 +116,11 @@ Untracked macOS duplicates across `src/`, `migrations/`, `docs/`. Risk of drift 
 | Area | Status | Gap |
 |------|--------|-----|
 | Stripe billing | Checkout + webhook provisioning work | Seat count not enforced; no webhook idempotency; email defaults to mock; audit orgId bug on checkout |
-| Admin portal | Most routes wired | SSO settings placeholder; audit pagination missing; `lastUsed` vs `lastUsedAt` field mismatch; README outdated |
+| Admin portal | Most routes wired | Audit pagination missing; `lastUsed` vs `lastUsedAt` field mismatch |
 | Website funnel | Signup → Stripe redirect works | No session verification on `/welcome`; env vars undocumented; port 3001 vs 3002 mismatch |
 | Webhook registration | Inbound handlers work | `PlaceholderWebhookClient` — no auto-register with GitHub/GitLab |
 | Integration search | Live API at chat time | No background indexing of Slack/Jira/Confluence/Notion (unlike Glean) |
-| SAML SSO | Server implemented | Operator-configured only; no self-serve admin setup; replay protection disabled |
+| SAML SSO | **Shipped** — self-serve at **Settings → Single sign-on** (`/settings/single-sign-on`); extension/browser handoff; `sso_required_active` guard on disable | JIT provisioning only (no SCIM); SAML assertion replay cache not enabled; operator CLI still available for support-led onboarding |
 | Extension marketplace | Built via esbuild | Version `0.0.1`; not published |
 | Inline autocomplete | Shipped (default **off**) | Opt-in via `coopAI.autocomplete.enabled`; Copilot coexistence policy |
 | First-run wizard | Documented as Phase B | Not built |
@@ -232,10 +232,9 @@ Do these before any public traffic:
 2. Publish VS Code extension to marketplace
 3. Roadmap items: file @-mentions, inline autocomplete T1
 4. Usage analytics in admin (Pro tier promise)
-5. Self-serve SSO setup in admin settings
-6. Redis-backed dedupe/rate limits for multi-instance HA
-7. Billing tests + webhook idempotency + `invoice.payment_failed`
-8. BYOK on router (enterprise pilot)
+5. Redis-backed dedupe/rate limits for multi-instance HA
+6. Billing tests + webhook idempotency + `invoice.payment_failed`
+7. BYOK on router (enterprise pilot)
 
 ---
 
@@ -260,7 +259,9 @@ From `docs/roadmap.md`:
 | `CREDENTIALS_ENCRYPTION_KEY` | Token encryption | Must be long random secret |
 | `COOP_REQUIRE_API_AUTH` | Security | Must be `true` |
 | `COOP_CORS_ORIGINS` | Admin portal | Include admin + marketing origins |
-| `COOP_PUBLIC_BASE_URL` | OAuth/SAML callbacks | `https://api.coop-ai.dev` |
+| `COOP_PUBLIC_BASE_URL` | OAuth/SAML callbacks (operator) | `https://api.coop-ai.dev` — operator sets on API server; SAML SP URLs derive from this (not org-admin config) |
+| `COOP_SSO_SP_ENTITY_ID` | SAML (optional) | Override default SP Entity ID |
+| `COOP_SSO_SESSION_TTL_MS` | SAML (optional) | SSO session lifetime (default 12h) |
 | `STRIPE_*` | Pro billing | Secret, webhook secret, price ID |
 | `RESEND_*` | Welcome emails | Set `COOP_EMAIL_MOCK=false` |
 | OAuth vars per provider | Connect flows | See `.env.backend.example` |
@@ -289,6 +290,7 @@ From `docs/roadmap.md`:
 
 | Area | Test files | Gap |
 |------|------------|-----|
+| SAML / SSO | 6 (`test:sso`, 24 tests) | Good baseline |
 | Prompts/context builders | ~15 | Good |
 | Auth middleware | 1 | Minimal |
 | Billing/Stripe | 0 | Critical |
@@ -304,7 +306,7 @@ From `docs/roadmap.md`:
 
 **You are past the "is this real?" stage.** The architecture is coherent: extension → API → Postgres → integrations → indexing → billing → admin. A focused operator can run a pilot with one customer org today if they configure env vars, apply migrations, and accept single-instance limits.
 
-**You are not at the "flip the switch for self-serve Pro" stage.** Security defaults, CI/CD, observability, Slack scopes, Teams UI, and admin deploy/config must close first. Budget **4–6 weeks** for a credible public Pro launch and **8–12 weeks** for enterprise-grade (SSO self-serve, analytics, HA, marketplace extension).
+**You are not at the "flip the switch for self-serve Pro" stage.** Security defaults, CI/CD breadth, observability, Slack scopes, Teams UI, and admin deploy/config must close first. Budget **4–6 weeks** for a credible public Pro launch and **8–12 weeks** for enterprise-grade (SCIM, analytics, HA, marketplace extension). Enterprise SAML self-serve is shipped at `/settings/single-sign-on` — see [saml-sso.md](../website/content/docs/saml-sso.md), [sso-smoke-test.md](./sso-smoke-test.md), and `npm run smoke:sso`.
 
 **Differentiation is clear:** no competitor ships Trace Decision + Knowledge Gaps + ownership graph + live Slack/Jira context inside VS Code with org OAuth. The gap vs Glean is indexing breadth; the gap vs Sourcegraph is code search scale; the gap vs Cursor is autocomplete polish. Your moat is **cross-tool developer workflows in-IDE** — protect that while closing ops gaps.
 

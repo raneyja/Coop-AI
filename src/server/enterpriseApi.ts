@@ -115,6 +115,16 @@ async function handleSsoConfig(
       writeJson(response, 400, { error: "invalid_request", message: parsedInput.message });
       return true;
     }
+    if (parsedInput.input.enabled === false && deps.authPolicyStore) {
+      const policy = await deps.authPolicyStore.getPolicy(auth.orgId);
+      if (policy.requireSso) {
+        writeJson(response, 400, {
+          error: "sso_required_active",
+          message: "Turn off Require SSO before disabling SAML sign-in."
+        });
+        return true;
+      }
+    }
     try {
       const saved = await deps.ssoConfigStore.upsertConfig(auth.orgId, parsedInput.input);
       const sp = buildSpDetails(deps.serverConfig);

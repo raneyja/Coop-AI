@@ -509,9 +509,13 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ---
 
-## Future: agent loop (Phase 5 scaffold)
+## Agent loop (Phase 5)
 
-Plain chat today uses a single-shot evidence fetch. A read-only **agent loop** (`src/api/agent/AgentOrchestrator.ts`, gated by `coopAI.chat.agentMode`) will iteratively call `search_code` and `read_file` tools against the existing graph/org APIs. Default: **off**.
+Plain chat uses single-shot evidence fetch by default. When `coopAI.chat.agentMode` is **on**, context gathering prefetches `search_code` hits via `AgentOrchestrator.executeTool` (graph-grounded, `repoId:path:line` citations). `read_file` is available to the orchestrator but not yet invoked by chat.
+
+**Shipped:** `createAgentToolRegistry`, `search_code`, `read_file`, opt-in setting, unit tests.
+
+**Deferred (Phase 5b):** LLM tool-use loop in `AgentOrchestrator.run()` — stream model responses, parse tool calls, execute registry handlers iteratively, synthesize final answer. Default remains **off**.
 
 ---
 

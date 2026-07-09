@@ -1,9 +1,15 @@
 import type { AgentToolName } from "../agentTypes";
+import type { AgentToolContext } from "../agentToolContext";
+import { handleReadFile } from "./readFile";
+import { handleSearchCode } from "./searchCode";
 
 export type AgentToolHandler = (args: Record<string, unknown>) => Promise<string>;
 
-/** Stub registry — wire to graph/org APIs in Phase 5 implementation. */
-export const AGENT_TOOL_REGISTRY: Partial<Record<AgentToolName, AgentToolHandler>> = {
-  read_file: async () => "[stub] read_file not implemented",
-  search_code: async () => "[stub] search_code not implemented"
-};
+export function createAgentToolRegistry(
+  ctx: AgentToolContext
+): Partial<Record<AgentToolName, AgentToolHandler>> {
+  return {
+    read_file: (args) => handleReadFile(ctx, args),
+    search_code: (args) => handleSearchCode(ctx, args)
+  };
+}

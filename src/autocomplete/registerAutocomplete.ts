@@ -3,9 +3,15 @@ import type { SecureApiClient } from "../chat/SecureApiClient";
 import {
   CoopAutocompleteProvider,
   registerCoopAutocomplete,
+  registerAutocompleteIndexNotifier,
   type AutocompleteStatusPublisher
 } from "./coopAutocompleteProvider";
-import { readAutocompleteSettings, onAutocompleteSettingsChanged } from "./autocompleteConfig";
+import {
+  readAutocompleteSettings,
+  onAutocompleteSettingsChanged,
+  markAutocompleteUserDisabled,
+  resolveAutocompleteEnabledUpdateTarget
+} from "./autocompleteConfig";
 import type { AutocompleteTelemetryEvent } from "./types";
 import {
   isCopilotInstalled,
@@ -107,7 +113,9 @@ export function registerAutocompleteCommands(
     vscode.commands.registerCommand("coopAI.showAutocompleteHelp", () => {
       void vscode.window.showInformationMessage(AUTOCOMPLETE_HELP, { modal: true });
     }),
-    vscode.commands.registerCommand("coopAI.setAutocompleteEnabled", async (enabled: boolean) => {
+    vscode.commands.registerCommand(
+      "coopAI.setAutocompleteEnabled",
+      async (enabled: boolean, target?: vscode.ConfigurationTarget) => {
       const config = vscode.workspace.getConfiguration("coopAI.autocomplete");
       const current = config.get<boolean>("enabled", false);
       if (current === enabled) {
@@ -117,7 +125,9 @@ export function registerAutocompleteCommands(
         });
         return;
       }
-      await config.update("enabled", enabled, vscode.ConfigurationTarget.Global);
+      const updateTarget = target ?? resolveAutocompleteEnabledUpdateTarget(config);
+      await markAutocompleteUserDisabled(context, !enabled);
+      await config.update("enabled", enabled, updateTarget);
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
       await syncCopilotInline(enabled);
       publishStatus({
@@ -132,4 +142,4 @@ export function registerAutocompleteCommands(
   );
 }
 
-export { registerCoopAutocomplete };
+export { registerCoopAutocomplete, registerAutocompleteIndexNotifier };

@@ -1,10 +1,12 @@
 # Enterprise integration onboarding
 
+**Updated:** July 9, 2026
+
 How Coop AI integrations work in **production** (`coopAI.devMode: false`), who does what, and how to avoid the multi-day vendor-console setup you hit in local dev.
 
 **Audience:** Coop platform operators, customer org admins, and sales/solutions engineers.
 
-**Related:** [integration-onboarding.md](./integration-onboarding.md) (extension UI reference), [github-connect.md](./github-connect.md) (GitHub detail).
+**Related:** [integration-onboarding.md](./integration-onboarding.md) (extension UI reference), [github-connect.md](./github-connect.md) (GitHub detail), [SAML SSO](../website/content/docs/saml-sso.md) (Enterprise IdP setup), [sso-smoke-test.md](./sso-smoke-test.md) (operator SSO validation).
 
 ---
 
@@ -44,7 +46,7 @@ No `.env.backend`, no Docker, no Slack/Google/Azure developer portals for the cu
 |-------------|--------|
 | Coop API running | `https://api.coop-ai.dev` (or self-hosted) with Postgres |
 | `CREDENTIALS_ENCRYPTION_KEY` | Long random secret in server env — **required** for org token storage |
-| `WEBHOOK_DOMAIN` / `COOP_PUBLIC_BASE_URL` | Public HTTPS base for OAuth callbacks (e.g. `https://api.coop-ai.dev`) |
+| `WEBHOOK_DOMAIN` / `COOP_PUBLIC_BASE_URL` | Operator-only public HTTPS base for OAuth/SAML callbacks (e.g. `https://api.coop-ai.dev`) — not configured by org admins |
 | OAuth apps registered | One registration per provider below — owned by **Coop** or **customer IT**, not end developers |
 
 ### Master redirect URI pattern
@@ -90,6 +92,23 @@ docker compose up -d --build api
 ```
 
 **Success:** `curl -s https://api.coop-ai.dev/health` returns `"ok":true`.
+
+### Enterprise SAML SSO (operator)
+
+For Enterprise orgs that sign in with SAML instead of password/Google:
+
+| Task | Doc / tool |
+|------|------------|
+| IdP values, admin self-serve UI | [SAML SSO](../website/content/docs/saml-sso.md) — admin portal **Settings → Single sign-on** (`/settings/single-sign-on`) |
+| Local/demo validation (seed org + SAML start redirect) | [sso-smoke-test.md](./sso-smoke-test.md) — `npm run smoke:sso` |
+| Support-led IdP config | `scripts/admin-org.ts configure-sso` |
+| API contract | `GET`/`PUT /v1/sso/config` (org admin bearer only); `GET`/`PUT /v1/sso/policy` |
+
+**Shipped behavior:** Nested settings hub; self-serve IdP config + **Test sign-in** + sign-in policy; extension **Sign in with SSO** handoff. **`sso_required_active`** guard blocks disabling SAML while **Require SSO** is on.
+
+**Known limits today:** SP-initiated login only; no SCIM; no SAML refresh tokens (12 h session TTL); shared Coop service provider across tenants (org resolved via RelayState).
+
+**Operator env:** Set `COOP_PUBLIC_BASE_URL` to the API’s public URL — SAML SP Entity ID and ACS URL derive from it.
 
 ---
 
@@ -152,6 +171,8 @@ Give this checklist to the customer's **owner/admin** user (`canInstallIntegrati
 
 - Email/password, **Continue with Google**, or **Sign in with SSO** (Enterprise)
 - Developers invited by email use the link in the invite email → `/accept-invite?token=…`
+
+**Enterprise SAML setup (org admin):** **Settings** → **Single sign-on** (`/settings/single-sign-on`) — configure IdP, **Test sign-in**, then optionally **Require SSO**. See [SAML SSO](../website/content/docs/saml-sso.md).
 
 **Extension UI** (optional for admins testing the extension): **Settings → Account** → same credentials → **Test connection**
 
@@ -228,7 +249,7 @@ What exists today vs what enterprise self-serve still needs:
 | Docs | `integration-onboarding.md` + this doc + connect quick ref | Per-provider connect guides in Settings UI (in-app links) |
 | Google restricted scopes | Manual consent screen + test users | Published app or Google Workspace domain install |
 | Demo / seed data | `scripts/populate_*.py` (Slack, Jira, Confluence) | Optional hosted demo tenant; not required for Connect |
-| SSO | Supported server-side | Default enterprise sign-in path in extension |
+| SSO | **Shipped** — nested settings at `/settings/single-sign-on`, extension handoff; see [SAML SSO](../website/content/docs/saml-sso.md) | IdP-initiated login, SCIM, per-tenant SP |
 | In-app scope help | Minimal | Show required scopes on each Connect card |
 
 ### Recommended rollout phases

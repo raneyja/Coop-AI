@@ -78,7 +78,8 @@ export async function handleInlineCompletionRequest(
     const slice = await fetchInlineGraphSlice(graphDeps, {
       repoId: record.repoId,
       file: record.file,
-      plan: org.plan
+      plan: org.plan,
+      orgId: org.orgId
     });
     if (slice.status === "ok") {
       message = `${message}\n\n${slice.block}`;

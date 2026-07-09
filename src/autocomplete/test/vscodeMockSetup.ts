@@ -19,6 +19,16 @@ const mockConfigValues = new Map<string, unknown>();
 const mockExtensions = new Map<string, MockExtension>();
 const configUpdates: Array<{ key: string; value: unknown; target: unknown }> = [];
 const globalState = new Map<string, unknown>();
+let mockInformationMessageChoice: string | undefined;
+const executedCommands: unknown[][] = [];
+
+export function setMockInformationMessageChoice(choice: string | undefined): void {
+  mockInformationMessageChoice = choice;
+}
+
+export function getMockExecutedCommands(): ReadonlyArray<readonly unknown[]> {
+  return executedCommands;
+}
 
 function configKey(section: string | undefined, key: string): string {
   return `${section ?? ""}:${key}`;
@@ -33,6 +43,8 @@ export function resetMockConfiguration(): void {
   mockExtensions.clear();
   configUpdates.length = 0;
   globalState.clear();
+  mockInformationMessageChoice = undefined;
+  executedCommands.length = 0;
 }
 
 export function getMockConfigUpdates(): ReadonlyArray<{ key: string; value: unknown; target: unknown }> {
@@ -97,6 +109,19 @@ const vscodeMock = {
         const stored = mockConfigValues.get(configKey(section, key));
         return stored !== undefined ? (stored as T) : defaultValue;
       },
+      inspect: <T>(key: string) => {
+        const value = mockConfigValues.get(configKey(section, key));
+        if (value === undefined) {
+          return undefined;
+        }
+        return {
+          key,
+          defaultValue: undefined,
+          globalValue: value as T,
+          workspaceValue: undefined,
+          workspaceFolderValue: undefined
+        };
+      },
       async update(key: string, value: unknown, target: unknown): Promise<void> {
         configUpdates.push({ key, value, target });
         mockConfigValues.set(configKey(section, key), value);
@@ -119,10 +144,14 @@ const vscodeMock = {
     onDidChange: () => ({ dispose: () => undefined })
   },
   commands: {
-    executeCommand: async () => undefined
+    executeCommand: async (...args: unknown[]) => {
+      executedCommands.push(args);
+      return args;
+    }
   },
   window: {
-    visibleTextEditors: [] as Array<{ document: { uri: { fsPath: string } } }>
+    visibleTextEditors: [] as Array<{ document: { uri: { fsPath: string } } }>,
+    showInformationMessage: async () => mockInformationMessageChoice
   },
   languages: {
     registerInlineCompletionItemProvider: () => ({ dispose: () => undefined })

@@ -163,7 +163,15 @@ export function defaultHomePath(me: StoredMe | null): string {
   return "/";
 }
 
-const MEMBER_ALLOWED_PREFIXES = ["/", "/feed", "/settings", "/my-usage", "/my-activity", "/integrations"];
+const MEMBER_ALLOWED_PREFIXES = [
+  "/",
+  "/feed",
+  "/settings",
+  "/my-usage",
+  "/analytics/my",
+  "/my-activity",
+  "/integrations"
+];
 
 export function isMemberAllowedPath(pathname: string): boolean {
   if (pathname === "/" || pathname === "/feed" || pathname.startsWith("/feed/")) {
@@ -174,6 +182,12 @@ export function isMemberAllowedPath(pathname: string): boolean {
   }
   if (pathname === "/integrations" || pathname.startsWith("/integrations/")) {
     return true;
+  }
+  if (pathname === "/analytics/my" || pathname.startsWith("/analytics/my/")) {
+    return true;
+  }
+  if (pathname === "/analytics" || pathname.startsWith("/analytics/")) {
+    return false;
   }
   return MEMBER_ALLOWED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
