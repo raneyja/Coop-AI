@@ -19,6 +19,8 @@ type ContextItem = {
 
 type Scenario = {
   question: string;
+  /** Filenames/paths in the question that turn blue once fully typed (extension file-link style). */
+  questionFiles?: string[];
   context: ContextItem[];
   response: {
     summary: string;
@@ -31,6 +33,7 @@ const SCENARIOS: Scenario[] = [
   {
     question:
       "Complete the empty-payload guard in token_validator.ts — match the AuthError pattern from billing/auth.",
+    questionFiles: ["token_validator.ts"],
     context: [
       { label: "Symbol graph", desc: "validateSession() · AuthError usages · 3 callers", status: "done" },
       { label: "GitHub · billing/auth", desc: "AuthError('empty_or_unsigned_payload')", status: "done" },
@@ -177,6 +180,60 @@ type Stage = 1 | 2 | 3 | 4;
 
 function stageClass(active: boolean) {
   return active ? "hero-demo-stage-visible" : "hero-demo-stage-hidden";
+}
+
+type QuestionSegment = { type: "text" | "file"; value: string };
+
+/** Split question into plain text and highlighted file spans (in order of appearance). */
+function buildQuestionSegments(question: string, files: string[]): QuestionSegment[] {
+  if (files.length === 0) return [{ type: "text", value: question }];
+
+  const segments: QuestionSegment[] = [];
+  let cursor = 0;
+
+  for (const file of files) {
+    const idx = question.indexOf(file, cursor);
+    if (idx === -1) continue;
+    if (idx > cursor) {
+      segments.push({ type: "text", value: question.slice(cursor, idx) });
+    }
+    segments.push({ type: "file", value: file });
+    cursor = idx + file.length;
+  }
+
+  if (cursor < question.length) {
+    segments.push({ type: "text", value: question.slice(cursor) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", value: question }];
+}
+
+/** Renders typed question; file spans turn blue once the full filename has been typed. */
+function renderTypedQuestion(typed: string, question: string, files?: string[]): React.ReactNode {
+  const segments = buildQuestionSegments(question, files ?? []);
+  let remaining = typed.length;
+  const nodes: React.ReactNode[] = [];
+  let key = 0;
+
+  for (const segment of segments) {
+    if (remaining <= 0) break;
+    const visibleLen = Math.min(remaining, segment.value.length);
+    const slice = segment.value.slice(0, visibleLen);
+    const fileComplete = segment.type === "file" && visibleLen === segment.value.length;
+
+    nodes.push(
+      fileComplete ? (
+        <span key={key++} className="text-blue-500">
+          {slice}
+        </span>
+      ) : (
+        <span key={key++}>{slice}</span>
+      )
+    );
+    remaining -= visibleLen;
+  }
+
+  return nodes;
 }
 
 /** Brief beat after stream ends — scales with length, capped so loops don't feel stuck. */
@@ -504,7 +561,9 @@ export function HeroDemoArtifact() {
         <div className={`hero-demo-stage ${stageClass(stage === 1)} space-y-6`}>
           <div className="font-mono text-sm text-gray-500">// question</div>
           <div className="text-lg text-gray-900">
-            <span className="font-mono">{typedQuestion}</span>
+            <span className="font-mono">
+              {renderTypedQuestion(typedQuestion, scenario.question, scenario.questionFiles)}
+            </span>
             {stage === 1 ? <span className="text-blue-500">|</span> : null}
           </div>
         </div>
@@ -571,7 +630,7 @@ export function HeroDemoArtifact() {
             {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
               <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
                 {scenario.response.codeFile ? (
-                  <span className="mb-2 block text-[10px] font-sans uppercase tracking-wide text-gray-400">
+                  <span className="mb-2 block font-sans text-[10px] uppercase tracking-wide text-blue-500">
                     {scenario.response.codeFile}
                   </span>
                 ) : null}
