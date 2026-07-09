@@ -23,10 +23,28 @@ type Scenario = {
   response: {
     summary: string;
     code?: string;
+    codeFile?: string;
   };
 };
 
 const SCENARIOS: Scenario[] = [
+  {
+    question:
+      "Complete the empty-payload guard in token_validator.ts — match the AuthError pattern from billing/auth.",
+    context: [
+      { label: "Symbol graph", desc: "validateSession() · AuthError usages · 3 callers", status: "done" },
+      { label: "GitHub · billing/auth", desc: "AuthError('empty_or_unsigned_payload')", status: "done" },
+      { label: "Dependents", desc: "3 importers require matching guard semantics", status: "done" },
+      { label: "Open file", desc: "token_validator.ts · cursor at line 5", status: "loading" }
+    ],
+    response: {
+      summary:
+        "**Completion ready** — matched AuthError guard from billing/auth. Graph shows 3 downstream callers on this path.\n\nTab to accept ghost text at your cursor:",
+      codeFile: "token_validator.ts",
+      code:
+        "  if (!payload?.signature || !payload?.exp) {\n    throw new AuthError('empty_or_unsigned_payload');\n  }"
+    }
+  },
   {
     question: "What's the impact of changing the auth middleware?",
     context: [
@@ -552,6 +570,11 @@ export function HeroDemoArtifact() {
             </p>
             {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
               <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
+                {scenario.response.codeFile ? (
+                  <span className="mb-2 block text-[10px] font-sans uppercase tracking-wide text-gray-400">
+                    {scenario.response.codeFile}
+                  </span>
+                ) : null}
                 {streamedCode}
                 {showCodeCursor ? (
                   <span className="hero-demo-response-cursor text-blue-500">|</span>
