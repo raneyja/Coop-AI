@@ -112,6 +112,8 @@ export async function handleAdminAnalyticsRequest(
       .filter((row) => row.eventType === "chat.message" || row.eventType === "chat.completion")
       .reduce((sum, row) => sum + row.count, 0);
     const quickActions = byType.filter((row) => row.eventType.startsWith("quick_action."));
+    const editEvents = byType.filter((row) => row.eventType.startsWith("edit."));
+    const editRequested = byType.find((row) => row.eventType === "edit.requested")?.count ?? 0;
     const [topUsers, carByPrincipal] = await Promise.all([
       usageTracker.topPrincipals(auth.orgId, range),
       usageTracker.completionAcceptanceByPrincipal(auth.orgId, range)
@@ -129,6 +131,8 @@ export async function handleAdminAnalyticsRequest(
     writeJson(response, 200, {
       chatMessages,
       quickActions,
+      editRequested,
+      editEvents,
       eventsByDay: await usageTracker.eventsByDay(auth.orgId, range),
       topUsers: topUsersWithCar
     });

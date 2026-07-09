@@ -24,6 +24,9 @@ export default function AuthCallbackPage() {
       return;
     }
 
+    // Strip the token from the URL bar before validating/saving.
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+
     void (async () => {
       const result = await validateSession(token);
       if (!result.ok || !result.data) {

@@ -13,6 +13,7 @@ import {
   type MeAnalyticsProductMixItem
 } from "@/lib/coopApi";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
+import { quickActionLabelFromEventType } from "@/lib/quickActionLabels";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import {
   AnalyticsBarChart,
@@ -34,19 +35,14 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function formatQuickActionLabel(eventType: string): string {
-  const suffix = eventType.replace(/^quick_action\./, "");
-  return suffix.replace(/_/g, " ");
-}
-
 function productLabel(product: string): string {
   const map: Record<string, string> = {
     chat: "Chat",
     completions: "Completions",
     completion: "Completions",
-    lightning: "Lightning",
     quick_actions: "Quick actions",
-    quickActions: "Quick actions"
+    quickActions: "Quick actions",
+    edits: "Edits"
   };
   return map[product] ?? product.replace(/_/g, " ");
 }
@@ -54,14 +50,14 @@ function productLabel(product: string): string {
 function mixFromBuckets(mix: {
   chat: number;
   completions: number;
-  lightning: number;
   quickActions: number;
+  edits: number;
 }): BarDatum[] {
   return [
     { label: "Chat", value: mix.chat },
     { label: "Completions", value: mix.completions },
-    { label: "Lightning", value: mix.lightning },
-    { label: "Quick actions", value: mix.quickActions }
+    { label: "Quick actions", value: mix.quickActions },
+    { label: "Edits", value: mix.edits }
   ].filter((d) => d.value > 0);
 }
 
@@ -72,7 +68,12 @@ function deriveProductMix(
 ): BarDatum[] {
   const mix = overview?.productMix;
   if (mix && !Array.isArray(mix)) {
-    return mixFromBuckets(mix);
+    return mixFromBuckets({
+      chat: mix.chat,
+      completions: mix.completions,
+      quickActions: mix.quickActions,
+      edits: chat?.editRequested ?? 0
+    });
   }
   if (Array.isArray(mix) && mix.length > 0) {
     return mix.map((item: MeAnalyticsProductMixItem) => ({
@@ -90,13 +91,13 @@ function deriveProductMix(
     (completions
       ? completions.suggested + completions.accepted + completions.requested
       : 0);
-  const lightningCount = overview?.lightningEvents ?? 0;
+  const editCount = chat?.editRequested ?? 0;
 
   return mixFromBuckets({
     chat: chatCount,
     completions: completionCount,
-    lightning: lightningCount,
-    quickActions
+    quickActions,
+    edits: editCount
   });
 }
 
@@ -247,7 +248,7 @@ export default function MyUsagePage() {
     () =>
       (chat?.quickActions ?? [])
         .map((row) => ({
-          label: formatQuickActionLabel(row.eventType),
+          label: quickActionLabelFromEventType(row.eventType),
           value: row.count
         }))
         .sort((a, b) => b.value - a.value),
@@ -260,7 +261,7 @@ export default function MyUsagePage() {
         <div>
           <h1 className="admin-page-title">My Analytics</h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Your personal Coop activity — events, product mix, and completion acceptance.
+            Your personal Coop activity — chat, completions, quick actions, and edits.
           </p>
         </div>
         <div className="flex rounded-sm border border-coop-border">
@@ -352,7 +353,7 @@ export default function MyUsagePage() {
           </section>
 
           <section className="admin-card">
-            <h2 className="admin-section-label mb-4">Product mix</h2>
+            <h2 className="admin-section-label mb-4">Activity mix</h2>
             {loading ? (
               <div className="flex h-48 items-center justify-center text-sm text-coop-muted">
                 Loading…
@@ -388,6 +389,11 @@ export default function MyUsagePage() {
               label="Quick actions"
               value={loading ? "—" : quickActionTotal}
               hint={`Selected ${range}`}
+            />
+            <AdminStat
+              label="Edit requests"
+              value={loading ? "—" : (chat?.editRequested ?? 0)}
+              hint="edit.requested (/edit, /patch)"
             />
           </AdminStatRow>
 

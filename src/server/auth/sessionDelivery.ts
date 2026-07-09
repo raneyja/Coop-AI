@@ -34,8 +34,7 @@ export function deliverSessionToken(
     if (refreshToken) {
       params.set("coopRefresh", refreshToken);
     }
-    const separator = redirect.includes("#") ? "&" : "#";
-    const location = `${redirect}${separator}${params.toString()}`;
+    const location = appendAuthFragmentParams(redirect, params);
     response.writeHead(302, { location });
     response.end();
     return;
@@ -51,7 +50,12 @@ export function writeJson(response: ServerResponse, statusCode: number, body: un
   response.end(JSON.stringify(body));
 }
 
-/** Browser OAuth flows: send users back to the portal login with a readable error. */
+function appendAuthFragmentParams(base: string, params: URLSearchParams): string {
+  const separator = base.includes("#") ? "&" : "#";
+  return `${base}${separator}${params.toString()}`;
+}
+
+/** OAuth / SSO errors: portal login for browsers; callback fragment for VS Code URI handlers. */
 export function deliverAuthError(
   response: ServerResponse,
   redirect: string | undefined,
@@ -62,6 +66,15 @@ export function deliverAuthError(
   if (redirect) {
     try {
       const target = new URL(redirect);
+      if (target.protocol === "vscode:" || target.protocol === "vscode-insiders:") {
+        const params = new URLSearchParams();
+        params.set("error", error);
+        params.set("message", message);
+        const location = appendAuthFragmentParams(redirect, params);
+        response.writeHead(302, { location });
+        response.end();
+        return;
+      }
       const loginPath = target.pathname.includes("/login") ? target.pathname : "/login";
       const loginUrl = new URL(loginPath, target.origin);
       loginUrl.searchParams.set("error", error);

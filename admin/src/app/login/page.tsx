@@ -159,35 +159,42 @@ export default function LoginPage() {
             Continue with Google
           </a>
 
-          <details className="mt-5 rounded-sm border border-coop-border/60 p-3">
-            <summary className="cursor-pointer text-sm text-coop-muted hover:text-white">
-              More sign-in options
-            </summary>
-            <div className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="ssoOrg" className="admin-label">
-                  Organization name
-                </label>
-                <input
-                  id="ssoOrg"
-                  type="text"
-                  className="admin-input"
-                  placeholder="Acme Engineering"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                />
-              </div>
-              <p className="text-xs text-coop-muted">Enterprise SAML SSO only.</p>
-              <a
-                href={orgName.trim() ? ssoStartUrl(orgName.trim()) : "#"}
-                className={`admin-btn-secondary block w-full py-2.5 text-center ${
-                  !orgName.trim() ? "pointer-events-none opacity-50" : ""
-                }`}
-              >
-                Continue with SSO
-              </a>
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
+            <span className="text-xs text-coop-muted">or SSO</span>
+            <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="ssoOrg" className="admin-label">
+                Organization name
+              </label>
+              <input
+                id="ssoOrg"
+                type="text"
+                className="admin-input"
+                placeholder="Acme Engineering"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+              />
             </div>
-          </details>
+            <p className="text-xs text-coop-muted">Enterprise SAML SSO — use the exact organization name.</p>
+            <a
+              href={orgName.trim() ? ssoStartUrl(orgName.trim()) : "#"}
+              className={`admin-btn-secondary block w-full py-2.5 text-center ${
+                !orgName.trim() ? "pointer-events-none opacity-50" : ""
+              }`}
+              onClick={(event) => {
+                if (!orgName.trim()) {
+                  event.preventDefault();
+                  setError("Enter your organization name to continue with SSO.");
+                }
+              }}
+            >
+              Continue with SSO
+            </a>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-sm text-coop-muted">

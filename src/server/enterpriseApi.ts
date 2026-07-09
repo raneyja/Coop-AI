@@ -2,8 +2,10 @@ import type { ServerResponse } from "node:http";
 import { requireAuth, requireInstallAdmin, requireOrgPlan, resolveAuthContext } from "./authMiddleware";
 import type { OrgStore, AuthContext } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
+import type { AuthPolicyStore } from "./sso/authPolicyStore";
 import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { OrgSsoConfigInput, SsoProvider } from "./sso/ssoConfigStore";
+import { isValidX509Cert } from "./sso/x509Cert";
 import type { UserStore } from "./users/userStore";
 
 type ParsedRequest = {
@@ -16,6 +18,7 @@ type ParsedRequest = {
 export type EnterpriseApiDeps = {
   orgStore?: OrgStore;
   ssoConfigStore?: SsoConfigStore;
+  authPolicyStore?: AuthPolicyStore;
   userStore?: UserStore;
   serverConfig: ServerConfig;
 };
@@ -54,6 +57,10 @@ export async function handleEnterpriseApiRequest(
     return handleSsoConfig(parsed, response, deps, auth!);
   }
 
+  if (parsed.pathname === "/v1/sso/policy") {
+    return handleSsoPolicy(parsed, response, deps, auth!);
+  }
+
   if (parsed.pathname.startsWith("/v1/self-host")) {
     writeJson(response, 501, { error: "not_implemented", message: "Self-host APIs are not available yet." });
     return true;
@@ -75,9 +82,13 @@ async function handleSsoConfig(
   }
 
   if (parsed.method === "GET") {
+    if (!requireInstallAdmin(auth, response)) {
+      return true;
+    }
     const config = await deps.ssoConfigStore.getConfig(auth.orgId);
+    const sp = buildSpDetails(deps.serverConfig);
     if (!config) {
-      writeJson(response, 200, { configured: false });
+      writeJson(response, 200, { configured: false, ...(sp ? { sp } : {}) });
       return true;
     }
     writeJson(response, 200, {
@@ -86,7 +97,9 @@ async function handleSsoConfig(
       idpEntityId: config.idpEntityId,
       idpSsoUrl: config.idpSsoUrl,
       enabled: config.enabled,
-      updatedAt: config.updatedAt.toISOString()
+      hasCertificate: isValidX509Cert(config.idpX509Cert),
+      updatedAt: config.updatedAt.toISOString(),
+      ...(sp ? { sp } : {})
     });
     return true;
   }
@@ -96,19 +109,85 @@ async function handleSsoConfig(
       return true;
     }
     const body = asRecord(parsed.body);
-    const input = parseSsoConfigInput(body);
-    if (!input) {
-      writeJson(response, 400, { error: "invalid_request", message: "provider, idpEntityId, idpSsoUrl, and idpX509Cert are required." });
+    const existing = await deps.ssoConfigStore.getConfig(auth.orgId);
+    const parsedInput = parseSsoConfigInput(body, existing?.idpX509Cert);
+    if (!parsedInput.ok) {
+      writeJson(response, 400, { error: "invalid_request", message: parsedInput.message });
       return true;
     }
-    const saved = await deps.ssoConfigStore.upsertConfig(auth.orgId, input);
+    try {
+      const saved = await deps.ssoConfigStore.upsertConfig(auth.orgId, parsedInput.input);
+      const sp = buildSpDetails(deps.serverConfig);
+      writeJson(response, 200, {
+        configured: true,
+        provider: saved.provider,
+        idpEntityId: saved.idpEntityId,
+        idpSsoUrl: saved.idpSsoUrl,
+        enabled: saved.enabled,
+        hasCertificate: true,
+        updatedAt: saved.updatedAt.toISOString(),
+        ...(sp ? { sp } : {})
+      });
+    } catch (error) {
+      writeJson(response, 400, {
+        error: "invalid_certificate",
+        message: error instanceof Error ? error.message : "Invalid IdP certificate."
+      });
+    }
+    return true;
+  }
+
+  writeJson(response, 405, { error: "method_not_allowed" });
+  return true;
+}
+
+async function handleSsoPolicy(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: EnterpriseApiDeps,
+  auth: AuthContext
+): Promise<boolean> {
+  if (!deps.authPolicyStore) {
+    writeJson(response, 503, { error: "sso_unavailable", message: "Auth policy store is not available." });
+    return true;
+  }
+
+  if (parsed.method === "GET") {
+    const policy = await deps.authPolicyStore.getPolicy(auth.orgId);
     writeJson(response, 200, {
-      configured: true,
-      provider: saved.provider,
-      idpEntityId: saved.idpEntityId,
-      idpSsoUrl: saved.idpSsoUrl,
-      enabled: saved.enabled,
-      updatedAt: saved.updatedAt.toISOString()
+      requireSso: policy.requireSso,
+      allowPassword: policy.allowPassword,
+      allowGoogle: policy.allowGoogle,
+      updatedAt: policy.updatedAt.toISOString()
+    });
+    return true;
+  }
+
+  if (parsed.method === "PUT") {
+    if (!requireInstallAdmin(auth, response)) {
+      return true;
+    }
+    const body = asRecord(parsed.body);
+    if (body.requireSso === true) {
+      const ssoReady = await isSsoEnabledForOrg(deps.ssoConfigStore, auth.orgId);
+      if (!ssoReady) {
+        writeJson(response, 400, {
+          error: "sso_not_configured",
+          message: "Enable and save SAML SSO configuration before requiring SSO sign-in."
+        });
+        return true;
+      }
+    }
+    const policy = await deps.authPolicyStore.upsertPolicy(auth.orgId, {
+      requireSso: typeof body.requireSso === "boolean" ? body.requireSso : undefined,
+      allowPassword: typeof body.allowPassword === "boolean" ? body.allowPassword : undefined,
+      allowGoogle: typeof body.allowGoogle === "boolean" ? body.allowGoogle : undefined
+    });
+    writeJson(response, 200, {
+      requireSso: policy.requireSso,
+      allowPassword: policy.allowPassword,
+      allowGoogle: policy.allowGoogle,
+      updatedAt: policy.updatedAt.toISOString()
     });
     return true;
   }
@@ -117,24 +196,92 @@ async function handleSsoConfig(
   return true;
 }
 
-function parseSsoConfigInput(body: Record<string, unknown>): OrgSsoConfigInput | undefined {
+function buildSpDetails(serverConfig: ServerConfig):
+  | { entityId: string; acsUrl: string; metadataUrl: string; publicStartUrl: string }
+  | undefined {
+  const base = serverConfig.ssoBaseUrl?.replace(/\/+$/, "");
+  if (!base) {
+    return undefined;
+  }
+  const metadataUrl = `${base}/v1/auth/saml/metadata`;
+  return {
+    entityId: serverConfig.ssoSpEntityId?.trim() || metadataUrl,
+    acsUrl: `${base}/v1/auth/saml/callback`,
+    metadataUrl,
+    publicStartUrl: `${base}/v1/auth/saml/start`
+  };
+}
+
+function parseSsoConfigInput(
+  body: Record<string, unknown>,
+  existingCert?: string
+): { ok: true; input: OrgSsoConfigInput } | { ok: false; message: string } {
   const provider = String(body.provider ?? "").trim() as SsoProvider;
   const idpEntityId = String(body.idpEntityId ?? "").trim();
   const idpSsoUrl = String(body.idpSsoUrl ?? "").trim();
-  const idpX509Cert = String(body.idpX509Cert ?? "").trim();
-  if (!provider || !idpEntityId || !idpSsoUrl || !idpX509Cert) {
-    return undefined;
+  const rawCert = typeof body.idpX509Cert === "string" ? body.idpX509Cert.trim() : "";
+
+  if (!provider || !idpEntityId || !idpSsoUrl) {
+    return {
+      ok: false,
+      message: "provider, idpEntityId, and idpSsoUrl are required."
+    };
   }
   if (!["okta", "azuread", "saml"].includes(provider)) {
-    return undefined;
+    return { ok: false, message: "provider must be okta, azuread, or saml." };
   }
+
+  let parsedSsoUrl: URL;
+  try {
+    parsedSsoUrl = new URL(idpSsoUrl);
+  } catch {
+    return { ok: false, message: "idpSsoUrl must be a valid URL." };
+  }
+  if (parsedSsoUrl.protocol !== "https:") {
+    return { ok: false, message: "idpSsoUrl must use HTTPS." };
+  }
+
+  if (rawCert) {
+    if (/^coop_(sess|refresh)_/i.test(rawCert)) {
+      return {
+        ok: false,
+        message: "idpX509Cert looks like a Coop session token. Paste the IdP X.509 signing certificate instead."
+      };
+    }
+    if (!isValidX509Cert(rawCert)) {
+      return {
+        ok: false,
+        message: "idpX509Cert must be a valid X.509 certificate (PEM or base64)."
+      };
+    }
+  } else if (!existingCert || !isValidX509Cert(existingCert)) {
+    return {
+      ok: false,
+      message: "idpX509Cert is required when no valid certificate is already on file."
+    };
+  }
+
   return {
-    provider,
-    idpEntityId,
-    idpSsoUrl,
-    idpX509Cert,
-    enabled: body.enabled === undefined ? true : Boolean(body.enabled)
+    ok: true,
+    input: {
+      provider,
+      idpEntityId,
+      idpSsoUrl,
+      idpX509Cert: rawCert || existingCert!,
+      enabled: body.enabled === undefined ? true : Boolean(body.enabled)
+    }
   };
+}
+
+async function isSsoEnabledForOrg(
+  ssoConfigStore: SsoConfigStore | undefined,
+  orgId: string
+): Promise<boolean> {
+  if (!ssoConfigStore) {
+    return false;
+  }
+  const config = await ssoConfigStore.getEnabledConfig(orgId);
+  return config !== undefined && isValidX509Cert(config.idpX509Cert);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

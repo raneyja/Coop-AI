@@ -93,7 +93,8 @@ function mockUsageTracker(): UsageTracker {
       { eventType: "completion.requested", count: 6 },
       { eventType: "completion.rejected", count: 1 },
       { eventType: "lightning.search", count: 3 },
-      { eventType: "quick_action.explain", count: 1 }
+      { eventType: "quick_action.explain", count: 1 },
+      { eventType: "edit.requested", count: 2 }
     ],
     listActivePrincipals: async () => ["user:u1"],
     lastActiveAtByPrincipal: async () => [
@@ -199,6 +200,8 @@ void (async () => {
   assert.equal(topUsers[0]?.acceptanceRate, 0.5);
   assert.equal(topUsers[1]?.suggested, 0);
   assert.equal(topUsers[1]?.acceptanceRate, null);
+  assert.equal(chatBody.editRequested, 2);
+  assert.equal((chatBody.editEvents as Array<{ eventType: string }>)[0]?.eventType, "edit.requested");
 
   const lightning = await request(deps, "/v1/admin/analytics/lightning");
   assert.equal(lightning.statusCode, 200);

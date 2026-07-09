@@ -1007,9 +1007,91 @@ export async function fetchAudit(
 }
 
 export function ssoStartUrl(orgName: string): string {
-  const redirect = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : "";
-  const params = new URLSearchParams({ org: orgName, redirect });
-  return `${getApiBase()}/v1/auth/saml/start?${params.toString()}`;
+  const params = new URLSearchParams({ org: orgName });
+  return `/api/auth/saml/start?${params.toString()}`;
+}
+
+export type SsoSpDetails = {
+  entityId: string;
+  acsUrl: string;
+  metadataUrl: string;
+  publicStartUrl: string;
+};
+
+export type SsoConfigResponse = {
+  configured: boolean;
+  provider?: "okta" | "azuread" | "saml";
+  idpEntityId?: string;
+  idpSsoUrl?: string;
+  enabled?: boolean;
+  hasCertificate?: boolean;
+  updatedAt?: string;
+  sp?: SsoSpDetails;
+};
+
+export type SsoPolicyResponse = {
+  requireSso: boolean;
+  allowPassword: boolean;
+  allowGoogle: boolean;
+  updatedAt?: string;
+};
+
+export type SsoConfigInput = {
+  provider: "okta" | "azuread" | "saml";
+  idpEntityId: string;
+  idpSsoUrl: string;
+  idpX509Cert?: string;
+  enabled?: boolean;
+};
+
+export async function fetchSsoConfig(): Promise<ApiResult<SsoConfigResponse>> {
+  return coopFetch<SsoConfigResponse>("/v1/sso/config");
+}
+
+export async function updateSsoConfig(input: SsoConfigInput): Promise<ApiResult<SsoConfigResponse>> {
+  return coopFetch<SsoConfigResponse>("/v1/sso/config", {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function fetchSsoPolicy(): Promise<ApiResult<SsoPolicyResponse>> {
+  return coopFetch<SsoPolicyResponse>("/v1/sso/policy");
+}
+
+export async function updateSsoPolicy(
+  input: Partial<Pick<SsoPolicyResponse, "requireSso" | "allowPassword" | "allowGoogle">>
+): Promise<ApiResult<SsoPolicyResponse>> {
+  return coopFetch<SsoPolicyResponse>("/v1/sso/policy", {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
+  let token = getToken();
+  if (!token) {
+    return { ok: false, status: 401, error: "Not signed in." };
+  }
+  try {
+    const response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let message = `Request failed (${response.status}).`;
+      try {
+        const body = JSON.parse(text) as { message?: string; error?: string };
+        message = body.message ?? body.error ?? message;
+      } catch {
+        // keep default
+      }
+      return { ok: false, status: response.status, error: message };
+    }
+    return { ok: true, status: response.status, data: await response.text() };
+  } catch {
+    return { ok: false, status: 0, error: "Could not reach the Coop API." };
+  }
 }
 
 export function planLabel(plan: string): string {
@@ -1081,6 +1163,8 @@ export type AnalyticsOverview = {
 export type AnalyticsChat = {
   chatMessages: number;
   quickActions: Array<{ eventType: string; count: number }>;
+  editRequested?: number;
+  editEvents?: Array<{ eventType: string; count: number }>;
   eventsByDay: Array<{ day: string; count: number }>;
   topUsers: Array<{
     principal: string;
@@ -1219,6 +1303,8 @@ export type MeAnalyticsOverview = {
 export type MeAnalyticsChat = {
   chatMessages: number;
   quickActions: Array<{ eventType: string; count: number }>;
+  editRequested?: number;
+  editEvents?: Array<{ eventType: string; count: number }>;
   eventsByDay: Array<{ day: string; count: number }>;
 };
 

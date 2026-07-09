@@ -1,6 +1,11 @@
 import type { ServerResponse } from "node:http";
 import { requireAuth, requireOrgPlan, resolveAuthContext } from "../authMiddleware";
 import { AuditLogger, principalForApiKey, principalForUser } from "../audit/auditLogger";
+import {
+  deliverAuthError,
+  deliverSessionToken,
+  sanitizeAuthRedirect
+} from "../auth/sessionDelivery";
 import type { OrgStore } from "../orgStore";
 import type { ServerConfig } from "../serverConfig";
 import type { UserStore } from "../users/userStore";
@@ -95,7 +100,8 @@ async function handlePublicStart(
 ): Promise<boolean> {
   const orgId = parsed.query?.get("orgId")?.trim();
   const orgName = parsed.query?.get("org")?.trim();
-  const redirect = sanitizeRedirect(parsed.query?.get("redirect"));
+  const redirect = sanitizeAuthRedirect(parsed.query?.get("redirect"));
+  const preferJson = parsed.query?.get("format") === "json";
 
   let resolvedOrgId = orgId;
   if (!resolvedOrgId && orgName) {
@@ -103,36 +109,61 @@ async function handlePublicStart(
     resolvedOrgId = org?.id;
   }
   if (!resolvedOrgId) {
-    writeJson(response, 400, {
-      error: "missing_org",
-      message: "Provide orgId or org (organization name) to start SSO."
-    });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      400,
+      "missing_org",
+      "Provide orgId or org (organization name) to start SSO."
+    );
     return true;
   }
 
   const org = await deps.orgStore!.getOrganization(resolvedOrgId);
   if (!org || org.plan !== "enterprise") {
-    writeJson(response, 403, { error: "plan_required", message: "SSO is available on the Enterprise plan only." });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      403,
+      "plan_required",
+      "SSO is available on the Enterprise plan only."
+    );
     return true;
   }
 
   const config = await deps.ssoConfigStore!.getEnabledConfig(resolvedOrgId);
   if (!config) {
-    writeJson(response, 409, { error: "sso_not_configured", message: "SSO is not enabled for this organization." });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      409,
+      "sso_not_configured",
+      "SSO is not enabled for this organization."
+    );
     return true;
   }
 
   const relayState = encodeRelayState({ orgId: resolvedOrgId, redirect: redirect ?? undefined });
   try {
     const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
-    if (parsed.query?.get("format") === "json") {
+    if (preferJson) {
       writeJson(response, 200, { redirectUrl: url });
     } else {
       response.writeHead(302, { location: url });
       response.end();
     }
   } catch (error) {
-    writeJson(response, 502, { error: "sso_login_failed", message: errorMessage(error) });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      502,
+      "sso_login_failed",
+      errorMessage(error)
+    );
   }
   return true;
 }
@@ -151,25 +182,41 @@ async function handleLogin(
     return true;
   }
 
+  const redirect = sanitizeAuthRedirect(parsed.query?.get("redirect"));
+  const preferJson = parsed.query?.get("format") === "json";
+
   const config = await deps.ssoConfigStore!.getEnabledConfig(auth.orgId);
   if (!config) {
-    writeJson(response, 409, { error: "sso_not_configured", message: "No enabled SSO configuration for this org." });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      409,
+      "sso_not_configured",
+      "No enabled SSO configuration for this org."
+    );
     return true;
   }
 
-  const redirect = sanitizeRedirect(parsed.query?.get("redirect"));
   const relayState = encodeRelayState({ orgId: auth.orgId, redirect });
 
   try {
     const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
-    if (parsed.query?.get("format") === "json") {
+    if (preferJson) {
       writeJson(response, 200, { redirectUrl: url });
     } else {
       response.writeHead(302, { location: url });
       response.end();
     }
   } catch (error) {
-    writeJson(response, 502, { error: "sso_login_failed", message: errorMessage(error) });
+    respondBrowserOrJson(
+      response,
+      preferJson,
+      redirect,
+      502,
+      "sso_login_failed",
+      errorMessage(error)
+    );
   }
   return true;
 }
@@ -188,28 +235,54 @@ async function handleCallback(
 ): Promise<boolean> {
   // CRITICAL: requires rawBody (application/x-www-form-urlencoded) — webhookServer must pass rawBody for this route or SAMLResponse will be missing.
   const form = readForm(parsed);
+  const earlyRelay = decodeRelayState(form.get("RelayState"));
+
   const samlResponse = form.get("SAMLResponse");
   if (!samlResponse) {
-    writeJson(response, 400, { error: "missing_saml_response" });
+    respondCallbackError(
+      response,
+      earlyRelay,
+      400,
+      "missing_saml_response",
+      "The identity provider did not return a SAML response."
+    );
     return true;
   }
 
-  const relay = decodeRelayState(form.get("RelayState"));
+  const relay = earlyRelay;
   if (!relay?.orgId) {
-    writeJson(response, 400, { error: "missing_relay_state", message: "SP-initiated login is required (no org in RelayState)." });
+    respondCallbackError(
+      response,
+      undefined,
+      400,
+      "missing_relay_state",
+      "SP-initiated login is required (no org in RelayState)."
+    );
     return true;
   }
 
   // Enterprise-plan gate, resolved from the RelayState org rather than a bearer.
   const org = await deps.orgStore!.getOrganization(relay.orgId);
   if (!org || org.plan !== "enterprise") {
-    writeJson(response, 403, { error: "plan_required", message: "SSO is available on the Enterprise plan only." });
+    respondCallbackError(
+      response,
+      relay,
+      403,
+      "plan_required",
+      "SSO is available on the Enterprise plan only."
+    );
     return true;
   }
 
   const config = await deps.ssoConfigStore!.getEnabledConfig(relay.orgId);
   if (!config) {
-    writeJson(response, 403, { error: "sso_not_configured", message: "SSO is not enabled for this organization." });
+    respondCallbackError(
+      response,
+      relay,
+      403,
+      "sso_not_configured",
+      "SSO is not enabled for this organization."
+    );
     return true;
   }
 
@@ -218,7 +291,13 @@ async function handleCallback(
     assertion = await deps.samlService!.validateCallback(config, samlResponse);
   } catch (error) {
     // node-saml throws here on signature/audience/timestamp/status failures.
-    writeJson(response, 401, { error: "saml_validation_failed", message: errorMessage(error) });
+    respondCallbackError(
+      response,
+      relay,
+      401,
+      "saml_validation_failed",
+      errorMessage(error)
+    );
     return true;
   }
 
@@ -242,7 +321,7 @@ async function handleCallback(
     metadata: { idpProvider: assertion.idpProvider, email: user.email }
   });
 
-  deliverSession(response, session.token, relay.redirect);
+  deliverSessionToken(response, session.token, relay.redirect);
   return true;
 }
 
@@ -369,7 +448,7 @@ function decodeRelayState(raw: string | null | undefined): RelayState | undefine
     const json = Buffer.from(raw, "base64url").toString("utf8");
     const parsed = JSON.parse(json) as Partial<RelayState>;
     if (parsed && typeof parsed.orgId === "string" && parsed.orgId) {
-      return { orgId: parsed.orgId, redirect: sanitizeRedirect(parsed.redirect) };
+      return { orgId: parsed.orgId, redirect: sanitizeAuthRedirect(parsed.redirect) };
     }
   } catch {
     // Not our encoded RelayState — fall through.
@@ -381,41 +460,33 @@ function decodeRelayState(raw: string | null | undefined): RelayState | undefine
   return undefined;
 }
 
-/** Only allow handing the session token to a vscode: deep link or https URL. */
-function sanitizeRedirect(redirect: string | null | undefined): string | undefined {
-  if (!redirect) {
-    return undefined;
-  }
-  try {
-    const url = new URL(redirect);
-    if (url.protocol === "vscode:" || url.protocol === "vscode-insiders:" || url.protocol === "https:") {
-      return url.toString();
-    }
-  } catch {
-    // not a valid URL
-  }
-  return undefined;
-}
-
-function deliverSession(response: ServerResponse, token: string, redirect?: string): void {
-  if (redirect) {
-    const separator = redirect.includes("#") ? "&" : "#";
-    const location = `${redirect}${separator}coopToken=${encodeURIComponent(token)}`;
-    response.writeHead(302, { location });
-    response.end();
+function respondBrowserOrJson(
+  response: ServerResponse,
+  preferJson: boolean,
+  redirect: string | undefined,
+  statusCode: number,
+  error: string,
+  message: string
+): void {
+  if (!preferJson && redirect) {
+    deliverAuthError(response, redirect, error, message, statusCode);
     return;
   }
-  // No redirect target: render a minimal page with the token to copy into the
-  // extension. (API-only scope — intentionally not a styled UI.)
-  const safeToken = escapeHtml(token);
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>CoopAI sign-in complete</title></head>
-<body style="font-family:system-ui;max-width:40rem;margin:4rem auto;padding:0 1rem">
-<h1>Signed in</h1>
-<p>Copy this token into CoopAI to finish signing in:</p>
-<pre style="white-space:pre-wrap;word-break:break-all;background:#f4f4f5;padding:1rem;border-radius:8px">${safeToken}</pre>
-</body></html>`;
-  response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-  response.end(html);
+  writeJson(response, statusCode, { error, message });
+}
+
+function respondCallbackError(
+  response: ServerResponse,
+  relay: RelayState | undefined,
+  statusCode: number,
+  error: string,
+  message: string
+): void {
+  if (relay?.redirect) {
+    deliverAuthError(response, relay.redirect, error, message, statusCode);
+    return;
+  }
+  writeJson(response, statusCode, { error, message });
 }
 
 function readForm(parsed: ParsedRequest): URLSearchParams {
@@ -437,15 +508,6 @@ function readForm(parsed: ParsedRequest): URLSearchParams {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function errorMessage(error: unknown): string {

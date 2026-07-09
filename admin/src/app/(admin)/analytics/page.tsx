@@ -7,49 +7,34 @@ import {
   exportAnalyticsCsv,
   fetchAnalyticsChat,
   fetchAnalyticsCompletions,
-  fetchAnalyticsLightning,
   fetchAnalyticsOverview,
   fetchAnalyticsUsers,
-  fetchIntegrations,
-  fetchOrgRepos,
   fetchUsers,
   type AnalyticsChat,
   type AnalyticsCompletions,
-  type AnalyticsLightning,
   type AnalyticsOverview,
-  type AnalyticsProductMix,
   type AnalyticsRange,
   type AnalyticsUsers,
-  type AdminUser,
-  type OrgRepoRecord
+  type AdminUser
 } from "@/lib/coopApi";
-import { INTEGRATIONS, type IntegrationStatus } from "@/lib/integrations";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { AnalyticsBarChart, AnalyticsLineChart } from "@/components/analytics";
-import { IntegrationStatusList } from "@/components/IntegrationStatusList";
+import { quickActionLabelFromEventType } from "@/lib/quickActionLabels";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "chat", label: "Chat & Actions" },
-  { id: "lightning", label: "Lightning" },
   { id: "completions", label: "Completions" },
-  { id: "integrations", label: "Integrations" },
   { id: "users", label: "Users" }
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
-const CHAT_MINUTES_SAVED = 5;
-const QUICK_ACTION_MINUTES_SAVED = 10;
+const MINUTES_SAVED_PER_ACTION = 5;
 
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
-}
-
-function formatQuickActionLabel(eventType: string): string {
-  const suffix = eventType.replace(/^quick_action\./, "");
-  return suffix.replace(/_/g, " ");
 }
 
 function PlaceholderCallout({ title, body }: { title: string; body: string }) {
@@ -61,27 +46,23 @@ function PlaceholderCallout({ title, body }: { title: string; body: string }) {
   );
 }
 
-function approximateProductMix(
+function activityMixBars(
   chat: AnalyticsChat | null,
-  completions: AnalyticsCompletions | null,
-  lightningSearchCount: number | null
-): AnalyticsProductMix {
+  completions: AnalyticsCompletions | null
+): Array<{ label: string; value: number }> {
   const quickActions = (chat?.quickActions ?? []).reduce((sum, row) => sum + row.count, 0);
-  return {
-    chat: chat?.chatMessages ?? 0,
-    completions: (completions?.suggested ?? 0) + (completions?.accepted ?? 0) + (completions?.requested ?? 0),
-    lightning: lightningSearchCount ?? 0,
-    quickActions
-  };
-}
-
-function productMixBars(mix: AnalyticsProductMix): Array<{ label: string; value: number }> {
   return [
-    { label: "Chat", value: mix.chat },
-    { label: "Completions", value: mix.completions },
-    { label: "Lightning", value: mix.lightning },
-    { label: "Quick actions", value: mix.quickActions }
-  ];
+    { label: "Chat", value: chat?.chatMessages ?? 0 },
+    {
+      label: "Completions",
+      value:
+        (completions?.suggested ?? 0) +
+        (completions?.accepted ?? 0) +
+        (completions?.requested ?? 0)
+    },
+    { label: "Quick actions", value: quickActions },
+    { label: "Edits", value: chat?.editRequested ?? 0 }
+  ].filter((row) => row.value > 0);
 }
 
 export default function AnalyticsPage() {
@@ -90,12 +71,8 @@ export default function AnalyticsPage() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [chat, setChat] = useState<AnalyticsChat | null>(null);
   const [completions, setCompletions] = useState<AnalyticsCompletions | null>(null);
-  const [lightning, setLightning] = useState<AnalyticsLightning | null>(null);
-  const [lightningUnavailable, setLightningUnavailable] = useState(false);
   const [analyticsUsers, setAnalyticsUsers] = useState<AnalyticsUsers | null>(null);
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [orgRepos, setOrgRepos] = useState<OrgRepoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,43 +88,18 @@ export default function AnalyticsPage() {
       overviewResult,
       chatResult,
       completionsResult,
-      lightningResult,
       analyticsUsersResult,
-      integrationsResult,
-      usersResult,
-      reposResult
+      usersResult
     ] = await Promise.all([
       fetchAnalyticsOverview(from, to),
       fetchAnalyticsChat(from, to),
       fetchAnalyticsCompletions(from, to),
-      fetchAnalyticsLightning(from, to),
       fetchAnalyticsUsers(from, to),
-      fetchIntegrations(),
-      fetchUsers(),
-      fetchOrgRepos()
+      fetchUsers()
     ]);
-
-    if (integrationsResult.ok) {
-      setIntegrations(integrationsResult.data ?? []);
-    }
 
     if (usersResult.ok) {
       setUsers(usersResult.data?.users ?? []);
-    }
-
-    if (reposResult.ok) {
-      setOrgRepos(reposResult.data?.repos ?? []);
-    }
-
-    if (lightningResult.unavailable || (!lightningResult.ok && lightningResult.status === 404)) {
-      setLightningUnavailable(true);
-      setLightning(null);
-    } else if (!lightningResult.ok) {
-      setLightningUnavailable(true);
-      setLightning(null);
-    } else {
-      setLightningUnavailable(false);
-      setLightning(lightningResult.data ?? null);
     }
 
     if (analyticsUsersResult.ok && !analyticsUsersResult.unavailable) {
@@ -200,22 +152,9 @@ export default function AnalyticsPage() {
   );
 
   const estimatedHoursSaved = useMemo(() => {
-    const chatMessages = chat?.chatMessages ?? 0;
-    const minutes = chatMessages * CHAT_MINUTES_SAVED + quickActionTotal * QUICK_ACTION_MINUTES_SAVED;
-    return (minutes / 60).toFixed(1);
+    const actions = (chat?.chatMessages ?? 0) + quickActionTotal;
+    return ((actions * MINUTES_SAVED_PER_ACTION) / 60).toFixed(1);
   }, [chat, quickActionTotal]);
-
-  const connectedIntegrations = integrations.filter((item) => item.installed).length;
-
-  const lightningRepos = useMemo(
-    () => orgRepos.filter((repo) => repo.lightningEnabled !== false),
-    [orgRepos]
-  );
-
-  const indexedRepoCount = useMemo(
-    () => lightningRepos.filter((repo) => repo.indexStatus === "ready").length,
-    [lightningRepos]
-  );
 
   const userActivityMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -267,12 +206,10 @@ export default function AnalyticsPage() {
     return null;
   }, [overview, completions]);
 
-  const productMix = useMemo(() => {
-    if (overview?.productMix) return overview.productMix;
-    return approximateProductMix(chat, completions, lightning?.searchCount ?? null);
-  }, [overview, chat, completions, lightning]);
-
-  const productMixFromApi = Boolean(overview?.productMix);
+  const activityMix = useMemo(
+    () => activityMixBars(chat, completions),
+    [chat, completions]
+  );
 
   const inactiveCount = useMemo(() => {
     if (typeof analyticsUsers?.inactiveSeatCount === "number") {
@@ -307,9 +244,6 @@ export default function AnalyticsPage() {
     }).length;
   }, [analyticsUsers, overview, users, userActivityMap]);
 
-  const lightningSearchCount = lightning?.searchCount ?? null;
-  const lightningHasSeries = (lightning?.eventsByDay ?? []).some((row) => row.count > 0);
-
   async function handleExport() {
     setExporting(true);
     setError(null);
@@ -326,7 +260,7 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="admin-page-title">Analytics</h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Usage, engagement, and impact across chat, Lightning, and integrations.
+            Team adoption, AI usage, and completion quality. Repo indexing lives on the Indexing page.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -425,7 +359,7 @@ export default function AnalyticsPage() {
             <AdminStat
               label="Est. hours saved"
               value={loading ? "—" : estimatedHoursSaved}
-              hint={`${CHAT_MINUTES_SAVED} min/chat + ${QUICK_ACTION_MINUTES_SAVED} min/quick action`}
+              hint={`${MINUTES_SAVED_PER_ACTION} min per chat message or quick action`}
             />
           </AdminStatRow>
 
@@ -442,22 +376,15 @@ export default function AnalyticsPage() {
           </section>
 
           <section>
-            <h2 className="admin-section-label mb-4">Product mix</h2>
+            <h2 className="admin-section-label mb-4">Activity mix</h2>
             {loading ? (
               <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
             ) : (
-              <>
-                {!productMixFromApi ? (
-                  <p className="mb-3 text-xs text-coop-muted">
-                    Approximate mix from chat, completions, and Lightning search in this range.
-                  </p>
-                ) : null}
-                <AnalyticsBarChart
-                  data={productMixBars(productMix)}
-                  orientation="horizontal"
-                  emptyLabel="No product activity in this range yet."
-                />
-              </>
+              <AnalyticsBarChart
+                data={activityMix}
+                orientation="horizontal"
+                emptyLabel="No product activity in this range yet."
+              />
             )}
           </section>
         </div>
@@ -475,6 +402,11 @@ export default function AnalyticsPage() {
               label="Quick actions"
               value={loading ? "—" : quickActionTotal}
               hint={`Selected ${range}`}
+            />
+            <AdminStat
+              label="Edit requests"
+              value={loading ? "—" : (chat?.editRequested ?? 0)}
+              hint="edit.requested (/edit, /patch)"
             />
           </AdminStatRow>
 
@@ -497,7 +429,7 @@ export default function AnalyticsPage() {
             ) : (
               <AnalyticsBarChart
                 data={(chat?.quickActions ?? []).map((row) => ({
-                  label: formatQuickActionLabel(row.eventType),
+                  label: quickActionLabelFromEventType(row.eventType),
                   value: row.count
                 }))}
                 orientation="horizontal"
@@ -534,101 +466,6 @@ export default function AnalyticsPage() {
                       <tr key={row.principal}>
                         <td className="font-mono text-xs">{row.principal}</td>
                         <td className="tabular-nums">{row.count}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {activeTab === "lightning" && (
-        <div className="space-y-6">
-          <AdminStatRow>
-            <AdminStat
-              label="Lightning searches"
-              value={
-                loading
-                  ? "—"
-                  : lightningUnavailable
-                    ? "—"
-                    : (lightningSearchCount ?? 0)
-              }
-              hint={
-                lightningUnavailable
-                  ? "lightning.search metrics pending API"
-                  : `Selected ${range}`
-              }
-            />
-            <AdminStat
-              label="Indexed repos"
-              value={loading ? "—" : `${indexedRepoCount} ready`}
-              hint={
-                lightningRepos.length > 0
-                  ? `${lightningRepos.length} Lightning-enabled repo(s)`
-                  : "Enable Lightning on repos in Collections"
-              }
-            />
-          </AdminStatRow>
-
-          {loading ? (
-            <div className="py-8 text-center text-sm text-coop-muted">Loading…</div>
-          ) : lightningUnavailable ? (
-            <PlaceholderCallout
-              title="Lightning search analytics not available yet"
-              body="The admin Lightning endpoint is not deployed. Search volume (lightning.search) will appear here once the API exposes it. Indexed repo status below is still live."
-            />
-          ) : !lightningHasSeries && (lightningSearchCount ?? 0) === 0 ? (
-            <PlaceholderCallout
-              title="No Lightning searches in this range"
-              body="Counts appear when teammates run Lightning search (lightning.search). Indexed repo status below is independent of search volume."
-            />
-          ) : (
-            <section>
-              <h2 className="admin-section-label mb-4">Lightning searches by day</h2>
-              <AnalyticsLineChart
-                data={lightning?.eventsByDay ?? []}
-                emptyLabel="No lightning.search events in this range."
-              />
-            </section>
-          )}
-
-          <section>
-            <h2 className="admin-section-label mb-4">Repo index status</h2>
-            <div className="admin-card--table">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Repository</th>
-                    <th>Status</th>
-                    <th>Last indexed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={3} className="py-8 text-center text-coop-muted">
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : lightningRepos.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-8 text-center text-coop-muted">
-                        No Lightning-enabled repos yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    lightningRepos.map((repo) => (
-                      <tr key={repo.repoId}>
-                        <td className="font-mono text-xs">{repo.repoId}</td>
-                        <td className="capitalize">{repo.indexStatus ?? "unknown"}</td>
-                        <td className="text-xs text-coop-muted">
-                          {repo.lastIndexedAt
-                            ? new Date(repo.lastIndexedAt).toLocaleString()
-                            : "—"}
-                        </td>
                       </tr>
                     ))
                   )}
@@ -731,28 +568,6 @@ export default function AnalyticsPage() {
                 emptyLabel="No completion usage events in this range."
               />
             )}
-          </section>
-        </div>
-      )}
-
-      {activeTab === "integrations" && (
-        <div className="space-y-6">
-          <AdminStatRow>
-            <AdminStat
-              label="Connected integrations"
-              value={loading ? "—" : connectedIntegrations}
-              hint={`of ${INTEGRATIONS.length} available`}
-            />
-          </AdminStatRow>
-
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="admin-section-label">Providers</h2>
-              <Link href="/integrations" className="admin-link text-sm">
-                Manage integrations →
-              </Link>
-            </div>
-            <IntegrationStatusList integrations={integrations} loading={loading} />
           </section>
         </div>
       )}

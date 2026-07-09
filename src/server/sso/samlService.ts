@@ -6,6 +6,7 @@ import {
   type SamlConfig
 } from "@node-saml/node-saml";
 import type { OrgSsoConfig } from "./ssoConfigStore";
+import { normalizeX509Cert } from "./x509Cert";
 
 /**
  * The verified identity extracted from a signed SAML assertion. Only produced
@@ -111,7 +112,7 @@ export class SamlService {
       audience: this.spEntityId,
       // IdP identity + trust anchor (signature validation key)
       entryPoint: config.idpSsoUrl,
-      idpCert: config.idpX509Cert.trim(),
+      idpCert: normalizeX509Cert(config.idpX509Cert),
       idpIssuer: config.idpEntityId,
       // Security posture: require the assertion to be signed and verify it
       // against idpCert. Response-level signing is not required (Okta/Azure

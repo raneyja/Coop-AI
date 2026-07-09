@@ -64,7 +64,7 @@
       },
       {
         "command": "coopAI.runSavedPrompt",
-        "title": "CoopAI: Run Saved Prompt…"
+        "title": "CoopAI: Run Saved Prompt\u2026"
       },
       {
         "command": "coopAI.newChat",
@@ -859,7 +859,10 @@
     "seed:pro-onboarding": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai api node dist/admin-org.js seed-pro-onboarding",
     "seed:governance-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai -e CREDENTIALS_ENCRYPTION_KEY=change-me-to-a-long-random-secret api node dist/admin-org.js seed-governance-demo",
     "smoke:repo-access": "npm run build:admin && bash scripts/smoke-repo-access.sh",
-    "dev:admin-portal": "bash scripts/dev-admin-portal.sh"
+    "dev:admin-portal": "bash scripts/dev-admin-portal.sh",
+    "seed:analytics-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai -e CREDENTIALS_ENCRYPTION_KEY=change-me-to-a-long-random-secret api node dist/admin-org.js seed-analytics-demo",
+    "seed:enterprise-sso-demo": "npm run build:admin && docker compose cp dist/admin-org.js api:/app/dist/admin-org.js && docker compose exec -T -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai -e CREDENTIALS_ENCRYPTION_KEY=change-me-to-a-long-random-secret -e COOP_PUBLIC_BASE_URL=http://localhost:8787 -e COOP_ADMIN_PORTAL_URL=http://localhost:3001 api node dist/admin-org.js seed-enterprise-sso-demo",
+    "smoke:sso": "npm run build:admin && bash scripts/smoke-sso.sh"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

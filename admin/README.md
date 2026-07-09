@@ -36,11 +36,11 @@ Open **http://localhost:3001** in your browser.
 
 1. Go to `/login`
 2. Sign in with email and password, or **Continue with Google**
-3. On success you are redirected to the dashboard
+3. **Enterprise SAML:** enter **Organization name**, then **Continue with SSO** (inline on the login page)
 
 **Success looks like:** Dashboard shows your org name, plan badge, and integration status grid.
 
-Enterprise orgs can expand **More sign-in options** for SAML SSO. Automation API keys are created on **API Keys** for CI and scripts — not for portal sign-in.
+Automation API keys are created on **API Keys** for CI and scripts — not for portal sign-in.
 
 ## Authentication
 
@@ -71,7 +71,10 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 | `/api-keys` | Admin | Create and revoke org API keys |
 | `/billing` | Admin | Plan, seats, and Stripe billing portal |
 | `/audit` | Admin | Org admin audit log |
-| `/settings` | All | Account, org info, repository access mode, sign-out |
+| `/settings` | All | Settings hub — links to nested pages below |
+| `/settings/account` | All | Account, org info, sign-out |
+| `/settings/repository-access` | Pro/Ent admin | Per-user vs all-indexed repo access mode |
+| `/settings/single-sign-on` | Enterprise admin | SAML IdP config, **Test sign-in**, sign-in policy |
 
 ### GitHub connect (admin)
 

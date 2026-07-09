@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { isValidX509Cert, normalizeX509Cert } from "./x509Cert";
 
 export type SsoProvider = "okta" | "azuread" | "saml";
 
@@ -46,6 +47,12 @@ export class SsoConfigStore {
   }
 
   public async upsertConfig(orgId: string, input: OrgSsoConfigInput): Promise<OrgSsoConfig> {
+    const idpX509Cert = normalizeX509Cert(input.idpX509Cert);
+    if (!isValidX509Cert(idpX509Cert)) {
+      throw new Error(
+        "idpX509Cert must be a valid X.509 certificate (PEM or base64), not a Coop session token."
+      );
+    }
     const result = await this.pool.query(
       `INSERT INTO org_sso_config
          (org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, updated_at)
@@ -58,7 +65,7 @@ export class SsoConfigStore {
          enabled = EXCLUDED.enabled,
          updated_at = NOW()
        RETURNING org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at`,
-      [orgId, input.provider, input.idpEntityId, input.idpSsoUrl, input.idpX509Cert, input.enabled ?? true]
+      [orgId, input.provider, input.idpEntityId, input.idpSsoUrl, idpX509Cert, input.enabled ?? true]
     );
     return rowToConfig(result.rows[0]);
   }

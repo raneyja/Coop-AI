@@ -772,6 +772,9 @@ async function checkAuthMethodAllowed(
     return { ok: true };
   }
   const policy = await loadOrgAuthPolicy(deps, orgId);
+  if (!policy.ok) {
+    return { ok: false, error: policy.error, message: policy.message };
+  }
   if (policy.requireSso) {
     return {
       ok: false,
@@ -788,13 +791,18 @@ async function checkAuthMethodAllowed(
   return { ok: true };
 }
 
-async function loadOrgAuthPolicy(
-  deps: UserAuthApiDeps,
-  orgId: string
-): Promise<{ requireSso: boolean; allowPassword: boolean; allowGoogle: boolean }> {
+type LoadedOrgAuthPolicy =
+  | { ok: true; requireSso: boolean; allowPassword: boolean; allowGoogle: boolean }
+  | { ok: false; error: string; message: string };
+
+async function loadOrgAuthPolicy(deps: UserAuthApiDeps, orgId: string): Promise<LoadedOrgAuthPolicy> {
   const pool = deps.pool ?? (await getDbPool());
   if (!pool) {
-    return { requireSso: false, allowPassword: true, allowGoogle: true };
+    return {
+      ok: false,
+      error: "auth_policy_unavailable",
+      message: "Unable to verify your organization's sign-in policy. Try again later or contact your administrator."
+    };
   }
   try {
     const result = await pool.query(
@@ -803,15 +811,20 @@ async function loadOrgAuthPolicy(
     );
     const row = result.rows[0];
     if (!row) {
-      return { requireSso: false, allowPassword: true, allowGoogle: true };
+      return { ok: true, requireSso: false, allowPassword: true, allowGoogle: true };
     }
     return {
+      ok: true,
       requireSso: Boolean(row.require_sso),
       allowPassword: row.allow_password !== false,
       allowGoogle: row.allow_google !== false
     };
   } catch {
-    return { requireSso: false, allowPassword: true, allowGoogle: true };
+    return {
+      ok: false,
+      error: "auth_policy_unavailable",
+      message: "Unable to verify your organization's sign-in policy. Try again later or contact your administrator."
+    };
   }
 }
 

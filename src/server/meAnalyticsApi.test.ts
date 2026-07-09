@@ -62,6 +62,7 @@ function mockUsageTracker(): UsageTracker {
             { eventType: "chat.message", count: 5 },
             { eventType: "chat.completion", count: 2 },
             { eventType: "quick_action.explain", count: 1 },
+            { eventType: "edit.requested", count: 2 },
             { eventType: "completion.suggested", count: 8 },
             { eventType: "completion.accepted", count: 4 },
             { eventType: "completion.requested", count: 6 },
@@ -177,6 +178,7 @@ void (async () => {
   assert.equal(chatBody.chatMessages, 7);
   assert.ok(Array.isArray(chatBody.quickActions));
   assert.equal((chatBody.quickActions as unknown[]).length, 1);
+  assert.equal(chatBody.editRequested, 2);
   assert.ok(Array.isArray(chatBody.eventsByDay));
   assert.equal("topUsers" in chatBody, false);
 

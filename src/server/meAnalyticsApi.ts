@@ -61,9 +61,13 @@ export async function handleMeAnalyticsRequest(
       .filter((row) => row.eventType === "chat.message" || row.eventType === "chat.completion")
       .reduce((sum, row) => sum + row.count, 0);
     const quickActions = byType.filter((row) => row.eventType.startsWith("quick_action."));
+    const editEvents = byType.filter((row) => row.eventType.startsWith("edit."));
+    const editRequested = byType.find((row) => row.eventType === "edit.requested")?.count ?? 0;
     writeJson(response, 200, {
       chatMessages,
       quickActions,
+      editRequested,
+      editEvents,
       eventsByDay: await usageTracker.eventsByDayForPrincipal(auth.orgId, principal, range)
     });
     return true;

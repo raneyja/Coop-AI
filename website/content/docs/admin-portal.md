@@ -3,7 +3,7 @@ title: Admin portal
 description: Sign in, connect integrations, invite users, and manage automation API keys.
 section: admin
 order: 1
-lastUpdated: "2026-07-07"
+lastUpdated: "2026-07-09"
 ---
 
 The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure CoopAI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
@@ -12,7 +12,7 @@ The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org 
 
 1. **Browser** → [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login)
 2. Sign in with your **email and password**, or click **Continue with Google**.
-3. **Enterprise:** expand **More sign-in options** → **Sign in with SSO** (SAML).
+3. **Enterprise SAML:** enter your **Organization name**, then click **Continue with SSO** (inline on the login page — not in a collapsed section).
 4. **Invited users:** open the link in your invite email → set password and profile on `/accept-invite`.
 5. Success: dashboard loads with org name and integration status.
 
@@ -74,11 +74,11 @@ Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces
 
 ## SAML SSO (Enterprise)
 
-Org admins configure SAML 2.0 in **Settings → Single sign-on (SSO)**:
+Org admins configure SAML 2.0 in **Settings → Single sign-on** (`/settings/single-sign-on`):
 
 1. Copy Coop **Service provider** values (Entity ID, ACS URL) into your IdP
 2. Paste IdP Entity ID, SSO URL, and signing certificate
-3. **Test SSO sign-in** before enabling **Require SSO for all users**
+3. **Test sign-in** before enabling **Require SSO**
 
 Full walkthrough: [SAML SSO](/docs/saml-sso)
 
