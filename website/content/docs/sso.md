@@ -117,6 +117,10 @@ Use **Test sign-in** with at least one admin account before enabling **Require S
 
 To disable SAML while **Require SSO** is on, turn off **Require SSO** first — otherwise **Save SSO** returns `sso_required_active`.
 
+<!-- figures -->
+![Admin portal Settings — open Single sign-on to configure SAML and sign-in policy](/screenshots/docs/admin-settings-sso.png)
+<!-- /figures -->
+
 ## User lifecycle
 
 | Event | Behavior |
