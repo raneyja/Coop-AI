@@ -8,6 +8,10 @@ lastUpdated: "2026-07-10"
 
 Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entra ID, or any standards-compliant identity provider.
 
+<!-- figures -->
+![Admin portal sign-in — enter organization name and Continue with SSO](/screenshots/docs/admin-login-sso.png)
+<!-- /figures -->
+
 **Who this page is for:** **Org admins and IT** configure SAML in the [admin portal](https://admin.coop-ai.dev). **End users** sign in through the admin portal or VS Code extension. **Coop operators** (hosted support or self-hosted deployers) manage server-side settings — see [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise).
 
 ## On this page
