@@ -84,7 +84,10 @@ export async function syncThreadToBackend(
     });
 
     if (!response.ok) {
-      console.warn(`[coop] thread sync failed (${response.status}) for ${thread.id}`);
+      const detail = await response.text().catch(() => "");
+      console.warn(
+        `[coop] thread sync failed (${response.status}) for ${thread.id}${detail ? `: ${detail.slice(0, 240)}` : ""}`
+      );
     }
   } catch (error) {
     console.warn("[coop] thread sync error:", error);
