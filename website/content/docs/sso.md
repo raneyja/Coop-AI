@@ -8,6 +8,8 @@ lastUpdated: "2026-07-10"
 
 Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entra ID, or any standards-compliant identity provider.
 
+**Who this page is for:** **Org admins and IT** configure SAML in the [admin portal](https://admin.coop-ai.dev). **End users** sign in through the admin portal or VS Code extension. **Coop operators** (hosted support or self-hosted deployers) manage server-side settings — see [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise).
+
 ## On this page
 
 - [Who can configure SSO](#who-can-configure-sso)
@@ -25,8 +27,8 @@ Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entr
 
 | Role | Access |
 | --- | --- |
-| **Org admin / owner** | Admin portal → **Settings** → **Single sign-on** (`/settings/single-sign-on`) |
-| **Coop operator** | `scripts/admin-org.ts configure-sso` (support-led onboarding) |
+| **Org admin / owner** | [Admin portal](https://admin.coop-ai.dev) → **Settings** → **Single sign-on** (`/settings/single-sign-on`) |
+| **Coop operator** | Server env vars and post-deploy validation — [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) (support-led onboarding available) |
 
 SSO is available on the **Enterprise** plan only.
 
@@ -51,7 +53,7 @@ Your IdP admin needs these values when creating the SAML application. In the adm
 | **ACS URL** | `https://api.coop-ai.dev/v1/auth/saml/callback` |
 | **Metadata URL** | `https://api.coop-ai.dev/v1/auth/saml/metadata` (requires signed-in Enterprise admin) |
 
-Self-hosted deployments use your API hostname instead of `api.coop-ai.dev`. Your Coop **operator** sets `COOP_PUBLIC_BASE_URL` on the API server — org admins copy SP values from the admin portal; end users never configure this variable.
+Hosted Coop uses `api.coop-ai.dev` for all SP values above. Self-hosted deployments use your API hostname instead — your Coop **operator** configures the server; org admins copy the resulting SP values from the admin portal.
 
 ## IdP requirements
 
@@ -155,7 +157,7 @@ Quick reference:
 | `admin_required` | Only org **admin** or **owner** can read or save SSO config via API |
 | `missing_org` | Enter your organization name before starting SSO |
 | Missing email in assertion | Map `email` attribute in IdP; NameID must be email if no attribute |
-| SSO URLs unavailable | Operator: set `COOP_PUBLIC_BASE_URL` on the API server and restart |
+| SSO URLs unavailable | Coop **operator**: fix server configuration — [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) |
 
 ## Known limits
 
@@ -168,12 +170,10 @@ Quick reference:
 | **API keys bypass `requireSso`** | Org API keys authenticate automation even when SSO is required — rotate or revoke for offboarded users |
 | **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends; signature and timestamp checks still apply |
 
-Operator smoke test: repo `docs/sso-smoke-test.md` (`npm run smoke:sso`).
-
 ## Security notes
 
 - Session tokens are hashed server-side; SAML assertions are validated with your IdP signing certificate
-- SSO sessions default to **12 hours** (`COOP_SSO_SESSION_TTL_MS`); re-authenticate through your IdP when expired — no refresh token
+- SSO sessions default to **12 hours**; re-authenticate through your IdP when expired — no refresh token
 - Audit events: `auth.saml.login` recorded for each successful SSO sign-in
 
 Details: [Security architecture — SAML](/docs/security-architecture#saml-sso-sessions).

@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 ## Extension
@@ -69,7 +69,7 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | **Health check fails** | Verify `DATABASE_URL`, restart API container |
 | **LLM 502 errors** | Check provider API keys in `.env.backend` |
 | **Webhooks not firing** | Verify webhook URL and secret in GitHub settings |
-| **SAML SP URLs empty** | Set `COOP_PUBLIC_BASE_URL` in `.env.backend` and restart API — [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
+| **SAML SP URLs empty** | Coop **operator**: fix server configuration — [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) |
 
 ## Enterprise SSO
 
@@ -79,13 +79,13 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | **`sso_not_configured`** | Admin: **Settings → Single sign-on** → save IdP config with **Enable SSO** checked |
 | **`saml_validation_failed`** | Check IdP cert expiry, Entity ID / ACS URL match, server clock skew |
 | **`sso_required_active`** | Turn off **Require SSO** before disabling SAML |
-| **SP URLs empty in admin** | Operator: set `COOP_PUBLIC_BASE_URL` in `.env.backend` and restart API |
+| **SP URLs empty in admin** | Coop **operator**: fix server configuration — [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) |
 | **IdP-initiated login fails** | Coop is SP-initiated only — start from admin **Test sign-in** or extension **Sign in with SSO** |
 | **Browser handoff fails (extension)** | Complete IdP login in browser; see callback errors in [Extension settings — Enterprise SSO](/docs/extension-settings#enterprise-sso) |
 
-Full error code table and known limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+Full error code table and known limits: [SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
-Operator local smoke test: repo `docs/sso-smoke-test.md` (`npm run smoke:sso`).
+Coop **operators** (self-hosted or support): post-deploy validation steps in [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise).
 
 ## Still stuck?
 

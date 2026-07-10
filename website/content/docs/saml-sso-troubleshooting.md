@@ -3,10 +3,10 @@ title: SAML SSO troubleshooting
 description: Error codes, fixes, and known limits for Enterprise SAML single sign-on.
 section: enterprise
 order: 4
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
-Use this page when SAML sign-in fails in the admin portal, VS Code extension, or API smoke tests. For initial setup, see [Single Sign On (SSO)](/docs/sso).
+Use this page when SAML sign-in fails in the admin portal or VS Code extension. For initial setup, see [Single Sign On (SSO)](/docs/sso).
 
 ## Error code reference
 
@@ -18,7 +18,7 @@ Use this page when SAML sign-in fails in the admin portal, VS Code extension, or
 | `saml_validation_failed` | 401 | IdP callback after assertion validation fails | Check IdP cert expiry, server clock skew, Entity ID / ACS URL match, and signed assertions (SHA-256). Re-download cert from IdP. |
 | `sso_required` | 403 | Password or Google login when org enforces SSO | Use **Sign in with SSO** (extension) or **Continue with SSO** (admin portal). Existing sessions stay valid until expiry. |
 | `sso_required_active` | 400 | Disabling SAML or unchecking **Enable SSO** while **Require SSO** is on | Admin portal → **Settings → Single sign-on** → turn off **Require SSO** first, then disable SSO. |
-| `sso_unavailable` | 503 | SSO stores not wired on this API deployment | Operator: ensure Postgres migrations applied and API rebuilt with SSO routes enabled. |
+| `sso_unavailable` | 503 | SSO stores not wired on this API deployment | Coop **operator**: ensure Postgres migrations applied and API rebuilt with SSO routes — [Enterprise deployment](/docs/enterprise-deployment#saml-sso-enterprise) |
 | `missing_saml_response` | 400 | IdP POST to callback without `SAMLResponse` | IdP misconfiguration or interrupted redirect — retry from **Test sign-in**. |
 | `missing_relay_state` | 400 | Callback without org in RelayState | Use SP-initiated login from Coop (`/v1/auth/saml/start` or admin **Test sign-in**), not IdP-initiated flows without RelayState. |
 | `sso_login_failed` | 502 | Error building IdP redirect URL | Check `idpSsoUrl` is reachable and valid HTTPS. |
@@ -32,11 +32,9 @@ Browser sign-in surfaces redirect to your `redirect` URL with `?error=<code>&mes
 
 If the admin portal **Settings → Single sign-on** panel shows empty Entity ID, ACS URL, or metadata links, your Coop **operator** must fix server configuration — org admins and end users do not set this themselves.
 
-**Operator steps:**
+**Org admin:** Reload **Settings → Single sign-on** after your operator confirms the fix. Success looks like populated SP fields and a working **Test sign-in**.
 
-1. **File** — `.env.backend` at repo root: set `COOP_PUBLIC_BASE_URL` to the public HTTPS API origin (e.g. `https://api.coop-ai.dev` or `http://localhost:8787` for local dev).
-2. **Terminal** — Restart API after saving: `docker compose up -d --build api`.
-3. **Success** — Admin reloads **Settings → Single sign-on**; `GET /v1/sso/config` (admin bearer or org API key) includes an `sp` object with `entityId`, `acsUrl`, `metadataUrl`, and `publicStartUrl`.
+**Coop operator:** Set the public API base URL on the API server and restart. Full steps (env vars, Docker restart, post-deploy validation): [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise).
 
 Self-hosted deployments must use HTTPS in production so IdPs accept the ACS URL.
 
@@ -47,7 +45,7 @@ Self-hosted deployments must use HTTPS in production so IdPs accept the ACS URL.
 | Missing email in assertion | No email attribute mapped | Map `email` / `user.mail` in IdP, or use email-format NameID |
 | Cert expired | Rotated IdP signing cert | Re-download cert from IdP; **Save SSO** in admin portal |
 | Audience mismatch | Wrong SP Entity ID in IdP | Use Coop **Entity ID** exactly (default: metadata URL) |
-| ACS mismatch | Wrong Reply URL | Use Coop **ACS URL**: `{COOP_PUBLIC_BASE_URL}/v1/auth/saml/callback` |
+| ACS mismatch | Wrong Reply URL | Use the Coop **ACS URL** from admin **Settings → Single sign-on** (hosted: `https://api.coop-ai.dev/v1/auth/saml/callback`) |
 | Clock skew | Server time drift | Sync API host NTP; default tolerance is 5 seconds |
 
 ## Known limits
@@ -63,13 +61,10 @@ Self-hosted deployments must use HTTPS in production so IdPs accept the ACS URL.
 | **JIT default role** | First SAML login creates a **member** user; promote admins in **Users** or pre-create accounts. |
 | **Marketing site has no SSO** | [coop-ai.dev/login](https://coop-ai.dev/login) does not offer SSO — use admin portal or extension only. |
 
-## Operator smoke test
-
-Local validation with MockSAML: repo `docs/sso-smoke-test.md` — `npm run smoke:sso`.
-
 ## Related
 
 - [Single Sign On (SSO)](/docs/sso) — setup and provider notes
+- [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) — operator env vars and post-deploy validation
 - [API reference — SSO](/docs/api-reference#sso-configuration-enterprise)
 - [Security architecture](/docs/security-architecture) — SAML session model and audit events
 - [Troubleshooting](/docs/troubleshooting) — extension, admin portal, and integrations

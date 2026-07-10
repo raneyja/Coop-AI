@@ -116,15 +116,15 @@ Org admins copy these from **Settings → Single sign-on** in the admin portal, 
 
 See `.env.backend.example` for names and defaults.
 
-### Post-deploy smoke test
+### Post-deploy validation (operators only)
 
-After the API is running with `COOP_PUBLIC_BASE_URL` set:
+After the API is running with `COOP_PUBLIC_BASE_URL` set, Coop operators can run an automated SSO smoke test from the deployment repo:
 
 ```bash
 npm run smoke:sso
 ```
 
-This seeds an Enterprise SSO demo org, verifies `/v1/sso/config`, and checks that SAML start returns an IdP redirect. Use the printed portal URL and credentials to complete a browser test.
+This verifies `/v1/sso/config`, SAML start redirect, and prints portal credentials for a browser **Test sign-in**. Org admins configure production IdP settings in the admin portal — see [Single Sign On (SSO)](/docs/sso).
 
 ## Next steps
 

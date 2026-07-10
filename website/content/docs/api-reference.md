@@ -292,7 +292,7 @@ Deactivate users when they are removed from your IdP. **Enterprise bearer requir
 
 **Response** `200`: `{ "ok": true, … }` with `deactivated` or `deactivatedIds` as applicable.
 
-See [Single Sign On (SSO)](/docs/sso) for IdP setup and operator smoke-test steps in the repo `docs/sso-smoke-test.md`.
+See [Single Sign On (SSO)](/docs/sso) for IdP setup. Self-hosted operators: [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise).
 
 ## Environment variables (self-hosted)
 
