@@ -34,7 +34,7 @@ Integration OAuth tokens are encrypted at rest with `CREDENTIALS_ENCRYPTION_KEY`
 
 - **Email + password** — default sign-in for extension, admin portal, and website
 - **Google OAuth** — same account as signup
-- **SSO (SAML)** — Enterprise orgs; configured in admin portal ([SAML SSO](/docs/saml-sso))
+- **SSO (SAML)** — Enterprise orgs; configured in admin portal ([Single Sign On (SSO)](/docs/sso))
 - **Automation API keys** — optional Bearer tokens for CI/scripts and direct API calls; not the primary sign-in method
 - **Integration OAuth** — per-integration browser consent flows (Slack, GitHub, etc.)
 
@@ -102,7 +102,7 @@ Your code and prompts are **never** used to train foundation models. Coop routes
 
 ## Next steps
 
-- [SAML SSO](/docs/saml-sso) — IdP setup and sign-in policy
+- [Single Sign On (SSO)](/docs/sso) — IdP setup and sign-in policy
 - [Zero-retention LLM routing](/docs/zero-retention)
 - [Enterprise deployment](/docs/enterprise-deployment)
 - [Security page](/security) — full architecture for security reviewers

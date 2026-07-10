@@ -90,7 +90,7 @@ Org admins configure SAML 2.0 in **Settings → Single sign-on**:
 2. Paste IdP Entity ID, SSO URL, and signing certificate → **Save SSO**
 3. **Test sign-in**, then enable **Require SSO** (confirmation modal) when ready
 
-Full walkthrough: [SAML SSO](/docs/saml-sso)
+Full walkthrough: [Single Sign On (SSO)](/docs/sso)
 
 ## Users
 

@@ -6,7 +6,7 @@ order: 4
 lastUpdated: "2026-07-09"
 ---
 
-Use this page when SAML sign-in fails in the admin portal, VS Code extension, or API smoke tests. For initial setup, see [SAML SSO](/docs/saml-sso).
+Use this page when SAML sign-in fails in the admin portal, VS Code extension, or API smoke tests. For initial setup, see [Single Sign On (SSO)](/docs/sso).
 
 ## Error code reference
 
@@ -69,7 +69,7 @@ Local validation with MockSAML: repo `docs/sso-smoke-test.md` — `npm run smoke
 
 ## Related
 
-- [SAML SSO](/docs/saml-sso) — setup and provider notes
+- [Single Sign On (SSO)](/docs/sso) — setup and provider notes
 - [API reference — SSO](/docs/api-reference#sso-configuration-enterprise)
 - [Security architecture](/docs/security-architecture) — SAML session model and audit events
 - [Troubleshooting](/docs/troubleshooting) — extension, admin portal, and integrations

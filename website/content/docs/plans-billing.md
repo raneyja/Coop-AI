@@ -66,7 +66,7 @@ Enterprise includes **SAML 2.0 SSO** for the admin portal and VS Code extension:
 | **Sign-in surfaces** | Admin portal (**Continue with SSO**) and extension (**Sign in with SSO** with browser handoff) |
 | **Policy** | Optional **Require SSO** to block password and Google sign-in; org API keys still work for automation |
 
-Setup guide: [SAML SSO](/docs/saml-sso). Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+Setup guide: [Single Sign On (SSO)](/docs/sso). Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 See also [Enterprise deployment](/docs/enterprise-deployment) and [Security architecture](/docs/security-architecture).
 

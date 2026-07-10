@@ -37,7 +37,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 | Capability | Route / module | Notes |
 |------------|----------------|-------|
-| **Enterprise SAML SSO** | `/v1/auth/saml/*`, `/v1/sso/*` | **Shipped** — admin portal self-serve at **Settings → Single sign-on** (`/settings/single-sign-on`) + extension SSO handoff. Policy guard: `sso_required_active` when disabling SAML under **Require SSO**. Tests: `npm run test:sso` (24 tests, in `npm test`). **Known limits:** SP-initiated only (no IdP-initiated); no SCIM; no SAML refresh tokens (12 h session TTL); shared service provider for all Enterprise tenants (org resolved via RelayState). Operator sets `COOP_PUBLIC_BASE_URL`. See [SAML SSO](../website/content/docs/saml-sso.md), [sso-smoke-test.md](./sso-smoke-test.md). |
+| **Enterprise SAML SSO** | `/v1/auth/saml/*`, `/v1/sso/*` | **Shipped** — admin portal self-serve at **Settings → Single sign-on** (`/settings/single-sign-on`) + extension SSO handoff. Policy guard: `sso_required_active` when disabling SAML under **Require SSO**. Tests: `npm run test:sso` (24 tests, in `npm test`). **Known limits:** SP-initiated only (no IdP-initiated); no SCIM; no SAML refresh tokens (12 h session TTL); shared service provider for all Enterprise tenants (org resolved via RelayState). Operator sets `COOP_PUBLIC_BASE_URL`. See [Single Sign On (SSO)](../website/content/docs/sso.md), [sso-smoke-test.md](./sso-smoke-test.md). |
 
 ### Explicitly not in scope of that pass
 
@@ -227,5 +227,5 @@ When ready for a row above, use a prompt like:
 | [webhook-backend.md](./webhook-backend.md) | Graph routes, webhooks, health |
 | [job-queue.md](./job-queue.md) | Heavy scans (knowledge gaps, index) |
 | [zero-retention-llm.md](./zero-retention-llm.md) | Enterprise LLM policy |
-| [SAML SSO](../website/content/docs/saml-sso.md) | Enterprise IdP setup, sign-in surfaces, troubleshooting |
+| [Single Sign On (SSO)](../website/content/docs/sso.md) | Enterprise IdP setup, sign-in surfaces, troubleshooting |
 | [sso-smoke-test.md](./sso-smoke-test.md) | Operator smoke test for local/demo SSO |

@@ -1,9 +1,9 @@
 ---
-title: SAML SSO
-description: Configure SAML 2.0 single sign-on for Enterprise organizations.
+title: Single Sign On (SSO)
+description: Configure single sign-on for Enterprise organizations with SAML 2.0.
 section: enterprise
 order: 2
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entra ID, or any standards-compliant identity provider.
@@ -142,7 +142,7 @@ Admin and automation endpoints are documented in [API reference — SSO](/docs/a
 
 ## Troubleshooting
 
-See [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) for the full error code table, SP URL fixes, and known limits.
+See [SSO troubleshooting](/docs/saml-sso-troubleshooting) for the full error code table, SP URL fixes, and known limits.
 
 Quick reference:
 
@@ -180,7 +180,7 @@ Details: [Security architecture — SAML](/docs/security-architecture#saml-sso-s
 
 ## Next steps
 
-- [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) — error codes and known limits
+- [SSO troubleshooting](/docs/saml-sso-troubleshooting) — error codes and known limits
 - [Security architecture](/docs/security-architecture) — data handling and compliance
 - [Admin portal](/docs/admin-portal) — user management and audit log
 - [Enterprise deployment](/docs/enterprise-deployment) — self-hosted env vars

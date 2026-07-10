@@ -13,7 +13,7 @@ Operator checklist to validate Enterprise SAML SSO on a local or staging deploym
 | `COOP_PUBLIC_BASE_URL` | **Operator-only** — public HTTPS base of the Coop API (e.g. `http://localhost:8787` local, `https://api.coop-ai.dev` hosted). SAML SP URLs and OAuth callbacks derive from this; org admins do not set it. |
 | Admin portal (optional) | `cd admin && npm run dev` → `http://localhost:3001`; `admin/.env.local` with `COOP_API_BASE=http://localhost:8787` |
 
-Full IdP setup: [SAML SSO](/docs/saml-sso). Error codes: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+Full IdP setup: [Single Sign On (SSO)](/docs/sso). Error codes: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 ---
 

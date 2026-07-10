@@ -306,7 +306,7 @@ From `docs/roadmap.md`:
 
 **You are past the "is this real?" stage.** The architecture is coherent: extension → API → Postgres → integrations → indexing → billing → admin. A focused operator can run a pilot with one customer org today if they configure env vars, apply migrations, and accept single-instance limits.
 
-**You are not at the "flip the switch for self-serve Pro" stage.** Security defaults, CI/CD breadth, observability, Slack scopes, Teams UI, and admin deploy/config must close first. Budget **4–6 weeks** for a credible public Pro launch and **8–12 weeks** for enterprise-grade (SCIM, analytics, HA, marketplace extension). Enterprise SAML self-serve is shipped at `/settings/single-sign-on` — see [saml-sso.md](../website/content/docs/saml-sso.md), [sso-smoke-test.md](./sso-smoke-test.md), and `npm run smoke:sso`.
+**You are not at the "flip the switch for self-serve Pro" stage.** Security defaults, CI/CD breadth, observability, Slack scopes, Teams UI, and admin deploy/config must close first. Budget **4–6 weeks** for a credible public Pro launch and **8–12 weeks** for enterprise-grade (SCIM, analytics, HA, marketplace extension). Enterprise SAML self-serve is shipped at `/settings/single-sign-on` — see [sso.md](../website/content/docs/sso.md), [sso-smoke-test.md](./sso-smoke-test.md), and `npm run smoke:sso`.
 
 **Differentiation is clear:** no competitor ships Trace Decision + Knowledge Gaps + ownership graph + live Slack/Jira context inside VS Code with org OAuth. The gap vs Glean is indexing breadth; the gap vs Sourcegraph is code search scale; the gap vs Cursor is autocomplete polish. Your moat is **cross-tool developer workflows in-IDE** — protect that while closing ops gaps.
 

@@ -10,6 +10,11 @@
       "has": [{ "type": "host", "value": "www.coop-ai.dev" }],
       "destination": "https://coop-ai.dev/:path*",
       "permanent": true
+    },
+    {
+      "source": "/docs/saml-sso",
+      "destination": "/docs/sso",
+      "permanent": true
     }
   ],
   "headers": [

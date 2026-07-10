@@ -292,7 +292,7 @@ Deactivate users when they are removed from your IdP. **Enterprise bearer requir
 
 **Response** `200`: `{ "ok": true, … }` with `deactivated` or `deactivatedIds` as applicable.
 
-See [SAML SSO](/docs/saml-sso) for IdP setup and operator smoke-test steps in the repo `docs/sso-smoke-test.md`.
+See [Single Sign On (SSO)](/docs/sso) for IdP setup and operator smoke-test steps in the repo `docs/sso-smoke-test.md`.
 
 ## Environment variables (self-hosted)
 
@@ -309,4 +309,4 @@ See [SAML SSO](/docs/saml-sso) for IdP setup and operator smoke-test steps in th
 | `COOP_SSO_SP_ENTITY_ID` | Optional SP entity ID override (default: metadata URL) |
 | `COOP_SSO_SESSION_TTL_MS` | SAML session lifetime in ms (default: 12 hours) |
 
-See [Zero-retention LLM routing](/docs/zero-retention), [Enterprise deployment](/docs/enterprise-deployment), and [SAML SSO](/docs/saml-sso).
+See [Zero-retention LLM routing](/docs/zero-retention), [Enterprise deployment](/docs/enterprise-deployment), and [Single Sign On (SSO)](/docs/sso).

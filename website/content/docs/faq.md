@@ -77,7 +77,7 @@ Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Li
 
 ### Does Coop support SAML single sign-on?
 
-Yes, on the **Enterprise** plan. Org admins configure SAML in the admin portal under **Settings → Single sign-on**. Supported IdPs include Okta, Azure AD / Entra ID, and any SAML 2.0 provider with signed assertions. See [SAML SSO](/docs/saml-sso).
+Yes, on the **Enterprise** plan. Org admins configure SAML in the admin portal under **Settings → Single sign-on**. Supported IdPs include Okta, Azure AD / Entra ID, and any SAML 2.0 provider with signed assertions. See [Single Sign On (SSO)](/docs/sso).
 
 ### Where can I sign in with SSO?
 

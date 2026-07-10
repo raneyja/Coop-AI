@@ -6,7 +6,7 @@ How Coop AI integrations work in **production** (`coopAI.devMode: false`), who d
 
 **Audience:** Coop platform operators, customer org admins, and sales/solutions engineers.
 
-**Related:** [integration-onboarding.md](./integration-onboarding.md) (extension UI reference), [github-connect.md](./github-connect.md) (GitHub detail), [SAML SSO](../website/content/docs/saml-sso.md) (Enterprise IdP setup), [sso-smoke-test.md](./sso-smoke-test.md) (operator SSO validation).
+**Related:** [integration-onboarding.md](./integration-onboarding.md) (extension UI reference), [github-connect.md](./github-connect.md) (GitHub detail), [Single Sign On (SSO)](../website/content/docs/sso.md) (Enterprise IdP setup), [sso-smoke-test.md](./sso-smoke-test.md) (operator SSO validation).
 
 ---
 
@@ -99,7 +99,7 @@ For Enterprise orgs that sign in with SAML instead of password/Google:
 
 | Task | Doc / tool |
 |------|------------|
-| IdP values, admin self-serve UI | [SAML SSO](../website/content/docs/saml-sso.md) — admin portal **Settings → Single sign-on** (`/settings/single-sign-on`) |
+| IdP values, admin self-serve UI | [Single Sign On (SSO)](../website/content/docs/sso.md) — admin portal **Settings → Single sign-on** (`/settings/single-sign-on`) |
 | Local/demo validation (seed org + SAML start redirect) | [sso-smoke-test.md](./sso-smoke-test.md) — `npm run smoke:sso` |
 | Support-led IdP config | `scripts/admin-org.ts configure-sso` |
 | API contract | `GET`/`PUT /v1/sso/config` (org admin bearer only); `GET`/`PUT /v1/sso/policy` |
@@ -172,7 +172,7 @@ Give this checklist to the customer's **owner/admin** user (`canInstallIntegrati
 - Email/password, **Continue with Google**, or **Sign in with SSO** (Enterprise)
 - Developers invited by email use the link in the invite email → `/accept-invite?token=…`
 
-**Enterprise SAML setup (org admin):** **Settings** → **Single sign-on** (`/settings/single-sign-on`) — configure IdP, **Test sign-in**, then optionally **Require SSO**. See [SAML SSO](../website/content/docs/saml-sso.md).
+**Enterprise SAML setup (org admin):** **Settings** → **Single sign-on** (`/settings/single-sign-on`) — configure IdP, **Test sign-in**, then optionally **Require SSO**. See [Single Sign On (SSO)](../website/content/docs/sso.md).
 
 **Extension UI** (optional for admins testing the extension): **Settings → Account** → same credentials → **Test connection**
 
@@ -249,7 +249,7 @@ What exists today vs what enterprise self-serve still needs:
 | Docs | `integration-onboarding.md` + this doc + connect quick ref | Per-provider connect guides in Settings UI (in-app links) |
 | Google restricted scopes | Manual consent screen + test users | Published app or Google Workspace domain install |
 | Demo / seed data | `scripts/populate_*.py` (Slack, Jira, Confluence) | Optional hosted demo tenant; not required for Connect |
-| SSO | **Shipped** — nested settings at `/settings/single-sign-on`, extension handoff; see [SAML SSO](../website/content/docs/saml-sso.md) | IdP-initiated login, SCIM, per-tenant SP |
+| SSO | **Shipped** — nested settings at `/settings/single-sign-on`, extension handoff; see [Single Sign On (SSO)](../website/content/docs/sso.md) | IdP-initiated login, SCIM, per-tenant SP |
 | In-app scope help | Minimal | Show required scopes on each Connect card |
 
 ### Recommended rollout phases

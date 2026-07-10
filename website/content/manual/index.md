@@ -78,7 +78,7 @@ Typical sequence for a new Enterprise org (org admin + IT). Adjust for your IdP 
 | **Week 1 — Users** | Org admin | **Users** → invite or rely on IdP JIT; assign per-user repo grants if using **Per-user grants** | Day 5–10 |
 | **Week 2 — Validate** | Developers + admin | Extension sign-in (SSO), **Workspace** repo, quick actions, autocomplete smoke | Day 7–14 |
 
-Detail: [SAML SSO](/docs/saml-sso), [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting), [admin portal](/docs/admin-portal), and operator guide `docs/enterprise-integration-onboarding.md`.
+Detail: [Single Sign On (SSO)](/docs/sso), [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting), [admin portal](/docs/admin-portal), and operator guide `docs/enterprise-integration-onboarding.md`.
 
 ### SSO-only org playbook
 
@@ -184,7 +184,7 @@ Enterprise orgs sign in with SAML 2.0 through your company identity provider (Ok
 | **VS Code extension** | Yes | **Settings → Account** → **Organization name** → **Sign in with SSO** (browser handoff) |
 | **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | **No** | Email/password and Google only — if your org requires SSO, use the admin portal or extension |
 
-Organization name matching is case-insensitive on both surfaces. IdP setup detail (Okta, Entra, generic): [SAML SSO](/docs/saml-sso). Error codes and known limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+Organization name matching is case-insensitive on both surfaces. IdP setup detail (Okta, Entra, generic): [Single Sign On (SSO)](/docs/sso). Error codes and known limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 ### Admin portal login (SSO)
 
@@ -208,7 +208,7 @@ Org admins configure SAML at **Settings → Single sign-on** (`/settings/single-
 
 If step 1 shows **Service provider URLs unavailable**, your Coop **operator** (not end users) must set `COOP_PUBLIC_BASE_URL` on the API server to the public backend URL (e.g. `https://api.coop-ai.dev`), then restart the API. This env var controls SAML callback URLs — it is operator infrastructure config, not something developers set in VS Code.
 
-Full IdP walkthroughs: [SAML SSO](/docs/saml-sso).
+Full IdP walkthroughs: [Single Sign On (SSO)](/docs/sso).
 
 ### Admin portal settings hub
 
@@ -692,12 +692,12 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **`missing_org`** | Enter **Organization name** before starting SSO |
 | **`saml_validation_failed`** | Check IdP cert expiry, clock skew, Entity ID / ACS URL match — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
 | **SP URLs empty in admin** | Operator: set `COOP_PUBLIC_BASE_URL` on API server and restart — not a user/extension setting |
-| **Missing email in SAML assertion** | IdP admin: map `email` attribute or use email-format NameID — [SAML SSO](/docs/saml-sso#idp-requirements) |
+| **Missing email in SAML assertion** | IdP admin: map `email` attribute or use email-format NameID — [Single Sign On (SSO)](/docs/sso#idp-requirements) |
 
 ## Support
 
 - **Email:** [hello@coop-ai.dev](mailto:hello@coop-ai.dev)
 - **Demo / enterprise:** [Book a demo](/demo)
 - **Documentation:** [Docs hub](/docs) for admin portal, integrations, API reference, and enterprise deployment
-- **Enterprise SSO:** [SAML SSO](/docs/saml-sso) setup · [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) error codes
+- **Enterprise SSO:** [Single Sign On (SSO)](/docs/sso) setup · [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) error codes
 - **Security questions:** [Security page](/security)

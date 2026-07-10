@@ -42,7 +42,7 @@ Production checklist: [connect-integrations-production.md](./connect-integration
 |-------|-------|
 | Sign in | Email and password, Google, or SSO (Enterprise) |
 
-Enterprise org admins configure SAML at [admin portal](https://admin.coop-ai.dev) → **Settings → Single sign-on** (`/settings/single-sign-on`). Developers use **Sign in with SSO** in the extension (**Settings → Account**). See [SAML SSO](../website/content/docs/saml-sso.md).
+Enterprise org admins configure SAML at [admin portal](https://admin.coop-ai.dev) → **Settings → Single sign-on** (`/settings/single-sign-on`). Developers use **Sign in with SSO** in the extension (**Settings → Account**). See [Single Sign On (SSO)](../website/content/docs/sso.md).
 
 **Success:** Account shows your org name and plan after sign-in.
 

@@ -109,7 +109,7 @@ See [Inline autocomplete](/docs/autocomplete) for FIM, graph context (indexed re
 | **Pro** | Teams — unlimited indexing, team seats, higher AI limits |
 | **Enterprise** | Self-hosted, BYOK, zero-retention, SAML SSO, compliance |
 
-**Enterprise org admins:** configure SAML in the admin portal before rolling SSO to your team — see [SAML SSO](/docs/saml-sso).
+**Enterprise org admins:** configure SAML in the admin portal before rolling SSO to your team — see [Single Sign On (SSO)](/docs/sso).
 
 See [Plans & billing](/docs/plans-billing) for details.
 

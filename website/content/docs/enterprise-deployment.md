@@ -84,7 +84,7 @@ Developers and admins use the portal for org configuration.
 
 ## SAML SSO (Enterprise)
 
-Enterprise orgs can enable SAML 2.0 for admin portal and extension sign-in. Full walkthrough: [SAML SSO](/docs/saml-sso).
+Enterprise orgs can enable SAML 2.0 for admin portal and extension sign-in. Full walkthrough: [Single Sign On (SSO)](/docs/sso).
 
 Org admins configure SSO in the admin portal (**Settings → Single sign-on**). End users sign in via the admin portal or VS Code extension only — they never edit server environment variables.
 
@@ -128,7 +128,7 @@ This seeds an Enterprise SSO demo org, verifies `/v1/sso/config`, and checks tha
 
 ## Next steps
 
-- [SAML SSO](/docs/saml-sso)
+- [Single Sign On (SSO)](/docs/sso)
 - [Connect integrations](/docs/connect-integrations)
 - [Security architecture](/docs/security-architecture)
 - [Enterprise product page](/enterprise)
