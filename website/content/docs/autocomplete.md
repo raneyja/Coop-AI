@@ -1,26 +1,26 @@
 ---
 title: Inline autocomplete
-description: Enable ghost-text code completions in VS Code — FIM, streaming, graph context, and Copilot coexistence.
+description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
 section: extension
-order: 2
-lastUpdated: "2026-07-09"
+order: 3
+lastUpdated: "2026-07-10"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
 
-The feature ships in production and is **off by default** until your repo is Deep-Indexed. When Lightning index status becomes **ready** for the active workspace repo, Coop **automatically enables** workspace autocomplete (Cody-style) and shows a one-time toast — **Turn off** if you prefer it disabled. Explicit opt-out via the sidebar toggle or **CoopAI: Toggle Autocomplete** suppresses future auto-enable prompts.
+The feature ships in production and is **on by default** (`coopAI.autocomplete.enabled: true`). Coop assigns **Mistral Codestral** for inline completions — see [Model assignments](/docs/model-assignments). Turn autocomplete off if you prefer not to use it; your choice is saved **globally** (User scope) so workspace folders cannot silently override it.
 
-## Enable autocomplete
+## Turn autocomplete off (or back on)
 
 ### 1. Extension UI — header toggle (fastest)
 
-Click **Autocomplete** in the Coop sidebar header to switch **On** or **Off**. No need to edit JSON settings — the toggle updates `coopAI.autocomplete.enabled` for you.
+Click **Autocomplete** in the Coop sidebar header to switch **On** or **Off**. The toggle updates `coopAI.autocomplete.enabled` at **global** scope.
 
 <!-- figures -->
 ![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
 <!-- /figures -->
 
-**Success:** Label shows **On**. Typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
+**Success:** Label shows **On** or **Off**. When on, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
 ### 2. Extension UI — Settings → Preferences → Model & chat
 
@@ -33,30 +33,32 @@ Click **Autocomplete** in the Coop sidebar header to switch **On** or **Off**. N
 ![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-off.png)
 <!-- /figures -->
 
-Use this screen when you want autocomplete on or off together with **Enable live LLM chat**, provider, and model. The header toggle updates the same setting.
+Use this screen together with **Enable live LLM chat** and the read-only assigned-model rows. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
 
-### 3. File — VS Code settings (User or Workspace)
+### 3. File — VS Code User settings
 
-Add or change:
+Prefer **User** settings (not Workspace) so the preference stays consistent across folders:
 
 ```json
-"coopAI.autocomplete.enabled": true
+"coopAI.autocomplete.enabled": false
 ```
 
-**Success:** Coop sidebar shows **Autocomplete On**. Typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
-
-<!-- figures -->
-![Inline autocomplete — ghost-text suggestion in the editor with Accept controls](/screenshots/docs/inline-autocomplete.png)
-<!-- /figures -->
+Coop strips legacy **workspace** `false` overrides on activate so an old folder setting cannot keep autocomplete off without your intent.
 
 ### 4. Extension UI — Command Palette (optional)
 
-Run **CoopAI: Toggle Autocomplete** to flip `coopAI.autocomplete.enabled` without opening JSON settings.
+Run **CoopAI: Toggle Autocomplete** to flip the global enabled flag without opening JSON settings.
+
+Explicit opt-out is remembered (`coopAI.autocomplete.userDisabled` in extension global state) so index-discovery toasts do not re-enable autocomplete after you turn it off.
 
 ### Prerequisites
 
 - Signed in under **Settings → Account** (Google, email, or SSO)
 - File type is supported (code files; sensitive files such as `.env` are skipped)
+
+<!-- figures -->
+![Inline autocomplete — ghost-text suggestion in the editor with Accept controls](/screenshots/docs/inline-autocomplete.png)
+<!-- /figures -->
 
 ## How it works
 
@@ -73,7 +75,7 @@ flowchart LR
 ```
 
 1. **Context extraction** — Prefix, suffix, indentation, and surrounding lines from the open buffer.
-2. **FIM (fill-in-the-middle)** — When `coopAI.autocomplete.useFim` is `true` (default), the extension sends `segments: { prefix, suffix }`. The server routes to Codestral or DeepSeek FIM when keys are configured; otherwise it falls back to chat-style completion.
+2. **FIM (fill-in-the-middle)** — When `coopAI.autocomplete.useFim` is `true` (default), the extension sends `segments: { prefix, suffix }`. Production routing uses **Codestral** (Mistral) when the server has FIM keys configured; otherwise it falls back to chat-style completion.
 3. **SSE streaming** — The extension requests `stream: true`. Tokens arrive incrementally so ghost text can appear before the full completion finishes.
 4. **Client intelligence** — Hot Streak, Smart Throttle, request recycling, and multi-line detection tune when and how requests fire.
 
@@ -114,19 +116,17 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `coopAI.autocomplete.enabled` | `false` | Master switch for inline ghost-text autocomplete |
+| `coopAI.autocomplete.enabled` | `true` | Master switch — persisted at **global** scope |
 | `coopAI.autocomplete.trigger` | `auto` | `auto` — debounced while typing; `manual` — hotkey only; `off` — no requests |
-| `coopAI.autocomplete.useFim` | `true` | Send FIM `segments` for Codestral / DeepSeek routing |
+| `coopAI.autocomplete.useFim` | `true` | Send FIM `segments` for Codestral routing |
 | `coopAI.autocomplete.useGraphContext` | `false` | Force indexed graph context on; when `false`, graph is still auto-attached when Deep-Index is ready (see below) |
-| `coopAI.autocomplete.model` | `chat` | `chat` uses Preferences provider/model; or fast presets `haiku`, `gpt35`, `custom` |
-| `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
-| `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000). Use 1500+ when model is `chat`. |
+| `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters in one suggestion (8–500) |
 | `coopAI.autocomplete.showMultipleSuggestions` | `false` | Request and cycle ranked alternatives (Alt+[ / Alt+]) |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias project-style completions |
 
-See [Extension settings](/docs/extension-settings) for Account, Tools, and Workspace settings.
+Advanced `coopAI.autocomplete.model` presets exist for developer tuning; production inline routing uses the assigned **Codestral** model regardless. See [Extension settings](/docs/extension-settings).
 
 ## GitHub Copilot
 
@@ -152,11 +152,11 @@ Response header `x-graph-context: degraded` means the graph slice timed out or w
 
 Traditional completion sends only text *before* the cursor. FIM sends both **prefix** (before cursor) and **suffix** (after cursor) so the model can fill the gap.
 
-**Server routing** (when `segments.prefix` is present and `useFim` is enabled):
+**Production routing** (when `segments.prefix` is present and `useFim` is enabled):
 
-1. **Mistral Codestral** — `MISTRAL_API_KEY` → `codestral-latest`
-2. **DeepSeek FIM** — `DEEPSEEK_API_KEY` → `deepseek-chat`
-3. **Chat fallback** — Anthropic Haiku or OpenAI mini via `message` prompt
+1. **Mistral Codestral** — assigned autocomplete model (`codestral-latest`) when `MISTRAL_API_KEY` is configured
+2. **DeepSeek FIM** — fallback when only `DEEPSEEK_API_KEY` is set
+3. **Chat fallback** — when FIM providers are unavailable
 
 Set `coopAI.autocomplete.useFim` to `false` to always use chat-style `message` requests.
 
@@ -174,7 +174,7 @@ See [Zero-retention LLM routing](/docs/zero-retention).
 
 | Event | Where | Purpose |
 | --- | --- | --- |
-| `completion.requested` | Server | Token billing, server-side latency |
+| `completion.requested` | Server | Usage tracking, server-side latency |
 | `completion.suggested` | Extension | Ghost text actually shown (CAR denominator) |
 | `completion.accepted` | Extension | Tab accept (CAR numerator) |
 | `completion.rejected` | Extension | Escape or superseded suggestion |
@@ -186,11 +186,12 @@ Org admins can view org completion metrics in the [admin portal](https://admin.c
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true`; confirm you are signed in under **Settings → Account** |
+| **No ghost text** | Confirm **Autocomplete On** in the sidebar or **Enable inline autocomplete** in Model & chat; sign in under **Settings → Account** |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
-| **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
+| **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
 | **Graph context empty** | Deep-Index the repo in admin portal; confirm index status is **ready** in Settings → Indexing; check Workspace owner/repo/branch; set `coopAI.autocomplete.useGraphContext` to `true` to force on |
+| **Workspace kept it off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
 
 More fixes: [Troubleshooting](/docs/troubleshooting#autocomplete).
 
@@ -200,7 +201,7 @@ Direct API usage: [API reference — Inline completion](/docs/api-reference#inli
 
 ## Next steps
 
+- [Model assignments](/docs/model-assignments) — per-feature models and settings UI
 - [Extension settings](/docs/extension-settings)
 - [Getting started](/docs/getting-started)
 - [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
-- [Owner's Manual — Inline complete](/manual#inline-complete-and-edit-selection)

@@ -13,22 +13,35 @@ lastUpdated: "2026-07-10"
 | **Not signed in** | **Settings → Account** — **Continue with Google**, **Continue with email**, or **Sign in with SSO** |
 | **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
 | **SSO required** | Your org requires SAML — extension: **Sign in with SSO** (enter org name); admin portal: **Organization name** + **Continue with SSO** on `/login` |
-| **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context |
+| **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm **Enable live LLM chat** under Model & chat |
+| **No model picker in settings** | Expected in production — models are Coop-assigned; see [Model assignments](/docs/model-assignments) |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
 | **No integration context** | Ask admin to connect tools in admin portal |
+
+## Verify production
+
+| Check | Success looks like |
+| --- | --- |
+| **API** | [api.coop-ai.dev/health](https://api.coop-ai.dev/health) returns OK |
+| **Model & chat** | Four assigned models, no provider picker |
+| **Autocomplete** | Ghost text on type → **Tab** accepts |
+| **/edit** | Patch notification with **Apply** / **Undo** |
+| **Quick action** | Structured answer with repo/integration context |
+| **Plain chat** | Grounded reply in composer |
 
 ## Autocomplete
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Set `coopAI.autocomplete.enabled` to `true` in VS Code settings |
+| **No ghost text** | Confirm sidebar **Autocomplete On** or **Enable inline autocomplete** in Model & chat; sign in under **Settings → Account** |
 | **Manual trigger does nothing** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Competing suggestions with Copilot** | Turn Coop autocomplete off, or leave it on — Coop automatically disables Copilot inline when enabled |
-| **Slow or dropped completions** | Increase `requestTimeoutMs` (default 1500; use 1500+ when model is `chat`); check API latency; self-hosted API needs `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` for FIM, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` for chat fallback |
+| **Slow or dropped completions** | Increase `requestTimeoutMs` (default 1500); check API latency; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **401 on completions** | Sign in again under **Settings → Account**; automation API keys do not replace user sign-in |
 | **Graph context not applied** | Deep-Index the repo in admin portal; set `coopAI.autocomplete.useGraphContext` to `true`; set Workspace owner/repo/branch |
-| **FIM not used** | Ensure `coopAI.autocomplete.useFim` is `true`; operator sets `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` on API server |
+| **FIM not used** | Ensure `coopAI.autocomplete.useFim` is `true`; operator sets `MISTRAL_API_KEY` on API server for Codestral |
+| **Workspace kept autocomplete off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 

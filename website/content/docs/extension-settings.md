@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -104,14 +104,42 @@ Profile and chat defaults — moved out of Account:
 
 | Item | Purpose |
 | --- | --- |
-| **Timezone** | Quota reset times and scheduling context in chat |
+| **Timezone** | Usage reset times and scheduling context in chat |
 | **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
-| **Model & chat** | LLM provider, **Enable live LLM chat**, **Enable inline autocomplete** |
+| **Model & chat** | Read-only assigned models, **Enable live LLM chat**, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
+
+The Preferences hub subtitle shows **Assigned models** plus chat and autocomplete status.
 
 <!-- figures -->
 ![Model & chat — Enable inline autocomplete on or off](/screenshots/docs/extension-autocomplete-settings-on-off.png)
 <!-- /figures -->
+
+## Model & chat
+
+**Preferences → Model & chat** shows how Coop routes each feature in production:
+
+| Row | Assignment |
+| --- | --- |
+| Chat | OpenAI · GPT-4o mini |
+| Quick actions | Anthropic · Claude Sonnet 4.6 |
+| /edit patches | OpenAI · GPT-5 mini |
+| Autocomplete | Mistral · Codestral |
+
+Production users see these rows as **read-only** with **On** / **Off** badges. Copy on the screen:
+
+> Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).
+
+**What you can change:**
+
+| Toggle | Setting | Default |
+| --- | --- | --- |
+| **Enable live LLM chat** | `coopAI.llm.enabled` | `true` |
+| **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `true` |
+
+Click **Save model settings** to persist toggles. Provider and model fields are not writable in production — the extension blocks updates to `coopAI.llmProvider` and `coopAI.defaultModel` unless `coopAI.devMode: true`.
+
+Full table and routing details: [Model assignments](/docs/model-assignments).
 
 <!-- figures -->
 ![Prompt library — search, pin, and create team prompts](/screenshots/docs/prompt-library.png)
@@ -119,21 +147,21 @@ Profile and chat defaults — moved out of Account:
 
 ## Autocomplete
 
-Inline ghost-text completions are **off by default**. Turn them on from the chat header (**Autocomplete On/Off**) or **Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. See the full guide: [Inline autocomplete](/docs/autocomplete).
+Inline ghost-text completions are **on by default**. Turn them off from the chat header (**Autocomplete On/Off**) or **Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. Autocomplete toggles persist at **global** (User) scope. See the full guide: [Inline autocomplete](/docs/autocomplete).
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `coopAI.autocomplete.enabled` | `false` | Enable inline ghost-text autocomplete |
+| `coopAI.autocomplete.enabled` | `true` | Enable inline ghost-text autocomplete (global scope) |
 | `coopAI.autocomplete.trigger` | `auto` | `auto` \| `manual` \| `off` — when to request completions |
-| `coopAI.autocomplete.useFim` | `true` | FIM `segments` for Codestral / DeepSeek routing |
-| `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (all plans when repo is Deep-Indexed) |
-| `coopAI.autocomplete.model` | `chat` | `chat` uses Preferences provider/model; or presets `haiku` \| `gpt35` \| `custom` |
-| `coopAI.autocomplete.customModel` | `""` | Model id when `model` is `custom` |
+| `coopAI.autocomplete.useFim` | `true` | FIM `segments` for Codestral routing |
+| `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (auto when Deep-Index is ready) |
 | `coopAI.autocomplete.debounceMs` | `300` | Ms after typing before auto-trigger (0–2000) |
 | `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters per suggestion (8–500) |
 | `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle alternatives with Alt+[ / Alt+] |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias completions |
+
+Production routing uses **Mistral Codestral** — not user-selected models. See [Model assignments](/docs/model-assignments).
 
 **Command Palette:** **CoopAI: Toggle Autocomplete**, **CoopAI: Show Autocomplete Help**
 
@@ -156,4 +184,4 @@ Enterprise customers should keep dev mode **off** in workspace settings.
 | **CoopAI: Understand Repo** | Run Understand Repo quick action |
 | **CoopAI: Trace Decision** | Run Trace Decision (file required) |
 
-See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. For inline autocomplete, see [Inline autocomplete](/docs/autocomplete).
+See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).

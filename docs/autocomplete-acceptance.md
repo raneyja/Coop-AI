@@ -52,14 +52,14 @@ npm run smoke:autocomplete:live    # live API only (same as smoke script step 1)
 
 ## Rollout ladder
 
-Extension default remains **off** (`coopAI.autocomplete.enabled: false` in `package.json`) until thresholds are met in dogfood.
+Extension default is **on** (`coopAI.autocomplete.enabled: true` in `package.json` and `autocompleteConfig.ts`). User opt-out is persisted globally; workspace `false` overrides are stripped on activate.
 
 | Stage | Gate | Action |
 |-------|------|--------|
-| **0 — Opt-in** | Current | Default `false`; early adopters enable in settings |
+| **0 — Opt-in (legacy)** | Pre–Stage 3 | Default `false`; early adopters enable in settings |
 | **1 — Org allowlist** | p50 < 400 ms, p95 < 800 ms, CAR > 20% for 7 days in internal dogfood | Document org IDs; optional server flag (below) |
 | **2 — Org default on** | Same thresholds for 2 weeks across ≥ 3 orgs | Server returns `autocompleteDefaultOn: true` for allowlisted orgs; extension reads on activate |
-| **3 — Global default on** | Stable CAR + latency for 30 days | Flip `package.json` default to `true` |
+| **3 — Global default on** | Stable CAR + latency for 30 days | **Shipped** — `package.json` default `true`; global persistence; workspace false overrides cleared |
 
 ### Optional server feature flag (pattern)
 

@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -19,7 +19,7 @@ Most AI coding tools only see the file you have open. CoopAI connects your **cod
 
 CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs — not full monorepo copies on every laptop. Your source stays on your infrastructure.
 
-**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode — with AI credits capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher AI limits.
+**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode — with AI usage capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher seat-based limits.
 
 ### Quick actions at a glance
 
@@ -264,7 +264,7 @@ Previous threads stay in the dropdown until you delete them. Quick actions and s
 
 ### Chat composer
 
-Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations.
+Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-4o mini** — assigned by Coop, not user-selected.
 
 - Press **Enter** to send (Shift+Enter for a new line).
 - Responses stream in real time with markdown formatting.
@@ -287,7 +287,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code (aliases: `/patch`, `/fix`) |
+| `/edit` | Edit code — GPT-5 mini (aliases: `/patch`, `/fix`) |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -306,19 +306,41 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | Screen | Purpose |
 | --- | --- |
 | **Account** | Sign in (Google, email, SSO); signed-in org/plan + Sign out |
-| **Plan & Usage** | Current plan, credits, upgrade path |
+| **Plan & Usage** | Current plan, usage summary, upgrade path |
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
-| **Preferences** | Timezone, identity links, prompt library, model preferences |
+| **Preferences** | Assigned models, prompt library, identity links, timezone |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, **Understand Repo**, or **Knowledge Gaps**.
 
+### Model assignments
+
+Coop assigns a model per feature — you do **not** pick provider or model on Pro. Open **Settings → Preferences → Model & chat** to see four read-only assignment rows with **On** / **Off** badges.
+
+| Feature | Assigned model |
+| --- | --- |
+| **Chat** | OpenAI GPT-4o mini |
+| **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
+| **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5 mini |
+| **Autocomplete** | Mistral Codestral |
+
+Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
+
+Two toggles remain editable:
+
+| Toggle | Effect |
+| --- | --- |
+| **Enable live LLM chat** | Chat, quick actions, and edit patches (badges show **Off** when disabled) |
+| **Enable inline autocomplete** | Inline ghost text (syncs with the header **Autocomplete** toggle) |
+
+Click **Save model settings** after changing toggles.
+
 ### Inline complete and edit selection
 
-**Inline complete** — Ghost-text autocomplete as you type. Shipped in production; **auto-enables** when your workspace repo is **Deep-Indexed** and index status is **ready** (one-time toast; **Turn off** to disable). Explicit opt-out via the sidebar toggle suppresses future auto-enable.
+**Inline complete** — Ghost-text autocomplete as you type. **On by default** for new installs. Coop routes completions to **Mistral Codestral** (FIM).
 
-Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick switch while you code. For a persistent preference (and to set provider/model), use **Settings → Preferences → Model & chat**.
+Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick switch while you code. For a persistent preference, use **Settings → Preferences → Model & chat** → **Enable inline autocomplete**. The header toggle and this checkbox stay in sync. Preferences persist at **global scope** — workspace `.vscode/settings.json` cannot silently override your choice.
 
 <!-- figures -->
 ![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
@@ -347,16 +369,16 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 **How it works:**
 
 - VS Code `InlineCompletionItemProvider` shows streaming ghost text
-- **FIM** (fill-in-the-middle) sends `prefix` + `suffix` segments when `coopAI.autocomplete.useFim` is `true` (default) — routed to Codestral or DeepSeek when configured
+- **FIM** (fill-in-the-middle) sends `prefix` + `suffix` segments when `coopAI.autocomplete.useFim` is `true` (default) — routed to assigned **Mistral Codestral**
 - **Hot Streak** keeps completions snappy after Tab-accept; **Smart Throttle** adapts debounce to typing speed and latency
 - **Multi-line** completions activate after `{`, `=>`, `(`, or inside blocks (up to 200 tokens)
-- **Indexed repos:** when the workspace repo is **Deep-Indexed** and index status is **ready**, graph context (dependents and ownership) is attached automatically — no extra setting required. Set `coopAI.autocomplete.useGraphContext` to `true` to force graph on; leave at `false` (default) for auto when indexed (all plans)
+- **Indexed repos:** when the workspace repo is **Deep-Indexed** and index status is **ready**, graph context (dependents and ownership) is attached automatically — no extra setting required. A one-time toast may confirm autocomplete is available with graph context. Set `coopAI.autocomplete.useGraphContext` to `true` to force graph on; leave at `false` (default) for auto when indexed (all plans)
 
 **Copilot:** when Coop autocomplete is **on**, Coop automatically disables Copilot **inline** ghost text (`github.copilot.enable`) and restores your prior setting when you turn Coop autocomplete off. Copilot chat and other features stay available.
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 
-**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop includes your editor selection and active file in context (`coopAI.includeSelection`, default `true`).
+**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop routes edit patches through **OpenAI GPT-5 mini** and includes your editor selection and active file in context (`coopAI.includeSelection`, default `true`).
 
 | Step | Surface | Action |
 | --- | --- | --- |
@@ -371,7 +393,7 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 ## Quick Actions
 
-Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace`, `/owner`, …), or the **editor context menu** — right-click a selection to see all five actions.
+Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace`, `/owner`, …), or the **editor context menu** — right-click a selection to see all five actions. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -488,6 +510,8 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 | Blast Radius | **No** | Requires open file |
 
 ### Integration slash commands
+
+Integration commands query connected tools with the same **Anthropic Claude Sonnet 4.6** routing as quick actions.
 
 | Slash | Description |
 | --- | --- |
@@ -656,7 +680,8 @@ Ask Coop: "Update AGENTS.md based on what I told you in this thread" to generate
 | Feature | Developer (free) | Pro |
 | --- | --- | --- |
 | Local workspace context | Yes | Yes |
-| AI credits | 80k / 5-hour window | Higher limits |
+| AI usage | 80k tokens / 5-hour window | Higher limits (seat-based billing) |
+| Model selection | Coop-assigned per feature | Coop-assigned per feature (Enterprise custom: coming soon) |
 | Code hosts & integrations | Yes (admin portal) | Yes |
 | Deep-Index / Lightning Mode | Yes (3 repos org-wide) | Yes (unlimited) |
 | Team seats | Individual only (1 seat) | Multi-seat |
@@ -693,6 +718,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **`saml_validation_failed`** | Check IdP cert expiry, clock skew, Entity ID / ACS URL match — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
 | **SP URLs empty in admin** | Operator: set `COOP_PUBLIC_BASE_URL` on API server and restart — not a user/extension setting |
 | **Missing email in SAML assertion** | IdP admin: map `email` attribute or use email-format NameID — [Single Sign On (SSO)](/docs/sso#idp-requirements) |
+| **Autocomplete turned off unexpectedly** | Preference persists globally — re-enable via header **Autocomplete** toggle or **Settings → Preferences → Model & chat → Enable inline autocomplete**. Remove stale `coopAI.autocomplete.enabled: false` from workspace `.vscode/settings.json` if present |
 
 ## Support
 

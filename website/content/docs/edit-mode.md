@@ -2,8 +2,8 @@
 title: Edit mode
 description: Generate search-replace patches from chat — slash commands, apply, undo, and selection context.
 section: extension
-order: 3
-lastUpdated: "2026-07-09"
+order: 4
+lastUpdated: "2026-07-10"
 ---
 
 CoopAI **edit mode** turns natural-language instructions into **search-replace patches** you review and apply in VS Code. Use it when you want in-file changes without an autonomous agent rewriting your tree.
@@ -19,6 +19,8 @@ Edit mode ships in production. It uses the same chat composer as quick actions �
 | Apply a localized change with review | Exploratory "what if" analysis |
 
 Edit mode routes to the `code_edit` use case and expects **patch blocks** in the model response — not prose-only answers.
+
+**Model:** Coop assigns **OpenAI GPT-5 mini** for `/edit`, `/patch`, and `/fix` in production. See [Model assignments](/docs/model-assignments).
 
 ## Slash commands
 
@@ -162,6 +164,6 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 
 ## Next steps
 
-- [Inline autocomplete](/docs/autocomplete) — ghost-text completions (opt-in)
+- [Inline autocomplete](/docs/autocomplete) — ghost-text completions (on by default)
 - [Extension settings](/docs/extension-settings)
 - [Owner's Manual — Edit selection](/manual#inline-complete-and-edit-selection)

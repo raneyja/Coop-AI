@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 ## General
@@ -24,7 +24,7 @@ No. Your code and prompts are never used to train foundation models. See [Securi
 
 ### What's included in the free Developer plan?
 
-Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google Docs, Teams) via the admin portal, Deep-Index / Lightning Mode on up to 3 repos org-wide, workspace repos, chat, quick actions, and AI credits (80,000 tokens per 5-hour window). Solo account only — no team invites.
+Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google Docs, Teams) via the admin portal, Deep-Index / Lightning Mode on up to 3 repos org-wide, workspace repos, chat, quick actions, and inline autocomplete. Free accounts include a rolling 5-hour usage window. Solo account only — no team invites.
 
 ### How do I upgrade to Pro?
 
@@ -63,7 +63,11 @@ In production mode, **org admins** connect integrations once in the [admin porta
 
 ### What are quick actions?
 
-Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. See the [Owner's Manual](/manual#quick-actions).
+Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. They route to **Claude Sonnet 4.6** in production. See the [Owner's Manual](/manual#quick-actions) and [Model assignments](/docs/model-assignments).
+
+### Can I choose the LLM provider or model?
+
+Not on Developer or Pro. Coop assigns models per feature (chat, quick actions, edit, autocomplete) — see [Model assignments](/docs/model-assignments). **Settings → Preferences → Model & chat** shows read-only assignments plus toggles for chat and autocomplete. Custom model selection is an Enterprise capability (coming soon). Set `coopAI.devMode: true` only for local testing overrides.
 
 ### What is Lightning Mode?
 

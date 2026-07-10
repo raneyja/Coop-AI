@@ -3,7 +3,7 @@ title: Plans & billing
 description: Developer, Pro, and Enterprise plans — features, limits, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-10"
 ---
 
 ## Plan comparison
@@ -13,12 +13,13 @@ lastUpdated: "2026-07-09"
 | **Price** | Free | $20/seat/month | Custom |
 | **VS Code extension** | Yes | Yes | Yes |
 | **Local workspace context** | Yes | Yes | Yes |
-| **AI credits** | 80k tokens / 5-hour window (model-weighted) | Higher limits | Custom |
+| **Usage** | Rolling 5-hour allowance | Included with each seat | Custom |
 | **Code hosts (GitHub, GitLab, Bitbucket)** | Yes (admin portal) | Yes | Yes |
 | **Collaboration integrations** | Yes (admin portal) | Yes (scope allowlist) | Yes (scope allowlist) |
 | **Deep-Index / Lightning Mode** | Yes (up to 3 repos org-wide) | Yes (unlimited) | Yes |
 | **Workspace repos** | Up to 3 | Up to 3 per seat | Unlimited |
 | **Team seats** | Individual (1 seat) | Multi-seat | Unlimited |
+| **Model selection** | Coop-assigned per feature | Coop-assigned per feature | Custom (Enterprise — coming soon) |
 | **Collections** | No | Yes | Yes |
 | **Admin portal** | Personal account | Full org admin | Full + SSO |
 | **Self-hosted** | No | No | Yes |
@@ -28,6 +29,8 @@ lastUpdated: "2026-07-09"
 
 See current pricing at [coop-ai.dev/pricing](/pricing).
 
+Coop assigns models per feature in production — you are not billed per model or provider. See [Model assignments](/docs/model-assignments).
+
 ## Developer (free)
 
 1. **Browser** → [Signup free](/signup/free) — email and password, or Google
@@ -35,7 +38,7 @@ See current pricing at [coop-ai.dev/pricing](/pricing).
 3. Connect code hosts and integrations in the [admin portal](/docs/admin-portal)
 4. Deep-Index up to **3 repos** org-wide; use workspace repos, chat, and quick actions in production mode
 
-Free includes the same tool connectivity and cloud indexing as Pro. Limits are AI credits, the 3-repo Deep-Index cap, and solo account (no team invites).
+Free includes the same tool connectivity and cloud indexing as Pro. Limits are the rolling usage window on free accounts, the 3-repo Deep-Index cap, and solo account (no team invites).
 
 ## Pro
 
@@ -44,7 +47,9 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are A
 3. Admin connects GitHub + integrations (same flow as free)
 4. Invite team from admin portal
 
-Pro adds unlimited Deep-Indexed repos, team seats, higher AI limits, Collections, usage analytics, and integration scope allowlists (same default-deny policy as Enterprise).
+Pro is **seat-based**: each paid seat includes the extension, unlimited Deep-Indexed repos, team collaboration, Collections, and usage analytics. AI features use Coop-assigned models — not per-model credits.
+
+Pro adds unlimited Deep-Indexed repos, team seats, Collections, usage analytics, and integration scope allowlists (same default-deny policy as Enterprise).
 
 ## Enterprise
 
@@ -80,10 +85,17 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 
 ## Usage limits
 
-Pro plans include usage analytics in the admin portal. Free plans show a rolling 5-hour AI credit meter. Contact support if you approach credit limits — upgrade paths are available.
+| Plan | What you see |
+| --- | --- |
+| **Developer (free)** | Rolling 5-hour usage window in the extension and admin portal |
+| **Pro** | Seat-based billing — AI usage included; analytics in admin portal |
+| **Enterprise** | Custom contract |
+
+Contact support if you hit free-tier limits — upgrade to Pro for team seats and unlimited Deep-Index. Coop does not expose per-model costs or credit weights in the product UI.
 
 ## Next steps
 
 - [Getting started](/docs/getting-started)
+- [Model assignments](/docs/model-assignments)
 - [Admin portal](/docs/admin-portal)
 - [Enterprise deployment](/docs/enterprise-deployment)
