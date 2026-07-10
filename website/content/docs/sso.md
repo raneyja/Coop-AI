@@ -53,8 +53,8 @@ Your IdP admin needs these values when creating the SAML application. In the adm
 
 | Field | Example (hosted Coop) |
 | --- | --- |
-| **Entity ID** | `https://api.coop-ai.dev/v1/auth/saml/metadata` |
-| **ACS URL** | `https://api.coop-ai.dev/v1/auth/saml/callback` |
+| **Single sign-on URL / ACS URL** | `https://api.coop-ai.dev/v1/auth/saml/callback` |
+| **Audience URI (SP Entity ID) / Entity ID** | `https://api.coop-ai.dev/v1/auth/saml/metadata` |
 | **Metadata URL** | `https://api.coop-ai.dev/v1/auth/saml/metadata` (requires signed-in Enterprise admin) |
 
 Hosted Coop uses `api.coop-ai.dev` for all SP values above. Self-hosted deployments use your API hostname instead — your Coop **operator** configures the server; org admins copy the resulting SP values from the admin portal.
@@ -75,11 +75,11 @@ The panel follows three steps:
 
 ### 1. Coop service provider
 
-Copy **Entity ID**, **ACS URL**, and **Metadata URL** (or **Download metadata**) into your IdP SAML application.
+Copy **Single sign-on URL / ACS URL**, **Audience URI (SP Entity ID) / Entity ID**, and **Metadata URL** (or **Download metadata**) into your IdP SAML application.
 
 ### 2. Identity provider
 
-Choose your provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML 2.0**). Paste IdP **Entity ID**, **SSO URL**, and **Signing certificate**. Check **Enable SSO for this organization**, then click **Save SSO**.
+Choose your provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML 2.0**). Paste the provider values from its SAML setup page. Okta calls these **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, and **X.509 Certificate**. Check **Enable SSO for this organization**, then click **Save SSO**.
 
 ### 3. Sign-in policy
 
@@ -92,8 +92,12 @@ Click **Test sign-in** and complete IdP login with an admin account. When SSO wo
 1. Create a **SAML 2.0** application.
 2. Set **Single sign-on URL** to the Coop **ACS URL**.
 3. Set **Audience URI (SP Entity ID)** to the Coop **Entity ID**.
-4. Under **Attribute Statements**, map `email` → `user.email` (or use email as NameID).
-5. Copy the IdP metadata: **Entity ID**, **SSO URL**, and **Signing certificate**.
+4. Set **Name ID format** to **EmailAddress** and **Application username** to **Email**.
+5. From Okta's setup instructions, copy **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, and **X.509 Certificate** into Coop.
+
+<!-- figures ml -->
+![Okta sign-in — Connecting to CoopAI after SAML app setup](/screenshots/docs/admin-sso-okta.png)
+<!-- /figures -->
 
 ### Azure AD / Entra ID
 
