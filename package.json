@@ -298,7 +298,7 @@
       "properties": {
         "coopAI.defaultModel": {
           "type": "string",
-          "default": "claude-sonnet-4-6",
+          "default": "gpt-4o-mini",
           "description": "Default model for CoopAI chat requests."
         },
         "coopAI.llmProvider": {
@@ -309,7 +309,7 @@
             "gemini",
             "deepseek"
           ],
-          "default": "anthropic",
+          "default": "openai",
           "description": "LLM provider routed by the CoopAI API server."
         },
         "coopAI.temperature": {
@@ -333,7 +333,7 @@
         },
         "coopAI.autocomplete.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable inline ghost-text autocomplete in the editor."
         },
         "coopAI.autocomplete.trigger": {
@@ -368,8 +368,8 @@
             "gpt35",
             "custom"
           ],
-          "default": "chat",
-          "description": "Autocomplete model: chat uses the same provider and model as Preferences (coopAI.llmProvider + coopAI.defaultModel). haiku/gpt35 are fast presets."
+          "default": "gpt35",
+          "description": "Autocomplete model: gpt35/haiku are fast presets. chat uses the same provider and model as Preferences (coopAI.llmProvider + coopAI.defaultModel)."
         },
         "coopAI.autocomplete.customModel": {
           "type": "string",
@@ -812,7 +812,10 @@
     "start:webhooks": "node dist/webhookServer.js",
     "start:workers": "node dist/workerEntry.js",
     "migrate": "node scripts/run-migrations.mjs",
+    "migrate:production:chat-feed": "bash scripts/fix-production-chat-feed.sh",
     "admin:org": "node dist/admin-org.js",
+    "ops:dev": "npm run dev --prefix ops",
+    "test:operator": "npx tsx src/server/operatorApi.test.ts && npx tsx src/server/authMiddleware.test.ts && npx tsx src/server/operators/operatorAuthConfig.test.ts",
     "watch": "npm-run-all -p watch:extension watch:webview",
     "watch:extension": "npm run build:extension -- --watch",
     "watch:webview": "npm-run-all -p watch:webview:css watch:webview:js",
@@ -839,7 +842,7 @@
     "smoke:autocomplete:mock": "npx tsx scripts/autocomplete-smoke.mjs",
     "smoke:autocomplete:live": "npx tsx scripts/autocomplete-smoke-live.mjs",
     "test:fim": "npx tsx src/api/fimRouter.test.ts",
-    "test:autocomplete": "npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
+    "test:autocomplete": "npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/autocompletePersistence.test.ts && npx tsx src/autocomplete/coopAutocompleteProvider.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",
     "test:repo-access": "npx tsx src/server/resolveAccessibleRepos.test.ts",
