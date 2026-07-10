@@ -95,7 +95,7 @@ Click **Test sign-in** and complete IdP login with an admin account. When SSO wo
 4. Set **Name ID format** to **EmailAddress** and **Application username** to **Email**.
 5. From Okta's setup instructions, copy **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, and **X.509 Certificate** into Coop.
 
-<!-- figures ml -->
+<!-- figures xs -->
 ![Okta sign-in — Connecting to CoopAI after SAML app setup](/screenshots/docs/admin-sso-okta.png)
 <!-- /figures -->
 

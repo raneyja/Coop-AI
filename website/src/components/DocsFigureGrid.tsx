@@ -6,6 +6,7 @@ import {
   docsFigureSingleCompactClassName,
   docsFigureSingleMediumClassName,
   docsFigureSingleMediumLargeClassName,
+  docsFigureSingleExtraSmallClassName,
   docsFigureSingleSmallClassName,
   docsFigureTileClassName
 } from "@/lib/docsStyles";
@@ -24,15 +25,17 @@ export function DocsFigureGrid({ items, compact, size }: DocsFigureGridProps) {
 
   const single = items.length === 1;
   const figureClassName = single
-    ? size === "sm"
-      ? docsFigureSingleSmallClassName
-      : size === "ml"
-        ? docsFigureSingleMediumLargeClassName
-        : size === "md"
-          ? docsFigureSingleMediumClassName
-          : compact
-            ? docsFigureSingleCompactClassName
-            : docsFigureSingleClassName
+    ? size === "xs"
+      ? docsFigureSingleExtraSmallClassName
+      : size === "sm"
+        ? docsFigureSingleSmallClassName
+        : size === "ml"
+          ? docsFigureSingleMediumLargeClassName
+          : size === "md"
+            ? docsFigureSingleMediumClassName
+            : compact
+              ? docsFigureSingleCompactClassName
+              : docsFigureSingleClassName
     : compact
       ? docsFigureGridCompactClassName
       : docsFigureGridClassName;
