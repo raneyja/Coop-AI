@@ -781,7 +781,7 @@ function ToolsListDetail({
 }
 
 function MemberToolsListDetail({ prefs }: { prefs: Preferences }): React.ReactElement {
-  const codeHosts: OrgIntegrationProvider[] = ["github", "gitlab", "bitbucket"];
+  const codeHosts: CodeHostProviderPreference[] = ["github", "gitlab", "bitbucket"];
   const collaborationProviders: Array<{ provider: OrgIntegrationProvider; name: string; description: string }> = [
     { provider: "slack", name: "Slack", description: "Search Slack threads and check teammate availability." },
     { provider: "atlassian", name: "Jira & Confluence", description: "Link Jira tickets and search Confluence pages in chat." },

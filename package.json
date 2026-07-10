@@ -834,6 +834,7 @@
     "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
+    "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:project-instructions": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/projectInstructionsStatus.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/webview/lib/agentsMdStatus.test.ts",
     "test:codegen": "npm run test:patch && npm run test:agent-routing && npx tsx src/context/repoSemanticRetrieval.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/agent/tools/registry.test.ts && npm run test:autocomplete && npm run build:extension",
     "test:inline-completion": "npx tsx src/api/inlineGraphContext.test.ts && npx tsx src/api/inlineCompletionApi.test.ts",

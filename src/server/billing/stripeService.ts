@@ -3,6 +3,11 @@ import type { BillingConfig } from "./billingConfig";
 
 type StripeSession = { id: string; url: string | null };
 type StripePortal = { url: string };
+type StripeSubscription = {
+  id: string;
+  status: string;
+  quantity?: number;
+};
 
 export type StripeCheckoutSession = {
   id: string;
@@ -74,6 +79,31 @@ export class StripeService {
     params.set("customer", customerId);
     params.set("return_url", this.config.billingPortalReturnUrl);
     return this.postForm<StripePortal>("/v1/billing_portal/sessions", params);
+  }
+
+  public async retrieveSubscription(subscriptionId: string): Promise<StripeSubscription> {
+    if (!this.config.stripeSecretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+    const response = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      {
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+      }
+    );
+    const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
+      error?: { message?: string };
+      items?: { data?: Array<{ quantity?: number }> };
+    };
+    if (!response.ok) {
+      throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
+    }
+    const quantity = json.items?.data?.[0]?.quantity;
+    return {
+      id: json.id,
+      status: json.status,
+      quantity: quantity ?? json.quantity
+    };
   }
 
   public verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): unknown {

@@ -6,6 +6,7 @@ import type { OrgStore } from "./orgStore";
 import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { AuthPolicyStore } from "./sso/authPolicyStore";
 import type { UserStore } from "./users/userStore";
+import type { ServerConfig } from "./serverConfig";
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown } {
   const response = {
@@ -29,7 +30,7 @@ const serverConfig = {
   ssoBaseUrl: "https://api.coop-ai.dev",
   ssoSpEntityId: undefined,
   ssoSessionTtlMs: 43_200_000
-};
+} as ServerConfig;
 
 function mockOrgStore(): OrgStore {
   return {
@@ -44,7 +45,8 @@ function mockOrgStore(): OrgStore {
     getOrganization: async (orgId: string) =>
       orgId === enterpriseOrgId
         ? { id: orgId, name: "Acme", plan: "enterprise", createdAt: new Date() }
-        : undefined
+        : undefined,
+    isOrgSuspended: async () => false
   } as unknown as OrgStore;
 }
 
@@ -88,7 +90,13 @@ function mockSsoConfigStore(): SsoConfigStore {
         : undefined;
       return config?.enabled ? config : undefined;
     },
-    upsertConfig: async (_orgId, input) => {
+    upsertConfig: async (_orgId: string, input: {
+      provider: string;
+      idpEntityId: string;
+      idpSsoUrl: string;
+      idpX509Cert: string;
+      enabled?: boolean;
+    }) => {
       saved = {
         provider: input.provider as "okta",
         idpEntityId: input.idpEntityId,
@@ -121,7 +129,11 @@ function mockAuthPolicyStore(): AuthPolicyStore {
 
   return {
     getPolicy: async () => policy,
-    upsertPolicy: async (_orgId, input) => {
+    upsertPolicy: async (_orgId: string, input: {
+      requireSso?: boolean;
+      allowPassword?: boolean;
+      allowGoogle?: boolean;
+    }) => {
       policy = {
         ...policy,
         requireSso: input.requireSso ?? policy.requireSso,
@@ -457,7 +469,8 @@ test("non-enterprise org is rejected for SSO config", async () => {
       userId: "user-2"
     }),
     getOrganization: async (orgId: string) =>
-      orgId === "org-pro" ? { id: orgId, name: "Pro Org", plan: "pro", createdAt: new Date() } : undefined
+      orgId === "org-pro" ? { id: orgId, name: "Pro Org", plan: "pro", createdAt: new Date() } : undefined,
+    isOrgSuspended: async () => false
   } as unknown as OrgStore;
 
   const response = mockResponse();
@@ -494,7 +507,8 @@ test("GET /v1/sso/config rejects non-admin members", async () => {
     getOrganization: async (orgId: string) =>
       orgId === enterpriseOrgId
         ? { id: orgId, name: "Acme", plan: "enterprise", createdAt: new Date() }
-        : undefined
+        : undefined,
+    isOrgSuspended: async () => false
   } as unknown as OrgStore;
 
   const response = mockResponse();

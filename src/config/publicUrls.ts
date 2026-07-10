@@ -3,6 +3,9 @@ import { MARKETING_SITE_URL } from "./siteConfig";
 /** Canonical admin portal — not the marketing site host. */
 export const ADMIN_PORTAL_URL = "https://admin.coop-ai.dev";
 
+/** Canonical ops portal — internal operator console. */
+export const OPS_PORTAL_URL = "https://ops.coop-ai.dev";
+
 export function isLocalhostUrl(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
@@ -56,4 +59,8 @@ export function resolveMarketingBaseUrl(env: NodeJS.ProcessEnv, publicBaseUrl: s
 
 export function resolveAdminPortalUrl(env: NodeJS.ProcessEnv, publicBaseUrl: string): string {
   return resolvePublicUrl(env.COOP_ADMIN_PORTAL_URL, publicBaseUrl, ADMIN_PORTAL_URL, "http://localhost:3001");
+}
+
+export function resolveOpsPortalUrl(env: NodeJS.ProcessEnv, publicBaseUrl: string): string {
+  return resolvePublicUrl(env.COOP_OPS_PORTAL_URL, publicBaseUrl, OPS_PORTAL_URL, "http://localhost:3003");
 }

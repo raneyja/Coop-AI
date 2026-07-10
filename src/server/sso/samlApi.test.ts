@@ -6,6 +6,7 @@ import { SamlService } from "./samlService";
 import type { OrgStore } from "../orgStore";
 import type { SsoConfigStore, OrgSsoConfig } from "./ssoConfigStore";
 import type { UserStore, UserRecord, CreatedSession } from "../users/userStore";
+import type { ServerConfig } from "../serverConfig";
 import {
   TEST_IDP_CERT,
   TEST_IDP_ENTITY_ID,
@@ -22,7 +23,7 @@ const serverConfig = {
   ssoBaseUrl: TEST_SAML_BASE_URL,
   ssoSpEntityId: undefined,
   ssoSessionTtlMs: 43_200_000
-};
+} as ServerConfig;
 
 function mockRedirectResponse(): {
   response: ServerResponse;
@@ -63,7 +64,8 @@ function mockOrgStore(): OrgStore {
     getOrganization: async (orgId: string) =>
       orgId === enterpriseOrgId
         ? { id: orgId, name: "SSO Callback Test", plan: "enterprise", createdAt: new Date() }
-        : undefined
+        : undefined,
+    isOrgSuspended: async () => false
   } as unknown as OrgStore;
 }
 
@@ -90,13 +92,13 @@ function mockUserStore(): UserStore {
   };
 
   return {
-    upsertUserFromIdp: async (login) => {
+    upsertUserFromIdp: async (login: { orgId: string; email: string; idpProvider: string }) => {
       assert.equal(login.orgId, enterpriseOrgId);
       assert.equal(login.email, user.email);
       assert.equal(login.idpProvider, "saml");
       return user;
     },
-    createSession: async (userId, orgId) => {
+    createSession: async (userId: string, orgId: string) => {
       assert.equal(userId, user.id);
       assert.equal(orgId, enterpriseOrgId);
       return session;

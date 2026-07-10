@@ -1,0 +1,170 @@
+import assert from "node:assert/strict";
+import type { ServerResponse } from "node:http";
+import { resolveAuthContextDetailed, writeOrgSuspended } from "./authMiddleware";
+import { handleOperatorApiRequest } from "./operatorApi";
+import type { OperatorApiDeps } from "./operatorApi";
+import type { OrgStore } from "./orgStore";
+import type { ServerConfig } from "./serverConfig";
+import type { OperatorStore } from "./operators/operatorStore";
+import type { OperatorAuthConfig } from "./operators/operatorAuthConfig";
+import type { OperatorContext as OpCtx } from "./operators/operatorStore";
+
+function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
+  const res = {
+    statusCode: undefined as number | undefined,
+    body: undefined as string | undefined,
+    writeHead(code: number) {
+      this.statusCode = code;
+    },
+    end(payload: string) {
+      this.body = payload;
+    }
+  };
+  return res as ServerResponse & { statusCode?: number; body?: string };
+}
+
+function baseDeps(overrides: Partial<OperatorApiDeps> = {}): OperatorApiDeps {
+  const serverConfig = { requireApiAuth: true, legacyApiToken: undefined } as ServerConfig;
+  const operatorAuthConfig: OperatorAuthConfig = {
+    allowlistEmails: new Set(["ops@coop-ai.dev"]),
+    opsPortalUrl: "http://localhost:3003",
+    sessionTtlMs: 3600000,
+    oauthStateSecret: "test",
+    defaultRole: "super_admin"
+  };
+  return {
+    serverConfig,
+    operatorAuthConfig,
+    ...overrides
+  };
+}
+
+void (async () => {
+  // Org-admin session must not access operator routes.
+  const denied = mockResponse();
+  const handled = await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/me",
+      headers: { authorization: "Bearer org-admin-session" },
+      body: {}
+    },
+    denied,
+    baseDeps({
+      operatorStore: {
+        resolveSession: async () => undefined
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(handled, true);
+  assert.equal(denied.statusCode, 401);
+
+  // Viewer cannot suspend.
+  const viewer: OpCtx = {
+    operatorId: "op-viewer",
+    email: "viewer@coop-ai.dev",
+    role: "viewer"
+  };
+  const suspendDenied = mockResponse();
+  const suspendHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/suspend",
+      headers: { authorization: "Bearer ops-token" },
+      body: { reason: "abuse", confirmName: "Acme" }
+    },
+    suspendDenied,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({ id: "org-1", name: "Acme", plan: "pro", repoAccessMode: "all_indexed", createdAt: new Date() })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => viewer,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(suspendHandled, true);
+  assert.equal(suspendDenied.statusCode, 403);
+  assert.match(suspendDenied.body ?? "", /operator_role_required/);
+
+  // Super-admin suspend requires confirm name and writes audit before 200.
+  let auditAction = "";
+  const superAdmin: OpCtx = {
+    operatorId: "op-super",
+    email: "super@coop-ai.dev",
+    role: "super_admin"
+  };
+  const suspendOk = mockResponse();
+  const suspendOkHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/suspend",
+      headers: { authorization: "Bearer ops-token" },
+      body: { reason: "policy violation", confirmName: "Acme Corp" }
+    },
+    suspendOk,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "enterprise",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        suspendOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "enterprise",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async (input: { action: string }) => {
+          auditAction = input.action;
+          return {
+            id: "1",
+            operatorId: superAdmin.operatorId,
+            action: input.action,
+            metadata: {},
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(suspendOkHandled, true);
+  assert.equal(suspendOk.statusCode, 200);
+  assert.equal(auditAction, "operator.org.suspend");
+
+  // Suspended org returns org_suspended via auth middleware.
+  const suspendedStore = {
+    resolveAuth: async () => ({
+      orgId: "org-suspended",
+      orgName: "Suspended Org",
+      plan: "pro",
+      apiKeyId: "key-1"
+    }),
+    isOrgSuspended: async (orgId: string) => orgId === "org-suspended"
+  } as unknown as OrgStore;
+  const suspendedResult = await resolveAuthContextDetailed(
+    { authorization: "Bearer coop_api_key" },
+    suspendedStore,
+    undefined,
+    true
+  );
+  assert.equal(suspendedResult.auth, undefined);
+  assert.equal(suspendedResult.orgSuspended, true);
+
+  const suspendedRes = mockResponse();
+  writeOrgSuspended(suspendedRes);
+  assert.equal(suspendedRes.statusCode, 403);
+  assert.match(suspendedRes.body ?? "", /org_suspended/);
+
+  console.log("operatorApi.test.ts: ok");
+})();

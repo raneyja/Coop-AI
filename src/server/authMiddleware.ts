@@ -16,6 +16,51 @@ export function extractBearerToken(headers: Record<string, string | undefined>):
   return token || undefined;
 }
 
+export type AuthResolveResult = {
+  auth?: AuthContext;
+  orgSuspended?: boolean;
+};
+
+export async function checkOrgNotSuspended(
+  orgStore: OrgStore | undefined,
+  orgId: string
+): Promise<boolean> {
+  if (!orgStore || orgId === "legacy") {
+    return true;
+  }
+  return !(await orgStore.isOrgSuspended(orgId));
+}
+
+export function writeOrgSuspended(response: ServerResponse): void {
+  writeJson(response, 403, {
+    error: "org_suspended",
+    message: "This organization has been suspended."
+  });
+}
+
+export async function resolveAuthContextDetailed(
+  headers: Record<string, string | undefined>,
+  orgStore: OrgStore | undefined,
+  legacyApiToken?: string,
+  requireApiAuth = false,
+  userStore?: UserStore
+): Promise<AuthResolveResult> {
+  const auth = await resolveAuthContext(
+    headers,
+    orgStore,
+    legacyApiToken,
+    requireApiAuth,
+    userStore
+  );
+  if (!auth) {
+    return {};
+  }
+  if (!(await checkOrgNotSuspended(orgStore, auth.orgId))) {
+    return { orgSuspended: true };
+  }
+  return { auth };
+}
+
 export async function resolveAuthContext(
   headers: Record<string, string | undefined>,
   orgStore: OrgStore | undefined,

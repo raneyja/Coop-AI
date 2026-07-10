@@ -115,7 +115,7 @@ export type ChatThreadsListPayload = {
   threads: ChatThreadListItem[];
 };
 
-export type LlmProviderPreference = "openai" | "anthropic" | "deepseek" | "gemini";
+export type LlmProviderPreference = "openai" | "anthropic" | "deepseek" | "gemini" | "mistral";
 
 export type UserPreferences = {
   model: string;
@@ -151,7 +151,7 @@ export type UserPreferences = {
     connected: number;
     scopeRequired: number;
   };
-  orgIntegrationStatuses?: import("../integrationStatusTypes").OrgIntegrationStatusEntry[];
+  orgIntegrationStatuses?: import("./integrationStatusTypes").OrgIntegrationStatusEntry[];
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;

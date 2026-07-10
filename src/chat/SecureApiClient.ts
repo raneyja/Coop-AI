@@ -791,7 +791,7 @@ export function readConfiguration(): Omit<
     temperature: config.get<number>("temperature", 0.5),
     maxTokens: config.get<number>("maxTokens", 2000),
     llmEnabled: config.get<boolean>("llm.enabled", true),
-    autocompleteEnabled: config.get<boolean>("autocomplete.enabled", false),
+    autocompleteEnabled: config.get<boolean>("autocomplete.enabled", true),
     useCachedResponses: config.get<boolean>("useCachedResponses", true),
     includeSelection: config.get<boolean>("includeSelection", true),
     includeActiveFile: config.get<boolean>("includeActiveFile", true),

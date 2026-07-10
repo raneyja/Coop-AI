@@ -28,13 +28,13 @@ const basePrefs = {
   hasApiKey: true,
   apiBaseUrl: "http://localhost:8787",
   devMode: false,
-  plan: "enterprise"
+  plan: "enterprise" as const
 } as Preferences;
 
 test("resolveMemberToolStatus marks pro slack scope required as pending admin setup", () => {
   const prefs = {
     ...basePrefs,
-    plan: "pro",
+    plan: "pro" as const,
     orgIntegrationStatuses: [
       { provider: "slack" as const, installed: true, scopeStatus: "required" as const }
     ]

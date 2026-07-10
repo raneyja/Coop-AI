@@ -82,6 +82,37 @@ export type AuthContext = {
   email?: string;
 };
 
+export type OrgOperatorProvenance =
+  | "unknown"
+  | "stripe_checkout"
+  | "free_signup"
+  | "manual_enterprise"
+  | "manual_pro";
+
+export type OrgOperatorStatus = "active" | "suspended";
+
+export type OrgOperatorMetadata = {
+  operatorStatus: OrgOperatorStatus;
+  crmExternalId?: string | null;
+  operatorNotes?: string | null;
+  suspendedAt?: Date | null;
+  suspendedReason?: string | null;
+  provenance: OrgOperatorProvenance;
+  assigneeOperatorId?: string | null;
+};
+
+export type OperatorOrganizationListItem = {
+  id: string;
+  name: string;
+  plan: OrgPlan;
+  createdAt: Date;
+  billingStatus?: string;
+  billingEmail?: string;
+  seatCount?: number;
+  operatorStatus?: OrgOperatorStatus;
+  provenance?: OrgOperatorProvenance;
+};
+
 export class OrgStore {
   public constructor(
     private readonly pool: Pool,
@@ -487,6 +518,145 @@ export class OrgStore {
       [orgId]
     );
   }
+
+  public async isOrgSuspended(orgId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT operator_status FROM organizations WHERE id = $1`,
+      [orgId]
+    );
+    const row = result.rows[0];
+    return row ? String(row.operator_status ?? "active") === "suspended" : false;
+  }
+
+  public async getOrgOperatorMetadata(orgId: string): Promise<OrgOperatorMetadata | undefined> {
+    const result = await this.pool.query(
+      `SELECT operator_status, crm_external_id, operator_notes, suspended_at, suspended_reason, provenance, assignee_operator_id
+       FROM organizations WHERE id = $1`,
+      [orgId]
+    );
+    const row = result.rows[0];
+    return row ? rowToOperatorMetadata(row) : undefined;
+  }
+
+  public async updateOrgOperatorMetadata(
+    orgId: string,
+    patch: Partial<{
+      operatorNotes: string | null;
+      crmExternalId: string | null;
+      assigneeOperatorId: string | null;
+      provenance: OrgOperatorProvenance;
+    }>
+  ): Promise<void> {
+    const fields: string[] = [];
+    const values: unknown[] = [orgId];
+    let idx = 2;
+    if (patch.operatorNotes !== undefined) {
+      fields.push(`operator_notes = $${idx++}`);
+      values.push(patch.operatorNotes);
+    }
+    if (patch.crmExternalId !== undefined) {
+      fields.push(`crm_external_id = $${idx++}`);
+      values.push(patch.crmExternalId);
+    }
+    if (patch.assigneeOperatorId !== undefined) {
+      fields.push(`assignee_operator_id = $${idx++}`);
+      values.push(patch.assigneeOperatorId);
+    }
+    if (patch.provenance !== undefined) {
+      fields.push(`provenance = $${idx++}`);
+      values.push(patch.provenance);
+    }
+    if (fields.length === 0) {
+      return;
+    }
+    await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
+  }
+
+  public async suspendOrganization(orgId: string, reason: string): Promise<Organization | undefined> {
+    const result = await this.pool.query(
+      `UPDATE organizations
+       SET operator_status = 'suspended', suspended_at = NOW(), suspended_reason = $2
+       WHERE id = $1
+       RETURNING id, name, plan, repo_access_mode, created_at`,
+      [orgId, reason]
+    );
+    const row = result.rows[0];
+    return row ? rowToOrg(row) : undefined;
+  }
+
+  public async activateOrganization(orgId: string): Promise<Organization | undefined> {
+    const result = await this.pool.query(
+      `UPDATE organizations
+       SET operator_status = 'active', suspended_at = NULL, suspended_reason = NULL
+       WHERE id = $1
+       RETURNING id, name, plan, repo_access_mode, created_at`,
+      [orgId]
+    );
+    const row = result.rows[0];
+    return row ? rowToOrg(row) : undefined;
+  }
+
+  public async revokeAllApiKeys(orgId: string): Promise<number> {
+    const result = await this.pool.query(`DELETE FROM api_keys WHERE org_id = $1`, [orgId]);
+    return result.rowCount ?? 0;
+  }
+
+  public async listOrganizationsForOperator(filters: {
+    search?: string;
+    plan?: OrgPlan;
+    billingStatus?: string;
+    sort?: "created_desc" | "created_asc" | "name_asc" | "name_desc";
+    limit?: number;
+  }): Promise<{ organizations: OperatorOrganizationListItem[]; total: number }> {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (filters.search?.trim()) {
+      clauses.push(`o.name ILIKE $${idx++}`);
+      params.push(`%${filters.search.trim()}%`);
+    }
+    if (filters.plan) {
+      clauses.push(`o.plan = $${idx++}`);
+      params.push(filters.plan);
+    }
+    if (filters.billingStatus?.trim()) {
+      clauses.push(`COALESCE(o.billing_status, 'none') = $${idx++}`);
+      params.push(filters.billingStatus.trim());
+    }
+
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const orderBy =
+      filters.sort === "created_asc"
+        ? "o.created_at ASC"
+        : filters.sort === "name_asc"
+          ? "o.name ASC"
+          : filters.sort === "name_desc"
+            ? "o.name DESC"
+            : "o.created_at DESC";
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+
+    const countResult = await this.pool.query(
+      `SELECT COUNT(*)::int AS total FROM organizations o ${where}`,
+      params
+    );
+    const total = Number(countResult.rows[0]?.total ?? 0);
+
+    const result = await this.pool.query(
+      `SELECT o.id, o.name, o.plan, o.created_at, o.operator_status, o.provenance,
+              o.billing_status, o.billing_email, o.seat_count
+       FROM organizations o
+       ${where}
+       ORDER BY ${orderBy}
+       LIMIT $${idx}`,
+      [...params, limit]
+    );
+
+    return {
+      organizations: result.rows.map(rowToOperatorOrganizationListItem),
+      total
+    };
+  }
 }
 
 function rowToBilling(row: Record<string, unknown>): OrgBilling {
@@ -553,6 +723,34 @@ function rowToOrgRepo(row: Record<string, unknown>): OrgRepoRecord {
     error: row.error ? String(row.error) : undefined,
     embeddingError: row.embedding_error ? String(row.embedding_error) : undefined,
     updatedAt: new Date(String(row.updated_at))
+  };
+}
+
+function rowToOperatorMetadata(row: Record<string, unknown>): OrgOperatorMetadata {
+  return {
+    operatorStatus: String(row.operator_status ?? "active") as OrgOperatorStatus,
+    crmExternalId: row.crm_external_id ? String(row.crm_external_id) : null,
+    operatorNotes: row.operator_notes ? String(row.operator_notes) : null,
+    suspendedAt: row.suspended_at ? new Date(String(row.suspended_at)) : null,
+    suspendedReason: row.suspended_reason ? String(row.suspended_reason) : null,
+    provenance: String(row.provenance ?? "unknown") as OrgOperatorProvenance,
+    assigneeOperatorId: row.assignee_operator_id ? String(row.assignee_operator_id) : null
+  };
+}
+
+function rowToOperatorOrganizationListItem(row: Record<string, unknown>): OperatorOrganizationListItem {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    plan: String(row.plan) as OrgPlan,
+    createdAt: new Date(String(row.created_at)),
+    billingStatus: row.billing_status ? String(row.billing_status) : undefined,
+    billingEmail: row.billing_email ? String(row.billing_email) : undefined,
+    seatCount: row.seat_count != null ? Number(row.seat_count) : undefined,
+    operatorStatus: row.operator_status
+      ? (String(row.operator_status) as OrgOperatorStatus)
+      : undefined,
+    provenance: row.provenance ? (String(row.provenance) as OrgOperatorProvenance) : undefined
   };
 }
 

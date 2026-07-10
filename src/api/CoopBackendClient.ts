@@ -285,7 +285,7 @@ export class CoopBackendClient {
       validateStatus: () => true
     });
     if (response.status >= 400) {
-      throw new Error(formatCoopApiError(response.status, response.data));
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
     }
     return response.data ?? { integrations: [] };
   }

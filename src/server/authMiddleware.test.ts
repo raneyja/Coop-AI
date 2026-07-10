@@ -39,8 +39,9 @@ function mockOrgStore(plans: Record<string, OrgPlan>): OrgStore {
         plan,
         createdAt: new Date()
       };
-    }
-  } as OrgStore;
+    },
+    isOrgSuspended: async () => false
+  } as unknown as OrgStore;
 }
 
 const freeAuth: AuthContext = {

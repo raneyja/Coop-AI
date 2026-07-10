@@ -2,6 +2,7 @@ import { GitHubClient } from "./codeHosts/githubClient";
 import { GitLabClient } from "./codeHosts/gitlabClient";
 import { BitbucketClient } from "./codeHosts/bitbucketClient";
 import { CodeHostError } from "./codeHosts/types";
+import type { RemoteFileContent, RepoCoordinates } from "./codeHosts/types";
 import { parseRepoId } from "../jobs/buildStructureManifest";
 import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getConnector } from "../server/codeHostConnectors/registry";
@@ -47,10 +48,10 @@ export function createOrgInlineGraphFileSnippetFetcher(deps: {
 }
 
 async function fetchRepoFileContent(
-  coords: { provider: string; owner: string; repo: string; branch?: string },
+  coords: RepoCoordinates,
   filePath: string,
   token: string
-): Promise<{ content: string } | undefined> {
+): Promise<RemoteFileContent | undefined> {
   switch (coords.provider) {
     case "github":
       return new GitHubClient({ token }).getFileContent(coords, filePath);

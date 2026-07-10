@@ -7,6 +7,7 @@ import type { AuthIdentityStore } from "./authIdentityStore";
 import type { AuthTokenStore } from "./authTokenStore";
 import type { AuthConfig } from "./authConfig";
 import type { ServerConfig } from "../serverConfig";
+import type { Pool } from "pg";
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown } {
   const response = {
@@ -76,7 +77,7 @@ void (async () => {
         query: async () => {
           throw new Error("database unavailable");
         }
-      }
+      } as unknown as Pool
     }
   );
 

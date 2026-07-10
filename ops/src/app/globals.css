@@ -1,0 +1,175 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-coop-dark text-[#e4e4e7] antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background-color: rgba(63, 185, 80, 0.25);
+    color: white;
+  }
+}
+
+@layer components {
+  .coop-logo-mark {
+    @apply h-auto w-auto opacity-90 invert;
+    mix-blend-mode: screen;
+    background: transparent;
+  }
+
+  .admin-card {
+    @apply space-y-4 border-b border-coop-border/50 pb-6;
+  }
+
+  .admin-card--table {
+    @apply overflow-x-auto border-b border-coop-border/50 pb-0;
+  }
+
+  .admin-panel-inset {
+    @apply border-l-2 border-l-coop-index py-1 pl-4;
+  }
+
+  .admin-list {
+    @apply divide-y divide-coop-border/40;
+  }
+
+  .admin-list-row {
+    @apply flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.02];
+  }
+
+  .admin-stat-row {
+    @apply grid grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:divide-x sm:divide-coop-border/60;
+  }
+
+  .admin-stat {
+    @apply min-w-0 sm:flex-1 sm:px-5 sm:first:pl-0 sm:last:pr-0;
+  }
+
+  .admin-chip {
+    @apply inline-flex items-center rounded-md border border-coop-border/60 px-2 py-0.5 text-xs font-medium;
+  }
+
+  .admin-chip--muted {
+    @apply text-coop-muted;
+  }
+
+  .admin-chip--plan-pro {
+    @apply border-coop-index/30 text-coop-index;
+  }
+
+  .admin-chip--plan-enterprise {
+    @apply text-white/80;
+  }
+
+  .admin-chip--plan-free {
+    @apply text-coop-muted;
+  }
+
+  .admin-chip--warn {
+    @apply border-coop-warn/40 text-coop-warn;
+  }
+
+  .admin-chip--danger {
+    @apply border-red-500/40 text-red-300;
+  }
+
+  .admin-status {
+    @apply inline-flex shrink-0 items-center gap-1.5 text-xs font-medium;
+  }
+
+  .admin-status--connected {
+    @apply text-coop-index;
+  }
+
+  .admin-status--available {
+    @apply text-coop-muted;
+  }
+
+  .admin-status--warn {
+    @apply text-coop-warn;
+  }
+
+  .admin-status-dot {
+    @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
+  }
+
+  .admin-status--connected .admin-status-dot {
+    @apply bg-coop-index;
+  }
+
+  .admin-status--available .admin-status-dot {
+    @apply bg-coop-muted/50;
+  }
+
+  .admin-status--warn .admin-status-dot {
+    @apply bg-coop-warn;
+  }
+
+  .admin-section-label {
+    @apply text-xs font-medium uppercase tracking-wide text-coop-muted;
+  }
+
+  .admin-btn {
+    @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 font-mono text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .admin-btn-primary {
+    @apply admin-btn bg-coop-index text-coop-dark hover:bg-[#46c35a];
+  }
+
+  .admin-btn-secondary {
+    @apply admin-btn border border-coop-border bg-transparent text-white/90 hover:border-coop-muted/50 hover:bg-white/[0.03];
+  }
+
+  .admin-btn-danger {
+    @apply admin-btn border border-red-500/40 bg-transparent text-red-300 hover:bg-red-500/10;
+  }
+
+  .admin-input {
+    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
+  }
+
+  .admin-label {
+    @apply mb-1.5 block font-mono text-xs text-coop-muted;
+  }
+
+  .admin-link {
+    @apply text-white/70 underline-offset-2 transition hover:text-white hover:underline;
+  }
+
+  .admin-table {
+    @apply w-full text-left text-sm;
+  }
+
+  .admin-table th {
+    @apply border-b border-coop-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-coop-muted;
+  }
+
+  .admin-table td {
+    @apply border-b border-coop-border/40 px-4 py-2;
+  }
+
+  .admin-page-title {
+    @apply text-xl font-semibold text-white;
+  }
+
+  .attention-card {
+    @apply rounded-md border border-coop-border/80 bg-coop-surface/40 p-4 transition-colors hover:border-coop-border;
+  }
+
+  .attention-card--warn {
+    @apply border-coop-warn/30 hover:border-coop-warn/50;
+  }
+
+  .attention-card--danger {
+    @apply border-red-500/30 hover:border-red-500/50;
+  }
+}

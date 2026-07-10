@@ -59,7 +59,7 @@ export type Preferences = {
     connected: number;
     scopeRequired: number;
   };
-  orgIntegrationStatuses?: import("../../chat/integrationStatusTypes").OrgIntegrationStatusEntry[];
+  orgIntegrationStatuses?: import("../../../chat/integrationStatusTypes").OrgIntegrationStatusEntry[];
   hasGitLabToken: boolean;
   hasGitLabAppInstalled: boolean;
   hasBitbucketCredentials: boolean;
