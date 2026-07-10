@@ -218,15 +218,8 @@ export function indexingHubSubtitle(
   return "No repos indexed yet";
 }
 
-export function preferencesHubSubtitle(prefs: Preferences, pinnedCount: number): string {
-  const model = prefs.model.replace(/-\d{8}$/, "").replace(/-/g, " ");
-  const prompts =
-    pinnedCount === 0
-      ? "No quick prompts"
-      : pinnedCount === 1
-        ? "1 quick prompt"
-        : `${pinnedCount} quick prompts`;
-  return `${model} · ${prompts}`;
+export function preferencesHubSubtitle(_prefs: Preferences, _pinnedCount: number): string {
+  return "Model & chat · Prompt Library";
 }
 
 export function integrationDisplayName(provider: IntegrationProvider): string {
