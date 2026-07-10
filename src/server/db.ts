@@ -41,3 +41,18 @@ export function requireDbPool(pool: Pool | null): Pool {
   }
   return pool;
 }
+
+export type ChatThreadsSchemaStatus = "ok" | "missing" | "unavailable";
+
+export async function getChatThreadsSchemaStatus(pool: Pool | null): Promise<ChatThreadsSchemaStatus> {
+  if (!pool) {
+    return "unavailable";
+  }
+  const result = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'chat_threads'
+    ) AS ok
+  `);
+  return result.rows[0]?.ok ? "ok" : "missing";
+}

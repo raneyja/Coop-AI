@@ -24,8 +24,8 @@ SQL
 
 for file in "${MIGRATIONS_DIR}"/*.sql; do
   base="$(basename "${file}")"
-  # Skip macOS duplicate filenames (should not exist after hygiene cleanup)
-  if [[ "${base}" == *" 2"* ]]; then
+  # Skip macOS duplicate filenames (e.g. "019_chat_threads 2.sql")
+  if [[ "${base}" =~ \ [0-9] ]]; then
     continue
   fi
   applied="$(psql "${DATABASE_URL}" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '${base}'" 2>/dev/null | tr -d '[:space:]')"

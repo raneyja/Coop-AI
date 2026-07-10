@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { auditActor } from "./audit/auditLogger";
-import { requireAuth, resolveAuthContext } from "./authMiddleware";
+import { canOrgAdmin, requireAuth, resolveAuthContext } from "./authMiddleware";
 import { getDbPool, requireDbPool } from "./db";
 import type { OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
@@ -113,6 +113,23 @@ function parseOptionalDate(value: unknown): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+function isMissingChatThreadsTable(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "42P01"
+  );
+}
+
+function writeChatThreadsSchemaError(response: ServerResponse): void {
+  writeJson(response, 503, {
+    error: "chat_threads_schema_missing",
+    message:
+      "Chat Feed storage is not initialized. Apply migration 019_chat_threads.sql on the API database, then redeploy."
+  });
+}
+
 export async function handleChatThreadsApiRequest(
   parsed: ParsedRequest,
   response: ServerResponse,
@@ -147,7 +164,8 @@ export async function handleChatThreadsApiRequest(
 
   const store = new ChatThreadsStore(requireDbPool(pool));
   const actor = auditActor(auth);
-  const memberScope = personalThreadScope(auth, actor);
+  const orgWideFeed = canOrgAdmin(auth);
+  const memberScope = orgWideFeed ? undefined : personalThreadScope(auth, actor);
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/threads") {
     const query = parsed.query;
@@ -157,22 +175,31 @@ export async function handleChatThreadsApiRequest(
     const toRaw = query?.get("to")?.trim();
     const cursor = decodeThreadCursor(query?.get("cursor")?.trim() ?? "");
 
-    const result = await store.listThreads({
-      orgId: auth.orgId,
-      from: fromRaw ? new Date(fromRaw) : undefined,
-      to: toRaw ? new Date(toRaw) : undefined,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      query: query?.get("q")?.trim() || undefined,
-      limit,
-      cursor,
-      memberScope
-    });
+    try {
+      const result = await store.listThreads({
+        orgId: auth.orgId,
+        from: fromRaw ? new Date(fromRaw) : undefined,
+        to: toRaw ? new Date(toRaw) : undefined,
+        repoOwner: repo.owner,
+        repoName: repo.name,
+        query: query?.get("q")?.trim() || undefined,
+        limit,
+        cursor,
+        memberScope,
+        userId: query?.get("userId")?.trim() || undefined
+      });
 
-    writeJson(response, 200, {
-      threads: result.threads.map(threadToJson),
-      nextCursor: result.nextCursor
-    });
+      writeJson(response, 200, {
+        threads: result.threads.map(threadToJson),
+        nextCursor: result.nextCursor
+      });
+    } catch (error) {
+      if (isMissingChatThreadsTable(error)) {
+        writeChatThreadsSchemaError(response);
+      } else {
+        throw error;
+      }
+    }
     return true;
   }
 
@@ -181,16 +208,24 @@ export async function handleChatThreadsApiRequest(
     const threadId = decodeURIComponent(threadMatch[1]);
 
     if (parsed.method === "GET") {
-      const thread = await store.getThread(auth.orgId, threadId);
-      if (!thread || !threadOwnedByAuth(thread, auth)) {
-        writeJson(response, 404, { error: "thread_not_found" });
-        return true;
+      try {
+        const thread = await store.getThread(auth.orgId, threadId);
+        if (!thread || (!orgWideFeed && !threadOwnedByAuth(thread, auth))) {
+          writeJson(response, 404, { error: "thread_not_found" });
+          return true;
+        }
+        const messages = await store.getThreadMessages(threadId);
+        writeJson(response, 200, {
+          thread: threadToJson(thread),
+          messages: messages.map(messageToJson)
+        });
+      } catch (error) {
+        if (isMissingChatThreadsTable(error)) {
+          writeChatThreadsSchemaError(response);
+        } else {
+          throw error;
+        }
       }
-      const messages = await store.getThreadMessages(threadId);
-      writeJson(response, 200, {
-        thread: threadToJson(thread),
-        messages: messages.map(messageToJson)
-      });
       return true;
     }
 
@@ -240,22 +275,30 @@ export async function handleChatThreadsApiRequest(
         };
       });
 
-      const thread = await store.upsertThread({
-        id: threadId,
-        orgId: auth.orgId,
-        userId: threadUserId,
-        principal: actor.principal,
-        title,
-        repoOwner,
-        repoName,
-        repoProvider,
-        previewText: previewFromMessages(messages),
-        createdAt: parseOptionalDate(body.createdAt),
-        updatedAt: parseOptionalDate(body.updatedAt),
-        messages
-      });
+      try {
+        const thread = await store.upsertThread({
+          id: threadId,
+          orgId: auth.orgId,
+          userId: threadUserId,
+          principal: actor.principal,
+          title,
+          repoOwner,
+          repoName,
+          repoProvider,
+          previewText: previewFromMessages(messages),
+          createdAt: parseOptionalDate(body.createdAt),
+          updatedAt: parseOptionalDate(body.updatedAt),
+          messages
+        });
 
-      writeJson(response, 200, { thread: threadToJson(thread) });
+        writeJson(response, 200, { thread: threadToJson(thread) });
+      } catch (error) {
+        if (isMissingChatThreadsTable(error)) {
+          writeChatThreadsSchemaError(response);
+        } else {
+          throw error;
+        }
+      }
       return true;
     }
 

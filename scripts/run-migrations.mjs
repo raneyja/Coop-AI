@@ -29,6 +29,42 @@ function poolConfig(connectionString) {
     : { connectionString };
 }
 
+/** Table that must exist before we backfill a migration into schema_migrations. */
+const LEDGER_TABLE_PROBES = {
+  "018_org_integration_policies.sql": "org_integration_policies",
+  "019_chat_threads.sql": "chat_threads"
+};
+
+async function tableExists(client, tableName) {
+  const result = await client.query(
+    `
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = $1
+      ) AS ok
+    `,
+    [tableName]
+  );
+  return Boolean(result.rows[0]?.ok);
+}
+
+/** Remove ledger rows that were backfilled without the migration actually running. */
+async function repairFalseLedgerEntries(client) {
+  for (const [filename, tableName] of Object.entries(LEDGER_TABLE_PROBES)) {
+    const recorded = await client.query("SELECT 1 FROM schema_migrations WHERE filename = $1", [
+      filename
+    ]);
+    if (recorded.rowCount === 0) {
+      continue;
+    }
+    if (await tableExists(client, tableName)) {
+      continue;
+    }
+    await client.query("DELETE FROM schema_migrations WHERE filename = $1", [filename]);
+    console.log(`repair ${filename} (ledger entry present but ${tableName} missing)`);
+  }
+}
+
 /** Docker Compose mounts migrations into initdb.d — schema exists but ledger may only list 001. */
 async function syncDockerInitLedger(client, filenames) {
   const probe = await client.query(`
@@ -54,16 +90,9 @@ async function syncDockerInitLedger(client, filenames) {
       continue;
     }
 
-    if (filename === "018_org_integration_policies.sql") {
-      const table = await client.query(`
-        SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables
-          WHERE table_schema = 'public' AND table_name = 'org_integration_policies'
-        ) AS ok
-      `);
-      if (!table.rows[0]?.ok) {
-        continue;
-      }
+    const requiredTable = LEDGER_TABLE_PROBES[filename];
+    if (requiredTable && !(await tableExists(client, requiredTable))) {
+      continue;
     }
 
     await client.query(
@@ -88,12 +117,13 @@ async function main() {
 
     const files = fs
       .readdirSync(migrationsDir)
-      .filter((name) => name.endsWith(".sql") && !name.includes(" 2"))
+      .filter((name) => name.endsWith(".sql") && !/ \d/.test(name))
       .sort();
 
     console.log(`Using DATABASE_URL (host redacted)`);
     console.log(`Migrations directory: ${migrationsDir}`);
 
+    await repairFalseLedgerEntries(client);
     await syncDockerInitLedger(client, files);
 
     for (const filename of files) {
