@@ -37,15 +37,18 @@ export const docsFigureCompactCaptionClassName =
 export const docsFigureGridCompactClassName =
   "not-prose my-6 grid max-w-[44.8rem] grid-cols-1 gap-4 sm:grid-cols-2";
 
-export const docsFigureSingleClassName = "not-prose my-6 max-w-4xl";
+export const docsFigureSingleClassName = "not-prose my-6 mx-auto max-w-4xl";
 
-export const docsFigureSingleCompactClassName = "not-prose my-6 max-w-[44.8rem]";
+export const docsFigureSingleCompactClassName = "not-prose my-6 mx-auto max-w-[44.8rem]";
 
 // Medium single figure: 25% narrower than standard docs figures.
-export const docsFigureSingleMediumClassName = "not-prose my-6 max-w-[42rem]";
+export const docsFigureSingleMediumClassName = "not-prose my-6 mx-auto max-w-[42rem]";
+
+// Between sm and md: 25% wider than sm (portrait UI screenshots).
+export const docsFigureSingleMediumLargeClassName = "not-prose my-6 mx-auto max-w-[33.6rem]";
 
 // Small single figure: ~40% narrower than compact, for tall/portrait screenshots.
-export const docsFigureSingleSmallClassName = "not-prose my-6 max-w-[26.9rem]";
+export const docsFigureSingleSmallClassName = "not-prose my-6 mx-auto max-w-[26.9rem]";
 
 export const docsFigureTileClassName =
   "block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";

@@ -8,7 +8,7 @@ lastUpdated: "2026-07-10"
 
 CoopAI assigns an LLM per feature in production. You do not pick provider or model on Developer or Pro — Coop routes each use case to the model below. **Custom model selection is an Enterprise capability (coming soon).**
 
-<!-- figures sm -->
+<!-- figures ml -->
 ![Model & chat — read-only assigned models for Chat, Quick actions, /edit, and Autocomplete](/screenshots/docs/extension-settings-models-and-chat.png)
 <!-- /figures -->
 
