@@ -41,6 +41,9 @@ export const docsFigureSingleClassName = "not-prose my-6 max-w-4xl";
 
 export const docsFigureSingleCompactClassName = "not-prose my-6 max-w-[44.8rem]";
 
+// Medium single figure: 25% narrower than standard docs figures.
+export const docsFigureSingleMediumClassName = "not-prose my-6 max-w-[42rem]";
+
 // Small single figure: ~40% narrower than compact, for tall/portrait screenshots.
 export const docsFigureSingleSmallClassName = "not-prose my-6 max-w-[26.9rem]";
 

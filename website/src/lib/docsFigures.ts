@@ -4,7 +4,7 @@ export type DocsFigureItem = {
   caption?: string;
 };
 
-export type DocsFigureSize = "sm";
+export type DocsFigureSize = "md" | "sm";
 
 export type DocsContentSegment =
   | { type: "markdown"; content: string }
@@ -50,7 +50,10 @@ export function parseDocsFigures(block: string): DocsFigureItem[] {
 const figuresBlockRe = /<!--\s*figures(?:\s+([a-z]+))?\s*-->([\s\S]*?)<!--\s*\/figures\s*-->/g;
 
 function parseFigureSize(token: string | undefined): DocsFigureSize | undefined {
-  return token === "sm" ? "sm" : undefined;
+  if (token === "sm" || token === "md") {
+    return token;
+  }
+  return undefined;
 }
 
 export function splitDocsContent(content: string): DocsContentSegment[] {

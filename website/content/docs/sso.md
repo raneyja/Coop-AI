@@ -8,7 +8,7 @@ lastUpdated: "2026-07-10"
 
 Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entra ID, or any standards-compliant identity provider.
 
-<!-- figures -->
+<!-- figures md -->
 ![Admin portal sign-in — enter organization name and Continue with SSO](/screenshots/docs/admin-login-sso.png)
 <!-- /figures -->
 
@@ -121,7 +121,7 @@ Use **Test sign-in** with at least one admin account before enabling **Require S
 
 To disable SAML while **Require SSO** is on, turn off **Require SSO** first — otherwise **Save SSO** returns `sso_required_active`.
 
-<!-- figures sm -->
+<!-- figures -->
 ![Admin portal Settings — open Single sign-on to configure SAML and sign-in policy](/screenshots/docs/admin-settings-sso.png)
 <!-- /figures -->
 
