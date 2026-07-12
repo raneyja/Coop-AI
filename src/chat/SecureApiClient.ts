@@ -11,6 +11,7 @@ import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { CoopBackendClient } from "../api/CoopBackendClient";
 import { clampSearchScopeModeForPlan } from "../license/licenseChecker";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
+import { stripUserModelPreferenceUpdates } from "../config/featureModelAssignments";
 import { isCoopDevMode } from "../config/lightningConfig";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
@@ -1157,51 +1158,53 @@ export function resolvePreferredCodeHost(input: {
 
 export async function updateConfiguration(updates: Partial<UserPreferences>): Promise<void> {
   const config = vscode.workspace.getConfiguration("coopAI");
+  const devMode = config.get<boolean>("devMode", false);
+  const safeUpdates = stripUserModelPreferenceUpdates(updates, { devMode });
   const ops: Array<[string, string | boolean | number]> = [];
-  if (updates.model !== undefined) {
-    ops.push(["defaultModel", updates.model]);
+  if (safeUpdates.model !== undefined) {
+    ops.push(["defaultModel", safeUpdates.model]);
   }
-  if (updates.llmProvider !== undefined) {
-    ops.push(["llmProvider", updates.llmProvider]);
+  if (safeUpdates.llmProvider !== undefined) {
+    ops.push(["llmProvider", safeUpdates.llmProvider]);
   }
-  if (updates.temperature !== undefined) {
-    ops.push(["temperature", updates.temperature]);
+  if (safeUpdates.temperature !== undefined) {
+    ops.push(["temperature", safeUpdates.temperature]);
   }
-  if (updates.maxTokens !== undefined) {
-    ops.push(["maxTokens", updates.maxTokens]);
+  if (safeUpdates.maxTokens !== undefined) {
+    ops.push(["maxTokens", safeUpdates.maxTokens]);
   }
-  if (updates.llmEnabled !== undefined) {
-    ops.push(["llm.enabled", updates.llmEnabled]);
+  if (safeUpdates.llmEnabled !== undefined) {
+    ops.push(["llm.enabled", safeUpdates.llmEnabled]);
   }
-  if (updates.autocompleteEnabled !== undefined) {
-    ops.push(["autocomplete.enabled", updates.autocompleteEnabled]);
+  if (safeUpdates.autocompleteEnabled !== undefined) {
+    ops.push(["autocomplete.enabled", safeUpdates.autocompleteEnabled]);
   }
-  if (updates.useCachedResponses !== undefined) {
-    ops.push(["useCachedResponses", updates.useCachedResponses]);
+  if (safeUpdates.useCachedResponses !== undefined) {
+    ops.push(["useCachedResponses", safeUpdates.useCachedResponses]);
   }
-  if (updates.includeSelection !== undefined) {
-    ops.push(["includeSelection", updates.includeSelection]);
+  if (safeUpdates.includeSelection !== undefined) {
+    ops.push(["includeSelection", safeUpdates.includeSelection]);
   }
-  if (updates.includeActiveFile !== undefined) {
-    ops.push(["includeActiveFile", updates.includeActiveFile]);
+  if (safeUpdates.includeActiveFile !== undefined) {
+    ops.push(["includeActiveFile", safeUpdates.includeActiveFile]);
   }
-  if (updates.apiBaseUrl !== undefined && isCoopDevMode()) {
-    ops.push(["apiBaseUrl", updates.apiBaseUrl]);
+  if (safeUpdates.apiBaseUrl !== undefined && isCoopDevMode()) {
+    ops.push(["apiBaseUrl", safeUpdates.apiBaseUrl]);
   }
-  if (updates.owner !== undefined) {
-    ops.push(["defaultOwner", updates.owner]);
+  if (safeUpdates.owner !== undefined) {
+    ops.push(["defaultOwner", safeUpdates.owner]);
   }
-  if (updates.repo !== undefined) {
-    ops.push(["defaultRepo", updates.repo]);
+  if (safeUpdates.repo !== undefined) {
+    ops.push(["defaultRepo", safeUpdates.repo]);
   }
-  if (updates.branch !== undefined) {
-    ops.push(["defaultBranch", updates.branch]);
+  if (safeUpdates.branch !== undefined) {
+    ops.push(["defaultBranch", safeUpdates.branch]);
   }
-  if (updates.defaultCodeHost !== undefined) {
-    ops.push(["defaultCodeHost", updates.defaultCodeHost]);
+  if (safeUpdates.defaultCodeHost !== undefined) {
+    ops.push(["defaultCodeHost", safeUpdates.defaultCodeHost]);
   }
-  if (updates.gitlabBaseUrl !== undefined) {
-    ops.push(["gitlab.baseUrl", updates.gitlabBaseUrl]);
+  if (safeUpdates.gitlabBaseUrl !== undefined) {
+    ops.push(["gitlab.baseUrl", safeUpdates.gitlabBaseUrl]);
   }
   if (updates.jiraBaseUrl !== undefined) {
     ops.push(["jira.baseUrl", updates.jiraBaseUrl]);

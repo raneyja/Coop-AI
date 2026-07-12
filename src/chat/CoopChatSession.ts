@@ -141,6 +141,7 @@ import {
   quickActionModelPrompt,
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
+import { resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
 import {
   filterMentionsByInScopeKeys,
   allMentionsOutOfScopeForActiveRepo,
@@ -3113,14 +3114,25 @@ export class CoopChatSession {
     const minResponseVisibleMs = effectiveQuickAction ? 0 : undefined;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
+    const chatUseCase = resolveChatUseCase(
+      effectiveQuickAction,
+      integrationProvider,
+      options?.composerMode
+    );
+    const runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
+      devMode: this.preferences.devMode,
+      llmProvider: this.preferences.llmProvider,
+      model: this.preferences.model
+    });
     const cacheKey = JSON.stringify({
       content,
       attachments,
       sourceHint,
       integrationProvider,
       context: this.currentContext,
-      model: this.preferences.model,
-      provider: this.preferences.llmProvider
+      model: runtimeModel.model,
+      provider: runtimeModel.provider,
+      useCase: chatUseCase
     });
     // Never replay cached chat answers — stale cache returned hallucinations when file attach failed.
     const skipResponseCache = true;
@@ -3496,9 +3508,9 @@ export class CoopChatSession {
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,
           mentions: options?.mentions,
-          model: this.preferences.model,
-          provider: this.preferences.llmProvider,
-          useCase: resolveChatUseCase(effectiveQuickAction, integrationProvider, options?.composerMode),
+          model: runtimeModel.model,
+          provider: runtimeModel.provider,
+          useCase: chatUseCase,
           temperature: this.preferences.temperature,
           maxTokens: this.preferences.maxTokens
         },

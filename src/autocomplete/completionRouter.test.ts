@@ -252,11 +252,12 @@ async function runAsyncTests(): Promise<void> {
   });
 
   await asyncTest("falls back to secondary provider when primary request fails", async () => {
+    setMockConfiguration("coopAI", "devMode", false);
     let attempt = 0;
     const api = {
       streamInlineCompletion: async (_base: string, body: { provider: string }) => {
         attempt += 1;
-        if (body.provider === "anthropic") {
+        if (body.provider === "mistral") {
           throw new Error("primary failed");
         }
         return { text: "fallback;", alternatives: [], model: "mini", provider: "openai" };
@@ -295,9 +296,34 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(cached.completions[0]?.text, "cached;");
   });
 
-  await asyncTest("uses chat preferences model when preset is chat", async () => {
+  await asyncTest("uses assigned autocomplete model in production", async () => {
     setMockConfiguration("coopAI", "llmProvider", "openai");
     setMockConfiguration("coopAI", "defaultModel", "gpt-4o");
+    setMockConfiguration("coopAI", "devMode", false);
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "42;", alternatives: [], model: "codestral-latest", provider: "mistral" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+
+    await router.fetchCompletions(sampleContext, {
+      ...autocompleteSettings,
+      model: "chat"
+    });
+
+    assert.equal(capturedBody?.provider, "mistral");
+    assert.equal(capturedBody?.model, "codestral-latest");
+  });
+
+  await asyncTest("uses chat preferences model when dev mode is on", async () => {
+    setMockConfiguration("coopAI", "llmProvider", "openai");
+    setMockConfiguration("coopAI", "defaultModel", "gpt-4o");
+    setMockConfiguration("coopAI", "devMode", true);
 
     let capturedBody: Record<string, unknown> | undefined;
     const api = {

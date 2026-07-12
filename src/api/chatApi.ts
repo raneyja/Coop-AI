@@ -4,6 +4,7 @@ import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
+import { resolveAssignedModelForUseCase } from "../config/featureModelAssignments";
 import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
 import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
 import {
@@ -156,8 +157,14 @@ export async function handleChatApiRequest(
   const visionWeighted =
     visionAttachmentCount > 0 ||
     history.some((entry) => countVisionWeightedAttachments(entry.attachments) > 0);
-  const provider = readProvider(body.provider, config.defaultProvider);
-  const model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
+  const useCase = readUseCase(body.useCase);
+  let provider = readProvider(body.provider, config.defaultProvider);
+  let model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
+  if (!config.allowUnapprovedProvider) {
+    const assigned = resolveAssignedModelForUseCase(useCase);
+    provider = assigned.provider;
+    model = assigned.model;
+  }
   try {
     await planQuota.check(
       org.orgId,
@@ -203,7 +210,7 @@ export async function handleChatApiRequest(
         history,
         context: body.context,
         attachments: attachments.length ? attachments : undefined,
-        useCase: readUseCase(body.useCase),
+        useCase,
         allowUnapprovedProvider: config.allowUnapprovedProvider,
         modelConfig: {
           provider,

@@ -1,0 +1,39 @@
+---
+description: Operator-controlled per-feature model routing — do not expose user model pickers in production
+globs: src/config/featureModelAssignments.ts,src/webview/components/settings/**,src/chat/CoopChatSession.ts,src/chat/SecureApiClient.ts,src/autocomplete/completionRouter.ts,src/api/chatApi.ts,src/api/inlineCompletionApi.ts
+alwaysApply: false
+---
+
+# Model assignments — operator-controlled routing
+
+Production users **do not** pick LLM provider or model. Coop assigns models per feature.
+
+## Source of truth
+
+`src/config/featureModelAssignments.ts` — `COOP_FEATURE_MODEL_ASSIGNMENTS` and `resolveAssignedModelForUseCase()`.
+
+| Feature | Provider | Model |
+|---|---|---|
+| Chat | OpenAI | gpt-4o-mini |
+| Quick actions + integration chat | Anthropic | claude-sonnet-4-6 |
+| /edit patches | OpenAI | gpt-5-mini |
+| Autocomplete | Mistral | codestral-latest |
+
+## Required wiring (all must stay connected)
+
+1. **Settings UI** (`SettingsDetailViews.tsx` `ModelDetail`) — read-only assignment rows + On/Off badges; toggles only. Provider/model pickers **only** when `canUserSelectModels({ devMode: true })`.
+2. **Extension runtime** — `resolveRuntimeModelForUseCase()` in `CoopChatSession`; `resolveRuntimeAutocompleteModel()` in `completionRouter`.
+3. **Config writes** — `stripUserModelPreferenceUpdates()` in `SecureApiClient.updateConfiguration` blocks `llmProvider` / `defaultModel` unless dev mode.
+4. **Server enforcement** — `chatApi.ts` and `inlineCompletionApi.ts` override client model when `!config.allowUnapprovedProvider`.
+
+## Dev mode only
+
+`coopAI.devMode: true` unlocks local provider/model overrides. Never ship provider pickers to production users.
+
+## Tests
+
+Run `npx tsx src/config/featureModelAssignments.test.ts` and `npm run test:autocomplete` after any change to model routing or Model & chat settings.
+
+## Docs
+
+Keep `website/content/docs/model-assignments.md` in sync with `COOP_FEATURE_MODEL_ASSIGNMENTS`.

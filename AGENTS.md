@@ -24,6 +24,10 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 
 **Reference:** `PromptLibraryModal.tsx`, `SettingsPanel.tsx`, `LightningModePanel.tsx`.
 
+## Model assignments (operator-controlled)
+
+Production users do **not** pick provider or model. Assignments live in `src/config/featureModelAssignments.ts` and must be wired through settings UI, extension runtime, config writes, and server APIs. See `.cursor/rules/model-assignments.mdc` and `website/content/docs/model-assignments.md`. **Do not** add provider/model pickers without `canUserSelectModels({ devMode: true })` gating.
+
 ## Other areas
 
 - Marketing site: `website/` (separate Tailwind stack; not shared with the extension webview)

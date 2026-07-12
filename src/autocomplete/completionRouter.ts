@@ -3,7 +3,7 @@ import { readConfiguration } from "../chat/SecureApiClient";
 import { buildRepoId } from "../chat/buildRepoId";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import { resolveInlineModelPreset, resolveChatModelPreset } from "../config/inlineModelPresets";
+import { resolveRuntimeAutocompleteModel } from "../config/featureModelAssignments";
 import { resolveEffectiveUseGraphContext } from "./autocompleteConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
@@ -412,14 +412,11 @@ function resolveModelPreset(
   settings: AutocompleteSettings,
   prefs: ReturnType<typeof readConfiguration>
 ): { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } } {
-  if (settings.model === "chat") {
-    return resolveChatModelPreset(prefs.llmProvider as LlmProvider, prefs.model);
-  }
-  return resolveInlineModelPreset(
-    settings.model,
-    settings.customModel,
-    prefs.llmProvider as LlmProvider
-  );
+  return resolveRuntimeAutocompleteModel(settings.model, settings.customModel, {
+    devMode: prefs.devMode,
+    llmProvider: prefs.llmProvider as LlmProvider,
+    model: prefs.model
+  });
 }
 
 function linkAbort(outer: AbortSignal | undefined, inner: AbortSignal): AbortSignal {

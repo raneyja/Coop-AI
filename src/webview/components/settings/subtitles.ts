@@ -1,5 +1,6 @@
 import { identityDirectorySummary } from "../../../identity/identityDirectory";
 import type { IntegrationChatProvider } from "../../../chat/types";
+import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import type { Preferences } from "./types";
 import {
   codeHostConfiguredFromFlags,
@@ -26,10 +27,6 @@ const CODE_HOST_LABELS: Record<Preferences["defaultCodeHost"], string> = {
   bitbucket: "Bitbucket"
 };
 
-function formatModelLabel(model: string): string {
-  return model.replace(/-\d{8}$/, "").replace(/-/g, " ");
-}
-
 function integrationNames(prefs: Preferences): string {
   const names: string[] = [];
   if (integrationConfigured(prefs, "slack")) {
@@ -54,9 +51,10 @@ function integrationNames(prefs: Preferences): string {
 }
 
 export function modelHubSubtitle(prefs: Preferences): string {
-  const model = formatModelLabel(prefs.model);
-  const chat = prefs.llmEnabled ? "Chat on" : "Chat off";
-  return `${model} · ${chat}`;
+  return assignedModelsHubSubtitle({
+    llmEnabled: prefs.llmEnabled,
+    autocompleteEnabled: prefs.autocompleteEnabled
+  });
 }
 
 export function apiHubSubtitle(prefs: Preferences): string {

@@ -6,6 +6,7 @@ import type { LlmProvider } from "./zeroRetentionConfig";
 import type { ChatOrgPlan } from "./types";
 import { systemPromptForUseCase } from "../prompts/systemPrompts";
 import type { PlanQuotaService } from "../server/planQuota";
+import { getFeatureModelAssignment } from "../config/featureModelAssignments";
 import { defaultInlineModelForProvider } from "../config/inlineModelPresets";
 import { selectFimProvider } from "./fimRouter";
 import {
@@ -88,11 +89,22 @@ export async function handleInlineCompletionRequest(
     }
   }
 
-  const provider = readProvider(record.provider, config.defaultProvider);
+  const enforceAssignment = !config.allowUnapprovedProvider;
+  const assignedAutocomplete = enforceAssignment
+    ? getFeatureModelAssignment("autocomplete")
+    : undefined;
+  const provider = readProvider(
+    enforceAssignment ? assignedAutocomplete!.provider : record.provider,
+    config.defaultProvider
+  );
   const route = selectFimProvider(config, {
     segments,
     requestedProvider: provider,
-    requestedModel: typeof record.model === "string" ? record.model : undefined
+    requestedModel: enforceAssignment
+      ? assignedAutocomplete!.model
+      : typeof record.model === "string"
+        ? record.model
+        : undefined
   });
   const model =
     route.mode === "fim"

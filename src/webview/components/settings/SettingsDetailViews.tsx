@@ -1,5 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { lowestCreditModelForProvider } from "../../../config/llmModels";
+import {
+  MODELS_BY_PROVIDER,
+  DEFAULT_MODEL_BY_PROVIDER,
+  formatModelOptionLabel,
+  lowestCreditModelForProvider,
+  modelsForProvider
+} from "../../../config/llmModels";
+import {
+  assignedModelsHubSubtitle,
+  canUserSelectModels,
+  COOP_FEATURE_MODEL_ASSIGNMENTS,
+  formatAssignedModelMeta,
+  type CoopFeatureId
+} from "../../../config/featureModelAssignments";
+import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { TestButton, type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -253,15 +267,52 @@ export function SettingsDetailView({
   }
 }
 
+function assignmentFeatureEnabled(
+  feature: CoopFeatureId,
+  draft: { llmEnabled: boolean; autocompleteEnabled: boolean }
+): boolean {
+  return feature === "autocomplete" ? draft.autocompleteEnabled : draft.llmEnabled;
+}
+
+function AssignedModelRow({
+  label,
+  meta,
+  enabled,
+  note
+}: {
+  label: string;
+  meta: string;
+  enabled: boolean;
+  note?: string;
+}): React.ReactElement {
+  return (
+    <div className="coop-health-integration">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="coop-health-integration-name">{label}</div>
+          <div className="coop-health-integration-meta">{meta}</div>
+          {note ? <div className="coop-health-integration-meta mt-1">{note}</div> : null}
+        </div>
+        <span
+          className={`coop-health-status shrink-0 ${enabled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
+        >
+          {enabled ? "On" : "Off"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ModelDetail({
   prefs,
   onUpdate,
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
+  const userCanSelectModels = canUserSelectModels({ devMode: prefs.devMode });
   const budgetModel = lowestCreditModelForProvider(prefs.llmProvider);
   const [draft, setDraft] = useState({
     llmProvider: prefs.llmProvider,
-    model: budgetModel.id,
+    model: userCanSelectModels ? prefs.model : budgetModel.id,
     llmEnabled: prefs.llmEnabled,
     autocompleteEnabled: prefs.autocompleteEnabled
   });
@@ -269,19 +320,25 @@ function ModelDetail({
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
 
-  // Re-sync from persisted prefs only when there are no pending edits, so an
-  // unrelated settings:state push can't clobber what the user is editing.
   useEffect(() => {
     if (!dirty) {
       const nextBudgetModel = lowestCreditModelForProvider(prefs.llmProvider);
       setDraft({
         llmProvider: prefs.llmProvider,
-        model: nextBudgetModel.id,
+        model: userCanSelectModels ? prefs.model : nextBudgetModel.id,
         llmEnabled: prefs.llmEnabled,
         autocompleteEnabled: prefs.autocompleteEnabled
       });
     }
-  }, [prefs.llmProvider, prefs.llmEnabled, prefs.autocompleteEnabled, dirty]);
+  }, [
+    prefs.llmProvider,
+    prefs.model,
+    prefs.llmEnabled,
+    prefs.autocompleteEnabled,
+    prefs.devMode,
+    dirty,
+    userCanSelectModels
+  ]);
 
   useEffect(
     () => () => {
@@ -292,10 +349,7 @@ function ModelDetail({
     []
   );
 
-  const settingsModel = useMemo(
-    () => lowestCreditModelForProvider(draft.llmProvider),
-    [draft.llmProvider]
-  );
+  const devModels = useMemo(() => modelsForProvider(draft.llmProvider), [draft.llmProvider]);
 
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
@@ -304,18 +358,24 @@ function ModelDetail({
   };
 
   const onProviderChange = (provider: LlmProviderPreference) => {
-    update({ llmProvider: provider, model: lowestCreditModelForProvider(provider).id });
+    const nextModel = MODELS_BY_PROVIDER[provider].includes(draft.model)
+      ? draft.model
+      : DEFAULT_MODEL_BY_PROVIDER[provider];
+    update({ llmProvider: provider, model: nextModel });
   };
 
   const handleSave = () => {
-    onUpdate({
-      llmProvider: draft.llmProvider,
-      model: settingsModel.id,
+    const updates: Parameters<SettingsDetailProps["onUpdate"]>[0] = {
       temperature: prefs.temperature,
       maxTokens: prefs.maxTokens,
       llmEnabled: draft.llmEnabled,
       autocompleteEnabled: draft.autocompleteEnabled
-    });
+    };
+    if (userCanSelectModels) {
+      updates.llmProvider = draft.llmProvider;
+      updates.model = draft.model;
+    }
+    onUpdate(updates);
     setDirty(false);
     setSaved(true);
     if (savedTimer.current !== null) {
@@ -327,24 +387,57 @@ function ModelDetail({
   return (
     <>
       <SettingsSection>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">LLM provider (routed server-side)</span>
-          <select
-            value={draft.llmProvider}
-            onChange={(e) => onProviderChange(e.target.value as LlmProviderPreference)}
-            className="coop-settings-field"
-          >
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-            <option value="gemini">Gemini</option>
-            <option value="deepseek">DeepSeek (legal review)</option>
-          </select>
-        </label>
+        <p className="coop-settings-card-desc px-0.5">
+          Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an
+          Enterprise capability (coming soon).
+        </p>
 
-        <div className="coop-settings-field-row">
-          <span className="coop-settings-label">Model</span>
-          <span className="text-[13px]">{settingsModel.label}</span>
+        <div className="space-y-2">
+          {COOP_FEATURE_MODEL_ASSIGNMENTS.map((assignment) => (
+            <AssignedModelRow
+              key={assignment.feature}
+              label={assignment.label}
+              meta={formatAssignedModelMeta(assignment)}
+              note={assignment.note}
+              enabled={assignmentFeatureEnabled(assignment.feature, draft)}
+            />
+          ))}
         </div>
+
+        {userCanSelectModels ? (
+          <>
+            <p className="coop-settings-card-desc mt-3 px-0.5">
+              Dev mode overrides apply to local testing only.
+            </p>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">LLM provider (dev override)</span>
+              <select
+                value={draft.llmProvider}
+                onChange={(e) => onProviderChange(e.target.value as LlmProviderPreference)}
+                className="coop-settings-field"
+              >
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Gemini</option>
+                <option value="deepseek">DeepSeek (legal review)</option>
+              </select>
+            </label>
+            <label className="coop-settings-field-row">
+              <span className="coop-settings-label">Model (dev override)</span>
+              <select
+                value={draft.model}
+                onChange={(e) => update({ model: e.target.value })}
+                className="coop-settings-field"
+              >
+                {devModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {formatModelOptionLabel(model)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : null}
 
         <SettingsCheckboxRow
           title="Enable live LLM chat"
@@ -851,7 +944,10 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
       <CoopNavList>
         <CoopNavRow
           title="Model & chat"
-          subtitle={prefs.llmEnabled ? `${prefs.model.replace(/-\d{8}$/, "").replace(/-/g, " ")} · Chat on` : "Chat off"}
+          subtitle={assignedModelsHubSubtitle({
+            llmEnabled: prefs.llmEnabled,
+            autocompleteEnabled: prefs.autocompleteEnabled
+          })}
           onClick={() => onNavigate("model")}
         />
         <CoopNavRow

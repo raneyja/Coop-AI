@@ -1,7 +1,13 @@
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { formatModelOptionLabel, getModelDefinition } from "./llmModels";
-import { FIM_MISTRAL_MODEL } from "./inlineModelPresets";
+import {
+  FIM_MISTRAL_MODEL,
+  type InlineModelPresetId,
+  INLINE_MODEL_PRESETS,
+  resolveChatModelPreset,
+  resolveInlineModelPreset
+} from "./inlineModelPresets";
 
 export type CoopFeatureId = "chat" | "quickActions" | "edit" | "autocomplete";
 
@@ -56,8 +62,69 @@ const QUICK_ACTION_USE_CASES = new Set<UseCase>([
   "integration"
 ]);
 
+export type RuntimeModelPrefs = {
+  devMode?: boolean;
+  llmProvider?: LlmProvider;
+  model?: string;
+};
+
 export function canUserSelectModels(options: { devMode?: boolean }): boolean {
   return options.devMode === true;
+}
+
+/** Strip user model/provider writes when production routing is locked. */
+export function stripUserModelPreferenceUpdates<T extends { model?: string; llmProvider?: string }>(
+  updates: T,
+  options: { devMode?: boolean }
+): T {
+  if (canUserSelectModels(options)) {
+    return updates;
+  }
+  const next = { ...updates };
+  delete next.model;
+  delete next.llmProvider;
+  return next;
+}
+
+export function resolveRuntimeModelForUseCase(
+  useCase: UseCase,
+  prefs: RuntimeModelPrefs
+): { provider: LlmProvider; model: string } {
+  if (canUserSelectModels(prefs)) {
+    const provider = (prefs.llmProvider ?? "openai") as LlmProvider;
+    const model = prefs.model?.trim() || getFeatureModelAssignment("chat").model;
+    return { provider, model };
+  }
+  return resolveAssignedModelForUseCase(useCase);
+}
+
+export function resolveRuntimeAutocompleteModel(
+  preset: InlineModelPresetId,
+  customModel: string,
+  prefs: RuntimeModelPrefs
+): { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } } {
+  if (canUserSelectModels(prefs)) {
+    const provider = (prefs.llmProvider ?? "anthropic") as LlmProvider;
+    if (preset === "chat") {
+      return resolveChatModelPreset(provider, prefs.model ?? "");
+    }
+    return resolveInlineModelPreset(preset, customModel, provider);
+  }
+  const assignment = getFeatureModelAssignment("autocomplete");
+  return {
+    provider: assignment.provider,
+    model: assignment.model,
+    fallback: INLINE_MODEL_PRESETS.haiku.fallback
+  };
+}
+
+export function assignedModelsHubSubtitle(options: {
+  llmEnabled: boolean;
+  autocompleteEnabled: boolean;
+}): string {
+  const chat = options.llmEnabled ? "Chat on" : "Chat off";
+  const autocomplete = options.autocompleteEnabled ? "Autocomplete on" : "Autocomplete off";
+  return `Assigned models · ${chat} · ${autocomplete}`;
 }
 
 export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {
