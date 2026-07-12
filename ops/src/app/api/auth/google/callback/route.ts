@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
+import { opsPublicOrigin, serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
 
 function loginRedirect(origin: string, error: string, message: string): NextResponse {
   const loginUrl = new URL("/login", origin);
@@ -10,7 +10,8 @@ function loginRedirect(origin: string, error: string, message: string): NextResp
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const opsOrigin = url.origin.replace(/\/$/, "");
+  const opsOrigin =
+    process.env.NODE_ENV === "production" ? opsPublicOrigin() : url.origin.replace(/\/$/, "");
   const oauthCallback = `${opsOrigin}/api/auth/google/callback`;
 
   const googleError = url.searchParams.get("error");

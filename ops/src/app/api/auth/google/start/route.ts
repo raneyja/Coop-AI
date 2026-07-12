@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { serverApiBase } from "@/lib/serverCoopApi";
+import { opsPublicOrigin, serverApiBase } from "@/lib/serverCoopApi";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const opsOrigin = url.origin.replace(/\/$/, "");
+  const opsOrigin =
+    process.env.NODE_ENV === "production" ? opsPublicOrigin() : url.origin.replace(/\/$/, "");
   const oauthCallback = `${opsOrigin}/api/auth/google/callback`;
   const finalRedirect = `${opsOrigin}/auth/callback`;
 

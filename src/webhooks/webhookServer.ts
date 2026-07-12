@@ -76,6 +76,9 @@ import { IntegrationConnectionStore } from "../server/integrationConnectionStore
 import { IntegrationScopePolicyStore } from "../server/integrationScopePolicyStore";
 import { handleIntegrationApiRequest } from "../server/integrationApi";
 import { handleAdminApiRequest } from "../server/adminApi";
+import { handleOperatorApiRequest } from "../server/operatorApi";
+import { loadOperatorAuthConfig } from "../server/operators/operatorAuthConfig";
+import { OperatorStore } from "../server/operators/operatorStore";
 import { handleBillingApiRequest } from "../server/billing/billingApi";
 import { loadBillingConfig } from "../server/billing/billingConfig";
 import { EmailService } from "../server/email/emailService";
@@ -167,6 +170,18 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const authPolicyStore = pool ? new AuthPolicyStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
   const usageTracker = new UsageTracker(pool ?? null);
+  const operatorStore = pool ? new OperatorStore(pool) : undefined;
+  const operatorAuthConfig = loadOperatorAuthConfig();
+  if (operatorStore && operatorAuthConfig.googleClientId) {
+    console.log(
+      `[operator] Google sign-in enabled via ${operatorAuthConfig.googleOAuthCredentialSource ?? "unknown"} ` +
+        `(ops portal ${operatorAuthConfig.opsPortalUrl})`
+    );
+  } else if (operatorStore) {
+    console.warn(
+      "[operator] Operator API enabled but Google sign-in disabled — set GOOGLE_AUTH_CLIENT_* or COOP_OPERATOR_GOOGLE_*"
+    );
+  }
   const samlService = serverConfig.ssoBaseUrl
     ? new SamlService({ baseUrl: serverConfig.ssoBaseUrl, spEntityId: serverConfig.ssoSpEntityId })
     : undefined;
@@ -619,6 +634,24 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           response,
           { orgStore, userStore, emailService, auditLogger, serverConfig, pool, authIdentityStore, authTokenStore, authConfig }
         )
+      ) {
+        return;
+      }
+
+      // Operator console routes must run before handleOrgApiRequest (which claims all /v1/*).
+      if (
+        await handleOperatorApiRequest(orgParsed, response, {
+          orgStore,
+          userStore,
+          operatorStore,
+          authTokenStore,
+          integrationStore,
+          serverConfig,
+          operatorAuthConfig,
+          emailService,
+          auditLogger,
+          jobQueue: jobs.queue
+        })
       ) {
         return;
       }
