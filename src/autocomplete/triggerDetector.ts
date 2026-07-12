@@ -13,6 +13,8 @@ export type TriggerEvaluateOptions = {
   p95LatencyMs?: number;
 };
 
+const UNCHANGED_CONTEXT_COOLDOWN_MS = 1_000;
+
 export class TriggerDetector {
   private lastRequestAt = 0;
   private rejectionCount = 0;
@@ -69,7 +71,10 @@ export class TriggerDetector {
       return { shouldRequest: true, debounceMs: 0 };
     }
 
-    if (context.contextHash === this.lastContextHash) {
+    if (
+      context.contextHash === this.lastContextHash &&
+      Date.now() - this.lastRequestAt < UNCHANGED_CONTEXT_COOLDOWN_MS
+    ) {
       return { shouldRequest: false, debounceMs: 0, reason: "unchanged_context" };
     }
 
@@ -116,6 +121,11 @@ export class TriggerDetector {
   public markRequested(contextHash: string): void {
     this.lastContextHash = contextHash;
     this.lastRequestAt = Date.now();
+  }
+
+  /** Allow immediate retry when a request failed before producing a suggestion. */
+  public noteRequestFailed(): void {
+    this.lastContextHash = "";
   }
 }
 

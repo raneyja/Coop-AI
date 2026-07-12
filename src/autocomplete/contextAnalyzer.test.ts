@@ -47,7 +47,7 @@ test("languageSpecificHints mentions property access after dot", () => {
     new vscode.Position(0, 4)
   );
   const hints = languageSpecificHints({ ...context, afterDot: true });
-  assert.match(hints, /property access/i);
+  assert.match(hints, /member name after the dot/i);
 });
 
 test("isFileEligible rejects markdown", () => {

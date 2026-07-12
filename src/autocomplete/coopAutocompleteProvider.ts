@@ -79,11 +79,7 @@ export function registerAutocompleteIndexNotifier(
     notified = true;
     const settings = readAutocompleteSettings();
     if (!settings.enabled) {
-      await vscode.commands.executeCommand(
-        "coopAI.setAutocompleteEnabled",
-        true,
-        vscode.ConfigurationTarget.Workspace
-      );
+      await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", true);
     }
     await markAutocompleteDiscoveryShown(context);
     const choice = await vscode.window.showInformationMessage(
@@ -91,11 +87,7 @@ export function registerAutocompleteIndexNotifier(
       "Turn off"
     );
     if (choice === "Turn off") {
-      await vscode.commands.executeCommand(
-        "coopAI.setAutocompleteEnabled",
-        false,
-        vscode.ConfigurationTarget.Workspace
-      );
+      await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", false);
     }
   };
 
@@ -125,6 +117,16 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private lastShownContextHash = "";
   private lastShownAt = 0;
   private lastShownLanguageId: string | undefined;
+  private requestGeneration = 0;
+  private readonly inFlightByHash = new Map<string, Promise<vscode.InlineCompletionItem[] | null>>();
+  private pendingSchedule:
+    | {
+        generation: number;
+        resolve: (value: vscode.InlineCompletionItem[] | null) => void;
+        cancelListener: vscode.Disposable;
+      }
+    | undefined;
+  private lastAuthWarningAt = 0;
   private readonly disposables: vscode.Disposable[] = [];
 
   public constructor(private readonly options: CoopAutocompleteProviderOptions) {
@@ -147,9 +149,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   }
 
   public dispose(): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-    }
+    this.supersedePendingSchedule();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -192,6 +192,16 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const extracted = analyzeDocumentContext(document, position);
     this.noteSupersededIfNeeded(extracted.contextHash);
 
+    const cachedItems = this.buildCachedItems(document, position, extracted);
+    if (cachedItems) {
+      return cachedItems;
+    }
+
+    const inflight = this.inFlightByHash.get(extracted.contextHash);
+    if (inflight) {
+      return inflight;
+    }
+
     const trigger = triggerContextFromVscode(context, this.manualInvoke);
     this.manualInvoke = false;
 
@@ -200,18 +210,20 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       p95LatencyMs: this.performance.getRollingP95()
     });
     if (!decision.shouldRequest) {
+      if (decision.reason === "unchanged_context") {
+        const retryInflight = this.inFlightByHash.get(extracted.contextHash);
+        if (retryInflight) {
+          return retryInflight;
+        }
+        const retryCached = this.buildCachedItems(document, position, extracted);
+        if (retryCached) {
+          return retryCached;
+        }
+      }
       if (decision.reason && decision.reason !== "unchanged_context") {
         this.publishStatus("ready", this.describeSkipReason(decision.reason));
       }
       return null;
-    }
-
-    if (this.lastAlternatives.length > 1 && extracted.contextHash === this.lastScopeHash) {
-      const item = this.buildInlineItem(document, position, extracted, this.lastAlternatives[this.alternativeIndex]);
-      if (item) {
-        this.trackShownItem(extracted.contextHash, extracted.languageId);
-        return [item];
-      }
     }
 
     return this.scheduleRequest(document, position, extracted, decision.debounceMs, token);
@@ -236,10 +248,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
   public noteSuggestionRejected(reason: string, languageId?: string): void {
     this.clearLastShown();
-    this.triggerDetector.noteRejection();
-    this.performance.recordReject(reason, languageId);
-    this.lastAlternatives = [];
-    this.alternativeIndex = 0;
+    if (reason !== "superseded") {
+      this.triggerDetector.noteRejection();
+      this.performance.recordReject(reason, languageId);
+      this.lastAlternatives = [];
+      this.alternativeIndex = 0;
+    }
   }
 
   /** Reject only when Coop recently showed a suggestion (avoids Copilot escape false positives). */
@@ -279,6 +293,18 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.lastShownLanguageId = undefined;
   }
 
+  private supersedePendingSchedule(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = undefined;
+    }
+    if (this.pendingSchedule) {
+      this.pendingSchedule.cancelListener.dispose();
+      this.pendingSchedule.resolve(null);
+      this.pendingSchedule = undefined;
+    }
+  }
+
   private scheduleRequest(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -286,30 +312,50 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     debounceMs: number,
     token: vscode.CancellationToken
   ): Promise<vscode.InlineCompletionItem[] | null> {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = undefined;
-    }
+    const generation = ++this.requestGeneration;
+    this.supersedePendingSchedule();
 
     return new Promise((resolve) => {
-      let cancelled = false;
+      let vscodeCancelled = false;
       const cancelListener = token.onCancellationRequested(() => {
-        cancelled = true;
-        if (this.debounceTimer) {
-          clearTimeout(this.debounceTimer);
-          this.debounceTimer = undefined;
-        }
+        vscodeCancelled = true;
       });
+      const pending = { generation, resolve, cancelListener };
+      this.pendingSchedule = pending;
+
+      const finish = (items: vscode.InlineCompletionItem[] | null) => {
+        if (this.pendingSchedule === pending) {
+          this.pendingSchedule = undefined;
+        }
+        cancelListener.dispose();
+        resolve(items);
+      };
 
       const run = () => {
-        void this.executeRequest(document, position, extracted, token).then((items) => {
-          cancelListener.dispose();
-          if (cancelled && items && items.length > 0) {
-            void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
-            resolve(null);
-            return;
+        if (generation !== this.requestGeneration) {
+          finish(null);
+          return;
+        }
+
+        const existing = this.inFlightByHash.get(extracted.contextHash);
+        if (existing) {
+          void existing.then(finish);
+          return;
+        }
+
+        const promise = this.executeRequest(document, position, extracted);
+        this.inFlightByHash.set(extracted.contextHash, promise);
+        void promise.finally(() => {
+          if (this.inFlightByHash.get(extracted.contextHash) === promise) {
+            this.inFlightByHash.delete(extracted.contextHash);
           }
-          resolve(items);
+        });
+
+        void promise.then((items) => {
+          if (vscodeCancelled && items && items.length > 0) {
+            void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+          }
+          finish(items);
         });
       };
 
@@ -321,29 +367,84 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     });
   }
 
+  private buildCachedItems(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    extracted: ExtractedCodeContext
+  ): vscode.InlineCompletionItem[] | null {
+    if (this.lastAlternatives.length === 0 || extracted.contextHash !== this.lastScopeHash) {
+      return null;
+    }
+    const item = this.buildInlineItem(
+      document,
+      position,
+      extracted,
+      this.lastAlternatives[this.alternativeIndex]
+    );
+    if (!item) {
+      return null;
+    }
+    this.trackShownItem(extracted.contextHash, extracted.languageId);
+    return [item];
+  }
+
+  private resolveLiveCompletionContext(
+    document: vscode.TextDocument,
+    fallbackPosition: vscode.Position
+  ): { position: vscode.Position; extracted: ExtractedCodeContext } {
+    const editor = vscode.window.activeTextEditor;
+    const position =
+      editor && editor.document.uri.toString() === document.uri.toString()
+        ? editor.selection.active
+        : fallbackPosition;
+    return {
+      position,
+      extracted: analyzeDocumentContext(document, position)
+    };
+  }
+
+  private isCompatibleCompletionContext(
+    requested: ExtractedCodeContext,
+    live: ExtractedCodeContext
+  ): boolean {
+    if (requested.contextHash === live.contextHash) {
+      return true;
+    }
+    if (requested.filePath !== live.filePath) {
+      return false;
+    }
+    const reqPrefix = requested.currentLinePrefix.trimEnd();
+    const livePrefix = live.currentLinePrefix.trimEnd();
+    return livePrefix === reqPrefix || livePrefix.startsWith(reqPrefix) || reqPrefix.startsWith(livePrefix);
+  }
+
   private async executeRequest(
     document: vscode.TextDocument,
     position: vscode.Position,
-    extracted: ExtractedCodeContext,
-    token: vscode.CancellationToken
+    extracted: ExtractedCodeContext
   ): Promise<vscode.InlineCompletionItem[] | null> {
-    if (token.isCancellationRequested) {
-      return null;
-    }
-
+    let live = this.resolveLiveCompletionContext(document, position);
+    position = live.position;
+    extracted = live.extracted;
     this.noteSupersededIfNeeded(extracted.contextHash);
-    this.triggerDetector.markRequested(extracted.contextHash);
     this.publishStatus("processing");
 
     const abort = new AbortController();
-    const cancelListener = token.onCancellationRequested(() => abort.abort());
     try {
       const result = await this.router.fetchCompletions(extracted, this.settings, abort.signal);
-      if (token.isCancellationRequested) {
+      live = this.resolveLiveCompletionContext(document, position);
+      if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
+        this.triggerDetector.noteRequestFailed();
+        this.publishStatus("ready", "Context changed");
         return null;
       }
+      position = live.position;
+      extracted = live.extracted;
+
       if (result.completions.length === 0) {
+        this.triggerDetector.noteRequestFailed();
         this.publishStatus("ready", this.describeEmptyResult(result));
+        this.maybeWarnAuthFailure(result.error);
         return null;
       }
 
@@ -360,10 +461,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
 
       if (items.length === 0) {
+        this.triggerDetector.noteRequestFailed();
         this.publishStatus("ready", "Filtered low-quality suggestion");
         return null;
       }
 
+      this.triggerDetector.markRequested(extracted.contextHash);
       this.publishStatus(
         "ready",
         undefined,
@@ -374,13 +477,18 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
       this.trackShownItem(extracted.contextHash, extracted.languageId);
       discardContextPayload(extracted);
-      return this.settings.showMultipleSuggestions ? items : [items[0]];
+      return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
     } catch (error) {
+      if (abort.signal.aborted) {
+        this.triggerDetector.noteRequestFailed();
+        return null;
+      }
+      this.triggerDetector.noteRequestFailed();
       const message = error instanceof Error ? error.message : "Autocomplete failed";
-      this.publishStatus("error", this.describeErrorMessage(message));
+      const friendly = this.describeErrorMessage(message);
+      this.publishStatus("error", friendly);
+      this.maybeWarnAuthFailure(message);
       return null;
-    } finally {
-      cancelListener.dispose();
     }
   }
 
@@ -400,13 +508,26 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
     const range = new vscode.Range(position, position);
     const item = new vscode.InlineCompletionItem(insertText, range);
-    item.filterText = context.currentLinePrefix + insertText;
     item.command = {
       title: "CoopAI autocomplete accepted",
       command: "coopAI.internal.autocompleteAccepted",
       arguments: [context.contextHash, context.languageId]
     };
     return item;
+  }
+
+  private maybeWarnAuthFailure(error: string | undefined): void {
+    if (!error || !/api key is missing|sign in|not authenticated/i.test(error)) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastAuthWarningAt < 30_000) {
+      return;
+    }
+    this.lastAuthWarningAt = now;
+    void vscode.window.showWarningMessage(
+      "Coop autocomplete requires sign-in. Open Coop chat → Settings → sign in in this Extension Development Host window."
+    );
   }
 
   private describeSkipReason(reason: string): string {

@@ -15,7 +15,7 @@ import {
   createAutocompleteUsageTelemetryHandler
 } from "./autocomplete/registerAutocomplete";
 import { registerPatchCommands } from "./edit/registerPatchCommands";
-import { readAutocompleteSettings } from "./autocomplete/autocompleteConfig";
+import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides, restoreAutocompleteUnlessUserOptedOut } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
@@ -633,6 +633,18 @@ export function activate(context: vscode.ExtensionContext): void {
   registerAutocompleteCommands(context, api, autocompleteProvider, publishAutocompleteStatus);
   context.subscriptions.push(registerAutocompleteIndexNotifier(context, indexBackend));
   registerPatchCommands(context, api, () => provider.session);
+
+  void (async () => {
+    await clearAutocompleteWorkspaceOverrides();
+    await restoreAutocompleteUnlessUserOptedOut(context);
+    const enabled = readAutocompleteSettings().enabled;
+    await vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
+    publishAutocompleteStatus({
+      status: enabled ? "ready" : "disabled",
+      message: enabled ? "Autocomplete enabled" : "Autocomplete disabled"
+    });
+    await refreshAllSessions();
+  })();
 
   void vscode.commands.executeCommand(
     "setContext",

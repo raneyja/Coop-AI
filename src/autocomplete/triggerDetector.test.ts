@@ -118,6 +118,37 @@ test("skips unchanged context hash", () => {
   assert.equal(decision.reason, "unchanged_context");
 });
 
+test("retries unchanged context after cooldown", () => {
+  const detector = new TriggerDetector();
+  const originalNow = Date.now;
+  let now = 10_000;
+  Date.now = () => now;
+  try {
+    detector.markRequested("hash-a");
+    now += 1_001;
+    const decision = detector.evaluate(
+      baseSettings(),
+      baseContext({ contextHash: "hash-a" }),
+      autoTrigger()
+    );
+    assert.equal(decision.shouldRequest, true);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("failed request clears dedup for immediate retry", () => {
+  const detector = new TriggerDetector();
+  detector.markRequested("hash-a");
+  detector.noteRequestFailed();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ contextHash: "hash-a" }),
+    autoTrigger()
+  );
+  assert.equal(decision.shouldRequest, true);
+});
+
 test("backoff after rejection suppresses requests", () => {
   const detector = new TriggerDetector();
   detector.noteRejection();

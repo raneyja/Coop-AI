@@ -383,10 +383,10 @@
         },
         "coopAI.autocomplete.requestTimeoutMs": {
           "type": "number",
-          "default": 1500,
+          "default": 3000,
           "minimum": 100,
           "maximum": 5000,
-          "description": "Drop slow completion requests after this many milliseconds. Use 1500+ when autocomplete model is chat (e.g. gpt-4o)."
+          "description": "Drop slow completion requests after this many milliseconds."
         },
         "coopAI.autocomplete.useFim": {
           "type": "boolean",
@@ -396,7 +396,7 @@
         "coopAI.autocomplete.useGraphContext": {
           "type": "boolean",
           "default": false,
-          "description": "Include indexed dependency graph context in inline completions (Pro plan)."
+          "description": "Include indexed dependency graph context in inline completions when the repo is Deep-Indexed."
         },
         "coopAI.autocomplete.projectImports": {
           "type": "array",

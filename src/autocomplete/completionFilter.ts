@@ -138,7 +138,9 @@ export function normalizeCompletionText(text: string, context?: ExtractedCodeCon
     value = value.slice(1, -1);
   }
   const lineCap =
-    context && wantsMultiLineCompletion(context) ? MULTI_LINE_CAP : SINGLE_LINE_CAP;
+    context && wantsMultiLineCompletion(context) && !context.afterDot
+      ? MULTI_LINE_CAP
+      : SINGLE_LINE_CAP;
   const lines = value.split("\n");
   if (lines.length > lineCap) {
     value = lines.slice(0, lineCap).join("\n");
@@ -158,6 +160,14 @@ export function sanitizeCompletionForContext(
   let value = text.trim();
   if (DECL_ASSIGNMENT_PREFIX.test(context.currentLinePrefix)) {
     value = value.replace(REDUNDANT_DECL_ASSIGNMENT, "").trimStart();
+    value = value.split("\n")[0]?.trimEnd() ?? "";
+  }
+
+  if (context.afterDot) {
+    value = sanitizeAfterDotCompletion(value);
+    if (!value) {
+      return "";
+    }
   }
 
   if (rejectsInlineStatementStart(value, context)) {
@@ -167,8 +177,27 @@ export function sanitizeCompletionForContext(
   return value;
 }
 
+function sanitizeAfterDotCompletion(text: string): string {
+  const firstLine = text.split("\n")[0]?.trim() ?? "";
+  if (!firstLine || firstLine.includes("{")) {
+    return "";
+  }
+  if (/^(?:function|class|if|for|while|return|onDid\w+)\b/.test(firstLine)) {
+    return "";
+  }
+  const memberMatch = /^([\w$]+(?:\([^)]*\))?)/.exec(firstLine);
+  if (!memberMatch) {
+    return "";
+  }
+  return memberMatch[1];
+}
+
 function rejectsInlineStatementStart(text: string, context: ExtractedCodeContext): boolean {
   if (!JS_LIKE_LANGUAGES.has(context.languageId)) {
+    return false;
+  }
+
+  if (context.afterDot) {
     return false;
   }
 

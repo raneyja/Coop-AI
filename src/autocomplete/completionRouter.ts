@@ -405,7 +405,10 @@ function buildFimPrefix(context: ExtractedCodeContext): string {
 function buildAutocompleteUserMessage(context: ExtractedCodeContext): string {
   const block = buildPromptContextBlock(context);
   const hints = languageSpecificHints(context);
-  return `${block}\n\nHINT: ${hints}\n\nTASK: Complete the current line or next 2-3 lines. Return ONLY code.`;
+  const task = context.afterDot
+    ? "Complete ONLY the identifier/method after the dot. Return a single member name (optional `(`). No newlines."
+    : "Complete the current line or next 2-3 lines. Return ONLY code.";
+  return `${block}\n\nHINT: ${hints}\n\nTASK: ${task}`;
 }
 
 function resolveModelPreset(

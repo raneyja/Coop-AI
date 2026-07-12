@@ -41,15 +41,22 @@ test("readConfiguration falls back to autocomplete enabled when unset", () => {
   assert.equal(readConfiguration().autocompleteEnabled, true);
 });
 
-test("registerAutocomplete resolves update target before persisting enabled", () => {
+test("registerAutocomplete persists enabled at Global scope", () => {
   const source = readRepoFile("src/autocomplete/registerAutocomplete.ts");
-  assert.match(source, /resolveAutocompleteEnabledUpdateTarget/);
+  assert.match(source, /ConfigurationTarget\.Global/);
   assert.match(source, /await config\.update\("enabled", enabled, updateTarget\)/);
 });
 
 test("index notifier routes toggles through setAutocompleteEnabled command", () => {
   const source = readRepoFile("src/autocomplete/coopAutocompleteProvider.ts");
   assert.match(source, /coopAI\.setAutocompleteEnabled/);
+  assert.doesNotMatch(source, /ConfigurationTarget\.Workspace/);
+});
+
+test("extension activates autocomplete restore on startup", () => {
+  const source = readRepoFile("src/extension.ts");
+  assert.match(source, /clearAutocompleteWorkspaceOverrides/);
+  assert.match(source, /restoreAutocompleteUnlessUserOptedOut/);
 });
 
 console.log(`\nautocompletePersistence: ${passed} passed, ${failed} failed`);

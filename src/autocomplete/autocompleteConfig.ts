@@ -18,14 +18,14 @@ export const AUTOCOMPLETE_INDEX_DISCOVERY_SHOWN_KEY = "coopAI.autocomplete.index
 export function readAutocompleteSettings(): AutocompleteSettings {
   const config = vscode.workspace.getConfiguration(SECTION);
   return {
-    enabled: config.get<boolean>("enabled", false),
+    enabled: config.get<boolean>("enabled", true),
     trigger: config.get<AutocompleteTriggerMode>("trigger", "auto"),
     maxSuggestionLength: config.get<number>("maxSuggestionLength", 200),
     debounceMs: config.get<number>("debounceMs", 300),
     model: config.get<AutocompleteModelPreset>("model", "chat"),
     customModel: config.get<string>("customModel", ""),
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
-    requestTimeoutMs: config.get<number>("requestTimeoutMs", 1500),
+    requestTimeoutMs: config.get<number>("requestTimeoutMs", 3000),
     useFim: config.get<boolean>("useFim", true),
     useGraphContext: config.get<boolean>("useGraphContext", false)
   };
@@ -110,13 +110,35 @@ export function findActiveRepoBecameHealthy(
 }
 
 export function resolveAutocompleteEnabledUpdateTarget(
-  config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(SECTION)
+  _config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration(SECTION)
 ): vscode.ConfigurationTarget {
-  const inspected = config.inspect<boolean>("enabled");
-  if (inspected?.workspaceFolderValue !== undefined || inspected?.workspaceValue !== undefined) {
-    return vscode.ConfigurationTarget.Workspace;
-  }
   return vscode.ConfigurationTarget.Global;
+}
+
+/** Remove stale workspace-scoped `enabled: false` overrides left by older builds. */
+export async function clearAutocompleteWorkspaceOverrides(): Promise<void> {
+  const config = vscode.workspace.getConfiguration(SECTION);
+  const inspected = config.inspect<boolean>("enabled");
+  if (inspected?.workspaceValue === false) {
+    await config.update("enabled", undefined, vscode.ConfigurationTarget.Workspace);
+  }
+  if (inspected?.workspaceFolderValue === false) {
+    await config.update("enabled", undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+  }
+}
+
+/** Turn autocomplete on globally unless the user explicitly opted out. */
+export async function restoreAutocompleteUnlessUserOptedOut(
+  context: vscode.ExtensionContext
+): Promise<void> {
+  if (isAutocompleteUserDisabled(context)) {
+    return;
+  }
+  const config = vscode.workspace.getConfiguration(SECTION);
+  if (config.get<boolean>("enabled", true)) {
+    return;
+  }
+  await config.update("enabled", true, vscode.ConfigurationTarget.Global);
 }
 
 /** Explicit setting forces graph on; otherwise auto-enable when the repo index is healthy. */

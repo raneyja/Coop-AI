@@ -1,6 +1,5 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
-import * as vscode from "vscode";
 import { registerAutocompleteIndexNotifier } from "./coopAutocompleteProvider";
 import {
   createMockExtensionContext,
@@ -69,7 +68,8 @@ const readyStatus: IndexRepoStatus = {
 };
 
 void (async () => {
-  await asyncTest("index notifier auto-enables autocomplete at workspace when index becomes healthy", async () => {
+  await asyncTest("index notifier auto-enables autocomplete globally when index becomes healthy", async () => {
+    setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");
     setMockConfiguration("coopAI", "defaultRepo", "widgets");
 
@@ -85,11 +85,11 @@ void (async () => {
     assert.equal(commands.length, 1);
     assert.equal(commands[0]?.[0], "coopAI.setAutocompleteEnabled");
     assert.equal(commands[0]?.[1], true);
-    assert.equal(commands[0]?.[2], vscode.ConfigurationTarget.Workspace);
     assert.equal(context.globalState.get("coopAI.autocomplete.indexReadyToastShown"), true);
   });
 
-  await asyncTest("index notifier Turn off disables autocomplete at workspace", async () => {
+  await asyncTest("index notifier Turn off disables autocomplete globally", async () => {
+    setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");
     setMockConfiguration("coopAI", "defaultRepo", "widgets");
     setMockInformationMessageChoice("Turn off");
@@ -107,7 +107,6 @@ void (async () => {
     assert.equal(commands[0]?.[1], true);
     assert.equal(commands[1]?.[0], "coopAI.setAutocompleteEnabled");
     assert.equal(commands[1]?.[1], false);
-    assert.equal(commands[1]?.[2], vscode.ConfigurationTarget.Workspace);
   });
 
   await asyncTest("index notifier skips when user previously disabled autocomplete", async () => {

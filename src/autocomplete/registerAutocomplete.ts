@@ -10,7 +10,6 @@ import {
   readAutocompleteSettings,
   onAutocompleteSettingsChanged,
   markAutocompleteUserDisabled,
-  resolveAutocompleteEnabledUpdateTarget
 } from "./autocompleteConfig";
 import type { AutocompleteTelemetryEvent } from "./types";
 import {
@@ -115,7 +114,7 @@ export function registerAutocompleteCommands(
     }),
     vscode.commands.registerCommand(
       "coopAI.setAutocompleteEnabled",
-      async (enabled: boolean, target?: vscode.ConfigurationTarget) => {
+      async (enabled: boolean, _target?: vscode.ConfigurationTarget) => {
       const config = vscode.workspace.getConfiguration("coopAI.autocomplete");
       const current = config.get<boolean>("enabled", false);
       if (current === enabled) {
@@ -125,7 +124,7 @@ export function registerAutocompleteCommands(
         });
         return;
       }
-      const updateTarget = target ?? resolveAutocompleteEnabledUpdateTarget(config);
+      const updateTarget = vscode.ConfigurationTarget.Global;
       await markAutocompleteUserDisabled(context, !enabled);
       await config.update("enabled", enabled, updateTarget);
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);

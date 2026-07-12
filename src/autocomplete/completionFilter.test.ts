@@ -94,6 +94,33 @@ test("filterAndRankCompletions keeps rhs after stripping duplicate declaration",
   assert.equal(ranked[0]?.text, "1;");
 });
 
+test("filterAndRankCompletions trims invented trailing statements after assignment rhs", () => {
+  const ranked = filterAndRankCompletions(
+    ["CoopSettingsPanel.instance;\nCoopSettingsPanel.instance.panel.reveal(vscode.ViewColumn.Active);"],
+    context,
+    settings
+  );
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "CoopSettingsPanel.instance;");
+});
+
+test("filterAndRankCompletions drops multi-line block after dot", () => {
+  const dotContext = { ...context, afterDot: true, currentLinePrefix: "this.session." };
+  const ranked = filterAndRankCompletions(
+    ["onDidDispose(() => {\n  this.panel.dispose();\n});"],
+    dotContext,
+    settings
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("filterAndRankCompletions keeps member after dot", () => {
+  const dotContext = { ...context, afterDot: true, currentLinePrefix: "this.session." };
+  const ranked = filterAndRankCompletions(["detachSettingsWebview();"], dotContext, settings);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "detachSettingsWebview()");
+});
+
 test("filterAndRankCompletions drops function restart mid-assignment", () => {
   const ranked = filterAndRankCompletions(
     ["function helper() { return 1; }"],

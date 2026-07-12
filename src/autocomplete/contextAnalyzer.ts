@@ -93,7 +93,7 @@ export function languageSpecificHints(context: ExtractedCodeContext): string {
   const id = context.languageId;
   if (id === "typescript" || id === "javascript" || id === "typescriptreact" || id === "javascriptreact") {
     if (context.afterDot) {
-      return "Complete object property access for the expression before the dot.";
+      return "Complete ONLY the member name after the dot (and optional opening paren). One line. No blocks or new statements.";
     }
     return "Match TS/JS style; prefer const/await patterns seen in imports.";
   }
