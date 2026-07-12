@@ -21,6 +21,13 @@ const configUpdates: Array<{ key: string; value: unknown; target: unknown }> = [
 const globalState = new Map<string, unknown>();
 let mockInformationMessageChoice: string | undefined;
 const executedCommands: unknown[][] = [];
+let mockExecuteCommandHandler: ((...args: unknown[]) => Promise<unknown>) | undefined;
+
+export function setMockExecuteCommandHandler(
+  handler: ((...args: unknown[]) => Promise<unknown>) | undefined
+): void {
+  mockExecuteCommandHandler = handler;
+}
 
 export function setMockInformationMessageChoice(choice: string | undefined): void {
   mockInformationMessageChoice = choice;
@@ -45,6 +52,7 @@ export function resetMockConfiguration(): void {
   globalState.clear();
   mockInformationMessageChoice = undefined;
   executedCommands.length = 0;
+  mockExecuteCommandHandler = undefined;
 }
 
 export function getMockConfigUpdates(): ReadonlyArray<{ key: string; value: unknown; target: unknown }> {
@@ -87,6 +95,33 @@ export function createMockExtensionContext(): {
 const vscodeMock = {
   InlineCompletionTriggerKind: { Automatic: 0, Invoke: 1 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+  CompletionItemKind: {
+    Text: 0,
+    Method: 1,
+    Function: 2,
+    Constructor: 3,
+    Field: 4,
+    Variable: 5,
+    Class: 6,
+    Interface: 7,
+    Module: 8,
+    Property: 9,
+    Unit: 10,
+    Value: 11,
+    Enum: 12,
+    Keyword: 13,
+    Snippet: 14,
+    Color: 15,
+    File: 16,
+    Reference: 17,
+    Folder: 18,
+    EnumMember: 19,
+    Constant: 20,
+    Struct: 21,
+    Event: 22,
+    Operator: 23,
+    TypeParameter: 24
+  },
   Uri: {
     file: (path: string) => ({ fsPath: path, scheme: "file", toString: () => path })
   },
@@ -146,6 +181,9 @@ const vscodeMock = {
   commands: {
     executeCommand: async (...args: unknown[]) => {
       executedCommands.push(args);
+      if (mockExecuteCommandHandler) {
+        return mockExecuteCommandHandler(...args);
+      }
       return args;
     }
   },
@@ -163,6 +201,17 @@ const vscodeMock = {
     ) {}
     filterText?: string;
     command?: { title: string; command: string; arguments?: unknown[] };
+  },
+  CompletionItem: class {
+    label: string;
+    kind?: number;
+    insertText?: string | { value: string };
+    textEdit?: { newText: string; range?: unknown };
+
+    constructor(label: string, kind?: number) {
+      this.label = label;
+      this.kind = kind;
+    }
   }
 };
 

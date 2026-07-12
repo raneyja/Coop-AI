@@ -111,10 +111,14 @@ export function filterAndRankCompletions(
 
   for (const item of raw) {
     const cleaned = sanitizeCompletionForContext(normalizeCompletionText(item, context), context);
-    if (!cleaned || seen.has(cleaned)) {
+    if (!cleaned) {
       continue;
     }
-    seen.add(cleaned);
+    const dedupeKey = context.afterDot ? afterDotMemberDedupeKey(cleaned) : cleaned;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
 
     const quality = scoreCompletion(cleaned, context, settings, fileTextSample, symbolHints);
     if (!quality.include) {
@@ -128,7 +132,13 @@ export function filterAndRankCompletions(
   }
 
   ranked.sort((a, b) => b.score - a.score);
-  return ranked.slice(0, settings.showMultipleSuggestions ? 3 : 1);
+  const limit = settings.showMultipleSuggestions ? 3 : 1;
+  if (context.afterDot) {
+    return ranked
+      .filter((item) => !rejectsAfterDotCompletion(item.text, context.currentLinePrefix))
+      .slice(0, limit);
+  }
+  return ranked.slice(0, limit);
 }
 
 export function normalizeCompletionText(text: string, context?: ExtractedCodeContext): string {
@@ -138,9 +148,11 @@ export function normalizeCompletionText(text: string, context?: ExtractedCodeCon
     value = value.slice(1, -1);
   }
   const lineCap =
-    context && wantsMultiLineCompletion(context) && !context.afterDot
-      ? MULTI_LINE_CAP
-      : SINGLE_LINE_CAP;
+    context?.afterDot
+      ? 1
+      : context && wantsMultiLineCompletion(context)
+        ? MULTI_LINE_CAP
+        : SINGLE_LINE_CAP;
   const lines = value.split("\n");
   if (lines.length > lineCap) {
     value = lines.slice(0, lineCap).join("\n");
@@ -164,7 +176,10 @@ export function sanitizeCompletionForContext(
   }
 
   if (context.afterDot) {
-    value = sanitizeAfterDotCompletion(value);
+    if (rejectsAfterDotCompletion(value, context.currentLinePrefix)) {
+      return "";
+    }
+    value = sanitizeAfterDotMemberText(value);
     if (!value) {
       return "";
     }
@@ -177,19 +192,120 @@ export function sanitizeCompletionForContext(
   return value;
 }
 
-function sanitizeAfterDotCompletion(text: string): string {
-  const firstLine = text.split("\n")[0]?.trim() ?? "";
+/** One member name, optionally followed by an opening paren only (no args). Reject property chains. */
+const AFTER_DOT_MEMBER_PATTERN = /^([\w$]+)(\()?/;
+
+function rejectsAfterDotCompletion(text: string, prefix: string): boolean {
+  if (text.includes("\n")) {
+    return true;
+  }
+  if (/\breturn\b/.test(text)) {
+    return true;
+  }
+  if (/;\s*[A-Za-z_$]/.test(text)) {
+    return true;
+  }
+  return rejectsAfterDotForeignTypeReference(text, prefix);
+}
+
+function rejectsAfterDotForeignTypeReference(text: string, prefix: string): boolean {
+  const receiver = parseReceiverFromPrefix(prefix);
+  if (!receiver) {
+    return false;
+  }
+
+  const allowedTypes = new Set<string>();
+  for (const part of receiver.split(".")) {
+    if (/^[A-Z]/.test(part)) {
+      allowedTypes.add(part);
+    }
+  }
+
+  for (const match of text.matchAll(/\b([A-Z][\w$]*)\./g)) {
+    const typeRef = match[1];
+    if (JS_BUILTINS.has(typeRef)) {
+      continue;
+    }
+    if (!allowedTypes.has(typeRef)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function afterDotMemberDedupeKey(text: string): string {
+  const match = /^([\w$]+)/.exec(text.trim());
+  return match?.[1] ?? text.trim();
+}
+
+export function consolidateAfterDotRanked(
+  ranked: RankedCompletion[],
+  linePrefix: string
+): RankedCompletion[] {
+  const seen = new Set<string>();
+  const consolidated: RankedCompletion[] = [];
+
+  for (const item of ranked) {
+    const text = sanitizeAfterDotMemberText(item.text);
+    if (!text || rejectsAfterDotCompletion(text, linePrefix)) {
+      continue;
+    }
+    const key = afterDotMemberDedupeKey(text);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    consolidated.push({ ...item, text });
+  }
+
+  return consolidated;
+}
+
+export function sanitizeAfterDotMemberText(text: string): string {
+  if (text.includes("\n")) {
+    return "";
+  }
+
+  const firstLine = text.trim();
   if (!firstLine || firstLine.includes("{")) {
     return "";
   }
   if (/^(?:function|class|if|for|while|return|onDid\w+)\b/.test(firstLine)) {
     return "";
   }
-  const memberMatch = /^([\w$]+(?:\([^)]*\))?)/.exec(firstLine);
-  if (!memberMatch) {
+
+  const memberMatch = AFTER_DOT_MEMBER_PATTERN.exec(firstLine);
+  if (!memberMatch?.[1]) {
     return "";
   }
-  return memberMatch[1];
+
+  const name = memberMatch[1];
+  const hasOpenParen = memberMatch[2] === "(";
+  const afterMember = firstLine.slice(memberMatch[0].length).trim();
+
+  if (afterMember.startsWith(".")) {
+    return "";
+  }
+  if (hasOpenParen) {
+    if (!afterMember || afterMember === ";" || afterMember.startsWith(")")) {
+      return `${name}(`;
+    }
+    if (/^["'`]/.test(afterMember) || /^[\w$]/.test(afterMember)) {
+      return `${name}(`;
+    }
+    return "";
+  }
+
+  if (afterMember && afterMember !== ";") {
+    return "";
+  }
+
+  return name;
+}
+
+export function isValidAfterDotInsertText(text: string): boolean {
+  return /^[\w$]+(?:\(\)?)?$/.test(text.trimEnd());
 }
 
 function rejectsInlineStatementStart(text: string, context: ExtractedCodeContext): boolean {
@@ -300,6 +416,130 @@ export function symbolPlausibilityAdjustment(
   return Math.max(-0.2, Math.min(0.12, adjustment));
 }
 
+function parseReceiverFromPrefix(prefix: string): string | null {
+  const match = /^(.*)\.\s*$/.exec(prefix);
+  const receiver = match?.[1]?.trim();
+  return receiver || null;
+}
+
+function extractClassNameFromReceiver(receiver: string): string | null {
+  const root = receiver.split(".")[0];
+  if (!root || !/^[A-Z]/.test(root)) {
+    return null;
+  }
+  return root;
+}
+
+function extractClassBody(className: string, fileText: string): string | null {
+  const classStart = fileText.indexOf(`class ${className}`);
+  if (classStart === -1) {
+    return null;
+  }
+
+  const braceStart = fileText.indexOf("{", classStart);
+  if (braceStart === -1) {
+    return null;
+  }
+
+  let depth = 1;
+  let index = braceStart + 1;
+  while (index < fileText.length && depth > 0) {
+    const char = fileText[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+    }
+    index += 1;
+  }
+
+  if (depth !== 0) {
+    return null;
+  }
+
+  return fileText.slice(braceStart + 1, index - 1);
+}
+
+function extractClassMembers(className: string, fileText: string): Set<string> {
+  const members = new Set<string>();
+  const classBody = extractClassBody(className, fileText);
+  if (!classBody) {
+    return members;
+  }
+
+  const memberPatterns = [
+    /\b(?:public|private|protected|readonly|static|\s)*([\w$]+)\s*\(/g,
+    /\b(?:public|private|protected|readonly|\s)*([\w$]+)\s*:/g,
+    /\bget\s+([\w$]+)\s*\(/g
+  ];
+
+  for (const pattern of memberPatterns) {
+    for (const match of classBody.matchAll(pattern)) {
+      const name = match[1];
+      if (name && !JS_KEYWORDS.has(name)) {
+        members.add(name);
+      }
+    }
+  }
+
+  return members;
+}
+
+function extractSiblingUsageMembers(receiver: string, fileText: string): Set<string> {
+  const members = new Set<string>();
+  const escaped = receiver.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const usagePattern = new RegExp(`${escaped}\\.([\\w$]+)\\s*\\(`, "g");
+  for (const match of fileText.matchAll(usagePattern)) {
+    const name = match[1];
+    if (name) {
+      members.add(name);
+    }
+  }
+  return members;
+}
+
+function extractCompletionMemberName(text: string): string | null {
+  const match = /^([\w$]+)/.exec(text.trim());
+  return match?.[1] ?? null;
+}
+
+export function receiverAwareRankingBoost(
+  text: string,
+  context: ExtractedCodeContext,
+  fileTextSample?: string
+): number {
+  if (!context.afterDot || !fileTextSample) {
+    return 0;
+  }
+
+  const receiver = parseReceiverFromPrefix(context.currentLinePrefix);
+  if (!receiver) {
+    return 0;
+  }
+
+  const memberName = extractCompletionMemberName(text);
+  if (!memberName) {
+    return 0;
+  }
+
+  let boost = 0;
+
+  const className = extractClassNameFromReceiver(receiver);
+  if (className) {
+    const classMembers = extractClassMembers(className, fileTextSample);
+    if (classMembers.has(memberName)) {
+      boost += 0.15;
+    }
+  }
+
+  const siblingMembers = extractSiblingUsageMembers(receiver, fileTextSample);
+  if (siblingMembers.has(memberName)) {
+    boost += 0.25;
+  }
+
+  return boost;
+}
+
 export function failsManifestSymbolPlausibility(
   text: string,
   context: ExtractedCodeContext,
@@ -318,6 +558,20 @@ export function failsManifestSymbolPlausibility(
 
   const unknown = references.filter((identifier) => !known.has(identifier));
   return unknown.length >= 2 && unknown.length === references.length;
+}
+
+function repeatsSuffixContent(text: string, context: ExtractedCodeContext): boolean {
+  const suffix = context.suffixWindow;
+  if (!suffix.trim()) {
+    return false;
+  }
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.length > 10 && suffix.includes(trimmed)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function scoreCompletion(
@@ -342,6 +596,9 @@ function scoreCompletion(
   if (isAlreadyTyped(text, context)) {
     return { include: false, score: 0 };
   }
+  if (repeatsSuffixContent(text, context)) {
+    return { include: false, score: 0 };
+  }
   if (failsManifestSymbolPlausibility(text, context, fileTextSample, symbolHints)) {
     return { include: false, score: 0 };
   }
@@ -357,6 +614,9 @@ function scoreCompletion(
   }
   if (fileTextSample && fileTextSample.includes(text.trim())) {
     score += 0.1;
+  }
+  if (context.afterDot) {
+    score += receiverAwareRankingBoost(text, context, fileTextSample);
   }
   if (isBoilerplate(text)) {
     score -= 0.1;

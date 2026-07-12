@@ -3,8 +3,7 @@ import type { SecureApiClient } from "../chat/SecureApiClient";
 import {
   CoopAutocompleteProvider,
   registerCoopAutocomplete,
-  registerAutocompleteIndexNotifier,
-  type AutocompleteStatusPublisher
+  registerAutocompleteIndexNotifier
 } from "./coopAutocompleteProvider";
 import {
   readAutocompleteSettings,
@@ -45,8 +44,7 @@ export function createAutocompleteUsageTelemetryHandler(
 export function registerAutocompleteCommands(
   context: vscode.ExtensionContext,
   api: SecureApiClient,
-  provider: CoopAutocompleteProvider,
-  publishStatus: AutocompleteStatusPublisher
+  provider: CoopAutocompleteProvider
 ): void {
   const emitUsage = async (eventType: string, metadata?: Record<string, unknown>) => {
     try {
@@ -118,10 +116,6 @@ export function registerAutocompleteCommands(
       const config = vscode.workspace.getConfiguration("coopAI.autocomplete");
       const current = config.get<boolean>("enabled", false);
       if (current === enabled) {
-        publishStatus({
-          status: enabled ? "ready" : "disabled",
-          message: enabled ? "Autocomplete enabled" : "Autocomplete disabled"
-        });
         return;
       }
       const updateTarget = vscode.ConfigurationTarget.Global;
@@ -129,14 +123,6 @@ export function registerAutocompleteCommands(
       await config.update("enabled", enabled, updateTarget);
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
       await syncCopilotInline(enabled);
-      publishStatus({
-        status: enabled ? "ready" : "disabled",
-        message: enabled ? "Autocomplete enabled" : "Autocomplete disabled"
-      });
-    }),
-    vscode.commands.registerCommand("coopAI.toggleAutocomplete", async () => {
-      const enabled = readAutocompleteSettings().enabled;
-      await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", !enabled);
     })
   );
 }

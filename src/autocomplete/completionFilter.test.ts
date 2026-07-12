@@ -8,7 +8,8 @@ import {
   sanitizeCompletionForContext,
   stripOverlapWithPrefix,
   symbolPlausibilityAdjustment,
-  toInlineInsertText
+  toInlineInsertText,
+  isValidAfterDotInsertText
 } from "./completionFilter";
 import type { AutocompleteSettings, ExtractedCodeContext, RankedCompletion } from "./types";
 
@@ -118,7 +119,104 @@ test("filterAndRankCompletions keeps member after dot", () => {
   const dotContext = { ...context, afterDot: true, currentLinePrefix: "this.session." };
   const ranked = filterAndRankCompletions(["detachSettingsWebview();"], dotContext, settings);
   assert.equal(ranked.length, 1);
-  assert.equal(ranked[0]?.text, "detachSettingsWebview()");
+  assert.equal(ranked[0]?.text, "detachSettingsWebview(");
+});
+
+test("filterAndRankCompletions rejects property chains after dot", () => {
+  const dotContext = { ...context, afterDot: true, currentLinePrefix: "CoopSettingsPanel.instance." };
+  const ranked = filterAndRankCompletions(
+    ["panel.reveal(vscode.ViewColumn.Active);"],
+    dotContext,
+    settings
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("filterAndRankCompletions keeps single member and call after dot", () => {
+  const dotContext = { ...context, afterDot: true, currentLinePrefix: "CoopSettingsPanel.instance." };
+  const ranked = filterAndRankCompletions(["bindSession(session);"], dotContext, settings);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "bindSession(");
+});
+
+test("filterAndRankCompletions rejects completion copied from suffix below cursor", () => {
+  const blankLineContext = {
+    ...context,
+    indent: "      ",
+    currentLinePrefix: "      ",
+    currentLineSuffix: "",
+    suffixWindow:
+      "      CoopSettingsPanel.instance.bindSession(session);\n      session.flushPendingSettingsNavigation();\n      CoopSettingsPanel.instance.panel.reveal(vscode.ViewColumn.Active);"
+  };
+  const ranked = filterAndRankCompletions(
+    ["CoopSettingsPanel.instance.panel.reveal(vscode.ViewColumn.Active);"],
+    blankLineContext,
+    settings
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("isValidAfterDotInsertText accepts member-only inserts", () => {
+  assert.equal(isValidAfterDotInsertText("showInformationMessage("), true);
+  assert.equal(isValidAfterDotInsertText("panel"), true);
+  assert.equal(
+    isValidAfterDotInsertText('showInformationMessage("CoopAI Settings panel is already open");'),
+    false
+  );
+});
+
+test("filterAndRankCompletions rejects block copy after vscode.window dot", () => {
+  const dotContext = { ...context, afterDot: true, currentLinePrefix: "      vscode.window." };
+  const block = `showInformationMessage("open");
+CoopSettingsPanel.instance.bindSession(session);
+session.flushPendingSettingsNavigation();
+return CoopSettingsPanel.instance;`;
+  const ranked = filterAndRankCompletions(
+    [
+      'showInformationMessage("CoopAI Settings panel is already open");',
+      block,
+      "CoopSettingsPanel.instance.bindSession(session);"
+    ],
+    dotContext,
+    { ...settings, showMultipleSuggestions: true }
+  );
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.text, "showInformationMessage(");
+});
+
+test("filterAndRankCompletions boosts sibling receiver usage after dot", () => {
+  const fileSample = `
+export class CoopSettingsPanel {
+  private static instance: CoopSettingsPanel | undefined;
+
+  public static createOrReveal(session: CoopChatSession): CoopSettingsPanel {
+    if (CoopSettingsPanel.instance) {
+      CoopSettingsPanel.instance.bindSession(session);
+      CoopSettingsPanel.instance.panel.reveal(vscode.ViewColumn.Active);
+      return CoopSettingsPanel.instance;
+    }
+    return CoopSettingsPanel.instance;
+  }
+
+  private bindSession(session: CoopChatSession): void {}
+  public readonly panel: vscode.WebviewPanel;
+}
+`.trim();
+
+  const dotContext = {
+    ...context,
+    afterDot: true,
+    currentLinePrefix: "      CoopSettingsPanel.instance."
+  };
+  const ranked = filterAndRankCompletions(
+    ["panel", "bindSession(session)"],
+    dotContext,
+    { ...settings, showMultipleSuggestions: true },
+    fileSample
+  );
+  assert.equal(ranked.length, 2);
+  assert.equal(ranked[0]?.text, "bindSession(");
+  assert.equal(ranked[1]?.text, "panel");
 });
 
 test("filterAndRankCompletions drops function restart mid-assignment", () => {

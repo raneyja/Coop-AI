@@ -11,7 +11,8 @@ import {
 } from "./autocompleteConfig";
 import { analyzeDocumentContext, isFileEligible } from "./contextAnalyzer";
 import { CompletionRouter } from "./completionRouter";
-import { toInlineInsertText } from "./completionFilter";
+import { toInlineInsertText, sanitizeAfterDotMemberText, consolidateAfterDotRanked, isValidAfterDotInsertText } from "./completionFilter";
+import { fetchAfterDotMemberCompletions } from "./memberCompletionProvider";
 import { discardContextPayload } from "./privacy";
 import { AutocompletePerformanceMonitor } from "./performance";
 import { HotStreak } from "./hotStreak";
@@ -19,24 +20,14 @@ import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
 import { readLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type {
-  AutocompleteStatusState,
   AutocompleteTelemetryEvent,
   ExtractedCodeContext,
   RankedCompletion
 } from "./types";
 
-export type AutocompleteStatusPublisher = (payload: {
-  status: AutocompleteStatusState;
-  message?: string;
-  suggestionIndex?: number;
-  suggestionCount?: number;
-  latencyMs?: number;
-}) => void;
-
 export type CoopAutocompleteProviderOptions = {
   api: SecureApiClient;
   indexBackend?: IndexBackend;
-  onStatus?: AutocompleteStatusPublisher;
   onTelemetry?: (event: AutocompleteTelemetryEvent) => void;
 };
 
@@ -138,14 +129,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.disposables.push(
       onAutocompleteSettingsChanged(() => {
         this.settings = readAutocompleteSettings();
-        this.publishStatus(this.settings.enabled ? "ready" : "disabled");
       })
     );
     const unsubscribeTelemetry = this.performance.onEvent((event) =>
       this.options.onTelemetry?.(event)
     );
     this.disposables.push({ dispose: unsubscribeTelemetry });
-    this.publishStatus(this.settings.enabled ? "ready" : "disabled");
   }
 
   public dispose(): void {
@@ -167,7 +156,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       (this.alternativeIndex + direction + this.lastAlternatives.length) %
       this.lastAlternatives.length;
     void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
-    this.publishStatus("ready", undefined, this.alternativeIndex + 1, this.lastAlternatives.length);
   }
 
   public getPerformanceSnapshot() {
@@ -182,7 +170,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   ): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList | null> {
     this.settings = readAutocompleteSettings();
     if (!this.settings.enabled) {
-      this.publishStatus("disabled");
       return null;
     }
     if (!isFileEligible(document)) {
@@ -219,9 +206,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         if (retryCached) {
           return retryCached;
         }
-      }
-      if (decision.reason && decision.reason !== "unchanged_context") {
-        this.publishStatus("ready", this.describeSkipReason(decision.reason));
       }
       return null;
     }
@@ -427,15 +411,63 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     position = live.position;
     extracted = live.extracted;
     this.noteSupersededIfNeeded(extracted.contextHash);
-    this.publishStatus("processing");
 
     const abort = new AbortController();
     try {
-      const result = await this.router.fetchCompletions(extracted, this.settings, abort.signal);
+      this.publishStatus("processing");
+
+      if (extracted.afterDot) {
+        const lspItems = await this.tryLspMemberCompletions(document, position, extracted, abort.signal);
+        live = this.resolveLiveCompletionContext(document, position);
+        if (
+          lspItems &&
+          lspItems.length > 0 &&
+          this.isCompatibleCompletionContext(extracted, live.extracted)
+        ) {
+          position = live.position;
+          extracted = live.extracted;
+          this.publishStatus("ready", undefined, 1, lspItems.length, 0);
+          discardContextPayload(extracted);
+          return lspItems;
+        }
+        position = live.position;
+        extracted = live.extracted;
+
+        const llmFallback = await this.router.fetchCompletions(
+          extracted,
+          this.settings,
+          abort.signal,
+          document.getText().slice(0, 32_768)
+        );
+        live = this.resolveLiveCompletionContext(document, position);
+        if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
+          this.triggerDetector.noteRequestFailed();
+          return null;
+        }
+        position = live.position;
+        extracted = live.extracted;
+        const consolidated = consolidateAfterDotRanked(
+          llmFallback.completions,
+          extracted.currentLinePrefix
+        );
+        return this.returnRankedInlineItems(
+          document,
+          position,
+          extracted,
+          consolidated,
+          llmFallback.latencyMs
+        );
+      }
+
+      const result = await this.router.fetchCompletions(
+        extracted,
+        this.settings,
+        abort.signal,
+        document.getText().slice(0, 32_768)
+      );
       live = this.resolveLiveCompletionContext(document, position);
       if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
         this.triggerDetector.noteRequestFailed();
-        this.publishStatus("ready", "Context changed");
         return null;
       }
       position = live.position;
@@ -443,41 +475,18 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
       if (result.completions.length === 0) {
         this.triggerDetector.noteRequestFailed();
-        this.publishStatus("ready", this.describeEmptyResult(result));
         this.maybeWarnAuthFailure(result.error);
         return null;
       }
 
-      this.lastAlternatives = result.completions;
-      this.alternativeIndex = 0;
-      this.lastScopeHash = extracted.contextHash;
-
-      const items: vscode.InlineCompletionItem[] = [];
-      for (const ranked of result.completions) {
-        const item = this.buildInlineItem(document, position, extracted, ranked);
-        if (item) {
-          items.push(item);
-        }
-      }
-
-      if (items.length === 0) {
-        this.triggerDetector.noteRequestFailed();
-        this.publishStatus("ready", "Filtered low-quality suggestion");
-        return null;
-      }
-
-      this.triggerDetector.markRequested(extracted.contextHash);
-      this.publishStatus(
-        "ready",
-        undefined,
-        1,
-        items.length,
+      const ranked = result.completions;
+      return this.returnRankedInlineItems(
+        document,
+        position,
+        extracted,
+        ranked,
         result.latencyMs
       );
-
-      this.trackShownItem(extracted.contextHash, extracted.languageId);
-      discardContextPayload(extracted);
-      return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
     } catch (error) {
       if (abort.signal.aborted) {
         this.triggerDetector.noteRequestFailed();
@@ -485,11 +494,82 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
       this.triggerDetector.noteRequestFailed();
       const message = error instanceof Error ? error.message : "Autocomplete failed";
-      const friendly = this.describeErrorMessage(message);
-      this.publishStatus("error", friendly);
       this.maybeWarnAuthFailure(message);
       return null;
     }
+  }
+
+  private async tryLspMemberCompletions(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    extracted: ExtractedCodeContext,
+    signal?: AbortSignal
+  ): Promise<vscode.InlineCompletionItem[] | null> {
+    const ranked = extracted.afterDot
+      ? consolidateAfterDotRanked(
+          await fetchAfterDotMemberCompletions(document, position, extracted, { signal }),
+          extracted.currentLinePrefix
+        )
+      : await fetchAfterDotMemberCompletions(document, position, extracted, { signal });
+    if (ranked.length === 0) {
+      return null;
+    }
+
+    const items: vscode.InlineCompletionItem[] = [];
+    for (const completion of ranked) {
+      const item = this.buildInlineItem(document, position, extracted, completion);
+      if (item) {
+        items.push(item);
+      }
+    }
+    if (items.length === 0) {
+      return null;
+    }
+
+    this.lastAlternatives = ranked;
+    this.alternativeIndex = 0;
+    this.lastScopeHash = extracted.contextHash;
+    this.triggerDetector.markRequested(extracted.contextHash);
+    this.trackShownItem(extracted.contextHash, extracted.languageId);
+    return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
+  }
+
+  private returnRankedInlineItems(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    extracted: ExtractedCodeContext,
+    ranked: RankedCompletion[],
+    latencyMs = 0
+  ): vscode.InlineCompletionItem[] | null {
+    if (ranked.length === 0) {
+      this.triggerDetector.noteRequestFailed();
+      this.publishStatus("ready", "Filtered low-quality suggestion");
+      return null;
+    }
+
+    this.lastAlternatives = ranked;
+    this.alternativeIndex = 0;
+    this.lastScopeHash = extracted.contextHash;
+
+    const items: vscode.InlineCompletionItem[] = [];
+    for (const completion of ranked) {
+      const item = this.buildInlineItem(document, position, extracted, completion);
+      if (item) {
+        items.push(item);
+      }
+    }
+
+    if (items.length === 0) {
+      this.triggerDetector.noteRequestFailed();
+      this.publishStatus("ready", "Filtered low-quality suggestion");
+      return null;
+    }
+
+    this.triggerDetector.markRequested(extracted.contextHash);
+    this.publishStatus("ready", undefined, 1, items.length, latencyMs);
+    this.trackShownItem(extracted.contextHash, extracted.languageId);
+    discardContextPayload(extracted);
+    return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
   }
 
   private buildInlineItem(
@@ -501,8 +581,18 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     if (!ranked) {
       return undefined;
     }
-    const insertText = toInlineInsertText(context, ranked);
+    let completionText = ranked.text;
+    if (context.afterDot) {
+      completionText = sanitizeAfterDotMemberText(completionText);
+      if (!completionText) {
+        return undefined;
+      }
+    }
+    const insertText = toInlineInsertText(context, { ...ranked, text: completionText });
     if (!insertText || insertText.length < 2) {
+      return undefined;
+    }
+    if (context.afterDot && !isValidAfterDotInsertText(insertText)) {
       return undefined;
     }
 
@@ -529,70 +619,17 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       "Coop autocomplete requires sign-in. Open Coop chat → Settings → sign in in this Extension Development Host window."
     );
   }
-
-  private describeSkipReason(reason: string): string {
-    switch (reason) {
-      case "backoff":
-        return "Paused after dismissed suggestions";
-      case "manual_only":
-        return "Manual trigger only (Cmd+Shift+\\)";
-      case "in_comment_or_string":
-        return "Skipped in comment or string";
-      case "post_accept_cooldown":
-        return "Ready";
-      default:
-        return reason.replaceAll("_", " ");
-    }
-  }
-
-  private describeEmptyResult(result: { error?: string; latencyMs: number }): string {
-    if (result.error) {
-      return this.describeErrorMessage(result.error);
-    }
-    if (result.latencyMs > 0) {
-      return `No suggestion (${result.latencyMs}ms)`;
-    }
-    return "No suggestion";
-  }
-
-  private describeErrorMessage(message: string): string {
-    if (/api key is missing|sign in|not authenticated/i.test(message)) {
-      return "Sign in to Coop AI to use autocomplete";
-    }
-    if (/timed out/i.test(message)) {
-      return "Autocomplete timed out — try again or increase request timeout";
-    }
-    return message;
-  }
-
-  private publishStatus(
-    status: AutocompleteStatusState,
-    message?: string,
-    suggestionIndex?: number,
-    suggestionCount?: number,
-    latencyMs?: number
-  ): void {
-    this.options.onStatus?.({
-      status,
-      message,
-      suggestionIndex,
-      suggestionCount,
-      latencyMs
-    });
-  }
 }
 
 export function registerCoopAutocomplete(
   context: vscode.ExtensionContext,
   api: SecureApiClient,
-  publishStatus: AutocompleteStatusPublisher,
   onTelemetry?: (event: AutocompleteTelemetryEvent) => void,
   indexBackend?: IndexBackend
 ): CoopAutocompleteProvider {
   const provider = new CoopAutocompleteProvider({
     api,
     indexBackend,
-    onStatus: publishStatus,
     onTelemetry
   });
 

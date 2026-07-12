@@ -34,7 +34,6 @@ import { PromptLibraryPill } from "./components/PromptLibraryPill";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
 import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
-import { AutocompleteStatus, type AutocompleteBadgeStatus } from "./AutocompleteStatus";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
@@ -145,17 +144,6 @@ type InboundMessage =
       };
     }
   | { type: "prompts:insert"; payload: { text: string; actionId?: string } }
-  | {
-      type: "autocomplete:status";
-      payload: {
-        status: AutocompleteBadgeStatus;
-        message?: string;
-        suggestionIndex?: number;
-        suggestionCount?: number;
-        latencyMs?: number;
-        previewText?: string;
-      };
-    }
   | { type: "decision:timeline"; payload: { artifactId?: string; timeline: DecisionTimelinePayload } }
   | {
       type: "ownership:card";
@@ -348,8 +336,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [pendingPromptActionId, setPendingPromptActionId] = useState<QuickActionId | undefined>();
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [savePromptDraft, setSavePromptDraft] = useState({ title: "", template: "" });
-  const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteBadgeStatus>("disabled");
-  const [autocompleteMessage, setAutocompleteMessage] = useState<string | undefined>();
   const [inlineArtifacts, setInlineArtifacts] = useState<ChatInlineArtifact[]>([]);
   const [threadsState, setThreadsState] = useState<{
     activeId: string;
@@ -852,10 +838,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setPromptModalOpen(false);
           vscode.setState({ draftInput: message.payload.text } satisfies PersistedWebviewState);
           break;
-        case "autocomplete:status":
-          setAutocompleteStatus(message.payload.status);
-          setAutocompleteMessage(message.payload.message);
-          break;
         default:
           break;
       }
@@ -1315,21 +1297,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onNewThread={() => post({ type: "threads:new" })}
           />
         ) : null}
-        <div className={threadsState ? "ml-auto flex shrink-0 items-center gap-2" : "ml-auto flex w-full items-center justify-end gap-2"}>
-          {lightningState && !lightningState.canUseLightning ? (
+        {lightningState && !lightningState.canUseLightning ? (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <ProUpgradeChip onClick={() => post({ type: "lightning:upgrade" })} />
-          ) : null}
-          <AutocompleteStatus
-            status={autocompleteStatus}
-            message={autocompleteMessage}
-            onToggle={() =>
-              post({
-                type: "autocomplete:set",
-                payload: { enabled: autocompleteStatus === "disabled" }
-              })
-            }
-          />
-        </div>
+          </div>
+        ) : null}
       </div>
       <p className="coop-panel-narrow-notice" role="status">
         Widen the sidebar for the best experience.

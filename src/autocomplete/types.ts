@@ -52,7 +52,7 @@ export type InlineCompletionRequest = {
 export type RankedCompletion = {
   text: string;
   score: number;
-  source: "cache" | "llm" | "pattern";
+  source: "cache" | "llm" | "pattern" | "lsp";
 };
 
 export type CompletionRouterResult = {
@@ -63,12 +63,6 @@ export type CompletionRouterResult = {
   provider?: string;
   error?: string;
 };
-
-export type AutocompleteStatusState =
-  | "disabled"
-  | "ready"
-  | "processing"
-  | "error";
 
 export type PerformanceBatchPayload = {
   requestCount: number;

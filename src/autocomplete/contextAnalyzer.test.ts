@@ -1,7 +1,7 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { analyzeDocumentContext, isFileEligible, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
+import { analyzeDocumentContext, isFileEligible, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
 import { createMockDocument } from "./test/vscodeMockSetup";
 
 let passed = 0;
@@ -48,6 +48,17 @@ test("languageSpecificHints mentions property access after dot", () => {
   );
   const hints = languageSpecificHints({ ...context, afterDot: true });
   assert.match(hints, /member name after the dot/i);
+});
+
+test("autocompleteGroundingRules forbids invented strings and assumptions", () => {
+  const context = analyzeDocumentContext(
+    createMockDocument("obj.") as never,
+    new vscode.Position(0, 4)
+  );
+  const rules = autocompleteGroundingRules({ ...context, afterDot: true });
+  assert.match(rules, /Do NOT invent string literals/i);
+  assert.match(rules, /Do NOT assume runtime state/i);
+  assert.match(rules, /No arguments, string literals/i);
 });
 
 test("isFileEligible rejects markdown", () => {

@@ -6,8 +6,8 @@ import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveRuntimeAutocompleteModel } from "../config/featureModelAssignments";
 import { resolveEffectiveUseGraphContext } from "./autocompleteConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
-import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion } from "./contextAnalyzer";
-import { filterAndRankCompletions, normalizeCompletionText, type SymbolPlausibilityHints } from "./completionFilter";
+import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
+import { filterAndRankCompletions, normalizeCompletionText, consolidateAfterDotRanked, type SymbolPlausibilityHints } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
 import { applyEdgeCaseFallbacks } from "./edgeCases";
 import { CompletionCache, createLatencyTimer, type AutocompletePerformanceMonitor } from "./performance";
@@ -52,7 +52,8 @@ export class CompletionRouter {
   public async fetchCompletions(
     context: ExtractedCodeContext,
     settings: AutocompleteSettings,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    rankingFileSample?: string
   ): Promise<CompletionRouterResult> {
     const timer = createLatencyTimer();
 
@@ -62,14 +63,20 @@ export class CompletionRouter {
 
     const cached = this.cache.get(context.contextHash);
     if (cached) {
-      return {
-        completions: [
-          { text: cached.text, score: 1, source: "cache" },
-          ...cached.alternatives.map((text) => ({ text, score: 0.9, source: "cache" as const }))
-        ],
-        latencyMs: 0,
-        fromCache: true
-      };
+      let completions = [
+        { text: cached.text, score: 1, source: "cache" as const },
+        ...cached.alternatives.map((text) => ({ text, score: 0.9, source: "cache" as const }))
+      ];
+      if (context.afterDot) {
+        completions = consolidateAfterDotRanked(completions, context.currentLinePrefix);
+        if (completions.length === 0) {
+          // Stale cache entry from before after-dot sanitization; fetch fresh.
+        } else {
+          return { completions, latencyMs: 0, fromCache: true };
+        }
+      } else {
+        return { completions, latencyMs: 0, fromCache: true };
+      }
     }
 
     const docKey = context.filePath;
@@ -87,7 +94,7 @@ export class CompletionRouter {
     }
 
     const controller = new AbortController();
-    const promise = this.executeFetch(context, settings, signal, controller, timer);
+    const promise = this.executeFetch(context, settings, signal, controller, timer, rankingFileSample);
     this.inFlightByDoc.set(docKey, {
       prefix: prefixKey,
       contextHash: context.contextHash,
@@ -114,7 +121,8 @@ export class CompletionRouter {
     settings: AutocompleteSettings,
     signal: AbortSignal | undefined,
     controller: AbortController,
-    timer: ReturnType<typeof createLatencyTimer>
+    timer: ReturnType<typeof createLatencyTimer>,
+    rankingFileSample?: string
   ): Promise<CompletionRouterResult> {
     const linked = linkAbort(signal, controller.signal);
 
@@ -159,7 +167,8 @@ export class CompletionRouter {
         vscode.Uri.file(context.filePath)
       );
       const profile = getProjectStyleProfile(folder ?? undefined);
-      const fileSample = safeContext.previousLines.slice(0, 2000);
+      const fileSample =
+        rankingFileSample?.slice(0, 32_000) ?? safeContext.previousLines.slice(0, 2000);
       const symbolHints = await this.resolveSymbolHints(context, settings, prefs);
 
       let ranked = filterAndRankCompletions(
@@ -171,6 +180,9 @@ export class CompletionRouter {
       );
       ranked = biasCompletionsWithProjectStyle(ranked, context, profile);
       ranked = applyEdgeCaseFallbacks(context, ranked);
+      if (context.afterDot) {
+        ranked = consolidateAfterDotRanked(ranked, context.currentLinePrefix);
+      }
 
       if (ranked.length > 0) {
         this.cache.set(
@@ -371,7 +383,7 @@ export function synthesizeMessageFromSegments(
   if (!prefix) {
     return fallbackPrompt;
   }
-  return `${hints}\n\nPREFIX:\n${segments.prefix}\n\nSUFFIX:\n${segments.suffix}\n\nTASK: Complete the code at the cursor position (between PREFIX and SUFFIX). Return ONLY the completion text.`;
+  return `${hints}\n\nGROUNDING: ${autocompleteGroundingRules(context)}\n\nPREFIX:\n${segments.prefix}\n\nSUFFIX:\n${segments.suffix}\n\nTASK: Complete the code at the cursor position (between PREFIX and SUFFIX). Return ONLY the completion text.`;
 }
 
 export function buildFimSegments(
@@ -405,10 +417,11 @@ function buildFimPrefix(context: ExtractedCodeContext): string {
 function buildAutocompleteUserMessage(context: ExtractedCodeContext): string {
   const block = buildPromptContextBlock(context);
   const hints = languageSpecificHints(context);
+  const grounding = autocompleteGroundingRules(context);
   const task = context.afterDot
-    ? "Complete ONLY the identifier/method after the dot. Return a single member name (optional `(`). No newlines."
-    : "Complete the current line or next 2-3 lines. Return ONLY code.";
-  return `${block}\n\nHINT: ${hints}\n\nTASK: ${task}`;
+    ? "Complete ONLY the identifier/method after the dot. Return a single member name (optional `(`). No arguments, string literals, or newlines."
+    : "Complete the current line or next 2-3 lines. Return ONLY code grounded in the attached context.";
+  return `${block}\n\nHINT: ${hints}\n\nGROUNDING: ${grounding}\n\nTASK: ${task}`;
 }
 
 function resolveModelPreset(

@@ -453,8 +453,6 @@ export type WebviewInbound =
   | { type: "ui:close-settings" }
   | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
-  | { type: "autocomplete:toggle" }
-  | { type: "autocomplete:set"; payload: { enabled: boolean } }
   | { type: "lightning:ready" }
   | { type: "lightning:enable-global" }
   | { type: "lightning:disable-global" }
@@ -569,17 +567,6 @@ export type WebviewOutbound =
     }
   | { type: "job:progress"; payload: JobProgressPayload }
   | { type: "job:complete"; payload: JobProgressPayload & { result?: unknown } }
-  | {
-      type: "autocomplete:status";
-      payload: {
-        status: "disabled" | "ready" | "processing" | "error";
-        message?: string;
-        suggestionIndex?: number;
-        suggestionCount?: number;
-        latencyMs?: number;
-        previewText?: string;
-      };
-    }
   | {
       type: "mention:results";
       payload: {

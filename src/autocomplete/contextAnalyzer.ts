@@ -89,13 +89,28 @@ export function buildPromptContextBlock(context: ExtractedCodeContext): string {
   return parts.join("\n\n");
 }
 
+export function autocompleteGroundingRules(context: ExtractedCodeContext): string {
+  const lines = [
+    "Use ONLY code supported by PREFIX, SUFFIX, IMPORTS, and SURROUNDING — no invented UI copy or assumptions.",
+    "Do NOT invent string literals, toast messages, log text, or user-facing copy unless that exact literal already appears in context.",
+    "Do NOT assume runtime state, user intent, or behavior not shown in the attached context.",
+    "Do NOT copy or extend multi-line blocks from elsewhere in the file unless completing the current expression."
+  ];
+  if (context.afterDot) {
+    lines.push(
+      "After a dot: return ONLY the member identifier (optional `(`). No arguments, string literals, or semicolon."
+    );
+  }
+  return lines.join(" ");
+}
+
 export function languageSpecificHints(context: ExtractedCodeContext): string {
   const id = context.languageId;
   if (id === "typescript" || id === "javascript" || id === "typescriptreact" || id === "javascriptreact") {
     if (context.afterDot) {
-      return "Complete ONLY the member name after the dot (and optional opening paren). One line. No blocks or new statements.";
+      return "Complete ONLY the member name after the dot (and optional opening paren). One line. No blocks, arguments, or new statements.";
     }
-    return "Match TS/JS style; prefer const/await patterns seen in imports.";
+    return "Match TS/JS style from context only; do not invent messages or copy unrelated blocks.";
   }
   if (id === "python") {
     return "Respect indentation strictly; use 4-space blocks unless file uses otherwise.";

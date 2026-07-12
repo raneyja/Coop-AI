@@ -279,38 +279,6 @@
     color: var(--coop-panel-muted);
   }
 
-  .coop-autocomplete-control {
-    @apply flex items-center gap-1.5;
-  }
-
-  .coop-autocomplete-label {
-    @apply cursor-default text-[11px];
-    color: var(--coop-panel-muted);
-  }
-
-  .coop-autocomplete-label:hover {
-    color: var(--coop-panel-foreground);
-  }
-
-  .coop-autocomplete-copilot-warning {
-    color: var(--vscode-editorWarning-foreground, #cca700);
-    font-size: 0.85em;
-  }
-
-  .coop-autocomplete-toggle {
-    @apply inline-flex h-[18px] min-w-[30px] shrink-0 cursor-pointer items-center justify-center rounded-full border px-1.5 text-[9px] font-medium uppercase tracking-wide transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
-    background: var(--vscode-input-background, var(--vscode-editor-background));
-    border-color: var(--vscode-input-border, var(--coop-border));
-    color: var(--coop-panel-muted);
-  }
-
-  .coop-autocomplete-toggle--on {
-    background: var(--vscode-foreground);
-    border-color: var(--vscode-foreground);
-    color: var(--vscode-editor-background, var(--vscode-sideBar-background));
-  }
-
   .coop-text-btn {
     @apply rounded px-2 py-0.5 text-[11px] transition-colors duration-150;
     color: var(--vscode-textLink-foreground);

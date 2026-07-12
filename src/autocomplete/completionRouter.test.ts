@@ -89,6 +89,8 @@ test("synthesizeMessageFromSegments builds chat-fallback prompt from FIM segment
   assert.match(message, /const x = /);
   assert.match(message, /SUFFIX:/);
   assert.match(message, /TASK:/);
+  assert.match(message, /GROUNDING:/);
+  assert.match(message, /Do NOT invent string literals/i);
 });
 
 async function runAsyncTests(): Promise<void> {

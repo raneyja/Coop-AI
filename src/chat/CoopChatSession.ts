@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { readAutocompleteSettings } from "../autocomplete/autocompleteConfig";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
 import { setLastEditUserMessage } from "../edit/patchSession";
 import { activeThemeMode } from "./themeMode";
@@ -557,24 +556,6 @@ export class CoopChatSession {
     this.postTheme();
   }
 
-  public postAutocompleteStatus(payload: {
-    status: "disabled" | "ready" | "processing" | "error";
-    message?: string;
-    suggestionIndex?: number;
-    suggestionCount?: number;
-    latencyMs?: number;
-    previewText?: string;
-  }): void {
-    this.postToChat({ type: "autocomplete:status", payload });
-  }
-
-  private syncAutocompleteStatus(): void {
-    const enabled = readAutocompleteSettings().enabled;
-    this.postAutocompleteStatus({
-      status: enabled ? "ready" : "disabled"
-    });
-  }
-
   public newChat(): void {
     if (this.threadStore) {
       this.persistActiveThread();
@@ -843,7 +824,6 @@ export class CoopChatSession {
       case "webview-ready":
         this.postTheme();
         if (source === "chat") {
-          this.syncAutocompleteStatus();
           this.postContext();
           try {
             await this.pushSettingsState();
@@ -895,12 +875,6 @@ export class CoopChatSession {
         return;
       case "agents:open":
         await this.openAgentsMd();
-        return;
-      case "autocomplete:toggle":
-        await vscode.commands.executeCommand("coopAI.toggleAutocomplete");
-        return;
-      case "autocomplete:set":
-        await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", message.payload.enabled);
         return;
       case "chat:send":
         await this.handleChatSend(

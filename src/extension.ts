@@ -614,23 +614,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   registerQuickActionCommands(context, () => provider.session);
 
-  const publishAutocompleteStatus: import("./autocomplete/coopAutocompleteProvider").AutocompleteStatusPublisher =
-    (payload) => {
-      for (const session of coopSessionRegistry.getAll()) {
-        session.postAutocompleteStatus(payload);
-      }
-    };
-
   const autocompleteProvider = registerCoopAutocomplete(
     context,
     api,
-    publishAutocompleteStatus,
     createAutocompleteUsageTelemetryHandler((eventType, metadata) => {
       void api.recordUsageEvents(eventType, metadata).catch(() => undefined);
     }),
     indexBackend
   );
-  registerAutocompleteCommands(context, api, autocompleteProvider, publishAutocompleteStatus);
+  registerAutocompleteCommands(context, api, autocompleteProvider);
   context.subscriptions.push(registerAutocompleteIndexNotifier(context, indexBackend));
   registerPatchCommands(context, api, () => provider.session);
 
@@ -639,10 +631,6 @@ export function activate(context: vscode.ExtensionContext): void {
     await restoreAutocompleteUnlessUserOptedOut(context);
     const enabled = readAutocompleteSettings().enabled;
     await vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
-    publishAutocompleteStatus({
-      status: enabled ? "ready" : "disabled",
-      message: enabled ? "Autocomplete enabled" : "Autocomplete disabled"
-    });
     await refreshAllSessions();
   })();
 
