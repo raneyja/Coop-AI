@@ -374,7 +374,7 @@ export class CoopChatSession {
       temperature: 0.5,
       maxTokens: 2000,
       llmEnabled: true,
-      autocompleteEnabled: false,
+      autocompleteEnabled: true,
       useCachedResponses: true,
       includeSelection: true,
       includeActiveFile: true,
@@ -1053,8 +1053,12 @@ export class CoopChatSession {
       case "link:open":
         void openReferencedLink(message.payload.url);
         return;
-      case "settings:update":
-        await updateConfiguration(message.payload);
+      case "settings:update": {
+        const { autocompleteEnabled, ...rest } = message.payload;
+        if (autocompleteEnabled !== undefined) {
+          await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", autocompleteEnabled);
+        }
+        await updateConfiguration(rest);
         if (message.payload.jiraBaseUrl !== undefined) {
           await this.options.integrationSecrets.updateJiraBaseUrl(message.payload.jiraBaseUrl);
         }
@@ -1063,6 +1067,7 @@ export class CoopChatSession {
         }
         await this.refreshAllSessionsPreferences();
         return;
+      }
       case "settings:update-api-key":
         await this.options.api.setToken(message.payload.apiKey);
         await this.refreshAllSessionsPreferences();

@@ -21,14 +21,14 @@ Production users **do not** pick LLM provider or model. Coop assigns models per 
 
 ## Required wiring (all must stay connected)
 
-1. **Settings UI** (`SettingsDetailViews.tsx` `ModelDetail`) — read-only assignment rows + On/Off badges; toggles only. Provider/model pickers **only** when `canUserSelectModels({ devMode: true })`.
+1. **Settings UI** (`SettingsDetailViews.tsx` `ModelDetail`) — read-only assignment rows + On/Off badges; toggles only. **Never** add provider/model pickers to settings.
 2. **Extension runtime** — `resolveRuntimeModelForUseCase()` in `CoopChatSession`; `resolveRuntimeAutocompleteModel()` in `completionRouter`.
 3. **Config writes** — `stripUserModelPreferenceUpdates()` in `SecureApiClient.updateConfiguration` blocks `llmProvider` / `defaultModel` unless dev mode.
 4. **Server enforcement** — `chatApi.ts` and `inlineCompletionApi.ts` override client model when `!config.allowUnapprovedProvider`.
 
 ## Dev mode only
 
-`coopAI.devMode: true` unlocks local provider/model overrides. Never ship provider pickers to production users.
+`coopAI.devMode: true` may unlock runtime routing overrides via VS Code User settings (`coopAI.llmProvider`, `coopAI.defaultModel`). The settings webview must **never** show provider/model pickers.
 
 ## Tests
 

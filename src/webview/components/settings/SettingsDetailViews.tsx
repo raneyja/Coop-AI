@@ -1,19 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  MODELS_BY_PROVIDER,
-  DEFAULT_MODEL_BY_PROVIDER,
-  formatModelOptionLabel,
-  lowestCreditModelForProvider,
-  modelsForProvider
-} from "../../../config/llmModels";
+import React, { useEffect, useRef, useState } from "react";
 import {
   assignedModelsHubSubtitle,
-  canUserSelectModels,
   COOP_FEATURE_MODEL_ASSIGNMENTS,
   formatAssignedModelMeta,
   type CoopFeatureId
 } from "../../../config/featureModelAssignments";
-import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { TestButton, type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -308,11 +299,7 @@ function ModelDetail({
   onUpdate,
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
-  const userCanSelectModels = canUserSelectModels({ devMode: prefs.devMode });
-  const budgetModel = lowestCreditModelForProvider(prefs.llmProvider);
   const [draft, setDraft] = useState({
-    llmProvider: prefs.llmProvider,
-    model: userCanSelectModels ? prefs.model : budgetModel.id,
     llmEnabled: prefs.llmEnabled,
     autocompleteEnabled: prefs.autocompleteEnabled
   });
@@ -322,23 +309,12 @@ function ModelDetail({
 
   useEffect(() => {
     if (!dirty) {
-      const nextBudgetModel = lowestCreditModelForProvider(prefs.llmProvider);
       setDraft({
-        llmProvider: prefs.llmProvider,
-        model: userCanSelectModels ? prefs.model : nextBudgetModel.id,
         llmEnabled: prefs.llmEnabled,
         autocompleteEnabled: prefs.autocompleteEnabled
       });
     }
-  }, [
-    prefs.llmProvider,
-    prefs.model,
-    prefs.llmEnabled,
-    prefs.autocompleteEnabled,
-    prefs.devMode,
-    dirty,
-    userCanSelectModels
-  ]);
+  }, [prefs.llmEnabled, prefs.autocompleteEnabled, dirty]);
 
   useEffect(
     () => () => {
@@ -349,33 +325,17 @@ function ModelDetail({
     []
   );
 
-  const devModels = useMemo(() => modelsForProvider(draft.llmProvider), [draft.llmProvider]);
-
   const update = (partial: Partial<typeof draft>) => {
     setDraft((prev) => ({ ...prev, ...partial }));
     setDirty(true);
     setSaved(false);
   };
 
-  const onProviderChange = (provider: LlmProviderPreference) => {
-    const nextModel = MODELS_BY_PROVIDER[provider].includes(draft.model)
-      ? draft.model
-      : DEFAULT_MODEL_BY_PROVIDER[provider];
-    update({ llmProvider: provider, model: nextModel });
-  };
-
   const handleSave = () => {
-    const updates: Parameters<SettingsDetailProps["onUpdate"]>[0] = {
-      temperature: prefs.temperature,
-      maxTokens: prefs.maxTokens,
+    onUpdate({
       llmEnabled: draft.llmEnabled,
       autocompleteEnabled: draft.autocompleteEnabled
-    };
-    if (userCanSelectModels) {
-      updates.llmProvider = draft.llmProvider;
-      updates.model = draft.model;
-    }
-    onUpdate(updates);
+    });
     setDirty(false);
     setSaved(true);
     if (savedTimer.current !== null) {
@@ -403,41 +363,6 @@ function ModelDetail({
             />
           ))}
         </div>
-
-        {userCanSelectModels ? (
-          <>
-            <p className="coop-settings-card-desc mt-3 px-0.5">
-              Dev mode overrides apply to local testing only.
-            </p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">LLM provider (dev override)</span>
-              <select
-                value={draft.llmProvider}
-                onChange={(e) => onProviderChange(e.target.value as LlmProviderPreference)}
-                className="coop-settings-field"
-              >
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Gemini</option>
-                <option value="deepseek">DeepSeek (legal review)</option>
-              </select>
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Model (dev override)</span>
-              <select
-                value={draft.model}
-                onChange={(e) => update({ model: e.target.value })}
-                className="coop-settings-field"
-              >
-                {devModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {formatModelOptionLabel(model)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        ) : null}
 
         <SettingsCheckboxRow
           title="Enable live LLM chat"

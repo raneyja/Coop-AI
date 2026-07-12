@@ -35,17 +35,15 @@ Production users see:
 - Two toggles you **can** change:
   - **Enable live LLM chat** — master switch for chat, quick actions, and edit mode
   - **Enable inline autocomplete** — master switch for ghost-text completions
-- **Save model settings** persists only the toggles (and dev overrides when dev mode is on)
+- **Save model settings** persists only the toggles
 
 The Preferences hub subtitle shows **Assigned models** plus chat and autocomplete status (for example, `Assigned models · Chat on · Autocomplete on`).
 
-There is **no provider or model picker** for normal users. Model routing is operator cost — not user-facing credits or per-model pricing.
+There is **no provider or model picker** in settings. Model routing is operator cost — not user-facing credits or per-model pricing.
 
 ### Developer mode override
 
-Set `coopAI.devMode: true` in VS Code settings to unlock **LLM provider** and **Model** overrides on the same screen. Dev overrides apply to **local testing only**; production orgs should keep dev mode off.
-
-The extension blocks writes to `coopAI.llmProvider` and `coopAI.defaultModel` from the settings UI unless dev mode is enabled.
+Set `coopAI.devMode: true` in VS Code User settings to unlock local `coopAI.llmProvider` and `coopAI.defaultModel` overrides for testing. The Model & chat screen does **not** expose pickers — edit VS Code settings directly if needed.
 
 ## Related settings
 

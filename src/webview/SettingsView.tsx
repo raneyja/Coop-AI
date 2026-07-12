@@ -90,7 +90,7 @@ const DEFAULT_PREFS: Preferences = {
   temperature: 0.5,
   maxTokens: 2000,
   llmEnabled: true,
-  autocompleteEnabled: false,
+  autocompleteEnabled: true,
   useCachedResponses: true,
   includeSelection: true,
   includeActiveFile: true,
