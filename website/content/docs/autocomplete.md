@@ -21,7 +21,7 @@ Autocomplete is controlled from **Settings → Preferences → Model & chat** �
 3. Check or uncheck **Enable inline autocomplete**.
 4. Click **Save model settings**.
 
-<!-- figures ml -->
+<!-- figures lg -->
 ![Model & chat — assigned models, Enable live LLM chat, and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 

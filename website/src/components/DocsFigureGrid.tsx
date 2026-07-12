@@ -5,6 +5,7 @@ import {
   docsFigureSingleClassName,
   docsFigureSingleCompactClassName,
   docsFigureSingleMediumClassName,
+  docsFigureSingleLargeClassName,
   docsFigureSingleMediumLargeClassName,
   docsFigureSingleExtraSmallClassName,
   docsFigureSingleSmallClassName,
@@ -29,8 +30,10 @@ export function DocsFigureGrid({ items, compact, size }: DocsFigureGridProps) {
       ? docsFigureSingleExtraSmallClassName
       : size === "sm"
         ? docsFigureSingleSmallClassName
-        : size === "ml"
-          ? docsFigureSingleMediumLargeClassName
+      : size === "ml"
+        ? docsFigureSingleMediumLargeClassName
+        : size === "lg"
+          ? docsFigureSingleLargeClassName
           : size === "md"
             ? docsFigureSingleMediumClassName
             : compact
