@@ -22,7 +22,7 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="Code intelligence from the entire stack"
+        title="Context from your entire stack (not just your codebase)"
         description="CoopAI indexes your entire codebase and the tools that your team uses. Providing context from tools like GitHub, GitLab, Slack, Jira, Notion, and more."
       />
 
