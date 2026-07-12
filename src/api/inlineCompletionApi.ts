@@ -106,12 +106,7 @@ export async function handleInlineCompletionRequest(
         ? record.model
         : undefined
   });
-  const model =
-    route.mode === "fim"
-      ? route.model
-      : typeof record.model === "string" && record.model
-        ? record.model
-        : defaultInlineModelFor(route.provider);
+  const model = route.model;
   const resolvedProvider = route.mode === "fim" ? route.provider : route.provider;
   const maxTokens =
     typeof record.maxTokens === "number"

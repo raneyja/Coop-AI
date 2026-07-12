@@ -7,6 +7,7 @@ import {
   parseInlineBody
 } from "./inlineCompletionApi";
 import { INLINE_MODEL_PRESETS } from "../config/inlineModelPresets";
+import { getFeatureModelAssignment } from "../config/featureModelAssignments";
 import { GraphQueryApi } from "./graphQuery";
 import { GraphCache } from "../cache/graphCache";
 
@@ -124,6 +125,61 @@ void (async () => {
   const fimPayload = JSON.parse(fimRes.body ?? "{}") as Record<string, unknown>;
   assert.equal(fimPayload.fim, true);
   assert.equal(typeof fimPayload.text, "string");
+  passed++;
+
+  const assignedAutocomplete = getFeatureModelAssignment("autocomplete");
+
+  const enforcedRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      message: "function hello() {\n  return '",
+      provider: "anthropic",
+      model: "claude-opus-4",
+      languageId: "typescript",
+      file: "src/example.ts"
+    },
+    enforcedRes,
+    router,
+    router["config"],
+    org
+  );
+  assert.equal(enforcedRes.statusCode, 200);
+  const enforcedPayload = JSON.parse(enforcedRes.body ?? "{}") as Record<string, unknown>;
+  assert.equal(enforcedPayload.fim, false, "message-only requests use chat-fallback");
+  assert.equal(
+    enforcedPayload.provider,
+    assignedAutocomplete.provider,
+    "production must ignore client provider"
+  );
+  assert.equal(
+    enforcedPayload.model,
+    assignedAutocomplete.model,
+    "production must ignore client model on chat-fallback"
+  );
+  passed++;
+
+  const enforcedEmptyPrefixRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      message: "function hello() {\n  return '",
+      segments: { prefix: "   ", suffix: "" },
+      provider: "openai",
+      model: "gpt-4o",
+      languageId: "typescript"
+    },
+    enforcedEmptyPrefixRes,
+    router,
+    router["config"],
+    org
+  );
+  assert.equal(enforcedEmptyPrefixRes.statusCode, 200);
+  const enforcedEmptyPrefixPayload = JSON.parse(enforcedEmptyPrefixRes.body ?? "{}") as Record<
+    string,
+    unknown
+  >;
+  assert.equal(enforcedEmptyPrefixPayload.fim, false, "whitespace prefix uses chat-fallback");
+  assert.equal(enforcedEmptyPrefixPayload.provider, assignedAutocomplete.provider);
+  assert.equal(enforcedEmptyPrefixPayload.model, assignedAutocomplete.model);
   passed++;
 
   const multiLineRes = mockResponse();
