@@ -3,7 +3,7 @@ title: Inline autocomplete
 description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
 section: extension
 order: 3
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-12"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
@@ -12,30 +12,24 @@ The feature ships in production and is **on by default** (`coopAI.autocomplete.e
 
 ## Turn autocomplete off (or back on)
 
-### 1. Extension UI — header toggle (fastest)
+Autocomplete is controlled from **Settings → Preferences → Model & chat** — there is no toggle in the Coop sidebar header.
 
-Click **Autocomplete** in the Coop sidebar header to switch **On** or **Off**. The toggle updates `coopAI.autocomplete.enabled` at **global** scope.
-
-<!-- figures -->
-![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
-<!-- /figures -->
-
-**Success:** Label shows **On** or **Off**. When on, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
-
-### 2. Extension UI — Settings → Preferences → Model & chat
+### Extension UI — Settings → Preferences → Model & chat
 
 1. Open **CoopAI Settings** (gear icon in the sidebar title bar).
 2. Go to **Preferences** → **Model & chat**.
 3. Check or uncheck **Enable inline autocomplete**.
 4. Click **Save model settings**.
 
-<!-- figures -->
-![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+<!-- figures ml -->
+![Model & chat — assigned models, Enable live LLM chat, and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
-Use this screen together with **Enable live LLM chat** and the read-only assigned-model rows. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
+The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Use **Enable live LLM chat** on the same screen to control chat, quick actions, and edit mode. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
 
-### 3. File — VS Code User settings
+**Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
+
+### File — VS Code User settings
 
 Prefer **User** settings (not Workspace) so the preference stays consistent across folders:
 
@@ -45,7 +39,7 @@ Prefer **User** settings (not Workspace) so the preference stays consistent acro
 
 Coop strips legacy **workspace** `false` overrides on activate so an old folder setting cannot keep autocomplete off without your intent.
 
-### 4. Extension UI — Command Palette (optional)
+### Extension UI — Command Palette (optional)
 
 Run **CoopAI: Toggle Autocomplete** to flip the global enabled flag without opening JSON settings.
 
@@ -186,7 +180,7 @@ Org admins can view org completion metrics in the [admin portal](https://admin.c
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Confirm **Autocomplete On** in the sidebar or **Enable inline autocomplete** in Model & chat; sign in under **Settings → Account** |
+| **No ghost text** | Confirm **Enable inline autocomplete** is checked in **Settings → Preferences → Model & chat** and saved; sign in under **Settings → Account** |
 | **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
