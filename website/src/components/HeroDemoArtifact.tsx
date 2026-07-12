@@ -161,6 +161,8 @@ const TOOLS = [
   }
 ];
 
+const DEMO_MESSAGE_CARD = "rounded-lg border border-gray-200 bg-gray-50 p-4";
+
 const TIMING = {
   questionCharMs: 26,
   afterQuestionMs: 850,
@@ -558,13 +560,13 @@ export function HeroDemoArtifact() {
       }}
     >
       <div className="hero-demo-section">
-        <div className={`hero-demo-stage ${stageClass(stage === 1)} space-y-6`}>
-          <div className="font-mono text-sm text-gray-500">// question</div>
-          <div className="text-lg text-gray-900">
-            <span className="font-mono">
+        <div className={`hero-demo-stage ${stageClass(stage === 1)}`}>
+          <div className="mb-4 font-mono text-sm text-gray-500">// question</div>
+          <div className={DEMO_MESSAGE_CARD}>
+            <p className="font-mono text-sm leading-relaxed text-gray-800">
               {renderTypedQuestion(typedQuestion, scenario.question, scenario.questionFiles)}
-            </span>
-            {stage === 1 ? <span className="text-blue-500">|</span> : null}
+              {stage === 1 ? <span className="hero-demo-response-cursor text-blue-500">|</span> : null}
+            </p>
           </div>
         </div>
 
@@ -620,7 +622,7 @@ export function HeroDemoArtifact() {
               </span>
             ) : null}
           </div>
-          <div className="hero-demo-response-card space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className={`${DEMO_MESSAGE_CARD} space-y-4`}>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
               {renderStreamedBoldText(streamedSummary)}
               {showSummaryCursor ? (
