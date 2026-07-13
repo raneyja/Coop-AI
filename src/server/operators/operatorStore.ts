@@ -29,6 +29,8 @@ export type OperatorAuditEntry = {
   operatorName?: string;
   action: string;
   targetOrgId?: string;
+  /** Customer org display name when targetOrgId is set. */
+  orgName?: string;
   metadata: Record<string, unknown>;
   createdAt: Date;
 };
@@ -183,9 +185,10 @@ export class OperatorStore {
     }
     const result = await this.pool.query(
       `SELECT a.id, a.operator_id, o.email AS operator_email, o.name AS operator_name,
-              a.action, a.target_org_id, a.metadata, a.created_at
+              a.action, a.target_org_id, org.name AS org_name, a.metadata, a.created_at
        FROM operator_audit_log a
        JOIN operators o ON o.id = a.operator_id
+       LEFT JOIN organizations org ON org.id = a.target_org_id
        WHERE a.target_org_id = $1 ${cursorClause}
        ORDER BY a.id DESC
        LIMIT $2`,
@@ -210,9 +213,10 @@ export class OperatorStore {
     }
     const result = await this.pool.query(
       `SELECT a.id, a.operator_id, o.email AS operator_email, o.name AS operator_name,
-              a.action, a.target_org_id, a.metadata, a.created_at
+              a.action, a.target_org_id, org.name AS org_name, a.metadata, a.created_at
        FROM operator_audit_log a
        JOIN operators o ON o.id = a.operator_id
+       LEFT JOIN organizations org ON org.id = a.target_org_id
        ${cursorClause}
        ORDER BY a.id DESC
        LIMIT $1`,
@@ -342,7 +346,8 @@ function rowToAuditEntryWithOperator(row: Record<string, unknown>): OperatorAudi
   return {
     ...rowToAuditEntry(row),
     operatorEmail: row.operator_email ? String(row.operator_email) : undefined,
-    operatorName: row.operator_name ? String(row.operator_name) : undefined
+    operatorName: row.operator_name ? String(row.operator_name) : undefined,
+    orgName: row.org_name ? String(row.org_name) : undefined
   };
 }
 

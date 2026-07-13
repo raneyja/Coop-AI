@@ -811,7 +811,7 @@
     "migrate:production:chat-feed": "bash scripts/fix-production-chat-feed.sh",
     "admin:org": "node dist/admin-org.js",
     "ops:dev": "npm run dev --prefix ops",
-    "test:operator": "npx tsx src/server/operatorApi.test.ts && npx tsx src/server/authMiddleware.test.ts && npx tsx src/server/operators/operatorAuthConfig.test.ts",
+    "test:operator": "npx tsx src/server/operatorApi.test.ts && npx tsx src/server/authMiddleware.test.ts && npx tsx src/server/operators/operatorAuthConfig.test.ts && npx tsx src/server/orgStore.operatorSearch.test.ts",
     "watch": "npm-run-all -p watch:extension watch:webview",
     "watch:extension": "npm run build:extension -- --watch",
     "watch:webview": "npm-run-all -p watch:webview:css watch:webview:js",

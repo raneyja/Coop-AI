@@ -615,28 +615,10 @@ export class OrgStore {
     let idx = 1;
 
     if (filters.search?.trim()) {
-      const search = filters.search.trim();
-      const fuzzyParam = `$${idx++}`;
-      params.push(`%${search}%`);
-      const exactParam = `$${idx++}`;
-      params.push(search);
-      const prefixParam = `$${idx++}`;
-      params.push(`${search}%`);
-      clauses.push(`(
-        o.name ILIKE ${fuzzyParam}
-        OR COALESCE(o.billing_email, '') ILIKE ${fuzzyParam}
-        OR COALESCE(o.stripe_customer_id, '') ILIKE ${fuzzyParam}
-        OR o.id = ${exactParam}
-        OR o.id ILIKE ${prefixParam}
-        OR EXISTS (
-          SELECT 1
-          FROM users u
-          WHERE u.org_id = o.id
-            AND u.deactivated_at IS NULL
-            AND u.role IN ('admin', 'owner')
-            AND u.email ILIKE ${fuzzyParam}
-        )
-      )`);
+      const built = buildOperatorOrgSearchClause(filters.search.trim(), idx);
+      clauses.push(built.clause);
+      params.push(...built.params);
+      idx = built.nextIdx;
     }
     if (filters.plan) {
       clauses.push(`o.plan = $${idx++}`);
@@ -688,6 +670,41 @@ export class OrgStore {
       total
     };
   }
+}
+
+/**
+ * Builds the operator org search WHERE fragment.
+ * Exported for regression tests — `organizations.id` is UUID; text operators must cast.
+ */
+export function buildOperatorOrgSearchClause(
+  search: string,
+  startIdx: number
+): { clause: string; params: unknown[]; nextIdx: number } {
+  let idx = startIdx;
+  const params: unknown[] = [];
+  const fuzzyParam = `$${idx++}`;
+  params.push(`%${search}%`);
+  const exactParam = `$${idx++}`;
+  params.push(search);
+  const prefixParam = `$${idx++}`;
+  params.push(`${search}%`);
+  // o.id is UUID — cast to text before ILIKE/= or Postgres rejects the statement.
+  const clause = `(
+        o.name ILIKE ${fuzzyParam}
+        OR COALESCE(o.billing_email, '') ILIKE ${fuzzyParam}
+        OR COALESCE(o.stripe_customer_id, '') ILIKE ${fuzzyParam}
+        OR o.id::text = ${exactParam}
+        OR o.id::text ILIKE ${prefixParam}
+        OR EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.org_id = o.id
+            AND u.deactivated_at IS NULL
+            AND u.role IN ('admin', 'owner')
+            AND u.email ILIKE ${fuzzyParam}
+        )
+      )`;
+  return { clause, params, nextIdx: idx };
 }
 
 function rowToBilling(row: Record<string, unknown>): OrgBilling {

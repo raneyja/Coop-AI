@@ -93,7 +93,7 @@ export default function CustomersPage() {
             id="search"
             type="search"
             className="admin-input"
-            placeholder="Acme, admin@acme.com, org_…, cus_…"
+            placeholder="Acme, admin@acme.com, UUID, cus_…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
