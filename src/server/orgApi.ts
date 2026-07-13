@@ -19,7 +19,9 @@ import {
   requireOrgAdmin,
   requireOrgPlan,
   resolveAuthContext,
-  resolveOrgPlanFromDb
+  resolveAuthContextDetailed,
+  resolveOrgPlanFromDb,
+  writeOrgSuspended
 } from "./authMiddleware";
 import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
 import { AuditLogger, auditActor } from "./audit/auditLogger";
@@ -154,13 +156,17 @@ export async function handleOrgApiRequest(
     return false;
   }
 
-  const auth = await resolveAuthContext(
+  const { auth, orgSuspended } = await resolveAuthContextDetailed(
     parsed.headers,
     deps.orgStore,
     deps.serverConfig.legacyApiToken,
     deps.serverConfig.requireApiAuth,
     deps.userStore
   );
+  if (orgSuspended) {
+    writeOrgSuspended(response);
+    return true;
+  }
   if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) {
     writeJson(response, 401, { error: "unauthorized" });
     return true;

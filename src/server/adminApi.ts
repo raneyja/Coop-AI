@@ -51,6 +51,32 @@ export async function handleAdminApiRequest(
     return true;
   }
 
+  if (parsed.method === "POST" && parsed.pathname === "/v1/admin/enterprise-upgrade-request") {
+    if (!deps.operatorStore) {
+      writeJson(response, 503, { error: "operator_unavailable" });
+      return true;
+    }
+    const body = asRecord(parsed.body);
+    const companyName = String(body.orgName ?? auth.orgName ?? "").trim();
+    const contactEmail = String(body.email ?? auth.email ?? "").trim().toLowerCase();
+    const contactName = String(body.name ?? "").trim();
+    const notes = String(body.notes ?? "").trim();
+    if (!companyName || !contactEmail) {
+      writeJson(response, 400, { error: "invalid_request", message: "orgName and email are required." });
+      return true;
+    }
+
+    const message = [contactName, notes].filter(Boolean).join(" - ") || undefined;
+    await deps.operatorStore.createEnterpriseUpgradeRequest({
+      orgId: auth.orgId,
+      companyName,
+      contactEmail,
+      message
+    });
+    writeJson(response, 200, { ok: true });
+    return true;
+  }
+
   if (await handleAdminUsersRequest(parsed, response, deps, auth)) {
     return true;
   }
@@ -75,4 +101,8 @@ export async function handleAdminApiRequest(
 
   writeJson(response, 404, { error: "not found" });
   return true;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }

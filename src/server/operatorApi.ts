@@ -328,6 +328,13 @@ async function handleProvisionOrganization(
     const created = await deps.orgStore!.createApiKey(org.id, "bootstrap");
     apiKey = { id: created.record.id, label: created.record.label, rawKey: created.rawKey };
   }
+  const invite =
+    inviteResult && inviteResult.inviteToken
+      ? {
+          ...inviteResult,
+          inviteLink: adminPortalAcceptInviteUrl(loadBillingConfig().adminPortalUrl, inviteResult.inviteToken)
+        }
+      : inviteResult;
 
   await operatorAudit(deps, operator, "operator.org.provision", org.id, {
     name,
@@ -346,7 +353,7 @@ async function handleProvisionOrganization(
       plan: org.plan,
       seats: clampSeatCountForPlan(plan, seats)
     },
-    invite: inviteResult,
+    invite,
     apiKey
   });
   return true;
@@ -475,10 +482,6 @@ async function handlePatchOrg(
   deps: OperatorApiDeps,
   operator: OperatorContext
 ): Promise<boolean> {
-  if (!requireOperatorRole(operator, "billing", response)) {
-    return true;
-  }
-
   const org = await deps.orgStore!.getOrganization(orgId);
   if (!org) {
     writeJson(response, 404, { error: "organization not found" });
@@ -486,6 +489,21 @@ async function handlePatchOrg(
   }
 
   const body = asRecord(parsed.body);
+  const patchesSupportFields =
+    body.notes !== undefined || body.crmExternalId !== undefined || body.assigneeOperatorId !== undefined;
+  const patchesBillingFields = body.seats !== undefined || body.plan !== undefined;
+
+  if (!patchesSupportFields && !patchesBillingFields) {
+    writeJson(response, 400, { error: "invalid_request", message: "No supported fields were provided." });
+    return true;
+  }
+  if (patchesSupportFields && !requireOperatorRole(operator, "support", response)) {
+    return true;
+  }
+  if (patchesBillingFields && !requireOperatorRole(operator, "billing", response)) {
+    return true;
+  }
+
   const patchMeta: {
     operatorNotes?: string | null;
     crmExternalId?: string | null;
@@ -639,12 +657,15 @@ async function handleInviteUser(
       { orgStore: deps.orgStore!, userStore: deps.userStore, authTokenStore: deps.authTokenStore },
       { orgId, email, role, invitedByEmail: operator.email }
     );
+    const inviteLink = result.inviteToken
+      ? adminPortalAcceptInviteUrl(loadBillingConfig().adminPortalUrl, result.inviteToken)
+      : undefined;
     await operatorAudit(deps, operator, "operator.user.invite", orgId, {
       userId: result.user.id,
       email: result.user.email,
       role: result.user.role
     });
-    writeJson(response, 201, result);
+    writeJson(response, 201, { ...result, inviteLink });
   } catch (error) {
     if (isSeatLimitError(error)) {
       writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });
@@ -698,7 +719,12 @@ async function handleResendInvite(
   }
 
   await operatorAudit(deps, operator, "operator.user.resend_invite", orgId, { userId });
-  writeJson(response, 200, { ok: true, userId });
+  writeJson(response, 200, {
+    ok: true,
+    userId,
+    inviteToken,
+    inviteLink: adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken)
+  });
   return true;
 }
 

@@ -121,6 +121,48 @@ export type CustomerApiKey = {
   lastUsedAt?: string;
 };
 
+type BackendCustomerUser = {
+  id: string;
+  email: string;
+  role: string;
+  active?: boolean;
+  status?: CustomerUser["status"];
+  createdAt?: string;
+  lastLoginAt?: string | null;
+};
+
+function normalizeUser(user: BackendCustomerUser): CustomerUser {
+  const status =
+    user.status ??
+    (user.active === false ? "deactivated" : user.lastLoginAt ? "active" : "invited");
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role === "owner" ? "admin" : user.role,
+    status,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt ?? undefined
+  };
+}
+
+type BackendCustomerApiKey = {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsed?: string | null;
+  lastUsedAt?: string | null;
+};
+
+function normalizeApiKey(key: BackendCustomerApiKey): CustomerApiKey {
+  const lastUsedAt = key.lastUsedAt ?? key.lastUsed ?? undefined;
+  return {
+    id: key.id,
+    label: key.label,
+    createdAt: key.createdAt,
+    lastUsedAt: lastUsedAt ?? undefined
+  };
+}
+
 export type OperatorAuditEntry = {
   id: string;
   action: string;
@@ -159,6 +201,7 @@ export type ProvisionCustomerResult = {
 };
 
 const DEFAULT_API_BASE = "https://api.coop-ai.dev";
+const DEFAULT_ADMIN_PORTAL_BASE = "https://admin.coop-ai.dev";
 
 type RawRecord = Record<string, unknown>;
 
@@ -311,6 +354,16 @@ function resolveCoopApiBase(configured: string | undefined): string {
   return trimmed;
 }
 
+function resolveAdminPortalBase(configured: string | undefined): string {
+  const trimmed = configured?.trim().replace(/\/+$/, "").replace(/\/login$/, "") ?? "";
+  return trimmed || DEFAULT_ADMIN_PORTAL_BASE;
+}
+
+function adminPortalAcceptInviteUrl(token: string): string {
+  const base = resolveAdminPortalBase(process.env.NEXT_PUBLIC_COOP_ADMIN_PORTAL_URL);
+  return `${base}/accept-invite?token=${encodeURIComponent(token)}`;
+}
+
 export function getApiBase(): string {
   return resolveCoopApiBase(process.env.NEXT_PUBLIC_COOP_API_BASE);
 }
@@ -438,6 +491,20 @@ export type OrganizationListParams = {
   cursor?: string;
 };
 
+function mapOrganizationSort(
+  sort: OrganizationListParams["sort"],
+  order: OrganizationListParams["order"]
+): "name_asc" | "name_desc" | "created_asc" | "created_desc" | undefined {
+  const normalizedOrder = order === "desc" ? "desc" : "asc";
+  if (sort === "name") {
+    return normalizedOrder === "desc" ? "name_desc" : "name_asc";
+  }
+  if (sort === "createdAt") {
+    return normalizedOrder === "desc" ? "created_desc" : "created_asc";
+  }
+  return undefined;
+}
+
 export async function fetchOrganizations(
   params: OrganizationListParams = {}
 ): Promise<ApiResult<{ organizations: CustomerSummary[]; nextCursor?: string; total?: number }>> {
@@ -446,8 +513,8 @@ export async function fetchOrganizations(
   if (params.plan) search.set("plan", params.plan);
   if (params.billingStatus) search.set("billingStatus", params.billingStatus);
   if (params.onboardingIncomplete) search.set("onboardingIncomplete", "true");
-  if (params.sort) search.set("sort", params.sort);
-  if (params.order) search.set("order", params.order);
+  const mappedSort = mapOrganizationSort(params.sort, params.order);
+  if (mappedSort) search.set("sort", mappedSort);
   if (params.limit) search.set("limit", String(params.limit));
   if (params.cursor) search.set("cursor", params.cursor);
   const query = search.toString();
@@ -496,12 +563,31 @@ export async function provisionOrganization(
   }
   const orgRaw = asRecord(result.data.organization);
   const apiKeyRaw = asRecord(result.data.apiKey);
+  const inviteRaw = asRecord(result.data.invite);
+  const inviteUserRaw = asRecord(inviteRaw.user);
+  const inviteToken =
+    typeof inviteRaw.inviteToken === "string" && inviteRaw.inviteToken.trim()
+      ? inviteRaw.inviteToken.trim()
+      : undefined;
+  const inviteLink =
+    typeof inviteRaw.inviteLink === "string" && inviteRaw.inviteLink.trim()
+      ? inviteRaw.inviteLink.trim()
+      : inviteToken
+        ? adminPortalAcceptInviteUrl(inviteToken)
+        : undefined;
+  const inviteStatus = String(inviteRaw.inviteStatus ?? inviteRaw.status ?? "created");
+  const inviteEmail =
+    typeof inviteRaw.email === "string" && inviteRaw.email.trim()
+      ? inviteRaw.email
+      : typeof inviteUserRaw.email === "string"
+        ? inviteUserRaw.email
+        : undefined;
   return {
     ok: true,
     status: result.status,
     data: {
       organization: normalizeCustomerDetail({ ...orgRaw, id: orgRaw.id, name: orgRaw.name, plan: orgRaw.plan }),
-      invite: result.data.invite as ProvisionCustomerResult["invite"],
+      invite: inviteEmail ? { email: inviteEmail, status: inviteStatus, inviteLink } : undefined,
       bootstrapKey: apiKeyRaw.rawKey
         ? {
             rawKey: String(apiKeyRaw.rawKey),
@@ -564,44 +650,70 @@ export async function inviteOrganizationUser(
   email: string,
   role = "admin"
 ): Promise<ApiResult<{ user: CustomerUser; inviteLink?: string }>> {
-  return coopFetch<{ user: CustomerUser; inviteLink?: string }>(
+  const result = await coopFetch<{
+    user?: BackendCustomerUser;
+    inviteLink?: string;
+    inviteToken?: string;
+  }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/users/invite`,
     {
       method: "POST",
       body: JSON.stringify({ email: email.trim().toLowerCase(), role })
     }
   );
+  if (!result.ok || !result.data?.user) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const inviteLink = result.data.inviteLink ?? (result.data.inviteToken ? adminPortalAcceptInviteUrl(result.data.inviteToken) : undefined);
+  return {
+    ok: true,
+    status: result.status,
+    data: { user: normalizeUser(result.data.user), inviteLink }
+  };
 }
 
 export async function resendOrganizationInvite(
   orgId: string,
   userId: string
 ): Promise<ApiResult<{ inviteLink?: string }>> {
-  return coopFetch<{ inviteLink?: string }>(
+  const result = await coopFetch<{ inviteLink?: string; inviteToken?: string }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/users/${encodeURIComponent(userId)}/resend-invite`,
     { method: "POST", body: "{}" }
   );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const inviteLink = result.data?.inviteLink ?? (result.data?.inviteToken ? adminPortalAcceptInviteUrl(result.data.inviteToken) : undefined);
+  return { ok: true, status: result.status, data: { inviteLink } };
 }
 
 export async function fetchOrganizationUsers(
   orgId: string
 ): Promise<ApiResult<{ users: CustomerUser[] }>> {
-  return coopFetch<{ users: CustomerUser[] }>(
+  const result = await coopFetch<{ users?: BackendCustomerUser[] }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/users`
   );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: { users: (result.data?.users ?? []).map(normalizeUser) }
+  };
 }
 
 export async function fetchOrganizationApiKeys(
   orgId: string
 ): Promise<ApiResult<{ keys: CustomerApiKey[] }>> {
-  const result = await coopFetch<{ keys?: CustomerApiKey[]; apiKeys?: CustomerApiKey[] }>(
+  const result = await coopFetch<{ keys?: BackendCustomerApiKey[]; apiKeys?: BackendCustomerApiKey[] }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/api-keys`
   );
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
   const raw = result.data?.keys ?? result.data?.apiKeys ?? [];
-  return { ok: true, status: result.status, data: { keys: raw } };
+  return { ok: true, status: result.status, data: { keys: raw.map(normalizeApiKey) } };
 }
 
 export async function createOrganizationApiKey(
@@ -609,9 +721,9 @@ export async function createOrganizationApiKey(
   label: string
 ): Promise<ApiResult<{ key: CustomerApiKey; rawKey: string }>> {
   const result = await coopFetch<{
-    key?: CustomerApiKey;
+    key?: BackendCustomerApiKey;
     rawKey?: string;
-    apiKey?: CustomerApiKey & { rawKey?: string };
+    apiKey?: BackendCustomerApiKey & { rawKey?: string };
   }>(`/v1/operator/organizations/${encodeURIComponent(orgId)}/api-keys`, {
     method: "POST",
     body: JSON.stringify({ label: label.trim() || "API key" })
@@ -624,7 +736,7 @@ export async function createOrganizationApiKey(
   if (!rawKey || !key) {
     return { ok: false, status: 502, error: "API key was created but the response was incomplete." };
   }
-  return { ok: true, status: result.status, data: { key, rawKey } };
+  return { ok: true, status: result.status, data: { key: normalizeApiKey(key), rawKey } };
 }
 
 export async function revokeOrganizationApiKey(
@@ -641,10 +753,18 @@ export async function revokeAllOrganizationApiKeys(
   orgId: string,
   confirmName: string
 ): Promise<ApiResult<{ revoked: number }>> {
-  return coopFetch<{ revoked: number }>(
+  const result = await coopFetch<{ revoked?: number; revokedCount?: number }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/api-keys/revoke-all`,
     { method: "POST", body: JSON.stringify({ confirmName: confirmName.trim() }) }
   );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: { revoked: Number(result.data?.revoked ?? result.data?.revokedCount ?? 0) }
+  };
 }
 
 export async function reindexOrganizationEstate(
@@ -668,7 +788,16 @@ export async function updateOrganizationRepoAccess(
   if (!result.ok || !result.data) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
-  return { ok: true, status: result.status, data: normalizeCustomerDetail(result.data) };
+  if (result.data.name && result.data.billing) {
+    return { ok: true, status: result.status, data: normalizeCustomerDetail(result.data) };
+  }
+  return fetchOrganization(
+    typeof result.data.orgId === "string"
+      ? result.data.orgId
+      : typeof result.data.id === "string"
+        ? result.data.id
+        : orgId
+  );
 }
 
 export async function manualProUpgrade(orgId: string): Promise<ApiResult<CustomerDetail>> {
@@ -679,7 +808,45 @@ export async function manualProUpgrade(orgId: string): Promise<ApiResult<Custome
   if (!result.ok || !result.data) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
-  return { ok: true, status: result.status, data: normalizeCustomerDetail(result.data) };
+  if (result.data.name && result.data.billing) {
+    return { ok: true, status: result.status, data: normalizeCustomerDetail(result.data) };
+  }
+  return fetchOrganization(
+    typeof result.data.orgId === "string"
+      ? result.data.orgId
+      : typeof result.data.id === "string"
+        ? result.data.id
+        : orgId
+  );
+}
+
+function normalizeOrgAuditEntry(raw: RawRecord, source: "customer" | "operator"): OrgAuditEntry {
+  const metadata = asRecord(raw.metadata);
+  const operatorPrincipal =
+    typeof raw.operatorEmail === "string" && raw.operatorEmail
+      ? raw.operatorEmail
+      : typeof raw.operatorId === "string"
+        ? raw.operatorId
+        : undefined;
+  return {
+    id: `${source}:${String(raw.id ?? "")}`,
+    action: String(raw.action ?? ""),
+    principal: source === "operator" ? operatorPrincipal : raw.principal ? String(raw.principal) : undefined,
+    createdAt: String(raw.createdAt ?? ""),
+    metadata
+  };
+}
+
+function mergeAuditCursor(...cursors: Array<string | undefined>): string | undefined {
+  const values = cursors.filter((value): value is string => Boolean(value));
+  if (values.length === 0) {
+    return undefined;
+  }
+  const numeric = values.map((value) => Number(value));
+  if (numeric.every((value) => Number.isFinite(value))) {
+    return String(Math.min(...numeric));
+  }
+  return values[0];
 }
 
 export async function fetchOrganizationAudit(
@@ -689,9 +856,41 @@ export async function fetchOrganizationAudit(
   const params = new URLSearchParams();
   params.set("limit", String(options?.limit ?? 50));
   if (options?.cursor) params.set("cursor", options.cursor);
-  return coopFetch<{ entries: OrgAuditEntry[]; nextCursor?: string }>(
+  const result = await coopFetch<{
+    customerAudit?: { entries?: RawRecord[]; nextCursor?: string };
+    operatorAudit?: { entries?: RawRecord[]; nextCursor?: string };
+    entries?: RawRecord[];
+    nextCursor?: string;
+  }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/audit?${params.toString()}`
   );
+  if (!result.ok || !result.data) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  if (Array.isArray(result.data.entries)) {
+    return {
+      ok: true,
+      status: result.status,
+      data: {
+        entries: result.data.entries.map((entry) => normalizeOrgAuditEntry(asRecord(entry), "customer")),
+        nextCursor: result.data.nextCursor
+      }
+    };
+  }
+
+  const customerAudit = asRecord(result.data.customerAudit);
+  const operatorAudit = asRecord(result.data.operatorAudit);
+  const customerEntries = Array.isArray(customerAudit.entries) ? (customerAudit.entries as RawRecord[]) : [];
+  const operatorEntries = Array.isArray(operatorAudit.entries) ? (operatorAudit.entries as RawRecord[]) : [];
+  const entries = [
+    ...customerEntries.map((entry) => normalizeOrgAuditEntry(asRecord(entry), "customer")),
+    ...operatorEntries.map((entry) => normalizeOrgAuditEntry(asRecord(entry), "operator"))
+  ].sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
+  const nextCursor = mergeAuditCursor(
+    typeof customerAudit.nextCursor === "string" ? customerAudit.nextCursor : undefined,
+    typeof operatorAudit.nextCursor === "string" ? operatorAudit.nextCursor : undefined
+  );
+  return { ok: true, status: result.status, data: { entries, nextCursor } };
 }
 
 export async function fetchOperatorActivity(
@@ -700,9 +899,31 @@ export async function fetchOperatorActivity(
   const params = new URLSearchParams();
   params.set("limit", String(options?.limit ?? 50));
   if (options?.cursor) params.set("cursor", options.cursor);
-  return coopFetch<{ entries: OperatorAuditEntry[]; nextCursor?: string }>(
+  const result = await coopFetch<{ entries?: RawRecord[]; nextCursor?: string }>(
     `/v1/operator/activity?${params.toString()}`
   );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const entries = (result.data?.entries ?? []).map((entry) => {
+    const raw = asRecord(entry);
+    return {
+      id: String(raw.id ?? ""),
+      action: String(raw.action ?? ""),
+      operatorEmail: raw.operatorEmail ? String(raw.operatorEmail) : undefined,
+      operatorId: raw.operatorId ? String(raw.operatorId) : undefined,
+      orgId:
+        typeof raw.orgId === "string"
+          ? raw.orgId
+          : typeof raw.targetOrgId === "string"
+            ? raw.targetOrgId
+            : undefined,
+      orgName: raw.orgName ? String(raw.orgName) : undefined,
+      createdAt: String(raw.createdAt ?? ""),
+      metadata: asRecord(raw.metadata)
+    } satisfies OperatorAuditEntry;
+  });
+  return { ok: true, status: result.status, data: { entries, nextCursor: result.data?.nextCursor } };
 }
 
 export function planLabel(plan: string): string {

@@ -142,6 +142,94 @@ void (async () => {
   assert.equal(suspendOk.statusCode, 200);
   assert.equal(auditAction, "operator.org.suspend");
 
+  // Support can patch support metadata fields.
+  const support: OpCtx = {
+    operatorId: "op-support",
+    email: "support@coop-ai.dev",
+    role: "support"
+  };
+  let patchedMetadata: Record<string, unknown> | undefined;
+  const supportPatchRes = mockResponse();
+  const supportPatchHandled = await handleOperatorApiRequest(
+    {
+      method: "PATCH",
+      pathname: "/v1/operator/organizations/org-1",
+      headers: { authorization: "Bearer ops-token" },
+      body: { notes: "Needs follow-up", crmExternalId: "crm-123", assigneeOperatorId: "op-support" }
+    },
+    supportPatchRes,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "enterprise",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrganizationBilling: async () => ({
+          seatCount: 10,
+          billingStatus: "active"
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "manual_enterprise"
+        }),
+        updateOrgOperatorMetadata: async (_orgId: string, patch: Record<string, unknown>) => {
+          patchedMetadata = patch;
+        },
+        getCodeHostInstallation: async () => undefined,
+        listOrgRepos: async () => []
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => support,
+        recordAudit: async (input: { action: string }) => ({
+          id: "2",
+          operatorId: support.operatorId,
+          action: input.action,
+          metadata: {},
+          createdAt: new Date()
+        })
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(supportPatchHandled, true);
+  assert.equal(supportPatchRes.statusCode, 200);
+  assert.deepEqual(patchedMetadata, {
+    operatorNotes: "Needs follow-up",
+    crmExternalId: "crm-123",
+    assigneeOperatorId: "op-support"
+  });
+
+  // Support cannot patch billing fields (seats/plan).
+  const supportBillingPatchRes = mockResponse();
+  const supportBillingPatchHandled = await handleOperatorApiRequest(
+    {
+      method: "PATCH",
+      pathname: "/v1/operator/organizations/org-1",
+      headers: { authorization: "Bearer ops-token" },
+      body: { seats: 25 }
+    },
+    supportBillingPatchRes,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "enterprise",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => support
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(supportBillingPatchHandled, true);
+  assert.equal(supportBillingPatchRes.statusCode, 403);
+  assert.match(supportBillingPatchRes.body ?? "", /operator_role_required/);
+
   // Suspended org returns org_suspended via auth middleware.
   const suspendedStore = {
     resolveAuth: async () => ({

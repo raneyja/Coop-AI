@@ -33,6 +33,7 @@ function createOrgStore(input: {
   plan: "pro" | "enterprise";
   repos: OrgRepoRecord[];
   seatCount?: number;
+  suspended?: boolean;
 }): OrgStore {
   const store = new Map(input.repos.map((entry) => [entry.repoId, { ...entry }]));
   const auth: AuthContext = {
@@ -69,7 +70,8 @@ function createOrgStore(input: {
       };
       store.set(repoId, next);
       return next;
-    }
+    },
+    isOrgSuspended: async () => input.suspended === true
   } as unknown as OrgStore;
 }
 
@@ -124,6 +126,17 @@ void (async () => {
     ]
   });
   const proDeps = baseDeps(proStore);
+
+  const suspendedStore = createOrgStore({
+    orgId: "org-suspended",
+    plan: "pro",
+    repos: [],
+    suspended: true
+  });
+  const suspendedDeps = baseDeps(suspendedStore);
+  const suspendedMe = await request(suspendedDeps, "GET", "/v1/me");
+  assert.equal(suspendedMe.statusCode, 403);
+  assert.match(suspendedMe.body ?? "", /org_suspended/);
 
   const me = await request(proDeps, "GET", "/v1/me");
   assert.equal(me.statusCode, 200);

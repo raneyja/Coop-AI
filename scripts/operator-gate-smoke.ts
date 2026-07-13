@@ -20,9 +20,8 @@ async function main(): Promise<void> {
   }
   const { token } = await opStore.createSession(op.id);
   const org = await orgStore.createOrganization(`Gate Test Org ${Date.now()}`, "enterprise");
-  await orgStore.updateOrganizationMetadata(org.id, {
-    provenance: "manual_enterprise",
-    operatorStatus: "active"
+  await orgStore.updateOrgOperatorMetadata(org.id, {
+    provenance: "manual_enterprise"
   });
   await orgStore.updateOrganizationBilling(org.id, {
     seatCount: 5,

@@ -5,6 +5,7 @@ import type { UsageTracker } from "./usageTracker";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
 import type { OrgStore } from "./orgStore";
+import type { OperatorStore } from "./operators/operatorStore";
 import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
 
@@ -14,6 +15,7 @@ export type AdminApiDeps = {
   authTokenStore?: AuthTokenStore;
   integrationStore?: IntegrationConnectionStore;
   scopePolicyStore?: IntegrationScopePolicyStore;
+  operatorStore?: OperatorStore;
   serverConfig: ServerConfig;
   auditLogger?: AuditLogger;
   usageTracker?: UsageTracker;

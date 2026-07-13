@@ -35,7 +35,14 @@ import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
 import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
-import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import {
+  authUserId,
+  requireAuth,
+  requireOrgPlan,
+  resolveAuthContext,
+  resolveAuthContextDetailed,
+  writeOrgSuspended
+} from "../server/authMiddleware";
 import { requireRemoteCodePlan } from "../server/planGates";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
@@ -423,13 +430,18 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         body: parsed.body
       };
 
-      const auth = await resolveAuthContext(
+      const { auth, orgSuspended } = await resolveAuthContextDetailed(
         parsed.headers,
         orgStore,
         serverConfig.legacyApiToken,
         serverConfig.requireApiAuth,
         userStore
       );
+
+      if (orgSuspended && !parsed.pathname.startsWith("/v1/operator/")) {
+        writeOrgSuspended(response);
+        return;
+      }
 
       if (
         await handleGitHubAppApiRequest(orgParsed, response, {
@@ -663,6 +675,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           authTokenStore,
           integrationStore,
           scopePolicyStore,
+          operatorStore,
           serverConfig,
           auditLogger,
           usageTracker

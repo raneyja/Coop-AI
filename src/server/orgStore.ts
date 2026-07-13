@@ -108,7 +108,9 @@ export type OperatorOrganizationListItem = {
   createdAt: Date;
   billingStatus?: string;
   billingEmail?: string;
+  adminEmail?: string;
   seatCount?: number;
+  stripeCustomerId?: string;
   operatorStatus?: OrgOperatorStatus;
   provenance?: OrgOperatorProvenance;
 };
@@ -613,8 +615,28 @@ export class OrgStore {
     let idx = 1;
 
     if (filters.search?.trim()) {
-      clauses.push(`o.name ILIKE $${idx++}`);
-      params.push(`%${filters.search.trim()}%`);
+      const search = filters.search.trim();
+      const fuzzyParam = `$${idx++}`;
+      params.push(`%${search}%`);
+      const exactParam = `$${idx++}`;
+      params.push(search);
+      const prefixParam = `$${idx++}`;
+      params.push(`${search}%`);
+      clauses.push(`(
+        o.name ILIKE ${fuzzyParam}
+        OR COALESCE(o.billing_email, '') ILIKE ${fuzzyParam}
+        OR COALESCE(o.stripe_customer_id, '') ILIKE ${fuzzyParam}
+        OR o.id = ${exactParam}
+        OR o.id ILIKE ${prefixParam}
+        OR EXISTS (
+          SELECT 1
+          FROM users u
+          WHERE u.org_id = o.id
+            AND u.deactivated_at IS NULL
+            AND u.role IN ('admin', 'owner')
+            AND u.email ILIKE ${fuzzyParam}
+        )
+      )`);
     }
     if (filters.plan) {
       clauses.push(`o.plan = $${idx++}`);
@@ -644,7 +666,16 @@ export class OrgStore {
 
     const result = await this.pool.query(
       `SELECT o.id, o.name, o.plan, o.created_at, o.operator_status, o.provenance,
-              o.billing_status, o.billing_email, o.seat_count
+              o.billing_status, o.billing_email, o.seat_count, o.stripe_customer_id,
+              (
+                SELECT u.email
+                FROM users u
+                WHERE u.org_id = o.id
+                  AND u.deactivated_at IS NULL
+                  AND u.role IN ('owner', 'admin')
+                ORDER BY CASE WHEN u.role = 'owner' THEN 0 ELSE 1 END, u.created_at ASC
+                LIMIT 1
+              ) AS admin_email
        FROM organizations o
        ${where}
        ORDER BY ${orderBy}
@@ -746,7 +777,9 @@ function rowToOperatorOrganizationListItem(row: Record<string, unknown>): Operat
     createdAt: new Date(String(row.created_at)),
     billingStatus: row.billing_status ? String(row.billing_status) : undefined,
     billingEmail: row.billing_email ? String(row.billing_email) : undefined,
+    adminEmail: row.admin_email ? String(row.admin_email) : undefined,
     seatCount: row.seat_count != null ? Number(row.seat_count) : undefined,
+    stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : undefined,
     operatorStatus: row.operator_status
       ? (String(row.operator_status) as OrgOperatorStatus)
       : undefined,
