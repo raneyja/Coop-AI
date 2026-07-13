@@ -230,6 +230,92 @@ void (async () => {
   assert.equal(supportBillingPatchRes.statusCode, 403);
   assert.match(supportBillingPatchRes.body ?? "", /operator_role_required/);
 
+  // Stripe-managed org cannot PATCH seats directly.
+  const billingOp: OpCtx = {
+    operatorId: "op-billing",
+    email: "billing@coop-ai.dev",
+    role: "billing"
+  };
+  const stripePatchRes = mockResponse();
+  const stripePatchHandled = await handleOperatorApiRequest(
+    {
+      method: "PATCH",
+      pathname: "/v1/operator/organizations/org-1",
+      headers: { authorization: "Bearer ops-token" },
+      body: { seats: 5 }
+    },
+    stripePatchRes,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrganizationBilling: async () => ({
+          seatCount: 1,
+          billingStatus: "active",
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123"
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => billingOp
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(stripePatchHandled, true);
+  assert.equal(stripePatchRes.statusCode, 409);
+  assert.match(stripePatchRes.body ?? "", /stripe_managed/);
+
+  // Seat-change link returns Stripe portal URL without mutating Coop seats.
+  const seatLinkRes = mockResponse();
+  let seatCountUpdated = false;
+  const seatLinkHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/seat-change-link",
+      headers: { authorization: "Bearer ops-token" },
+      body: { seats: 3 }
+    },
+    seatLinkRes,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrganizationBilling: async () => ({
+          seatCount: 1,
+          billingStatus: "active",
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123"
+        }),
+        updateOrganizationBilling: async () => {
+          seatCountUpdated = true;
+        }
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => billingOp,
+        recordAudit: async () => undefined
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        retrieveSubscription: async () => ({ id: "sub_123", status: "active", quantity: 1, itemId: "si_123" }),
+        createBillingPortalSession: async () => ({ url: "https://billing.stripe.com/session/test" })
+      } as never
+    })
+  );
+  assert.equal(seatLinkHandled, true);
+  assert.equal(seatLinkRes.statusCode, 200);
+  assert.match(seatLinkRes.body ?? "", /billing\.stripe\.com/);
+  assert.equal(seatCountUpdated, false);
+
   // Suspended org returns org_suspended via auth middleware.
   const suspendedStore = {
     resolveAuth: async () => ({

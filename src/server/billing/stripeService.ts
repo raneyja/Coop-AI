@@ -7,6 +7,7 @@ type StripeSubscription = {
   id: string;
   status: string;
   quantity?: number;
+  itemId?: string;
 };
 
 export type StripeCheckoutSession = {
@@ -74,10 +75,31 @@ export class StripeService {
     return json;
   }
 
-  public async createBillingPortalSession(customerId: string): Promise<StripePortal> {
+  public async createBillingPortalSession(
+    customerId: string,
+    options?: {
+      subscriptionId?: string;
+      subscriptionItemId?: string;
+      quantity?: number;
+    }
+  ): Promise<StripePortal> {
     const params = new URLSearchParams();
     params.set("customer", customerId);
     params.set("return_url", this.config.billingPortalReturnUrl);
+    if (
+      options?.subscriptionId &&
+      options.subscriptionItemId &&
+      options.quantity != null &&
+      options.quantity >= 1
+    ) {
+      params.set("flow_data[type]", "subscription_update_confirm");
+      params.set("flow_data[subscription_update_confirm][subscription]", options.subscriptionId);
+      params.set("flow_data[subscription_update_confirm][items][0][id]", options.subscriptionItemId);
+      params.set(
+        "flow_data[subscription_update_confirm][items][0][quantity]",
+        String(Math.max(1, Math.floor(options.quantity)))
+      );
+    }
     return this.postForm<StripePortal>("/v1/billing_portal/sessions", params);
   }
 
@@ -93,16 +115,17 @@ export class StripeService {
     );
     const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
       error?: { message?: string };
-      items?: { data?: Array<{ quantity?: number }> };
+      items?: { data?: Array<{ id?: string; quantity?: number }> };
     };
     if (!response.ok) {
       throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
     }
-    const quantity = json.items?.data?.[0]?.quantity;
+    const item = json.items?.data?.[0];
     return {
       id: json.id,
       status: json.status,
-      quantity: quantity ?? json.quantity
+      quantity: item?.quantity ?? json.quantity,
+      itemId: item?.id
     };
   }
 

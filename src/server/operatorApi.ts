@@ -38,6 +38,7 @@ export type OperatorApiDeps = {
   serverConfig: ServerConfig;
   operatorAuthConfig: OperatorAuthConfig;
   operatorGoogleAuth?: OperatorGoogleAuthService;
+  stripeService?: StripeService;
   emailService?: EmailService;
   auditLogger?: AuditLogger;
   jobQueue?: JobQueue;
@@ -411,6 +412,9 @@ async function handleOrgScopedRequest(
   if (suffix === "/upgrade-pro" && parsed.method === "POST") {
     return handleUpgradePro(orgId, response, deps, operator);
   }
+  if (suffix === "/seat-change-link" && parsed.method === "POST") {
+    return handleSeatChangeLink(orgId, parsed, response, deps, operator);
+  }
   if (suffix === "/audit" && parsed.method === "GET") {
     return handleOrgAudit(orgId, parsed, response, deps, operator);
   }
@@ -501,6 +505,16 @@ async function handlePatchOrg(
     return true;
   }
   if (patchesBillingFields && !requireOperatorRole(operator, "billing", response)) {
+    return true;
+  }
+
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  if (patchesBillingFields && billing?.stripeCustomerId) {
+    writeJson(response, 409, {
+      error: "stripe_managed",
+      message:
+        "Plan and seats are billed in Stripe. Create a seat-change approval link instead of editing Coop seats directly."
+    });
     return true;
   }
 
@@ -885,6 +899,105 @@ async function handleRepoAccessMode(
 
   await operatorAudit(deps, operator, "operator.org.repo_access_mode", orgId, { repoAccessMode: mode });
   writeJson(response, 200, { id: org.id, repoAccessMode: org.repoAccessMode });
+  return true;
+}
+
+async function handleSeatChangeLink(
+  orgId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "billing", response)) {
+    return true;
+  }
+
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  if (!billing?.stripeCustomerId || !billing.stripeSubscriptionId) {
+    writeJson(response, 400, {
+      error: "stripe_subscription_required",
+      message: "This organization has no Stripe subscription. Use Update billing for manual (non-Stripe) orgs."
+    });
+    return true;
+  }
+
+  const body = asRecord(parsed.body);
+  const seats = Math.max(1, Math.floor(Number(body.seats) || 0));
+  if (!Number.isFinite(seats) || seats < 1) {
+    writeJson(response, 400, { error: "invalid_request", message: "seats must be a positive integer." });
+    return true;
+  }
+  if (seats === billing.seatCount) {
+    writeJson(response, 400, {
+      error: "seats_unchanged",
+      message: `Organization already has ${billing.seatCount} seat(s).`
+    });
+    return true;
+  }
+
+  const stripe = deps.stripeService ?? new StripeService(loadBillingConfig());
+  if (!stripe.isConfigured()) {
+    writeJson(response, 503, { error: "billing_unavailable", message: "Stripe is not configured on this server." });
+    return true;
+  }
+
+  let subscription;
+  try {
+    subscription = await stripe.retrieveSubscription(billing.stripeSubscriptionId);
+  } catch (error) {
+    writeJson(response, 502, {
+      error: "stripe_error",
+      message: error instanceof Error ? error.message : "Could not load Stripe subscription."
+    });
+    return true;
+  }
+
+  if (!subscription.itemId) {
+    writeJson(response, 502, {
+      error: "stripe_item_missing",
+      message: "Stripe subscription has no line item to update."
+    });
+    return true;
+  }
+
+  let portal;
+  try {
+    portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
+      subscriptionId: subscription.id,
+      subscriptionItemId: subscription.itemId,
+      quantity: seats
+    });
+  } catch (error) {
+    writeJson(response, 502, {
+      error: "stripe_portal_failed",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Could not create Stripe approval link. Ensure Customer Portal allows subscription quantity updates."
+    });
+    return true;
+  }
+
+  await operatorAudit(deps, operator, "operator.org.seat_change_link", orgId, {
+    fromSeats: billing.seatCount,
+    toSeats: seats,
+    stripeSubscriptionId: subscription.id
+  });
+
+  writeJson(response, 200, {
+    url: portal.url,
+    currentSeats: billing.seatCount,
+    requestedSeats: seats,
+    message:
+      "Send this link to the customer billing contact. Coop seats update after they confirm in Stripe."
+  });
   return true;
 }
 

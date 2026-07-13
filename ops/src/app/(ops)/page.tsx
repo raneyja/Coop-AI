@@ -5,8 +5,7 @@ import Link from "next/link";
 import {
   fetchAttentionQueue,
   formatDate,
-  type AttentionQueue,
-  type CustomerSummary
+  type AttentionQueue
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
@@ -15,20 +14,6 @@ function AttentionCount({ count }: { count: number }) {
     return <span className="admin-chip admin-chip--muted">None</span>;
   }
   return <span className="admin-chip admin-chip--warn">{count}</span>;
-}
-
-function CustomerRow({ org }: { org: CustomerSummary }) {
-  return (
-    <Link href={`/customers/${org.id}`} className="admin-list-row">
-      <div className="min-w-0">
-        <p className="truncate font-medium text-white">{org.name}</p>
-        <p className="truncate text-xs text-coop-muted">{org.adminEmail ?? org.billingEmail ?? org.id}</p>
-      </div>
-      <span className={org.plan === "enterprise" ? "admin-chip admin-chip--plan-enterprise" : org.plan === "pro" ? "admin-chip admin-chip--plan-pro" : "admin-chip admin-chip--plan-free"}>
-        {org.plan}
-      </span>
-    </Link>
-  );
 }
 
 export default function AttentionQueuePage() {
@@ -143,7 +128,15 @@ export default function AttentionQueuePage() {
             {queue?.pastDue.length ? (
               <div className="admin-list">
                 {queue.pastDue.map((org) => (
-                  <CustomerRow key={org.id} org={org} />
+                  <div key={org.id} className="admin-list-row flex-wrap justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-white">{org.name}</p>
+                      <p className="text-xs text-coop-muted">Follow up on payment · open Stripe from customer detail</p>
+                    </div>
+                    <Link href={`/customers/${org.id}?focus=billing`} className="admin-btn-secondary shrink-0">
+                      Open billing
+                    </Link>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -156,13 +149,25 @@ export default function AttentionQueuePage() {
             {queue?.invitePending.length ? (
               <div className="admin-list">
                 {queue.invitePending.map((item) => (
-                  <Link key={`${item.orgId}-${item.email}`} href={`/customers/${item.orgId}`} className="admin-list-row">
-                    <div>
+                  <div
+                    key={`${item.orgId}-${item.email}`}
+                    className="admin-list-row flex-wrap justify-between gap-3"
+                  >
+                    <div className="min-w-0">
                       <p className="font-medium text-white">{item.orgName}</p>
                       <p className="text-xs text-coop-muted">{item.email}</p>
+                      <p className="mt-1 text-xs text-coop-muted">Next step: resend invite from Users</p>
                     </div>
-                    <span className="admin-chip admin-chip--warn">{item.daysPending}d pending</span>
-                  </Link>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="admin-chip admin-chip--warn">{item.daysPending}d pending</span>
+                      <Link
+                        href={`/customers/${item.orgId}?focus=users`}
+                        className="admin-btn-secondary"
+                      >
+                        Resend invite
+                      </Link>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -175,15 +180,23 @@ export default function AttentionQueuePage() {
             {queue?.indexingErrors.length ? (
               <div className="admin-list">
                 {queue.indexingErrors.map((item) => (
-                  <Link key={item.orgId} href={`/customers/${item.orgId}`} className="admin-list-row">
-                    <div>
+                  <div key={item.orgId} className="admin-list-row flex-wrap justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="font-medium text-white">{item.orgName}</p>
+                      <p className="mt-1 text-xs text-coop-muted">
+                        Next step: open customer → check GitHub App install / Deep-Index for this repo.
+                      </p>
                       {item.lastError ? (
-                        <p className="truncate text-xs text-red-300">{item.lastError}</p>
+                        <p className="mt-2 break-words text-xs text-coop-muted/90">{item.lastError}</p>
                       ) : null}
                     </div>
-                    <span className="admin-chip admin-chip--danger">{item.errorCount} errors</span>
-                  </Link>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="admin-chip admin-chip--danger">{item.errorCount} errors</span>
+                      <Link href={`/customers/${item.orgId}`} className="admin-btn-secondary">
+                        Review customer
+                      </Link>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -196,12 +209,25 @@ export default function AttentionQueuePage() {
             {queue?.seatOverage.length ? (
               <div className="admin-list">
                 {queue.seatOverage.map((item) => (
-                  <Link key={item.orgId} href={`/customers/${item.orgId}`} className="admin-list-row">
-                    <p className="font-medium text-white">{item.orgName}</p>
-                    <span className="admin-chip admin-chip--warn">
-                      {item.seatsUsed} / {item.seats} seats
-                    </span>
-                  </Link>
+                  <div key={item.orgId} className="admin-list-row flex-wrap justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-white">{item.orgName}</p>
+                      <p className="mt-1 text-xs text-coop-muted">
+                        Next step: create a Stripe seat-change approval link on billing.
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="admin-chip admin-chip--warn">
+                        {item.seatsUsed} / {item.seats} seats
+                      </span>
+                      <Link
+                        href={`/customers/${item.orgId}?focus=billing`}
+                        className="admin-btn-secondary"
+                      >
+                        Request seats
+                      </Link>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (

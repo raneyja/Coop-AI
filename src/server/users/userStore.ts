@@ -172,8 +172,15 @@ export class UserStore {
 
   public async listOrgUsers(orgId: string): Promise<UserRecord[]> {
     const result = await this.pool.query(
-      `SELECT id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at
-       FROM users WHERE org_id = $1 ORDER BY created_at ASC`,
+      `SELECT u.id, u.org_id, u.email, u.idp_subject, u.idp_provider, u.role,
+              COALESCE(
+                u.last_login_at,
+                (SELECT MAX(s.last_active_at) FROM user_sessions s WHERE s.user_id = u.id)
+              ) AS last_login_at,
+              u.deactivated_at, u.created_at
+       FROM users u
+       WHERE u.org_id = $1
+       ORDER BY u.created_at ASC`,
       [orgId]
     );
     return result.rows.map(rowToUser);
@@ -244,6 +251,7 @@ export class UserStore {
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [tokenHash, userId, orgId, expiresAt, authProvider ?? null]
     );
+    await this.pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [userId]);
     return { token, userId, orgId, expiresAt };
   }
 

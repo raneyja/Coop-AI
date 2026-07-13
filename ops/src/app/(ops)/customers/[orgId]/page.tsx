@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { getStoredMe } from "@/lib/auth";
 import {
   canMutateBilling,
@@ -28,6 +28,7 @@ import {
   resendOrganizationInvite,
   revokeAllOrganizationApiKeys,
   revokeOrganizationApiKey,
+  createSeatChangeLink,
   stripeCustomerUrl,
   suspendOrganization,
   updateOrganization,
@@ -46,8 +47,10 @@ import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 export default function CustomerDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgId = String(params.orgId ?? "");
   const me = getStoredMe();
+  const focus = searchParams.get("focus");
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [users, setUsers] = useState<CustomerUser[]>([]);
@@ -66,6 +69,7 @@ export default function CustomerDetailPage() {
   const [planInput, setPlanInput] = useState<OrgPlan>("pro");
   const [inviteEmail, setInviteEmail] = useState("");
   const [keyLabel, setKeyLabel] = useState("");
+  const [seatChangeLink, setSeatChangeLink] = useState<string | null>(null);
 
   const [suspendModal, setSuspendModal] = useState(false);
   const [revokeAllModal, setRevokeAllModal] = useState(false);
@@ -112,6 +116,13 @@ export default function CustomerDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!focus || loading) return;
+    const id = focus === "users" ? "ops-users" : focus === "billing" ? "ops-billing" : null;
+    if (!id) return;
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focus, loading]);
+
   async function saveMetadata(e: FormEvent) {
     e.preventDefault();
     if (!me || !canMutateSupport(me)) return;
@@ -132,7 +143,7 @@ export default function CustomerDetailPage() {
 
   async function saveBilling(e: FormEvent) {
     e.preventDefault();
-    if (!me || !canMutateBilling(me)) return;
+    if (!me || !canMutateBilling(me) || detail?.stripe?.managed === true) return;
     setBusy("billing");
     setActionError(null);
     const seats = Number(seatInput);
@@ -146,6 +157,26 @@ export default function CustomerDetailPage() {
       return;
     }
     setDetail(result.data ?? null);
+  }
+
+  async function handleSeatChangeLink(e: FormEvent) {
+    e.preventDefault();
+    if (!me || !canMutateBilling(me)) return;
+    const seats = Number(seatInput);
+    if (!Number.isFinite(seats) || seats < 1) {
+      setActionError("Enter a valid seat count.");
+      return;
+    }
+    setBusy("seat-link");
+    setActionError(null);
+    setSeatChangeLink(null);
+    const result = await createSeatChangeLink(orgId, seats);
+    setBusy(null);
+    if (!result.ok || !result.data?.url) {
+      setActionError(result.error ?? "Failed to create seat-change link.");
+      return;
+    }
+    setSeatChangeLink(result.data.url);
   }
 
   async function handleSuspend() {
@@ -376,7 +407,7 @@ export default function CustomerDetailPage() {
         </div>
       </section>
 
-      <section className="admin-card">
+      <section id="ops-billing" className="admin-card">
         <h2 className="admin-section-label">Billing & Stripe</h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div className="rounded-md border border-coop-border/60 p-4">
@@ -417,14 +448,56 @@ export default function CustomerDetailPage() {
             Drift detected between Coop and Stripe
             {planDrift ? ` (plan: ${detail.coopBilling?.plan} vs ${detail.stripe?.plan})` : ""}
             {seatDrift ? ` (seats: ${detail.coopBilling?.seats} vs ${detail.stripe?.seats})` : ""}.
+            Prefer fixing quantity in Stripe; Coop seats sync from the webhook after the customer confirms.
           </p>
         )}
         {stripeManaged && me && canMutateBilling(me) && (
-          <p className="mt-2 text-xs text-coop-muted">
-            Plan and seats are Stripe-managed. Manual edits may be locked until billing is detached.
-          </p>
+          <div className="mt-4 space-y-3 rounded-md border border-coop-border/60 p-4">
+            <p className="text-sm text-coop-muted">
+              This org bills through Stripe. Coop does not change seats until the customer confirms a
+              Stripe payment link. Do not edit Coop seats directly.
+            </p>
+            <form onSubmit={handleSeatChangeLink} className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="admin-label">Requested seats</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="admin-input w-28"
+                  value={seatInput}
+                  onChange={(e) => setSeatInput(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="admin-btn-primary" disabled={busy === "seat-link"}>
+                {busy === "seat-link" ? "Creating link…" : "Create Stripe approval link"}
+              </button>
+            </form>
+            {seatChangeLink ? (
+              <div className="space-y-2 break-all rounded-md bg-black/30 p-3 text-xs">
+                <p className="text-coop-muted">Send this link to the customer billing contact:</p>
+                <p className="font-mono text-white">{seatChangeLink}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="admin-btn-secondary"
+                    onClick={() => void navigator.clipboard.writeText(seatChangeLink)}
+                  >
+                    Copy link
+                  </button>
+                  <a
+                    href={seatChangeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="admin-btn-secondary inline-flex"
+                  >
+                    Open link ↗
+                  </a>
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
-        {me && canMutateBilling(me) && (
+        {me && canMutateBilling(me) && !stripeManaged && (
           <form onSubmit={saveBilling} className="mt-4 flex flex-wrap items-end gap-3">
             <div>
               <label className="admin-label">Plan</label>
@@ -432,7 +505,6 @@ export default function CustomerDetailPage() {
                 className="admin-input"
                 value={planInput}
                 onChange={(e) => setPlanInput(e.target.value as OrgPlan)}
-                disabled={stripeManaged}
               >
                 <option value="free">Free</option>
                 <option value="pro">Pro</option>
@@ -447,10 +519,9 @@ export default function CustomerDetailPage() {
                 className="admin-input w-28"
                 value={seatInput}
                 onChange={(e) => setSeatInput(e.target.value)}
-                disabled={stripeManaged}
               />
             </div>
-            <button type="submit" className="admin-btn-secondary" disabled={busy === "billing" || stripeManaged}>
+            <button type="submit" className="admin-btn-secondary" disabled={busy === "billing"}>
               {busy === "billing" ? "Saving…" : "Update billing"}
             </button>
             {detail.plan === "free" && (
@@ -464,6 +535,11 @@ export default function CustomerDetailPage() {
               </button>
             )}
           </form>
+        )}
+        {me && canMutateBilling(me) && !stripeManaged && (
+          <p className="mt-2 text-xs text-coop-muted">
+            Manual (non-Stripe) billing only. Changes apply in Coop immediately — no customer payment step.
+          </p>
         )}
       </section>
 
@@ -498,7 +574,7 @@ export default function CustomerDetailPage() {
         )}
       </section>
 
-      <section className="admin-card">
+      <section id="ops-users" className="admin-card">
         <h2 className="admin-section-label">Users</h2>
         {me && canMutateSupport(me) && (
           <form onSubmit={handleInvite} className="mt-3 flex flex-wrap items-end gap-3">

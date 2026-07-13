@@ -820,6 +820,16 @@ export async function manualProUpgrade(orgId: string): Promise<ApiResult<Custome
   );
 }
 
+export async function createSeatChangeLink(
+  orgId: string,
+  seats: number
+): Promise<ApiResult<{ url: string; currentSeats: number; requestedSeats: number; message?: string }>> {
+  return coopFetch(`/v1/operator/organizations/${encodeURIComponent(orgId)}/seat-change-link`, {
+    method: "POST",
+    body: JSON.stringify({ seats })
+  });
+}
+
 function normalizeOrgAuditEntry(raw: RawRecord, source: "customer" | "operator"): OrgAuditEntry {
   const metadata = asRecord(raw.metadata);
   const operatorPrincipal =

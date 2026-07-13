@@ -303,6 +303,7 @@ export class OperatorStore {
        WHERE u.last_login_at IS NULL
          AND u.deactivated_at IS NULL
          AND u.created_at < NOW() - INTERVAL '7 days'
+         AND NOT EXISTS (SELECT 1 FROM user_sessions s WHERE s.user_id = u.id)
        ORDER BY u.created_at ASC
        LIMIT $1`,
       [limit]
