@@ -27,8 +27,52 @@ const CALLABLE_MEMBER_KINDS = new Set<vscode.CompletionItemKind>([
   vscode.CompletionItemKind.Constructor
 ]);
 
-const DEFAULT_LSP_TIMEOUT_MS = 250;
+const DEFAULT_LSP_TIMEOUT_MS = 1_000;
 const MAX_LSP_SUGGESTIONS = 8;
+
+/** Prefer API-relevant members when the receiver is vscode.window. */
+const VSCODE_WINDOW_MEMBER_PRIORITY = [
+  "createWebviewPanel",
+  "showInformationMessage",
+  "showWarningMessage",
+  "showErrorMessage",
+  "showQuickPick",
+  "createQuickPick",
+  "createStatusBarItem",
+  "createTerminal",
+  "createOutputChannel",
+  "createInputBox",
+  "withProgress"
+] as const;
+
+export function resolveLspTriggerCharacter(context: ExtractedCodeContext): string | undefined {
+  if (context.afterDot) {
+    return ".";
+  }
+  return undefined;
+}
+
+function windowMemberPriorityScore(memberText: string): number {
+  const name = afterDotMemberDedupeKey(memberText);
+  const index = VSCODE_WINDOW_MEMBER_PRIORITY.indexOf(name as (typeof VSCODE_WINDOW_MEMBER_PRIORITY)[number]);
+  return index >= 0 ? VSCODE_WINDOW_MEMBER_PRIORITY.length - index : 0;
+}
+
+export function rankAfterDotLspMembers(
+  ranked: RankedCompletion[],
+  linePrefix: string
+): RankedCompletion[] {
+  if (!/vscode\.window\.\s*$/.test(linePrefix)) {
+    return ranked;
+  }
+  return [...ranked].sort((left, right) => {
+    const priorityDelta = windowMemberPriorityScore(right.text) - windowMemberPriorityScore(left.text);
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+    return right.score - left.score;
+  });
+}
 
 export function isAfterDotMemberCompletionEligible(context: ExtractedCodeContext): boolean {
   return context.afterDot && JS_LIKE_LANGUAGES.has(context.languageId);
@@ -199,13 +243,16 @@ export async function fetchAfterDotMemberCompletions(
   const signal = options.signal;
 
   try {
+    const triggerCharacter = resolveLspTriggerCharacter(context);
     const result = await raceWithTimeout(
-      vscode.commands.executeCommand<vscode.CompletionList | vscode.CompletionItem[]>(
-        "vscode.executeCompletionItemProvider",
-        document.uri,
-        position,
-        undefined,
-        MAX_LSP_SUGGESTIONS * 2
+      Promise.resolve(
+        vscode.commands.executeCommand<vscode.CompletionList | vscode.CompletionItem[]>(
+          "vscode.executeCompletionItemProvider",
+          document.uri,
+          position,
+          triggerCharacter,
+          MAX_LSP_SUGGESTIONS * 2
+        )
       ),
       timeoutMs,
       signal
@@ -214,7 +261,8 @@ export async function fetchAfterDotMemberCompletions(
       return [];
     }
     const filtered = filterMemberCompletionItems(asCompletionItems(result));
-    return lspItemsToRankedCompletions(filtered, context.currentLinePrefix);
+    const ranked = lspItemsToRankedCompletions(filtered, context.currentLinePrefix);
+    return rankAfterDotLspMembers(ranked, context.currentLinePrefix);
   } catch {
     return [];
   }

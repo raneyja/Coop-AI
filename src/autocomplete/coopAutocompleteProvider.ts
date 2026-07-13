@@ -414,8 +414,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
     const abort = new AbortController();
     try {
-      this.publishStatus("processing");
-
       if (extracted.afterDot) {
         const lspItems = await this.tryLspMemberCompletions(document, position, extracted, abort.signal);
         live = this.resolveLiveCompletionContext(document, position);
@@ -426,8 +424,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         ) {
           position = live.position;
           extracted = live.extracted;
-          this.publishStatus("ready", undefined, 1, lspItems.length, 0);
           discardContextPayload(extracted);
+          // IntelliSense may be open after `.`; retrigger so ghost text can appear once it closes.
+          setTimeout(() => {
+            void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+          }, 50);
           return lspItems;
         }
         position = live.position;
@@ -543,7 +544,6 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   ): vscode.InlineCompletionItem[] | null {
     if (ranked.length === 0) {
       this.triggerDetector.noteRequestFailed();
-      this.publishStatus("ready", "Filtered low-quality suggestion");
       return null;
     }
 
@@ -561,12 +561,10 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
     if (items.length === 0) {
       this.triggerDetector.noteRequestFailed();
-      this.publishStatus("ready", "Filtered low-quality suggestion");
       return null;
     }
 
     this.triggerDetector.markRequested(extracted.contextHash);
-    this.publishStatus("ready", undefined, 1, items.length, latencyMs);
     this.trackShownItem(extracted.contextHash, extracted.languageId);
     discardContextPayload(extracted);
     return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);

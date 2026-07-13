@@ -7,6 +7,8 @@ import {
   isAfterDotMemberCompletionEligible,
   lspItemsToRankedCompletions,
   normalizeMemberInsertText,
+  rankAfterDotLspMembers,
+  resolveLspTriggerCharacter,
   stripSnippetPlaceholders
 } from "./memberCompletionProvider";
 import {
@@ -77,6 +79,23 @@ test("isAfterDotMemberCompletionEligible requires afterDot and TS/JS language", 
   );
 });
 
+test("resolveLspTriggerCharacter returns dot for afterDot contexts", () => {
+  assert.equal(resolveLspTriggerCharacter(baseContext), ".");
+  assert.equal(resolveLspTriggerCharacter({ ...baseContext, afterDot: false }), undefined);
+});
+
+test("rankAfterDotLspMembers prioritizes createWebviewPanel on vscode.window", () => {
+  const ranked = rankAfterDotLspMembers(
+    [
+      { text: "activeColorTheme", score: 1, source: "lsp" },
+      { text: "createWebviewPanel(", score: 0.9, source: "lsp" },
+      { text: "showInformationMessage(", score: 0.8, source: "lsp" }
+    ],
+    "    const panel = vscode.window."
+  );
+  assert.equal(ranked[0]?.text, "createWebviewPanel(");
+});
+
 test("stripSnippetPlaceholders removes VS Code snippet syntax", () => {
   assert.equal(stripSnippetPlaceholders("bindSession(${1:})"), "bindSession()");
   assert.equal(stripSnippetPlaceholders("foo($0)"), "foo()");
@@ -117,8 +136,9 @@ test("lspItemsToRankedCompletions dedupes and tags source lsp", () => {
 
 void (async () => {
   await asyncTest("fetchAfterDotMemberCompletions calls VS Code completion provider", async () => {
-    setMockExecuteCommandHandler(async (command, uri, position) => {
+    setMockExecuteCommandHandler(async (command, uri, position, triggerCharacter) => {
       assert.equal(command, "vscode.executeCompletionItemProvider");
+      assert.equal(triggerCharacter, ".");
       assert.ok(uri);
       assert.ok(position);
       return [

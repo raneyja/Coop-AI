@@ -56,7 +56,13 @@ export class TriggerDetector {
       return { shouldRequest: false, debounceMs: 0, reason: "disabled" };
     }
 
-    if (Date.now() < this.backoffUntil) {
+    const immediate = isImmediateTriggerContext(context, trigger);
+    // Only bypass backoff for after-dot member completions (and explicit immediate/paste
+    // triggers) — the broader isImmediateTriggerLine heuristic (matches any line ending in
+    // `=`, `,`, `(`) is intentionally used for debounce decisions below but is too permissive
+    // for backoff bypass, since it would defeat rejection backoff for most completions.
+    const bypassesBackoff = context.afterDot || trigger.kind === "immediate" || trigger.kind === "paste";
+    if (Date.now() < this.backoffUntil && !bypassesBackoff) {
       return { shouldRequest: false, debounceMs: 0, reason: "backoff" };
     }
 
@@ -71,9 +77,10 @@ export class TriggerDetector {
       return { shouldRequest: true, debounceMs: 0 };
     }
 
+    const unchangedCooldownMs = context.afterDot ? 250 : UNCHANGED_CONTEXT_COOLDOWN_MS;
     if (
       context.contextHash === this.lastContextHash &&
-      Date.now() - this.lastRequestAt < UNCHANGED_CONTEXT_COOLDOWN_MS
+      Date.now() - this.lastRequestAt < unchangedCooldownMs
     ) {
       return { shouldRequest: false, debounceMs: 0, reason: "unchanged_context" };
     }
@@ -84,8 +91,6 @@ export class TriggerDetector {
     ) {
       return { shouldRequest: false, debounceMs: 0, reason: "post_accept_cooldown" };
     }
-
-    const immediate = isImmediateTriggerContext(context, trigger);
 
     if (trigger.kind === "paste" || Date.now() < this.pasteDetectedUntil) {
       return { shouldRequest: true, debounceMs: 0 };

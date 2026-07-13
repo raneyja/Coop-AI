@@ -202,6 +202,19 @@ test("immediate trigger after equals bypasses rapid typing", () => {
   assert.notEqual(decision.reason, "rapid_typing");
 });
 
+test("afterDot bypasses rejection backoff", () => {
+  const detector = new TriggerDetector();
+  detector.noteRejection();
+  detector.noteRejection();
+  const decision = detector.evaluate(
+    baseSettings(),
+    baseContext({ afterDot: true, currentLinePrefix: "vscode.window.", contextHash: "hash-dot" }),
+    autoTrigger()
+  );
+  assert.equal(decision.shouldRequest, true);
+  assert.equal(decision.debounceMs, 0);
+});
+
 test("rapid typing schedules debounced request instead of blocking", () => {
   const detector = new TriggerDetector();
   detector.noteKeystroke();

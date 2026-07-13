@@ -12,7 +12,7 @@ import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./custo
 import { applyEdgeCaseFallbacks } from "./edgeCases";
 import { CompletionCache, createLatencyTimer, type AutocompletePerformanceMonitor } from "./performance";
 import { sanitizeContextForRequest, shouldSkipForPrivacy } from "./privacy";
-import type { AutocompleteSettings, CompletionRouterResult, ExtractedCodeContext } from "./types";
+import type { AutocompleteSettings, CompletionRouterResult, ExtractedCodeContext, RankedCompletion } from "./types";
 import * as vscode from "vscode";
 
 export type CompletionRouterDeps = {
@@ -63,8 +63,8 @@ export class CompletionRouter {
 
     const cached = this.cache.get(context.contextHash);
     if (cached) {
-      let completions = [
-        { text: cached.text, score: 1, source: "cache" as const },
+      let completions: RankedCompletion[] = [
+        { text: cached.text, score: 1, source: "cache" },
         ...cached.alternatives.map((text) => ({ text, score: 0.9, source: "cache" as const }))
       ];
       if (context.afterDot) {

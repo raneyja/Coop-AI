@@ -16,6 +16,7 @@ import {
   onCopilotExtensionsChanged,
   syncCopilotInlineWithCoopAutocomplete
 } from "./copilotCoexistence";
+import { syncSuggestWidgetCoexistenceWithCoopAutocomplete } from "./suggestWidgetCoexistence";
 
 const AUTOCOMPLETE_HELP = [
   "CoopAI inline autocomplete",
@@ -58,6 +59,10 @@ export function registerAutocompleteCommands(
     await syncCopilotInlineWithCoopAutocomplete(context, enabled);
   };
 
+  const syncSuggestWidgetCoexistence = async (enabled: boolean) => {
+    await syncSuggestWidgetCoexistenceWithCoopAutocomplete(context, enabled);
+  };
+
   const refreshAfterCopilotChange = () => {
     const settings = readAutocompleteSettings();
     if (settings.enabled && isCopilotInstalled()) {
@@ -66,11 +71,14 @@ export function registerAutocompleteCommands(
   };
 
   void syncCopilotInline(readAutocompleteSettings().enabled);
+  void syncSuggestWidgetCoexistence(readAutocompleteSettings().enabled);
 
   context.subscriptions.push(
     onCopilotExtensionsChanged(refreshAfterCopilotChange),
     onAutocompleteSettingsChanged(() => {
-      void syncCopilotInline(readAutocompleteSettings().enabled);
+      const enabled = readAutocompleteSettings().enabled;
+      void syncCopilotInline(enabled);
+      void syncSuggestWidgetCoexistence(enabled);
     })
   );
 
@@ -123,6 +131,7 @@ export function registerAutocompleteCommands(
       await config.update("enabled", enabled, updateTarget);
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
       await syncCopilotInline(enabled);
+      await syncSuggestWidgetCoexistence(enabled);
     })
   );
 }
