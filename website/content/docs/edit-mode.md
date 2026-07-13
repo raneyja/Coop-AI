@@ -6,6 +6,10 @@ order: 4
 lastUpdated: "2026-07-10"
 ---
 
+<!-- figures lg -->
+![Edit mode — highlight code, send /edit in chat, review the diff, then Apply patch or Reject](/screenshots/docs/extension-edit-highlighted.png)
+<!-- /figures -->
+
 CoopAI **edit mode** turns natural-language instructions into **search-replace patches** you review and apply in VS Code. Use it when you want in-file changes without an autonomous agent rewriting your tree.
 
 Edit mode ships in production. It uses the same chat composer as quick actions — no separate panel.
