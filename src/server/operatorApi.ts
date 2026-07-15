@@ -975,12 +975,16 @@ async function handleSeatChangeLink(
       quantity: seats
     });
   } catch (error) {
+    const raw = error instanceof Error ? error.message : "";
+    const portalUpdateDisabled = /subscription update feature in the portal configuration is disabled/i.test(
+      raw
+    );
     writeJson(response, 502, {
-      error: "stripe_portal_failed",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Could not create Stripe approval link. Ensure Customer Portal allows subscription quantity updates."
+      error: portalUpdateDisabled ? "stripe_portal_subscription_update_disabled" : "stripe_portal_failed",
+      message: portalUpdateDisabled
+        ? "Stripe Customer Portal has subscription updates disabled. In Stripe Dashboard → Settings → Billing → Customer portal, turn on “Update quantities” (and allow your Pro product), then retry."
+        : raw ||
+          "Could not create Stripe approval link. Ensure Customer Portal allows subscription quantity updates."
     });
     return true;
   }

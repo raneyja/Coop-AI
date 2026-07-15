@@ -457,6 +457,10 @@ export default function CustomerDetailPage() {
               This org bills through Stripe. Coop does not change seats until the customer confirms a
               Stripe payment link. Do not edit Coop seats directly.
             </p>
+            <p className="text-xs text-coop-muted">
+              Requires Stripe Customer Portal → <strong className="font-medium text-white/80">Update quantities</strong>{" "}
+              enabled for your Pro product (Settings → Billing → Customer portal).
+            </p>
             <form onSubmit={handleSeatChangeLink} className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="admin-label">Requested seats</label>
