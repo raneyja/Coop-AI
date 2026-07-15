@@ -67,7 +67,8 @@ export default function DocsHubPage() {
           </div>
 
           <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-14">
-            <aside className="mb-8 lg:sticky lg:top-24 lg:self-start">
+            {/* Side rail is desktop-only — below lg it stacked above the hub cards */}
+            <aside className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
               <DocsSidebar sections={sections} />
             </aside>
 

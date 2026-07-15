@@ -43,9 +43,10 @@ export function DocsArticleLayout({
           </div>
 
           <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-14">
-            <aside className="mb-8 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto">
+            {/* Side rail is desktop-only — below lg it stacked above the article and pushed content off-screen */}
+            <aside className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto">
               <DocsSidebar sections={sections} currentSlug={currentSlug} />
-              <p className="mt-8 hidden text-xs leading-relaxed text-coop-muted lg:block">
+              <p className="mt-8 text-xs leading-relaxed text-coop-muted">
                 Need a walkthrough? See the{" "}
                 <Link href="/manual" className={docsInlineLinkClassName}>
                   Owner&apos;s Manual
