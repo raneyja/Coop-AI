@@ -2,19 +2,17 @@ import * as vscode from "vscode";
 import type { CoopChatSession } from "../chat/CoopChatSession";
 import { coopSessionRegistry } from "../chat/CoopSessionRegistry";
 import type { SecureApiClient } from "../chat/SecureApiClient";
-import { applyPatchesToWorkspace, undoPatchApplication } from "./patchApplier";
-import { handlePatchComplete, rejectPendingPatch, showPatchReadyNotification } from "./handlePatchComplete";
-import { emitPatchEvent, setPatchEventHandler } from "./patchEvents";
-import { countHunks } from "./patchParser";
+import { handlePatchComplete, showPatchReadyNotification } from "./handlePatchComplete";
 import {
-  clearLastUndoStack,
-  clearPendingPatches,
+  applyPendingPatch,
+  rejectPendingPatchWithState,
+  undoLastPatchWithState
+} from "./patchActions";
+import { setPatchEventHandler } from "./patchEvents";
+import {
   getLastAssistantPatchContent,
   getLastPatchApplyError,
-  getLastUndoStack,
-  getPendingPatches,
-  setLastPatchApplyError,
-  setLastUndoStack
+  getPendingPatches
 } from "./patchSession";
 
 export function registerPatchCommands(
@@ -26,75 +24,20 @@ export function registerPatchCommands(
     void api.recordUsageEvents(eventType, payload).catch(() => undefined);
   });
 
+  const publishForSession = () => {
+    const session = coopSessionRegistry.getActive() ?? getFallbackSession();
+    return (payload: Parameters<CoopChatSession["postPatchUpdate"]>[0]) => session.postPatchUpdate(payload);
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand("coopAI.applyPatch", async () => {
-      const pending = getPendingPatches();
-      if (!pending) {
-        void vscode.window.showWarningMessage("No patch is pending. Use /edit in chat to generate one.");
-        return;
-      }
-
-      const result = await applyPatchesToWorkspace(pending);
-      if (!result.ok) {
-        setLastPatchApplyError(result.error);
-        emitPatchEvent("edit.patch_failed", { phase: "apply", error: result.error, file: result.file });
-        void vscode.window
-          .showErrorMessage(`CoopAI: Could not apply patch — ${result.error}`, "Retry")
-          .then((choice) => {
-            if (choice === "Retry") {
-              void vscode.commands.executeCommand("coopAI.retryLastPatch");
-            }
-          });
-        return;
-      }
-
-      setLastPatchApplyError(undefined);
-      setLastUndoStack(result.undo);
-      clearPendingPatches();
-      void vscode.commands.executeCommand("setContext", "coopAI.patchPending", false);
-      emitPatchEvent("edit.patch_applied", {
-        fileCount: result.filesChanged,
-        hunkCount: countHunks(pending)
-      });
-
-      void vscode.window
-        .showInformationMessage(
-          `CoopAI: Applied patch to ${result.filesChanged} file${result.filesChanged === 1 ? "" : "s"}.`,
-          "Undo"
-        )
-        .then((choice) => {
-          if (choice === "Undo") {
-            void vscode.commands.executeCommand("coopAI.undoLastPatch");
-          }
-        });
+      await applyPendingPatch(publishForSession());
     }),
     vscode.commands.registerCommand("coopAI.undoLastPatch", async () => {
-      const undo = getLastUndoStack();
-      if (!undo?.length) {
-        void vscode.window.showWarningMessage("Nothing to undo.");
-        return;
-      }
-
-      const result = await undoPatchApplication(undo);
-      if (!result.ok) {
-        emitPatchEvent("edit.patch_failed", { phase: "undo", error: result.error });
-        void vscode.window.showErrorMessage(`CoopAI: Could not undo — ${result.error}`);
-        return;
-      }
-
-      const fileCount = undo.length;
-      clearLastUndoStack();
-      emitPatchEvent("edit.patch_undone", { fileCount });
-      void vscode.window.showInformationMessage(
-        `CoopAI: Undid patch on ${fileCount} file${fileCount === 1 ? "" : "s"}.`
-      );
+      await undoLastPatchWithState(publishForSession());
     }),
     vscode.commands.registerCommand("coopAI.rejectPatch", () => {
-      if (!getPendingPatches()) {
-        void vscode.window.showWarningMessage("No patch is pending.");
-        return;
-      }
-      rejectPendingPatch("explicit");
+      rejectPendingPatchWithState(publishForSession(), "explicit");
       void vscode.window.showInformationMessage("CoopAI: Patch rejected.");
     }),
     vscode.commands.registerCommand("coopAI.retryLastPatch", async () => {
@@ -119,7 +62,10 @@ export function registerPatchCommands(
 
       const lastContent = getLastAssistantPatchContent();
       if (lastContent) {
-        await handlePatchComplete(lastContent);
+        const session = coopSessionRegistry.getActive() ?? getFallbackSession();
+        await handlePatchComplete(lastContent, {
+          publish: (payload) => session.postPatchUpdate(payload)
+        });
         return;
       }
 

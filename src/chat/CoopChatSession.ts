@@ -2,6 +2,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
+import {
+  applyPendingPatch,
+  rejectPendingPatchWithState,
+  resolvePatchCardsSnapshot,
+  undoLastPatchWithState
+} from "../edit/patchActions";
 import { setLastEditUserMessage } from "../edit/patchSession";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
@@ -74,6 +80,8 @@ import type {
   DegradationNotificationPayload,
   IntentFeedbackState,
   MentionSearchResult,
+  PatchCardState,
+  PatchCardsUpdatePayload,
   RepoContext,
   ThemeMode,
   ThemePayload,
@@ -230,6 +238,7 @@ import { localFilesFromContextData } from "../context/localFileContext";
 import {
   readActiveEditorFileForChat,
   pickEditorForContext,
+  pickLocalEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
@@ -833,6 +842,7 @@ export class CoopChatSession {
           void this.pushLightningState();
           this.postChatHistory();
           this.pushThreadsList();
+          this.pushPatchState();
           void this.pushWorkspacePrompts();
           this.workspacePromptWatcher?.dispose();
           this.workspacePromptWatcher = watchWorkspacePrompts(() => void this.pushWorkspacePrompts());
@@ -1312,6 +1322,28 @@ export class CoopChatSession {
       case "conflict:action":
         this.handleConflictAction(message.payload.conflictId, message.payload.action);
         return;
+      case "patch:apply":
+        await applyPendingPatch(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload?.messageTimestamp
+        );
+        return;
+      case "patch:reject":
+        rejectPendingPatchWithState(
+          (payload) => this.postPatchUpdate(payload),
+          "explicit",
+          message.payload?.messageTimestamp
+        );
+        return;
+      case "patch:undo":
+        await undoLastPatchWithState(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload?.messageTimestamp
+        );
+        return;
+      case "patch:open-file":
+        void this.handleRemoteFileIntent({ path: message.payload.path, preserveContext: true });
+        return;
       case "ownership:copy-draft":
         await vscode.env.clipboard.writeText(message.payload.text);
         void vscode.window.showInformationMessage("Ownership message draft copied to clipboard.");
@@ -1508,23 +1540,24 @@ export class CoopChatSession {
     await this.runIntentFetch(event, { quiet: true });
   }
 
-  /** Open a repo file for manual review without changing chat context. */
+  /** Open a repo file for manual review without changing chat context. Prefer local disk. */
   private async openRepoFileForReview(path: string, line?: number): Promise<void> {
     this.editorContextSuppressedUntil = Date.now() + 15_000;
     this.intentDebouncer.cancelAll();
 
+    const absolute = resolveLocalAbsolutePath(path);
+    if (absolute) {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+      const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.Beside,
+        preview: true,
+        preserveFocus: true
+      });
+      this.revealLineInEditor(editor, line);
+      return;
+    }
+
     if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      const absolute = resolveLocalAbsolutePath(path);
-      if (absolute) {
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-        const editor = await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: true,
-          preserveFocus: true
-        });
-        this.revealLineInEditor(editor, line);
-        return;
-      }
       void vscode.window.showWarningMessage(
         "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
       );
@@ -1725,7 +1758,7 @@ export class CoopChatSession {
       return result;
     } finally {
       this.pendingChatMentions = undefined;
-      this.pendingCodeEditIntent = false;
+      // Keep pendingCodeEditIntent until local files are resolved for the model prompt.
     }
   }
 
@@ -1943,7 +1976,7 @@ export class CoopChatSession {
       file: params.file,
       fileSource: params.fileSource,
       openEditors: request.intent.context.openEditors,
-      lines: params.lines,
+      lines: this.pendingCodeEditIntent ? undefined : params.lines,
       resolveAbsolutePath: resolveLocalAbsolutePath
     });
   }
@@ -2024,6 +2057,14 @@ export class CoopChatSession {
       updatedAt: new Date().toISOString()
     };
     this.post({ type: "conflict:update", payload: this.currentConflictState });
+  }
+
+  public postPatchUpdate(payload: PatchCardsUpdatePayload): void {
+    this.post({ type: "patch:update", payload });
+  }
+
+  private pushPatchState(): void {
+    this.postPatchUpdate(resolvePatchCardsSnapshot());
   }
 
   private conflictInputFromResults(event: IntentEvent, results: ContextFetchResult[]): ConflictDetectionInput {
@@ -2395,7 +2436,9 @@ export class CoopChatSession {
       }
     }
 
-    this.snapEditorContextBeforeSend();
+    this.snapEditorContextBeforeSend({
+      allowLocalFileForEdit: options?.composerMode === "edit"
+    });
     if (options?.mentions?.length) {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
@@ -2426,7 +2469,10 @@ export class CoopChatSession {
     if (quickAction === "understand-repo") {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
-    this.pendingChatLocalFiles = quickAction === "understand-repo" ? undefined : this.loadLocalFilesSyncForChat();
+    this.pendingChatLocalFiles =
+      quickAction === "understand-repo"
+        ? undefined
+        : this.loadLocalFilesSyncForChat({ fullFile: options?.composerMode === "edit" });
 
     if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
@@ -3090,7 +3136,9 @@ export class CoopChatSession {
     }
   ): Promise<void> {
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
-    const minResponseVisibleMs = effectiveQuickAction ? 0 : undefined;
+    // No artificial minimum — first tokens stream as soon as the LLM produces them,
+    // for plain chat, /edit, and quick actions alike.
+    const minResponseVisibleMs = 0;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
     const chatUseCase = resolveChatUseCase(
@@ -3535,7 +3583,10 @@ export class CoopChatSession {
             this.clearIntentFeedback();
       this.post({ type: "chat:complete", payload: { message: finalMessage } });
       if (options?.composerMode === "edit") {
-        void handlePatchComplete(finalMessage.content);
+        void handlePatchComplete(finalMessage.content, {
+          messageTimestamp: finalMessage.timestamp,
+          publish: (state) => this.postPatchUpdate(state)
+        });
       }
       this.postChatHistory();
       this.persistActiveThread();
@@ -3572,6 +3623,7 @@ export class CoopChatSession {
       this.post({ type: "chat:error", payload: { message } });
     } finally {
       this.pendingChatLocalFiles = undefined;
+      this.pendingCodeEditIntent = false;
     }
   }
 
@@ -3999,13 +4051,16 @@ export class CoopChatSession {
     );
     try {
       let entries: Array<{ provider: typeof provider; owner: string; repo: string; branch?: string }> = [];
-      let emptyHint: "workspace" | undefined;
+      let emptyHint: "workspace" | "workspace_admin" | undefined;
       let listLabel: "workspace" | undefined;
 
       if (source === "chat" && (await this.options.api.hasToken())) {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
         if (workspace.repos.length === 0) {
-          emptyHint = "workspace";
+          emptyHint =
+            workspace.adminControlled === true || this.preferences.adminControlledRepos
+              ? "workspace_admin"
+              : "workspace";
         } else {
           listLabel = "workspace";
           entries = workspace.repos.map((entry) => {
@@ -4602,12 +4657,15 @@ export class CoopChatSession {
   }
 
   /** Snap active editor file/selection into context immediately before chat send. */
-  private snapEditorContextBeforeSend(): void {
-    if (isExplicitRepoScope(this.currentContext)) {
+  private snapEditorContextBeforeSend(options?: { allowLocalFileForEdit?: boolean }): void {
+    const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
+    if (isExplicitRepoScope(this.currentContext) && !allowLocalFileForEdit) {
       return;
     }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    const editor = pickEditorForContext(this.currentContext.file);
+    const editor = allowLocalFileForEdit
+      ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
+      : pickEditorForContext(this.currentContext.file);
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextFromEditor(editor, chatPrefs, this.currentContext)
@@ -4625,12 +4683,20 @@ export class CoopChatSession {
   }
 
   /** Synchronous capture at send time — async editor/focus state is unreliable after webview click. */
-  private loadLocalFilesSyncForChat(): LocalFileContextPayload | undefined {
-    if (isExplicitRepoScope(this.currentContext)) {
+  private loadLocalFilesSyncForChat(options?: {
+    /** /edit: attach the full active file so multi-hunk refactors can see call sites. */
+    fullFile?: boolean;
+  }): LocalFileContextPayload | undefined {
+    const fullFile = options?.fullFile === true || this.pendingCodeEditIntent;
+    // Repo-only explorer scope normally means "don't attach a file". /edit always needs the
+    // open local buffer — otherwise a prior "Use repo" click blocks Apply-worthy patches.
+    if (isExplicitRepoScope(this.currentContext) && !fullFile) {
       return undefined;
     }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    const editor = pickEditorForContext(this.currentContext.file);
+    const editor = fullFile
+      ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
+      : pickEditorForContext(this.currentContext.file);
     if (editor) {
       this.currentContext = mergeRepoContext(
         this.currentContext,
@@ -4639,9 +4705,11 @@ export class CoopChatSession {
     }
 
     const ctx = this.currentContext;
-    const lines = ctx.selectedLines
-      ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] }
-      : undefined;
+    const lines =
+      fullFile || !ctx.selectedLines
+        ? undefined
+        : { start: ctx.selectedLines[0], end: ctx.selectedLines[1] };
+    const editorCtx = fullFile ? { ...ctx, selectedLines: undefined } : ctx;
     const wantedPath = ctx.file?.trim() ? normalizeRelativePath(ctx.file) : undefined;
 
     const payloadFromEditorDocument = (
@@ -4719,7 +4787,16 @@ export class CoopChatSession {
       return fromVisible;
     }
 
-    const fromEditor = readActiveEditorFileForChat(ctx);
+    // /edit: if chat still holds a stale path (e.g. after remote "Use repo"), attach any
+    // visible local editor rather than asking the model for file contents.
+    if (fullFile && wantedPath) {
+      const fromAnyVisible = tryVisibleEditors(undefined);
+      if (fromAnyVisible) {
+        return fromAnyVisible;
+      }
+    }
+
+    const fromEditor = readActiveEditorFileForChat(editorCtx);
     if (fromEditor?.files.length) {
       return fromEditor;
     }
@@ -4831,7 +4908,7 @@ export class CoopChatSession {
 
     const fromOpenTabs = await readOpenTabFilesForChat({
       file: this.currentContext.file,
-      selectedLines: this.currentContext.selectedLines
+      selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines
     });
     if (fromOpenTabs?.files.length) {
       this.currentContext = {
@@ -4860,11 +4937,14 @@ export class CoopChatSession {
       return undefined;
     }
 
-    const lines = ctx.selectedLines
-      ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] }
-      : undefined;
+    const lines =
+      this.pendingCodeEditIntent || !ctx.selectedLines
+        ? undefined
+        : { start: ctx.selectedLines[0], end: ctx.selectedLines[1] };
 
-    const fromEditor = readActiveEditorFileForChat(ctx);
+    const fromEditor = readActiveEditorFileForChat(
+      this.pendingCodeEditIntent ? { ...ctx, selectedLines: undefined } : ctx
+    );
     if (fromEditor?.files.length) {
       return fromEditor;
     }

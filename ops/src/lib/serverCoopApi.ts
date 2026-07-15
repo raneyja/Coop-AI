@@ -23,6 +23,9 @@ export function opsPublicOrigin(): string {
   if (configured) {
     return configured;
   }
+  if (process.env.NODE_ENV === "production") {
+    return "https://ops.coop-ai.dev";
+  }
   return "http://localhost:3003";
 }
 

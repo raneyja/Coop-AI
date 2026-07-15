@@ -100,7 +100,7 @@ type ChatStreamProps = {
   /** Context-gathering status shown inline after the latest user turn. */
   thinkingMessage?: string;
   endRef: React.RefObject<HTMLDivElement | null>;
-  renderBody: (content: string, relatedArtifactId?: string) => React.ReactElement[];
+  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
   actionContext: EvidenceActionContext;
   conflicts?: ConflictSummary[];
   /** Bumps when thread/history loads so the view jumps to the latest messages. */
@@ -243,7 +243,7 @@ function MessageBlock({
   isStreaming = false
 }: {
   message: ChatMessage;
-  renderBody: (content: string, relatedArtifactId?: string) => React.ReactElement[];
+  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
   isStreaming?: boolean;
 }): React.ReactElement {
   const isUser = message.role === "user";
@@ -306,7 +306,9 @@ function MessageBlock({
           ) : isUser ? (
             <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
           ) : (
-            <div className="chat-message-body">{renderBody(parsed.body, message.relatedArtifactId)}</div>
+            <div className="chat-message-body">
+              {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}
+            </div>
           )
         ) : null}
       </div>

@@ -1883,11 +1883,11 @@ function WorkspaceDetail({
         };
       });
     }
-    if (draft.owner && draft.repo) {
-      return [{ repoId: `${draft.owner}/${draft.repo}`, label: `${draft.owner}/${draft.repo}` }];
-    }
     return [];
-  }, [prefs.workspaceRepoIds, workspacePickerState.repos, draft.owner, draft.repo]);
+  }, [prefs.workspaceRepoIds, workspacePickerState.repos]);
+
+  const primaryRepoLabel =
+    draft.owner && draft.repo ? `${draft.owner}/${draft.repo}` : undefined;
 
   const workspaceCountLabel =
     prefs.workspaceRepoLimit != null
@@ -1977,12 +1977,28 @@ function WorkspaceDetail({
                   </span>
                 ))}
               </div>
+            ) : prefs.adminControlledRepos ? (
+              <p className="coop-settings-card-desc">
+                No indexed repos assigned to your account yet. Ask your org admin to grant access in
+                the admin portal.
+              </p>
             ) : (
               <p className="coop-settings-card-desc">No workspace repos selected</p>
             )}
-            <p className="coop-settings-card-desc mt-1">
-              {draft.branch ? `Primary branch: ${draft.branch}` : "Pick repos from your org indexed catalog."}
-            </p>
+            {primaryRepoLabel ? (
+              <p className="coop-settings-card-desc mt-1">
+                Primary repo context: <span className="font-medium">{primaryRepoLabel}</span>
+                {draft.branch ? ` · branch ${draft.branch}` : ""}
+                {workspaceRepos.length === 0
+                  ? " — used for chat context; remote browse requires workspace repos above."
+                  : ""}
+              </p>
+            ) : null}
+            {workspaceRepos.length > 0 ? (
+              <p className="coop-settings-card-desc mt-1">
+                {draft.branch ? `Primary branch: ${draft.branch}` : "Pick repos from your org indexed catalog."}
+              </p>
+            ) : null}
           </div>
           <div className="coop-settings-actions">
             {prefs.githubNeedsReconnect ? (

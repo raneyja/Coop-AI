@@ -102,6 +102,54 @@ export type ChatHistoryPayload = {
   artifacts: ChatPersistedArtifact[];
 };
 
+export type PatchDiffLineKind = "context" | "remove" | "add";
+
+export type PatchDiffLine = {
+  kind: PatchDiffLineKind;
+  text: string;
+  lineNumber?: number;
+};
+
+export type PatchPreviewHunk = {
+  id: string;
+  lines: PatchDiffLine[];
+  matchStatus: "matched" | "not_found" | "ambiguous";
+};
+
+export type PatchPreviewFile = {
+  relativePath: string;
+  hunks: PatchPreviewHunk[];
+};
+
+export type PatchCardStatus = "idle" | "pending" | "applied" | "failed" | "undone" | "rejected";
+
+export type PatchCardState = {
+  status: PatchCardStatus;
+  messageTimestamp?: number;
+  fileCount: number;
+  hunkCount: number;
+  files: PatchPreviewFile[];
+  error?: string;
+  appliedFileCount?: number;
+  canUndo?: boolean;
+  /**
+   * Once a patch card has been shown for this assistant message, keep hiding the raw
+   * SEARCH/REPLACE fence for that message.
+   */
+  suppressMarkdown?: boolean;
+  /**
+   * Every assistant message timestamp that has ever had a patch card this session.
+   * Used so earlier messages keep raw markdown hidden even after newer /edit cards appear.
+   */
+  suppressedMessageTimestamps?: number[];
+};
+
+export type PatchCardsUpdatePayload = {
+  cards: PatchCardState[];
+  activeMessageTimestamp?: number;
+  suppressedMessageTimestamps?: number[];
+};
+
 export type ChatThreadListItem = {
   id: string;
   title: string;
@@ -448,6 +496,10 @@ export type WebviewInbound =
   | { type: "agents:open" }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
+  | { type: "patch:apply"; payload?: { messageTimestamp?: number } }
+  | { type: "patch:reject"; payload?: { messageTimestamp?: number } }
+  | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
+  | { type: "patch:open-file"; payload: { path: string } }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }
@@ -511,7 +563,7 @@ export type WebviewOutbound =
         stale?: boolean;
         provider?: CodeHostProviderPreference;
         loading?: boolean;
-        emptyHint?: "workspace";
+        emptyHint?: "workspace" | "workspace_admin";
         listLabel?: "workspace";
       };
     }
@@ -526,6 +578,7 @@ export type WebviewOutbound =
     }
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
+  | { type: "patch:update"; payload: PatchCardsUpdatePayload }
   | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }

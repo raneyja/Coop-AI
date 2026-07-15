@@ -258,14 +258,34 @@ function formatGeminiParts(message: ChatRequestMessage): Array<Record<string, un
 function anthropicBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
   const systemMessages = messages.filter((message) => message.role === "system").map((message) => message.content);
   const nonSystemMessages = messages.filter((message) => message.role !== "system");
-  return {
-    ...commonBody,
+  // Anthropic Messages API rejects unknown top-level fields (retention_policy, etc.) and
+  // only allows metadata.user_id — not Coop's enterprise annotation keys.
+  const body: Record<string, unknown> = {
+    model: commonBody.model,
+    max_tokens: commonBody.max_tokens,
+    temperature: commonBody.temperature,
     system: systemMessages.join("\n\n"),
     messages: nonSystemMessages.map((message) => ({
       role: message.role,
       content: formatAnthropicContent(message)
     }))
   };
+  const metadata = anthropicMetadata(commonBody.metadata);
+  if (metadata) {
+    body.metadata = metadata;
+  }
+  return body;
+}
+
+function anthropicMetadata(metadata: unknown): Record<string, unknown> | undefined {
+  if (!metadata || typeof metadata !== "object") {
+    return undefined;
+  }
+  const userId = (metadata as Record<string, unknown>).user_id;
+  if (typeof userId !== "string" || !userId.trim()) {
+    return undefined;
+  }
+  return { user_id: userId.trim() };
 }
 
 function geminiBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {

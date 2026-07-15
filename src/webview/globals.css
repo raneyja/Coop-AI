@@ -1203,6 +1203,87 @@
     color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-foreground));
   }
 
+  .coop-patch-diff-stack {
+    @apply my-2 space-y-2;
+  }
+
+  .coop-patch-file {
+    @apply overflow-hidden rounded-md border;
+    border-color: var(--coop-border);
+    background: var(--vscode-editor-background, var(--coop-panel-canvas));
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+  }
+
+  .coop-patch-file-header {
+    @apply flex items-center justify-between gap-2 border-b px-2.5 py-1.5 text-[11px];
+    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 88%,
+      var(--coop-panel-canvas) 12%
+    );
+  }
+
+  .coop-patch-file-path {
+    @apply truncate font-medium;
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .coop-patch-file-body {
+    @apply m-0 border-0 bg-transparent p-0;
+  }
+
+  .coop-patch-hunk + .coop-patch-hunk {
+    @apply border-t;
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-diff {
+    @apply m-0 overflow-x-auto px-0 py-1 text-[11px] leading-5;
+    color: var(--vscode-editor-foreground);
+    background: transparent;
+  }
+
+  .coop-patch-line {
+    @apply grid whitespace-pre;
+    grid-template-columns: 3rem 1rem 1fr;
+  }
+
+  .coop-patch-gutter {
+    @apply select-none pr-2 text-right;
+    color: var(--vscode-editorLineNumber-foreground);
+  }
+
+  .coop-patch-marker {
+    @apply select-none text-center font-medium;
+  }
+
+  .coop-patch-text {
+    @apply pr-2;
+  }
+
+  .coop-patch-line--context {
+    background: transparent;
+  }
+
+  .coop-patch-line--remove {
+    background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #ff000033) 70%, transparent);
+  }
+
+  .coop-patch-line--remove .coop-patch-marker,
+  .coop-patch-line--remove .coop-patch-text {
+    color: var(--vscode-diffEditor-removedTextBackground, #f14c4c);
+  }
+
+  .coop-patch-line--add {
+    background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #00ff0033) 70%, transparent);
+  }
+
+  .coop-patch-line--add .coop-patch-marker,
+  .coop-patch-line--add .coop-patch-text {
+    color: var(--vscode-diffEditor-insertedTextBackground, #73c991);
+  }
+
   .coop-chat-citation {
     @apply my-2 overflow-hidden rounded-md border;
     border-color: color-mix(in srgb, var(--coop-pill-border) 70%, var(--vscode-textLink-foreground) 30%);
@@ -2057,6 +2138,10 @@
 
   .coop-result-body {
     @apply max-h-[420px] space-y-0 overflow-y-auto px-3.5 py-2;
+  }
+
+  .coop-patch-card .coop-result-body {
+    @apply max-h-[min(70vh,560px)];
   }
 
   .coop-result-section {

@@ -12,7 +12,7 @@ export type ExplorerTreeState = {
   loading?: boolean;
   provider?: CodeHostProviderPreference;
   /** When set, empty repo list shows workspace picker guidance instead of connect GitHub copy. */
-  emptyHint?: "workspace";
+  emptyHint?: "workspace" | "workspace_admin";
   /** Adjusts breadcrumb when listing workspace-selected repos only. */
   listLabel?: "workspace";
 };
@@ -332,6 +332,8 @@ type RemoteExplorerTreePanelProps = {
   onPickRepo?: (repo: GithubRepoOption) => void;
   onUseRepo?: (path: string) => void;
   onOpenSettings?: (screen?: SettingsScreen) => void;
+  /** Opens the org admin portal in the browser (repo grants live there). */
+  onOpenAdminPortal?: () => void;
 };
 
 export function RemoteExplorerTreePanel({
@@ -354,7 +356,8 @@ export function RemoteExplorerTreePanel({
   onOpenFile,
   onPickRepo,
   onUseRepo,
-  onOpenSettings
+  onOpenSettings,
+  onOpenAdminPortal
 }: RemoteExplorerTreePanelProps): React.ReactElement {
   const [nodes, setNodes] = useState<TreeNodeState[]>([]);
   const [query, setQuery] = useState("");
@@ -581,7 +584,24 @@ export function RemoteExplorerTreePanel({
             ) : filteredNodes.length === 0 && !treeState.loading ? (
               <li className="coop-explorer-empty">
                 {isRepoList ? (
-                  treeState.emptyHint === "workspace" && onOpenSettings ? (
+                  treeState.emptyHint === "workspace_admin" ? (
+                    <span>
+                      No indexed repos are assigned to your account yet. Ask your org admin to grant
+                      repository access in the{" "}
+                      {onOpenAdminPortal ? (
+                        <button
+                          type="button"
+                          className="coop-explorer-inline-link"
+                          onClick={onOpenAdminPortal}
+                        >
+                          admin portal
+                        </button>
+                      ) : (
+                        "admin portal"
+                      )}
+                      , then click Refresh.
+                    </span>
+                  ) : treeState.emptyHint === "workspace" && onOpenSettings ? (
                     <span>
                       Select up to 3 repos in{" "}
                       <button

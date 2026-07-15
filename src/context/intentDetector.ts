@@ -209,6 +209,10 @@ export function repoContextFromEditor(
       next.owner = resolved.owner;
       next.repo = resolved.repo;
     }
+    if (next.file?.trim()) {
+      // Promote out of explorer repo-only scope so normalizeRepoContext keeps the file.
+      next.scope = "file";
+    }
   }
 
   if (preferences.includeSelection) {

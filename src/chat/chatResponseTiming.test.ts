@@ -13,49 +13,50 @@ function test(name: string, fn: () => void): void {
   console.log(`ok - ${name}`);
 }
 
-test("remainingMinResponseDelayMs respects minimum window", () => {
-  assert.equal(remainingMinResponseDelayMs(1000, 1500), MIN_CHAT_RESPONSE_VISIBLE_MS - 500);
-  assert.equal(remainingMinResponseDelayMs(1000, 5000), 0);
+test("production default has no artificial delay", () => {
+  assert.equal(MIN_CHAT_RESPONSE_VISIBLE_MS, 0);
+  assert.equal(remainingMinResponseDelayMs(1000, 1000), 0);
+  assert.equal(remainingMinResponseDelayMs(1000, 1500), 0);
 });
 
-test("remainingMinResponseDelayMs supports custom minimum window", () => {
+test("remainingMinResponseDelayMs still supports an explicit minimum window", () => {
   assert.equal(remainingMinResponseDelayMs(1000, 1500, 0), 0);
   assert.equal(remainingMinResponseDelayMs(1000, 1500, 1000), 500);
 });
 
 void (async () => {
-  const startedAt = Date.now() - MIN_CHAT_RESPONSE_VISIBLE_MS;
-  const emitted: string[] = [];
-  const gate = createChatOutputGate({
-    startedAt,
-    isCancelled: () => false,
-    onChunk: (chunk) => emitted.push(chunk)
-  });
-
-  gate.push("a");
-  gate.push("b");
-  await gate.waitUntilOpen();
-  assert.deepEqual(emitted, ["a", "b"]);
-
-  gate.push("c");
-  assert.deepEqual(emitted, ["a", "b", "c"]);
-  passed += 1;
-  console.log("ok - createChatOutputGate releases queued chunks after delay");
-
   const immediate: string[] = [];
   const immediateGate = createChatOutputGate({
     startedAt: Date.now(),
-    minVisibleMs: 0,
     isCancelled: () => false,
     onChunk: (chunk) => immediate.push(chunk)
   });
+
   immediateGate.push("x");
   assert.deepEqual(immediate, ["x"]);
   await immediateGate.waitUntilOpen();
   immediateGate.push("y");
   assert.deepEqual(immediate, ["x", "y"]);
   passed += 1;
-  console.log("ok - createChatOutputGate streams immediately with zero minimum");
+  console.log("ok - createChatOutputGate streams immediately with the default (no artificial delay)");
+
+  const delayed: string[] = [];
+  const delayedGate = createChatOutputGate({
+    startedAt: Date.now(),
+    minVisibleMs: 50,
+    isCancelled: () => false,
+    onChunk: (chunk) => delayed.push(chunk)
+  });
+
+  delayedGate.push("a");
+  delayedGate.push("b");
+  assert.deepEqual(delayed, []);
+  await delayedGate.waitUntilOpen();
+  assert.deepEqual(delayed, ["a", "b"]);
+  delayedGate.push("c");
+  assert.deepEqual(delayed, ["a", "b", "c"]);
+  passed += 1;
+  console.log("ok - createChatOutputGate still honors an explicit minVisibleMs when a caller opts in");
 
   console.log(`\n${passed} passed`);
 })();

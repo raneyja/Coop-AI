@@ -29,6 +29,7 @@ type RemoteExplorerProps = {
   onBrowseRepo: (path: string) => void;
   onUseRepo: (path: string) => void;
   onOpenSettings?: (screen?: SettingsScreen) => void;
+  onOpenAdminPortal?: () => void;
 };
 
 export function RemoteExplorer({
@@ -46,7 +47,8 @@ export function RemoteExplorer({
   onSelectFile,
   onBrowseRepo,
   onUseRepo,
-  onOpenSettings
+  onOpenSettings,
+  onOpenAdminPortal
 }: RemoteExplorerProps): React.ReactElement | null {
   const isRepoList = treeState.scope === "repos";
 
@@ -107,6 +109,7 @@ export function RemoteExplorer({
         }}
         onUseRepo={onUseRepo}
         onOpenSettings={onOpenSettings}
+        onOpenAdminPortal={onOpenAdminPortal}
       />
     </div>
   );

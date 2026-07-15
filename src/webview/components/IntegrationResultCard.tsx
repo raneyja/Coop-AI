@@ -16,6 +16,7 @@ type IntegrationResultCardProps = {
   ariaLabel: string;
   children: React.ReactNode;
   scrollable?: boolean;
+  className?: string;
 };
 
 export function IntegrationResultStack({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -30,10 +31,11 @@ export function IntegrationResultCard({
   onDismiss,
   ariaLabel,
   children,
-  scrollable = false
+  scrollable = false,
+  className
 }: IntegrationResultCardProps): React.ReactElement {
   return (
-    <section className="coop-result-card" aria-label={ariaLabel}>
+    <section className={`coop-result-card${className ? ` ${className}` : ""}`} aria-label={ariaLabel}>
       <header className="coop-result-header">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

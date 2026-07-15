@@ -1,6 +1,20 @@
 import { DEFAULT_INTENT_CONFIG, IntentBatchingConfig } from "../config/intentConfig";
-import { ContextRequestType, IntentCost, IntentEvent } from "./intentDetector";
+import { ContextRequestType, IntentCost, IntentEvent, UserIntent } from "./intentDetector";
 import { toRepositoryRelativePath } from "./repoFilePath";
+
+/**
+ * Explicit user actions (chat send, quick-action click, hotkey) are always waiting
+ * synchronously on the result. Batching exists to coalesce ambient/background context
+ * requests (selection change, hover, etc.) — it must never hold up a request the user
+ * is actively waiting on, regardless of that request's cost estimate.
+ */
+function isExplicitUserIntent(intent: UserIntent): boolean {
+  return (
+    intent === UserIntent.QUICK_ACTION_CLICKED ||
+    intent === UserIntent.MANUAL_CHAT_SUBMIT ||
+    intent === UserIntent.HOTKEY_TRIGGERED
+  );
+}
 
 export type ContextRequestParams = {
   file?: string;
@@ -91,7 +105,12 @@ export class RequestBatcher {
   }
 
   public enqueue(request: ContextFetchRequest): Promise<ContextFetchResult> {
-    if (!this.config.enabled || this.config.window <= 0 || request.intent.costEstimate === "expensive") {
+    if (
+      !this.config.enabled ||
+      this.config.window <= 0 ||
+      request.intent.costEstimate === "expensive" ||
+      isExplicitUserIntent(request.intent.intent)
+    ) {
       return this.executeSingle(request);
     }
 

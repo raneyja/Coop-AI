@@ -14,9 +14,10 @@ import { EmptyState } from "./components/EmptyState";
 import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
+import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
-import type { ChatHistoryPayload, GithubRepoOption } from "../chat/types";
+import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
 import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
@@ -34,6 +35,7 @@ import { PromptLibraryPill } from "./components/PromptLibraryPill";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { RemoteExplorer, parseRepoNodePath } from "./RemoteExplorer";
 import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
+import { ADMIN_PORTAL_URL } from "../config/publicUrls";
 import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
@@ -97,7 +99,7 @@ type InboundMessage =
         stale?: boolean;
         provider?: "github" | "gitlab" | "bitbucket";
         loading?: boolean;
-        emptyHint?: "workspace";
+        emptyHint?: "workspace" | "workspace_admin";
         listLabel?: "workspace";
       };
     }
@@ -112,6 +114,7 @@ type InboundMessage =
     }
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
+  | { type: "patch:update"; payload: PatchCardsUpdatePayload | PatchCardState }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | {
@@ -324,6 +327,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     run: { message: string; quickAction: string; attachments?: ChatImageAttachment[]; historyContent?: string; mentions?: ChatFileMention[]; slashUserArgs?: string };
   } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
+  const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
+  const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
   const [promptLibrary, setPromptLibrary] = useState<{
@@ -456,10 +461,48 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const renderBody = useCallback(
-    (content: string, relatedArtifactId?: string) => [
-      <ChatProse key="chat-prose" content={content} relatedArtifactId={relatedArtifactId} />
-    ],
-    []
+    (content: string, relatedArtifactId?: string, messageTimestamp?: number) => {
+      const card =
+        messageTimestamp !== undefined
+          ? patchCards.find((entry) => entry.messageTimestamp === messageTimestamp)
+          : undefined;
+      const showPatchCard =
+        messageTimestamp !== undefined &&
+        shouldRenderPatchCardForMessage(patchCards, messageTimestamp);
+      const hidePatchFences =
+        messageTimestamp !== undefined &&
+        shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps);
+
+      const elements: React.ReactElement[] = [];
+      if (showPatchCard && card) {
+        elements.push(
+          <PatchCard
+            key={`patch-${messageTimestamp}`}
+            state={card}
+            onApply={() =>
+              post({ type: "patch:apply", payload: { messageTimestamp } })
+            }
+            onReject={() =>
+              post({ type: "patch:reject", payload: { messageTimestamp } })
+            }
+            onUndo={() =>
+              post({ type: "patch:undo", payload: { messageTimestamp } })
+            }
+            onOpenFile={(path) => post({ type: "patch:open-file", payload: { path } })}
+          />
+        );
+      }
+      elements.push(
+        <ChatProse
+          key="chat-prose"
+          content={content}
+          relatedArtifactId={relatedArtifactId}
+          hidePatchFences={hidePatchFences}
+        />
+      );
+      return elements;
+    },
+    [patchCards, post, suppressedPatchTimestamps]
   );
 
   const handleCopyEvidenceText = useCallback(
@@ -575,6 +618,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     },
     [post]
   );
+
+  const openAdminPortal = useCallback(() => {
+    handleOpenLink(ADMIN_PORTAL_URL);
+  }, [handleOpenLink]);
 
   const requestTree = useCallback((path = "") => {
     post({ type: "repo:list", payload: { path, scope: "files" } });
@@ -724,6 +771,34 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "conflict:update":
           setConflictState(message.payload);
           break;
+        case "patch:update": {
+          const payload = message.payload;
+          if (payload && typeof payload === "object" && "cards" in payload && Array.isArray(payload.cards)) {
+            setPatchCards(payload.cards);
+            if (Array.isArray(payload.suppressedMessageTimestamps)) {
+              setSuppressedPatchTimestamps(payload.suppressedMessageTimestamps);
+            } else {
+              setSuppressedPatchTimestamps(
+                payload.cards
+                  .map((card) => card.messageTimestamp)
+                  .filter((value): value is number => typeof value === "number")
+              );
+            }
+          } else if (payload && typeof payload === "object" && "status" in payload) {
+            // Legacy single-card payload
+            const card = payload as PatchCardState;
+            if (card.messageTimestamp !== undefined) {
+              const timestamp = card.messageTimestamp;
+              setPatchCards((current) => {
+                const without = current.filter((entry) => entry.messageTimestamp !== timestamp);
+                return shouldRenderPatchCardForMessage([card], timestamp)
+                  ? [...without, card]
+                  : without;
+              });
+            }
+          }
+          break;
+        }
         case "degradation:notification":
           setDegradationNotification(message.payload);
           break;
@@ -1161,6 +1236,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onBrowseRepo={handleBrowseRepo}
           onUseRepo={handleUseRepo}
           onOpenSettings={openSettings}
+          onOpenAdminPortal={openAdminPortal}
         />
       ) : null}
       <ChatComposer

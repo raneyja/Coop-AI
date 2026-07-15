@@ -10,6 +10,7 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 | Pricing | https://coop-ai.dev/pricing | `PRICING_PAGE_URL` in `src/config/siteConfig.ts` |
 | API (backend) | https://api.coop-ai.dev | `DEFAULT_API_BASE` in `src/chat/types.ts` |
 | Admin portal | https://admin.coop-ai.dev | `admin/src/lib/coopApi.ts`, `COOP_ADMIN_PORTAL_URL` |
+| Ops portal | https://ops.coop-ai.dev | `ops/` Next app; deploy via [docs/deploy-ops-portal.md](docs/deploy-ops-portal.md) |
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 

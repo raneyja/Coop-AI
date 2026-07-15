@@ -124,9 +124,6 @@ const PROVIDER_CONFIGS: Record<LlmProvider, ZeroRetentionProviderConfig> = {
       provider_training_default: "commercial_api_data_not_used_for_training_by_default"
     },
     bodyAnnotations: {
-      metadata: {
-        ...SHARED_METADATA
-      },
       retention_policy: STRICT_RETENTION_POLICY
     },
     compliance: {

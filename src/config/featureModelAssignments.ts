@@ -38,7 +38,8 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
     feature: "edit",
     label: "/edit patches",
     provider: "openai",
-    model: "gpt-5-mini"
+    model: "gpt-5.1",
+    note: "OpenAI only — Anthropic is reserved for quick actions"
   },
   {
     feature: "autocomplete",

@@ -1,5 +1,10 @@
-/** Minimum time from user send to first visible assistant text output. */
-export const MIN_CHAT_RESPONSE_VISIBLE_MS = 3000;
+/**
+ * Configurable floor between user send and first visible assistant text output.
+ * Production default is 0 — Coop no longer buffers real output behind an artificial
+ * delay. Callers may still pass an explicit `minVisibleMs` (e.g. for tests), but no
+ * hot-path call site should rely on this default being non-zero.
+ */
+export const MIN_CHAT_RESPONSE_VISIBLE_MS = 0;
 
 export function remainingMinResponseDelayMs(
   startedAt: number,

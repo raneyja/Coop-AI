@@ -77,6 +77,13 @@ Rules:
 - Multiple files: repeat the File line + patch block per file.
 - If a change cannot be expressed safely, say why in one sentence — do not invent a patch.
 - Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
+
+## Completeness (required)
+- Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
+- If you introduce a helper, symbol, or extracted function, also emit the call-site / wire-up hunks so the new code is used (unless the user asked only to define it).
+- Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
+- Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
+- Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
 `;
 
 function withPatchOutputContract(prompt: string): string {
@@ -350,11 +357,12 @@ ${GENERAL_CHAT_EVIDENCE_RULES}`, "chat");
 
 export const CODE_EDIT_SYSTEM = withPatchOutputContract(`You are CoopAI in edit mode — a code generation assistant inside the user's editor.
 
-TASK: Produce minimal, correct patches for the user's request using the search-replace block format below.
+TASK: Produce minimal, correct patches that fully implement the user's request using the search-replace block format below.
 
 RULES:
-- Prefer the smallest change that satisfies the request; match surrounding style and conventions.
-- When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as authoritative source — never invent symbols or branches not in the attachment.
+- Prefer the smallest change that still completes the request; match surrounding style and conventions.
+- Multi-step edits (extract + call, rename + update callers, add helper + use it): emit every required hunk in this turn. Do not stop after adding a definition if call sites must change.
+- When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as authoritative source — never invent symbols or branches not in the attachment. Search the full attached file for all sites that must change.
 - When \`<project_instructions>\` is attached, follow those rules alongside this prompt.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
 - Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`);

@@ -13,6 +13,7 @@ import { evidenceArtifactAnchor, sourceCitationAnchor } from "../../prompts/sour
 type ChatProseProps = {
   content: string;
   relatedArtifactId?: string;
+  hidePatchFences?: boolean;
   onOpenFile?: (path: string, line?: number) => void;
   onOpenLink?: (url: string) => void;
   className?: string;
@@ -26,6 +27,7 @@ type RenderOptions = {
 export function ChatProse({
   content,
   relatedArtifactId,
+  hidePatchFences = false,
   onOpenFile,
   onOpenLink,
   className
@@ -40,6 +42,9 @@ export function ChatProse({
 
   for (let index = 0; index < document.blocks.length; index += 1) {
     const block = document.blocks[index]!;
+    if (hidePatchFences && shouldHidePatchBlock(block)) {
+      continue;
+    }
     if (block.type === "section-heading") {
       inSourcesSection = block.text.trim().toLowerCase() === "sources";
     }
@@ -56,6 +61,41 @@ export function ChatProse({
       {blocks}
     </div>
   );
+}
+
+export function shouldHidePatchBlock(block: ChatProseBlock): boolean {
+  if (block.type === "code-fence") {
+    const language = block.language?.trim().toLowerCase();
+    if (language === "patch" || block.code.includes("<<<<<<< SEARCH")) {
+      return true;
+    }
+  }
+  if (block.type === "paragraph") {
+    const text = block.content.map(inlineNodeToPlainText).join("").trim();
+    if (/^File:\s/.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function inlineNodeToPlainText(node: ChatInlineNode): string {
+  switch (node.type) {
+    case "text":
+    case "strong":
+    case "em":
+      return node.text;
+    case "inline-code":
+      return node.code;
+    case "file-link":
+    case "source-citation":
+    case "evidence-link":
+      return node.label;
+    case "external-link":
+      return node.label;
+    default:
+      return "";
+  }
 }
 
 function renderBlock(

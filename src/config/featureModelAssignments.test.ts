@@ -26,7 +26,7 @@ assert.equal(chatModel.model, "gpt-4o-mini");
 
 const editModel = resolveAssignedModelForUseCase("code_edit");
 assert.equal(editModel.provider, "openai");
-assert.equal(editModel.model, "gpt-5-mini");
+assert.equal(editModel.model, "gpt-5.1");
 
 const quickActionModel = resolveAssignedModelForUseCase("blast_radius");
 assert.equal(quickActionModel.provider, "anthropic");

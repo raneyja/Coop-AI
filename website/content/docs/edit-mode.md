@@ -24,7 +24,7 @@ Edit mode ships in production. It uses the same chat composer as quick actions �
 
 Edit mode routes to the `code_edit` use case and expects **patch blocks** in the model response — not prose-only answers.
 
-**Model:** Coop assigns **OpenAI GPT-5 mini** for `/edit`, `/patch`, and `/fix` in production. See [Model assignments](/docs/model-assignments).
+**Model:** Coop assigns **OpenAI GPT-5.1** for `/edit`, `/patch`, and `/fix` in production (balanced mutation model). See [Model assignments](/docs/model-assignments).
 
 ## Slash commands
 
@@ -59,7 +59,7 @@ Coop attaches editor context automatically:
 | **Selected lines** | `coopAI.includeSelection` | `true` |
 | **Active file path** | `coopAI.includeActiveFile` | `true` |
 
-**Best practice:** highlight the code you want changed, then run `/edit <instruction>`. With no selection, Coop uses the active file and your instruction.
+**Best practice:** highlight the code you want changed, then run `/edit <instruction>`. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
 
 Workspace **owner / repo / branch** (Settings → Workspace) help resolve indexed-repo context when the repo is Deep-Indexed.
 

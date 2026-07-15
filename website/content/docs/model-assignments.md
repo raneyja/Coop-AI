@@ -18,7 +18,7 @@ CoopAI assigns an LLM per feature in production. You do not pick provider or mod
 | --- | --- | --- | --- |
 | **Chat** (free-form composer) | OpenAI | GPT-4o mini | Chat session → `resolveAssignedModelForUseCase()` |
 | **Quick actions** (Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps; integration chat) | Anthropic | Claude Sonnet 4.6 | Same |
-| **/edit patches** (`/edit`, `/patch`, `/fix`) | OpenAI | GPT-5 mini | Same (`code_edit` use case) |
+| **/edit patches** (`/edit`, `/patch`, `/fix`) | OpenAI | GPT-5.1 | Same (`code_edit` use case) |
 | **Autocomplete** (inline ghost text) | Mistral | Codestral | `completionRouter.ts` → FIM when available |
 | **Embeddings** (Deep-Index semantic search) | OpenAI | text-embedding-3-small | Backend only — not shown in settings |
 
@@ -58,5 +58,5 @@ See [Extension settings](/docs/extension-settings) for the full settings hub.
 ## Next steps
 
 - [Inline autocomplete](/docs/autocomplete) — default on, global persistence, turn off intentionally
-- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5 mini
+- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1 |
 - [Plans & billing](/docs/plans-billing) — seat-based Pro pricing

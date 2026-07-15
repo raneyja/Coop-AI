@@ -58,8 +58,9 @@ export function resolveLocalAbsolutePath(relativePath: string): string | undefin
     if (!samePath) {
       continue;
     }
+    // Skip remote VFS tabs — Apply always targets the on-disk workspace file.
     if (isRemoteTabAbsolutePath(ref.absolutePath)) {
-      return undefined;
+      continue;
     }
     if (fs.existsSync(ref.absolutePath)) {
       return ref.absolutePath;
