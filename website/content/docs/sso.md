@@ -3,7 +3,7 @@ title: Single Sign On (SSO)
 description: Configure single sign-on for Enterprise organizations with SAML 2.0.
 section: enterprise
 order: 2
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-15"
 ---
 
 Enterprise organizations can sign in with SAML 2.0 through Okta, Azure AD / Entra ID, or any standards-compliant identity provider.
@@ -47,17 +47,45 @@ After a successful SAML assertion, Coop issues a session token and redirects bac
 
 **Not supported:** [coop-ai.dev/login](https://coop-ai.dev/login) (marketing site signup) does **not** offer SSO — only the admin portal and extension do.
 
+## How SAML setup works (two directions)
+
+SAML needs a trust handshake in **both** directions. In admin **Settings → Single sign-on**, choose your provider first — field labels then match that IdP’s console.
+
+| Step in admin UI | Direction | Why it’s required |
+| --- | --- | --- |
+| **1. Copy into …** (Okta / Entra / IdP) | Coop → IdP | Tells Okta/Entra **where to POST** the assertion (ACS / Reply URL) and **who Coop is** (Entity ID / Audience). Without this, the IdP cannot complete login. |
+| **2. Paste from …** | IdP → Coop | Tells Coop which IdP to trust (issuer, SSO URL, signing certificate). Without this, Coop cannot validate assertions. |
+| **3. Sign-in policy** | Coop only | Optional until SSO works — then you can require SSO and block password/Google. |
+
+Section 1 is **not optional**. Docs and the admin panel show the same Coop URLs because self-hosted deployments use different hostnames — always prefer the values shown in your admin portal over hard-coding examples.
+
 ## Service provider (Coop) values
 
-Your IdP admin needs these values when creating the SAML application. In the admin portal, open **Settings → Single sign-on** — the panel lists them and offers **Download metadata**.
+These are the Section **1** values: copy **from** Coop **into** your IdP. Open [admin portal → Settings → Single sign-on](https://admin.coop-ai.dev/settings/single-sign-on) — the panel lists them for your deployment and offers **Download metadata**.
 
-| Field | Example (hosted Coop) |
+Hosted Coop examples:
+
+| Purpose | Hosted Coop URL |
 | --- | --- |
-| **Single sign-on URL / ACS URL** | `https://api.coop-ai.dev/v1/auth/saml/callback` |
-| **Audience URI (SP Entity ID) / Entity ID** | `https://api.coop-ai.dev/v1/auth/saml/metadata` |
-| **Metadata URL** | `https://api.coop-ai.dev/v1/auth/saml/metadata` (requires signed-in Enterprise admin) |
+| Assertion callback (ACS / Reply / SSO URL) | `https://api.coop-ai.dev/v1/auth/saml/callback` |
+| SP entity / audience / identifier | `https://api.coop-ai.dev/v1/auth/saml/metadata` |
+| Metadata URL (optional) | `https://api.coop-ai.dev/v1/auth/saml/metadata` (Enterprise admin; may require sign-in) |
 
-Hosted Coop uses `api.coop-ai.dev` for all SP values above. Self-hosted deployments use your API hostname instead — your Coop **operator** configures the server; org admins copy the resulting SP values from the admin portal.
+**Okta field names** (Section 1 labels in admin):
+
+| Coop value | Paste into Okta as |
+| --- | --- |
+| ACS / callback URL | **Single sign-on URL** |
+| Entity ID | **Audience URI (SP Entity ID)** |
+
+**Microsoft Entra field names** (Section 1 labels in admin):
+
+| Coop value | Paste into Entra as |
+| --- | --- |
+| ACS / callback URL | **Reply URL (Assertion Consumer Service URL)** |
+| Entity ID | **Identifier (Entity ID)** |
+
+Self-hosted deployments use your API hostname instead — your Coop **operator** configures the server; org admins copy the resulting SP values from the admin portal.
 
 ## IdP requirements
 
@@ -71,29 +99,21 @@ Coop uses a single service provider for all Enterprise tenants. Your org is reso
 
 Sign in to the [admin portal](https://admin.coop-ai.dev) as an org admin on an Enterprise plan. Open **Settings** → **Single sign-on** (`/settings/single-sign-on`).
 
-The panel follows three steps:
-
-### 1. Coop service provider
-
-Copy **Single sign-on URL / ACS URL**, **Audience URI (SP Entity ID) / Entity ID**, and **Metadata URL** (or **Download metadata**) into your IdP SAML application.
-
-### 2. Identity provider
-
-Choose your provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML 2.0**). Paste the provider values from its SAML setup page. Okta calls these **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, and **X.509 Certificate**. Check **Enable SSO for this organization**, then click **Save SSO**.
-
-### 3. Sign-in policy
-
-Click **Test sign-in** and complete IdP login with an admin account. When SSO works, enable **Require SSO** — a confirmation modal warns that password and Google sign-in will be blocked. You can also toggle **Allow email and password** and **Allow Google** when **Require SSO** is off.
+1. Choose **Provider** (Okta, Azure AD / Entra ID, or Generic SAML 2.0) — labels update to match that console.
+2. **Section 1 — Copy into your IdP:** copy ACS / Entity ID (names match your provider) into the IdP SAML app. See [Service provider (Coop) values](#service-provider-coop-values).
+3. **Section 2 — Paste from your IdP:** paste issuer/SSO URL/certificate (provider-named fields) into Coop → check **Enable SSO** → **Save SSO**.
+4. Click **Test connection** — Coop opens your IdP, validates the SAML response, and returns a pass/fail result on this page. It does **not** replace your admin session or sign you in as another user.
+5. **Section 3 — Sign-in policy:** when the connection test passes, enable **Require SSO** (blocks password and Google at login and refresh; revokes existing non-SAML sessions after confirm). End users then use **Continue with SSO** on the login page.
 
 ## Provider-specific notes
 
 ### Okta
 
 1. Create a **SAML 2.0** application.
-2. Set **Single sign-on URL** to the Coop **ACS URL**.
-3. Set **Audience URI (SP Entity ID)** to the Coop **Entity ID**.
-4. Set **Name ID format** to **EmailAddress** and **Application username** to **Email**.
-5. From Okta's setup instructions, copy **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, and **X.509 Certificate** into Coop.
+2. From Coop Section **1**, paste **Single sign-on URL** and **Audience URI (SP Entity ID)** into Okta **Configure SAML**.
+3. Set **Name ID format** to **EmailAddress** and **Application username** to **Email**.
+4. From Okta **Sign On → View SAML setup instructions**, paste into Coop Section **2**: **Identity Provider Issuer**, **Identity Provider Single Sign-On URL**, **X.509 Certificate**.
+5. Assign users in Okta → Coop **Save SSO** → **Test connection**.
 
 <!-- figures xs -->
 ![Okta sign-in — Connecting to CoopAI after SAML app setup](/screenshots/docs/admin-sso-okta.png)
@@ -102,14 +122,25 @@ Click **Test sign-in** and complete IdP login with an admin account. When SSO wo
 ### Azure AD / Entra ID
 
 1. Create an **Enterprise application** → **Create your own application** → **Integrate any other application (non-gallery)**.
-2. Under **Single sign-on**, choose **SAML**.
-3. Set **Identifier (Entity ID)** and **Reply URL (ACS)** to Coop SP values.
-4. Edit **Attributes & Claims** — ensure `email` or `user.mail` is sent.
-5. Download the **Certificate (Base64)** and copy **Login URL** and **Azure AD Identifier**.
+2. **Single sign-on** → **SAML** → **Basic SAML Configuration**.
+3. From Coop Section **1**, paste **Reply URL (Assertion Consumer Service URL)** and **Identifier (Entity ID)** into Entra.
+4. **Attributes & Claims** — ensure email is sent (`user.mail`; NameID email format preferred).
+5. Assign users under **Users and groups**.
+6. From Entra, paste into Coop Section **2** — **do not swap these two URLs**:
+
+| Entra label | Example | Coop field |
+| --- | --- | --- |
+| **Microsoft Entra Identifier** | `https://sts.windows.net/{tenant-id}/` | **Microsoft Entra Identifier** |
+| **Login URL** | `https://login.microsoftonline.com/{tenant-id}/saml2` | **Login URL** |
+
+   If **Test connection** 404s on `sts.windows.net`, the Login URL field has the Identifier — swap them and save again.
+
+7. Upload the signing certificate (**Upload file** with Entra’s **Certificate (Base64)** `.cer` — don’t double-click it on macOS).
+8. Coop **Save SSO** → **Test connection**.
 
 ### Generic SAML
 
-Use the same SP values. Any IdP that signs assertions and sends a usable email claim works.
+Use the same Coop SP values from Section **1**. Any IdP that signs assertions and sends a usable email claim works — paste that IdP’s entity ID, SSO URL, and signing certificate into Section **2**.
 
 ## Enforce SSO-only sign-in
 
@@ -117,11 +148,11 @@ In **Settings → Single sign-on → Sign-in policy**, enable **Require SSO** an
 
 When enabled:
 
-- Email/password and Google sign-in return `sso_required` for your org
-- Existing password sessions remain valid until they expire or the user signs out
+- Email/password and Google sign-in return `sso_required` at login and on `/v1/auth/refresh`
+- Coop **immediately revokes** existing password and Google sessions and refresh tokens for your org; **SAML sessions stay valid**
 - Org API keys (`coop_…`) still authenticate automation endpoints — revoke keys for offboarded users
 
-Use **Test sign-in** with at least one admin account before enabling **Require SSO**.
+Use **Test connection** before enabling **Require SSO**. Real user sign-in is via login → **Continue with SSO**, not the settings test button.
 
 To disable SAML while **Require SSO** is on, turn off **Require SSO** first — otherwise **Save SSO** returns `sso_required_active`.
 
@@ -175,16 +206,20 @@ Quick reference:
 
 | Limit | Detail |
 | --- | --- |
-| **SP-initiated only** | Login must start from Coop (admin **Test sign-in**, extension **Sign in with SSO**, or `/v1/auth/saml/start`) — IdP-initiated flows without RelayState fail |
+| **SP-initiated only** | Login must start from Coop (admin **Test connection**, extension **Sign in with SSO**, or `/v1/auth/saml/start`) — IdP-initiated flows without RelayState fail |
 | **No SCIM** | No automated user provisioning sync from IdP — first SAML login JIT-provisions a **member**; offboard via admin **Users** or `POST /v1/auth/saml/offboard` |
 | **12-hour sessions, no refresh** | SAML sessions expire after TTL (default 12h); users re-authenticate through the IdP |
 | **Shared service provider** | One Entity ID and ACS URL per Coop deployment; org resolved via RelayState |
-| **API keys bypass `requireSso`** | Org API keys authenticate automation even when SSO is required — rotate or revoke for offboarded users |
+| **API keys bypass `requireSso`** | Org API keys authenticate automation even when SSO is required — rotate or revoke for offboarded users. Password and Google sign-in and refresh are blocked. |
+| **ForceAuthn on every login** | Coop sets `ForceAuthn="true"` on every SAML AuthnRequest; Azure AD also gets `prompt=login` so Microsoft must show an interactive sign-in challenge instead of silent SSO |
+| **No IdP single logout (SLO)** | Signing out of Coop ends the Coop session only — it does not terminate your Okta/Azure browser session |
 | **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends; signature and timestamp checks still apply |
+| **IdP cert storage** | X.509 signing certificates are stored in plaintext in `org_sso_config` (unlike encrypted OAuth integration tokens) |
 
 ## Security notes
 
 - Session tokens are hashed server-side; SAML assertions are validated with your IdP signing certificate
+- Post-login redirects with session tokens only go to Coop surfaces (admin portal, marketing site, and `vscode:` / `vscode-insiders:` extension callbacks) — not arbitrary `https://` hosts
 - SSO sessions default to **12 hours**; re-authenticate through your IdP when expired — no refresh token
 - Audit events: `auth.saml.login` recorded for each successful SSO sign-in
 

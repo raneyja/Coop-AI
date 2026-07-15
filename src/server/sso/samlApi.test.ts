@@ -7,6 +7,7 @@ import type { OrgStore } from "../orgStore";
 import type { SsoConfigStore, OrgSsoConfig } from "./ssoConfigStore";
 import type { UserStore, UserRecord, CreatedSession } from "../users/userStore";
 import type { ServerConfig } from "../serverConfig";
+import type { AuthConfig } from "../auth/authConfig";
 import {
   TEST_IDP_CERT,
   TEST_IDP_ENTITY_ID,
@@ -25,6 +26,11 @@ const serverConfig = {
   ssoSessionTtlMs: 43_200_000
 } as ServerConfig;
 
+const authConfig = {
+  adminPortalUrl: "https://admin.coop-ai.dev",
+  marketingBaseUrl: "https://coop-ai.dev"
+} as AuthConfig;
+
 function mockRedirectResponse(): {
   response: ServerResponse;
   state: { statusCode?: number; location?: string; body?: string };
@@ -42,8 +48,8 @@ function mockRedirectResponse(): {
   return { response, state };
 }
 
-function encodeRelayState(orgId: string, redirect?: string): string {
-  return Buffer.from(JSON.stringify({ orgId, redirect }), "utf8").toString("base64url");
+function encodeRelayState(orgId: string, redirect?: string, mode: "login" | "test" = "login"): string {
+  return Buffer.from(JSON.stringify({ orgId, redirect, mode }), "utf8").toString("base64url");
 }
 
 function testSsoConfig(): OrgSsoConfig {
@@ -130,7 +136,8 @@ test("POST /v1/auth/saml/callback delivers session token on valid signed asserti
       userStore: mockUserStore(),
       ssoConfigStore: mockSsoConfigStore(),
       samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig
+      serverConfig,
+      authConfig
     }
   );
 
@@ -161,7 +168,8 @@ test("POST /v1/auth/saml/callback redirects saml_validation_failed for invalid a
       userStore: mockUserStore(),
       ssoConfigStore: mockSsoConfigStore(),
       samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig
+      serverConfig,
+      authConfig
     }
   );
 
@@ -190,7 +198,8 @@ test("POST /v1/auth/saml/callback returns missing_saml_response when body is emp
       userStore: mockUserStore(),
       ssoConfigStore: mockSsoConfigStore(),
       samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig
+      serverConfig,
+      authConfig
     }
   );
 
@@ -219,7 +228,8 @@ test("POST /v1/auth/saml/callback returns missing_relay_state without org contex
       userStore: mockUserStore(),
       ssoConfigStore: mockSsoConfigStore(),
       samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig
+      serverConfig,
+      authConfig
     }
   );
 
@@ -228,4 +238,85 @@ test("POST /v1/auth/saml/callback returns missing_relay_state without org contex
     error: "missing_relay_state",
     message: "SP-initiated login is required (no org in RelayState)."
   });
+});
+
+test("POST /v1/auth/saml/callback test mode reports success without creating a session", async () => {
+  const redirect = "https://admin.coop-ai.dev/settings/single-sign-on";
+  const relayState = encodeRelayState(enterpriseOrgId, redirect, "test");
+  const samlResponse = createSignedSamlResponse({ email: "sso-callback@demo.local" });
+  const { response, state } = mockRedirectResponse();
+  let upsertCalls = 0;
+  let sessionCalls = 0;
+
+  const userStore = {
+    upsertUserFromIdp: async () => {
+      upsertCalls += 1;
+      throw new Error("test mode must not upsert users");
+    },
+    createSession: async () => {
+      sessionCalls += 1;
+      throw new Error("test mode must not create sessions");
+    }
+  } as unknown as UserStore;
+
+  await handleSamlApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/auth/saml/callback",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: undefined,
+      rawBody: callbackFormBody(samlResponse, relayState)
+    },
+    response,
+    {
+      orgStore: mockOrgStore(),
+      userStore,
+      ssoConfigStore: mockSsoConfigStore(),
+      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
+      serverConfig,
+      authConfig
+    }
+  );
+
+  assert.equal(upsertCalls, 0);
+  assert.equal(sessionCalls, 0);
+  assert.equal(state.statusCode, 302);
+  const location = new URL(state.location!);
+  assert.equal(location.pathname, "/settings/single-sign-on");
+  assert.equal(location.searchParams.get("sso_test"), "passed");
+  assert.equal(location.searchParams.get("email"), "sso-callback@demo.local");
+  assert.equal(location.hash.includes("coopToken"), false);
+});
+
+test("POST /v1/auth/saml/callback test mode reports failure without logging the admin out", async () => {
+  const redirect = "https://admin.coop-ai.dev/settings/single-sign-on";
+  const relayState = encodeRelayState(enterpriseOrgId, redirect, "test");
+  const invalidResponse = Buffer.from("<samlp:Response/>", "utf8").toString("base64");
+  const { response, state } = mockRedirectResponse();
+
+  await handleSamlApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/auth/saml/callback",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: undefined,
+      rawBody: callbackFormBody(invalidResponse, relayState)
+    },
+    response,
+    {
+      orgStore: mockOrgStore(),
+      userStore: mockUserStore(),
+      ssoConfigStore: mockSsoConfigStore(),
+      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
+      serverConfig,
+      authConfig
+    }
+  );
+
+  assert.equal(state.statusCode, 302);
+  const location = new URL(state.location!);
+  assert.equal(location.pathname, "/settings/single-sign-on");
+  assert.equal(location.searchParams.get("sso_test"), "failed");
+  assert.equal(location.searchParams.get("error"), "saml_validation_failed");
+  assert.equal(location.pathname.includes("/login"), false);
 });

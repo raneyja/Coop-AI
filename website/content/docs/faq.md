@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-15"
 ---
 
 ## General
@@ -93,11 +93,19 @@ Yes, on the **Enterprise** plan. Org admins configure SAML in the admin portal u
 
 ### What happens when my org requires SSO?
 
-When an admin enables **Require SSO**, password and Google sign-in return `sso_required`. Existing sessions stay valid until expiry. Org API keys for automation still work — admins should revoke keys for offboarded users.
+When an admin enables **Require SSO**, password and Google sign-in return `sso_required` at login and on session refresh. Coop immediately revokes existing password and Google sessions and refresh tokens for the org; SAML sessions remain valid. Org API keys for automation still work — admins should revoke keys for offboarded users.
 
 ### Can I disable SSO after enabling Require SSO?
 
 Turn off **Require SSO** in **Settings → Single sign-on → Sign-in policy** first. Disabling SAML while **Require SSO** is active returns `sso_required_active`.
+
+### Why does Google sign-in fail with email not verified?
+
+Google sign-in requires Google's verified-email flag (`email_verified`). Unverified Google accounts are rejected with `email_not_verified` — verify the address in your Google account, then try again.
+
+### Does Coop block password login until email is verified?
+
+No. Coop sends a verification link on password signup but does **not** hard-block password login until verified (standard B2B soft verify).
 
 ## Support
 

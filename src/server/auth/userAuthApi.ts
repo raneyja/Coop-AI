@@ -12,7 +12,14 @@ import { AuthIdentityStore } from "./authIdentityStore";
 import { AuthTokenStore } from "./authTokenStore";
 import { GoogleAuthService } from "./googleAuthService";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "./passwordCrypto";
-import { deliverAuthError, deliverSessionToken, sanitizeAuthRedirect, writeJson } from "./sessionDelivery";
+import {
+  authRedirectAllowlistFromConfig,
+  deliverAuthError,
+  deliverSessionToken,
+  sanitizeAuthRedirect,
+  writeJson
+} from "./sessionDelivery";
+import { authClientKey, consumeAuthRateLimit } from "./authRateLimit";
 import { adminPortalLoginUrl } from "../billing/adminPortalUrl";
 import type { Pool } from "pg";
 import { getDbPool } from "../db";
@@ -113,6 +120,14 @@ async function handleRegister(
   const password = String(body.password ?? "");
   const orgNameInput = String(body.orgName ?? body.displayName ?? "").trim();
 
+  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
+    writeJson(response, 429, {
+      error: "rate_limited",
+      message: "Too many attempts. Try again in a few minutes."
+    });
+    return true;
+  }
+
   if (!isValidEmail(email)) {
     writeJson(response, 400, { error: "invalid_email", message: "Enter a valid email address." });
     return true;
@@ -165,6 +180,14 @@ async function handleLogin(
     .trim()
     .toLowerCase();
   const password = String(body.password ?? "");
+
+  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
+    writeJson(response, 429, {
+      error: "rate_limited",
+      message: "Too many attempts. Try again in a few minutes."
+    });
+    return true;
+  }
 
   if (!email || !password) {
     writeJson(response, 400, { error: "invalid_credentials", message: "Enter your email and password." });
@@ -234,20 +257,29 @@ async function handleRefresh(
     return true;
   }
 
-  const userId = await deps.authTokenStore!.validateRefreshToken(refreshToken);
-  if (!userId) {
+  const peeked = await deps.authTokenStore!.peekToken(refreshToken, "refresh");
+  if (!peeked) {
     writeJson(response, 401, { error: "invalid_refresh_token" });
     return true;
   }
 
-  const user = await deps.userStore!.getUser(userId);
+  const user = await deps.userStore!.getUser(peeked.userId);
   if (!user || user.deactivatedAt) {
     writeJson(response, 401, { error: "invalid_refresh_token" });
     return true;
   }
 
+  const providerRaw = String(peeked.metadata?.authProvider ?? "password");
+  const authProvider: "password" | "google" =
+    providerRaw === "google" ? "google" : "password";
+  const allowed = await checkAuthMethodAllowed(deps, user.orgId, authProvider);
+  if (!allowed.ok) {
+    writeJson(response, 403, { error: allowed.error, message: allowed.message });
+    return true;
+  }
+
   await deps.authTokenStore!.markRefreshTokenUsed(refreshToken);
-  const session = await issueSession(deps, user.id, user.orgId, "password");
+  const session = await issueSession(deps, user.id, user.orgId, authProvider);
   writeJson(response, 200, session);
   return true;
 }
@@ -261,6 +293,14 @@ async function handleForgotPassword(
   const email = String(body.email ?? "")
     .trim()
     .toLowerCase();
+
+  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
+    writeJson(response, 429, {
+      error: "rate_limited",
+      message: "Too many attempts. Try again in a few minutes."
+    });
+    return true;
+  }
 
   writeJson(response, 200, {
     ok: true,
@@ -291,6 +331,14 @@ async function handleResetPassword(
   const body = asRecord(parsed.body);
   const token = String(body.token ?? "").trim();
   const password = String(body.password ?? "");
+
+  if (!consumeAuthRateLimit(authClientKey(parsed.headers, token.slice(0, 16)))) {
+    writeJson(response, 429, {
+      error: "rate_limited",
+      message: "Too many attempts. Try again in a few minutes."
+    });
+    return true;
+  }
 
   const passwordError = validatePasswordStrength(password, deps.authConfig.passwordMinLength);
   if (passwordError) {
@@ -462,7 +510,10 @@ async function handleGoogleStart(
     return true;
   }
 
-  const redirect = sanitizeAuthRedirect(parsed.query?.get("redirect"));
+  const redirect = sanitizeAuthRedirect(
+    parsed.query?.get("redirect"),
+    authRedirectAllowlistFromConfig(deps.authConfig)
+  );
   const mode = parsed.query?.get("mode") === "signup" ? "signup" : "login";
   const orgName = parsed.query?.get("orgName")?.trim() || undefined;
   const callbackUri = resolveGoogleCallbackUri(parsed, deps.authConfig);
@@ -614,17 +665,21 @@ async function completeGoogleOAuth(
     };
   }
 
-  const clientRedirect = sanitizeAuthRedirect(state.redirect);
+  const clientRedirect = sanitizeAuthRedirect(
+    state.redirect,
+    authRedirectAllowlistFromConfig(deps.authConfig)
+  );
 
   let profile;
   try {
     profile = await deps.googleAuth.exchangeCode(code, callbackUri);
   } catch (err) {
+    console.error("[auth] google token exchange failed:", err);
     return {
       ok: false,
       status: 502,
       error: "google_exchange_failed",
-      message: err instanceof Error ? err.message : "Google sign-in failed.",
+      message: "Google sign-in failed. Try again.",
       redirect: clientRedirect ?? fallbackLogin
     };
   }
@@ -656,7 +711,7 @@ async function completeGoogleOAuth(
     ok: true,
     accessToken: sessionResult.accessToken,
     refreshToken: sessionResult.refreshToken,
-    clientRedirect: state.redirect ?? clientRedirect
+    clientRedirect
   };
 }
 
@@ -691,6 +746,15 @@ async function resolveGoogleUser(
   | { ok: true; accessToken: string; refreshToken: string }
   | { ok: false; status: number; error: string; message: string }
 > {
+  if (!profile.emailVerified) {
+    return {
+      ok: false,
+      status: 403,
+      error: "email_not_verified",
+      message: "Verify your Google email address, then try again."
+    };
+  }
+
   let user = await deps.userStore!.findActiveUserByEmail(profile.email);
   const googleIdentity = await deps.authIdentityStore!.findGoogleIdentity(profile.sub);
 
@@ -702,11 +766,7 @@ async function resolveGoogleUser(
     const orgName = state.orgName?.trim() || deriveOrgName(profile.email);
     const org = await deps.orgStore!.createOrganization(orgName, "free");
     user = await deps.userStore!.createUser(org.id, profile.email, "admin");
-    await deps.authIdentityStore!.createGoogleIdentity(
-      user.id,
-      profile.sub,
-      profile.emailVerified ? new Date() : new Date()
-    );
+    await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
     const loginUrl = adminPortalLoginUrl(deps.authConfig.adminPortalUrl);
     try {
       await deps.emailService?.sendFreeSignupWelcome({
@@ -724,11 +784,7 @@ async function resolveGoogleUser(
       return { ok: false, status: 403, error: allowed.error!, message: allowed.message! };
     }
     if (!googleIdentity) {
-      await deps.authIdentityStore!.createGoogleIdentity(
-        user.id,
-        profile.sub,
-        profile.emailVerified ? new Date() : new Date()
-      );
+      await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
     }
     await audit(deps, user.id, user.orgId, "auth.login", { method: "google" });
   }
@@ -750,7 +806,8 @@ async function issueSession(
   const refreshToken = await deps.authTokenStore!.createToken(
     userId,
     "refresh",
-    deps.authConfig.refreshTtlMs
+    deps.authConfig.refreshTtlMs,
+    { authProvider }
   );
   return {
     accessToken: created.token,

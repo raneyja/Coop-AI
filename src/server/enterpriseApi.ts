@@ -7,6 +7,7 @@ import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { OrgSsoConfigInput, SsoProvider } from "./sso/ssoConfigStore";
 import { isValidX509Cert } from "./sso/x509Cert";
 import type { UserStore } from "./users/userStore";
+import type { AuthTokenStore } from "./auth/authTokenStore";
 
 type ParsedRequest = {
   method: string;
@@ -20,6 +21,7 @@ export type EnterpriseApiDeps = {
   ssoConfigStore?: SsoConfigStore;
   authPolicyStore?: AuthPolicyStore;
   userStore?: UserStore;
+  authTokenStore?: AuthTokenStore;
   serverConfig: ServerConfig;
 };
 
@@ -188,11 +190,23 @@ async function handleSsoPolicy(
         return true;
       }
     }
+    const previous = await deps.authPolicyStore.getPolicy(auth.orgId);
     const policy = await deps.authPolicyStore.upsertPolicy(auth.orgId, {
       requireSso: typeof body.requireSso === "boolean" ? body.requireSso : undefined,
       allowPassword: typeof body.allowPassword === "boolean" ? body.allowPassword : undefined,
       allowGoogle: typeof body.allowGoogle === "boolean" ? body.allowGoogle : undefined
     });
+
+    // Turning on Require SSO (or disabling password/Google) must end live non-SSO
+    // sessions — otherwise refresh tokens bypass the new policy.
+    const requiringSso = policy.requireSso && !previous.requireSso;
+    const blockedPassword = previous.allowPassword && !policy.allowPassword;
+    const blockedGoogle = previous.allowGoogle && !policy.allowGoogle;
+    if (requiringSso || blockedPassword || blockedGoogle) {
+      await deps.userStore?.revokeOrgNonSamlSessions?.(auth.orgId);
+      await deps.authTokenStore?.revokeRefreshTokensForOrg?.(auth.orgId);
+    }
+
     writeJson(response, 200, {
       requireSso: policy.requireSso,
       allowPassword: policy.allowPassword,
@@ -251,6 +265,11 @@ function parseSsoConfigInput(
     return { ok: false, message: "idpSsoUrl must use HTTPS." };
   }
 
+  const azureSwapError = validateAzureSsoFieldPlacement(provider, idpEntityId, idpSsoUrl);
+  if (azureSwapError) {
+    return { ok: false, message: azureSwapError };
+  }
+
   if (rawCert) {
     if (/^coop_(sess|refresh)_/i.test(rawCert)) {
       return {
@@ -292,6 +311,51 @@ async function isSsoEnabledForOrg(
   }
   const config = await ssoConfigStore.getEnabledConfig(orgId);
   return config !== undefined && isValidX509Cert(config.idpX509Cert);
+}
+
+/**
+ * Entra's Microsoft Entra Identifier (`https://sts.windows.net/{tenant}/`) is not
+ * a login endpoint. Customers often paste it into Login URL; AuthnRequests then 404.
+ */
+export function validateAzureSsoFieldPlacement(
+  provider: SsoProvider,
+  idpEntityId: string,
+  idpSsoUrl: string
+): string | undefined {
+  if (provider !== "azuread") {
+    return undefined;
+  }
+
+  let ssoHost = "";
+  let entityHost = "";
+  try {
+    ssoHost = new URL(idpSsoUrl).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+  try {
+    entityHost = new URL(idpEntityId).hostname.toLowerCase();
+  } catch {
+    // Entity ID may be a non-URL string for some tenants; ignore.
+  }
+
+  if (ssoHost === "sts.windows.net") {
+    return (
+      "Login URL looks like the Microsoft Entra Identifier (sts.windows.net). " +
+      "Use Entra's Login URL instead — usually https://login.microsoftonline.com/{tenant-id}/saml2. " +
+      "Put https://sts.windows.net/{tenant-id}/ in Microsoft Entra Identifier."
+    );
+  }
+
+  if (entityHost === "login.microsoftonline.com" && ssoHost !== "login.microsoftonline.com") {
+    return (
+      "Microsoft Entra Identifier looks like a Login URL. " +
+      "Put https://sts.windows.net/{tenant-id}/ in Microsoft Entra Identifier, " +
+      "and https://login.microsoftonline.com/{tenant-id}/saml2 in Login URL."
+    );
+  }
+
+  return undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

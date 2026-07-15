@@ -2,10 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import {
+  authRedirectAllowlistFromConfig,
   deliverAuthError,
   deliverSessionToken,
   sanitizeAuthRedirect
 } from "./sessionDelivery";
+
+const allowlist = authRedirectAllowlistFromConfig({
+  adminPortalUrl: "https://admin.coop-ai.dev",
+  marketingBaseUrl: "https://coop-ai.dev"
+});
 
 function mockRedirectResponse(): {
   response: ServerResponse;
@@ -24,30 +30,44 @@ function mockRedirectResponse(): {
   return { response, state };
 }
 
-test("sanitizeAuthRedirect allows vscode, https, and local http", () => {
+test("sanitizeAuthRedirect allows vscode and Coop callback origins", () => {
   assert.equal(
-    sanitizeAuthRedirect("vscode://coop-ai.coop-ai/auth/callback"),
+    sanitizeAuthRedirect("vscode://coop-ai.coop-ai/auth/callback", allowlist),
     "vscode://coop-ai.coop-ai/auth/callback"
   );
   assert.equal(
-    sanitizeAuthRedirect("vscode-insiders://coop-ai.coop-ai/auth/callback"),
+    sanitizeAuthRedirect("vscode-insiders://coop-ai.coop-ai/auth/callback", allowlist),
     "vscode-insiders://coop-ai.coop-ai/auth/callback"
   );
   assert.equal(
-    sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback"),
+    sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback", allowlist),
     "https://admin.coop-ai.dev/auth/callback"
   );
   assert.equal(
-    sanitizeAuthRedirect("http://localhost:3000/auth/callback"),
-    "http://localhost:3000/auth/callback"
+    sanitizeAuthRedirect("https://coop-ai.dev/auth/callback", allowlist),
+    "https://coop-ai.dev/auth/callback"
+  );
+  assert.equal(
+    sanitizeAuthRedirect("http://localhost:3001/auth/callback", {
+      adminPortalUrl: "http://localhost:3001",
+      marketingBaseUrl: "http://localhost:3001"
+    }),
+    "http://localhost:3001/auth/callback"
   );
 });
 
-test("sanitizeAuthRedirect rejects unsafe schemes", () => {
-  assert.equal(sanitizeAuthRedirect("javascript:alert(1)"), undefined);
-  assert.equal(sanitizeAuthRedirect("file:///etc/passwd"), undefined);
+test("sanitizeAuthRedirect rejects arbitrary https hosts (open redirect)", () => {
+  assert.equal(sanitizeAuthRedirect("https://evil.example/auth/callback", allowlist), undefined);
+  assert.equal(sanitizeAuthRedirect("https://evil.example/steal", allowlist), undefined);
+  assert.ok(sanitizeAuthRedirect("https://admin.coop-ai.dev/settings/single-sign-on", allowlist));
+});
+
+test("sanitizeAuthRedirect rejects unsafe schemes and https without allowlist", () => {
+  assert.equal(sanitizeAuthRedirect("javascript:alert(1)", allowlist), undefined);
+  assert.equal(sanitizeAuthRedirect("file:///etc/passwd", allowlist), undefined);
   assert.equal(sanitizeAuthRedirect(""), undefined);
   assert.equal(sanitizeAuthRedirect("not-a-url"), undefined);
+  assert.equal(sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback"), undefined);
 });
 
 test("deliverAuthError redirects vscode URIs to callback fragment", () => {

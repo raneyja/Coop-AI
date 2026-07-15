@@ -18,7 +18,7 @@ This guide gets you from signup to your first useful chat in CoopAI.
 
 **Browser** → [coop-ai.dev/signup/free](https://coop-ai.dev/signup/free)
 
-Enter your work email and create a password, or continue with Google. Verify your email if prompted.
+Enter your work email and create a password, or continue with Google. Coop sends a verification link on password signup; you can sign in before verifying (soft verify).
 
 For Pro or Enterprise, start at [Pricing](/pricing) and follow checkout to the [Welcome page](/welcome). Sign in with the same email you used at checkout.
 

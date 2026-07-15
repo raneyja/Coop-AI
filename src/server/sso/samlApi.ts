@@ -2,10 +2,13 @@ import type { ServerResponse } from "node:http";
 import { requireAuth, requireOrgPlan, resolveAuthContext } from "../authMiddleware";
 import { AuditLogger, principalForApiKey, principalForUser } from "../audit/auditLogger";
 import {
+  authRedirectAllowlistFromConfig,
   deliverAuthError,
   deliverSessionToken,
-  sanitizeAuthRedirect
+  sanitizeAuthRedirect,
+  type AuthRedirectAllowlist
 } from "../auth/sessionDelivery";
+import type { AuthConfig } from "../auth/authConfig";
 import type { OrgStore } from "../orgStore";
 import type { ServerConfig } from "../serverConfig";
 import type { UserStore } from "../users/userStore";
@@ -29,11 +32,18 @@ export type SamlApiDeps = {
   samlService?: SamlService;
   auditLogger?: AuditLogger;
   serverConfig: ServerConfig;
+  /** When set, post-login redirects are origin-allowlisted (tokens in fragment). */
+  authConfig?: AuthConfig;
 };
 
 type RelayState = {
   orgId: string;
   redirect?: string;
+  /**
+   * `test` = admin SSO settings diagnostic. Validates the IdP assertion, then
+   * returns a pass/fail redirect — never creates a Coop session or swaps users.
+   */
+  mode?: "login" | "test";
 };
 
 const SAML_PREFIX = "/v1/auth/saml";
@@ -100,8 +110,9 @@ async function handlePublicStart(
 ): Promise<boolean> {
   const orgId = parsed.query?.get("orgId")?.trim();
   const orgName = parsed.query?.get("org")?.trim();
-  const redirect = sanitizeAuthRedirect(parsed.query?.get("redirect"));
+  const redirect = sanitizeSamlRedirect(parsed.query?.get("redirect"), deps);
   const preferJson = parsed.query?.get("format") === "json";
+  const mode = parsed.query?.get("mode")?.trim() === "test" ? "test" : "login";
 
   let resolvedOrgId = orgId;
   if (!resolvedOrgId && orgName) {
@@ -146,7 +157,11 @@ async function handlePublicStart(
     return true;
   }
 
-  const relayState = encodeRelayState({ orgId: resolvedOrgId, redirect: redirect ?? undefined });
+  const relayState = encodeRelayState({
+    orgId: resolvedOrgId,
+    redirect: redirect ?? undefined,
+    mode
+  });
   try {
     const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
     if (preferJson) {
@@ -182,7 +197,7 @@ async function handleLogin(
     return true;
   }
 
-  const redirect = sanitizeAuthRedirect(parsed.query?.get("redirect"));
+  const redirect = sanitizeSamlRedirect(parsed.query?.get("redirect"), deps);
   const preferJson = parsed.query?.get("format") === "json";
 
   const config = await deps.ssoConfigStore!.getEnabledConfig(auth.orgId);
@@ -235,7 +250,7 @@ async function handleCallback(
 ): Promise<boolean> {
   // CRITICAL: requires rawBody (application/x-www-form-urlencoded) — webhookServer must pass rawBody for this route or SAMLResponse will be missing.
   const form = readForm(parsed);
-  const earlyRelay = decodeRelayState(form.get("RelayState"));
+  const earlyRelay = decodeRelayState(form.get("RelayState"), deps);
 
   const samlResponse = form.get("SAMLResponse");
   if (!samlResponse) {
@@ -298,6 +313,26 @@ async function handleCallback(
       "saml_validation_failed",
       errorMessage(error)
     );
+    return true;
+  }
+
+  // Admin "Test connection" — validate only; do not create/swap sessions.
+  if (relay.mode === "test") {
+    await deps.auditLogger?.record({
+      orgId: relay.orgId,
+      principal: principalForApiKey("sso-test"),
+      action: "auth.saml.test",
+      metadata: {
+        idpProvider: assertion.idpProvider,
+        email: assertion.email,
+        result: "passed"
+      }
+    });
+    deliverSsoTestResult(response, relay.redirect, {
+      result: "passed",
+      email: assertion.email,
+      provider: assertion.idpProvider
+    });
     return true;
   }
 
@@ -440,7 +475,10 @@ function encodeRelayState(state: RelayState): string {
   return Buffer.from(JSON.stringify(state), "utf8").toString("base64url");
 }
 
-function decodeRelayState(raw: string | null | undefined): RelayState | undefined {
+function decodeRelayState(
+  raw: string | null | undefined,
+  deps: { authConfig?: AuthConfig } = {}
+): RelayState | undefined {
   if (!raw) {
     return undefined;
   }
@@ -448,16 +486,61 @@ function decodeRelayState(raw: string | null | undefined): RelayState | undefine
     const json = Buffer.from(raw, "base64url").toString("utf8");
     const parsed = JSON.parse(json) as Partial<RelayState>;
     if (parsed && typeof parsed.orgId === "string" && parsed.orgId) {
-      return { orgId: parsed.orgId, redirect: sanitizeAuthRedirect(parsed.redirect) };
+      const mode = parsed.mode === "test" ? "test" : "login";
+      return {
+        orgId: parsed.orgId,
+        redirect: sanitizeSamlRedirect(parsed.redirect, deps),
+        mode
+      };
     }
   } catch {
     // Not our encoded RelayState — fall through.
   }
   // Tolerate a bare orgId (UUID) as RelayState for simple integrations.
   if (/^[0-9a-fA-F-]{16,}$/.test(raw)) {
-    return { orgId: raw };
+    return { orgId: raw, mode: "login" };
   }
   return undefined;
+}
+
+function sanitizeSamlRedirect(
+  redirect: string | null | undefined,
+  deps: { authConfig?: AuthConfig }
+): string | undefined {
+  // Without allowlist origins we still accept vscode: callbacks (extension),
+  // but reject https token handoffs to avoid open redirects.
+  const allowlist: AuthRedirectAllowlist | undefined = deps.authConfig
+    ? authRedirectAllowlistFromConfig(deps.authConfig)
+    : undefined;
+  return sanitizeAuthRedirect(redirect, allowlist);
+}
+
+function deliverSsoTestResult(
+  response: ServerResponse,
+  redirect: string | undefined,
+  outcome:
+    | { result: "passed"; email: string; provider: string }
+    | { result: "failed"; error: string; message: string }
+): void {
+  if (!redirect) {
+    writeJson(response, outcome.result === "passed" ? 200 : 401, outcome);
+    return;
+  }
+  try {
+    const target = new URL(redirect);
+    target.searchParams.set("sso_test", outcome.result);
+    if (outcome.result === "passed") {
+      target.searchParams.set("email", outcome.email);
+      target.searchParams.set("provider", outcome.provider);
+    } else {
+      target.searchParams.set("error", outcome.error);
+      target.searchParams.set("message", outcome.message);
+    }
+    response.writeHead(302, { location: target.toString() });
+    response.end();
+  } catch {
+    writeJson(response, outcome.result === "passed" ? 200 : 401, outcome);
+  }
 }
 
 function respondBrowserOrJson(
@@ -482,6 +565,10 @@ function respondCallbackError(
   error: string,
   message: string
 ): void {
+  if (relay?.mode === "test") {
+    deliverSsoTestResult(response, relay.redirect, { result: "failed", error, message });
+    return;
+  }
   if (relay?.redirect) {
     deliverAuthError(response, relay.redirect, error, message, statusCode);
     return;

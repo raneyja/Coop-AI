@@ -70,7 +70,13 @@ export class SamlService {
   /** Build the SP-initiated login redirect URL to the org's IdP. */
   public async getLoginRedirectUrl(config: OrgSsoConfig, relayState: string): Promise<string> {
     const saml = this.buildSaml(config);
-    return saml.getAuthorizeUrlAsync(relayState, undefined, {});
+    // Azure may silent-SSO from a browser cookie without a UI challenge unless
+    // we also request interactive login on the redirect URL.
+    const additionalParams =
+      config.provider === "azuread" ? { prompt: "login" } : {};
+    return saml.getAuthorizeUrlAsync(relayState, undefined, {
+      additionalParams
+    });
   }
 
   /**
@@ -125,6 +131,11 @@ export class SamlService {
       acceptedClockSkewMs: this.acceptedClockSkewMs,
       // Don't pin a NameID format — accept whatever Okta/Azure return.
       identifierFormat: null,
+      // Enterprise posture: require interactive IdP authentication on every Coop
+      // SSO start — do not silently reuse an existing Okta/Azure browser session.
+      forceAuthn: true,
+      // Azure also honors prompt=login on the authorize redirect (see getLoginRedirectUrl).
+      additionalAuthorizeParams: config.provider === "azuread" ? { prompt: "login" } : {},
       // Replay protection disabled — multi-instance backend has no shared InResponseTo cache. Signature + audience + NotBefore/NotOnOrAfter still enforced. Add Redis/PG cache provider to enable.
       validateInResponseTo: ValidateInResponseTo.never
     };

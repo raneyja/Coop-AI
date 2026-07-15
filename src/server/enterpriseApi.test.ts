@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
-import { handleEnterpriseApiRequest } from "./enterpriseApi";
+import { handleEnterpriseApiRequest, validateAzureSsoFieldPlacement } from "./enterpriseApi";
 import type { OrgStore } from "./orgStore";
 import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { AuthPolicyStore } from "./sso/authPolicyStore";
@@ -428,6 +428,8 @@ test("PUT /v1/sso/policy enforces SSO-only sign-in", async () => {
   );
   assert.equal(configResponse.statusCode, 200);
 
+  let revokedSessions = 0;
+  let revokedRefresh = 0;
   const response = mockResponse();
   const handled = await handleEnterpriseApiRequest(
     {
@@ -441,7 +443,18 @@ test("PUT /v1/sso/policy enforces SSO-only sign-in", async () => {
       orgStore: mockOrgStore(),
       ssoConfigStore,
       authPolicyStore: mockAuthPolicyStore(),
-      userStore,
+      userStore: {
+        revokeOrgNonSamlSessions: async () => {
+          revokedSessions += 1;
+          return 3;
+        }
+      } as unknown as UserStore,
+      authTokenStore: {
+        revokeRefreshTokensForOrg: async () => {
+          revokedRefresh += 1;
+          return 2;
+        }
+      } as never,
       serverConfig
     }
   );
@@ -456,6 +469,8 @@ test("PUT /v1/sso/policy enforces SSO-only sign-in", async () => {
   assert.equal(body.requireSso, true);
   assert.equal(body.allowPassword, false);
   assert.equal(body.allowGoogle, false);
+  assert.equal(revokedSessions, 1);
+  assert.equal(revokedRefresh, 1);
 });
 
 test("non-enterprise org is rejected for SSO config", async () => {
@@ -532,4 +547,23 @@ test("GET /v1/sso/config rejects non-admin members", async () => {
   assert.equal(response.statusCode, 403);
   const body = response.body as { error: string };
   assert.equal(body.error, "admin_required");
+});
+
+test("validateAzureSsoFieldPlacement rejects sts.windows.net as Login URL", () => {
+  const error = validateAzureSsoFieldPlacement(
+    "azuread",
+    "https://sts.windows.net/tenant-id/",
+    "https://sts.windows.net/tenant-id/"
+  );
+  assert.ok(error);
+  assert.match(error!, /Login URL looks like the Microsoft Entra Identifier/);
+});
+
+test("validateAzureSsoFieldPlacement accepts correct Entra Login URL + Identifier", () => {
+  const error = validateAzureSsoFieldPlacement(
+    "azuread",
+    "https://sts.windows.net/tenant-id/",
+    "https://login.microsoftonline.com/tenant-id/saml2"
+  );
+  assert.equal(error, undefined);
 });

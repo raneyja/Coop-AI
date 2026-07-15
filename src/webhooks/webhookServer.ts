@@ -569,7 +569,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             rawBody: parsed.rawBody.toString("utf8")
           },
           response,
-          { orgStore, userStore, ssoConfigStore, samlService, auditLogger, serverConfig }
+          { orgStore, userStore, ssoConfigStore, samlService, auditLogger, serverConfig, authConfig }
         )
       ) {
         return;
@@ -695,7 +695,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { orgStore, ssoConfigStore, authPolicyStore, userStore, serverConfig }
+          { orgStore, ssoConfigStore, authPolicyStore, userStore, authTokenStore, serverConfig }
         )
       ) {
         return;

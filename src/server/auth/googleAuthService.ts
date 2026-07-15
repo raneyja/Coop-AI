@@ -23,7 +23,12 @@ export type GoogleAuthState = {
   mode: "login" | "signup";
   orgName?: string;
   plan?: "free" | "pro";
+  /** Unix ms when the signed state was issued (replay window). */
+  iat?: number;
 };
+
+/** Signed OAuth state validity (standard SaaS OAuth CSRF window). */
+export const GOOGLE_AUTH_STATE_TTL_MS = 15 * 60 * 1000;
 
 export class GoogleAuthService {
   public constructor(private readonly options: GoogleAuthServiceOptions) {}
@@ -95,12 +100,17 @@ export class GoogleAuthService {
 }
 
 function signGoogleAuthState(state: GoogleAuthState, secret: string): string {
-  const payload = Buffer.from(JSON.stringify(state)).toString("base64url");
+  const withIat: GoogleAuthState = { ...state, iat: state.iat ?? Date.now() };
+  const payload = Buffer.from(JSON.stringify(withIat)).toString("base64url");
   const sig = createHmac("sha256", secret).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
 
-function verifyGoogleAuthState(state: string, secret: string): GoogleAuthState | undefined {
+function verifyGoogleAuthState(
+  state: string,
+  secret: string,
+  now = Date.now()
+): GoogleAuthState | undefined {
   const [payload, sig] = state.split(".");
   if (!payload || !sig) {
     return undefined;
@@ -114,7 +124,13 @@ function verifyGoogleAuthState(state: string, secret: string): GoogleAuthState |
     return undefined;
   }
   try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as GoogleAuthState;
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as GoogleAuthState;
+    if (typeof parsed.iat === "number") {
+      if (parsed.iat > now + 60_000 || now - parsed.iat > GOOGLE_AUTH_STATE_TTL_MS) {
+        return undefined;
+      }
+    }
+    return parsed;
   } catch {
     return undefined;
   }

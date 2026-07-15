@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { inflateRawSync } from "node:zlib";
 import { SamlService, SsoConfigError } from "./samlService";
 import type { OrgSsoConfig } from "./ssoConfigStore";
 import {
@@ -38,6 +39,28 @@ test("validateCallback accepts a signed assertion and extracts identity", async 
   assert.equal(assertion.idpSubject, email);
   assert.equal(assertion.idpProvider, "saml");
   assert.equal(assertion.sessionIndex, "session-test-123");
+});
+
+test("getLoginRedirectUrl requests ForceAuthn from the IdP", async () => {
+  const url = await samlService.getLoginRedirectUrl(testSsoConfig(), "relay-state-test");
+  const parsed = new URL(url);
+  const samlRequest = parsed.searchParams.get("SAMLRequest");
+  assert.ok(samlRequest, "expected SAMLRequest query param");
+  const xml = inflateRawSync(Buffer.from(samlRequest, "base64")).toString("utf8");
+  assert.match(xml, /ForceAuthn="true"/);
+});
+
+test("getLoginRedirectUrl adds prompt=login for Azure AD", async () => {
+  const url = await samlService.getLoginRedirectUrl(
+    testSsoConfig({ provider: "azuread" }),
+    "relay-state-azure"
+  );
+  const parsed = new URL(url);
+  assert.equal(parsed.searchParams.get("prompt"), "login");
+  const samlRequest = parsed.searchParams.get("SAMLRequest");
+  assert.ok(samlRequest);
+  const xml = inflateRawSync(Buffer.from(samlRequest!, "base64")).toString("utf8");
+  assert.match(xml, /ForceAuthn="true"/);
 });
 
 test("validateCallback rejects an unsigned assertion", async () => {

@@ -1,6 +1,22 @@
 import type { ServerResponse } from "node:http";
 
-export function sanitizeAuthRedirect(redirect: string | null | undefined): string | undefined {
+/** Origins allowed to receive session tokens in a redirect fragment. */
+export type AuthRedirectAllowlist = {
+  adminPortalUrl: string;
+  marketingBaseUrl: string;
+  /** Extra origins (e.g. preview deploys) from `COOP_AUTH_EXTRA_REDIRECT_ORIGINS`. */
+  extraOrigins?: string[];
+};
+
+/**
+ * Post-login redirects may carry access tokens in the URL fragment.
+ * Allow only Coop surfaces (admin / marketing / localhost mirrors) and VS Code URI handlers —
+ * never arbitrary `https://` hosts.
+ */
+export function sanitizeAuthRedirect(
+  redirect: string | null | undefined,
+  allowlist?: AuthRedirectAllowlist
+): string | undefined {
   if (!redirect) {
     return undefined;
   }
@@ -10,16 +26,52 @@ export function sanitizeAuthRedirect(redirect: string | null | undefined): strin
   }
   try {
     const url = new URL(trimmed);
-    if (url.protocol === "vscode:" || url.protocol === "vscode-insiders:" || url.protocol === "https:") {
+    if (url.protocol === "vscode:" || url.protocol === "vscode-insiders:") {
       return trimmed;
     }
-    if (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) {
-      return trimmed;
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return undefined;
     }
+    if (!allowlist) {
+      return undefined;
+    }
+    if (url.protocol === "http:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+      return undefined;
+    }
+    if (!isAllowedRedirectOrigin(url.origin, allowlist)) {
+      return undefined;
+    }
+    return trimmed;
   } catch {
     return undefined;
   }
-  return undefined;
+}
+
+export function authRedirectAllowlistFromConfig(config: {
+  adminPortalUrl: string;
+  marketingBaseUrl: string;
+}, env: NodeJS.ProcessEnv = process.env): AuthRedirectAllowlist {
+  const extra =
+    env.COOP_AUTH_EXTRA_REDIRECT_ORIGINS?.split(",")
+      .map((entry) => entry.trim().replace(/\/$/, ""))
+      .filter(Boolean) ?? [];
+  return {
+    adminPortalUrl: config.adminPortalUrl,
+    marketingBaseUrl: config.marketingBaseUrl,
+    extraOrigins: extra
+  };
+}
+
+function isAllowedRedirectOrigin(origin: string, allowlist: AuthRedirectAllowlist): boolean {
+  const allowed = new Set<string>();
+  for (const base of [allowlist.adminPortalUrl, allowlist.marketingBaseUrl, ...(allowlist.extraOrigins ?? [])]) {
+    try {
+      allowed.add(new URL(base).origin);
+    } catch {
+      // skip invalid config entries
+    }
+  }
+  return allowed.has(origin);
 }
 
 export function deliverSessionToken(

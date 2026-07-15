@@ -22,7 +22,8 @@ const DEFAULT_POLICY: Omit<OrgAuthPolicy, "orgId" | "updatedAt"> = {
 
 /**
  * Per-org sign-in policy for Enterprise SSO enforcement.
- * When requireSso is true, password and Google sign-in are blocked at login time.
+ * When requireSso is true, password and Google sign-in are blocked at login and
+ * refresh; enabling Require SSO also revokes live non-SAML sessions.
  */
 export class AuthPolicyStore {
   public constructor(private readonly pool: Pool) {}

@@ -3,7 +3,7 @@ title: Security architecture
 description: Zero-clone indexing, credential storage, and data handling.
 section: enterprise
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-15"
 ---
 
 CoopAI is built for teams that cannot send full repo clones to third-party AI services.
@@ -32,11 +32,17 @@ Integration OAuth tokens are encrypted at rest with `CREDENTIALS_ENCRYPTION_KEY`
 
 ## Authentication
 
-- **Email + password** — default sign-in for extension, admin portal, and website
-- **Google OAuth** — same account as signup
+- **Email + password** — default sign-in for extension, admin portal, and website; verification link sent on signup (soft verify — login is not blocked until verified)
+- **Google OAuth** — same account as signup; requires Google's `email_verified` flag (`email_not_verified` if unverified)
 - **SSO (SAML)** — Enterprise orgs; configured in admin portal ([Single Sign On (SSO)](/docs/sso))
 - **Automation API keys** — optional Bearer tokens for CI/scripts and direct API calls; not the primary sign-in method
 - **Integration OAuth** — per-integration browser consent flows (Slack, GitHub, etc.)
+
+**Require SSO:** when enabled, password and Google sign-in are blocked at login and on `/v1/auth/refresh`. Coop immediately revokes existing password and Google sessions and refresh tokens for the org; SAML sessions remain valid. Org API keys still bypass `requireSso`.
+
+**Auth rate limiting:** login, register, forgot-password, and reset-password — ~20 attempts per 15 minutes per IP+email.
+
+**Post-login redirects:** session tokens in redirect URLs only go to Coop surfaces (admin portal, marketing site, `vscode:` / `vscode-insiders:`) — not arbitrary `https://` hosts.
 
 ### SAML SSO sessions
 
@@ -74,10 +80,12 @@ View audit history in the admin portal **Audit log** (org admins).
 | Limit | Impact |
 | --- | --- |
 | **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends without a shared cache. Signature, audience, and timestamp checks still apply. |
-| **API key bypass under `requireSso`** | `requireSso` blocks password and Google interactive sign-in only. Valid org API keys still authenticate `/v1/chat` and other automation endpoints — revoke keys for offboarded users. |
+| **API key bypass under `requireSso`** | `requireSso` blocks password and Google interactive sign-in and refresh only. Valid org API keys still authenticate `/v1/chat` and other automation endpoints — revoke keys for offboarded users. |
+| **Require SSO session revocation** | Enabling **Require SSO** (or disabling password/Google) immediately revokes non-SAML sessions and refresh tokens; existing SAML sessions stay valid. |
 | **JIT provisioning** | First SAML login creates a **member** user; admins must promote roles manually or pre-provision accounts. |
 | **No SCIM** | No IdP-driven user provisioning sync — offboard via admin **Users** or `POST /v1/auth/saml/offboard` |
-| **SP-initiated only** | Login must start from Coop (`/v1/auth/saml/start` or admin **Test sign-in**) so RelayState carries the org id. |
+| **SP-initiated only** | Login must start from Coop (`/v1/auth/saml/start` or admin **Test connection**) so RelayState carries the org id. |
+| **IdP cert storage** | X.509 signing certificates are stored in plaintext in `org_sso_config` (unlike encrypted OAuth integration tokens) |
 
 Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 

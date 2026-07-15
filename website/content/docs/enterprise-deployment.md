@@ -124,7 +124,7 @@ After the API is running with `COOP_PUBLIC_BASE_URL` set, Coop operators can run
 npm run smoke:sso
 ```
 
-This verifies `/v1/sso/config`, SAML start redirect, and prints portal credentials for a browser **Test sign-in**. Org admins configure production IdP settings in the admin portal — see [Single Sign On (SSO)](/docs/sso).
+This verifies `/v1/sso/config`, SAML start redirect, and prints portal credentials for a browser **Test connection**. Org admins configure production IdP settings in the admin portal — see [Single Sign On (SSO)](/docs/sso).
 
 ## Next steps
 

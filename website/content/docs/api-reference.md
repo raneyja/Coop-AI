@@ -3,7 +3,7 @@ title: API reference
 description: CoopAI API v1 — chat, inline completion, health, and authentication.
 section: api
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-07-15"
 ---
 
 All routes are served from your API base URL (`https://api.coop-ai.dev` or self-hosted).
@@ -13,6 +13,14 @@ All routes are served from your API base URL (`https://api.coop-ai.dev` or self-
 ### Extension and admin portal
 
 Users sign in with **email + password**, **Google**, or **SSO (SAML)**. The extension stores a session token after sign-in — not a pasted API key.
+
+**Google sign-in** requires Google's verified-email flag (`email_verified`). Unverified Google accounts return `email_not_verified` (403).
+
+**Password email verification** is soft: Coop sends a verify link on signup but does not block password login until verified.
+
+**Auth rate limiting:** login, register, forgot-password, and reset-password are limited to ~20 attempts per 15 minutes per IP+email (`429` `rate_limited`).
+
+**Post-login redirects:** session tokens in redirect URLs are only sent to Coop surfaces — admin portal, marketing site, and `vscode:` / `vscode-insiders:` extension callbacks. Arbitrary `https://` hosts are rejected.
 
 ### Automation and API access
 
@@ -232,7 +240,7 @@ Returns sign-in policy for the org.
 }
 ```
 
-When `requireSso` is `true`, password and Google sign-in are blocked at login (`sso_required`). Existing sessions remain valid until expiry.
+When `requireSso` is `true`, password and Google sign-in are blocked at login and on `/v1/auth/refresh` (`sso_required`). Enabling **Require SSO** (or disabling password/Google) immediately revokes existing password and Google sessions and refresh tokens for the org; SAML sessions remain valid.
 
 **Errors:** `401` unauthorized, `403` `plan_required`, `503` `sso_unavailable`
 
@@ -244,7 +252,7 @@ Update sign-in policy. **Admin only.**
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `requireSso` | boolean? | Block password/Google for new sign-ins |
+| `requireSso` | boolean? | Block password/Google at login and refresh; revokes non-SAML sessions when enabled |
 | `allowPassword` | boolean? | Ignored when `requireSso` is `true` |
 | `allowGoogle` | boolean? | Ignored when `requireSso` is `true` |
 
@@ -263,7 +271,7 @@ Public SSO entry for the extension and admin portal. Redirects (302) to your IdP
 | Param | Required | Notes |
 | --- | --- | --- |
 | `org` or `orgId` | Yes | Organization name (case-insensitive) or UUID |
-| `redirect` | No | Allowed callback URL after sign-in (admin portal or extension) |
+| `redirect` | No | Post-sign-in callback URL — must be admin portal, marketing site, or `vscode:` / `vscode-insiders:` extension handler |
 | `format` | No | `json` → `{ "redirectUrl": "…" }` instead of 302 |
 
 **Errors:** `400` `missing_org`, `403` `plan_required`, `409` `sso_not_configured`, `502` `sso_login_failed`

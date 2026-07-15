@@ -50,6 +50,8 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | Problem | Fix |
 | --- | --- |
 | **Cannot sign in** | Use email/password or Google from signup or invite — not an automation API key |
+| **`email_not_verified`** | Google sign-in requires a verified Google email — verify in your Google account, then retry |
+| **`rate_limited`** | Too many sign-in or password-reset attempts — wait ~15 minutes, then retry |
 | **SSO required** | Your org enforces SAML — admin portal: **Organization name** + **Continue with SSO** on `/login` |
 | **SAML sign-in failed** | See [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
 | **Invite link expired** | Ask admin to resend invite from **Users** |
@@ -93,7 +95,7 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | **`saml_validation_failed`** | Check IdP cert expiry, Entity ID / ACS URL match, server clock skew |
 | **`sso_required_active`** | Turn off **Require SSO** before disabling SAML |
 | **SP URLs empty in admin** | Coop **operator**: fix server configuration — [Enterprise deployment — SAML SSO](/docs/enterprise-deployment#saml-sso-enterprise) |
-| **IdP-initiated login fails** | Coop is SP-initiated only — start from admin **Test sign-in** or extension **Sign in with SSO** |
+| **IdP-initiated login fails** | Coop is SP-initiated only — start from admin **Test connection** or extension **Sign in with SSO** |
 | **Browser handoff fails (extension)** | Complete IdP login in browser; see callback errors in [Extension settings — Enterprise SSO](/docs/extension-settings#enterprise-sso) |
 
 Full error code table and known limits: [SSO troubleshooting](/docs/saml-sso-troubleshooting).

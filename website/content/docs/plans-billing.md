@@ -67,9 +67,9 @@ Enterprise includes **SAML 2.0 SSO** for the admin portal and VS Code extension:
 | Capability | Detail |
 | --- | --- |
 | **IdP support** | Okta, Azure AD / Entra ID, or any SAML 2.0 IdP with signed assertions |
-| **Admin setup** | **Settings → Single sign-on** — copy SP values, paste IdP config, **Test sign-in**, then **Require SSO** |
+| **Admin setup** | **Settings → Single sign-on** — copy SP values, paste IdP config, **Test connection**, then **Require SSO** |
 | **Sign-in surfaces** | Admin portal (**Continue with SSO**) and extension (**Sign in with SSO** with browser handoff) |
-| **Policy** | Optional **Require SSO** to block password and Google sign-in; org API keys still work for automation |
+| **Policy** | Optional **Require SSO** to block password and Google sign-in (including refresh); revokes existing password/Google sessions when enabled; org API keys still work for automation |
 
 Setup guide: [Single Sign On (SSO)](/docs/sso). Troubleshooting: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 

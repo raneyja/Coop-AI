@@ -179,7 +179,10 @@ export default function LoginPage() {
                 onChange={(e) => setOrgName(e.target.value)}
               />
             </div>
-            <p className="text-xs text-coop-muted">Enterprise SAML SSO — use the exact organization name.</p>
+            <p className="text-xs text-coop-muted">
+              Exact organization name required. Next you&apos;ll be redirected to your company identity
+              provider (Okta, Microsoft Entra, etc.) to sign in securely.
+            </p>
             <a
               href={orgName.trim() ? ssoStartUrl(orgName.trim()) : "#"}
               className={`admin-btn-secondary block w-full py-2.5 text-center ${

@@ -72,7 +72,7 @@ Typical sequence for a new Enterprise org (org admin + IT). Adjust for your IdP 
 | Phase | Owner | Tasks | Target |
 | --- | --- | --- | --- |
 | **Week 0 — Provision** | Coop / billing | Stripe checkout, welcome email, admin account | Day 1 |
-| **Week 0 — SSO** | IT + org admin | IdP SAML app with Coop SP values (step 1) → admin **Settings → Single sign-on** → paste IdP config (step 2) → **Test sign-in** → enable **Require SSO** (step 3) when ready | Day 1–3 |
+| **Week 0 — SSO** | IT + org admin | IdP SAML app with Coop SP values (step 1) → admin **Settings → Single sign-on** → paste IdP config (step 2) → **Test connection** → enable **Require SSO** (step 3) when ready | Day 1–3 |
 | **Week 1 — Integrations** | Org admin (+ GitHub admin if needed) | Admin portal **Integrations** — GitHub App, Slack, Jira, etc. | Day 3–7 |
 | **Week 1 — Indexing** | Org admin | **Indexing** → Deep-Index company repos; set **Repository access** mode | Day 3–7 |
 | **Week 1 — Users** | Org admin | **Users** → invite or rely on IdP JIT; assign per-user repo grants if using **Per-user grants** | Day 5–10 |
@@ -82,17 +82,17 @@ Detail: [Single Sign On (SSO)](/docs/sso), [SAML SSO troubleshooting](/docs/saml
 
 ### SSO-only org playbook
 
-Use this when **Require SSO** is enabled in **Settings → Single sign-on → Sign-in policy** (password and Google blocked for new interactive sign-ins).
+Use this when **Require SSO** is enabled in **Settings → Single sign-on → Sign-in policy** (password and Google blocked for new interactive sign-ins and token refresh).
 
 1. **Browser — IdP** — Provision users in Okta / Entra / your SAML IdP with an **email** attribute (or email-format NameID). Map the same email your org uses in Coop.
-2. **Browser — Admin portal** — **Settings → Single sign-on** → complete steps 1–2 (SP values into IdP, paste IdP Entity ID / SSO URL / cert) → **Save SSO** → **Test sign-in** with your admin identity.
-3. **Browser — Admin portal** — Step 3: enable **Require SSO** only after a successful test. Coop shows a confirmation — a misconfigured IdP can lock everyone out. **Allow email and password** and **Allow Google** are hidden while **Require SSO** is on.
+2. **Browser — Admin portal** — **Settings → Single sign-on** → complete steps 1–2 (SP values into IdP, paste IdP Entity ID / SSO URL / cert) → **Save SSO** → **Test connection** with your admin identity.
+3. **Browser — Admin portal** — Step 3: enable **Require SSO** only after a successful test. Coop shows a confirmation — a misconfigured IdP can lock everyone out. Enabling **Require SSO** also ends existing password/Google sessions for the org (SAML sessions stay). **Allow email and password** and **Allow Google** are hidden while **Require SSO** is on.
 4. **Browser — Admin portal** — **Users** → promote at least one SSO user to **admin** if JIT created them as **member** (first SAML login defaults to **member**).
 5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not send users to [coop-ai.dev/login](https://coop-ai.dev/login) — it has no SSO and returns `sso_required` for password attempts.
 6. **Extension UI** — Developers use **Settings → Account** → **Organization name** + **Sign in with SSO** (browser handoff; VS Code completes automatically). No password invite required for SSO-only orgs.
 7. **Offboarding** — Deactivate in **Users**, or automate `POST /v1/auth/saml/offboard` from your IdP provisioning job.
 
-**Known limits:** Existing password or Google sessions stay valid until expiry or sign-out. Org API keys (`coop_…`) still authenticate automation under **Require SSO** — revoke keys when users leave. SAML sessions default to 12 hours with no silent refresh. Full error codes and limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
+**Known limits:** Enabling **Require SSO** revokes password/Google sessions and refresh tokens for that org (SAML sessions remain). Org API keys (`coop_…`) still authenticate automation under **Require SSO** — revoke keys when users leave. SAML sessions default to 12 hours with no silent refresh. Full error codes and limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
 ### Repository access (Pro / Enterprise)
 
@@ -204,7 +204,7 @@ Org admins configure SAML at **Settings → Single sign-on** (`/settings/single-
 | --- | --- | --- |
 | **1. Coop service provider** | Top of page | Copy **Entity ID**, **ACS URL**, and **Metadata URL** into your IdP SAML app — or **Download metadata**. Share these with IT if they own the IdP. |
 | **2. Identity provider** | Middle form | Choose provider (**Okta**, **Azure AD / Entra ID**, or **Generic SAML 2.0**). Paste IdP **Entity ID**, **SSO URL**, and **X.509 signing certificate**. Check **Enable SSO for this organization** → **Save SSO**. |
-| **3. Sign-in policy** | Bottom section | Click **Test sign-in** (available when SSO is enabled). After a successful test, enable **Require SSO** to block password and Google. Optionally keep **Allow email and password** / **Allow Google** while testing. |
+| **3. Sign-in policy** | Bottom section | Click **Test connection** (available when SSO is enabled). After a successful test, enable **Require SSO** to block password and Google (and revoke those sessions). Optionally keep **Allow email and password** / **Allow Google** while testing. |
 
 If step 1 shows **Service provider URLs unavailable**, your Coop **operator** (not end users) must set `COOP_PUBLIC_BASE_URL` on the API server to the public backend URL (e.g. `https://api.coop-ai.dev`), then restart the API. This env var controls SAML callback URLs — it is operator infrastructure config, not something developers set in VS Code.
 
@@ -235,7 +235,7 @@ Admin portal login uses the same org name with **Continue with SSO** on `/login`
 | --- | --- |
 | **Shared service provider** | One Entity ID and ACS URL for all Enterprise tenants; org is resolved via RelayState at callback |
 | **API keys under Require SSO** | Org API keys (`coop_…`) still work for automation — revoke on offboarding |
-| **Existing sessions** | Password/Google sessions survive until expiry even after **Require SSO** is enabled |
+| **Existing sessions** | Enabling **Require SSO** revokes password/Google sessions immediately; SAML sessions stay until expiry |
 | **JIT default role** | First SAML login creates a **member** — promote admins in **Users** |
 | **No session refresh** | SAML sessions expire (default 12h); users re-authenticate through the IdP |
 
@@ -287,7 +287,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code — GPT-5 mini (aliases: `/patch`, `/fix`) |
+| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`) |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -322,7 +322,7 @@ Coop assigns a model per feature — you do **not** pick provider or model on Pr
 | --- | --- |
 | **Chat** | OpenAI GPT-4o mini |
 | **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
-| **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5 mini |
+| **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5.1 |
 | **Autocomplete** | Mistral Codestral |
 
 Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
@@ -378,7 +378,7 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 
-**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop routes edit patches through **OpenAI GPT-5 mini** and includes your editor selection and active file in context (`coopAI.includeSelection`, default `true`).
+**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop routes edit patches through **OpenAI GPT-5.1**, attaches the **full active file** (selection is a focus hint, not a context window cut), and includes your editor selection text when present (`coopAI.includeSelection`, default `true`).
 
 | Step | Surface | Action |
 | --- | --- | --- |

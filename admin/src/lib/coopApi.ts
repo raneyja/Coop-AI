@@ -1011,6 +1011,12 @@ export function ssoStartUrl(orgName: string): string {
   return `/api/auth/saml/start?${params.toString()}`;
 }
 
+/** Admin SSO settings diagnostic — validates IdP config without swapping sessions. */
+export function ssoTestConnectionUrl(orgName: string): string {
+  const params = new URLSearchParams({ org: orgName, mode: "test" });
+  return `/api/auth/saml/start?${params.toString()}`;
+}
+
 export type SsoSpDetails = {
   entityId: string;
   acsUrl: string;

@@ -55,6 +55,8 @@ If the browser redirect fails or you close the tab early, VS Code shows an error
 | --- | --- |
 | `sso_not_configured` | Ask your admin to finish **Settings → Single sign-on** in the admin portal |
 | `sso_required` | Use **Sign in with SSO** — password and Google are disabled for your org |
+| `email_not_verified` | Verify your Google email address, then try **Continue with Google** again |
+| `rate_limited` | Too many sign-in attempts — wait ~15 minutes, then retry |
 | `saml_validation_failed` | IdP cert, clock skew, or SP URL mismatch — ask your admin to check IdP config |
 | `missing_org` | Re-enter your **Organization name** before **Sign in with SSO** |
 | No session token | Complete IdP login in the browser; do not close the tab before redirect back to VS Code |
@@ -123,7 +125,7 @@ The Preferences hub subtitle shows **Assigned models** plus chat and autocomplet
 | --- | --- |
 | Chat | OpenAI · GPT-4o mini |
 | Quick actions | Anthropic · Claude Sonnet 4.6 |
-| /edit patches | OpenAI · GPT-5 mini |
+| /edit patches | OpenAI · GPT-5.1 |
 | Autocomplete | Mistral · Codestral |
 
 Production users see these rows as **read-only** with **On** / **Off** badges. Copy on the screen:

@@ -6,7 +6,7 @@ import {
   fetchSamlMetadataXml,
   fetchSsoConfig,
   fetchSsoPolicy,
-  ssoStartUrl,
+  ssoTestConnectionUrl,
   updateSsoConfig,
   updateSsoPolicy,
   type SsoConfigInput,
@@ -16,20 +16,127 @@ import {
 } from "@/lib/coopApi";
 import { Modal } from "@/components/Modal";
 import { StatusBadge } from "@/components/StatusBadge";
+import { readSsoCertFile } from "@/lib/readSsoCertFile";
 
 type Provider = SsoConfigInput["provider"];
 
+type SsoTestResult =
+  | { status: "passed"; email: string; provider?: string }
+  | { status: "failed"; message: string; error?: string };
+
+type ProviderFieldCopy = {
+  label: string;
+  /** Short note under the field — where this value appears in the IdP UI. */
+  hint?: string;
+  placeholder?: string;
+};
+
+type ProviderCopy = {
+  name: string;
+  /** Section 1 heading — values leave Coop and go into the IdP. */
+  spTitle: string;
+  /** How to paste Coop SP values into the IdP. */
+  spIntro: string;
+  spEntityId: string;
+  spAcsUrl: string;
+  spMetadataUrl: string;
+  /** Section 2 heading — values come back from the IdP into Coop. */
+  idpTitle: string;
+  /** How to paste IdP values back into Coop. */
+  idpIntro: string;
+  idpEntityId: ProviderFieldCopy;
+  idpSsoUrl: ProviderFieldCopy;
+  idpCertificate: ProviderFieldCopy;
+};
+
 function providerLabel(provider?: string): string {
-  switch (provider) {
-    case "okta":
-      return "Okta";
-    case "azuread":
-      return "Azure AD / Entra ID";
-    case "saml":
-      return "SAML 2.0";
-    default:
-      return "Identity provider";
+  return providerCopy(provider).name;
+}
+
+function providerCopy(provider?: string): ProviderCopy {
+  if (provider === "okta") {
+    return {
+      name: "Okta",
+      spTitle: "1. Copy into Okta",
+      spIntro:
+        "Required. In Okta Admin → Applications → your SAML app → Configure SAML, paste these Coop values into Okta. Without them Okta cannot send assertions back to Coop.",
+      spEntityId: "Audience URI (SP Entity ID)",
+      spAcsUrl: "Single sign-on URL",
+      spMetadataUrl: "Metadata URL (optional)",
+      idpTitle: "2. Paste from Okta",
+      idpIntro:
+        "After Okta is configured, open Sign On → View SAML setup instructions and paste the three values back into Coop.",
+      idpEntityId: {
+        label: "Identity Provider Issuer",
+        hint: "Okta calls this Identity Provider Issuer.",
+        placeholder: "http://www.okta.com/exk…"
+      },
+      idpSsoUrl: {
+        label: "Identity Provider Single Sign-On URL",
+        hint: "Okta calls this Identity Provider Single Sign-On URL.",
+        placeholder: "https://your-org.okta.com/app/…/sso/saml"
+      },
+      idpCertificate: {
+        label: "X.509 Certificate",
+        hint: "Paste from Okta setup instructions, or Upload file with the downloaded certificate.",
+        placeholder: "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"
+      }
+    };
   }
+
+  if (provider === "azuread") {
+    return {
+      name: "Azure AD / Entra ID",
+      spTitle: "1. Copy into Microsoft Entra",
+      spIntro:
+        "Required. In Entra → Enterprise applications → your app → Single sign-on → SAML → Basic SAML Configuration, paste these Coop values into Entra. Without them Entra cannot send assertions back to Coop.",
+      spEntityId: "Identifier (Entity ID)",
+      spAcsUrl: "Reply URL (Assertion Consumer Service URL)",
+      spMetadataUrl: "Metadata URL (optional)",
+      idpTitle: "2. Paste from Microsoft Entra",
+      idpIntro:
+        "After Entra is configured, copy Login URL, Microsoft Entra Identifier, and Certificate (Base64) back into Coop.",
+      idpEntityId: {
+        label: "Microsoft Entra Identifier",
+        hint: "Must be https://sts.windows.net/{tenant-id}/ — not the Login URL.",
+        placeholder: "https://sts.windows.net/…/"
+      },
+      idpSsoUrl: {
+        label: "Login URL",
+        hint: "Must be https://login.microsoftonline.com/{tenant-id}/saml2 — not sts.windows.net.",
+        placeholder: "https://login.microsoftonline.com/…/saml2"
+      },
+      idpCertificate: {
+        label: "Certificate (Base64)",
+        hint: "In Entra → SAML Certificates → Download Certificate (Base64). Prefer Upload file below — macOS opens .cer in Keychain if you double-click it.",
+        placeholder: "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"
+      }
+    };
+  }
+
+  return {
+    name: provider === "saml" ? "SAML 2.0" : "Identity provider",
+    spTitle: "1. Copy into your IdP",
+    spIntro:
+      "Required. Paste these Coop service-provider values into your identity provider's SAML application so it can send assertions back to Coop.",
+    spEntityId: "Entity ID / Audience",
+    spAcsUrl: "ACS URL / Reply URL",
+    spMetadataUrl: "Metadata URL",
+    idpTitle: "2. Paste from your IdP",
+    idpIntro: "Paste your IdP Entity ID, SSO URL, and signing certificate back into Coop.",
+    idpEntityId: {
+      label: "IdP Entity ID",
+      placeholder: "https://idp.example.com/…"
+    },
+    idpSsoUrl: {
+      label: "IdP SSO URL",
+      placeholder: "https://idp.example.com/sso/saml"
+    },
+    idpCertificate: {
+      label: "Signing certificate",
+      placeholder: "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"
+    }
+  };
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -72,6 +179,7 @@ export function SsoSettingsPanel() {
   const [sp, setSp] = useState<SsoSpDetails | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<SsoTestResult | null>(null);
 
   const [provider, setProvider] = useState<Provider>("okta");
   const [idpEntityId, setIdpEntityId] = useState("");
@@ -81,6 +189,31 @@ export function SsoSettingsPanel() {
   const [enabled, setEnabled] = useState(true);
   const [editing, setEditing] = useState(false);
   const [requireSsoConfirmOpen, setRequireSsoConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("sso_test");
+    if (result !== "passed" && result !== "failed") {
+      return;
+    }
+    if (result === "passed") {
+      setTestResult({
+        status: "passed",
+        email: params.get("email")?.trim() || "unknown",
+        provider: params.get("provider")?.trim() || undefined
+      });
+    } else {
+      setTestResult({
+        status: "failed",
+        error: params.get("error")?.trim() || undefined,
+        message: params.get("message")?.trim() || "SSO connection test failed."
+      });
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,10 +256,26 @@ export function SsoSettingsPanel() {
     setMessage(null);
     setError(null);
 
+    const trimmedEntityId = idpEntityId.trim();
+    const trimmedSsoUrl = idpSsoUrl.trim();
+    if (provider === "azuread") {
+      try {
+        if (new URL(trimmedSsoUrl).hostname.toLowerCase() === "sts.windows.net") {
+          setSaving(false);
+          setError(
+            "Login URL is the Microsoft Entra Identifier (sts.windows.net). Swap fields: Login URL should be https://login.microsoftonline.com/{tenant}/saml2."
+          );
+          return;
+        }
+      } catch {
+        // server-side URL validation will catch
+      }
+    }
+
     const input: SsoConfigInput = {
       provider,
-      idpEntityId: idpEntityId.trim(),
-      idpSsoUrl: idpSsoUrl.trim(),
+      idpEntityId: trimmedEntityId,
+      idpSsoUrl: trimmedSsoUrl,
       enabled
     };
     const cert = idpX509Cert.trim();
@@ -149,7 +298,7 @@ export function SsoSettingsPanel() {
     setHasCertificate(result.data?.hasCertificate ?? Boolean(cert));
     setIdpX509Cert("");
     setEditing(false);
-    setMessage("SSO saved. Use Test sign-in before requiring SSO for everyone.");
+    setMessage("SSO saved. Use Test connection before requiring SSO for everyone.");
   }
 
   function handleRequireSsoToggle(checked: boolean) {
@@ -216,6 +365,9 @@ export function SsoSettingsPanel() {
 
   const configured = Boolean(config?.configured);
   const active = configured && enabled;
+  const copy = providerCopy(editing || !configured ? provider : config?.provider);
+  const summaryCopy = providerCopy(config?.provider);
+  const spUsesLocalhost = Boolean(sp?.acsUrl.includes("localhost") || sp?.acsUrl.includes("127.0.0.1"));
 
   return (
     <div className="mt-4 space-y-8">
@@ -237,8 +389,12 @@ export function SsoSettingsPanel() {
         </div>
         <div className="flex flex-wrap gap-2">
           {active ? (
-            <a href={ssoStartUrl(orgName)} className="admin-btn-secondary">
-              Test sign-in
+            <a
+              href={ssoTestConnectionUrl(orgName)}
+              className="admin-btn-secondary"
+              title="Validates your IdP configuration without changing your Coop session"
+            >
+              Test connection
             </a>
           ) : null}
           {configured && !editing ? (
@@ -249,24 +405,71 @@ export function SsoSettingsPanel() {
         </div>
       </div>
 
+      {testResult?.status === "passed" ? (
+        <div className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+          SSO connection works. Your IdP returned a valid assertion for{" "}
+          <span className="font-mono text-white">{testResult.email}</span>
+          {testResult.provider ? ` (${testResult.provider})` : ""}. Your admin session was not changed —
+          users still sign in via the login page with Continue with SSO.
+        </div>
+      ) : null}
+      {testResult?.status === "failed" ? (
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          SSO connection failed
+          {testResult.error ? ` (${testResult.error})` : ""}. {testResult.message}
+        </div>
+      ) : null}
+      {active ? (
+        <p className="text-xs text-coop-muted">
+          Test connection opens your IdP, checks that Coop can validate the response, then returns you here.
+          It does not sign you in as another user.
+        </p>
+      ) : null}
+
+      {editing || !configured ? (
+        <div>
+          <label htmlFor="sso-provider" className="admin-label">
+            Provider
+          </label>
+          <select
+            id="sso-provider"
+            className="admin-input"
+            value={provider}
+            disabled={saving}
+            onChange={(event) => setProvider(event.target.value as Provider)}
+          >
+            <option value="okta">Okta</option>
+            <option value="azuread">Azure AD / Entra ID</option>
+            <option value="saml">Generic SAML 2.0</option>
+          </select>
+          <p className="mt-1.5 text-xs text-coop-muted">
+            Field labels below match {copy.name}&apos;s admin console so you can paste without translating names.
+          </p>
+        </div>
+      ) : null}
+
       {sp ? (
         <div className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <p className="text-sm font-medium text-white">1. Coop service provider</p>
-              <p className="mt-1 text-sm text-coop-muted">
-                Add these values in your identity provider&apos;s SAML application.
-              </p>
+              <p className="text-sm font-medium text-white">{copy.spTitle}</p>
+              <p className="mt-1 text-sm text-coop-muted">{copy.spIntro}</p>
             </div>
             <button type="button" className="admin-btn-secondary" onClick={() => void handleDownloadMetadata()}>
               Download metadata
             </button>
           </div>
           <div className="space-y-3">
-            <CopyField label="Entity ID" value={sp.entityId} />
-            <CopyField label="ACS URL" value={sp.acsUrl} />
-            <CopyField label="Metadata URL" value={sp.metadataUrl} />
+            <CopyField label={copy.spAcsUrl} value={sp.acsUrl} />
+            <CopyField label={copy.spEntityId} value={sp.entityId} />
+            <CopyField label={copy.spMetadataUrl} value={sp.metadataUrl} />
           </div>
+          {spUsesLocalhost ? (
+            <div className="rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+              These SP values use localhost. Identity providers cannot send SAML responses to localhost; use
+              hosted Coop or ask your Coop operator to expose the API through a public URL.
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="admin-panel-inset">
@@ -280,65 +483,85 @@ export function SsoSettingsPanel() {
       {editing || !configured ? (
         <form onSubmit={(event) => void handleSaveConfig(event)} className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-white">2. Identity provider</p>
-            <p className="mt-1 text-sm text-coop-muted">
-              Paste the Entity ID, SSO URL, and signing certificate from your IdP.
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="sso-provider" className="admin-label">
-              Provider
-            </label>
-            <select
-              id="sso-provider"
-              className="admin-input"
-              value={provider}
-              disabled={saving}
-              onChange={(event) => setProvider(event.target.value as Provider)}
-            >
-              <option value="okta">Okta</option>
-              <option value="azuread">Azure AD / Entra ID</option>
-              <option value="saml">Generic SAML 2.0</option>
-            </select>
+            <p className="text-sm font-medium text-white">{copy.idpTitle}</p>
+            <p className="mt-1 text-sm text-coop-muted">{copy.idpIntro}</p>
           </div>
 
           <div>
             <label htmlFor="sso-entity" className="admin-label">
-              IdP Entity ID
+              {copy.idpEntityId.label}
             </label>
+            {copy.idpEntityId.hint ? (
+              <p className="mb-1.5 text-xs text-coop-muted">{copy.idpEntityId.hint}</p>
+            ) : null}
             <input
               id="sso-entity"
               className="admin-input"
               value={idpEntityId}
               disabled={saving}
               onChange={(event) => setIdpEntityId(event.target.value)}
-              placeholder="https://idp.example.com/…"
+              placeholder={copy.idpEntityId.placeholder}
               required
             />
           </div>
 
           <div>
             <label htmlFor="sso-url" className="admin-label">
-              IdP SSO URL
+              {copy.idpSsoUrl.label}
             </label>
+            {copy.idpSsoUrl.hint ? (
+              <p className="mb-1.5 text-xs text-coop-muted">{copy.idpSsoUrl.hint}</p>
+            ) : null}
             <input
               id="sso-url"
               className="admin-input"
               value={idpSsoUrl}
               disabled={saving}
               onChange={(event) => setIdpSsoUrl(event.target.value)}
-              placeholder="https://idp.example.com/sso/saml"
+              placeholder={copy.idpSsoUrl.placeholder}
               required
             />
           </div>
 
           <div>
-            <label htmlFor="sso-cert" className="admin-label">
-              Signing certificate
-            </label>
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="sso-cert" className="admin-label mb-0">
+                {copy.idpCertificate.label}
+              </label>
+              <label className={`admin-btn-secondary !px-2 !py-1 text-xs ${saving ? "pointer-events-none opacity-50" : "cursor-pointer"}`}>
+                Upload file
+                <input
+                  type="file"
+                  accept=".cer,.crt,.pem,.cert,application/x-x509-ca-cert,application/pkix-cert,application/x-pem-file,text/plain"
+                  className="sr-only"
+                  disabled={saving}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) {
+                      return;
+                    }
+                    void (async () => {
+                      try {
+                        const pem = await readSsoCertFile(file);
+                        setIdpX509Cert(pem);
+                        setError(null);
+                        setMessage(`Loaded certificate from ${file.name}.`);
+                      } catch (err) {
+                        setMessage(null);
+                        setError(err instanceof Error ? err.message : "Could not read that certificate file.");
+                      }
+                    })();
+                  }}
+                />
+              </label>
+            </div>
             {hasCertificate && !idpX509Cert ? (
-              <p className="mb-1.5 text-xs text-coop-muted">Certificate on file. Leave blank to keep it, or paste a new one to replace.</p>
+              <p className="mb-1.5 text-xs text-coop-muted">
+                Certificate on file. Leave blank to keep it, or upload / paste a new one to replace.
+              </p>
+            ) : copy.idpCertificate.hint ? (
+              <p className="mb-1.5 text-xs text-coop-muted">{copy.idpCertificate.hint}</p>
             ) : null}
             <textarea
               id="sso-cert"
@@ -346,7 +569,7 @@ export function SsoSettingsPanel() {
               value={idpX509Cert}
               disabled={saving}
               onChange={(event) => setIdpX509Cert(event.target.value)}
-              placeholder={"-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"}
+              placeholder={copy.idpCertificate.placeholder}
               required={!hasCertificate}
             />
           </div>
@@ -405,22 +628,22 @@ export function SsoSettingsPanel() {
         </form>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-white">2. Identity provider</p>
-          <dl className="space-y-2 text-sm">
+          <p className="text-sm font-medium text-white">{summaryCopy.idpTitle}</p>
+          <dl className="space-y-3 text-sm">
             <div className="flex gap-3">
-              <dt className="w-28 shrink-0 text-coop-muted">Provider</dt>
+              <dt className="w-44 shrink-0 text-coop-muted">Provider</dt>
               <dd className="text-white">{providerLabel(config?.provider)}</dd>
             </div>
             <div className="flex gap-3">
-              <dt className="w-28 shrink-0 text-coop-muted">Entity ID</dt>
+              <dt className="w-44 shrink-0 text-coop-muted">{summaryCopy.idpEntityId.label}</dt>
               <dd className="min-w-0 break-all font-mono text-xs text-white/90">{config?.idpEntityId}</dd>
             </div>
             <div className="flex gap-3">
-              <dt className="w-28 shrink-0 text-coop-muted">SSO URL</dt>
+              <dt className="w-44 shrink-0 text-coop-muted">{summaryCopy.idpSsoUrl.label}</dt>
               <dd className="min-w-0 break-all font-mono text-xs text-white/90">{config?.idpSsoUrl}</dd>
             </div>
             <div className="flex gap-3">
-              <dt className="w-28 shrink-0 text-coop-muted">Certificate</dt>
+              <dt className="w-44 shrink-0 text-coop-muted">{summaryCopy.idpCertificate.label}</dt>
               <dd className="text-white">{hasCertificate ? "On file" : "Missing"}</dd>
             </div>
           </dl>
@@ -432,7 +655,8 @@ export function SsoSettingsPanel() {
           <div>
             <p className="text-sm font-medium text-white">3. Sign-in policy</p>
             <p className="mt-1 text-sm text-coop-muted">
-              Test SSO first. Then require it when you&apos;re ready to turn off password and Google sign-in.
+              Run Test connection first. Then require SSO when you&apos;re ready to turn off password and
+              Google sign-in.
             </p>
           </div>
 
@@ -489,7 +713,7 @@ export function SsoSettingsPanel() {
       >
         <p className="text-sm text-coop-muted">
           Users will no longer be able to sign in with email/password or Google. Make sure SSO is
-          working with <strong className="text-white">Test sign-in</strong> first — a misconfigured
+          working with <strong className="text-white">Test connection</strong> first — a misconfigured
           IdP can lock your entire organization out of Coop.
         </p>
         <div className="mt-6 flex flex-wrap justify-end gap-2">
