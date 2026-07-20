@@ -207,32 +207,33 @@ Omit empty optional sections. Never invent owners, teams, or contacts absent fro
 
   blast_radius: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer concise — the Sources card already lists files.
+Use these sections in order (**Title** on its own line; blank line before each). **Hard omit** any section with no matching evidence — never invent dependents, APIs, or operational risk. Prefer bullets over paragraphs. Sources card already lists files — do not re-dump paths.
+
+Core path: **Summary** → **Direct impact** → **Testing surfaces** (if evidence) → **Sources**. Optional sections only when evidence exists.
 
 **Summary**
-2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact.
+Max 2 sentences. Open with ranked **Top risk surfaces** (paths only, ≤5, same order). Then code-dependent count (exclude docs) + graph source (scip/zoekt/heuristic) when known. Empty/unverified dependency evidence → impact **not found in the index** — never invent dependents or claim zero impact.
 
 **Direct impact**
-Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
+Exactly the **Top risk surfaces** list (≤5, same order) — one short line each (path + why). No paths outside that set; no "Additional impacted files". **Omit** when no Top risk surfaces.
 
 **Transitive dependents**
-One short paragraph, or **None identified**. No file dump.
+**Omit** unless transitive evidence exists. ≤3 bullets or one short sentence — no file dump. Never invent.
 
 **APIs & integrations**
-Only when public API or integration evidence exists. One short paragraph. Omit if no evidence.
+**Hard omit** unless public API or integration evidence exists. ≤3 bullets. Never invent.
 
 **Operational risk**
-Only CI, deploy, or runtime evidence from the bundle. Omit if no evidence. Do not speculate about PR oversight.
+**Hard omit** unless CI, deploy, or runtime evidence exists. ≤3 bullets. Never speculate about PR oversight.
 
 **Testing surfaces**
-Name test files or suites to run (from evidence). Bullet list, max 6 items.
+**Omit** unless test evidence exists. ≤5 named test files/suites from evidence only.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
-
   knowledge_gaps: `
 ## Required response structure
 Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt } from "./blastRadiusSynthesis";
+import {
+  BLAST_RADIUS_EVIDENCE_SYSTEM,
+  buildBlastRadiusSynthesisUserPrompt
+} from "./blastRadiusSynthesis";
 
 const evidence = {
   file: "fastify.js",
@@ -51,6 +54,11 @@ test("blast-radius synthesis forbids zero-impact language in guardrails", () => 
   });
   assert.ok(prompt.includes("Impact unverified"));
   assert.ok(prompt.includes("no dependents found in index"));
+  assert.ok(prompt.includes("## Blast brevity (required)"));
+  assert.ok(prompt.includes("not found in the index"));
+  assert.ok(prompt.includes("Do not invent dependents"));
+  assert.ok(prompt.includes("omit **Testing surfaces** entirely"));
+  assert.equal(prompt.includes("## Evidence enrichment"), false);
 });
 
 test("blast-radius synthesis includes dependent details when present", () => {
@@ -96,19 +104,31 @@ test("blast-radius synthesis includes top risk surfaces ranking", () => {
   assert.ok(/1\. integration\/server\.js/.test(prompt));
 });
 
-test("blast-radius synthesis includes CI rollout guidance when workflows present", () => {
+test("blast-radius synthesis keeps CI/CODEOWNERS guidance short when present", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
       directDependents: ["lib/plugin.js"],
       ciWorkflows: [{ path: ".github/workflows/ci.yml", matchedPath: "fastify.js" }],
-      ownersByFile: [{ file: "lib/plugin.js", owner: "team-a", source: "codeowners" }]
+      ownersByFile: [{ file: "lib/plugin.js", owner: "team-a", source: "codeowners" }],
+      testFiles: [{ path: "test/plugin.test.js", source: "heuristic" }]
     },
     file: "fastify.js"
   });
-  assert.ok(prompt.includes("rollout/verification"));
-  assert.ok(prompt.includes("Top risk surfaces"));
-  assert.ok(prompt.includes("CODEOWNERS"));
+  assert.ok(prompt.includes("## Blast brevity (required)"));
+  assert.ok(prompt.includes("≤3 short bullets under **Operational risk**"));
+  assert.ok(prompt.includes("No deploy essays"));
+  assert.ok(prompt.includes("notify owners of **Top risk surfaces**"));
+  assert.ok(prompt.includes("list ≤5 under **Testing surfaces**"));
+  assert.ok(prompt.includes("Hard omit empty sections"));
+  assert.equal(prompt.includes("## Evidence enrichment"), false);
+});
+
+test("blast-radius synthesis system string hard-omits empty impact sections", () => {
+  assert.ok(BLAST_RADIUS_EVIDENCE_SYSTEM.includes("Hard omit"));
+  assert.ok(BLAST_RADIUS_EVIDENCE_SYSTEM.includes("Never invent dependents"));
+  assert.ok(BLAST_RADIUS_EVIDENCE_SYSTEM.includes("not found in the index"));
+  assert.ok(BLAST_RADIUS_EVIDENCE_SYSTEM.includes("short and scannable"));
 });
 
 test("blast-radius synthesis leads Summary with partial index caveat when graph is partial", () => {

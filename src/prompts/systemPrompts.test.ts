@@ -94,10 +94,16 @@ test("ownership use case leads with contact and omits empty optional sections", 
   assert.ok(prompt.includes("**Omit** otherwise"));
 });
 
-test("blast_radius use case includes impact sections", () => {
+test("blast_radius use case enforces short graph-grounded structure", () => {
   const prompt = systemPromptForUseCase("blast_radius");
-  assert.ok(prompt.includes("**Transitive dependents**"));
+  assert.ok(prompt.includes("**Hard omit**"));
+  assert.ok(prompt.includes("never invent dependents"));
+  assert.ok(prompt.includes("not found in the index"));
+  assert.ok(prompt.includes("**Direct impact**"));
   assert.ok(prompt.includes("**Testing surfaces**"));
+  assert.ok(prompt.includes("Omit** unless test evidence exists"));
+  assert.ok(prompt.includes("Core path: **Summary** → **Direct impact**"));
+  assert.equal(prompt.includes("None identified"), false);
 });
 
 test("inline_completion excludes audience and output contract", () => {

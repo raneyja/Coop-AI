@@ -33,7 +33,6 @@ import {
 } from "./blastRadiusSourceLabels";
 import {
   appendCitationKeysSection,
-  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
@@ -43,14 +42,14 @@ import {
 } from "./evidenceSynthesis";
 import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
 
-export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
-Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
-When ## Top risk surfaces is present, open **Summary** with those ranked items (up to 5) before general counts.
-Code dependents (tests, examples, integration) are the primary blast surface; docs/README/.d.ts hits are secondary references — mention counts, not full lists.
-Be explicit about transitive effects and testing surfaces when dependency data is available.
+export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact from the evidence bundle only — dependents, APIs, integrations, and operational risk.
+Gold standard: short and scannable. Prefer bullets over paragraphs. The Sources card already lists files — never re-dump paths in the narrative.
+When ## Top risk surfaces is present, those ranked items (≤5) lead **Summary** and are the entire **Direct impact** — do not expand beyond that set.
+Code dependents (tests, examples, integration) are the primary blast surface; docs/README/.d.ts hits are secondary — counts only, not full lists.
+Mention transitive effects and testing surfaces only when the bundle includes that evidence.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
-When dependency evidence is empty or marked unverified, say impact was **not found in the index** — never claim the change "will not impact" anything or that "nothing depends on it".
-Only include **APIs & integrations** or **Operational risk** sections when the evidence bundle contains matching data; omit sections with no evidence.
+Never invent dependents, callers, services, or APIs absent from the bundle. Empty or unverified dependency evidence → say impact was **not found in the index** — never claim the change "will not impact" anything or that "nothing depends on it".
+**Hard omit** **Transitive dependents**, **APIs & integrations**, **Operational risk**, and **Testing surfaces** when the bundle has no matching evidence.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -104,22 +103,12 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   );
   appendEvidenceQualityInstructions(lines);
   appendBlastRadiusSummaryGuidance(lines, evidence);
-  appendEvidenceEnrichmentInstructions(lines);
-  if (evidence.ciWorkflows?.length) {
-    lines.push(
-      "- CI workflows reference this path — include rollout/verification guidance: which workflows run, what to watch during deploy, and how to validate the change."
-    );
-  }
-  if (evidence.ownersByFile?.length) {
-    lines.push(
-      "- CODEOWNERS data is attached — recommend notifying owners of **Top risk surfaces** before merging."
-    );
-  }
+  appendBlastRadiusBrevityGuardrails(lines, evidence);
   lines.push(
     "Synthesize impact for the primary target file only. Out-of-scope @ paths must not replace the dependency evidence for the open file."
   );
   lines.push(
-    "Keep the narrative short: lead with ## Top risk surfaces in **Summary**, mirror them exactly in **Direct impact** (no extra paths), cite test files in **Testing surfaces**, treat docs references as secondary."
+    "Keep the answer short: **Summary** (top risks) → **Direct impact** (same list) → optional evidence-backed sections → **Testing surfaces** (if tests) → **Sources**. Hard omit empty sections. Never invent dependents."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
@@ -138,6 +127,45 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
     "- Lower evidence strength when the dependency graph notes partial index coverage; do not treat listed dependents as exhaustive."
   );
   lines.push("");
+}
+
+function appendBlastRadiusBrevityGuardrails(lines: string[], evidence: BlastRadiusEvidence): void {
+  lines.push("## Blast brevity (required)");
+  lines.push(
+    "- Max 2 sentences in **Summary**; **Direct impact** is only the ranked Top risk surfaces (≤5 lines)."
+  );
+  lines.push(
+    "- Hard omit **Transitive dependents**, **APIs & integrations**, **Operational risk**, and **Testing surfaces** when those evidence slices are absent — never invent fillers."
+  );
+  if (!hasCodeDependentEvidence(evidence)) {
+    lines.push(
+      "- Dependency evidence is empty/unverified — say impact was **not found in the index**. Do not invent dependents, callers, or zero-impact claims."
+    );
+  }
+  if (evidence.ciWorkflows?.length) {
+    lines.push(
+      "- CI workflows are attached — put ≤3 short bullets under **Operational risk** (which workflows; what to verify). No deploy essays."
+    );
+  }
+  if (evidence.ownersByFile?.length) {
+    lines.push(
+      "- CODEOWNERS data is attached — one line in **Summary** or **Operational risk**: notify owners of **Top risk surfaces** before merge."
+    );
+  }
+  if (evidence.testFiles?.length) {
+    lines.push("- Test files are attached — list ≤5 under **Testing surfaces**; omit that section if none.");
+  } else {
+    lines.push("- No test evidence — omit **Testing surfaces** entirely.");
+  }
+  lines.push("");
+}
+
+function hasCodeDependentEvidence(evidence: BlastRadiusEvidence): boolean {
+  return Boolean(
+    evidence.dependentDetails?.length ||
+      evidence.directDependents?.length ||
+      evidence.transitiveDependents?.length
+  );
 }
 
 function appendMentionScopeSection(lines: string[], input: BlastRadiusSynthesisInput): void {
