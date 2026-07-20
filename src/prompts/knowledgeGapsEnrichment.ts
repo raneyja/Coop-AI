@@ -1,3 +1,8 @@
+import {
+  MAX_KNOWLEDGE_GAP_REVIEWED_PAGES,
+  MAX_KNOWLEDGE_GAP_SUBSECTIONS
+} from "./knowledgeGapsSynthesis";
+
 export type IntegrationPageForEnrichment = {
   title: string;
   excerpt?: string;
@@ -24,6 +29,7 @@ export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
 const NOTION_REVIEWED_HEADING = "**Notion pages reviewed**";
 const GOOGLE_DOCS_REVIEWED_HEADING = "**Google Docs reviewed**";
+const RECOMMENDED_NEXT_STEP_HEADING = "**Recommended next step**";
 
 const DOCUMENTATION_SCAN_GAP_TYPES = new Set(["missing_docs", "impact_unknown"]);
 const INTEGRATION_SCAN_GAP_TYPES = new Set([
@@ -69,6 +75,7 @@ function isMainSectionLine(line: string): boolean {
     title === "documentation gaps" ||
     title === "ownership & maintenance" ||
     title === "integration & operations" ||
+    title === "recommended next step" ||
     title === "recommended next steps" ||
     title === "out-of-scope @ attachments" ||
     title === "sources" ||
@@ -173,37 +180,79 @@ export function formatReviewedPageLine(page: IntegrationPageForEnrichment, activ
   return `- **${page.title}:** ${note}`;
 }
 
+function scoreReviewedPageRelevance(page: IntegrationPageForEnrichment, activeFile?: string): number {
+  const haystack = `${page.title} ${page.excerpt ?? ""}`.toLowerCase();
+  let score = 0;
+  if (activeFile?.trim()) {
+    const normalized = activeFile.trim().replace(/^\/+/, "").toLowerCase();
+    if (haystack.includes(normalized)) {
+      score += 20;
+    }
+    const basename = normalized.split("/").pop() ?? "";
+    const stem = basename.replace(/\.[^.]+$/, "");
+    if (stem && haystack.includes(stem.toLowerCase())) {
+      score += 12;
+    }
+  }
+  if (/\b(adr|architecture decision|runbook|overview)\b/.test(haystack)) {
+    score += 4;
+  }
+  return score;
+}
+
+function selectReviewedPages(
+  pages: IntegrationPageForEnrichment[],
+  activeFile?: string,
+  limit = MAX_KNOWLEDGE_GAP_REVIEWED_PAGES
+): { selected: IntegrationPageForEnrichment[]; total: number } {
+  const total = pages.length;
+  if (total <= limit) {
+    return { selected: pages, total };
+  }
+  const selected = [...pages]
+    .sort((a, b) => scoreReviewedPageRelevance(b, activeFile) - scoreReviewedPageRelevance(a, activeFile))
+    .slice(0, limit);
+  return { selected, total };
+}
+
+function buildReviewedPagesBlock(
+  heading: string,
+  pages: IntegrationPageForEnrichment[],
+  activeFile?: string
+): string {
+  const { selected, total } = selectReviewedPages(pages, activeFile);
+  const lines = [heading, ""];
+  if (total > selected.length) {
+    lines.push(
+      `Top ${selected.length} of ${total} attached pages for this scope (full list in the Sources card above).`
+    );
+    lines.push("");
+  }
+  for (const page of selected) {
+    lines.push(formatReviewedPageLine(page, activeFile));
+  }
+  return lines.join("\n");
+}
+
 export function buildConfluencePagesReviewedBlock(
   pages: IntegrationPageForEnrichment[],
   activeFile?: string
 ): string {
-  const lines = [CONFLUENCE_REVIEWED_HEADING, ""];
-  for (const page of pages) {
-    lines.push(formatReviewedPageLine(page, activeFile));
-  }
-  return lines.join("\n");
+  return buildReviewedPagesBlock(CONFLUENCE_REVIEWED_HEADING, pages, activeFile);
 }
 
 export function buildNotionPagesReviewedBlock(
   pages: IntegrationPageForEnrichment[],
   activeFile?: string
 ): string {
-  const lines = [NOTION_REVIEWED_HEADING, ""];
-  for (const page of pages) {
-    lines.push(formatReviewedPageLine(page, activeFile));
-  }
-  return lines.join("\n");
+  return buildReviewedPagesBlock(NOTION_REVIEWED_HEADING, pages, activeFile);
 }
 
 export function buildGoogleDocsReviewedBlock(
   documents: IntegrationPageForEnrichment[],
   activeFile?: string
 ): string {
-  const lines = [GOOGLE_DOCS_REVIEWED_HEADING, ""];
-  for (const doc of documents) {
-    lines.push(formatReviewedPageLine(doc, activeFile));
-  }
-  return lines.join("\n");
+  return buildReviewedPagesBlock(GOOGLE_DOCS_REVIEWED_HEADING, documents, activeFile);
 }
 
 function scanGapSubsectionTitle(gap: KnowledgeGapScanGap): string {
@@ -300,11 +349,16 @@ function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext
   if (context?.googleDocs?.length) {
     blocks.push(buildGoogleDocsReviewedBlock(context.googleDocs, context.activeFile));
   }
+  let docGapCount = 0;
   for (const gap of context?.jobScanGaps ?? []) {
     if (!gap.type || !DOCUMENTATION_SCAN_GAP_TYPES.has(gap.type)) {
       continue;
     }
+    if (docGapCount >= MAX_KNOWLEDGE_GAP_SUBSECTIONS) {
+      break;
+    }
     blocks.push(buildScanGapSubsection(gap, context?.activeFile));
+    docGapCount += 1;
   }
   return blocks;
 }
@@ -312,12 +366,14 @@ function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext
 function ownershipBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
   return (context?.jobScanGaps ?? [])
     .filter((gap) => gap.type === "missing_owner")
+    .slice(0, MAX_KNOWLEDGE_GAP_SUBSECTIONS)
     .map((gap) => buildScanGapSubsection(gap, context?.activeFile));
 }
 
 function integrationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
   return (context?.jobScanGaps ?? [])
     .filter((gap) => gap.type && INTEGRATION_SCAN_GAP_TYPES.has(gap.type))
+    .slice(0, MAX_KNOWLEDGE_GAP_SUBSECTIONS)
     .map((gap) => buildScanGapSubsection(gap, context?.activeFile));
 }
 
@@ -368,7 +424,10 @@ function rebuildMainSection(content: string, heading: string, blocks: string[]):
 
   const lines = result.replace(/\r\n/g, "\n").split("\n");
   const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
-  const recIdx = lines.findIndex((line) => stripBoldHeading(line) === "recommended next steps");
+  const recIdx = lines.findIndex((line) => {
+    const title = stripBoldHeading(line);
+    return title === "recommended next step" || title === "recommended next steps";
+  });
   const sectionLines = [heading, "", ...blocks.flatMap((block) => [block, ""])];
 
   let insertAt = recIdx >= 0 ? recIdx : lines.length;
@@ -420,42 +479,41 @@ function stripMainSection(content: string, sectionTitle: string): string {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function normalizeRecommendedNextSteps(content: string): string {
+function normalizeRecommendedNextStep(content: string): string {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const out: string[] = [];
   let inSection = false;
-  let stepNumber = 0;
+  let keptStep = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
+    const sectionTitle = stripBoldHeading(trimmed);
 
-    if (stripBoldHeading(trimmed) === "recommended next steps") {
+    if (sectionTitle === "recommended next steps" || sectionTitle === "recommended next step") {
       inSection = true;
-      stepNumber = 0;
-      out.push("**Recommended next steps**");
+      keptStep = false;
+      out.push(RECOMMENDED_NEXT_STEP_HEADING);
       continue;
     }
 
-    if (inSection && isMainSectionLine(trimmed) && stripBoldHeading(trimmed) !== "recommended next steps") {
+    if (inSection && isMainSectionLine(trimmed) && sectionTitle !== "recommended next step") {
       inSection = false;
     }
 
     if (inSection && trimmed) {
-      if (/^\d+\.\s+/.test(trimmed)) {
-        stepNumber += 1;
+      if (isMainSectionLine(trimmed) || /^\*\*[^*]+\*\*$/.test(trimmed)) {
         out.push(line);
         continue;
       }
-      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        stepNumber += 1;
-        out.push(`${stepNumber}. ${trimmed.replace(/^[-*]\s+/, "")}`);
+      if (keptStep) {
         continue;
       }
-      if (!isMainSectionLine(trimmed) && !/^\*\*[^*]+\*\*$/.test(trimmed)) {
-        stepNumber += 1;
-        out.push(`${stepNumber}. ${trimmed}`);
-        continue;
+      const stepBody = trimmed.replace(/^\d+\.\s+/, "").replace(/^[-*]\s+/, "");
+      if (stepBody) {
+        out.push(stepBody);
+        keptStep = true;
       }
+      continue;
     }
 
     out.push(line);
@@ -481,7 +539,7 @@ export function enrichKnowledgeGapsResponse(
   result = rebuildMainSection(result, "**Ownership & maintenance**", ownershipBlocks);
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
-  result = normalizeRecommendedNextSteps(result);
+  result = normalizeRecommendedNextStep(result);
   return enrichIntegrationDocsResponse(result, context);
 }
 

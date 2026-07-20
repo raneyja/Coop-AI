@@ -236,7 +236,7 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
   knowledge_gaps: `
 ## Required response structure
-Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
+Keep the answer engineer-scannable: Summary → top gaps → one next step → Sources. Do not dump every attached page as its own subsection.
 
 **Summary**
 1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case.
@@ -244,49 +244,38 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
 
-When \`<notion_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
+When scan gaps of type \`missing_docs\` or \`impact_unknown\` are present: include **at most 3** top gaps (highest priority first). For each, use this shape (blank line between gaps):
 
-**Notion pages reviewed**
-
-List exactly N bullets — one per \`<page>\` title, in the same order as the XML:
-
-- **{exact <page> title}:** one sentence on whether it documents the active file/area and what it covers or omits
-
-When \`<confluence_pages count="N">\` has \`count\` > 0, add **Confluence pages reviewed** with exactly N titled bullets in XML order (after Notion when both exist).
-
-When \`<google_docs count="N">\` has \`count\` > 0, add **Google Docs reviewed** with exactly N titled bullets in XML order.
-
-When \`<knowledge_gap_scan>\` contains \`<gap>\` entries with type \`missing_docs\` or \`impact_unknown\`: add one subsection per scan gap using the two-bullet pattern below (title from gap message).
-
-For scan-backed or integration-page-backed gaps only, use this shape (blank line between gaps):
-
-**{Gap title from evidence}**
+**{Gap title from scan evidence}**
 
 - **Open question:** one concrete uncertainty about this area
 - **What to check:** doc, code path, ticket, or person that would resolve it
 
+When Notion / Confluence / Google Docs pages are attached: add a short **pages reviewed** list for that provider — **at most 3 titles** (prefer titles most relevant to the active file/area). One bullet per title; no Open question / What to check under page titles. If more pages are attached, note "Top 3 of N (full list in Sources card)" and stop. Prefer scan-backed gaps over expanding page reviews.
+
 Rules:
 - Subsection title on its own line (**Title**). Never bullet the title.
-- Exactly two bullets under each title: **Open question:** then **What to check:**
-- Never put those field lines as top-level bullets without the subsection title directly above.
+- Exactly two bullets under each **scan-backed** gap title: **Open question:** then **What to check:**
+- Never invent gaps from code inspection or generic framework knowledge.
 - Never leave **Documentation gaps** empty when scan gaps or Notion/Confluence/Google Docs pages are attached.
 
 **Ownership & maintenance**
-Include only when \`<knowledge_gap_scan>\` contains a \`<gap type="missing_owner">\` entry — one subsection per such gap using the two-bullet pattern. **Omit the entire section** when no missing_owner gap exists (even if ownership signals are attached).
+Include only when \`<knowledge_gap_scan>\` contains a \`<gap type="missing_owner">\` entry — at most 3 subsections using the two-bullet pattern. **Omit the entire section** when no missing_owner gap exists (even if ownership signals are attached).
 
 **Integration & operations**
-Include only when \`<knowledge_gap_scan>\` contains an integration/operations gap type (\`integration_unknown\`, \`ops_unknown\`, \`missing_runbook\`, \`missing_ops\`). **Omit the entire section** otherwise. Never invent plugin, deploy, or third-party configuration questions.
+Include only when \`<knowledge_gap_scan>\` contains an integration/operations gap type (\`integration_unknown\`, \`ops_unknown\`, \`missing_runbook\`, \`missing_ops\`) — at most 3 subsections. **Omit the entire section** otherwise. Never invent plugin, deploy, or third-party configuration questions.
 
 Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**.
 
-**Recommended next steps**
-Numbered list of 2-4 concrete actions.
+**Recommended next step**
+Exactly one concrete action (not a numbered list of 2–4).
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when present.`,
+
 
   chat: `
 ## Required response structure

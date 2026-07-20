@@ -74,7 +74,7 @@ test("knowledge-gaps synthesis uses response contract instead of invented enrich
   assert.ok(!prompt.includes("introducingDiffSummary"));
 });
 
-test("knowledge-gaps synthesis requires Notion pages and scan gaps in response contract", () => {
+test("knowledge-gaps synthesis requires compact Notion pages and scan gaps in response contract", () => {
   const prompt = buildKnowledgeGapsSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
@@ -95,10 +95,43 @@ test("knowledge-gaps synthesis requires Notion pages and scan gaps in response c
     owner: "coop-demo-lab",
     repo: "fastify"
   });
-  assert.ok(prompt.includes("**Notion pages reviewed** with exactly 2 titled bullets"));
+  assert.ok(prompt.includes("**Notion pages reviewed** — at most 3 titled bullets"));
   assert.ok(prompt.includes("No Confluence pages matched repo scope"));
   assert.ok(prompt.includes("No Google Docs matched repo scope"));
   assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));
+  assert.ok(prompt.includes("**Recommended next step** — exactly one concrete action"));
+});
+
+test("knowledge-gaps synthesis caps reviewed pages and scan gaps in response contract", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: {
+      jobScan: {
+        gaps: [
+          { type: "missing_docs", message: "Gap A" },
+          { type: "missing_docs", message: "Gap B" },
+          { type: "missing_docs", message: "Gap C" },
+          { type: "missing_docs", message: "Gap D" },
+          { type: "impact_unknown", message: "Gap E" }
+        ]
+      }
+    },
+    confluence: {
+      pages: [
+        { id: "1", title: "Page One", updated: "2026-01-01" },
+        { id: "2", title: "Page Two", updated: "2026-01-01" },
+        { id: "3", title: "Page Three", updated: "2026-01-01" },
+        { id: "4", title: "Page Four", updated: "2026-01-01" }
+      ]
+    },
+    file: "src/server/api.ts"
+  });
+  const contract = prompt.slice(prompt.indexOf("## Response contract (required)"));
+  assert.ok(contract.includes("Top 3 of 4; full list in Sources card"));
+  assert.ok(contract.includes("Omit remaining 2 lower-priority scan gaps"));
+  assert.ok(contract.includes("Gap A"));
+  assert.ok(contract.includes("Gap C"));
+  assert.ok(!contract.includes("Gap D"));
+  assert.ok(!contract.includes("Gap E"));
 });
 
 test("knowledge-gaps synthesis flags limited evidence when scan missing", () => {

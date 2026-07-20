@@ -37,12 +37,18 @@ import {
 } from "./knowledgeGapsSourceLabels";
 import { ownershipTierLabel } from "./ownershipSourceLabels";
 
+/** Max scan-backed gap subsections shown in the response contract / expected output. */
+export const MAX_KNOWLEDGE_GAP_SUBSECTIONS = 3;
+/** Max attached doc titles listed under each provider "pages reviewed" block. */
+export const MAX_KNOWLEDGE_GAP_REVIEWED_PAGES = 3;
+
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
+Keep answers scannable for engineers: Summary, top scan-backed gaps (at most ${MAX_KNOWLEDGE_GAP_SUBSECTIONS}), one recommended next step, Sources.
 List scan-backed gaps and integration hits — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, or explicit integration errors in the bundle.
 Omit **Ownership & maintenance** unless the scan contains a missing_owner gap. Ownership signals in the card are context only — not a reason to invent owner questions.
 Omit **Integration & operations** unless the scan contains an integration or operations gap type. Never invent plugin, deploy, or third-party configuration questions.
-When Notion or Confluence pages are attached with count > 0, review those exact titles under **Documentation gaps** before scan gap subsections.
+When Notion, Confluence, or Google Docs pages are attached, add a short pages-reviewed list (at most ${MAX_KNOWLEDGE_GAP_REVIEWED_PAGES} titles per provider) — do not expand every page into its own Open question / What to check subsection.
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -151,6 +157,18 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
   return lines.join("\n");
 }
 
+function compactReviewedPagesContractLine(
+  heading: string,
+  titles: string[]
+): string {
+  const shown = titles.slice(0, MAX_KNOWLEDGE_GAP_REVIEWED_PAGES);
+  const overflow =
+    titles.length > MAX_KNOWLEDGE_GAP_REVIEWED_PAGES
+      ? ` (Top ${MAX_KNOWLEDGE_GAP_REVIEWED_PAGES} of ${titles.length}; full list in Sources card)`
+      : "";
+  return `- **${heading}** — at most ${MAX_KNOWLEDGE_GAP_REVIEWED_PAGES} titled bullets${overflow}: ${shown.join("; ")}`;
+}
+
 function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGapsSynthesisInput): void {
   const scanGaps = input.evidence.jobScan?.gaps ?? [];
   const documentationGaps = scanGaps.filter(
@@ -166,30 +184,42 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   );
 
   lines.push("## Response contract (required)");
+  lines.push(
+    `Keep the reply short: Summary → top gaps (≤${MAX_KNOWLEDGE_GAP_SUBSECTIONS}) → **Recommended next step** (one action) → Sources.`
+  );
   lines.push("**Documentation gaps** must include, in order:");
   if (input.notion?.pages?.length) {
     lines.push(
-      `- **Notion pages reviewed** with exactly ${input.notion.pages.length} titled bullets in this order: ${input.notion.pages
-        .map((page) => page.title)
-        .join("; ")}`
+      compactReviewedPagesContractLine(
+        "Notion pages reviewed",
+        input.notion.pages.map((page) => page.title)
+      )
     );
   }
   if (input.confluence?.pages?.length) {
     lines.push(
-      `- **Confluence pages reviewed** with exactly ${input.confluence.pages.length} titled bullets in this order: ${input.confluence.pages
-        .map((page) => page.title)
-        .join("; ")}`
+      compactReviewedPagesContractLine(
+        "Confluence pages reviewed",
+        input.confluence.pages.map((page) => page.title)
+      )
     );
   }
   if (input.googleDocs?.documents?.length) {
     lines.push(
-      `- **Google Docs reviewed** with exactly ${input.googleDocs.documents.length} titled bullets in this order: ${input.googleDocs.documents
-        .map((doc) => doc.title)
-        .join("; ")}`
+      compactReviewedPagesContractLine(
+        "Google Docs reviewed",
+        input.googleDocs.documents.map((doc) => doc.title)
+      )
     );
   }
-  for (const gap of documentationGaps) {
+  const topDocGaps = documentationGaps.slice(0, MAX_KNOWLEDGE_GAP_SUBSECTIONS);
+  for (const gap of topDocGaps) {
     lines.push(`- Scan gap subsection from [Sources: Knowledge gap scan]: ${String(gap.message ?? gap.type ?? "gap")}`);
+  }
+  if (documentationGaps.length > MAX_KNOWLEDGE_GAP_SUBSECTIONS) {
+    lines.push(
+      `- Omit remaining ${documentationGaps.length - MAX_KNOWLEDGE_GAP_SUBSECTIONS} lower-priority scan gaps (cap ${MAX_KNOWLEDGE_GAP_SUBSECTIONS}).`
+    );
   }
   if (
     !input.notion?.pages?.length &&
@@ -201,7 +231,9 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   }
 
   if (ownerGaps.length > 0) {
-    lines.push("**Ownership & maintenance** — include one subsection per missing_owner scan gap only.");
+    lines.push(
+      `**Ownership & maintenance** — at most ${MAX_KNOWLEDGE_GAP_SUBSECTIONS} missing_owner scan gap subsection(s) only.`
+    );
   } else {
     lines.push(
       "- **Omit Ownership & maintenance entirely** — scan has no missing_owner gaps; do not invent owner or maintainer questions from ownership signals."
@@ -209,12 +241,16 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   }
 
   if (integrationGaps.length > 0) {
-    lines.push("**Integration & operations** — include one subsection per integration/ops scan gap only.");
+    lines.push(
+      `**Integration & operations** — at most ${MAX_KNOWLEDGE_GAP_SUBSECTIONS} integration/ops scan gap subsection(s) only.`
+    );
   } else {
     lines.push(
       "- **Omit Integration & operations entirely** — scan has no integration/ops gaps; do not invent plugin, deploy, or configuration questions."
     );
   }
+
+  lines.push("- **Recommended next step** — exactly one concrete action (not a 2–4 item list).");
 
   const scanGapCount = scanGaps.length;
   const hasDocHits =

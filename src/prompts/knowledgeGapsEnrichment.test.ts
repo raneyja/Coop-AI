@@ -115,9 +115,12 @@ test("enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation
   assert.equal(enriched.includes("**Documentation Coverage**"), false);
   assert.equal(enriched.includes("Is there comprehensive documentation"), false);
   assert.ok(enriched.includes("Automated scan found no structured gaps in this pass; attached Confluence doc review"));
-  for (const page of SAMPLE_PAGES) {
-    assert.ok(enriched.includes(`[${page.title}](${page.htmlUrl})`));
-  }
+  assert.ok(enriched.includes("Top 3 of 7 attached pages"));
+  // Cap to 3 pages — not every SAMPLE_PAGES title
+  const linkedTitles = SAMPLE_PAGES.filter((page) =>
+    enriched.includes(`[${page.title}](${page.htmlUrl})`)
+  );
+  assert.equal(linkedTitles.length, 3);
 });
 
 test("enrichKnowledgeGapsResponse strips invented Ownership and Integration sections", () => {
@@ -137,8 +140,12 @@ test("enrichKnowledgeGapsResponse linkifies file paths and Confluence title ment
     activeFile: "src/server/githubAppApi.ts"
   });
   assert.ok(enriched.includes("`src/server/githubAppApi.ts`"));
-  assert.ok(enriched.includes("[Coop AI — Architecture Overview](https://example.atlassian.net/wiki/spaces/COOP/pages/6)"));
   assert.ok(enriched.includes("**Confluence pages reviewed**"));
+  // Architecture Overview ranks highly for githubAppApi — may appear in top 3 or only in Sources
+  assert.ok(
+    enriched.includes("Top 3 of 7") ||
+      enriched.includes("[Coop AI — Architecture Overview](https://example.atlassian.net/wiki/spaces/COOP/pages/6)")
+  );
 });
 
 test("buildConfluencePagesReviewedBlock uses keyword heuristics for runbook pages", () => {
@@ -150,13 +157,15 @@ test("buildConfluencePagesReviewedBlock uses keyword heuristics for runbook page
   assert.ok(!block.includes("COOP-55"));
 });
 
-test("enrichKnowledgeGapsResponse numbers recommended next steps", () => {
+test("enrichKnowledgeGapsResponse keeps a single recommended next step", () => {
   const enriched = enrichKnowledgeGapsResponse(SAMPLE_LLM_OUTPUT, {
     confluencePages: SAMPLE_PAGES,
     activeFile: "src/server/githubAppApi.ts"
   });
-  assert.ok(enriched.includes("1. Verify the configuration documentation"));
-  assert.ok(enriched.includes("2. Consult the [Coop AI — Architecture Overview]"));
+  assert.ok(enriched.includes("**Recommended next step**"));
+  assert.equal(enriched.includes("**Recommended next steps**"), false);
+  assert.ok(enriched.includes("Verify the configuration documentation"));
+  assert.equal(enriched.includes("Consult the [Coop AI — Architecture Overview]"), false);
 });
 
 test("enrichKnowledgeGapsResponse rebuilds fastify.js scenario with Notion pages and scan gaps", () => {
@@ -205,15 +214,35 @@ No documentation resources were found for fastify.js.
   });
 
   assert.ok(enriched.includes("**Notion pages reviewed**"));
-  for (const page of notionPages) {
-    assert.ok(enriched.includes(`[${page.title}](${page.htmlUrl})`));
-  }
+  assert.ok(enriched.includes("Top 3 of 6 attached pages"));
+  const linkedNotion = notionPages.filter((page) =>
+    enriched.includes(`[${page.title}](${page.htmlUrl})`)
+  );
+  assert.equal(linkedNotion.length, 3);
   assert.ok(enriched.includes("No Confluence pages matched repo scope"));
   assert.ok(enriched.includes("No Google Docs matched repo scope"));
   assert.equal(enriched.includes("**Ownership & maintenance**"), false);
   assert.equal(enriched.includes("**Integration & operations**"), false);
   assert.equal(enriched.includes("Third-party plugins"), false);
   assert.ok(enriched.includes("`fastify.js`"));
+  assert.ok(enriched.includes("**Recommended next step**"));
+});
+
+test("enrichKnowledgeGapsResponse caps scan gap subsections at three", () => {
+  const gaps = [
+    { type: "missing_docs", message: "Missing docs for module A" },
+    { type: "missing_docs", message: "Missing docs for module B" },
+    { type: "impact_unknown", message: "Impact unknown for module C" },
+    { type: "missing_docs", message: "Missing docs for module D" }
+  ];
+  const enriched = enrichKnowledgeGapsResponse(
+    `**Summary**\n\nSeveral gaps.\n\n**Documentation gaps**\n\n**Recommended next steps**\n\n1. Write a runbook.`,
+    { jobScanGaps: gaps, activeFile: "src/app.ts" }
+  );
+  assert.ok(enriched.includes("Missing docs for module A"));
+  assert.ok(enriched.includes("Impact unknown for module C"));
+  assert.equal(enriched.includes("Missing docs for module D"), false);
+  assert.ok(enriched.includes("**Recommended next step**"));
 });
 
 test("buildScanGapSubsection uses scan message for What to check", () => {
