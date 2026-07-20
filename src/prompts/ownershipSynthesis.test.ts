@@ -76,8 +76,9 @@ test("ownership synthesis supports repository-wide scope", () => {
   });
   assert.ok(prompt.includes("repository-wide"));
   assert.ok(prompt.includes("Who owns acme/widgets"));
-  assert.ok(prompt.includes("escalation order"));
+  assert.ok(prompt.includes("who to contact first"));
   assert.ok(prompt.includes("CODEOWNERS data is present"));
+  assert.ok(prompt.includes("Keep the whole answer short"));
 });
 
 test("ownership synthesis surfaces CODEOWNERS orgContext prominently", () => {
@@ -104,7 +105,8 @@ test("ownership synthesis surfaces CODEOWNERS orgContext prominently", () => {
   });
   assert.ok(prompt.includes("[Sources: CODEOWNERS]"));
   assert.ok(!OWNERSHIP_INTELLIGENCE_SYSTEM.includes("hiring"));
-  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("coverage gaps"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Never invent owners"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("scannable"));
 });
 
 test("ownership synthesis omits outreach draft and includes pathEvolution guidance", () => {
@@ -131,6 +133,14 @@ test("ownership synthesis omits outreach draft and includes pathEvolution guidan
   assert.ok(prompt.includes("## Path evolution guidance"));
   assert.ok(prompt.includes("12 recent commit(s)"));
   assert.ok(!prompt.includes("Suggested outreach draft"));
+});
+
+test("ownership intelligence system prioritizes contact over essay sections", () => {
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("who to contact first"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Add escalation only when evidence"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("otherwise omit those sections"));
+  assert.ok(!OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Recommends knowledge transfer targets"));
+  assert.ok(!OWNERSHIP_INTELLIGENCE_SYSTEM.includes("coverage gaps"));
 });
 
 test("ownership synthesis cites Slack presence when discussions are empty", () => {

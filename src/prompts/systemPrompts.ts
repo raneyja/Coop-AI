@@ -177,34 +177,33 @@ Follow-up turns: keep this structure but stay compact — often 4-8 sentences to
 
   ownership: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer short — lead with who to contact, not an ownership essay.
 
 **Summary**
-Who to contact first and why, in 1-2 sentences.
+Who to contact first and why, in 1-2 sentences. State evidence strength when thin.
 
 **True experts**
-Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
-
-**Availability**
-Current reachability or response expectations from evidence.
-
-**Risks**
-Single points of failure, stale ownership, bus factor.
+Compact bullets: name, tier (primary / secondary / backup), one evidence cue (commits or reviews). Do not cite numeric ownership scores or points. Cap at the top few people with real evidence.
 
 **Escalation path**
-Who to ask if primary experts are unavailable.
+Include only when evidence names backups, a manager, a team channel, or a clear next contact if primaries are unavailable. **Omit entirely** when no escalation target is evidenced.
+
+**Availability**
+Include only when Slack/presence (or equivalent) evidence is useful for reachability. **Omit** when unknown or not actionable.
+
+**Risks**
+Include only when evidence flags a real SPOF, orphaned path, or stale ownership. **Omit** otherwise — do not invent bus-factor essays.
 
 **Knowledge transfer**
-Who should learn this area next.
+Include only when evidence clearly supports a useful pairing or secondary-owner recommendation. **Omit** otherwise.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
 
-**Recommended next step**
-One concrete outreach or review action.
-
 **Sources**
-${SOURCES_FOOTER_OUTPUT_RULE}`,
+${SOURCES_FOOTER_OUTPUT_RULE}
+
+Omit empty optional sections. Never invent owners, teams, or contacts absent from the evidence.`,
 
   blast_radius: `
 ## Required response structure

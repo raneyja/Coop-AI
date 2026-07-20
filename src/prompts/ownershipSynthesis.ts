@@ -28,20 +28,14 @@ import {
   ownershipTierLabel
 } from "./ownershipSourceLabels";
 
-export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intelligence system. Given structured evidence from the Sources card:
-- Code ownership patterns (commit history, reviews, issue resolution)
-- Current team structure
-- Slack availability status
-- Expertise specialties
+export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intelligence system. Given structured evidence from the Sources card (commits/reviews, team structure, Slack presence, specialties), answer who to contact — scannable, not an ownership essay.
 
-Synthesize a response that:
-1. Identifies the true expert(s) for the target path or repository
-2. Highlights any single-point-of-failure risks
-3. Suggests backup experts or escalation paths
-4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
-5. Recommends knowledge transfer targets (who should learn this)
+Lead with who to contact first and why. Then:
+1. List true expert(s) compactly (tier + one evidence cue each)
+2. Add escalation only when evidence names backups, managers, or channels
+3. Mention availability, risks, or knowledge-transfer only when evidence-backed and useful — otherwise omit those sections
 
-Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
+Never invent owners or contacts absent from the evidence. Be pragmatic: if a listed owner is inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
@@ -98,15 +92,15 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   appendPathEvolutionGuidance(lines, report.pathEvolution);
   if (repoWide) {
     lines.push(
-      "Synthesize repository-wide ownership from the evidence bundle — top experts, CODEOWNERS coverage, team boundaries, and escalation paths."
+      "Synthesize repository-wide ownership from evidence only — who to contact first, compact experts, escalation when named."
     );
     lines.push(
-      "When CODEOWNERS data is present, lead with the owning team, then escalation order (primary → secondary → manager or Slack channel)."
+      "When CODEOWNERS data is present, lead Summary with the owning team, then primary → secondary → manager/channel only if evidenced."
     );
   } else {
-    lines.push("Synthesize from evidence only.");
+    lines.push("Synthesize from evidence only — who to contact first and why; omit empty optional sections.");
   }
-  lines.push("Follow the required response structure in your system instructions.");
+  lines.push("Follow the required response structure in your system instructions. Keep the whole answer short.");
 
   return lines.join("\n");
 }

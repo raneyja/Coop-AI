@@ -59,19 +59,39 @@ test("comprehension use case requires active file section when activeFile is set
   assert.ok(!prompt.includes("Omit entirely for repo-wide runs with no open file"));
 });
 
-test("knowledge_gaps use case requires grouped subsection structure", () => {
+test("knowledge_gaps use case requires scannable top-gaps structure", () => {
   const prompt = systemPromptForUseCase("knowledge_gaps");
   assert.ok(prompt.includes("## Grouping"));
   assert.ok(prompt.includes("**Documentation gaps**"));
-  assert.ok(prompt.includes("**Notion pages reviewed**"));
-  assert.ok(prompt.includes("**Confluence pages reviewed**"));
-  assert.ok(prompt.includes('count="N"'));
+  assert.ok(prompt.includes("at most 3"));
+  assert.ok(prompt.includes("**Recommended next step**"));
+  assert.ok(prompt.includes("Exactly one concrete action"));
   assert.ok(prompt.includes("Forbidden section names"));
-  assert.ok(prompt.includes("subsection title"));
   assert.ok(prompt.includes("Never alternate **Open question:**"));
   assert.ok(prompt.includes("**What to check:**"));
   assert.ok(prompt.includes("Never bullet the title"));
   assert.ok(prompt.includes("Omit the entire section"));
+  assert.ok(!prompt.includes("List exactly N bullets"));
+  assert.ok(!prompt.includes("Numbered list of 2-4"));
+});
+
+test("ownership use case leads with contact and omits empty optional sections", () => {
+  const prompt = systemPromptForUseCase("ownership");
+  assert.ok(prompt.includes("**Summary**"));
+  assert.ok(prompt.includes("**True experts**"));
+  assert.ok(prompt.includes("**Escalation path**"));
+  assert.ok(prompt.includes("**Omit entirely** when no escalation target is evidenced"));
+  assert.ok(prompt.includes("lead with who to contact, not an ownership essay"));
+  assert.ok(prompt.includes("Omit empty optional sections"));
+  assert.ok(prompt.includes("Never invent owners"));
+  assert.ok(!prompt.includes("**Recommended next step**"));
+  // Optional sections remain as omit-unless-useful, not always-required essay padding
+  assert.ok(prompt.includes("**Availability**"));
+  assert.ok(prompt.includes("**Omit** when unknown or not actionable"));
+  assert.ok(prompt.includes("**Risks**"));
+  assert.ok(prompt.includes("do not invent bus-factor essays"));
+  assert.ok(prompt.includes("**Knowledge transfer**"));
+  assert.ok(prompt.includes("**Omit** otherwise"));
 });
 
 test("blast_radius use case includes impact sections", () => {
