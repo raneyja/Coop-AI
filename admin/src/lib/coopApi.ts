@@ -554,15 +554,33 @@ export async function fetchInstallUrl(
   }
 }
 
-export async function fetchUsers(): Promise<ApiResult<{ users: AdminUser[] }>> {
-  const result = await coopFetch<{ users: BackendUser[] }>("/v1/admin/users");
+export type UsersListResponse = {
+  users: AdminUser[];
+  /** Purchased seats (Stripe/Coop). */
+  seats: number;
+  /** Active + invited users occupying seats. */
+  seatsUsed: number;
+};
+
+export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
+  const result = await coopFetch<{
+    users: BackendUser[];
+    seats?: number;
+    seatsUsed?: number;
+  }>("/v1/admin/users");
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
+  const seats = Math.max(1, Math.floor(Number(result.data?.seats ?? 1) || 1));
+  const seatsUsed = Math.max(0, Math.floor(Number(result.data?.seatsUsed ?? 0) || 0));
   return {
     ok: true,
     status: result.status,
-    data: { users: (result.data?.users ?? []).map(normalizeUser) }
+    data: {
+      users: (result.data?.users ?? []).map(normalizeUser),
+      seats,
+      seatsUsed
+    }
   };
 }
 

@@ -20,6 +20,8 @@ const TABLE_ROLES = ["member", "admin"];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [seats, setSeats] = useState(1);
+  const [seatsUsed, setSeatsUsed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +67,14 @@ export default function UsersPage() {
       return;
     }
     setUsers(result.data?.users ?? []);
+    setSeats(result.data?.seats ?? 1);
+    setSeatsUsed(result.data?.seatsUsed ?? 0);
   }, []);
 
   const teamInvitesBlocked = orgPlan === "free";
   const perUserAccess = repoAccessMode === "per_user";
+  const seatsAvailable = Math.max(0, seats - seatsUsed);
+  const atSeatCapacity = !loading && seatsUsed >= seats;
 
   useEffect(() => {
     void load();
@@ -132,13 +138,48 @@ export default function UsersPage() {
           <button
             type="button"
             className="admin-btn-primary"
-            disabled={unavailable || loading}
+            disabled={unavailable || loading || atSeatCapacity}
+            title={atSeatCapacity ? "All seats are assigned — add seats in Billing first." : undefined}
             onClick={() => setInviteOpen(true)}
           >
             Invite a new user
           </button>
         ) : null}
       </div>
+
+      {!unavailable && !loading ? (
+        <div className="admin-panel-inset flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="admin-section-label">Seats</p>
+            <p className="mt-1 text-sm text-white">
+              <span className="font-semibold tabular-nums">{seatsUsed}</span>
+              <span className="text-coop-muted"> of </span>
+              <span className="font-semibold tabular-nums">{seats}</span>
+              <span className="text-coop-muted"> assigned</span>
+            </p>
+            <p className="mt-0.5 text-xs text-coop-muted">
+              {atSeatCapacity
+                ? "No seats left — add seats in Billing before inviting anyone else."
+                : `${seatsAvailable} available`}
+            </p>
+          </div>
+          {!teamInvitesBlocked ? (
+            atSeatCapacity ? (
+              <Link href="/billing" className="admin-btn-secondary text-xs">
+                Add seats
+              </Link>
+            ) : (
+              <Link href="/billing" className="admin-link text-xs">
+                Manage billing →
+              </Link>
+            )
+          ) : (
+            <Link href="/billing" className="admin-link text-xs">
+              Upgrade for team seats →
+            </Link>
+          )}
+        </div>
+      ) : null}
 
       {unavailable && <UnavailableBanner />}
 

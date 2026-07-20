@@ -8,6 +8,7 @@ import type { AuthContext } from "./orgStore";
 import type { UserRole } from "./users/userStore";
 import { normalizeUserRole } from "./users/userStore";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
+import { resolveEffectiveSeatCount } from "./billing/resolveSeatCount";
 import { getDbPool } from "./db";
 import { UserRepoGrantStore } from "./userRepoGrantStore";
 import { indexedOrgRepoIds } from "./resolveAccessibleRepos";
@@ -34,7 +35,9 @@ export async function handleAdminUsersRequest(
     const users = await deps.userStore.listOrgUsers(auth.orgId);
     const activeUsers = users.filter((u) => !u.deactivatedAt).length;
     const billing = deps.orgStore ? await deps.orgStore.getOrganizationBilling(auth.orgId) : undefined;
-    const seats = billing?.seatCount ?? 1;
+    const seats = deps.orgStore
+      ? await resolveEffectiveSeatCount(deps.orgStore, auth.orgId, billing)
+      : Math.max(1, Math.floor(Number(billing?.seatCount ?? 1) || 1));
     writeJson(response, 200, {
       users: users.map(toUserSummary),
       seats,
@@ -70,7 +73,7 @@ export async function handleAdminUsersRequest(
       const users = await deps.userStore.listOrgUsers(auth.orgId);
       const activeUsers = users.filter((u) => !u.deactivatedAt).length;
       const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
-      const seats = billing?.seatCount ?? 1;
+      const seats = await resolveEffectiveSeatCount(deps.orgStore, auth.orgId, billing);
       if (activeUsers >= seats) {
         writeJson(response, 403, {
           error: "seat_limit_reached",
