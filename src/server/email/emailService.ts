@@ -43,38 +43,34 @@ export class EmailService {
   public async sendProUpgradeWelcome(params: WelcomeEmailParams): Promise<void> {
     const loginUrl = params.adminPortalUrl;
     const billingUrl = billingPortalUrl(params.adminPortalUrl);
-    const subject = `${params.orgName} is now on Coop AI Pro`;
+    const subject = `${params.orgName} is now on CoopAI Pro`;
     const html = emailShell({
       title: subject,
       body: `
         <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
         <p style="margin:0 0 16px;font-size:16px;">
           Your upgrade is complete — <strong>${escapeHtml(params.orgName)}</strong> is now on
-          <strong>Coop AI Pro</strong>.
+          <strong>CoopAI Pro</strong>.
         </p>
-        <p style="margin:0 0 16px;font-size:15px;color:#57606a;">
-          You now have unlimited AI usage, unlimited Deep-Index repositories, team user management,
-          and priority support.
-        </p>
-        ${primaryButton("Open Coop AI", loginUrl)}
-        <p style="margin:0 0 8px;font-size:14px;font-weight:600;">What's unlocked</p>
-        <ul style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
-          <li style="margin-bottom:6px;">Unlimited AI credits for chat and autocomplete.</li>
-          <li style="margin-bottom:6px;">Unlimited Deep-Index repositories.</li>
-          <li style="margin-bottom:6px;">Invite and manage teammates from <strong>Users</strong>.</li>
-          <li>View invoices and manage billing in your <a href="${escapeHtml(billingUrl)}" style="color:#0969da;">billing portal</a>.</li>
-        </ul>
+        ${primaryButton("Sign in to CoopAI", loginUrl)}
+        <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Next steps</p>
+        <ol style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
+          <li style="margin-bottom:6px;">Sign in with the same account you used before.</li>
+          <li style="margin-bottom:6px;">Invite teammates from <strong>Users</strong>.</li>
+          <li>Manage invoices and subscription in <a href="${escapeHtml(billingUrl)}" style="color:#0969da;">Billing</a>.</li>
+        </ol>
       `
     });
     const text = [
-      `${params.orgName} is now on Coop AI Pro.`,
+      `${params.orgName} is now on CoopAI Pro.`,
       "",
-      "You now have unlimited AI usage, unlimited Deep-Index repositories, team user management, and priority support.",
-      "",
-      "Open Coop AI:",
+      "Sign in to CoopAI:",
       loginUrl,
       "",
-      "Manage billing:",
+      "Next steps:",
+      "1. Sign in with the same account you used before.",
+      "2. Invite teammates from Users.",
+      "3. Manage invoices and subscription in Billing:",
       billingUrl
     ].join("\n");
     await this.send(params.to, subject, html, text);
@@ -90,52 +86,48 @@ export class EmailService {
       ? `<strong>${escapeHtml(params.invitedBy)}</strong> invited you to join`
       : "You've been invited to join";
     const subject = params.invitedBy
-      ? `${params.invitedBy} invited you to ${params.orgName} on Coop AI`
-      : `Join ${params.orgName} on Coop AI`;
+      ? `${params.invitedBy} invited you to ${params.orgName} on CoopAI`
+      : `Join ${params.orgName} on CoopAI`;
     const html = emailShell({
       title: subject,
       body: `
         <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
         <p style="margin:0 0 16px;font-size:16px;">
           ${inviterLine}
-          <strong>${escapeHtml(params.orgName)}</strong> on Coop AI.
-        </p>
-        <p style="margin:0 0 16px;font-size:15px;color:#57606a;">
-          Coop AI connects your team's tools so everyone can code with full context in VS Code.
+          <strong>${escapeHtml(params.orgName)}</strong> on CoopAI.
         </p>
         <p style="margin:0 0 24px;font-size:15px;color:#57606a;">
-          Accept this invitation to set up your profile and password for
+          Accept this invitation to create a password for
           <strong>${escapeHtml(params.to)}</strong>.
         </p>
         ${primaryButton("Accept invitation", params.acceptInviteUrl)}
         <p style="margin:24px 0 0;font-size:13px;color:#57606a;">
-          This link expires in 7 days. After you join, install the Coop AI VS Code extension and sign in with the same account.
+          This link expires in 7 days. After you join, install the CoopAI VS Code extension and sign in with the same account.
         </p>
       `
     });
     const text = [
       params.invitedBy
-        ? `${params.invitedBy} invited you to join ${params.orgName} on Coop AI.`
-        : `You've been invited to join ${params.orgName} on Coop AI.`,
+        ? `${params.invitedBy} invited you to join ${params.orgName} on CoopAI.`
+        : `You've been invited to join ${params.orgName} on CoopAI.`,
       "",
       `Accept your invitation and create a password for ${params.to}:`,
       params.acceptInviteUrl,
       "",
       "This link expires in 7 days.",
-      "After joining, install the Coop AI VS Code extension and sign in with the same account."
+      "After joining, install the CoopAI VS Code extension and sign in with the same account."
     ].join("\n");
     await this.send(params.to, subject, html, text);
   }
 
   public async sendEmailVerification(params: EmailVerificationParams): Promise<void> {
-    const subject = "Verify your Coop AI email";
+    const subject = "Verify your CoopAI email";
     const html = emailShell({
       title: subject,
       body: `
         <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
         <p style="margin:0 0 16px;font-size:16px;">
-          Thanks for creating <strong>${escapeHtml(params.orgName)}</strong> on Coop AI.
-          Confirm your email to secure your account.
+          Confirm your email for <strong>${escapeHtml(params.orgName)}</strong> on CoopAI.
         </p>
         ${primaryButton("Verify email address", params.verifyUrl)}
         <p style="margin:24px 0 0;font-size:13px;color:#57606a;">
@@ -144,7 +136,7 @@ export class EmailService {
       `
     });
     const text = [
-      `Verify your email for ${params.orgName} on Coop AI:`,
+      `Verify your email for ${params.orgName} on CoopAI:`,
       params.verifyUrl,
       "",
       "This link expires in 24 hours."
@@ -153,13 +145,13 @@ export class EmailService {
   }
 
   public async sendPasswordReset(params: PasswordResetParams): Promise<void> {
-    const subject = "Reset your Coop AI password";
+    const subject = "Reset your CoopAI password";
     const html = emailShell({
       title: subject,
       body: `
         <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
         <p style="margin:0 0 16px;font-size:16px;">
-          We received a request to reset the password for your Coop AI account.
+          We received a request to reset the password for your CoopAI account.
         </p>
         ${primaryButton("Reset password", params.resetUrl)}
         <p style="margin:24px 0 0;font-size:13px;color:#57606a;">
@@ -168,7 +160,7 @@ export class EmailService {
       `
     });
     const text = [
-      "Reset your Coop AI password:",
+      "Reset your CoopAI password:",
       params.resetUrl,
       "",
       "This link expires in 1 hour. If you didn't request this, ignore this email."
@@ -232,39 +224,43 @@ function collectHrefUrls(html: string): string[] {
 
 function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free"): PlanWelcomeContent {
   const loginUrl = params.adminPortalUrl;
-  const planLabel = plan === "pro" ? "Coop AI Pro" : "Coop AI Free";
+  const planLabel = plan === "pro" ? "CoopAI Pro" : "CoopAI Free";
   const intro =
     plan === "pro"
-      ? `<strong>${escapeHtml(params.orgName)}</strong> is ready on Coop AI Pro. Sign in to connect tools, invite your team, and manage billing.`
-      : `<strong>${escapeHtml(params.orgName)}</strong> is ready on Coop AI Free. Sign in to connect tools and start using Coop in VS Code.`;
+      ? `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Pro. Sign in at the admin portal to connect tools, invite your team, and manage billing.`
+      : `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Free. Sign in to connect tools and start using CoopAI in VS Code.`;
   const subject =
-    plan === "pro" ? `Welcome to Coop AI — ${params.orgName}` : `Welcome to Coop AI Free — ${params.orgName}`;
+    plan === "pro" ? `Welcome to CoopAI — ${params.orgName}` : `Welcome to CoopAI Free — ${params.orgName}`;
+  const signInStep =
+    plan === "pro"
+      ? "Sign in with Google, or use Forgot password to set a password for your checkout email."
+      : "Sign in with the email and password you created, or continue with Google.";
   const html = emailShell({
     title: subject,
     body: `
       <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
       <p style="margin:0 0 16px;font-size:16px;">${intro}</p>
-      ${primaryButton("Sign in to Coop AI", loginUrl)}
+      ${primaryButton("Sign in to CoopAI", loginUrl)}
       <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Next steps</p>
       <ol style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
-        <li style="margin-bottom:6px;">Sign in with your email and password, or continue with Google.</li>
+        <li style="margin-bottom:6px;">${signInStep}</li>
         <li style="margin-bottom:6px;">Connect GitHub, Slack, and other tools in <strong>Integrations</strong>.</li>
         <li style="margin-bottom:6px;">Invite teammates from <strong>Users</strong>.</li>
-        <li>Install the Coop AI VS Code extension and sign in with the same account.</li>
+        <li>Install the CoopAI VS Code extension and sign in with the same account.</li>
       </ol>
     `
   });
   const text = [
     `${params.orgName} is set up on ${planLabel}.`,
     "",
-    "Sign in to Coop AI:",
+    "Sign in to CoopAI:",
     loginUrl,
     "",
     "Next steps:",
-    "1. Sign in with your email and password, or continue with Google.",
+    `1. ${signInStep}`,
     "2. Connect GitHub, Slack, and other tools in Integrations.",
     "3. Invite teammates from Users.",
-    "4. Install the Coop AI VS Code extension and sign in."
+    "4. Install the CoopAI VS Code extension and sign in."
   ].join("\n");
 
   return { subject, html, text };

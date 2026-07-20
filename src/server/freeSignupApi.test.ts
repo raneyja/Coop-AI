@@ -104,7 +104,7 @@ test("free signup creates org, owner, session, and sends welcome email", async (
   assert.deepEqual(welcomeEmail, {
     to: "owner@example.com",
     orgName: "owner",
-    adminPortalUrl: "https://admin.coop-ai.dev/login"
+    adminPortalUrl: "https://admin.coop-ai.dev/login?signedOut=1&email=owner%40example.com"
   });
   const body = response.body as Record<string, unknown>;
   assert.equal(body.orgId, "org-1");

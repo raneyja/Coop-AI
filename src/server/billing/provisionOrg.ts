@@ -2,7 +2,7 @@ import type { EmailService } from "../email/emailService";
 import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { BillingConfig } from "./billingConfig";
-import { adminPortalLoginUrl } from "./adminPortalUrl";
+import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
 
 export type ProvisionInput = {
   orgName: string;
@@ -26,7 +26,9 @@ export async function provisionOrgFromCheckout(
   billingConfig: BillingConfig,
   input: ProvisionInput
 ): Promise<ProvisionResult> {
-  const loginUrl = adminPortalLoginUrl(billingConfig.adminPortalUrl);
+  const loginUrl = adminPortalFreshLoginUrl(billingConfig.adminPortalUrl, {
+    email: input.adminEmail
+  });
 
   if (input.existingOrgId && input.upgrade) {
     const org = await orgStore.getOrganization(input.existingOrgId);

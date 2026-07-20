@@ -20,7 +20,7 @@ import {
   writeJson
 } from "./sessionDelivery";
 import { authClientKey, consumeAuthRateLimit } from "./authRateLimit";
-import { adminPortalLoginUrl } from "../billing/adminPortalUrl";
+import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "../billing/adminPortalUrl";
 import type { Pool } from "pg";
 import { getDbPool } from "../db";
 
@@ -767,7 +767,9 @@ async function resolveGoogleUser(
     const org = await deps.orgStore!.createOrganization(orgName, "free");
     user = await deps.userStore!.createUser(org.id, profile.email, "admin");
     await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
-    const loginUrl = adminPortalLoginUrl(deps.authConfig.adminPortalUrl);
+    const loginUrl = adminPortalFreshLoginUrl(deps.authConfig.adminPortalUrl, {
+      email: profile.email
+    });
     try {
       await deps.emailService?.sendFreeSignupWelcome({
         to: profile.email,

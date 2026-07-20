@@ -8,7 +8,7 @@ import { requireAuth, requireOrgAdmin, resolveAuthContext, resolveOrgPlanFromDb 
 import { clampSeatCountForPlan } from "../planGates";
 import type { ServerConfig } from "../serverConfig";
 import { loadBillingConfig, type BillingConfig } from "./billingConfig";
-import { adminPortalLoginUrl } from "./adminPortalUrl";
+import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
@@ -225,7 +225,6 @@ async function handleCheckoutStatus(
 ): Promise<boolean> {
   const billingConfig = loadBillingConfig();
   const sessionId = parsed.query?.get("session_id")?.trim() ?? "";
-  const loginUrl = adminPortalLoginUrl(billingConfig.adminPortalUrl);
 
   if (!sessionId || !sessionId.startsWith("cs_")) {
     writeJson(response, 400, {
@@ -242,6 +241,12 @@ async function handleCheckoutStatus(
 
   try {
     const session = await stripe.retrieveCheckoutSession(sessionId);
+    const metadata = session.metadata ?? {};
+    const checkoutEmail = String(metadata.admin_email ?? session.customer_email ?? "").trim();
+    const loginUrl = adminPortalFreshLoginUrl(
+      billingConfig.adminPortalUrl,
+      checkoutEmail ? { email: checkoutEmail } : undefined
+    );
     const paid =
       session.payment_status === "paid" ||
       session.payment_status === "no_payment_required" ||
@@ -257,7 +262,6 @@ async function handleCheckoutStatus(
     }
 
     const customerId = readStripeCustomerId(session.customer);
-    const metadata = session.metadata ?? {};
     const orgName = metadata.org_name?.trim() || undefined;
 
     if (!customerId || !deps.orgStore) {

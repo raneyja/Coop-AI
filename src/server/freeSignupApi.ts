@@ -7,7 +7,7 @@ import type { AuthTokenStore } from "./auth/authTokenStore";
 import type { AuthConfig } from "./auth/authConfig";
 import { hashPassword, validatePasswordStrength } from "./auth/passwordCrypto";
 import { loadBillingConfig } from "./billing/billingConfig";
-import { adminPortalLoginUrl } from "./billing/adminPortalUrl";
+import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "./billing/adminPortalUrl";
 
 type ParsedRequest = {
   method: string;
@@ -83,12 +83,14 @@ export async function handleFreeSignupApiRequest(
 
   const verifyToken = await deps.authTokenStore.createToken(user.id, "email_verify", 24 * 60 * 60 * 1000);
   const verifyUrl = `${deps.authConfig.marketingBaseUrl}/verify-email?token=${encodeURIComponent(verifyToken)}`;
-  const loginUrl = adminPortalLoginUrl(loadBillingConfig().adminPortalUrl);
+  const portalBase = loadBillingConfig().adminPortalUrl;
+  const emailLoginUrl = adminPortalFreshLoginUrl(portalBase, { email });
+  const loginUrl = adminPortalLoginUrl(portalBase);
 
   await deps.emailService.sendFreeSignupWelcome({
     to: email,
     orgName: org.name,
-    adminPortalUrl: loginUrl
+    adminPortalUrl: emailLoginUrl
   });
   await deps.emailService.sendEmailVerification({ to: email, orgName: org.name, verifyUrl });
 

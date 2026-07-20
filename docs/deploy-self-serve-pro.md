@@ -36,7 +36,7 @@ STRIPE_PRICE_ID_PRO=price_...
 STRIPE_BILLING_PORTAL_RETURN_URL=https://admin.coop-ai.dev/billing
 
 RESEND_API_KEY=re_...
-EMAIL_FROM=hello@coop-ai.dev
+EMAIL_FROM="CoopAI <hello@coop-ai.dev>"
 COOP_EMAIL_MOCK=false
 ```
 
@@ -140,8 +140,8 @@ Deploy `admin/` to Vercel (or host) at `https://admin.coop-ai.dev`. Ensure `COOP
 
 1. **Browser** → [coop-ai.dev/pricing](https://coop-ai.dev/pricing) → start Pro checkout (use Stripe test card `4242 4242 4242 4242` in test mode)
 2. After payment → redirect to `/welcome?session_id=cs_...`
-3. **Email** — welcome message with portal link (Resend; check spam). Set your password from the link if this is your first sign-in.
-4. **Browser** → admin portal `/login` → sign in with the same email and password used at checkout (or **Continue with Google**)
+3. **Email** — welcome message with portal link (Resend; check spam). Checkout does not set a password.
+4. **Browser** → admin portal `/login` → **Continue with Google**, or use **Forgot password** to set a password for the checkout email
 5. **Browser** → admin **Billing** → “Manage subscription” opens Stripe customer portal
 
 **Success criteria:**

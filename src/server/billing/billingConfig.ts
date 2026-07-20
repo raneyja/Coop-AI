@@ -50,7 +50,7 @@ export function loadBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
     ),
     stripePortalConfigManage: env.STRIPE_PORTAL_CONFIG_MANAGE?.trim() || undefined,
     stripePortalConfigSeats: env.STRIPE_PORTAL_CONFIG_SEATS?.trim() || undefined,
-    emailFrom: env.EMAIL_FROM?.trim() || "hello@coop-ai.dev",
+    emailFrom: env.EMAIL_FROM?.trim() || "CoopAI <hello@coop-ai.dev>",
     resendApiKey: env.RESEND_API_KEY?.trim() || undefined,
     emailMock: readBoolean(env.COOP_EMAIL_MOCK, !env.RESEND_API_KEY)
   };

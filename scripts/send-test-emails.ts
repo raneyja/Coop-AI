@@ -7,7 +7,7 @@
  */
 
 import { loadBillingConfig } from "../src/server/billing/billingConfig";
-import { adminPortalAcceptInviteUrl, adminPortalLoginUrl } from "../src/server/billing/adminPortalUrl";
+import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "../src/server/billing/adminPortalUrl";
 import { EmailService } from "../src/server/email/emailService";
 
 const SAMPLE_ORG = "Acme Engineering";
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   }
 
   const emailService = new EmailService(config);
-  const loginUrl = adminPortalLoginUrl(config.adminPortalUrl);
+  const loginUrl = adminPortalFreshLoginUrl(config.adminPortalUrl, { email: to });
   const marketingBase = process.env.COOP_MARKETING_BASE_URL?.trim() || "https://coop-ai.dev";
 
   const sends: Array<{ label: string; run: () => Promise<void> }> = [

@@ -9,10 +9,30 @@ import {
   getToken,
   meFromAuthPayload,
   restoreSessionFromCookie,
-  saveSession
+  saveSession,
+  signOutRemote
 } from "@/lib/auth";
 import { loginWithPassword, ssoStartUrl, startGoogleAuthUrl, validateSession } from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
+
+function readLoginQuery(): { forceSignedOut: boolean; email: string; oauthError: string | null } {
+  const params = new URLSearchParams(window.location.search);
+  const forceSignedOut = params.get("signedOut") === "1" || params.get("fresh") === "1";
+  const email = params.get("email")?.trim() ?? "";
+  const oauthError = params.get("message") ?? params.get("error");
+  return { forceSignedOut, email, oauthError };
+}
+
+function stripFreshLoginParams(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("signedOut") && !url.searchParams.has("fresh")) {
+    return;
+  }
+  url.searchParams.delete("signedOut");
+  url.searchParams.delete("fresh");
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, "", next);
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,23 +41,41 @@ export default function LoginPage() {
   const [orgName, setOrgName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    const oauthError = params.get("message") ?? params.get("error");
-    if (oauthError) {
-      setError(oauthError);
-    }
-  }, []);
 
-  useEffect(() => {
-    async function resumeSession() {
+    let cancelled = false;
+
+    async function bootstrap() {
+      const { forceSignedOut, email: emailParam, oauthError } = readLoginQuery();
+      if (oauthError) {
+        setError(oauthError);
+      }
+      if (emailParam) {
+        setEmail(emailParam);
+      }
+
+      // Email / post-checkout CTAs: clear any existing portal session first.
+      if (forceSignedOut) {
+        await signOutRemote();
+        clearSession();
+        stripFreshLoginParams();
+        if (!cancelled) {
+          setReady(true);
+        }
+        return;
+      }
+
       const token = getToken();
       if (token) {
         const result = await validateSession(token);
+        if (cancelled) {
+          return;
+        }
         if (result.ok && result.data) {
           router.replace(defaultHomePath(result.data));
           return;
@@ -46,12 +84,21 @@ export default function LoginPage() {
       }
 
       const restored = await restoreSessionFromCookie();
+      if (cancelled) {
+        return;
+      }
       if (restored) {
         router.replace(defaultHomePath(restored));
+        return;
       }
+
+      setReady(true);
     }
 
-    void resumeSession();
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function finishSignIn(
@@ -91,6 +138,14 @@ export default function LoginPage() {
     }
 
     await finishSignIn(token, result.data, result.data.refreshToken);
+  }
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
+        <p className="text-sm text-coop-muted">Preparing sign-in…</p>
+      </div>
+    );
   }
 
   return (

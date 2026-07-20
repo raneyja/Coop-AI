@@ -12,10 +12,10 @@ type WelcomeContentProps = {
 };
 
 const STEPS = [
-  "Open the admin portal and sign in with your email and password.",
+  "Open the admin portal and sign in with Google, or set a password via Forgot password.",
   "Connect GitHub, Slack, and other tools once for your whole org.",
   "Invite teammates from the Users page.",
-  "Developers install Coop AI in VS Code and sign in."
+  "Developers install the CoopAI VS Code extension and sign in."
 ] as const;
 
 const POLL_INTERVAL_MS = 3000;
@@ -123,7 +123,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
               {orgName ? `${orgName} is ready` : "Your organization is ready"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              Sign in with the email and password you used at checkout.
+              Sign in with Google, or use Forgot password to set a password for this email.
             </p>
           </div>
         ) : null}

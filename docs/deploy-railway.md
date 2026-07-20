@@ -97,7 +97,7 @@ Set these on the **Coop-AI** service (**Variables** tab). Source for integration
 | `ANTHROPIC_API_KEY` | From local `.env.backend` |
 | `OPENAI_API_KEY` | From local `.env.backend` |
 | `RESEND_API_KEY` | From local `.env.backend` |
-| `EMAIL_FROM` | `hello@coop-ai.dev` |
+| `EMAIL_FROM` | `CoopAI <hello@coop-ai.dev>` |
 | `COOP_EMAIL_MOCK` | `false` |
 
 `DATABASE_URL` — reference from Postgres (Part A3). **`PORT`** — leave unset; Railway sets it automatically.

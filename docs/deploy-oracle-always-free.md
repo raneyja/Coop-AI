@@ -182,7 +182,7 @@ GOOGLE_DOCS_APP_CLIENT_SECRET=
 
 # Email
 RESEND_API_KEY=
-EMAIL_FROM=hello@coop-ai.dev
+EMAIL_FROM="CoopAI <hello@coop-ai.dev>"
 COOP_EMAIL_MOCK=false
 
 # Stripe (Phase 2 — add when ready)
