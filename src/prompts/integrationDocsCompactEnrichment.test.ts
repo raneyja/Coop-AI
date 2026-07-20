@@ -80,6 +80,31 @@ test("enrichCompactIntegrationDocs injects related docs after active file sectio
   assert.ok(enriched.indexOf("**Related documentation**") > enriched.indexOf("**How the open file fits**"));
 });
 
+test("enrichCompactIntegrationDocs collapses verbose Understand Repo Architecture doc lists", () => {
+  const longList = Array.from({ length: 6 }, (_, index) => `- Page ${index + 1}`).join("\n");
+  const input = [
+    "**Architecture**",
+    "VS Code extension + API.",
+    "",
+    "**Notion pages reviewed**",
+    longList,
+    "",
+    "**Key subsystems**",
+    "Auth."
+  ].join("\n");
+  const enriched = enrichCompactIntegrationDocs(
+    input,
+    {
+      notionPages: pages,
+      activeFile: "src/server/githubAppApi.ts"
+    },
+    { mode: "understand-repo" }
+  );
+  assert.ok(!enriched.includes("**Notion pages reviewed**"));
+  assert.ok(enriched.includes("**Related documentation**"));
+  assert.ok(enriched.split("\n").filter((line) => line.startsWith("- Page")).length === 0);
+});
+
 test("enrichCompactIntegrationDocs collapses verbose Blast Radius doc lists", () => {
   const longList = Array.from({ length: 8 }, (_, index) => `- Page ${index + 1}`).join("\n");
   const input = [

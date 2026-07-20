@@ -92,12 +92,10 @@ function withPatchOutputContract(prompt: string): string {
 
 const COMPREHENSION_ACTIVE_FILE_SECTION = `
 **How the open file fits**
-Keep this section brief (4-6 bullets max) — contextualize the open editor file within the repository. Do **not** replace repository-wide **Architecture** / **Key subsystems** with a file-only deep dive.
-- **Role** — what the file does in the overall architecture (1-2 sentences)
-- **Depends on** — direct imports or internal dependencies from ## Active file context or anchor content (max 5 paths)
-- **Used by** — direct dependents from dependency graph evidence (max 5 paths)
-- **Integration surface** — routes, HTTP handlers, or external APIs visible in anchor file content (omit if none)
-- **Owners** — primary owner when ownership evidence is scoped to this path (omit if none)`;
+Brief (≤4 bullets). Contextualize the open editor file — do **not** replace repo-wide **Architecture** / **Key subsystems**.
+- **Role** — one sentence
+- **Depends on** / **Used by** — max 3 paths each from evidence (omit empty)
+- **Owners** — one line when ownership evidence is scoped to this path (omit if none)`;
 
 function comprehensionResponseStructure(activeFile?: string): string {
   const trimmed = activeFile?.trim();
@@ -111,29 +109,23 @@ Include **only** when the user message ## Scope lists an active editor file. Omi
 
   return `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+Architecture brief — scannable, not a README. Use these sections in order (**Title** on its own line; blank line before each; **omit empty sections** — never pad with Risks, onboarding essays, or Suggested next steps):
 
 **Summary**
-1-2 sentence overview of the repo or relevant subsystem.
+1-2 sentences: what the repo is and how it runs.
 
 **Architecture**
-How major pieces connect; boundaries and data flow.
+Short: how major pieces connect (≤5 sentences or ≤5 bullets). Boundaries and data flow only.
 
 **Key subsystems**
-One bullet per subsystem with supporting file paths.
+3–6 bullets max. One subsystem + 1–2 supporting paths per bullet.
 ${activeFileSection}
 
 **Entry points**
-Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
-
-**Risks & unknowns**
-Concrete risks tied to paths or missing evidence.
+≤5 bullets: CLI, HTTP, extension activation, jobs, deploy/CI — only when evidence supports them.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
-
-**Suggested next steps**
-Numbered list of 2-4 onboarding or investigation actions.
 
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE}`;
@@ -144,36 +136,24 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 
   decision_archaeology: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Adapt length to evidence. Prefer a scannable short answer over an essay. Use **Title** on its own line; blank line before each included section.
 
-**Summary**
-Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin.
+**Always include**
+**Summary** — 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin.
+**Sources** — ${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed or returned no results.
 
-**Business context**
-Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
+**Include only when evidence supports — omit empty sections (no "Unknown" filler paragraphs)**
+**Business context** — only if commit/PR/ticket/discussion states a need.
+**Technical decision** — what was chosen and why (from commit, PR, or discussion).
+**Alternatives considered** / **Trade-offs** — only when discussion evidence (PR review, Slack/Jira/Teams, extracted alternatives) documents them. Otherwise omit entirely; if the user asked, one honest line max. Never invent.
+**Known limitations** — omit if none.
+**Domain experts** / **Who to engage** — people named in evidence only; omit if none.
+**Decision status** — one line (active / superseded / unclear) when useful; omit when speculative.
+**Out-of-scope @ attachments** — only when ## @ attachments lists out-of-repo paths. **Never** when all @ files are in scope.
 
-**Technical decision**
-What was chosen and why. Omit on follow-ups that did not ask for this when already covered.
-
-**Alternatives considered**
-One line or short bullets from evidence only. If unknown, write "Unknown — not recorded in attached sources." and omit speculative lists.
-
-**Trade-offs**
-One line from evidence only. If undocumented, write "Not documented in attached sources." Never invent generic trade-offs.
-
-**Known limitations**
-Future work or caveats from evidence. Omit if none.
-
-**Domain experts**
-Who to ask; cite sources. Omit if none named in evidence.
-
-**Out-of-scope @ attachments**
-Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
-
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed or returned no results.
-
-Follow-up turns: keep this structure but stay compact — often 4-8 sentences total when evidence is limited. Omit empty sections except **Summary** and **Sources**.`,
+Thin / minimal completeness (often introducing commit only): Summary + Technical decision + Sources is enough — often under ~8 sentences total.
+When PR reviews / Slack / Jira / Teams / extracted alternatives exist: expand Alternatives and Trade-offs with quotes and plain provenance.
+Follow-up turns: answer only what was asked; omit unrelated empty sections.`,
 
   ownership: `
 ## Required response structure
@@ -234,6 +214,7 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
+
   knowledge_gaps: `
 ## Required response structure
 Keep the answer engineer-scannable: Summary → top gaps → one next step → Sources. Do not dump every attached page as its own subsection.
@@ -275,7 +256,6 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when present.`,
-
 
   chat: `
 ## Required response structure

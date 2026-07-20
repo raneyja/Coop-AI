@@ -93,7 +93,7 @@ test("enrichTraceDecisionResponse does not replace initial trace run when model 
   assert.equal(enriched, goodTrace);
 });
 
-test("enrichTraceDecisionResponse replaces speculative initial trace run on thin evidence", () => {
+test("enrichTraceDecisionResponse strips speculative trade-offs on thin evidence without Unknown fillers", () => {
   const speculative = [
     "**Summary**",
     "Introduced in dd2bb73.",
@@ -111,7 +111,10 @@ test("enrichTraceDecisionResponse replaces speculative initial trace run on thin
     isFollowUp: false
   });
 
-  assert.ok(enriched.includes("**Alternatives considered**"));
+  assert.ok(enriched.includes("**Summary**"));
+  assert.ok(enriched.includes("Introduced in dd2bb73"));
+  assert.ok(!enriched.includes("**Trade-offs**"));
+  assert.ok(!enriched.includes("**Alternatives considered**"));
   assert.ok(!enriched.includes("we can infer"));
 });
 

@@ -198,9 +198,9 @@ export function quickActionPromptParts(
         chips.push({ key: "active file", value: ctx.file });
       }
       return {
-        display: "Understand this repository's architecture, subsystems, and risks.",
+        display: "Architecture brief for this repository.",
         model: [
-          "Explain this repository for a new engineer joining the team.",
+          "Deliver a crisp architecture brief — Summary, short Architecture, bounded Key subsystems and Entry points, Sources. Omit empty sections.",
           DIRECTIVE,
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`
@@ -208,7 +208,7 @@ export function quickActionPromptParts(
           "Use attached repo entry files, graph context, and manifest metadata from the evidence bundle.",
           mentions.length
             ? mentionModelGuidance("understand-repo", mentions, ctx)
-            : "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern.",
+            : "Keep Architecture and Key subsystems repo-wide — not a deep dive on only the active file.",
           repoWide ? REPO_WIDE_CROSS_ACTION_HINT : ""
         ]
           .filter(Boolean)

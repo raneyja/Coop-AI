@@ -70,7 +70,7 @@ test("decision synthesis requires out-of-scope callout for local workspace @ att
   assert.ok(prompt.includes("primary trace target only"));
 });
 
-test("decision synthesis includes alternatives guidance on initial trace", () => {
+test("decision synthesis requires short form on initial thin-evidence trace", () => {
   const prompt = buildDecisionSynthesisUserPrompt({
     timeline,
     file: "fastify.js",
@@ -82,9 +82,10 @@ test("decision synthesis includes alternatives guidance on initial trace", () =>
     isFollowUp: false
   });
   assert.ok(prompt.includes("## Alternatives / trade-offs guidance"));
-  assert.ok(prompt.includes("not documented"));
+  assert.ok(prompt.includes("**omit** **Alternatives considered** and **Trade-offs** entirely"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
-  assert.ok(prompt.includes("full trace narrative"));
+  assert.ok(prompt.includes("SHORT form"));
+  assert.ok(!prompt.includes("full trace narrative"));
 });
 
 test("decision synthesis follow-up steers compact alternatives answer when evidence is thin", () => {
@@ -99,7 +100,7 @@ test("decision synthesis follow-up steers compact alternatives answer when evide
   });
   assert.ok(prompt.includes("## Follow-up"));
   assert.ok(prompt.includes("Alternatives / trade-offs guidance"));
-  assert.ok(prompt.includes("not documented"));
+  assert.ok(prompt.includes("**omit** **Alternatives considered** and **Trade-offs** entirely"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
   assert.ok(prompt.includes("What trade-offs were rejected?"));
 });
@@ -165,7 +166,7 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
   assert.ok(formatted.includes("Commits since introduction: 7"));
 });
 
-test("decision synthesis includes trace completeness and decision status guidance", () => {
+test("decision synthesis includes trace completeness and omits status fillers when thin", () => {
   const prompt = buildDecisionSynthesisUserPrompt({
     timeline,
     file: "fastify.js",
@@ -176,7 +177,33 @@ test("decision synthesis includes trace completeness and decision status guidanc
   assert.ok(prompt.includes("Completeness: minimal"));
   assert.ok(prompt.includes("**Decision status**"));
   assert.ok(prompt.includes("**Who to engage**"));
+  assert.ok(prompt.includes("only when evidence names people"));
   assert.ok(prompt.includes("introducing commit and message — provenance"));
+});
+
+test("decision synthesis expands when discussion evidence is attached", () => {
+  const withPr: DecisionTimeline = {
+    ...timeline,
+    completeness: "partial",
+    linkedPR: {
+      number: 1506,
+      title: "Add logger factory",
+      state: "merged",
+      description: "Centralize logging",
+      approvers: ["alice"],
+      reviews: [{ author: "alice", body: "We rejected the singleton approach.", createdAt: "2016-10-04" }]
+    }
+  };
+  const prompt = buildDecisionSynthesisUserPrompt({
+    timeline: withPr,
+    file: "fastify.js",
+    owner: "coop-demo-lab",
+    repo: "fastify",
+    isFollowUp: false
+  });
+  assert.ok(prompt.includes("Discussion evidence is attached"));
+  assert.ok(prompt.includes("quote or paraphrase"));
+  assert.ok(!prompt.includes("SHORT form"));
 });
 
 test("formatTimelineForPrompt surfaces technical debt on jira tickets", () => {

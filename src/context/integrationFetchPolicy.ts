@@ -1,4 +1,5 @@
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { DecisionTimeline } from "../types/decisionTimeline";
 
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
@@ -13,6 +14,12 @@ export type RepoWideIntegrationQuickAction = (typeof REPO_WIDE_INTEGRATION_QUICK
 export const TRACE_DECISION_INTEGRATION_QUICK_ACTIONS = ["trace-decision"] as const;
 
 export type TraceDecisionIntegrationQuickAction = (typeof TRACE_DECISION_INTEGRATION_QUICK_ACTIONS)[number];
+
+/**
+ * Time budget for Trace Decision's connected-tool search. Mirrors Understand Repo:
+ * whatever completes within this window is included; slower tools are dropped.
+ */
+export const TRACE_DECISION_INTEGRATION_BUDGET_MS = 10_000;
 
 export function isRepoWideIntegrationQuickAction(
   quickAction: string | undefined
@@ -51,4 +58,31 @@ export function shouldFetchDiscussionIntegrations(request: ContextFetchRequest):
 /** Confluence / Notion / Google Docs / Jira search for trace-decision and repo-wide quick actions. */
 export function shouldFetchTraceDecisionDocIntegrations(request: ContextFetchRequest): boolean {
   return shouldFetchRepoWideIntegrations(request) || shouldFetchTraceDecisionIntegrations(request);
+}
+
+/**
+ * True when GitHub (or code-host) commit + PR evidence is already enough that title-only
+ * Notion / Google Docs waits are unlikely to improve the first-turn answer.
+ */
+export function timelineHasSufficientCodeHostEvidence(
+  timeline: Pick<DecisionTimeline, "originalCommit" | "linkedPR"> | undefined
+): boolean {
+  return Boolean(timeline?.originalCommit && timeline.linkedPR);
+}
+
+/**
+ * Soft title-only doc tools (Notion / Google Docs) for Trace Decision when code-host
+ * evidence is already strong. Repo-wide actions always keep them.
+ */
+export function shouldFetchTraceDecisionSoftDocIntegrations(
+  request: ContextFetchRequest,
+  timeline?: Pick<DecisionTimeline, "originalCommit" | "linkedPR">
+): boolean {
+  if (!shouldFetchTraceDecisionIntegrations(request)) {
+    return shouldFetchTraceDecisionDocIntegrations(request);
+  }
+  if (timelineHasSufficientCodeHostEvidence(timeline)) {
+    return false;
+  }
+  return true;
 }

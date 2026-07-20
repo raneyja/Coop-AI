@@ -33,14 +33,16 @@ export const DECISION_HISTORIAN_SYSTEM = `You are a code historian. You have bee
 
 Each evidence section is labeled with an exact citation key like \`[Sources: PR #1506]\` or \`[Sources: Slack #engineering]\`.
 
-Synthesize a clear narrative explaining:
-1. What was the business problem or technical need?
-2. What alternatives were considered and why were they rejected?
-3. What trade-offs were made?
-4. Are there known limitations or future improvements noted?
-5. Who are the domain experts?
-6. What is the current **Decision status** (active, superseded, or unclear from evidence)?
-7. **Who to engage** for questions or changes today — name people with evidence (authors, approvers, thread participants), not generic role titles.
+Lead with a scannable **Summary** (1–2 sentences). Expand only when evidence supports it — default short, not essay-length:
+1. Business need — omit when the bundle has no business signal beyond a bare commit.
+2. Technical decision — what was chosen and why (commit message, PR body, or discussion).
+3. Alternatives / trade-offs — only from PR review, Slack/Jira/Teams, or extracted alternatives; never invent.
+4. Known limitations / follow-ups — omit if none in evidence.
+5. Domain experts / who to engage — name people from evidence (authors, approvers, participants); omit if none.
+6. Decision status (active / superseded / unclear) — one short line when useful; omit when pure guesswork.
+
+When Trace completeness is minimal/partial and there is no discussion evidence, keep the whole answer short (often under ~8 sentences): Summary + Technical decision + Sources is enough.
+Prefer **omitting** empty sections over "Unknown — not recorded" filler paragraphs. If the user explicitly asks about a missing topic, one honest line max.
 
 The primary trace target is the file in ## Task and the decision timeline in ## Evidence bundle — not @-attached paths unless listed as in-scope in ## @ attachments.
 Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ attachments.
@@ -48,10 +50,9 @@ ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}
 ${EVIDENCE_ENRICHMENT_RULES}
-State confidence when evidence is thin. Keep answers concise — limited evidence warrants short sections, not speculative essays.
-Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
-For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
-When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
+State confidence when evidence is thin. Limited evidence warrants short answers, not speculative essays.
+Follow-up questions: answer only what was asked; omit unrelated empty sections.
+For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, omit those sections (or one line if the user asked) — never invent them.
 When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking), use them per the Evidence enrichment section in the user prompt.`;
 
 export type DecisionSynthesisInput = {
@@ -123,16 +124,49 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     "Synthesize the decision for the primary trace target only. Use the timeline evidence for that file — do not rewrite the narrative around out-of-scope @ attachments."
   );
   if (!input.isFollowUp) {
-    lines.push(
-      "Produce the full trace narrative (Summary, Business context, Technical decision, Domain experts, etc.) for the primary file — do not collapse the answer to only alternatives or trade-offs."
-    );
+    appendFirstTurnLengthGuidance(lines, timeline);
   }
   lines.push(
-    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants; say unknown when the bundle is thin."
+    "Include **Decision status** and **Who to engage** only when evidence names people or status clearly — omit rather than filler."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+function timelineHasDiscussionEvidence(timeline: DecisionTimeline): boolean {
+  return (
+    Boolean(timeline.linkedPR) ||
+    Boolean(timeline.slackThread) ||
+    Boolean(timeline.teamsThread) ||
+    (timeline.jiraTickets?.length ?? 0) > 0 ||
+    timeline.alternatives.length > 0
+  );
+}
+
+function isThinTraceEvidence(timeline: DecisionTimeline): boolean {
+  return (
+    timeline.completeness === "minimal" ||
+    (!timelineHasDiscussionEvidence(timeline) && !timeline.linkedPR)
+  );
+}
+
+function appendFirstTurnLengthGuidance(lines: string[], timeline: DecisionTimeline): void {
+  if (timelineHasDiscussionEvidence(timeline)) {
+    lines.push(
+      "Discussion evidence is attached — cover Summary, Business context, and Technical decision; expand Alternatives/Trade-offs only with grounded quotes. Still omit sections with no evidence."
+    );
+    return;
+  }
+  if (isThinTraceEvidence(timeline)) {
+    lines.push(
+      "Evidence is thin — produce the SHORT form for the primary file: **Summary**, **Technical decision** (from the introducing commit when that is all you have), and **Sources**. Omit empty sections; do not pad with Unknown essays."
+    );
+    return;
+  }
+  lines.push(
+    "Produce a compact first-turn trace for the primary file — Summary and Technical decision first; expand other sections only when evidence supports them. Prefer omit over Unknown fillers."
+  );
 }
 
 function appendFollowUpInstructions(lines: string[], userQuestion: string | undefined): void {
@@ -147,12 +181,7 @@ function appendFollowUpInstructions(lines: string[], userQuestion: string | unde
 }
 
 function appendAlternativesTradeOffGuidance(lines: string[], timeline: DecisionTimeline): void {
-  const hasDiscussion =
-    Boolean(timeline.linkedPR) ||
-    Boolean(timeline.slackThread) ||
-    Boolean(timeline.teamsThread) ||
-    (timeline.jiraTickets?.length ?? 0) > 0 ||
-    timeline.alternatives.length > 0;
+  const hasDiscussion = timelineHasDiscussionEvidence(timeline);
   lines.push("## Alternatives / trade-offs guidance");
   if (hasDiscussion) {
     lines.push(
@@ -161,7 +190,10 @@ function appendAlternativesTradeOffGuidance(lines: string[], timeline: DecisionT
     lines.push("- Do not list options or trade-offs that no attached discussion source mentions.");
   } else {
     lines.push(
-      "- Bundle has no PR, Slack, Teams, Jira, or extracted alternatives — **Alternatives considered** and **Trade-offs** must say unknown or not documented (one line each)."
+      "- Bundle has no PR, Slack, Teams, Jira, or extracted alternatives — **omit** **Alternatives considered** and **Trade-offs** entirely."
+    );
+    lines.push(
+      "- If the user explicitly asked about alternatives or trade-offs, one line max (e.g. not documented) — never invent options."
     );
     lines.push("- Do not infer generic trade-offs from software best practices or the introducing commit alone.");
   }

@@ -208,6 +208,55 @@ export function injectRelatedDocsAfterActiveFileSection(
   return `${content.slice(0, insertAt).trimEnd()}\n\n${compact}\n${content.slice(insertAt)}`.replace(/\n{3,}/g, "\n\n");
 }
 
+/** Collapse verbose per-provider doc lists under Architecture for Understand Repo. */
+export function collapseUnderstandRepoDocReviews(
+  content: string,
+  context?: IntegrationDocsEnrichmentContext
+): string {
+  if (!context || countAttachedDocPages(context) === 0) {
+    return content;
+  }
+
+  let result = content.replace(/\r\n/g, "\n");
+  const hasVerboseLists = DOC_REVIEW_HEADINGS.some((heading) =>
+    result.toLowerCase().includes(heading.replace(/\*\*/g, "").toLowerCase())
+  );
+  if (!hasVerboseLists) {
+    return result;
+  }
+
+  const compact = buildCompactRelatedDocumentationBlock(context);
+  if (!compact) {
+    return result;
+  }
+
+  for (const heading of DOC_REVIEW_HEADINGS) {
+    const pattern = new RegExp(
+      `(\\n${escapeRegExp(heading)}\\s*\\n)([\\s\\S]*?)(?=\\n\\*\\*[^*]|\\n${escapeRegExp(RELATED_DOCUMENTATION_HEADING)}|$)`,
+      "i"
+    );
+    result = result.replace(pattern, "");
+  }
+
+  if (result.includes(RELATED_DOCUMENTATION_HEADING)) {
+    return result.replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  const architecturePattern =
+    /(?:^|(\n))(\*\*Architecture\*\*\s*\n)([\s\S]*?)(?=\n\*\*Key subsystems\*\*|\n\*\*How the open file fits\*\*|\n\*\*Entry points\*\*|\n\*\*Sources\*\*|$)/i;
+  const match = architecturePattern.exec(result);
+  if (match) {
+    const prefix = match[1] ?? "";
+    const body = match[3].trimEnd();
+    const replacement = `${prefix}${match[2]}${body}\n\n${compact}\n`;
+    result = result.slice(0, match.index) + replacement + result.slice(match.index! + match[0].length);
+  } else {
+    result = `${result.trimEnd()}\n\n${compact}`;
+  }
+
+  return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -222,6 +271,7 @@ export function enrichCompactIntegrationDocs(
     return result;
   }
   if (options.mode === "understand-repo") {
+    result = collapseUnderstandRepoDocReviews(result, context);
     result = injectRelatedDocsAfterActiveFileSection(result, context);
   } else {
     result = collapseVerboseDocReviewSections(result, context);

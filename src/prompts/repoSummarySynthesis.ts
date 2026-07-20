@@ -27,12 +27,15 @@ import {
 } from "./repoSummarySourceLabels";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
-Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
+Deliver a crisp architecture brief — scannable in seconds, not a README. Prefer evidence from the attached Sources card over speculation.
 Cite file paths in narrative sections; reserve \`[Sources: …]\` labels for the **Sources** footer (at most 1-2 inline in **Summary**).
 Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
+
+/** Cap attached doc titles required in Architecture so Understand Repo stays a brief. */
+const MAX_UNDERSTAND_REPO_DOC_TITLES = 3;
 
 export type RepoSummarySynthesisInput = {
   owner: string;
@@ -51,7 +54,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   lines.push("## Task");
   lines.push(
     input.userQuestion?.trim() ||
-      `Explain the overall architecture of ${input.owner}/${input.repo} for a new engineer joining the team.`
+      `Architecture brief for ${input.owner}/${input.repo} — crisp overview for a joining engineer.`
   );
   lines.push("");
   lines.push("## Scope");
@@ -65,15 +68,17 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   lines.push("");
   lines.push("## Instructions");
   lines.push(
-    "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+    "Synthesize a **repository-wide** architecture brief from `<repo_entry_files>`, `<graph_context>`, and manifest metadata."
   );
-  lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
   lines.push(
-    "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
+    "Bounded output: short **Architecture** (≤5 bullets/sentences), 3–6 **Key subsystems**, ≤5 **Entry points**. Omit empty sections — no Risks essay, onboarding dump, or Suggested next steps."
+  );
+  lines.push(
+    "Mention deploy/CI, external integrations, or config boundaries only when attached evidence supports them — one bullet each, never invent."
   );
   if (activeFile) {
     lines.push(
-      `Include the required **How the open file fits** section for \`${activeFile}\` after **Key subsystems** — role, dependencies, dependents, integration surface, and owners from ## Active file context below. Keep **Architecture** and **Key subsystems** repo-wide; do not turn the whole answer into a file-only deep dive.`
+      `Include a brief **How the open file fits** for \`${activeFile}\` after **Key subsystems** (≤4 bullets from ## Active file context). Keep **Architecture** and **Key subsystems** repo-wide — not a file-only deep dive.`
     );
   } else {
     lines.push("Do **not** include **How the open file fits** — no active editor file is in scope.");
@@ -102,9 +107,6 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   appendEvidenceQualityInstructions(lines);
   appendEvidenceEnrichmentInstructions(lines);
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
-  lines.push(
-    "Close with a one-line pointer to **Find Owner** (CODEOWNERS and commit history) and **Blast Radius** (dependency impact) for paths that need deeper follow-up."
-  );
   return lines.join("\n");
 }
 
@@ -197,10 +199,19 @@ export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record
 function integrationDocsFromRepoSummary(
   summary: RepoSummaryEvidence
 ): IntegrationDocsResponseContractInput {
+  const notion = summary.notion?.pages ?? [];
+  const confluence = summary.confluence?.pages ?? [];
+  const googleDocs = summary.googleDocs?.documents ?? [];
+  const capped = [
+    ...notion.map((page) => ({ kind: "notion" as const, page })),
+    ...confluence.map((page) => ({ kind: "confluence" as const, page })),
+    ...googleDocs.map((page) => ({ kind: "googleDocs" as const, page }))
+  ].slice(0, MAX_UNDERSTAND_REPO_DOC_TITLES);
+
   return {
-    confluencePages: summary.confluence?.pages,
-    notionPages: summary.notion?.pages,
-    googleDocs: summary.googleDocs?.documents
+    notionPages: capped.filter((item) => item.kind === "notion").map((item) => item.page),
+    confluencePages: capped.filter((item) => item.kind === "confluence").map((item) => item.page),
+    googleDocs: capped.filter((item) => item.kind === "googleDocs").map((item) => item.page)
   };
 }
 

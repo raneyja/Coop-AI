@@ -263,3 +263,116 @@ test("enrichChatContextWithIntegrations returns partial results when budget elap
     }
   }
 });
+
+test("trace-decision skips title-only Notion/Docs when commit+PR evidence is enough", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+  const started: string[] = [];
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const request = {
+      id: "ctx-trace",
+      type: "decision_history",
+      params: { quickAction: "trace-decision", file: "src/server/example.ts" },
+      intent: { context: { queryText: "why exists" } }
+    } as ContextFetchRequest;
+
+    const result = {
+      requestId: "ctx-trace",
+      type: "decision_history",
+      data: {
+        timeline: {
+          file: "src/server/example.ts",
+          completeness: "partial",
+          originalCommit: {
+            sha: "abc123456789",
+            author: "alice",
+            date: "2024-01-01",
+            message: "Add retry helper"
+          },
+          linkedPR: {
+            number: 42,
+            title: "Add retry helper",
+            state: "merged",
+            description: "Retries transient failures",
+            approvers: ["bob"],
+            reviews: []
+          },
+          alternatives: [],
+          chronology: [],
+          warnings: []
+        }
+      },
+      fetchedAt: new Date()
+    } as ContextFetchResult;
+
+    const enriched = await enrichChatContextWithIntegrations({
+      result,
+      request,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "acme",
+      repo: "coop-ai",
+      codeHostConnected: false,
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () => {
+          started.push("confluence");
+          return { pages: [{ title: "ADR", excerpt: "Retries" }] } as never;
+        },
+        shouldFetchNotionContext: () => true,
+        fetchNotionSearchContext: async () => {
+          started.push("notion");
+          return { pages: [{ title: "Notion page" }] } as never;
+        },
+        shouldFetchJiraContext: () => true,
+        fetchJiraSearchContext: async () => {
+          started.push("jira");
+          return { issues: [] } as never;
+        },
+        shouldFetchGoogleDocsContext: () => true,
+        fetchGoogleDocsSearchContext: async () => {
+          started.push("google-docs");
+          return { documents: [{ title: "Doc" }] } as never;
+        },
+        shouldFetchSlackContext: () => true,
+        fetchSlackSearchContext: async () => {
+          started.push("slack");
+          return { messages: [] } as never;
+        },
+        shouldFetchTeamsContext: () => false,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+
+    const data = enriched.data as Record<string, unknown>;
+    assert.ok(started.includes("confluence"));
+    assert.ok(started.includes("jira"));
+    assert.ok(started.includes("slack"));
+    assert.equal(started.includes("notion"), false);
+    assert.equal(started.includes("google-docs"), false);
+    assert.ok(data.confluenceSearch);
+    assert.equal(data.notionSearch, undefined);
+    assert.equal(data.googleDocsSearch, undefined);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});

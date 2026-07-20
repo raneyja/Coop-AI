@@ -206,29 +206,37 @@ function shouldReplaceWithGroundedAlternatives(
 /** Compact, evidence-honest answer when only an introducing commit is available. */
 export function buildThinAlternativesTradeOffsResponse(
   timeline: DecisionTimeline,
-  file: string
+  file: string,
+  options?: { includeUnknownSections?: boolean }
 ): string {
   const warningNote = timeline.warnings.find((warning) => /no linked pull request/i.test(warning));
   const commitLabel = timeline.originalCommit
     ? decisionSourceLabelCommit(timeline.originalCommit.sha)
     : undefined;
+  const includeUnknown = options?.includeUnknownSections !== false;
 
   const lines = [
     "**Summary**",
     `Evidence is **limited** — only the introducing commit for \`${file}\` is attached.`,
-    "",
-    "**Alternatives considered**",
-    warningNote
-      ? `Unknown — not recorded in attached sources (${warningNote})`
-      : "Unknown — not recorded in attached sources.",
-    "",
-    "**Trade-offs**",
-    "Not documented in the available sources."
+    ""
   ];
+
+  if (includeUnknown) {
+    lines.push(
+      "**Alternatives considered**",
+      warningNote
+        ? `Unknown — not recorded (${warningNote}).`
+        : "Unknown — not recorded in attached sources.",
+      "",
+      "**Trade-offs**",
+      "Not documented in the available sources.",
+      ""
+    );
+  }
 
   const checklist = listDecisionSourcesChecklist(timeline);
   if (checklist.length) {
-    lines.push("", "**Sources**");
+    lines.push("**Sources**");
     for (const item of checklist) {
       if (commitLabel && item.startsWith(commitLabel)) {
         lines.push(`- ${commitLabel} — original introduction; does not record rejected alternatives or trade-offs.`);
@@ -238,7 +246,23 @@ export function buildThinAlternativesTradeOffsResponse(
     }
   }
 
-  return lines.join("\n");
+  return lines.join("\n").trim();
+}
+
+/**
+ * Removes speculative Alternatives / Trade-offs filler when the timeline has no discussion,
+ * keeping Summary / Technical decision / Sources intact when present.
+ */
+export function stripSpeculativeAlternativesTradeOffs(content: string): string {
+  let result = content;
+  for (const heading of ["Alternatives considered", "Trade-offs"]) {
+    const pattern = new RegExp(
+      `\\n\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n[\\s\\S]*?(?=\\n\\*\\*[^*]|$)`,
+      "i"
+    );
+    result = result.replace(pattern, "\n");
+  }
+  return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /**
@@ -266,13 +290,31 @@ export function enrichTraceDecisionResponse(options: {
     const asksAlternatives = asksAboutAlternativesOrTradeoffs(options.userQuestion);
     const speculative = responseHasSpeculativeTradeoffs(options.content);
 
-    if (asksAlternatives || speculative) {
+    if (asksAlternatives) {
       return stripDisallowedNarrativeSourceCitations(
         buildThinAlternativesTradeOffsResponse(
           timeline,
-          options.activeFile?.trim() || timeline.file
+          options.activeFile?.trim() || timeline.file,
+          { includeUnknownSections: true }
         )
       );
+    }
+    if (speculative) {
+      const stripped = stripSpeculativeAlternativesTradeOffs(options.content);
+      // If stripping left almost nothing useful, fall back to a compact honest stub.
+      const hasLead =
+        /\*\*(Summary|Technical decision)\*\*/i.test(stripped) &&
+        stripped.replace(/\*\*[^*]+\*\*/g, "").trim().length >= 12;
+      if (!hasLead) {
+        return stripDisallowedNarrativeSourceCitations(
+          buildThinAlternativesTradeOffsResponse(
+            timeline,
+            options.activeFile?.trim() || timeline.file,
+            { includeUnknownSections: false }
+          )
+        );
+      }
+      return stripDisallowedNarrativeSourceCitations(stripped);
     }
   } else if (shouldReplaceWithGroundedAlternatives(options.content, timeline, options.userQuestion)) {
     return stripDisallowedNarrativeSourceCitations(

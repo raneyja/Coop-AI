@@ -8,9 +8,12 @@ import { shouldFetchSlackContext } from "./slackContext";
 import { shouldFetchTeamsContext } from "./teamsContext";
 import {
   REPO_WIDE_INTEGRATION_QUICK_ACTIONS,
+  TRACE_DECISION_INTEGRATION_BUDGET_MS,
   shouldFetchDiscussionIntegrations,
   shouldFetchRepoWideIntegrations,
-  shouldFetchTraceDecisionIntegrations
+  shouldFetchTraceDecisionIntegrations,
+  shouldFetchTraceDecisionSoftDocIntegrations,
+  timelineHasSufficientCodeHostEvidence
 } from "./integrationFetchPolicy";
 
 let passed = 0;
@@ -101,6 +104,70 @@ test("integrations auto-fetch on trace-decision", () => {
   for (const [, shouldFetch] of [...DOC_INTEGRATIONS, ...DISCUSSION_INTEGRATIONS]) {
     assert.equal(shouldFetch(traceRequest), true);
   }
+});
+
+test("trace-decision soft docs skip when commit+PR evidence is enough", () => {
+  const traceRequest = request("trace-decision", "decision_history");
+  assert.equal(shouldFetchTraceDecisionSoftDocIntegrations(traceRequest), true);
+  assert.equal(
+    shouldFetchTraceDecisionSoftDocIntegrations(traceRequest, {
+      originalCommit: {
+        sha: "abc123",
+        author: "alice",
+        date: "2024-01-01",
+        message: "Add retry"
+      },
+      linkedPR: {
+        number: 1,
+        title: "Add retry",
+        state: "merged",
+        description: "Retries",
+        approvers: [],
+        reviews: []
+      }
+    }),
+    false
+  );
+  assert.equal(
+    timelineHasSufficientCodeHostEvidence({
+      originalCommit: {
+        sha: "abc123",
+        author: "alice",
+        date: "2024-01-01",
+        message: "Add retry"
+      },
+      linkedPR: {
+        number: 1,
+        title: "Add retry",
+        state: "merged",
+        description: "Retries",
+        approvers: [],
+        reviews: []
+      }
+    }),
+    true
+  );
+  assert.equal(TRACE_DECISION_INTEGRATION_BUDGET_MS, 10_000);
+  // Repo-wide actions keep soft docs even with a timeline shape attached.
+  assert.equal(
+    shouldFetchTraceDecisionSoftDocIntegrations(request("understand-repo"), {
+      originalCommit: {
+        sha: "abc123",
+        author: "alice",
+        date: "2024-01-01",
+        message: "Add retry"
+      },
+      linkedPR: {
+        number: 1,
+        title: "Add retry",
+        state: "merged",
+        description: "Retries",
+        approvers: [],
+        reviews: []
+      }
+    }),
+    true
+  );
 });
 
 test("integration provider slash commands always fetch", () => {

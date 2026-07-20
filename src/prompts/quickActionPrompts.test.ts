@@ -114,7 +114,9 @@ async function run(): Promise<void> {
   test("understand-repo model prompt steers repo-wide", () => {
     const model = quickActionModelPrompt("understand-repo", ctx);
     assert.ok(model.includes("repo-wide"));
+    assert.ok(model.includes("architecture brief"));
     assert.ok(model.includes("acme/widgets"));
+    assert.ok(model.includes("Omit empty sections"));
   });
 
   test("trace-decision model prompt references integration evidence", () => {
@@ -225,7 +227,7 @@ async function run(): Promise<void> {
   test("quickActionHistoryContent matches grid button format", () => {
     const history = quickActionHistoryContent("understand-repo", ctx);
     assert.ok(history.startsWith("[understand-repo] "));
-    assert.ok(history.includes("Understand this repository"));
+    assert.ok(history.includes("Architecture brief for this repository"));
     assert.ok(history.includes("repo: acme/widgets"));
   });
 

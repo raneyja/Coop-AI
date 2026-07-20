@@ -12,7 +12,7 @@ import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionContext";
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
-import { shouldFetchTraceDecisionIntegrations } from "./integrationFetchPolicy";
+import { shouldFetchTraceDecisionIntegrations, shouldFetchTraceDecisionSoftDocIntegrations } from "./integrationFetchPolicy";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -132,7 +132,11 @@ async function enrichIntegrationStages(
   });
 
   const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
-  const shouldFetchNotion = deps.shouldFetchNotionContext(options.request);
+  const timeline = asRecord(options.result.data).timeline as DecisionTimeline | undefined;
+  const softDocs =
+    !shouldFetchTraceDecisionIntegrations(options.request) ||
+    shouldFetchTraceDecisionSoftDocIntegrations(options.request, timeline);
+  const shouldFetchNotion = softDocs && deps.shouldFetchNotionContext(options.request);
   const [confluenceSearch, notionSearch] = await Promise.all([
     shouldFetchConfluence
       ? deps.fetchConfluenceSearchContext({
@@ -165,7 +169,7 @@ async function enrichIntegrationStages(
   const docExtraTerms = [...integrationTerms, ...crossToolText];
 
   const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
-  const shouldFetchGoogleDocs = deps.shouldFetchGoogleDocsContext(options.request);
+  const shouldFetchGoogleDocs = softDocs && deps.shouldFetchGoogleDocsContext(options.request);
   const [jiraSearch, googleDocsSearch] = await Promise.all([
     shouldFetchJira
       ? deps.fetchJiraSearchContext({

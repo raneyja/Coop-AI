@@ -129,16 +129,41 @@ async function run(): Promise<void> {
     assert.ok(!prompt.includes("Required in your response"));
   });
 
-  test("buildRepoSummarySynthesisUserPrompt includes enterprise onboarding and quick-action links", () => {
+  test("buildRepoSummarySynthesisUserPrompt steers brief architecture brief", () => {
     const prompt = buildRepoSummarySynthesisUserPrompt({
       owner: "raneyja",
       repo: "Coop-AI",
       summary: { entryFiles: [{ path: "package.json" }] }
     });
-    assert.ok(prompt.includes("enterprise onboarding"));
+    assert.ok(prompt.includes("architecture brief"));
+    assert.ok(prompt.includes("Bounded output"));
     assert.ok(prompt.includes("deploy/CI"));
-    assert.ok(prompt.includes("**Find Owner**"));
-    assert.ok(prompt.includes("**Blast Radius**"));
+    assert.ok(prompt.includes("Omit empty sections"));
+    assert.ok(prompt.includes("no Risks essay"));
+    assert.ok(!prompt.includes("**Find Owner**"));
+    assert.ok(!prompt.includes("Close with a one-line pointer"));
+  });
+
+  test("buildRepoSummarySynthesisUserPrompt caps attached doc titles for brevity", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "raneyja",
+      repo: "Coop-AI",
+      summary: {
+        entryFiles: [{ path: "package.json" }],
+        notion: {
+          pages: [
+            { id: "1", title: "Doc One", url: "https://notion.example/1" },
+            { id: "2", title: "Doc Two", url: "https://notion.example/2" },
+            { id: "3", title: "Doc Three", url: "https://notion.example/3" },
+            { id: "4", title: "Doc Four", url: "https://notion.example/4" }
+          ]
+        }
+      }
+    });
+    assert.ok(prompt.includes("## Attached documentation (required in response)"));
+    assert.ok(prompt.includes("Doc One"));
+    assert.ok(prompt.includes("Doc Three"));
+    assert.ok(!prompt.includes("Doc Four"));
   });
 
   test("buildRepoSummarySynthesisUserPrompt requires attached doc titles and guards supplementary citations", () => {
@@ -160,6 +185,17 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("## Citation guardrails"));
     assert.ok(prompt.includes("[Sources: Ownership signals]"));
     assert.ok(prompt.includes("[Sources: Dependency graph]"));
+  });
+
+  test("buildRepoSummarySynthesisUserPrompt asks for brief active-file section", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "raneyja",
+      repo: "Coop-AI",
+      activeFile: "src/extension.ts",
+      summary: { entryFiles: [{ path: "src/extension.ts", content: "export function activate() {}" }] }
+    });
+    assert.ok(prompt.includes("≤4 bullets"));
+    assert.ok(prompt.includes("architecture brief"));
   });
 
   const total = passed + failed;
