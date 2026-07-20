@@ -60,6 +60,7 @@ export default function CustomerDetailPage() {
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const [notes, setNotes] = useState("");
@@ -228,6 +229,8 @@ export default function CustomerDetailPage() {
   async function handleResendInvite(userId: string) {
     if (!me || !canMutateSupport(me)) return;
     setBusy(`resend-${userId}`);
+    setActionError(null);
+    setActionNotice(null);
     const result = await resendOrganizationInvite(orgId, userId);
     setBusy(null);
     if (!result.ok) {
@@ -235,7 +238,15 @@ export default function CustomerDetailPage() {
       return;
     }
     if (result.data?.inviteLink) {
-      await navigator.clipboard.writeText(result.data.inviteLink);
+      try {
+        await navigator.clipboard.writeText(result.data.inviteLink);
+        setActionError(null);
+        setActionNotice("Invite link emailed and copied to clipboard.");
+      } catch {
+        setActionNotice("Invite emailed. Copy failed — check the email inbox.");
+      }
+    } else {
+      setActionNotice("Invite emailed.");
     }
   }
 
@@ -385,6 +396,7 @@ export default function CustomerDetailPage() {
       </div>
 
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
+      {actionNotice && <p className="text-sm text-coop-index">{actionNotice}</p>}
 
       <section className="admin-card">
         <h2 className="admin-section-label">Health</h2>
@@ -635,15 +647,21 @@ export default function CustomerDetailPage() {
                     <td className="text-xs">{user.role}</td>
                     <td className="text-xs">{user.status}</td>
                     <td>
-                      {user.status === "invited" && me && canMutateSupport(me) && (
+                      {user.status !== "deactivated" && me && canMutateSupport(me) ? (
                         <button
                           type="button"
                           className="admin-btn-secondary text-xs"
                           onClick={() => handleResendInvite(user.id)}
                           disabled={busy === `resend-${user.id}`}
                         >
-                          Resend invite
+                          {busy === `resend-${user.id}`
+                            ? "Sending…"
+                            : user.status === "invited"
+                              ? "Resend invite"
+                              : "Resend activation"}
                         </button>
+                      ) : (
+                        <span className="text-xs text-coop-muted">—</span>
                       )}
                     </td>
                   </tr>

@@ -10,7 +10,7 @@ import type { OrgPlan, OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
 import { inviteOrgUser, isSeatLimitError } from "./users/inviteOrgUser";
-import { adminPortalAcceptInviteUrl } from "./billing/adminPortalUrl";
+import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./billing/adminPortalUrl";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { StripeService } from "./billing/stripeService";
 import { syncOrgCatalog } from "./catalogSyncService";
@@ -713,31 +713,44 @@ async function handleResendInvite(
 
   const org = await deps.orgStore!.getOrganization(orgId);
   const billingConfig = loadBillingConfig();
+  const needsActivation = !user.lastLoginAt;
   const inviteToken = await deps.authTokenStore.createToken(
     user.id,
     "user_invite",
     7 * 24 * 60 * 60 * 1000,
-    { orgName: org?.name, invitedBy: operator.email }
+    needsActivation
+      ? { orgName: org?.name, source: "checkout" }
+      : { orgName: org?.name, invitedBy: operator.email }
   );
+  const acceptInviteUrl = adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken);
   try {
-    await deps.emailService?.sendInvite({
-      to: user.email,
-      orgName: org?.name ?? "your organization",
-      acceptInviteUrl: adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken),
-      invitedBy: operator.email
-    });
+    if (needsActivation) {
+      await deps.emailService?.sendWelcome({
+        to: user.email,
+        orgName: org?.name ?? "your organization",
+        adminPortalUrl: adminPortalFreshLoginUrl(billingConfig.adminPortalUrl, { email: user.email }),
+        activateAccountUrl: acceptInviteUrl
+      });
+    } else {
+      await deps.emailService?.sendInvite({
+        to: user.email,
+        orgName: org?.name ?? "your organization",
+        acceptInviteUrl,
+        invitedBy: operator.email
+      });
+    }
   } catch (error) {
     console.warn("[operator] resend invite email failed:", error);
     writeJson(response, 502, { error: "email_failed" });
     return true;
   }
 
-  await operatorAudit(deps, operator, "operator.user.resend_invite", orgId, { userId });
+  await operatorAudit(deps, operator, "operator.user.resend_invite", orgId, { userId, needsActivation });
   writeJson(response, 200, {
     ok: true,
     userId,
     inviteToken,
-    inviteLink: adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken)
+    inviteLink: acceptInviteUrl
   });
   return true;
 }
