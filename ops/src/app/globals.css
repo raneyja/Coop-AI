@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-coop-dark text-[#e4e4e7] antialiased;
+    @apply bg-coop-dark text-[#e8e8eb] antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 

@@ -142,7 +142,7 @@ export function AnalyticsBarChart({
                   x2={width - pad.right}
                   y1={y}
                   y2={y}
-                  stroke="#30363D"
+                  stroke="#444A50"
                   strokeOpacity={0.55}
                   strokeWidth={1}
                 />
@@ -151,7 +151,7 @@ export function AnalyticsBarChart({
                   y={y}
                   textAnchor="end"
                   dominantBaseline="middle"
-                  fill="#9CA4AD"
+                  fill="#A1A9B1"
                   fontSize={CHART_AXIS_FONT_SIZE}
                   fontFamily="ui-monospace, monospace"
                 >
@@ -181,7 +181,7 @@ export function AnalyticsBarChart({
                   x={x + barW / 2}
                   y={height - 12}
                   textAnchor="middle"
-                  fill="#9CA4AD"
+                  fill="#A1A9B1"
                   fontSize={CHART_AXIS_FONT_SIZE}
                   fontFamily="ui-monospace, monospace"
                 >

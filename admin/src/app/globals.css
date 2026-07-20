@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-coop-dark text-[#e4e4e7] antialiased;
+    @apply bg-coop-dark text-[#e8e8eb] antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
@@ -200,12 +200,12 @@
   }
 
   .feed-chat-message-body {
-    @apply text-[13px] leading-[1.55] break-words text-[#e4e4e7];
+    @apply text-[13px] leading-[1.55] break-words text-[#e8e8eb];
   }
 
   /* Chat prose — mirrors extension ChatProse renderer */
   .coop-chat-prose {
-    @apply min-w-0 text-[13px] leading-relaxed text-[#e4e4e7];
+    @apply min-w-0 text-[13px] leading-relaxed text-[#e8e8eb];
   }
 
   .coop-chat-heading {
@@ -254,7 +254,7 @@
   }
 
   .coop-chat-inline-code {
-    @apply rounded border border-coop-border/80 bg-white/[0.06] px-1 py-0.5 font-mono text-[12px] text-[#e4e4e7];
+    @apply rounded border border-coop-border/80 bg-white/[0.06] px-1 py-0.5 font-mono text-[12px] text-[#e8e8eb];
   }
 
   .coop-chat-action-link {
@@ -287,7 +287,7 @@
   }
 
   .coop-chat-code-block code {
-    @apply block whitespace-pre text-[#d4d4d4];
+    @apply block whitespace-pre text-[#d8d8d8];
   }
 
   .coop-chat-citation {
@@ -303,6 +303,6 @@
   }
 
   .coop-chat-citation-block code {
-    @apply block whitespace-pre font-mono text-[12px] text-[#d4d4d4];
+    @apply block whitespace-pre font-mono text-[12px] text-[#d8d8d8];
   }
 }

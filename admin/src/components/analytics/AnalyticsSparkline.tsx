@@ -68,7 +68,7 @@ export function AnalyticsSparkline({
           x2={width - pad}
           y1={height / 2}
           y2={height / 2}
-          stroke="#30363D"
+          stroke="#444A50"
           strokeWidth={1}
         />
       ) : (

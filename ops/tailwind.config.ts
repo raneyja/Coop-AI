@@ -10,8 +10,8 @@ const config: Config = {
           warn: "#D29922",
           dark: "#0D1117",
           surface: "#161B22",
-          border: "#30363D",
-          muted: "#9CA4AD",
+          border: "#444A50",
+          muted: "#A1A9B1",
           editor: "#1e1e1e"
         }
       },
