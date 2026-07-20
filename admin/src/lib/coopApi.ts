@@ -385,10 +385,35 @@ export async function registerWithPassword(
   }
 }
 
-export function startGoogleAuthUrl(mode: "login" | "signup" = "login", orgName?: string): string {
+export function startGoogleAuthUrl(
+  mode: "login" | "signup" | "invite" = "login",
+  orgNameOrOptions?:
+    | string
+    | {
+        orgName?: string;
+        inviteToken?: string;
+        firstName?: string;
+        lastName?: string;
+        timezone?: string;
+      }
+): string {
+  const options =
+    typeof orgNameOrOptions === "string" ? { orgName: orgNameOrOptions } : (orgNameOrOptions ?? {});
   const params = new URLSearchParams({ mode });
-  if (orgName?.trim()) {
-    params.set("orgName", orgName.trim());
+  if (options.orgName?.trim()) {
+    params.set("orgName", options.orgName.trim());
+  }
+  if (mode === "invite" && options.inviteToken?.trim()) {
+    params.set("inviteToken", options.inviteToken.trim());
+  }
+  if (options.firstName?.trim()) {
+    params.set("firstName", options.firstName.trim());
+  }
+  if (options.lastName?.trim()) {
+    params.set("lastName", options.lastName.trim());
+  }
+  if (options.timezone?.trim()) {
+    params.set("timezone", options.timezone.trim());
   }
   return `/api/auth/google/start?${params.toString()}`;
 }

@@ -20,9 +20,14 @@ export type GoogleAuthServiceOptions = {
 
 export type GoogleAuthState = {
   redirect?: string;
-  mode: "login" | "signup";
+  mode: "login" | "signup" | "invite";
   orgName?: string;
   plan?: "free" | "pro";
+  /** One-time user_invite token when mode is "invite". */
+  inviteToken?: string;
+  firstName?: string;
+  lastName?: string;
+  timezone?: string;
   /** Unix ms when the signed state was issued (replay window). */
   iat?: number;
 };

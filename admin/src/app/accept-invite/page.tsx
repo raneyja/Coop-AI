@@ -10,7 +10,7 @@ import {
   saveSession,
   signOutRemote
 } from "@/lib/auth";
-import { acceptInviteWithPassword, fetchInvitePreview } from "@/lib/coopApi";
+import { acceptInviteWithPassword, fetchInvitePreview, startGoogleAuthUrl } from "@/lib/coopApi";
 import { timezoneOptionsWithDefault, detectBrowserTimezone } from "@/lib/timezones";
 import { BrandMark } from "@/components/BrandMark";
 
@@ -34,6 +34,10 @@ function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => searchParams.get("token")?.trim() ?? "", [searchParams]);
+  const oauthError = useMemo(
+    () => searchParams.get("message")?.trim() || searchParams.get("error")?.trim() || null,
+    [searchParams]
+  );
   const timezoneOptions = useMemo(() => timezoneOptionsWithDefault(), []);
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
@@ -44,7 +48,7 @@ function AcceptInviteContent() {
   const [timezone, setTimezone] = useState(detectBrowserTimezone);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(oauthError);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -55,6 +59,12 @@ function AcceptInviteContent() {
     }
     void clearExistingSession();
   }, []);
+
+  useEffect(() => {
+    if (oauthError) {
+      setError(oauthError);
+    }
+  }, [oauthError]);
 
   useEffect(() => {
     async function loadPreview() {
@@ -104,18 +114,40 @@ function AcceptInviteContent() {
     router.replace(defaultHomePath(me));
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-
+  function requireProfileFields(): { firstName: string; lastName: string; timezone: string } | null {
     const trimmedFirst = firstName.trim();
     const trimmedLast = lastName.trim();
     if (!trimmedFirst || !trimmedLast) {
       setError("First and last name are required.");
-      return;
+      return null;
     }
     if (!timezone.trim()) {
       setError("Select your timezone.");
+      return null;
+    }
+    return { firstName: trimmedFirst, lastName: trimmedLast, timezone: timezone.trim() };
+  }
+
+  function handleGoogleContinue() {
+    setError(null);
+    const profile = requireProfileFields();
+    if (!profile) {
+      return;
+    }
+    window.location.href = startGoogleAuthUrl("invite", {
+      inviteToken: token,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      timezone: profile.timezone
+    });
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const profile = requireProfileFields();
+    if (!profile) {
       return;
     }
 
@@ -130,11 +162,7 @@ function AcceptInviteContent() {
     }
 
     setLoading(true);
-    const result = await acceptInviteWithPassword(token, password, {
-      firstName: trimmedFirst,
-      lastName: trimmedLast,
-      timezone: timezone.trim()
-    });
+    const result = await acceptInviteWithPassword(token, password, profile);
     setLoading(false);
 
     if (!result.ok || !result.data) {
@@ -186,20 +214,21 @@ function AcceptInviteContent() {
   const isCheckoutActivation = preview.source === "checkout";
   const headline = isCheckoutActivation ? "Activate your account" : "Join your team";
   const subtitle = isCheckoutActivation
-    ? `${preview.orgName} is ready. Create your password to open the admin portal.`
+    ? `${preview.orgName} is ready. Continue with Google or set a password to open the admin portal.`
     : preview.invitedBy
       ? `${preview.invitedBy} invited you to join ${preview.orgName}.`
       : `You've been invited to join ${preview.orgName}.`;
   const helperCopy = isCheckoutActivation
-    ? "Set your password to finish setup. You’ll be signed in afterward."
-    : "Create your CoopAI account to access repositories, connect your tools, and install the VS Code extension.";
+    ? "Use the Google account for this email, or set a password. You’ll be signed in afterward."
+    : "Continue with Google or set a password to join — then connect tools and install the VS Code extension.";
   const submitLabel = isCheckoutActivation
     ? loading
       ? "Activating…"
-      : "Activate and continue"
+      : "Activate with password"
     : loading
       ? "Creating your account…"
-      : "Create account and continue";
+      : "Create account with password";
+  const googleLabel = isCheckoutActivation ? "Continue with Google" : "Continue with Google";
   const footerPrompt = isCheckoutActivation ? "Already activated?" : "Already joined?";
 
   return (
@@ -214,7 +243,7 @@ function AcceptInviteContent() {
         <div className="rounded-md border border-coop-border p-5">
           <p className="mb-5 text-sm text-coop-muted">{helperCopy}</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="firstName" className="admin-label">
@@ -258,6 +287,9 @@ function AcceptInviteContent() {
                 readOnly
                 aria-readonly
               />
+              <p className="mt-1 text-xs text-coop-muted">
+                Google must use this same address ({preview.email}).
+              </p>
             </div>
 
             <div>
@@ -293,6 +325,29 @@ function AcceptInviteContent() {
               </select>
             </div>
 
+            {error ? (
+              <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              className="admin-btn-secondary w-full py-2.5"
+              disabled={loading}
+              onClick={handleGoogleContinue}
+            >
+              {googleLabel}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
+              <span className="text-xs text-coop-muted">or set a password</span>
+              <span className="h-px flex-1 bg-coop-border/80" aria-hidden />
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label htmlFor="password" className="admin-label">
                 Password
@@ -325,12 +380,6 @@ function AcceptInviteContent() {
                 required
               />
             </div>
-
-            {error ? (
-              <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {error}
-              </p>
-            ) : null}
 
             <button type="submit" className="admin-btn-primary w-full py-2.5" disabled={loading}>
               {submitLabel}

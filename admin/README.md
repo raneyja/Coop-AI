@@ -45,7 +45,8 @@ Automation API keys are created on **API Keys** for CI and scripts — not for p
 ## Authentication
 
 - **Primary:** Email/password or Google OAuth via `/api/auth/login` and backend `/v1/auth/*`
-- **Invites:** Email link → `/accept-invite?token=…` → set password and profile → signed in
+- **Invites:** Email link → `/accept-invite?token=…` → Continue with Google (same email) or set password → signed in
+- **Pro activate:** Checkout welcome → same accept-invite page with activate copy + Google or password
 - **Session:** Access token in `sessionStorage` plus httpOnly `coop_session` cookie (set by Next.js API routes)
 - **Refresh:** Refresh token in `sessionStorage`; sign out calls `/api/auth/logout`
 

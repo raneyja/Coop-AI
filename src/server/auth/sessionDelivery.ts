@@ -127,11 +127,20 @@ export function deliverAuthError(
         response.end();
         return;
       }
-      const loginPath = target.pathname.includes("/login") ? target.pathname : "/login";
-      const loginUrl = new URL(loginPath, target.origin);
-      loginUrl.searchParams.set("error", error);
-      loginUrl.searchParams.set("message", message);
-      response.writeHead(302, { location: loginUrl.toString() });
+      const errorPath = target.pathname.includes("/login")
+        ? target.pathname
+        : target.pathname.includes("/accept-invite")
+          ? target.pathname
+          : "/login";
+      const errorUrl = new URL(errorPath, target.origin);
+      for (const [key, value] of target.searchParams) {
+        if (key !== "error" && key !== "message") {
+          errorUrl.searchParams.set(key, value);
+        }
+      }
+      errorUrl.searchParams.set("error", error);
+      errorUrl.searchParams.set("message", message);
+      response.writeHead(302, { location: errorUrl.toString() });
       response.end();
       return;
     } catch {

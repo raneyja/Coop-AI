@@ -100,6 +100,22 @@ test("deliverAuthError redirects browser flows to portal login", () => {
   assert.equal(url.searchParams.get("message"), "Assertion was rejected.");
 });
 
+test("deliverAuthError preserves accept-invite path and token", () => {
+  const { response, state } = mockRedirectResponse();
+  deliverAuthError(
+    response,
+    "https://admin.coop-ai.dev/accept-invite?token=invite-abc",
+    "email_mismatch",
+    "Sign in with the invited Google account."
+  );
+  assert.equal(state.statusCode, 302);
+  const url = new URL(state.location!);
+  assert.equal(url.pathname, "/accept-invite");
+  assert.equal(url.searchParams.get("token"), "invite-abc");
+  assert.equal(url.searchParams.get("error"), "email_mismatch");
+  assert.equal(url.searchParams.get("message"), "Sign in with the invited Google account.");
+});
+
 test("deliverSessionToken appends coopToken to redirect fragment", () => {
   const { response, state } = mockRedirectResponse();
   deliverSessionToken(response, "access-token-123", "vscode://coop-ai.coop-ai/auth/callback", "refresh-456");

@@ -515,8 +515,13 @@ async function handleGoogleStart(
     parsed.query?.get("redirect"),
     authRedirectAllowlistFromConfig(deps.authConfig)
   );
-  const mode = parsed.query?.get("mode") === "signup" ? "signup" : "login";
+  const modeParam = parsed.query?.get("mode");
+  const mode = modeParam === "signup" ? "signup" : modeParam === "invite" ? "invite" : "login";
   const orgName = parsed.query?.get("orgName")?.trim() || undefined;
+  const inviteToken = parsed.query?.get("inviteToken")?.trim() || undefined;
+  const firstName = parsed.query?.get("firstName")?.trim() || undefined;
+  const lastName = parsed.query?.get("lastName")?.trim() || undefined;
+  const timezone = parsed.query?.get("timezone")?.trim() || undefined;
   const callbackUri = resolveGoogleCallbackUri(parsed, deps.authConfig);
   if (!callbackUri) {
     writeJson(response, 400, {
@@ -526,7 +531,23 @@ async function handleGoogleStart(
     });
     return true;
   }
-  const url = deps.googleAuth.buildAuthorizeUrl(callbackUri, { redirect, mode, orgName, plan: "free" });
+  if (mode === "invite" && !inviteToken) {
+    writeJson(response, 400, {
+      error: "missing_token",
+      message: "Invitation link is missing or malformed."
+    });
+    return true;
+  }
+  const url = deps.googleAuth.buildAuthorizeUrl(callbackUri, {
+    redirect,
+    mode,
+    orgName: mode === "invite" ? undefined : orgName,
+    plan: mode === "invite" ? undefined : "free",
+    inviteToken: mode === "invite" ? inviteToken : undefined,
+    firstName,
+    lastName,
+    timezone
+  });
   response.writeHead(302, { location: url });
   response.end();
   return true;
@@ -583,7 +604,11 @@ async function handleGoogleExchange(
     fallbackLogin
   );
   if (!result.ok) {
-    writeJson(response, result.status, { error: result.error, message: result.message });
+    writeJson(response, result.status, {
+      error: result.error,
+      message: result.message,
+      ...(result.redirect ? { redirect: result.redirect } : {})
+    });
     return true;
   }
 
@@ -670,6 +695,7 @@ async function completeGoogleOAuth(
     state.redirect,
     authRedirectAllowlistFromConfig(deps.authConfig)
   );
+  const errorRedirect = googleOAuthErrorRedirect(deps, state, clientRedirect, fallbackLogin);
 
   let profile;
   try {
@@ -681,7 +707,7 @@ async function completeGoogleOAuth(
       status: 502,
       error: "google_exchange_failed",
       message: "Google sign-in failed. Try again.",
-      redirect: clientRedirect ?? fallbackLogin
+      redirect: errorRedirect
     };
   }
 
@@ -695,7 +721,7 @@ async function completeGoogleOAuth(
       status: 500,
       error: "google_signin_failed",
       message: err instanceof Error ? err.message : "Google sign-in failed.",
-      redirect: clientRedirect ?? fallbackLogin
+      redirect: errorRedirect
     };
   }
   if (!sessionResult.ok) {
@@ -704,7 +730,7 @@ async function completeGoogleOAuth(
       status: sessionResult.status,
       error: sessionResult.error,
       message: sessionResult.message,
-      redirect: clientRedirect ?? fallbackLogin
+      redirect: errorRedirect
     };
   }
 
@@ -714,6 +740,21 @@ async function completeGoogleOAuth(
     refreshToken: sessionResult.refreshToken,
     clientRedirect
   };
+}
+
+function googleOAuthErrorRedirect(
+  deps: UserAuthApiDeps,
+  state: { mode: string; inviteToken?: string },
+  clientRedirect: string | undefined,
+  fallbackLogin: string
+): string {
+  if (state.mode === "invite" && state.inviteToken) {
+    const base = deps.authConfig.adminPortalUrl.replace(/\/$/, "");
+    const url = new URL(`${base}/accept-invite`);
+    url.searchParams.set("token", state.inviteToken);
+    return url.toString();
+  }
+  return clientRedirect ?? fallbackLogin;
 }
 
 async function handleExchangeCode(
@@ -741,12 +782,23 @@ async function handleExchangeCode(
 
 async function resolveGoogleUser(
   deps: UserAuthApiDeps,
-  profile: { sub: string; email: string; emailVerified: boolean },
-  state: { mode: "login" | "signup"; orgName?: string }
+  profile: { sub: string; email: string; emailVerified: boolean; name?: string },
+  state: {
+    mode: "login" | "signup" | "invite";
+    orgName?: string;
+    inviteToken?: string;
+    firstName?: string;
+    lastName?: string;
+    timezone?: string;
+  }
 ): Promise<
   | { ok: true; accessToken: string; refreshToken: string }
   | { ok: false; status: number; error: string; message: string }
 > {
+  if (state.mode === "invite") {
+    return resolveGoogleInviteAcceptance(deps, profile, state);
+  }
+
   if (!profile.emailVerified) {
     return {
       ok: false,
@@ -794,6 +846,151 @@ async function resolveGoogleUser(
 
   const session = await issueSession(deps, user!.id, user!.orgId, "google");
   return { ok: true, accessToken: session.accessToken, refreshToken: session.refreshToken };
+}
+
+/** Accept invite via Google OAuth. Peeks before consume so failures leave the token usable. */
+export async function resolveGoogleInviteAcceptance(
+  deps: UserAuthApiDeps,
+  profile: { sub: string; email: string; emailVerified: boolean; name?: string },
+  state: {
+    inviteToken?: string;
+    firstName?: string;
+    lastName?: string;
+    timezone?: string;
+  }
+): Promise<
+  | { ok: true; accessToken: string; refreshToken: string }
+  | { ok: false; status: number; error: string; message: string }
+> {
+  if (!profile.emailVerified) {
+    return {
+      ok: false,
+      status: 403,
+      error: "email_not_verified",
+      message: "Verify your Google email address, then try again."
+    };
+  }
+
+  const inviteToken = state.inviteToken?.trim() ?? "";
+  if (!inviteToken) {
+    return {
+      ok: false,
+      status: 400,
+      error: "missing_token",
+      message: "Invitation link is missing or malformed."
+    };
+  }
+
+  const peeked = await deps.authTokenStore!.peekToken(inviteToken, "user_invite");
+  if (!peeked) {
+    return {
+      ok: false,
+      status: 400,
+      error: "invalid_token",
+      message: "This invitation link is invalid or has expired."
+    };
+  }
+
+  const user = await deps.userStore!.getUser(peeked.userId);
+  if (!user || user.deactivatedAt) {
+    return {
+      ok: false,
+      status: 400,
+      error: "invalid_token",
+      message: "This invitation link is invalid or has expired."
+    };
+  }
+
+  const invitedEmail = user.email.trim().toLowerCase();
+  const googleEmail = profile.email.trim().toLowerCase();
+  if (invitedEmail !== googleEmail) {
+    return {
+      ok: false,
+      status: 403,
+      error: "email_mismatch",
+      message: `Sign in with the Google account for ${user.email} to accept this invitation.`
+    };
+  }
+
+  const googleIdentity = await deps.authIdentityStore!.findGoogleIdentity(profile.sub);
+  if (googleIdentity && googleIdentity.userId !== user.id) {
+    return {
+      ok: false,
+      status: 409,
+      error: "google_identity_conflict",
+      message: "This Google account is already linked to another Coop user."
+    };
+  }
+
+  const allowed = await checkAuthMethodAllowed(deps, user.orgId, "google");
+  if (!allowed.ok) {
+    return { ok: false, status: 403, error: allowed.error!, message: allowed.message! };
+  }
+
+  const names = resolveInviteProfileNames(state, profile.name);
+  if (!names) {
+    return {
+      ok: false,
+      status: 400,
+      error: "missing_profile",
+      message: "First and last name are required."
+    };
+  }
+  const timezone = state.timezone?.trim() ?? "";
+  if (!timezone) {
+    return {
+      ok: false,
+      status: 400,
+      error: "missing_timezone",
+      message: "Select your timezone."
+    };
+  }
+
+  const consumed = await deps.authTokenStore!.consumeToken(inviteToken, "user_invite");
+  if (!consumed) {
+    return {
+      ok: false,
+      status: 400,
+      error: "invalid_token",
+      message: "This invitation link is invalid or has expired."
+    };
+  }
+
+  if (!googleIdentity) {
+    await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
+  } else {
+    await deps.authIdentityStore!.markEmailVerified(user.id, "google");
+  }
+  await deps.userStore!.updateUserProfile(user.id, {
+    firstName: names.firstName,
+    lastName: names.lastName,
+    timezone
+  });
+  await audit(deps, user.id, user.orgId, "auth.invite_accepted", { method: "google" });
+
+  const session = await issueSession(deps, user.id, user.orgId, "google");
+  return { ok: true, accessToken: session.accessToken, refreshToken: session.refreshToken };
+}
+
+function resolveInviteProfileNames(
+  state: { firstName?: string; lastName?: string },
+  googleName?: string
+): { firstName: string; lastName: string } | undefined {
+  let firstName = state.firstName?.trim() ?? "";
+  let lastName = state.lastName?.trim() ?? "";
+  if ((!firstName || !lastName) && googleName?.trim()) {
+    const parts = googleName.trim().split(/\s+/).filter(Boolean);
+    if (!firstName && parts[0]) {
+      firstName = parts[0];
+    }
+    if (!lastName) {
+      lastName = parts.slice(1).join(" ");
+    }
+  }
+  if (!firstName || !lastName) {
+    return undefined;
+  }
+  return { firstName, lastName };
 }
 
 async function issueSession(
