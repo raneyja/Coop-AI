@@ -809,6 +809,8 @@ export async function testIntegrationScope(
 export type BillingInfo = {
   plan: string;
   seats: number | null;
+  /** Stripe subscription quantity when available (may briefly differ from Coop seats). */
+  stripeSeats?: number | null;
   status: string;
   billingEmail?: string;
   hasStripeCustomer?: boolean;
@@ -888,17 +890,24 @@ export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {
 }
 
 /**
- * Increase-only seat management. Returns a Stripe confirm link for `seats` (which
- * must be strictly greater than the current seat count). Coop seats update only
- * after the customer confirms in Stripe (via webhook). Decreases are not allowed.
+ * Increase-only seat management. `addSeats` is how many seats to add on top of the
+ * effective current count (max of Coop and Stripe). Returns a Stripe confirm link
+ * for the new total. Coop seats update only after Stripe confirms (via webhook).
  */
 export async function createSeatIncreaseSession(
-  seats: number
-): Promise<ApiResult<{ url: string; currentSeats: number; requestedSeats: number }>> {
-  return coopFetch<{ url: string; currentSeats: number; requestedSeats: number }>(
-    "/v1/admin/billing/seat-increase",
-    { method: "POST", body: JSON.stringify({ seats }) }
-  );
+  addSeats: number
+): Promise<
+  ApiResult<{ url: string; currentSeats: number; requestedSeats: number; addedSeats: number }>
+> {
+  return coopFetch<{
+    url: string;
+    currentSeats: number;
+    requestedSeats: number;
+    addedSeats: number;
+  }>("/v1/admin/billing/seat-increase", {
+    method: "POST",
+    body: JSON.stringify({ addSeats })
+  });
 }
 
 export async function createUpgradeCheckoutSession(

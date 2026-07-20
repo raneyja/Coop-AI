@@ -4,6 +4,8 @@ import type { IntegrationProvider } from "./integrationConnectionStore";
 import { resolveOrgPlanFromDb } from "./authMiddleware";
 import { requireTeamPlan } from "./planGates";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
+import { loadBillingConfig } from "./billing/billingConfig";
+import { StripeService } from "./billing/stripeService";
 
 type ParsedRequest = {
   method: string;
@@ -83,9 +85,32 @@ export async function handleAdminOrgRequest(
   if (parsed.method === "GET" && parsed.pathname === "/v1/admin/billing") {
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
     const billing = await deps.orgStore!.getOrganizationBilling(auth.orgId);
+    let seats = billing?.seatCount ?? null;
+    let stripeSeats: number | null = null;
+
+    // Prefer Stripe quantity when ahead of Coop (e.g. webhook lag after a confirmed seat change).
+    if (billing?.stripeSubscriptionId) {
+      const stripe = new StripeService(loadBillingConfig());
+      if (stripe.isConfigured()) {
+        try {
+          const subscription = await stripe.retrieveSubscription(billing.stripeSubscriptionId);
+          if (subscription.quantity != null) {
+            stripeSeats = Math.max(1, Math.floor(Number(subscription.quantity) || 1));
+            if (seats == null || stripeSeats > seats) {
+              await deps.orgStore!.updateOrganizationBilling(auth.orgId, { seatCount: stripeSeats });
+              seats = stripeSeats;
+            }
+          }
+        } catch {
+          // Leave Coop seats if Stripe is temporarily unavailable.
+        }
+      }
+    }
+
     writeJson(response, 200, {
       plan,
-      seats: billing?.seatCount ?? null,
+      seats,
+      stripeSeats,
       status: billing?.billingStatus ?? "manual",
       billingEmail: billing?.billingEmail,
       hasStripeCustomer: Boolean(billing?.stripeCustomerId)

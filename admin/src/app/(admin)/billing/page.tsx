@@ -20,7 +20,7 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState(false);
   const [enterpriseFormOpen, setEnterpriseFormOpen] = useState(false);
-  const [seatInput, setSeatInput] = useState("");
+  const [seatInput, setSeatInput] = useState("1");
   const [addingSeats, setAddingSeats] = useState(false);
 
   const load = useCallback(async () => {
@@ -36,12 +36,6 @@ export default function BillingPage() {
       setUpgraded(new URLSearchParams(window.location.search).get("upgraded") === "1");
     }
   }, [load]);
-
-  useEffect(() => {
-    if (billing?.seats != null) {
-      setSeatInput(String(Math.max(1, Math.floor(billing.seats)) + 1));
-    }
-  }, [billing?.seats]);
 
   async function handlePortal() {
     setOpening(true);
@@ -69,13 +63,13 @@ export default function BillingPage() {
 
   async function handleAddSeats() {
     setError(null);
-    const requested = Math.floor(Number(seatInput));
-    if (!Number.isFinite(requested) || requested <= currentSeats) {
-      setError(`Enter a total seat count greater than your current ${currentSeats}. To reduce seats, contact Coop support.`);
+    const addSeats = Math.floor(Number(seatInput));
+    if (!Number.isFinite(addSeats) || addSeats < 1) {
+      setError("Enter how many seats to add (at least 1).");
       return;
     }
     setAddingSeats(true);
-    const result = await createSeatIncreaseSession(requested);
+    const result = await createSeatIncreaseSession(addSeats);
     setAddingSeats(false);
     if (!result.ok || !result.data?.url) {
       setError(result.error ?? "Could not start seat increase.");
@@ -89,6 +83,7 @@ export default function BillingPage() {
   const isPro = plan === "pro";
   const isEnterprise = plan === "enterprise";
   const currentSeats = Math.max(1, Math.floor(billing?.seats ?? 1));
+  const newTotalPreview = currentSeats + Math.max(0, Math.floor(Number(seatInput)) || 0);
 
   return (
     <div className="space-y-6">
@@ -140,17 +135,17 @@ export default function BillingPage() {
                 <div>
                   <p className="admin-section-label">Add seats</p>
                   <p className="mt-1 text-sm text-coop-muted">
-                    You currently have {currentSeats} seat{currentSeats === 1 ? "" : "s"}. Enter the new total —
-                    you&apos;ll confirm and pay the prorated amount in Stripe.
+                    You currently have {currentSeats} seat{currentSeats === 1 ? "" : "s"}. Enter how many
+                    to add — you&apos;ll confirm and pay the prorated amount in Stripe.
                   </p>
                 </div>
                 <div className="flex items-end gap-3">
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-coop-muted">New total seats</span>
+                    <span className="text-coop-muted">Seats to add</span>
                     <input
                       type="number"
                       inputMode="numeric"
-                      min={currentSeats + 1}
+                      min={1}
                       step={1}
                       className="admin-input max-w-[120px]"
                       value={seatInput}
@@ -167,6 +162,11 @@ export default function BillingPage() {
                     {addingSeats ? "Opening…" : "Add seats"}
                   </button>
                 </div>
+                {Number.isFinite(Number(seatInput)) && Number(seatInput) >= 1 ? (
+                  <p className="text-xs text-coop-muted">
+                    New total after confirm: {newTotalPreview} seat{newTotalPreview === 1 ? "" : "s"}.
+                  </p>
+                ) : null}
                 <p className="text-xs text-coop-muted">
                   To reduce seats, contact Coop support at{" "}
                   <a href="mailto:support@coop-ai.dev" className="admin-link">

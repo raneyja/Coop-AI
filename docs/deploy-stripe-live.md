@@ -108,7 +108,7 @@ Use a **real card** or Stripe’s live test flow only if your account allows it.
 
 Coop's model: **org admins can ADD seats (self-serve, paid via Stripe) but cannot REDUCE seats.** Decreases require Coop ops/support.
 
-- **Add seats** (`POST /v1/admin/billing/seat-increase`) creates a Stripe `subscription_update_confirm` deep link for the new quantity. The request must be strictly greater than **max(Coop seats, Stripe subscription quantity)** so a lagged Coop DB cannot be used to decrease Stripe seats. Coop's seat count updates only after the `customer.subscription.updated` webhook fires.
+- **Add seats** (`POST /v1/admin/billing/seat-increase`) accepts `addSeats` (preferred; seats to add) or `seats` (absolute new total). The new total must be strictly greater than **max(Coop seats, Stripe subscription quantity)**. `GET /v1/admin/billing` heals Coop upward when Stripe is ahead. Coop's seat count for a confirmed increase still lands via `customer.subscription.updated` after Stripe confirm.
 - **Payment methods & invoices** (`POST /v1/admin/billing/portal-session`) opens the generic Customer Portal for cards / invoices / cancellation.
 
 ### Why two portal configurations
