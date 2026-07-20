@@ -213,7 +213,9 @@ export function buildThinAlternativesTradeOffsResponse(
   const commitLabel = timeline.originalCommit
     ? decisionSourceLabelCommit(timeline.originalCommit.sha)
     : undefined;
-  const includeUnknown = options?.includeUnknownSections !== false;
+  // Default: omit Unknown fillers. Only include one-line unknowns when the caller
+  // asked about alternatives/trade-offs explicitly.
+  const includeUnknown = options?.includeUnknownSections === true;
 
   const lines = [
     "**Summary**",
@@ -225,11 +227,11 @@ export function buildThinAlternativesTradeOffsResponse(
     lines.push(
       "**Alternatives considered**",
       warningNote
-        ? `Unknown — not recorded (${warningNote}).`
-        : "Unknown — not recorded in attached sources.",
+        ? `Not documented (${warningNote}).`
+        : "Not documented in attached sources.",
       "",
       "**Trade-offs**",
-      "Not documented in the available sources.",
+      "Not documented in attached sources.",
       ""
     );
   }

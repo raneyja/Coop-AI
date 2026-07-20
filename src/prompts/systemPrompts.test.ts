@@ -46,9 +46,14 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes(AUDIENCE_MARKER));
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("## Required response structure"));
+  assert.ok(prompt.includes("Architecture brief"));
   assert.ok(prompt.includes("**Architecture**"));
+  assert.ok(prompt.includes("3–6 bullets max"));
+  assert.ok(prompt.includes("≤5 bullets"));
   assert.ok(prompt.includes("**How the open file fits**"));
   assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
+  assert.ok(!prompt.includes("**Risks & unknowns**"));
+  assert.ok(!prompt.includes("**Suggested next steps**"));
 });
 
 test("comprehension use case requires active file section when activeFile is set", () => {
@@ -104,6 +109,18 @@ test("blast_radius use case enforces short graph-grounded structure", () => {
   assert.ok(prompt.includes("Omit** unless test evidence exists"));
   assert.ok(prompt.includes("Core path: **Summary** → **Direct impact**"));
   assert.equal(prompt.includes("None identified"), false);
+});
+
+test("decision_archaeology prefers short form and omits Unknown fillers", () => {
+  const prompt = systemPromptForUseCase("decision_archaeology");
+  assert.ok(prompt.includes("## Required response structure"));
+  assert.ok(prompt.includes("scannable short answer"));
+  assert.ok(prompt.includes("no \"Unknown\" filler paragraphs"));
+  assert.ok(prompt.includes("**Summary**"));
+  assert.ok(prompt.includes("**Technical decision**"));
+  assert.ok(prompt.includes("**Sources**"));
+  assert.ok(prompt.includes("under ~8 sentences"));
+  assert.ok(!prompt.includes('write "Unknown — not recorded in attached sources."'));
 });
 
 test("inline_completion excludes audience and output contract", () => {

@@ -59,14 +59,21 @@ test("responseHasSpeculativeTradeoffs detects generic inference filler", () => {
   assert.equal(responseHasSpeculativeTradeoffs(bad), true);
 });
 
-test("buildThinAlternativesTradeOffsResponse stays compact and honest", () => {
+test("buildThinAlternativesTradeOffsResponse stays compact and omits Unknown by default", () => {
   const text = buildThinAlternativesTradeOffsResponse(thinTimeline, "fastify.js");
   assert.ok(text.includes("**Summary**"));
-  assert.ok(text.includes("Unknown — not recorded"));
-  assert.ok(text.includes("Not documented"));
+  assert.ok(!text.includes("Unknown — not recorded"));
+  assert.ok(!text.includes("**Alternatives considered**"));
   assert.ok(text.includes("[Sources: GitHub commit dd2bb73]"));
   assert.ok(!text.includes("Performance vs"));
-  assert.ok(text.split("\n").length < 20);
+  assert.ok(text.split("\n").length < 12);
+
+  const asked = buildThinAlternativesTradeOffsResponse(thinTimeline, "fastify.js", {
+    includeUnknownSections: true
+  });
+  assert.ok(asked.includes("**Alternatives considered**"));
+  assert.ok(asked.includes("Not documented"));
+  assert.ok(asked.split("\n").length < 20);
 });
 
 test("enrichTraceDecisionResponse does not replace initial trace run when model prompt mentions trade-offs", () => {
