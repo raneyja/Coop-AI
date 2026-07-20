@@ -65,6 +65,8 @@ Then **Grant admin consent for {your tenant}** (operator tenant). Customer tenan
 
 **Note:** `ChannelMessage.Read.All` is admin-consent in most orgs. Org admins connecting from [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations) need sufficient Entra role, or IT must pre-consent the app.
 
+Coop’s authorize URL includes `prompt=select_account consent` so Connect always shows Microsoft’s account picker and consent screen (instead of silently finishing when the tenant already granted admin consent).
+
 ---
 
 ## Operator — server env

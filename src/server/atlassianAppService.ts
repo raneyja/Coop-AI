@@ -9,6 +9,8 @@ const ATLASSIAN_SCOPES = [
   "read:jira-work",
   "read:confluence-content.all",
   "read:confluence-space.summary",
+  // Granular — required for Confluence Cloud REST API v2 GET /wiki/api/v2/spaces (v1 /space is 410 for OAuth).
+  "read:space:confluence",
   "search:confluence",
   "read:me",
   "offline_access"

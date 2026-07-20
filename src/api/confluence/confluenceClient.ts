@@ -51,17 +51,21 @@ function formatConfluenceError(status: number, body: string, oauthMode = false):
     );
   }
   if (status === 410) {
-    return "Confluence search API is unavailable on this site. Try again after reconnecting Atlassian.";
+    return (
+      "Confluence removed a deprecated API this call still used. Reconnect Atlassian after Coop is updated, " +
+      "or contact your Coop operator if this persists."
+    );
   }
   if (status === 401) {
     if (oauthMode && body.includes("scope does not match")) {
       return (
-        "Confluence OAuth scope mismatch. In the Atlassian developer console (CoopAI Local v2), add Classic scopes " +
-        "search:confluence and read:confluence-space.summary under Confluence API, then Manage Confluence to re-authorize."
+        "Confluence OAuth scope mismatch. In the Atlassian developer console, add scopes " +
+        "search:confluence, read:confluence-space.summary, and read:space:confluence under Confluence API, " +
+        "then disconnect and reconnect Atlassian to re-authorize."
       );
     }
     if (oauthMode) {
-      return "Confluence OAuth authentication failed. Click Manage Confluence to re-authorize your organization.";
+      return "Confluence OAuth authentication failed. Disconnect and reconnect Atlassian to re-authorize your organization.";
     }
     return "Confluence authentication failed. Verify your account email and API token, then save credentials again.";
   }
@@ -80,9 +84,26 @@ function parseConfluenceJsonMessage(body: string): string | undefined {
       return undefined;
     }
     if (/GoneException|deprecated endpoint has been removed/i.test(message)) {
-      return "Confluence search API is unavailable on this site. Try again after reconnecting Atlassian.";
+      return (
+        "Confluence removed a deprecated API this call still used. Reconnect Atlassian after Coop is updated, " +
+        "or contact your Coop operator if this persists."
+      );
     }
     return message;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractCursorFromNextLink(next: string | undefined): string | undefined {
+  if (!next?.trim()) {
+    return undefined;
+  }
+  try {
+    const url = next.startsWith("http")
+      ? new URL(next)
+      : new URL(next, "https://api.atlassian.com");
+    return url.searchParams.get("cursor") ?? undefined;
   } catch {
     return undefined;
   }
@@ -191,6 +212,58 @@ export class ConfluenceClient {
   }
 
   public async listSpaces(options?: { limit?: number }): Promise<ConfluenceSpace[]> {
+    // OAuth Cloud: v1 GET /wiki/rest/api/space returns 410 Gone. Use v2 spaces.
+    if (this.oauthMode && this.options.cloudId) {
+      return this.listSpacesV2(options);
+    }
+    return this.listSpacesV1(options);
+  }
+
+  private async listSpacesV2(options?: { limit?: number }): Promise<ConfluenceSpace[]> {
+    const limit = Math.min(options?.limit ?? 500, 1000);
+    const spaces: ConfluenceSpace[] = [];
+    let cursor: string | undefined;
+    const v2Base = `https://api.atlassian.com/ex/confluence/${this.options.cloudId}/wiki/api/v2`;
+
+    while (spaces.length < limit) {
+      const pageSize = Math.min(250, limit - spaces.length);
+      const query: Record<string, string> = { limit: String(pageSize) };
+      if (cursor) {
+        query.cursor = cursor;
+      }
+
+      const response = await this.requestOnce<{
+        results?: Array<{ id?: string | number; key?: string; name?: string }>;
+        _links?: { next?: string };
+      }>(v2Base, "/spaces", { query });
+
+      if (!response.ok) {
+        throw new ConfluenceApiError(
+          formatConfluenceError(response.status, response.body, this.oauthMode),
+          response.status
+        );
+      }
+
+      const batch = response.data.results ?? [];
+      for (const space of batch) {
+        const id = space.id !== undefined ? String(space.id).trim() : "";
+        const key = typeof space.key === "string" ? space.key.trim() : "";
+        const name = typeof space.name === "string" ? space.name.trim() : "";
+        if (id && key && name) {
+          spaces.push({ id, key, name });
+        }
+      }
+
+      cursor = extractCursorFromNextLink(response.data._links?.next);
+      if (!cursor || batch.length === 0) {
+        break;
+      }
+    }
+
+    return spaces;
+  }
+
+  private async listSpacesV1(options?: { limit?: number }): Promise<ConfluenceSpace[]> {
     const limit = Math.min(options?.limit ?? 500, 1000);
     const spaces: ConfluenceSpace[] = [];
     let start = 0;

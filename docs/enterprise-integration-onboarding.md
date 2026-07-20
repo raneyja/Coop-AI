@@ -134,7 +134,7 @@ For Enterprise orgs that sign in with SAML instead of password/Google:
 ### Atlassian (Jira + Confluence)
 
 - One Atlassian 3LO app covers **both** Jira and Confluence.
-- Scopes: `read:jira-work`, `read:confluence-content.all`, `search:confluence`, `offline_access`, etc. (see `atlassianAppService.ts`).
+- Scopes: `read:jira-work`, `read:confluence-content.all`, `read:confluence-space.summary`, `read:space:confluence`, `search:confluence`, `offline_access`, etc. (see `atlassianAppService.ts`).
 - **Customer admin:** **Connect** from Jira or Confluence row (same OAuth) → set site URLs in Settings if needed → **Test**.
 
 ### Notion
