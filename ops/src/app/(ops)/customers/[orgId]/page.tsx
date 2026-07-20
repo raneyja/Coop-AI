@@ -66,6 +66,7 @@ export default function CustomerDetailPage() {
   const [assignee, setAssignee] = useState("");
   const [crmId, setCrmId] = useState("");
   const [seatInput, setSeatInput] = useState("");
+  const [addSeatsInput, setAddSeatsInput] = useState("1");
   const [planInput, setPlanInput] = useState<OrgPlan>("pro");
   const [inviteEmail, setInviteEmail] = useState("");
   const [keyLabel, setKeyLabel] = useState("");
@@ -162,15 +163,15 @@ export default function CustomerDetailPage() {
   async function handleSeatChangeLink(e: FormEvent) {
     e.preventDefault();
     if (!me || !canMutateBilling(me)) return;
-    const seats = Number(seatInput);
-    if (!Number.isFinite(seats) || seats < 1) {
-      setActionError("Enter a valid seat count.");
+    const addSeats = Math.floor(Number(addSeatsInput));
+    if (!Number.isFinite(addSeats) || addSeats < 1) {
+      setActionError("Enter how many seats to add (at least 1).");
       return;
     }
     setBusy("seat-link");
     setActionError(null);
     setSeatChangeLink(null);
-    const result = await createSeatChangeLink(orgId, seats);
+    const result = await createSeatChangeLink(orgId, addSeats);
     setBusy(null);
     if (!result.ok || !result.data?.url) {
       setActionError(result.error ?? "Failed to create seat-change link.");
@@ -345,6 +346,12 @@ export default function CustomerDetailPage() {
 
   const stripeId = detail.stripe?.customerId ?? detail.stripeCustomerId;
   const stripeManaged = detail.stripe?.managed === true;
+  const currentSeatsEffective = Math.max(
+    Number(detail.coopBilling?.seats ?? 0) || 0,
+    Number(detail.stripe?.seats ?? 0) || 0,
+    Number(detail.seats ?? 0) || 0
+  );
+  const seatsToAddPreview = Math.max(0, Math.floor(Number(addSeatsInput)) || 0);
   const planDrift =
     detail.stripe?.plan &&
     detail.coopBilling?.plan &&
@@ -454,8 +461,8 @@ export default function CustomerDetailPage() {
         {stripeManaged && me && canMutateBilling(me) && (
           <div className="mt-4 space-y-3 rounded-md border border-coop-border/60 p-4">
             <p className="text-sm text-coop-muted">
-              This org bills through Stripe. Coop does not change seats until the customer confirms a
-              Stripe payment link. Do not edit Coop seats directly.
+              This org bills through Stripe. Enter how many seats to add — Coop does not change seats
+              until the customer confirms the Stripe payment link. Do not edit Coop seats directly.
             </p>
             <p className="text-xs text-coop-muted">
               Requires Stripe Customer Portal → <strong className="font-medium text-white/80">Update quantities</strong>{" "}
@@ -463,19 +470,26 @@ export default function CustomerDetailPage() {
             </p>
             <form onSubmit={handleSeatChangeLink} className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="admin-label">Requested seats</label>
+                <label className="admin-label">Seats to add</label>
                 <input
                   type="number"
                   min={1}
+                  step={1}
                   className="admin-input w-28"
-                  value={seatInput}
-                  onChange={(e) => setSeatInput(e.target.value)}
+                  value={addSeatsInput}
+                  onChange={(e) => setAddSeatsInput(e.target.value)}
                 />
               </div>
               <button type="submit" className="admin-btn-primary" disabled={busy === "seat-link"}>
                 {busy === "seat-link" ? "Creating link…" : "Create Stripe approval link"}
               </button>
             </form>
+            {seatsToAddPreview >= 1 ? (
+              <p className="text-xs text-coop-muted">
+                Current: {currentSeatsEffective || "—"} · New total after confirm:{" "}
+                {currentSeatsEffective + seatsToAddPreview}
+              </p>
+            ) : null}
             {seatChangeLink ? (
               <div className="space-y-2 break-all rounded-md bg-black/30 p-3 text-xs">
                 <p className="text-coop-muted">Send this link to the customer billing contact:</p>

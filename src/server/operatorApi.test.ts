@@ -270,15 +270,16 @@ void (async () => {
   assert.equal(stripePatchRes.statusCode, 409);
   assert.match(stripePatchRes.body ?? "", /stripe_managed/);
 
-  // Seat-change link returns Stripe portal URL without mutating Coop seats.
+  // Seat-change link returns Stripe portal URL without mutating Coop seats (additive).
   const seatLinkRes = mockResponse();
   let seatCountUpdated = false;
+  let sentQuantity: number | undefined;
   const seatLinkHandled = await handleOperatorApiRequest(
     {
       method: "POST",
       pathname: "/v1/operator/organizations/org-1/seat-change-link",
       headers: { authorization: "Bearer ops-token" },
-      body: { seats: 3 }
+      body: { addSeats: 2 }
     },
     seatLinkRes,
     baseDeps({
@@ -307,13 +308,21 @@ void (async () => {
       stripeService: {
         isConfigured: () => true,
         retrieveSubscription: async () => ({ id: "sub_123", status: "active", quantity: 1, itemId: "si_123" }),
-        createBillingPortalSession: async () => ({ url: "https://billing.stripe.com/session/test" })
+        createBillingPortalSession: async (_customerId: string, options?: { quantity?: number }) => {
+          sentQuantity = options?.quantity;
+          return { url: "https://billing.stripe.com/session/test" };
+        }
       } as never
     })
   );
   assert.equal(seatLinkHandled, true);
   assert.equal(seatLinkRes.statusCode, 200);
   assert.match(seatLinkRes.body ?? "", /billing\.stripe\.com/);
+  const seatPayload = JSON.parse(seatLinkRes.body ?? "{}");
+  assert.equal(seatPayload.currentSeats, 1);
+  assert.equal(seatPayload.addedSeats, 2);
+  assert.equal(seatPayload.requestedSeats, 3);
+  assert.equal(sentQuantity, 3);
   assert.equal(seatCountUpdated, false);
 
   // Suspended org returns org_suspended via auth middleware.

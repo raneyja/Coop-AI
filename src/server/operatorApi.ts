@@ -929,15 +929,16 @@ async function handleSeatChangeLink(
   }
 
   const body = asRecord(parsed.body);
-  const seats = Math.max(1, Math.floor(Number(body.seats) || 0));
-  if (!Number.isFinite(seats) || seats < 1) {
-    writeJson(response, 400, { error: "invalid_request", message: "seats must be a positive integer." });
-    return true;
-  }
-  if (seats === billing.seatCount) {
+  const addSeatsRaw = body.addSeats;
+  const absoluteSeatsRaw = body.seats;
+  const hasAddSeats = addSeatsRaw !== undefined && addSeatsRaw !== null && String(addSeatsRaw).trim() !== "";
+  const hasAbsoluteSeats =
+    absoluteSeatsRaw !== undefined && absoluteSeatsRaw !== null && String(absoluteSeatsRaw).trim() !== "";
+
+  if (!hasAddSeats && !hasAbsoluteSeats) {
     writeJson(response, 400, {
-      error: "seats_unchanged",
-      message: `Organization already has ${billing.seatCount} seat(s).`
+      error: "invalid_request",
+      message: "Provide addSeats (seats to add) or seats (new total)."
     });
     return true;
   }
@@ -968,12 +969,52 @@ async function handleSeatChangeLink(
     return true;
   }
 
+  const coopSeats = Math.max(1, Math.floor(Number(billing.seatCount ?? 1) || 1));
+  const stripeSeats = Math.max(1, Math.floor(Number(subscription.quantity ?? coopSeats) || coopSeats));
+  const currentSeats = Math.max(coopSeats, stripeSeats);
+
+  let requestedSeats: number;
+  let addedSeats: number;
+  if (hasAddSeats) {
+    addedSeats = Math.floor(Number(addSeatsRaw));
+    if (!Number.isFinite(addedSeats) || addedSeats < 1) {
+      writeJson(response, 400, {
+        error: "invalid_request",
+        message: "addSeats must be a positive integer (how many seats to add)."
+      });
+      return true;
+    }
+    requestedSeats = currentSeats + addedSeats;
+  } else {
+    requestedSeats = Math.floor(Number(absoluteSeatsRaw));
+    if (!Number.isFinite(requestedSeats) || requestedSeats < 1) {
+      writeJson(response, 400, {
+        error: "invalid_request",
+        message: "seats must be a positive integer (new total)."
+      });
+      return true;
+    }
+    if (requestedSeats === currentSeats) {
+      writeJson(response, 400, {
+        error: "seats_unchanged",
+        message: `Organization already has ${currentSeats} seat(s).`
+      });
+      return true;
+    }
+    addedSeats = requestedSeats - currentSeats;
+  }
+
+  // Heal Coop when Stripe is ahead so subsequent UI reads match.
+  if (stripeSeats > coopSeats) {
+    await deps.orgStore!.updateOrganizationBilling(orgId, { seatCount: stripeSeats });
+  }
+
   let portal;
   try {
     portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
       subscriptionId: subscription.id,
       subscriptionItemId: subscription.itemId,
-      quantity: seats,
+      quantity: requestedSeats,
       // Use the seats portal configuration (quantity edits enabled) when set so
       // confirm links keep working even if the default portal disables them.
       configurationId: billingConfig.stripePortalConfigSeats
@@ -994,15 +1035,17 @@ async function handleSeatChangeLink(
   }
 
   await operatorAudit(deps, operator, "operator.org.seat_change_link", orgId, {
-    fromSeats: billing.seatCount,
-    toSeats: seats,
+    fromSeats: currentSeats,
+    toSeats: requestedSeats,
+    addedSeats,
     stripeSubscriptionId: subscription.id
   });
 
   writeJson(response, 200, {
     url: portal.url,
-    currentSeats: billing.seatCount,
-    requestedSeats: seats,
+    currentSeats,
+    requestedSeats,
+    addedSeats,
     message:
       "Send this link to the customer billing contact. Coop seats update after they confirm in Stripe."
   });
