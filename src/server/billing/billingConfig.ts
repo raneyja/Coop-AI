@@ -8,6 +8,16 @@ export type BillingConfig = {
   checkoutCancelUrl: string;
   adminPortalUrl: string;
   billingPortalReturnUrl: string;
+  // Stripe Customer Portal configuration IDs (bpc_...). Optional. When set, they
+  // let us serve two different portal experiences from the same customer:
+  //   - stripePortalConfigManage: payment methods / invoices / cancel, with
+  //     subscription quantity edits DISABLED (blocks self-serve seat DECREASES).
+  //   - stripePortalConfigSeats: subscription quantity edits ENABLED, used only
+  //     for `subscription_update_confirm` deep links (admin seat increases and
+  //     ops seat-change links).
+  // If unset, sessions fall back to the account default portal configuration.
+  stripePortalConfigManage?: string;
+  stripePortalConfigSeats?: string;
   emailFrom: string;
   resendApiKey?: string;
   emailMock: boolean;
@@ -38,6 +48,8 @@ export function loadBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
       publicBase,
       `${adminPortal}/billing`
     ),
+    stripePortalConfigManage: env.STRIPE_PORTAL_CONFIG_MANAGE?.trim() || undefined,
+    stripePortalConfigSeats: env.STRIPE_PORTAL_CONFIG_SEATS?.trim() || undefined,
     emailFrom: env.EMAIL_FROM?.trim() || "hello@coop-ai.dev",
     resendApiKey: env.RESEND_API_KEY?.trim() || undefined,
     emailMock: readBoolean(env.COOP_EMAIL_MOCK, !env.RESEND_API_KEY)

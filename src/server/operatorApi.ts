@@ -942,7 +942,8 @@ async function handleSeatChangeLink(
     return true;
   }
 
-  const stripe = deps.stripeService ?? new StripeService(loadBillingConfig());
+  const billingConfig = loadBillingConfig();
+  const stripe = deps.stripeService ?? new StripeService(billingConfig);
   if (!stripe.isConfigured()) {
     writeJson(response, 503, { error: "billing_unavailable", message: "Stripe is not configured on this server." });
     return true;
@@ -972,7 +973,10 @@ async function handleSeatChangeLink(
     portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
       subscriptionId: subscription.id,
       subscriptionItemId: subscription.itemId,
-      quantity: seats
+      quantity: seats,
+      // Use the seats portal configuration (quantity edits enabled) when set so
+      // confirm links keep working even if the default portal disables them.
+      configurationId: billingConfig.stripePortalConfigSeats
     });
   } catch (error) {
     const raw = error instanceof Error ? error.message : "";

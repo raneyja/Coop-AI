@@ -887,6 +887,20 @@ export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {
   return coopFetch<{ url: string }>("/v1/admin/billing/portal-session", { method: "POST" });
 }
 
+/**
+ * Increase-only seat management. Returns a Stripe confirm link for `seats` (which
+ * must be strictly greater than the current seat count). Coop seats update only
+ * after the customer confirms in Stripe (via webhook). Decreases are not allowed.
+ */
+export async function createSeatIncreaseSession(
+  seats: number
+): Promise<ApiResult<{ url: string; currentSeats: number; requestedSeats: number }>> {
+  return coopFetch<{ url: string; currentSeats: number; requestedSeats: number }>(
+    "/v1/admin/billing/seat-increase",
+    { method: "POST", body: JSON.stringify({ seats }) }
+  );
+}
+
 export async function createUpgradeCheckoutSession(
   opts?: { email?: string; seats?: number }
 ): Promise<ApiResult<{ sessionId: string; url: string }>> {

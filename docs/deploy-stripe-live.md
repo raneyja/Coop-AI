@@ -92,7 +92,8 @@ Use a **real card** or Stripe’s live test flow only if your account allows it.
 3. Redirect to `/welcome?session_id=cs_live_…`
 4. **Email** — welcome with `coop_…` admin key (check spam)
 5. **Browser** → [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) → paste key
-6. **Billing** → **Manage subscription** → Stripe customer portal opens
+6. **Billing** → **Payment methods & invoices** → Stripe customer portal opens
+7. **Billing** → **Add seats** (Pro orgs) → enter a higher total → Stripe confirm page opens
 
 ### 3.1 Stripe webhook verification
 
@@ -100,6 +101,32 @@ Use a **real card** or Stripe’s live test flow only if your account allows it.
 2. **Recent deliveries** → latest `checkout.session.completed` → **200**
 
 **Success looks like:** HTTP 200; org created; email received within ~1 minute.
+
+---
+
+## Part 3b — Increase-only seats & portal configurations (recommended)
+
+Coop's model: **org admins can ADD seats (self-serve, paid via Stripe) but cannot REDUCE seats.** Decreases require Coop ops/support.
+
+- **Add seats** (`POST /v1/admin/billing/seat-increase`) creates a Stripe `subscription_update_confirm` deep link for the new (strictly greater) quantity. Coop's seat count updates only after the `customer.subscription.updated` webhook fires.
+- **Payment methods & invoices** (`POST /v1/admin/billing/portal-session`) opens the generic Customer Portal for cards / invoices / cancellation.
+
+### Why two portal configurations
+
+The `subscription_update_confirm` confirm flow **requires** a portal configuration where **"Update quantities"** is enabled. But if that same configuration backs the generic "Payment methods & invoices" session, a motivated admin can open it and free-form **decrease** their quantity — which we don't allow.
+
+To close that gap, create **two** [Customer Portal configurations](https://dashboard.stripe.com/settings/billing/portal) (or via the `billing_portal/configurations` API) and set their IDs in Railway Variables:
+
+| Variable | Configuration | Subscription "Update quantities" |
+|----------|---------------|----------------------------------|
+| `STRIPE_PORTAL_CONFIG_MANAGE` | Payment methods, invoices, cancel | **OFF** (blocks self-serve decreases) |
+| `STRIPE_PORTAL_CONFIG_SEATS` | Used only for seat-increase / ops seat-change confirm links | **ON** (required for confirm flow) |
+
+Both `bpc_…` IDs come from the configuration URL / API response. Set both in the API service Variables and redeploy.
+
+**Fallback (if either var is unset):** sessions use the Stripe **account default** portal configuration. In that case keep the default config's **"Update quantities" ON** (confirm links need it) and accept the residual risk that the generic portal also allows decreases until you split the configs. Seat *increases* still work via the dedicated endpoint regardless.
+
+**Success looks like:** with both vars set, "Add seats" opens a confirm page for the new quantity, while "Payment methods & invoices" shows no quantity editor.
 
 ---
 

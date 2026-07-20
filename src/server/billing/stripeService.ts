@@ -81,11 +81,16 @@ export class StripeService {
       subscriptionId?: string;
       subscriptionItemId?: string;
       quantity?: number;
+      /** Stripe portal configuration id (bpc_...). Selects which portal experience to serve. */
+      configurationId?: string;
     }
   ): Promise<StripePortal> {
     const params = new URLSearchParams();
     params.set("customer", customerId);
     params.set("return_url", this.config.billingPortalReturnUrl);
+    if (options?.configurationId) {
+      params.set("configuration", options.configurationId);
+    }
     if (
       options?.subscriptionId &&
       options.subscriptionItemId &&

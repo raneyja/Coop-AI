@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getStoredMe, displayOrgName } from "@/lib/auth";
-import { createUpgradeCheckoutSession, fetchBilling, openBillingPortal } from "@/lib/coopApi";
+import {
+  createSeatIncreaseSession,
+  createUpgradeCheckoutSession,
+  fetchBilling,
+  openBillingPortal
+} from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 import { EnterpriseUpgradeRequestForm } from "@/components/EnterpriseUpgradeRequestForm";
 
@@ -15,6 +20,8 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState(false);
   const [enterpriseFormOpen, setEnterpriseFormOpen] = useState(false);
+  const [seatInput, setSeatInput] = useState("");
+  const [addingSeats, setAddingSeats] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,6 +36,12 @@ export default function BillingPage() {
       setUpgraded(new URLSearchParams(window.location.search).get("upgraded") === "1");
     }
   }, [load]);
+
+  useEffect(() => {
+    if (billing?.seats != null) {
+      setSeatInput(String(Math.max(1, Math.floor(billing.seats)) + 1));
+    }
+  }, [billing?.seats]);
 
   async function handlePortal() {
     setOpening(true);
@@ -54,10 +67,28 @@ export default function BillingPage() {
     window.location.href = result.data.url;
   }
 
+  async function handleAddSeats() {
+    setError(null);
+    const requested = Math.floor(Number(seatInput));
+    if (!Number.isFinite(requested) || requested <= currentSeats) {
+      setError(`Enter a total seat count greater than your current ${currentSeats}. To reduce seats, contact Coop support.`);
+      return;
+    }
+    setAddingSeats(true);
+    const result = await createSeatIncreaseSession(requested);
+    setAddingSeats(false);
+    if (!result.ok || !result.data?.url) {
+      setError(result.error ?? "Could not start seat increase.");
+      return;
+    }
+    window.location.href = result.data.url;
+  }
+
   const plan = billing?.plan ?? me?.plan ?? "free";
   const isFree = plan === "free";
   const isPro = plan === "pro";
   const isEnterprise = plan === "enterprise";
+  const currentSeats = Math.max(1, Math.floor(billing?.seats ?? 1));
 
   return (
     <div className="space-y-6">
@@ -103,9 +134,50 @@ export default function BillingPage() {
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         {isEnterprise ? null : billing?.hasStripeCustomer ? (
-          <div className="space-y-3">
-            <button type="button" className="admin-btn-primary" onClick={() => void handlePortal()} disabled={opening}>
-              {opening ? "Opening…" : "Manage subscription"}
+          <div className="space-y-4">
+            {isPro ? (
+              <div className="admin-panel-inset space-y-3">
+                <div>
+                  <p className="admin-section-label">Add seats</p>
+                  <p className="mt-1 text-sm text-coop-muted">
+                    You currently have {currentSeats} seat{currentSeats === 1 ? "" : "s"}. Enter the new total —
+                    you&apos;ll confirm and pay the prorated amount in Stripe.
+                  </p>
+                </div>
+                <div className="flex items-end gap-3">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-coop-muted">New total seats</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={currentSeats + 1}
+                      step={1}
+                      className="admin-input max-w-[120px]"
+                      value={seatInput}
+                      onChange={(event) => setSeatInput(event.target.value)}
+                      disabled={addingSeats}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="admin-btn-primary"
+                    onClick={() => void handleAddSeats()}
+                    disabled={addingSeats}
+                  >
+                    {addingSeats ? "Opening…" : "Add seats"}
+                  </button>
+                </div>
+                <p className="text-xs text-coop-muted">
+                  To reduce seats, contact Coop support at{" "}
+                  <a href="mailto:support@coop-ai.dev" className="admin-link">
+                    support@coop-ai.dev
+                  </a>
+                  .
+                </p>
+              </div>
+            ) : null}
+            <button type="button" className="admin-btn-secondary" onClick={() => void handlePortal()} disabled={opening}>
+              {opening ? "Opening…" : "Payment methods & invoices"}
             </button>
             {isPro ? (
               <button

@@ -7,7 +7,7 @@ import { type AuditLogger } from "../audit/auditLogger";
 import { requireAuth, requireOrgAdmin, resolveAuthContext, resolveOrgPlanFromDb } from "../authMiddleware";
 import { clampSeatCountForPlan } from "../planGates";
 import type { ServerConfig } from "../serverConfig";
-import { loadBillingConfig } from "./billingConfig";
+import { loadBillingConfig, type BillingConfig } from "./billingConfig";
 import { adminPortalLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
@@ -84,7 +84,11 @@ export async function handleBillingApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/admin/billing/portal-session") {
-    return handleBillingPortal(parsed, response, deps, stripe);
+    return handleBillingPortal(parsed, response, deps, stripe, billingConfig);
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/admin/billing/seat-increase") {
+    return handleSeatIncrease(parsed, response, deps, stripe, billingConfig);
   }
 
   return false;
@@ -293,7 +297,8 @@ async function handleBillingPortal(
   parsed: ParsedRequest,
   response: ServerResponse,
   deps: BillingApiDeps,
-  stripe: StripeService
+  stripe: StripeService,
+  billingConfig: BillingConfig
 ): Promise<boolean> {
   const auth = await resolveAuthContext(
     parsed.headers,
@@ -319,7 +324,15 @@ async function handleBillingPortal(
   }
 
   try {
-    const portal = await stripe.createBillingPortalSession(billing.stripeCustomerId);
+    // Generic "manage payment methods & invoices" portal. When a manage
+    // configuration is set it disables subscription quantity edits so customers
+    // cannot self-serve seat DECREASES here (increases go through seat-increase).
+    // Without it, we fall back to the account default portal (residual risk:
+    // the default portal may allow quantity edits — keep that config's
+    // "Update quantities" on ONLY if you also rely on default for confirm flows).
+    const portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
+      configurationId: billingConfig.stripePortalConfigManage
+    });
     writeJson(response, 200, { url: portal.url });
   } catch (error) {
     writeJson(response, 502, {
@@ -327,6 +340,126 @@ async function handleBillingPortal(
       message: error instanceof Error ? error.message : "Portal session failed"
     });
   }
+  return true;
+}
+
+/**
+ * Increase-only seat management for org admins.
+ *
+ * Org admins may ADD seats (paid via Stripe) but never reduce them self-serve.
+ * We create a `subscription_update_confirm` Billing Portal deep link for the
+ * requested (strictly greater) quantity. Coop's own seatCount is NOT mutated
+ * here — it updates when Stripe fires customer.subscription.updated (see
+ * handleSubscriptionChange). Seat DECREASES require Coop ops/support.
+ */
+async function handleSeatIncrease(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: BillingApiDeps,
+  stripe: StripeService,
+  billingConfig: BillingConfig
+): Promise<boolean> {
+  const auth = await resolveAuthContext(
+    parsed.headers,
+    deps.orgStore,
+    deps.serverConfig.legacyApiToken,
+    deps.serverConfig.requireApiAuth,
+    deps.userStore
+  );
+  if (!requireAuth(auth, deps.serverConfig.requireApiAuth) || !auth) {
+    writeJson(response, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (!requireOrgAdmin(auth, response)) return true;
+  if (!deps.orgStore || !stripe.isConfigured()) {
+    writeJson(response, 503, { error: "billing_unavailable" });
+    return true;
+  }
+
+  const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
+  if (!billing?.stripeCustomerId || !billing.stripeSubscriptionId) {
+    writeJson(response, 400, {
+      error: "no_stripe_subscription",
+      message: "This organization has no Stripe subscription. Contact Coop support to change seats."
+    });
+    return true;
+  }
+
+  const currentSeats = Math.max(1, Math.floor(Number(billing.seatCount ?? 1) || 1));
+  const rawSeats = asRecord(parsed.body).seats;
+  const requestedSeats = Math.floor(Number(rawSeats));
+  if (!Number.isFinite(requestedSeats) || requestedSeats < 1) {
+    writeJson(response, 400, {
+      error: "invalid_seats",
+      message: "seats must be a positive integer."
+    });
+    return true;
+  }
+  if (requestedSeats <= currentSeats) {
+    writeJson(response, 400, {
+      error: "seats_not_increased",
+      message: `Requested seats (${requestedSeats}) must be greater than your current ${currentSeats}. To reduce seats, contact Coop support.`
+    });
+    return true;
+  }
+
+  let subscription;
+  try {
+    subscription = await stripe.retrieveSubscription(billing.stripeSubscriptionId);
+  } catch (error) {
+    writeJson(response, 502, {
+      error: "stripe_error",
+      message: error instanceof Error ? error.message : "Could not load Stripe subscription."
+    });
+    return true;
+  }
+
+  if (!subscription.itemId) {
+    writeJson(response, 502, {
+      error: "stripe_item_missing",
+      message: "Stripe subscription has no line item to update."
+    });
+    return true;
+  }
+
+  let portal;
+  try {
+    portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
+      subscriptionId: subscription.id,
+      subscriptionItemId: subscription.itemId,
+      quantity: requestedSeats,
+      // Prefer the seats configuration (quantity edits enabled) so the confirm
+      // flow works even when the account default portal disables them.
+      configurationId: billingConfig.stripePortalConfigSeats
+    });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : "";
+    const portalUpdateDisabled = /subscription update feature in the portal configuration is disabled/i.test(raw);
+    writeJson(response, 502, {
+      error: portalUpdateDisabled ? "stripe_portal_subscription_update_disabled" : "stripe_error",
+      message: portalUpdateDisabled
+        ? "Stripe Customer Portal has subscription updates disabled. Ask Coop to enable quantity updates on the seats portal configuration, then retry."
+        : raw || "Could not create Stripe seat-increase link."
+    });
+    return true;
+  }
+
+  await deps.auditLogger?.record({
+    orgId: auth.orgId,
+    action: "billing.seat_increase.link_created",
+    principal: auth.userId ? `user:${auth.userId}` : `apikey:${auth.apiKeyId}`,
+    metadata: {
+      fromSeats: currentSeats,
+      toSeats: requestedSeats,
+      stripeSubscriptionId: subscription.id
+    }
+  });
+
+  writeJson(response, 200, {
+    url: portal.url,
+    currentSeats,
+    requestedSeats
+  });
   return true;
 }
 
