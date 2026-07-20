@@ -31,10 +31,15 @@ export async function checkOrgNotSuspended(
   return !(await orgStore.isOrgSuspended(orgId));
 }
 
-export function writeOrgSuspended(response: ServerResponse): void {
+export function writeOrgSuspended(
+  response: ServerResponse,
+  org?: Pick<AuthContext, "orgId" | "orgName">
+): void {
   writeJson(response, 403, {
     error: "org_suspended",
-    message: "This organization has been suspended."
+    message: "This organization has been suspended.",
+    ...(org?.orgId ? { orgId: org.orgId } : {}),
+    ...(org?.orgName ? { orgName: org.orgName } : {})
   });
 }
 
@@ -56,7 +61,8 @@ export async function resolveAuthContextDetailed(
     return {};
   }
   if (!(await checkOrgNotSuspended(orgStore, auth.orgId))) {
-    return { orgSuspended: true };
+    // Keep auth so callers can include org identity in the 403 body.
+    return { auth, orgSuspended: true };
   }
   return { auth };
 }

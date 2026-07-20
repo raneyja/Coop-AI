@@ -164,7 +164,7 @@ export async function handleOrgApiRequest(
     deps.userStore
   );
   if (orgSuspended) {
-    writeOrgSuspended(response);
+    writeOrgSuspended(response, auth);
     return true;
   }
   if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) {

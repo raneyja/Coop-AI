@@ -8,6 +8,7 @@ import {
   fetchIntegrations,
   fetchQuota,
   fetchUsers,
+  isOrgSuspendedResult,
   type QuotaSnapshot
 } from "@/lib/coopApi";
 import { INTEGRATIONS } from "@/lib/integrations";
@@ -55,7 +56,10 @@ export function AdminDashboard() {
       }
     }
     if (!integrationsResult.ok) {
-      setError(integrationsResult.error ?? "Failed to load integrations.");
+      // Portal-wide OrgSuspendedOverlay handles org_suspended; skip inline red text.
+      if (!isOrgSuspendedResult(integrationsResult)) {
+        setError(integrationsResult.error ?? "Failed to load integrations.");
+      }
     } else {
       setIntegrations(integrationsResult.data ?? []);
     }

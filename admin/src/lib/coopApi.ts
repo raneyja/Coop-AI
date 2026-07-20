@@ -10,6 +10,7 @@ import type {
 } from "./integrations";
 import type { StoredMe } from "./auth";
 import { restoreSessionFromCookie } from "./auth";
+import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
 
 export type ApiError = {
   error?: string;
@@ -21,8 +22,31 @@ export type ApiResult<T> = {
   status: number;
   data?: T;
   error?: string;
+  /** Backend `error` field when present (e.g. `org_suspended`). */
+  errorCode?: string;
   unavailable?: boolean;
 };
+
+/** Fired on `window` when any Coop API call reports the org is suspended. */
+export const ORG_SUSPENDED_EVENT = "coop:org-suspended";
+
+export const ORG_SUSPENDED_SALES_EMAIL = "sales@coop-ai.dev";
+
+export function isOrgSuspendedError(status: number, errorCode?: string, message?: string): boolean {
+  if (errorCode === "org_suspended") return true;
+  if (status !== 403) return false;
+  return /org_suspended|organization has been suspended/i.test(message ?? "");
+}
+
+export function isOrgSuspendedResult(result: Pick<ApiResult<unknown>, "ok" | "status" | "error" | "errorCode">): boolean {
+  return !result.ok && isOrgSuspendedError(result.status, result.errorCode, result.error);
+}
+
+function notifyOrgSuspended(): void {
+  markOrgSuspended();
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ORG_SUSPENDED_EVENT));
+}
 
 export type MeResponse = StoredMe & {
   canUseLightning?: boolean;
@@ -208,10 +232,16 @@ export async function coopFetch<T>(
     }
 
     if (!response.ok) {
+      const errorCode = typeof body?.error === "string" ? body.error : undefined;
+      const error = formatError(response.status, body, `Request failed (${response.status}).`);
+      if (isOrgSuspendedError(response.status, errorCode, error)) {
+        notifyOrgSuspended();
+      }
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, `Request failed (${response.status}).`),
+        error,
+        errorCode,
         unavailable: response.status === 404 || response.status === 503
       };
     }
@@ -235,10 +265,16 @@ export async function validateSession(token: string): Promise<ApiResult<MeRespon
     });
     const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {
+      const errorCode = typeof body.error === "string" ? body.error : undefined;
+      const error = formatError(response.status, body, "Sign-in validation failed.");
+      if (isOrgSuspendedError(response.status, errorCode, error)) {
+        notifyOrgSuspended();
+      }
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, "Sign-in validation failed.")
+        error,
+        errorCode
       };
     }
     return { ok: true, status: response.status, data: body };
@@ -263,10 +299,16 @@ export async function loginWithPassword(
     });
     const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
     if (!response.ok) {
+      const errorCode = typeof body.error === "string" ? body.error : undefined;
+      const error = formatError(response.status, body, "Sign-in failed.");
+      if (isOrgSuspendedError(response.status, errorCode, error)) {
+        notifyOrgSuspended();
+      }
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body, "Sign-in failed.")
+        error,
+        errorCode
       };
     }
     return { ok: true, status: response.status, data: body };
@@ -490,10 +532,16 @@ export async function fetchIntegrations(options?: {
     });
 
     if (!response.ok) {
+      const errorCode = typeof body.error === "string" ? body.error : undefined;
+      const error = formatError(response.status, body as ApiError, `Request failed (${response.status}).`);
+      if (isOrgSuspendedError(response.status, errorCode, error)) {
+        notifyOrgSuspended();
+      }
       return {
         ok: false,
         status: response.status,
-        error: formatError(response.status, body as ApiError, `Request failed (${response.status}).`)
+        error,
+        errorCode
       };
     }
 

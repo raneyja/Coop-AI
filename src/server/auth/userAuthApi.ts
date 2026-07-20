@@ -212,6 +212,17 @@ async function handleLogin(
     return true;
   }
 
+  if (deps.orgStore && (await deps.orgStore.isOrgSuspended(user.orgId))) {
+    const org = await deps.orgStore.getOrganization(user.orgId);
+    writeJson(response, 403, {
+      error: "org_suspended",
+      message: "This organization has been suspended.",
+      orgId: user.orgId,
+      ...(org?.name ? { orgName: org.name } : {})
+    });
+    return true;
+  }
+
   const session = await issueSession(deps, user.id, user.orgId, "password");
   const org = await deps.orgStore!.getOrganization(user.orgId);
   await audit(deps, user.id, user.orgId, "auth.login", { method: "password" });
@@ -793,7 +804,7 @@ async function resolveGoogleUser(
   }
 ): Promise<
   | { ok: true; accessToken: string; refreshToken: string }
-  | { ok: false; status: number; error: string; message: string }
+  | { ok: false; status: number; error: string; message: string; orgId?: string; orgName?: string }
 > {
   if (state.mode === "invite") {
     return resolveGoogleInviteAcceptance(deps, profile, state);
@@ -842,6 +853,18 @@ async function resolveGoogleUser(
       await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
     }
     await audit(deps, user.id, user.orgId, "auth.login", { method: "google" });
+  }
+
+  if (deps.orgStore && (await deps.orgStore.isOrgSuspended(user!.orgId))) {
+    const org = await deps.orgStore.getOrganization(user!.orgId);
+    return {
+      ok: false,
+      status: 403,
+      error: "org_suspended",
+      message: "This organization has been suspended.",
+      orgId: user!.orgId,
+      orgName: org?.name
+    };
   }
 
   const session = await issueSession(deps, user!.id, user!.orgId, "google");

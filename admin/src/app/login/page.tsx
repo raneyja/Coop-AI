@@ -12,8 +12,16 @@ import {
   saveSession,
   signOutRemote
 } from "@/lib/auth";
-import { loginWithPassword, ssoStartUrl, startGoogleAuthUrl, validateSession } from "@/lib/coopApi";
+import {
+  isOrgSuspendedError,
+  isOrgSuspendedResult,
+  loginWithPassword,
+  ssoStartUrl,
+  startGoogleAuthUrl,
+  validateSession
+} from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
+import { OrgSuspendedOverlay } from "@/components/OrgSuspendedOverlay";
 
 function readLoginQuery(): { forceSignedOut: boolean; email: string; oauthError: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -40,6 +48,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [orgName, setOrgName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [orgSuspended, setOrgSuspended] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -53,7 +62,11 @@ export default function LoginPage() {
     async function bootstrap() {
       const { forceSignedOut, email: emailParam, oauthError } = readLoginQuery();
       if (oauthError) {
-        setError(oauthError);
+        if (isOrgSuspendedError(403, undefined, oauthError) || /org_suspended/i.test(oauthError)) {
+          setOrgSuspended(true);
+        } else {
+          setError(oauthError);
+        }
       }
       if (emailParam) {
         setEmail(emailParam);
@@ -78,6 +91,12 @@ export default function LoginPage() {
         }
         if (result.ok && result.data) {
           router.replace(defaultHomePath(result.data));
+          return;
+        }
+        if (isOrgSuspendedResult(result)) {
+          clearSession();
+          setOrgSuspended(true);
+          setReady(true);
           return;
         }
         clearSession();
@@ -127,6 +146,15 @@ export default function LoginPage() {
     setLoading(false);
 
     if (!result.ok || !result.data) {
+      const suspended =
+        isOrgSuspendedResult(result) ||
+        isOrgSuspendedError(result.status, result.errorCode, result.error) ||
+        /organization has been suspended/i.test(result.error ?? "");
+      if (suspended) {
+        setOrgSuspended(true);
+        setError(null);
+        return;
+      }
       setError(result.error ?? "Sign-in failed.");
       return;
     }
@@ -266,6 +294,12 @@ export default function LoginPage() {
           Session stored in this browser only.
         </p>
       </div>
+
+      <OrgSuspendedOverlay
+        open={orgSuspended}
+        variant="sign-in"
+        onDismiss={() => setOrgSuspended(false)}
+      />
     </div>
   );
 }

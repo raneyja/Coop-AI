@@ -9,11 +9,16 @@ import {
   isMemberAllowedPath,
   defaultHomePath,
   isMemberRole,
-  restoreSessionFromCookie
+  restoreSessionFromCookie,
+  updateStoredMe,
+  meFromAuthPayload
 } from "@/lib/auth";
+import { fetchMe, isOrgSuspendedResult } from "@/lib/coopApi";
+import { isOrgMarkedSuspended, subscribeOrgSuspended, clearOrgSuspended } from "@/lib/orgSuspendedState";
 import { IndexingProgressBar } from "./IndexingProgressBar";
 import { OnboardingProvider } from "./OnboardingProvider";
 import { MemberOnboardingProvider } from "./MemberOnboardingProvider";
+import { OrgSuspendedOverlay } from "./OrgSuspendedOverlay";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -25,6 +30,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [orgSuspended, setOrgSuspended] = useState(() => isOrgMarkedSuspended());
   const me = getStoredMe();
   const showGlobalIndexingProgress = Boolean(
     pathname && !pathname.startsWith("/indexing") && me && isAdminRole(me)
@@ -53,6 +59,27 @@ export function AdminShell({ children }: AdminShellProps) {
     void guard();
   }, [router, pathname]);
 
+  useEffect(() => {
+    return subscribeOrgSuspended(setOrgSuspended);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+
+    void fetchMe().then((result) => {
+      if (isOrgSuspendedResult(result)) {
+        setOrgSuspended(true);
+        return;
+      }
+      if (result.ok && result.data) {
+        clearOrgSuspended();
+        setOrgSuspended(false);
+        // Keep stored me in sync with the token's org (avoids stale name from another tab).
+        updateStoredMe(meFromAuthPayload(result.data as Record<string, unknown>));
+      }
+    });
+  }, [ready]);
+
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-coop-dark text-coop-muted">
@@ -74,6 +101,7 @@ export function AdminShell({ children }: AdminShellProps) {
             </main>
           </div>
         </div>
+        <OrgSuspendedOverlay open={orgSuspended} />
       </MemberOnboardingProvider>
     </OnboardingProvider>
   );

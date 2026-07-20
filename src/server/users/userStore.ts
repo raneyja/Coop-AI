@@ -322,6 +322,12 @@ export class UserStore {
     return result.rowCount ?? 0;
   }
 
+  /** Revoke every interactive session for an org (e.g. on suspend). */
+  public async revokeOrgSessions(orgId: string): Promise<number> {
+    const result = await this.pool.query(`DELETE FROM user_sessions WHERE org_id = $1`, [orgId]);
+    return result.rowCount ?? 0;
+  }
+
   public async deleteExpiredSessions(): Promise<number> {
     const result = await this.pool.query(`DELETE FROM user_sessions WHERE expires_at <= NOW()`);
     return result.rowCount ?? 0;

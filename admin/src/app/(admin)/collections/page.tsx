@@ -8,6 +8,7 @@ import {
   fetchCollections,
   fetchOrg,
   fetchOrgRepos,
+  isOrgSuspendedResult,
   removeRepoFromCollection,
   type AdminCollection,
   type OrgRepoRecord
@@ -70,11 +71,15 @@ export default function CollectionsPage() {
 
     setUnavailable(false);
     if (!collectionsResult.ok) {
-      setError(collectionsResult.error ?? "Failed to load collections.");
+      if (!isOrgSuspendedResult(collectionsResult)) {
+        setError(collectionsResult.error ?? "Failed to load collections.");
+      }
       return;
     }
     if (!reposResult.ok) {
-      setError(reposResult.error ?? "Failed to load repositories.");
+      if (!isOrgSuspendedResult(reposResult)) {
+        setError(reposResult.error ?? "Failed to load repositories.");
+      }
       return;
     }
 

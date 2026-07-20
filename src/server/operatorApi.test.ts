@@ -341,13 +341,14 @@ void (async () => {
     undefined,
     true
   );
-  assert.equal(suspendedResult.auth, undefined);
   assert.equal(suspendedResult.orgSuspended, true);
+  assert.equal(suspendedResult.auth?.orgId, "org-suspended");
 
   const suspendedRes = mockResponse();
-  writeOrgSuspended(suspendedRes);
+  writeOrgSuspended(suspendedRes, { orgId: "org-suspended", orgName: "Suspended Org" });
   assert.equal(suspendedRes.statusCode, 403);
   assert.match(suspendedRes.body ?? "", /org_suspended/);
+  assert.match(suspendedRes.body ?? "", /Suspended Org/);
 
   console.log("operatorApi.test.ts: ok");
 })();

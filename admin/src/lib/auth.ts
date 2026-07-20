@@ -1,3 +1,5 @@
+import { clearOrgSuspended } from "./orgSuspendedState";
+
 const TOKEN_KEY = "coop_admin_api_token";
 const REFRESH_TOKEN_KEY = "coop_admin_refresh_token";
 const ORG_NAME_KEY = "coop_admin_org_name";
@@ -65,6 +67,13 @@ export function saveSession(
   } else {
     sessionStorage.removeItem(ORG_NAME_KEY);
   }
+  // Successful sign-in for this org — clear any prior suspended-org latch.
+  clearOrgSuspended();
+}
+
+/** Update cached /v1/me profile without touching tokens. */
+export function updateStoredMe(me: StoredMe): void {
+  sessionStorage.setItem(ME_KEY, JSON.stringify(me));
 }
 
 export function clearSession(): void {
@@ -72,12 +81,17 @@ export function clearSession(): void {
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(ME_KEY);
   sessionStorage.removeItem(ORG_NAME_KEY);
+  clearOrgSuspended();
 }
 
 export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
   try {
     const response = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
     if (!response.ok) {
+      // Suspended/expired cookie must not leave a stale sessionStorage me around.
+      if (response.status === 401 || response.status === 403) {
+        clearSession();
+      }
       return null;
     }
     const data = (await response.json()) as StoredMe & {

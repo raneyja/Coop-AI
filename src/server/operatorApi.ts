@@ -588,8 +588,14 @@ async function handleSuspendOrg(
   }
 
   await deps.orgStore!.suspendOrganization(orgId, reason);
-  await operatorAudit(deps, operator, "operator.org.suspend", orgId, { reason });
-  writeJson(response, 200, { ok: true, orgId, operatorStatus: "suspended" });
+  const revokedSessions = deps.userStore
+    ? await deps.userStore.revokeOrgSessions(orgId)
+    : 0;
+  await operatorAudit(deps, operator, "operator.org.suspend", orgId, {
+    reason,
+    revokedSessions
+  });
+  writeJson(response, 200, { ok: true, orgId, operatorStatus: "suspended", revokedSessions });
   return true;
 }
 

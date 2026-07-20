@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import { fetchIntegrations, fetchMeWorkspaceRepos, type WorkspaceRepo } from "@/lib/coopApi";
+import {
+  fetchIntegrations,
+  fetchMeWorkspaceRepos,
+  isOrgSuspendedResult,
+  type WorkspaceRepo
+} from "@/lib/coopApi";
 import { displayName } from "@/lib/timezones";
 import { INTEGRATIONS } from "@/lib/integrations";
 import type { IntegrationStatus } from "@/lib/integrations";
@@ -35,7 +40,7 @@ export function MemberDashboard() {
     if (reposResult.ok && reposResult.data) {
       setRepos(reposResult.data.repos ?? []);
       setAdminControlled(Boolean(reposResult.data.adminControlled));
-    } else if (!reposResult.ok) {
+    } else if (!reposResult.ok && !isOrgSuspendedResult(reposResult)) {
       setError(reposResult.error ?? "Failed to load your repositories.");
     }
 

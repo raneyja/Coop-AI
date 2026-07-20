@@ -8,11 +8,13 @@ import {
   meFromAuthPayload,
   saveSession
 } from "@/lib/auth";
-import { validateSession } from "@/lib/coopApi";
+import { isOrgSuspendedResult, validateSession } from "@/lib/coopApi";
+import { OrgSuspendedOverlay } from "@/components/OrgSuspendedOverlay";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [orgSuspended, setOrgSuspended] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, "");
@@ -30,6 +32,10 @@ export default function AuthCallbackPage() {
     void (async () => {
       const result = await validateSession(token);
       if (!result.ok || !result.data) {
+        if (isOrgSuspendedResult(result)) {
+          setOrgSuspended(true);
+          return;
+        }
         setError(result.error ?? "Sign-in failed.");
         return;
       }
@@ -49,9 +55,14 @@ export default function AuthCallbackPage() {
             Back to sign in
           </a>
         </div>
-      ) : (
+      ) : orgSuspended ? null : (
         <p className="text-coop-muted">Completing sign-in…</p>
       )}
+      <OrgSuspendedOverlay
+        open={orgSuspended}
+        variant="sign-in"
+        onDismiss={() => router.replace("/login")}
+      />
     </div>
   );
 }
