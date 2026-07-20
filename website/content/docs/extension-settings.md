@@ -114,7 +114,7 @@ Profile and chat defaults — moved out of Account:
 The Preferences hub subtitle shows **Assigned models** plus chat and autocomplete status.
 
 <!-- figures -->
-![Model & chat — Enable inline autocomplete on or off](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+![Model & chat — Enable inline autocomplete on or off](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
 ## Model & chat

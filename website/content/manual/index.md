@@ -342,14 +342,10 @@ Click **Save model settings** after changing toggles.
 
 Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick switch while you code. For a persistent preference, use **Settings → Preferences → Model & chat** → **Enable inline autocomplete**. The header toggle and this checkbox stay in sync. Preferences persist at **global scope** — workspace `.vscode/settings.json` cannot silently override your choice.
 
-<!-- figures -->
-![Autocomplete toggle in the Coop sidebar header — On / Off](/screenshots/docs/extension-autocomplete-toggle.png)
-<!-- /figures -->
-
 **Settings path:** Open **CoopAI Settings** → **Preferences** → **Model & chat** → check or uncheck **Enable inline autocomplete** → **Save model settings**. The header toggle and this checkbox stay in sync.
 
 <!-- figures -->
-![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
 <!-- figures -->

@@ -88,11 +88,7 @@ CoopAI shows ghost-text code completions **by default** as you type.
 The sidebar header shows **Autocomplete On** for most installs. To turn it off: click **Autocomplete** in the header, or open **CoopAI Settings** → **Preferences** → **Model & chat** and uncheck **Enable inline autocomplete** → **Save model settings**.
 
 <!-- figures -->
-![Autocomplete toggle in the Coop sidebar header](/screenshots/docs/extension-autocomplete-toggle.png)
-<!-- /figures -->
-
-<!-- figures -->
-![Model & chat — Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-off.png)
+![Model & chat — Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
 <!-- figures -->
