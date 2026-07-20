@@ -54,8 +54,9 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
       if (data.adminPortalLoginUrl) {
         setAdminPortalLoginUrl(data.adminPortalLoginUrl);
       }
-      if (data.orgName) {
-        setOrgName(data.orgName);
+      const nextOrgName = data.orgName?.trim();
+      if (nextOrgName) {
+        setOrgName(nextOrgName);
       }
 
       if (!response.ok || data.status === "invalid") {
@@ -89,71 +90,80 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
 
   return (
     <section className="mx-auto max-w-lg px-6 pb-24">
-      <div className="coop-panel space-y-6 p-8">
-        {state === "invalid" && (
-          <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-red-200">
-            We couldn&apos;t verify this checkout link. If you just paid, check your email for the
-            admin portal link or{" "}
-            <Link href="/demo" className="text-coop-index hover:text-white">
-              contact support
-            </Link>
-            .
-          </p>
-        )}
+      <div className="coop-panel space-y-8 p-6 md:p-8">
+        {state === "invalid" ? (
+          <div className="border-l-2 border-l-red-500 pl-4">
+            <p className="text-sm font-medium text-gray-900">We couldn&apos;t verify this checkout</p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              If you just paid, check your email for the admin portal link or{" "}
+              <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
+                contact support
+              </Link>
+              .
+            </p>
+          </div>
+        ) : null}
 
-        {showProvisioning && (
-          <p className="rounded-sm border border-coop-border/80 bg-coop-surface/50 px-4 py-3 text-sm leading-relaxed text-coop-muted">
-            {state === "verifying"
-              ? "Confirming your payment…"
-              : "Your organization is being set up. This usually takes less than a minute."}
-            {orgName ? (
-              <>
-                {" "}
-                <span className="text-white/90">{orgName}</span> will be ready shortly.
-              </>
-            ) : null}
-          </p>
-        )}
+        {showProvisioning ? (
+          <div className="border-l-2 border-l-coop-index pl-4">
+            <p className="text-sm font-medium text-gray-900">
+              {state === "verifying" ? "Confirming your payment…" : "Setting up your organization…"}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              {orgName
+                ? `${orgName} will be ready shortly — usually under a minute.`
+                : "This usually takes less than a minute."}
+            </p>
+          </div>
+        ) : null}
 
-        {state === "ready" && orgName && (
-          <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-4 py-3 text-sm text-gray-900">
-            <strong>{orgName}</strong> is ready. Sign in with the email and password you used at checkout.
-          </p>
-        )}
+        {state === "ready" ? (
+          <div className="border-l-2 border-l-coop-index pl-4">
+            <p className="text-sm font-medium text-gray-900">
+              {orgName ? `${orgName} is ready` : "Your organization is ready"}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              Sign in with the email and password you used at checkout.
+            </p>
+          </div>
+        ) : null}
 
         <div>
-          <h2 className="text-sm font-medium text-white">Next steps</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Next steps</h2>
           <ol className="mt-4 space-y-3">
             {STEPS.map((step, index) => (
-              <li key={step} className="flex gap-3 text-sm text-coop-muted">
+              <li key={step} className="flex gap-3 text-sm leading-relaxed text-coop-muted">
                 <span
                   aria-hidden
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-coop-border font-mono text-xs text-coop-index"
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-coop-border font-mono text-xs text-coop-index"
                 >
                   {index + 1}
                 </span>
-                <span className="pt-0.5 leading-relaxed">{step}</span>
+                <span>{step}</span>
               </li>
             ))}
           </ol>
         </div>
 
-        <div className="space-y-4 border-t border-coop-border pt-6">
+        <div className="space-y-3 border-t border-coop-border pt-6">
           <Button href={adminPortalLoginUrl} external className="w-full">
             Open admin portal
           </Button>
-          {showProvisioning && (
-            <p className="text-center text-xs text-coop-muted">
+          {showProvisioning ? (
+            <p className="text-center text-xs leading-relaxed text-coop-muted">
               You can open the portal now — sign in once provisioning finishes.
             </p>
-          )}
+          ) : null}
           <p className="text-center text-xs leading-relaxed text-coop-muted">
             Didn&apos;t get the email? Check spam or{" "}
-            <Link href="/demo" className="text-coop-index hover:text-white">
+            <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
               contact support
             </Link>
             .{" "}
-            <Link href="/manual#get-started" className="text-coop-index hover:text-white">
+            <Link
+              href="/manual#get-started"
+              className="font-medium text-gray-900 underline-offset-2 hover:underline"
+            >
               Owner&apos;s Manual
             </Link>
           </p>
