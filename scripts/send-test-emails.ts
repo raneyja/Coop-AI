@@ -2,12 +2,15 @@
 /**
  * Send one copy of every transactional email to a target inbox (preview / QA).
  *
+ * Tokenized CTAs (activate / invite / verify / reset) point at /email-preview on the
+ * marketing site so layout review does not hit "invalid or expired" token pages.
+ *
  * Usage:
  *   npx tsx scripts/send-test-emails.ts jonathanaraney@gmail.com
  */
 
 import { loadBillingConfig } from "../src/server/billing/billingConfig";
-import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "../src/server/billing/adminPortalUrl";
+import { adminPortalFreshLoginUrl } from "../src/server/billing/adminPortalUrl";
 import { EmailService } from "../src/server/email/emailService";
 
 const SAMPLE_ORG = "Acme Engineering";
@@ -28,7 +31,12 @@ async function main(): Promise<void> {
 
   const emailService = new EmailService(config);
   const loginUrl = adminPortalFreshLoginUrl(config.adminPortalUrl, { email: to });
-  const marketingBase = process.env.COOP_MARKETING_BASE_URL?.trim() || "https://coop-ai.dev";
+  const marketingBase = (process.env.COOP_MARKETING_BASE_URL?.trim() || "https://coop-ai.dev").replace(
+    /\/+$/,
+    ""
+  );
+  const previewUrl = (type: "activate" | "invite" | "verify" | "reset") =>
+    `${marketingBase}/email-preview?type=${type}`;
 
   const sends: Array<{ label: string; run: () => Promise<void> }> = [
     {
@@ -41,7 +49,17 @@ async function main(): Promise<void> {
         })
     },
     {
-      label: "Pro signup welcome (new checkout)",
+      label: "Pro signup welcome (new checkout — activate account)",
+      run: () =>
+        emailService.sendWelcome({
+          to,
+          orgName: SAMPLE_ORG,
+          adminPortalUrl: loginUrl,
+          activateAccountUrl: previewUrl("activate")
+        })
+    },
+    {
+      label: "Pro signup welcome (existing account — sign in)",
       run: () =>
         emailService.sendWelcome({
           to,
@@ -64,7 +82,7 @@ async function main(): Promise<void> {
         emailService.sendInvite({
           to,
           orgName: SAMPLE_ORG,
-          acceptInviteUrl: adminPortalAcceptInviteUrl(config.adminPortalUrl, "preview-invite-token"),
+          acceptInviteUrl: previewUrl("invite"),
           invitedBy: SAMPLE_INVITER
         })
     },
@@ -74,7 +92,7 @@ async function main(): Promise<void> {
         emailService.sendEmailVerification({
           to,
           orgName: SAMPLE_ORG,
-          verifyUrl: `${marketingBase}/verify-email?token=preview-verify-token`
+          verifyUrl: previewUrl("verify")
         })
     },
     {
@@ -83,12 +101,13 @@ async function main(): Promise<void> {
         emailService.sendPasswordReset({
           to,
           orgName: SAMPLE_ORG,
-          resetUrl: `${marketingBase}/reset-password?token=preview-reset-token`
+          resetUrl: previewUrl("reset")
         })
     }
   ];
 
   console.log(`Sending ${sends.length} preview emails to ${to} (from ${config.emailFrom})…`);
+  console.log(`Tokenized CTAs → ${marketingBase}/email-preview?type=… (layout only, not live tokens)`);
 
   for (const { label, run } of sends) {
     try {

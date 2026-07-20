@@ -30,6 +30,14 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
     setError(null);
 
+    if (token.startsWith("preview-")) {
+      setSubmitting(false);
+      setError(
+        "This was an email layout preview — the link is not a live reset. Request a real link from Forgot password."
+      );
+      return;
+    }
+
     const passwordError = validatePasswordClient(password);
     if (passwordError) {
       setSubmitting(false);
@@ -56,6 +64,30 @@ export default function ResetPasswordPage() {
     }
 
     setSuccess(true);
+  }
+
+  if (token.startsWith("preview-")) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Account"
+          title="Reset link preview"
+          description="This was an email layout preview — not a live password reset."
+          tight
+        />
+        <section className="mx-auto max-w-lg px-6 pb-24">
+          <div className="coop-panel p-6">
+            <p className={authErrorClassName}>
+              Request a real link from the{" "}
+              <Link href="/forgot-password" className="font-medium underline">
+                forgot password
+              </Link>{" "}
+              page.
+            </p>
+          </div>
+        </section>
+      </>
+    );
   }
 
   if (!token) {

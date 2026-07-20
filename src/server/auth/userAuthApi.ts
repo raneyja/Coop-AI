@@ -402,7 +402,8 @@ async function handleAcceptInvitePreview(
   writeJson(response, 200, {
     email: user.email,
     orgName: String(metadata.orgName ?? org?.name ?? ""),
-    invitedBy: metadata.invitedBy ? String(metadata.invitedBy) : undefined
+    invitedBy: metadata.invitedBy ? String(metadata.invitedBy) : undefined,
+    source: metadata.source ? String(metadata.source) : undefined
   });
   return true;
 }

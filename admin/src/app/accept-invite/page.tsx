@@ -6,12 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   clearSession,
   defaultHomePath,
-  getToken,
   meFromAuthPayload,
-  restoreSessionFromCookie,
-  saveSession
+  saveSession,
+  signOutRemote
 } from "@/lib/auth";
-import { acceptInviteWithPassword, fetchInvitePreview, validateSession } from "@/lib/coopApi";
+import { acceptInviteWithPassword, fetchInvitePreview } from "@/lib/coopApi";
 import { timezoneOptionsWithDefault, detectBrowserTimezone } from "@/lib/timezones";
 import { BrandMark } from "@/components/BrandMark";
 
@@ -28,6 +27,7 @@ type InvitePreview = {
   email: string;
   orgName: string;
   invitedBy?: string;
+  source?: string;
 };
 
 function AcceptInviteContent() {
@@ -48,30 +48,27 @@ function AcceptInviteContent() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function resumeSession() {
-      const existingToken = getToken();
-      if (existingToken) {
-        const result = await validateSession(existingToken);
-        if (result.ok && result.data) {
-          router.replace(defaultHomePath(result.data));
-          return;
-        }
-        clearSession();
-      }
-
-      const restored = await restoreSessionFromCookie();
-      if (restored) {
-        router.replace(defaultHomePath(restored));
-      }
+    // Activation / invite links must not reuse another browser session.
+    async function clearExistingSession() {
+      await signOutRemote();
+      clearSession();
     }
-
-    void resumeSession();
-  }, [router]);
+    void clearExistingSession();
+  }, []);
 
   useEffect(() => {
     async function loadPreview() {
       if (!token) {
         setPreviewError("This invitation link is missing or malformed.");
+        setLoadingPreview(false);
+        return;
+      }
+
+      // QA / send-test-emails used to embed literal preview-* tokens.
+      if (token.startsWith("preview-")) {
+        setPreviewError(
+          "This was an email layout preview — the link is not a live invite. Real invites use a one-time token from your admin."
+        );
         setLoadingPreview(false);
         return;
       }
@@ -88,7 +85,8 @@ function AcceptInviteContent() {
       setPreview({
         email: String(result.data.email ?? ""),
         orgName: String(result.data.orgName ?? ""),
-        invitedBy: result.data.invitedBy ? String(result.data.invitedBy) : undefined
+        invitedBy: result.data.invitedBy ? String(result.data.invitedBy) : undefined,
+        source: result.data.source ? String(result.data.source) : undefined
       });
     }
 
@@ -158,16 +156,16 @@ function AcceptInviteContent() {
       <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
         <div className="w-full max-w-md text-center">
           <BrandMark size="md" />
-          <h1 className="mt-6 text-xl font-medium">Invitation unavailable</h1>
+          <h1 className="mt-6 text-xl font-medium">Link unavailable</h1>
           <p className="mt-3 text-sm text-coop-muted">
-            {previewError ?? "This invitation link is missing or malformed."}
+            {previewError ?? "This link is missing or malformed."}
           </p>
           <p className="mt-6 text-sm text-coop-muted">
-            Ask your admin to send a new invite, or{" "}
+            Check your email for a newer activation link, or{" "}
             <Link href="/login" className="text-white hover:underline">
               sign in
             </Link>{" "}
-            if you already have an account.
+            if you already set a password.
           </p>
         </div>
       </div>
@@ -179,30 +177,42 @@ function AcceptInviteContent() {
       <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
         <div className="w-full max-w-md text-center">
           <BrandMark size="md" />
-          <p className="mt-6 text-sm text-coop-muted">Loading your invitation…</p>
+          <p className="mt-6 text-sm text-coop-muted">Loading…</p>
         </div>
       </div>
     );
   }
 
-  const inviterLine = preview.invitedBy
-    ? `${preview.invitedBy} invited you to join ${preview.orgName}.`
-    : `You've been invited to join ${preview.orgName}.`;
+  const isCheckoutActivation = preview.source === "checkout";
+  const headline = isCheckoutActivation ? "Activate your account" : "Join your team";
+  const subtitle = isCheckoutActivation
+    ? `${preview.orgName} is ready. Create your password to open the admin portal.`
+    : preview.invitedBy
+      ? `${preview.invitedBy} invited you to join ${preview.orgName}.`
+      : `You've been invited to join ${preview.orgName}.`;
+  const helperCopy = isCheckoutActivation
+    ? "Set your password to finish setup. You’ll be signed in afterward."
+    : "Create your CoopAI account to access repositories, connect your tools, and install the VS Code extension.";
+  const submitLabel = isCheckoutActivation
+    ? loading
+      ? "Activating…"
+      : "Activate and continue"
+    : loading
+      ? "Creating your account…"
+      : "Create account and continue";
+  const footerPrompt = isCheckoutActivation ? "Already activated?" : "Already joined?";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4 py-10">
       <div className="w-full max-w-lg">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size="md" />
-          <h1 className="mt-6 text-xl font-medium">Join your team</h1>
-          <p className="mt-2 text-sm text-coop-muted">{inviterLine}</p>
+          <h1 className="mt-6 text-xl font-medium">{headline}</h1>
+          <p className="mt-2 text-sm text-coop-muted">{subtitle}</p>
         </div>
 
         <div className="rounded-md border border-coop-border p-5">
-          <p className="mb-5 text-sm text-coop-muted">
-            Create your Coop account to access repositories, connect your tools, and install the VS Code
-            extension.
-          </p>
+          <p className="mb-5 text-sm text-coop-muted">{helperCopy}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -323,13 +333,13 @@ function AcceptInviteContent() {
             ) : null}
 
             <button type="submit" className="admin-btn-primary w-full py-2.5" disabled={loading}>
-              {loading ? "Creating your account…" : "Create account and continue"}
+              {submitLabel}
             </button>
           </form>
         </div>
 
         <p className="mt-6 text-center text-sm text-coop-muted">
-          Already joined?{" "}
+          {footerPrompt}{" "}
           <Link href="/login" className="text-white hover:underline">
             Sign in
           </Link>

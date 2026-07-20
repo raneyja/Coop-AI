@@ -1,8 +1,9 @@
+import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { EmailService } from "../email/emailService";
 import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { BillingConfig } from "./billingConfig";
-import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
+import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./adminPortalUrl";
 
 export type ProvisionInput = {
   orgName: string;
@@ -24,7 +25,8 @@ export async function provisionOrgFromCheckout(
   userStore: UserStore,
   emailService: EmailService,
   billingConfig: BillingConfig,
-  input: ProvisionInput
+  input: ProvisionInput,
+  authTokenStore?: AuthTokenStore
 ): Promise<ProvisionResult> {
   const loginUrl = adminPortalFreshLoginUrl(billingConfig.adminPortalUrl, {
     email: input.adminEmail
@@ -72,14 +74,29 @@ export async function provisionOrgFromCheckout(
   });
 
   const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);
+  let activateAccountUrl: string | undefined;
+
   if (!existingUser) {
-    await userStore.createUser(org.id, input.adminEmail, "admin");
+    const user = await userStore.createUser(org.id, input.adminEmail, "admin");
+    // Industry-standard paid signup: activate account (set password) before first sign-in.
+    if (authTokenStore) {
+      const inviteToken = await authTokenStore.createToken(
+        user.id,
+        "user_invite",
+        7 * 24 * 60 * 60 * 1000,
+        { orgName: org.name, source: "checkout" }
+      );
+      activateAccountUrl = adminPortalAcceptInviteUrl(billingConfig.adminPortalUrl, inviteToken);
+    } else {
+      console.warn("[billing] auth token store missing; welcome email will link to sign-in only");
+    }
   }
 
   await emailService.sendWelcome({
     to: input.adminEmail,
     orgName: org.name,
-    adminPortalUrl: loginUrl
+    adminPortalUrl: loginUrl,
+    activateAccountUrl
   });
 
   return { orgId: org.id, orgName: org.name };

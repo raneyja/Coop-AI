@@ -4,7 +4,13 @@ import { assertSafePublicEmailUrl } from "../../config/publicUrls";
 export type WelcomeEmailParams = {
   to: string;
   orgName: string;
+  /** Fresh sign-in URL (existing accounts / upgrades). */
   adminPortalUrl: string;
+  /**
+   * When set (new Pro checkout), CTA activates the account: set password via accept-invite,
+   * then lands signed in. Prefer this over Sign in when the user has no password yet.
+   */
+  activateAccountUrl?: string;
 };
 
 export type InviteEmailParams = {
@@ -223,27 +229,42 @@ function collectHrefUrls(html: string): string[] {
 }
 
 function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free"): PlanWelcomeContent {
+  const activateUrl = params.activateAccountUrl?.trim();
   const loginUrl = params.adminPortalUrl;
+  const ctaUrl = activateUrl || loginUrl;
   const planLabel = plan === "pro" ? "CoopAI Pro" : "CoopAI Free";
-  const intro =
-    plan === "pro"
-      ? `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Pro. Sign in at the admin portal to connect tools, invite your team, and manage billing.`
-      : `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Free. Sign in to connect tools and start using CoopAI in VS Code.`;
+  // Pro checkout never collects a password — activate first. Free signup already set one.
+  const needsActivation = Boolean(activateUrl) && plan === "pro";
+
   const subject =
     plan === "pro" ? `Welcome to CoopAI — ${params.orgName}` : `Welcome to CoopAI Free — ${params.orgName}`;
-  const signInStep =
-    plan === "pro"
+
+  const intro = needsActivation
+    ? `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Pro. Activate your account to set a password and open the admin portal.`
+    : plan === "pro"
+      ? `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Pro. Sign in at the admin portal to connect tools, invite your team, and manage billing.`
+      : `<strong>${escapeHtml(params.orgName)}</strong> is ready on CoopAI Free. Your password was set when you signed up — open the admin portal to continue.`;
+
+  const buttonLabel = needsActivation
+    ? "Activate your account"
+    : plan === "free"
+      ? "Open CoopAI"
+      : "Sign in to CoopAI";
+  const firstStep = needsActivation
+    ? "Activate your account — create a password, then you’ll be signed in."
+    : plan === "pro"
       ? "Sign in with Google, or use Forgot password to set a password for your checkout email."
-      : "Sign in with the email and password you created, or continue with Google.";
+      : "Sign in with the email and password you created at signup, or continue with Google.";
+
   const html = emailShell({
     title: subject,
     body: `
       <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
       <p style="margin:0 0 16px;font-size:16px;">${intro}</p>
-      ${primaryButton("Sign in to CoopAI", loginUrl)}
+      ${primaryButton(buttonLabel, ctaUrl)}
       <p style="margin:0 0 8px;font-size:14px;font-weight:600;">Next steps</p>
       <ol style="margin:0;padding-left:20px;font-size:14px;color:#57606a;">
-        <li style="margin-bottom:6px;">${signInStep}</li>
+        <li style="margin-bottom:6px;">${firstStep}</li>
         <li style="margin-bottom:6px;">Connect GitHub, Slack, and other tools in <strong>Integrations</strong>.</li>
         <li style="margin-bottom:6px;">Invite teammates from <strong>Users</strong>.</li>
         <li>Install the CoopAI VS Code extension and sign in with the same account.</li>
@@ -253,11 +274,11 @@ function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free")
   const text = [
     `${params.orgName} is set up on ${planLabel}.`,
     "",
-    "Sign in to CoopAI:",
-    loginUrl,
+    needsActivation ? "Activate your CoopAI account:" : plan === "free" ? "Open CoopAI:" : "Sign in to CoopAI:",
+    ctaUrl,
     "",
     "Next steps:",
-    `1. ${signInStep}`,
+    `1. ${firstStep}`,
     "2. Connect GitHub, Slack, and other tools in Integrations.",
     "3. Invite teammates from Users.",
     "4. Install the CoopAI VS Code extension and sign in."

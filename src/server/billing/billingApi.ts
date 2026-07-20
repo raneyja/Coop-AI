@@ -594,7 +594,8 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
       stripeSubscriptionId: subscriptionId,
       existingOrgId: existingOrgId || undefined,
       upgrade
-    }
+    },
+    deps.authTokenStore
   );
 
   await deps.auditLogger?.record({

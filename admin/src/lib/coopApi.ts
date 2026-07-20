@@ -300,6 +300,8 @@ export type InvitePreviewResponse = {
   email?: string;
   orgName?: string;
   invitedBy?: string;
+  /** Present when the invite was minted from Pro checkout (activate account). */
+  source?: string;
 };
 
 export async function fetchInvitePreview(token: string): Promise<ApiResult<InvitePreviewResponse>> {

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/Button";
 
 type CheckoutState = "idle" | "verifying" | "pending" | "ready" | "invalid";
 
@@ -12,7 +11,7 @@ type WelcomeContentProps = {
 };
 
 const STEPS = [
-  "Open the admin portal and sign in with Google, or set a password via Forgot password.",
+  "Open the Activate your account link in your welcome email and set a password.",
   "Connect GitHub, Slack, and other tools once for your whole org.",
   "Invite teammates from the Users page.",
   "Developers install the CoopAI VS Code extension and sign in."
@@ -95,7 +94,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
           <div className="border-l-2 border-l-red-500 pl-4">
             <p className="text-sm font-medium text-gray-900">We couldn&apos;t verify this checkout</p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              If you just paid, check your email for the admin portal link or{" "}
+              If you just paid, check your email for the activate account link or{" "}
               <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
                 contact support
               </Link>
@@ -123,7 +122,17 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
               {orgName ? `${orgName} is ready` : "Your organization is ready"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              Sign in with Google, or use Forgot password to set a password for this email.
+              Check your email for <span className="font-medium text-gray-900">Activate your account</span>{" "}
+              — set a password there, then you&apos;ll be signed in. This is not a Sign in link yet.
+            </p>
+          </div>
+        ) : null}
+
+        {state === "idle" ? (
+          <div className="border-l-2 border-l-coop-index pl-4">
+            <p className="text-sm font-medium text-gray-900">Finish setup from your email</p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              After Pro checkout, open the activate link we sent — create a password before signing in.
             </p>
           </div>
         ) : null}
@@ -146,14 +155,26 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
         </div>
 
         <div className="space-y-3 border-t border-coop-border pt-6">
-          <Button href={adminPortalLoginUrl} external className="w-full">
-            Open admin portal
-          </Button>
           {showProvisioning ? (
-            <p className="text-center text-xs leading-relaxed text-coop-muted">
-              You can open the portal now — sign in once provisioning finishes.
+            <p className="text-center text-sm leading-relaxed text-coop-muted">
+              We&apos;re emailing your activate link as soon as provisioning finishes.
             </p>
-          ) : null}
+          ) : (
+            <p className="text-center text-sm leading-relaxed text-coop-muted">
+              Prefer to wait in the inbox — the activate link is the first step.
+            </p>
+          )}
+          <p className="text-center text-xs leading-relaxed text-coop-muted">
+            Already activated?{" "}
+            <a
+              href={adminPortalLoginUrl}
+              className="font-medium text-gray-900 underline-offset-2 hover:underline"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Sign in to the admin portal
+            </a>
+          </p>
           <p className="text-center text-xs leading-relaxed text-coop-muted">
             Didn&apos;t get the email? Check spam or{" "}
             <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
