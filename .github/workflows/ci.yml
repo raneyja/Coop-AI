@@ -37,6 +37,8 @@ jobs:
           npm run test:autocomplete-smoke
           npm run test:sso
           npm run test:user-facing-errors
+          npm run test:billing
+          npm run test:operator
 
   docker-build:
     runs-on: ubuntu-latest

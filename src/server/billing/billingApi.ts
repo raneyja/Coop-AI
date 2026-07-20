@@ -385,20 +385,13 @@ async function handleSeatIncrease(
     return true;
   }
 
-  const currentSeats = Math.max(1, Math.floor(Number(billing.seatCount ?? 1) || 1));
+  const coopSeats = Math.max(1, Math.floor(Number(billing.seatCount ?? 1) || 1));
   const rawSeats = asRecord(parsed.body).seats;
   const requestedSeats = Math.floor(Number(rawSeats));
   if (!Number.isFinite(requestedSeats) || requestedSeats < 1) {
     writeJson(response, 400, {
       error: "invalid_seats",
       message: "seats must be a positive integer."
-    });
-    return true;
-  }
-  if (requestedSeats <= currentSeats) {
-    writeJson(response, 400, {
-      error: "seats_not_increased",
-      message: `Requested seats (${requestedSeats}) must be greater than your current ${currentSeats}. To reduce seats, contact Coop support.`
     });
     return true;
   }
@@ -418,6 +411,18 @@ async function handleSeatIncrease(
     writeJson(response, 502, {
       error: "stripe_item_missing",
       message: "Stripe subscription has no line item to update."
+    });
+    return true;
+  }
+
+  // Floor on BOTH Coop and Stripe so a lagged Coop seatCount cannot be used to
+  // "increase" to a value that is actually a Stripe decrease.
+  const stripeSeats = Math.max(1, Math.floor(Number(subscription.quantity ?? coopSeats) || coopSeats));
+  const currentSeats = Math.max(coopSeats, stripeSeats);
+  if (requestedSeats <= currentSeats) {
+    writeJson(response, 400, {
+      error: "seats_not_increased",
+      message: `Requested seats (${requestedSeats}) must be greater than your current ${currentSeats}. To reduce seats, contact Coop support.`
     });
     return true;
   }
