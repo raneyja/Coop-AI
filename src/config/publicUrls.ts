@@ -15,6 +15,20 @@ export function isLocalhostUrl(url: string): boolean {
   }
 }
 
+export function isNonPublicEmailHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".local") ||
+      host.endsWith(".localhost")
+    );
+  } catch {
+    return true;
+  }
+}
+
 /** True when the API is deployed (not local docker/dev). */
 export function isProductionApiHost(publicBaseUrl: string): boolean {
   try {
@@ -63,4 +77,33 @@ export function resolveAdminPortalUrl(env: NodeJS.ProcessEnv, publicBaseUrl: str
 
 export function resolveOpsPortalUrl(env: NodeJS.ProcessEnv, publicBaseUrl: string): string {
   return resolvePublicUrl(env.COOP_OPS_PORTAL_URL, publicBaseUrl, OPS_PORTAL_URL, "http://localhost:3003");
+}
+
+/**
+ * Belt-and-suspenders: refuse to embed localhost / .local links in customer emails
+ * when the API is running on a production host.
+ */
+export function assertSafePublicEmailUrl(
+  url: string,
+  publicBaseUrl: string = process.env.COOP_PUBLIC_BASE_URL?.trim() ||
+    process.env.WEBHOOK_DOMAIN?.trim() ||
+    ""
+): void {
+  if (!isProductionApiHost(publicBaseUrl)) {
+    return;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Refusing to send email with invalid link: ${url}`);
+  }
+  if (parsed.protocol === "mailto:") {
+    return;
+  }
+  if (parsed.protocol !== "https:" || isNonPublicEmailHost(url)) {
+    throw new Error(
+      `Refusing to send email with non-public link (${parsed.origin}). Set COOP_ADMIN_PORTAL_URL / COOP_MARKETING_BASE_URL to https://admin.coop-ai.dev and https://coop-ai.dev.`
+    );
+  }
 }

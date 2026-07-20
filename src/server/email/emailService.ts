@@ -1,4 +1,5 @@
 import type { BillingConfig } from "../billing/billingConfig";
+import { assertSafePublicEmailUrl } from "../../config/publicUrls";
 
 export type WelcomeEmailParams = {
   to: string;
@@ -176,6 +177,8 @@ export class EmailService {
   }
 
   private async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+    assertEmailLinksArePublic(html, text);
+
     if (this.config.emailMock || !this.config.resendApiKey) {
       console.log(`[email:mock] to=${to} subject=${subject}`);
       if (text) {
@@ -204,6 +207,27 @@ export class EmailService {
       throw new Error(`Resend failed (${response.status}): ${body}`);
     }
   }
+}
+
+function assertEmailLinksArePublic(html: string, text?: string): void {
+  for (const href of collectHrefUrls(html)) {
+    assertSafePublicEmailUrl(href);
+  }
+  if (text) {
+    for (const match of text.match(/https?:\/\/[^\s]+/g) ?? []) {
+      assertSafePublicEmailUrl(match.replace(/[)>.,;]+$/, ""));
+    }
+  }
+}
+
+function collectHrefUrls(html: string): string[] {
+  const urls: string[] = [];
+  const re = /href="([^"]+)"/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html))) {
+    urls.push(match[1]);
+  }
+  return urls;
 }
 
 function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free"): PlanWelcomeContent {
