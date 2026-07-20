@@ -80,6 +80,14 @@ test("enrichCompactIntegrationDocs injects related docs after active file sectio
   assert.ok(enriched.indexOf("**Related documentation**") > enriched.indexOf("**How the open file fits**"));
 });
 
+test("enrichCompactIntegrationDocs injects related docs after Architecture when repo-wide", () => {
+  const input = ["**Architecture**", "Overview.", "", "**Key subsystems**", "Auth."].join("\n");
+  const enriched = enrichCompactIntegrationDocs(input, { notionPages: pages }, { mode: "understand-repo" });
+  assert.ok(enriched.includes("**Related documentation**"));
+  assert.ok(enriched.indexOf("**Related documentation**") > enriched.indexOf("**Architecture**"));
+  assert.ok(enriched.indexOf("**Related documentation**") < enriched.indexOf("**Key subsystems**"));
+});
+
 test("enrichCompactIntegrationDocs collapses verbose Understand Repo Architecture doc lists", () => {
   const longList = Array.from({ length: 6 }, (_, index) => `- Page ${index + 1}`).join("\n");
   const input = [

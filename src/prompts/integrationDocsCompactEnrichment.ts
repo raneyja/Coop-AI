@@ -177,35 +177,42 @@ export function collapseVerboseDocReviewSections(
   return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/** Insert compact related docs after **How the open file fits** for Understand Repo. */
+/** Insert compact related docs after **How the open file fits** (or **Architecture**) for Understand Repo. */
 export function injectRelatedDocsAfterActiveFileSection(
   content: string,
   context?: IntegrationDocsEnrichmentContext
 ): string {
-  if (!context?.activeFile?.trim() || countAttachedDocPages(context) === 0) {
+  if (countAttachedDocPages(context) === 0) {
     return content;
   }
 
-  const compact = buildCompactRelatedDocumentationBlock(context);
+  const compact = buildCompactRelatedDocumentationBlock(context!);
   if (!compact || content.includes(RELATED_DOCUMENTATION_HEADING)) {
     return content;
   }
 
-  const heading = "**How the open file fits**";
-  const index = content.indexOf(heading);
-  if (index < 0) {
-    return content;
+  const preferredHeadings = context?.activeFile?.trim()
+    ? ["**How the open file fits**", "**Architecture**"]
+    : ["**Architecture**", "**Key subsystems**"];
+
+  for (const heading of preferredHeadings) {
+    const index = content.indexOf(heading);
+    if (index < 0) {
+      continue;
+    }
+
+    const afterHeading = content.indexOf("\n", index + heading.length);
+    if (afterHeading < 0) {
+      continue;
+    }
+
+    const nextSection = content.slice(afterHeading + 1).search(/\n\*\*[^*]+\*\*\s*\n/);
+    const insertAt = nextSection >= 0 ? afterHeading + 1 + nextSection : content.length;
+
+    return `${content.slice(0, insertAt).trimEnd()}\n\n${compact}\n${content.slice(insertAt)}`.replace(/\n{3,}/g, "\n\n");
   }
 
-  const afterHeading = content.indexOf("\n", index + heading.length);
-  if (afterHeading < 0) {
-    return content;
-  }
-
-  const nextSection = content.slice(afterHeading + 1).search(/\n\*\*[^*]+\*\*\s*\n/);
-  const insertAt = nextSection >= 0 ? afterHeading + 1 + nextSection : content.length;
-
-  return `${content.slice(0, insertAt).trimEnd()}\n\n${compact}\n${content.slice(insertAt)}`.replace(/\n{3,}/g, "\n\n");
+  return content;
 }
 
 /** Collapse verbose per-provider doc lists under Architecture for Understand Repo. */
