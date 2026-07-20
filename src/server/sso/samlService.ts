@@ -72,8 +72,8 @@ export class SamlService {
     const saml = this.buildSaml(config);
     // Azure may silent-SSO from a browser cookie without a UI challenge unless
     // we also request interactive login on the redirect URL.
-    const additionalParams =
-      config.provider === "azuread" ? { prompt: "login" } : {};
+    const additionalParams: Record<string, string> | undefined =
+      config.provider === "azuread" ? { prompt: "login" } : undefined;
     return saml.getAuthorizeUrlAsync(relayState, undefined, {
       additionalParams
     });
