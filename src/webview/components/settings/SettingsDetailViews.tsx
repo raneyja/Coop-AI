@@ -1358,18 +1358,6 @@ function JiraDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        extraFields={
-          !prefs.devMode ? (
-            <label className="coop-settings-field-row mt-3">
-              <span className="coop-settings-label">Jira site URL</span>
-              <SettingsUrlField
-                value={prefs.jiraBaseUrl}
-                placeholder="https://your-company.atlassian.net"
-                onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
-              />
-            </label>
-          ) : undefined
-        }
         devFallback={
           <>
             <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
@@ -1559,18 +1547,6 @@ function ConfluenceDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        extraFields={
-          !prefs.devMode ? (
-            <label className="coop-settings-field-row mt-3">
-              <span className="coop-settings-label">Confluence site URL</span>
-              <SettingsUrlField
-                value={prefs.confluenceBaseUrl}
-                placeholder="https://your-company.atlassian.net/wiki"
-                onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
-              />
-            </label>
-          ) : undefined
-        }
         devFallback={
           <>
             <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>

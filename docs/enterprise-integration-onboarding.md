@@ -135,7 +135,7 @@ For Enterprise orgs that sign in with SAML instead of password/Google:
 
 - One Atlassian 3LO app covers **both** Jira and Confluence.
 - Scopes: `read:jira-work`, `read:confluence-content.all`, `read:confluence-space.summary`, `read:space:confluence`, `search:confluence`, `offline_access`, etc. (see `atlassianAppService.ts`).
-- **Customer admin:** **Connect** from Jira or Confluence row (same OAuth) → set site URLs in Settings if needed → **Test**.
+- **Customer admin:** **Connect** from Jira or Confluence row (same OAuth) → **Test**. Site URL comes from Atlassian OAuth (no manual site URL in the extension).
 
 ### Notion
 
@@ -194,8 +194,8 @@ For each row:
 |------|--------|
 | **GitHub** | Prefer GitHub App on company org; **Limited connect (OAuth)** only if org owner cannot install the App |
 | **Slack** | — |
-| **Jira** | Set **Jira site URL** in extension Workspace if needed |
-| **Confluence** | Set **Confluence site URL** (often `{site}/wiki`) |
+| **Jira** | Site comes from Atlassian OAuth — no manual site URL in the extension |
+| **Confluence** | Same Atlassian OAuth as Jira |
 | **Notion / Google Docs** | — |
 | **Teams** | Work/school M365 required; admin consent may be needed — see [teams-connect.md](./teams-connect.md) |
 

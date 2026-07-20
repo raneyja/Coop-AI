@@ -12,8 +12,7 @@ Jira connects via Atlassian OAuth (shared with Confluence).
 
 1. **Admin portal** → Integrations → **Connect Jira**
 2. **Browser** → Approve Atlassian OAuth
-3. Set **Jira site URL** (e.g. `https://yourorg.atlassian.net`)
-4. **Test Jira**
+3. **Test Jira**
 
 **Enterprise:** **Manage access** → select projects → Save scope.
 
@@ -33,13 +32,13 @@ Type `/jira` in the composer:
 
 ## Confluence
 
-Confluence uses the same Atlassian OAuth app. Connect separately and set **Confluence site URL**. Use `/confluence` or `/wiki` in chat.
+Confluence uses the same Atlassian OAuth app. Connect from the admin portal (or Tools → Confluence), then use `/confluence` or `/wiki` in chat. Site URL comes from OAuth — no manual site URL field in the extension.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| Empty ticket search | Verify Jira site URL; check scope includes relevant projects |
+| Empty ticket search | Check Manage access includes relevant projects; reconnect Atlassian if needed |
 | OAuth redirect fails | Callback must be `https://api.coop-ai.dev/v1/atlassian/app/callback` |
 | 403 on search | Re-connect; ensure Atlassian app has required scopes |
 
