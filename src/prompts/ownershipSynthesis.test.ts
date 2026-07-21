@@ -137,10 +137,19 @@ test("ownership synthesis omits outreach draft and includes pathEvolution guidan
 
 test("ownership intelligence system prioritizes contact over essay sections", () => {
   assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("who to contact first"));
-  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Add escalation only when evidence"));
-  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("otherwise omit those sections"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Hard-omit"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Never emit **Recommended next step**"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("same person"));
   assert.ok(!OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Recommends knowledge transfer targets"));
   assert.ok(!OWNERSHIP_INTELLIGENCE_SYSTEM.includes("coverage gaps"));
+});
+
+test("ownership synthesis enforces core path and identity merge in user prompt", () => {
+  const prompt = buildOwnershipSynthesisUserPrompt({ report, file: report.path });
+  assert.ok(prompt.includes("Summary → True experts → Escalation"));
+  assert.ok(prompt.includes("Hard-omit empty Availability"));
+  assert.ok(prompt.includes("Never emit Recommended next step"));
+  assert.ok(prompt.includes("prefer @login"));
 });
 
 test("ownership synthesis cites Slack presence when discussions are empty", () => {

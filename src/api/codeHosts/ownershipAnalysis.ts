@@ -1,6 +1,5 @@
-import { codeHostRequestJson } from "./codeHostHttp";
-import type { CodeHostRouter } from "./codeHostRouter";
-import type { CommitInfo, PullRequestReview, RepoCoordinates } from "./types";
+import { findPersonInDirectory } from "../../identity/identityDirectory";
+import type { IdentityDirectory } from "../../identity/types";
 import type {
   ActivityWindow,
   CommitPatternStats,
@@ -18,6 +17,9 @@ import type {
   TeamDomainGraph,
   TeamMemberRole
 } from "../../types/ownership";
+import { codeHostRequestJson } from "./codeHostHttp";
+import type { CodeHostRouter } from "./codeHostRouter";
+import type { CommitInfo, PullRequestReview, RepoCoordinates } from "./types";
 
 const MS_DAY = 86_400_000;
 const MS_30D = 30 * MS_DAY;
@@ -65,24 +67,65 @@ export type CodeownersMatch = {
   pattern: string;
 };
 
-export function authorKey(commit: CommitInfo): string {
-  return commit.authorLogin ?? commit.author;
+/** Normalize a person key for alias matching (login / display name / email local-part). */
+export function normalizeOwnershipPersonKey(value: string): string {
+  return value.trim().toLowerCase().replace(/^@/, "");
+}
+
+/**
+ * Map display names → GitHub/GitLab logins from commits that carry both.
+ * Used so name-only commits merge with login-keyed commits (remote history often splits these).
+ */
+export function buildAuthorLoginIndex(commits: CommitInfo[]): Map<string, string> {
+  const nameToLogin = new Map<string, string>();
+  for (const commit of commits) {
+    const login = commit.authorLogin?.trim();
+    const name = commit.author?.trim();
+    if (!login || !name) {
+      continue;
+    }
+    const nameKey = normalizeOwnershipPersonKey(name);
+    const loginKey = normalizeOwnershipPersonKey(login);
+    if (nameKey && nameKey !== loginKey) {
+      nameToLogin.set(nameKey, login);
+    }
+  }
+  return nameToLogin;
+}
+
+export function resolveAuthorKey(commit: CommitInfo, nameToLogin?: Map<string, string>): string {
+  const login = commit.authorLogin?.trim();
+  if (login) {
+    return login;
+  }
+  const name = commit.author?.trim() || "unknown";
+  const mapped = nameToLogin?.get(normalizeOwnershipPersonKey(name));
+  return mapped ?? name;
+}
+
+export function authorKey(commit: CommitInfo, nameToLogin?: Map<string, string>): string {
+  return resolveAuthorKey(commit, nameToLogin);
 }
 
 export function analyzeCommitPatterns(commits: CommitInfo[], now = Date.now()): CommitPatternStats[] {
+  const nameToLogin = buildAuthorLoginIndex(commits);
   const byAuthor = new Map<string, CommitPatternStats>();
 
   for (const commit of commits) {
-    const author = authorKey(commit);
+    const author = resolveAuthorKey(commit, nameToLogin);
     const entry = byAuthor.get(author) ?? {
       author,
-      authorLogin: commit.authorLogin,
+      authorLogin: commit.authorLogin?.trim() || (nameToLogin.has(normalizeOwnershipPersonKey(commit.author ?? ""))
+        ? author
+        : undefined),
       counts: { sixMonths: 0, oneYear: 0, allTime: 0 },
       recencyScore: 0,
       messages: []
     };
-    if (commit.authorLogin && !entry.authorLogin) {
-      entry.authorLogin = commit.authorLogin;
+    if (commit.authorLogin?.trim()) {
+      entry.authorLogin = commit.authorLogin.trim();
+    } else if (!entry.authorLogin && nameToLogin.has(normalizeOwnershipPersonKey(commit.author ?? ""))) {
+      entry.authorLogin = author;
     }
     const age = now - new Date(commit.date).getTime();
     entry.counts.allTime += 1;
@@ -208,18 +251,20 @@ export function detectSpecialties(commits: CommitPatternStats[]): Map<string, st
 export function calculateOwnershipScores(
   signals: OwnershipSignals,
   weights: ScoreWeights = DEFAULT_SCORE_WEIGHTS,
-  now = Date.now()
+  now = Date.now(),
+  options?: { identityDirectory?: IdentityDirectory }
 ): OwnershipScore[] {
-  const commitMap = new Map(signals.commits.map((c) => [c.author, c]));
-  const reviewMap = new Map(signals.reviews.map((r) => [r.author, r]));
-  const issueMap = new Map(signals.issues.map((i) => [i.author, i]));
-  const activityMap = new Map(signals.activity.map((a) => [a.author, a]));
-  const specialtyMap = detectSpecialties(signals.commits);
+  const remapped = remapOwnershipSignalAuthors(signals);
+  const commitMap = new Map(remapped.commits.map((c) => [normalizeOwnershipPersonKey(c.author), c]));
+  const reviewMap = new Map(remapped.reviews.map((r) => [normalizeOwnershipPersonKey(r.author), r]));
+  const issueMap = new Map(remapped.issues.map((i) => [normalizeOwnershipPersonKey(i.author), i]));
+  const activityMap = new Map(remapped.activity.map((a) => [normalizeOwnershipPersonKey(a.author), a]));
+  const specialtyMap = detectSpecialties(remapped.commits);
 
   const authors = new Set([
-    ...signals.commits.map((c) => c.author),
-    ...signals.reviews.map((r) => r.author),
-    ...signals.issues.map((i) => i.author)
+    ...remapped.commits.map((c) => c.author),
+    ...remapped.reviews.map((r) => r.author),
+    ...remapped.issues.map((i) => i.author)
   ]);
 
   const rawScores: Array<{
@@ -234,14 +279,15 @@ export function calculateOwnershipScores(
   }> = [];
 
   for (const author of authors) {
-    const activity = activityMap.get(author);
+    const key = normalizeOwnershipPersonKey(author);
+    const activity = activityMap.get(key);
     if (activity?.inactive) {
       continue;
     }
 
-    const commit = commitMap.get(author);
-    const review = reviewMap.get(author);
-    const issue = issueMap.get(author);
+    const commit = commitMap.get(key);
+    const review = reviewMap.get(key);
+    const issue = issueMap.get(key);
     const activityWeight = activity?.weight ?? 1;
 
     const commitCount = (commit?.counts.sixMonths ?? 0) * (commit?.recencyScore ?? 0);
@@ -259,10 +305,11 @@ export function calculateOwnershipScores(
     const isAuthor = Boolean(commit && commit.counts.allTime > 0);
     const isReviewer = Boolean(review && review.approvals > 0);
     const role: OwnershipScore["role"] = isAuthor && isReviewer ? "both" : isReviewer ? "reviewer" : "author";
+    const authorLogin = commit?.authorLogin ?? (looksLikeCodeHostLogin(author) ? author : undefined);
 
     rawScores.push({
-      author,
-      authorLogin: commit?.authorLogin,
+      author: authorLogin ?? author,
+      authorLogin,
       raw,
       commitCount: commit?.counts.sixMonths ?? 0,
       reviewApprovals: review?.approvals ?? 0,
@@ -291,7 +338,184 @@ export function calculateOwnershipScores(
     })
     .sort((a, b) => b.score - a.score);
 
-  return scores;
+  return mergeOwnershipScoreIdentities(scores, options?.identityDirectory);
+}
+
+/**
+ * Collapse login vs display-name (and identity-directory) aliases into one OwnershipScore.
+ * Prefer GitHub/GitLab login as the canonical `owner` handle.
+ */
+export function mergeOwnershipScoreIdentities(
+  scores: OwnershipScore[],
+  identityDirectory?: IdentityDirectory
+): OwnershipScore[] {
+  if (scores.length <= 1) {
+    return scores;
+  }
+
+  const parent = new Map<string, string>();
+  const ensure = (key: string) => {
+    if (!parent.has(key)) {
+      parent.set(key, key);
+    }
+  };
+  const find = (key: string): string => {
+    ensure(key);
+    const p = parent.get(key)!;
+    if (p !== key) {
+      const root = find(p);
+      parent.set(key, root);
+      return root;
+    }
+    return key;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) {
+      parent.set(ra, rb);
+    }
+  };
+
+  for (const score of scores) {
+    ensure(normalizeOwnershipPersonKey(score.owner));
+    if (score.githubLogin) {
+      const loginKey = normalizeOwnershipPersonKey(score.githubLogin);
+      ensure(loginKey);
+      union(normalizeOwnershipPersonKey(score.owner), loginKey);
+    }
+  }
+
+  for (let i = 0; i < scores.length; i++) {
+    for (let j = i + 1; j < scores.length; j++) {
+      const a = scores[i]!;
+      const b = scores[j]!;
+      if (scoresShareIdentity(a, b, identityDirectory)) {
+        union(normalizeOwnershipPersonKey(a.owner), normalizeOwnershipPersonKey(b.owner));
+      }
+    }
+  }
+
+  const groups = new Map<string, OwnershipScore[]>();
+  for (const score of scores) {
+    const root = find(normalizeOwnershipPersonKey(score.owner));
+    const group = groups.get(root) ?? [];
+    group.push(score);
+    groups.set(root, group);
+  }
+
+  const merged = [...groups.values()].map((group) => mergeScoreGroup(group));
+  return merged.sort((a, b) => b.score - a.score);
+}
+
+function scoresShareIdentity(
+  a: OwnershipScore,
+  b: OwnershipScore,
+  identityDirectory?: IdentityDirectory
+): boolean {
+  const aOwner = normalizeOwnershipPersonKey(a.owner);
+  const bOwner = normalizeOwnershipPersonKey(b.owner);
+  const aLogin = a.githubLogin ? normalizeOwnershipPersonKey(a.githubLogin) : undefined;
+  const bLogin = b.githubLogin ? normalizeOwnershipPersonKey(b.githubLogin) : undefined;
+
+  if (aLogin && (aLogin === bOwner || aLogin === bLogin)) {
+    return true;
+  }
+  if (bLogin && (bLogin === aOwner || bLogin === aLogin)) {
+    return true;
+  }
+
+  if (!identityDirectory) {
+    return false;
+  }
+
+  const personA =
+    findPersonInDirectory(identityDirectory, {
+      githubLogin: a.githubLogin ?? (looksLikeCodeHostLogin(a.owner) ? a.owner : undefined),
+      displayName: looksLikeCodeHostLogin(a.owner) ? undefined : a.owner
+    }) ??
+    findPersonInDirectory(identityDirectory, { displayName: a.owner });
+  const personB =
+    findPersonInDirectory(identityDirectory, {
+      githubLogin: b.githubLogin ?? (looksLikeCodeHostLogin(b.owner) ? b.owner : undefined),
+      displayName: looksLikeCodeHostLogin(b.owner) ? undefined : b.owner
+    }) ??
+    findPersonInDirectory(identityDirectory, { displayName: b.owner });
+
+  return Boolean(personA && personB && personA.id === personB.id);
+}
+
+function mergeScoreGroup(group: OwnershipScore[]): OwnershipScore {
+  const withLogin = group.find((s) => s.githubLogin) ?? group.find((s) => looksLikeCodeHostLogin(s.owner));
+  const canonicalLogin = withLogin?.githubLogin ?? (withLogin && looksLikeCodeHostLogin(withLogin.owner) ? withLogin.owner : undefined);
+  const owner = canonicalLogin ?? group[0]!.owner;
+  const score = Math.max(...group.map((s) => s.score));
+  const role = mergeRoles(group.map((s) => s.role));
+  return {
+    owner,
+    githubLogin: canonicalLogin,
+    score,
+    tier: tierForScore(score),
+    specialty: group.find((s) => s.specialty)?.specialty,
+    commitCount: group.reduce((sum, s) => sum + (s.commitCount ?? 0), 0),
+    reviewApprovals: group.reduce((sum, s) => sum + (s.reviewApprovals ?? 0), 0),
+    issueResolutions: group.reduce((sum, s) => sum + (s.issueResolutions ?? 0), 0),
+    activityWeight: Math.max(...group.map((s) => s.activityWeight ?? 0)),
+    presence: group.find((s) => s.presence)?.presence,
+    role
+  };
+}
+
+function mergeRoles(roles: Array<OwnershipScore["role"]>): OwnershipScore["role"] {
+  const hasAuthor = roles.some((r) => r === "author" || r === "both");
+  const hasReviewer = roles.some((r) => r === "reviewer" || r === "both");
+  if (hasAuthor && hasReviewer) {
+    return "both";
+  }
+  if (hasReviewer) {
+    return "reviewer";
+  }
+  return "author";
+}
+
+/** GitHub/GitLab logins are single tokens without spaces. */
+export function looksLikeCodeHostLogin(value: string): boolean {
+  const trimmed = value.trim().replace(/^@/, "");
+  return /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(trimmed) && !/\s/.test(trimmed);
+}
+
+/**
+ * Remap review/issue/activity authors onto commit login keys when display names match.
+ */
+export function remapOwnershipSignalAuthors(signals: OwnershipSignals): OwnershipSignals {
+  const nameToLogin = new Map<string, string>();
+  for (const commit of signals.commits) {
+    if (commit.authorLogin) {
+      const login = commit.authorLogin.trim();
+      nameToLogin.set(normalizeOwnershipPersonKey(login), login);
+      // author may already be the login after analyzeCommitPatterns
+    }
+  }
+  // Secondary: if a commit authorLogin exists, any matching review login is already fine.
+  // Map display-name activity entries that equal a known commit author's non-login form —
+  // commits are already login-keyed; reviews use logins. Remap only when author equals a known login case-insensitively.
+  const resolve = (author: string): string => {
+    const key = normalizeOwnershipPersonKey(author);
+    return nameToLogin.get(key) ?? author;
+  };
+
+  return {
+    ...signals,
+    commits: signals.commits.map((c) => ({
+      ...c,
+      author: c.authorLogin?.trim() || resolve(c.author),
+      authorLogin: c.authorLogin?.trim() || (looksLikeCodeHostLogin(c.author) ? c.author : c.authorLogin)
+    })),
+    reviews: signals.reviews.map((r) => ({ ...r, author: resolve(r.author) })),
+    issues: signals.issues.map((i) => ({ ...i, author: resolve(i.author) })),
+    activity: signals.activity.map((a) => ({ ...a, author: resolve(a.author) })),
+    specialties: signals.specialties.map((s) => ({ ...s, author: resolve(s.author) }))
+  };
 }
 
 export function computeOwnershipRisk(
@@ -308,7 +532,8 @@ export function computeOwnershipRisk(
 
   const sixMonthsAgo = now - MS_180D;
   const recentCommits = commits.filter((c) => new Date(c.date).getTime() >= sixMonthsAgo);
-  const authorSet = new Set(commits.map(authorKey));
+  const nameToLogin = buildAuthorLoginIndex(commits);
+  const authorSet = new Set(commits.map((c) => resolveAuthorKey(c, nameToLogin)));
 
   const primaryCount = scores.filter((s) => s.tier === "primary").length;
   const secondaryCount = scores.filter((s) => s.tier === "secondary").length;
@@ -579,9 +804,10 @@ export function activityWeightForDate(date: string | undefined, now: number): nu
 }
 
 function rankAuthors(commits: CommitInfo[]): Array<{ author: string; count: number }> {
+  const nameToLogin = buildAuthorLoginIndex(commits);
   const counts = new Map<string, number>();
   for (const commit of commits) {
-    const author = authorKey(commit);
+    const author = resolveAuthorKey(commit, nameToLogin);
     counts.set(author, (counts.get(author) ?? 0) + 1);
   }
   return [...counts.entries()]

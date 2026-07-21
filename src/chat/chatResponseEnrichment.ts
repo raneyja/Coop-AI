@@ -17,6 +17,7 @@ import {
 import {
   enrichTraceDecisionResponse
 } from "../prompts/decisionResponseEnrichment";
+import { enrichFindOwnerResponse } from "../prompts/ownershipResponseEnrichment";
 import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
 import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
 import {
@@ -87,6 +88,9 @@ export function enrichChatResponseForAction(options: {
         fallbackTimeline: options.fallbackTimeline,
         isFollowUp: options.isTraceFollowUp
       });
+      break;
+    case "find-owner":
+      enriched = enrichFindOwnerResponse(enriched);
       break;
     case "knowledge-gaps": {
       enriched = enrichKnowledgeGapsResponse(enriched, {

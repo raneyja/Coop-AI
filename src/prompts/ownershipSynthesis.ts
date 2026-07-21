@@ -30,10 +30,14 @@ import {
 
 export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intelligence system. Given structured evidence from the Sources card (commits/reviews, team structure, Slack presence, specialties), answer who to contact — scannable, not an ownership essay.
 
-Lead with who to contact first and why. Then:
-1. List true expert(s) compactly (tier + one evidence cue each)
-2. Add escalation only when evidence names backups, managers, or channels
-3. Mention availability, risks, or knowledge-transfer only when evidence-backed and useful — otherwise omit those sections
+Lead with who to contact first and why. Core path only:
+1. **Summary** — who to ping now (1-2 sentences)
+2. **True experts** — compact bullets (tier + one evidence cue). Cap at a few people.
+3. **Escalation path** — only when evidence names backups, managers, or channels; otherwise omit
+4. **Sources**
+
+Hard-omit **Availability**, **Risks**, and **Knowledge transfer** unless evidence is high-signal and actionable. Never emit **Recommended next step** or outreach drafts.
+Treat GitHub/GitLab login and display name (or email aliases) as the **same person** when evidence links them — never list \`@login\` and \`Display Name\` as two experts.
 
 Never invent owners or contacts absent from the evidence. Be pragmatic: if a listed owner is inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
@@ -100,9 +104,28 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   } else {
     lines.push("Synthesize from evidence only — who to contact first and why; omit empty optional sections.");
   }
+  lines.push(
+    "Identity: if the same human appears as both a login and a display name, treat them as one person (prefer @login)."
+  );
+  lines.push(
+    "Response shape: Summary → True experts → Escalation (if evidenced) → Sources. Hard-omit empty Availability/Risks/Knowledge transfer. Never emit Recommended next step."
+  );
   lines.push("Follow the required response structure in your system instructions. Keep the whole answer short.");
 
   return lines.join("\n");
+}
+
+/** Prefer @login; show display name only when it differs from the login. */
+export function formatOwnershipScoreHandle(score: {
+  owner: string;
+  githubLogin?: string;
+}): string {
+  const login = (score.githubLogin ?? score.owner).replace(/^@/, "").trim();
+  const owner = score.owner.replace(/^@/, "").trim();
+  if (login && owner && login.toLowerCase() !== owner.toLowerCase() && /\s/.test(owner)) {
+    return `@${login} (${owner})`;
+  }
+  return `@${login || owner}`;
 }
 
 function appendOwnershipSlackCitationGuidance(
@@ -166,7 +189,7 @@ export function formatOwnershipReportForPrompt(
           .slice(0, 10)
           .map(
             (s) =>
-              `- @${s.owner} (${ownershipTierLabel(s.tier)})` +
+              `- ${formatOwnershipScoreHandle(s)} (${ownershipTierLabel(s.tier)})` +
               `${s.specialty ? ` · specialty: ${s.specialty}` : ""}` +
               `${s.commitCount ? ` · ${s.commitCount} commits (6mo)` : ""}` +
               `${s.reviewApprovals ? ` · ${s.reviewApprovals} PR approvals` : ""}` +
@@ -184,7 +207,7 @@ export function formatOwnershipReportForPrompt(
       `### ${ownershipSourceLabelSlack()}\n` +
         presenceScores
           .slice(0, 10)
-          .map((score) => `- @${score.owner}: ${score.presence!.label}`)
+          .map((score) => `- ${formatOwnershipScoreHandle(score)}: ${score.presence!.label}`)
           .join("\n")
     );
   }

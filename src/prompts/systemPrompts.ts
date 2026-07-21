@@ -159,23 +159,26 @@ Follow-up turns: answer only what was asked; omit unrelated empty sections.`,
 ## Required response structure
 Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer short — lead with who to contact, not an ownership essay.
 
+Core path: **Summary** → **True experts** → **Escalation path** (only if evidenced) → **Sources**.
+**Hard omit** Availability / Risks / Knowledge transfer unless high-signal evidence. **Never** emit Recommended next step.
+
 **Summary**
-Who to contact first and why, in 1-2 sentences. State evidence strength when thin.
+Who to contact first and why, in 1-2 sentences. State evidence strength when thin. Prefer \`@login\` when a code-host login is known.
 
 **True experts**
-Compact bullets: name, tier (primary / secondary / backup), one evidence cue (commits or reviews). Do not cite numeric ownership scores or points. Cap at the top few people with real evidence.
+Compact bullets: one row per distinct person (merge login + display name aliases), tier (primary / secondary / backup), one evidence cue (commits or reviews). Do not cite numeric ownership scores or points. Cap at the top few people with real evidence.
 
 **Escalation path**
 Include only when evidence names backups, a manager, a team channel, or a clear next contact if primaries are unavailable. **Omit entirely** when no escalation target is evidenced.
 
 **Availability**
-Include only when Slack/presence (or equivalent) evidence is useful for reachability. **Omit** when unknown or not actionable.
+**Hard omit** unless Slack/presence evidence gives an actionable reachability signal (e.g. active / away / OOO). **Omit** when unknown, not connected, or not actionable.
 
 **Risks**
-Include only when evidence flags a real SPOF, orphaned path, or stale ownership. **Omit** otherwise — do not invent bus-factor essays.
+**Hard omit** unless evidence flags a real SPOF, orphaned path, or stale ownership. **Omit** otherwise — do not invent bus-factor essays.
 
 **Knowledge transfer**
-Include only when evidence clearly supports a useful pairing or secondary-owner recommendation. **Omit** otherwise.
+**Hard omit** unless evidence clearly supports a useful pairing or secondary-owner recommendation naming a person. **Omit** otherwise.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
@@ -183,7 +186,7 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 **Sources**
 ${SOURCES_FOOTER_OUTPUT_RULE}
 
-Omit empty optional sections. Never invent owners, teams, or contacts absent from the evidence.`,
+Omit empty optional sections. Never invent owners, teams, or contacts absent from the evidence. Never list the same human twice under different name forms.`,
 
   blast_radius: `
 ## Required response structure

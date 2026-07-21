@@ -119,7 +119,8 @@ export class OwnershipGraphEngine {
       specialties: []
     };
 
-    let scores = calculateOwnershipScores(signals);
+    const identityDirectory = await getIdentityDirectory().catch(() => undefined);
+    let scores = calculateOwnershipScores(signals, undefined, undefined, { identityDirectory });
     if (scores.length === 0 && commitStats.length > 0) {
       warnings.push("All contributors appear inactive for 6+ months; showing historical owners with reduced confidence.");
       const fallbackActivity = commitStats.map((c) => ({
@@ -129,13 +130,12 @@ export class OwnershipGraphEngine {
         inactive: false
       }));
       signals.activity = fallbackActivity;
-      scores = calculateOwnershipScores(signals);
+      scores = calculateOwnershipScores(signals, undefined, undefined, { identityDirectory });
     }
 
     const slack = await this.resolveSlackClient();
     if (slack) {
       try {
-        const identityDirectory = await getIdentityDirectory();
         scores = await enrichScoresWithPresence(scores, slack, { identityDirectory });
       } catch (error) {
         warnings.push(`Slack presence lookup failed: ${errorMessage(error)}`);

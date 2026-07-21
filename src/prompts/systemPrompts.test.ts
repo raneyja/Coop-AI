@@ -87,16 +87,20 @@ test("ownership use case leads with contact and omits empty optional sections", 
   assert.ok(prompt.includes("**Escalation path**"));
   assert.ok(prompt.includes("**Omit entirely** when no escalation target is evidenced"));
   assert.ok(prompt.includes("lead with who to contact, not an ownership essay"));
+  assert.ok(prompt.includes("Core path: **Summary** → **True experts**"));
+  assert.ok(prompt.includes("**Hard omit**"));
+  assert.ok(prompt.includes("Never** emit Recommended next step"));
+  assert.ok(prompt.includes("merge login + display name"));
   assert.ok(prompt.includes("Omit empty optional sections"));
   assert.ok(prompt.includes("Never invent owners"));
-  assert.ok(!prompt.includes("**Recommended next step**"));
+  assert.ok(!prompt.includes("**Recommended next step**\n"));
   // Optional sections remain as omit-unless-useful, not always-required essay padding
   assert.ok(prompt.includes("**Availability**"));
-  assert.ok(prompt.includes("**Omit** when unknown or not actionable"));
+  assert.ok(prompt.includes("**Hard omit** unless Slack/presence"));
   assert.ok(prompt.includes("**Risks**"));
   assert.ok(prompt.includes("do not invent bus-factor essays"));
   assert.ok(prompt.includes("**Knowledge transfer**"));
-  assert.ok(prompt.includes("**Omit** otherwise"));
+  assert.ok(prompt.includes("**Hard omit** unless evidence clearly supports"));
 });
 
 test("blast_radius use case enforces short graph-grounded structure", () => {
