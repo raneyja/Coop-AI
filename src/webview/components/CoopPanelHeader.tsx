@@ -31,16 +31,24 @@ export function CoopPanelHeader({
   actions
 }: CoopPanelHeaderProps): React.ReactElement {
   const TitleTag = titleElement;
+  const backAriaLabel = backLabel ?? "Back";
+  const iconOnlyBack = Boolean(onBack) && !backLabel;
 
   return (
     <header
       className={`coop-panel-header${variant === "panel" ? " coop-panel-header--bordered" : ""}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        {onBack && backLabel ? (
-          <button type="button" className="coop-panel-back-btn shrink-0" onClick={onBack}>
+        {onBack ? (
+          <button
+            type="button"
+            className={`coop-panel-back-btn shrink-0${iconOnlyBack ? " coop-panel-back-btn--icon" : ""}`}
+            onClick={onBack}
+            aria-label={backAriaLabel}
+            title={backAriaLabel}
+          >
             <BackIcon />
-            <span>{backLabel}</span>
+            {backLabel ? <span>{backLabel}</span> : null}
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
