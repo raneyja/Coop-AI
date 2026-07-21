@@ -223,35 +223,39 @@ export class BlastRadiusAnalysisEngine {
     }
 
     let slackSearch: BlastRadiusReport["slackSearch"];
-    try {
-      const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
-      const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
-      const query = [repoQuery, fileStem, ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)]
-        .filter(Boolean)
-        .join(" OR ");
-      const slackScope = await this.options.resolveSlackScope?.();
-      const slack = await fetchSlackSearchContext({
-        secrets: this.options.integrationSecrets,
-        owner: resolved.owner,
-        repo: resolved.repo,
-        queryText: query,
-        integrationScope: slackScope
-      });
-      slackSearch = {
-        query: slack.query,
-        messages: slack.messages.slice(0, 15).map((message) => ({
-          channelName: message.channelName,
-          userName: message.userName,
-          text: message.text,
-          permalink: message.permalink
-        })),
-        error: slack.error
-      };
-      if (slack.error) {
-        warnings.push(slack.error);
+    // Soft Slack: do not block a Strong graph answer on discussion search.
+    // Enrichment may still attach Slack within BLAST_RADIUS_INTEGRATION_BUDGET_MS.
+    if (directDependents.length === 0) {
+      try {
+        const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
+        const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
+        const query = [repoQuery, fileStem, ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)]
+          .filter(Boolean)
+          .join(" OR ");
+        const slackScope = await this.options.resolveSlackScope?.();
+        const slack = await fetchSlackSearchContext({
+          secrets: this.options.integrationSecrets,
+          owner: resolved.owner,
+          repo: resolved.repo,
+          queryText: query,
+          integrationScope: slackScope
+        });
+        slackSearch = {
+          query: slack.query,
+          messages: slack.messages.slice(0, 15).map((message) => ({
+            channelName: message.channelName,
+            userName: message.userName,
+            text: message.text,
+            permalink: message.permalink
+          })),
+          error: slack.error
+        };
+        if (slack.error) {
+          warnings.push(slack.error);
+        }
+      } catch (error) {
+        warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
       }
-    } catch (error) {
-      warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
     }
 
     const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);

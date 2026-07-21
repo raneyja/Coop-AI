@@ -12,7 +12,13 @@ import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionContext";
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
-import { shouldFetchTraceDecisionIntegrations, shouldFetchTraceDecisionSoftDocIntegrations } from "./integrationFetchPolicy";
+import {
+  isBlastRadiusQuickAction,
+  shouldFetchBlastRadiusSoftDocIntegrations,
+  shouldFetchTraceDecisionIntegrations,
+  shouldFetchTraceDecisionSoftDocIntegrations,
+  type BlastRadiusGraphEvidence
+} from "./integrationFetchPolicy";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -133,10 +139,37 @@ async function enrichIntegrationStages(
 
   const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
   const timeline = asRecord(options.result.data).timeline as DecisionTimeline | undefined;
-  const softDocs =
-    !shouldFetchTraceDecisionIntegrations(options.request) ||
-    shouldFetchTraceDecisionSoftDocIntegrations(options.request, timeline);
+  const blastEvidence = extractBlastRadiusGraphEvidence(options.result.data);
+  const softDocs = resolveSoftDocFetch(options.request, timeline, blastEvidence);
   const shouldFetchNotion = softDocs && deps.shouldFetchNotionContext(options.request);
+  const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
+  const shouldFetchGoogleDocs = softDocs && deps.shouldFetchGoogleDocsContext(options.request);
+  const shouldFetchSlack = deps.shouldFetchSlackContext(options.request);
+  const shouldFetchTeams = deps.shouldFetchTeamsContext(options.request);
+  const shouldFetchCodeHost =
+    deps.shouldFetchCodeHostContext(options.request) && Boolean(options.codeHostConnected);
+
+  // Blast Radius: fan out remaining tools in parallel so empty Slack/Confluence
+  // cannot add sequential stage time after Notion/Docs. Soft docs already skipped
+  // when graph evidence is Strong.
+  if (isBlastRadiusQuickAction(options.request.params.quickAction)) {
+    await enrichBlastRadiusIntegrationsInParallel({
+      options,
+      data,
+      deps,
+      base,
+      integrationTerms,
+      shouldFetchConfluence,
+      shouldFetchNotion,
+      shouldFetchJira,
+      shouldFetchGoogleDocs,
+      shouldFetchSlack,
+      shouldFetchTeams,
+      shouldFetchCodeHost
+    });
+    return;
+  }
+
   const [confluenceSearch, notionSearch] = await Promise.all([
     shouldFetchConfluence
       ? deps.fetchConfluenceSearchContext({
@@ -168,8 +201,6 @@ async function enrichIntegrationStages(
   const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
   const docExtraTerms = [...integrationTerms, ...crossToolText];
 
-  const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
-  const shouldFetchGoogleDocs = softDocs && deps.shouldFetchGoogleDocsContext(options.request);
   const [jiraSearch, googleDocsSearch] = await Promise.all([
     shouldFetchJira
       ? deps.fetchJiraSearchContext({
@@ -202,8 +233,6 @@ async function enrichIntegrationStages(
   )?.issues
     ?.map((issue) => issue.key?.trim())
     .filter((key): key is string => Boolean(key));
-  const shouldFetchSlack = deps.shouldFetchSlackContext(options.request);
-  const shouldFetchTeams = deps.shouldFetchTeamsContext(options.request);
   const [slackSearch, teamsSearch] = await Promise.all([
     shouldFetchSlack
       ? deps.fetchSlackSearchContext({
@@ -229,13 +258,191 @@ async function enrichIntegrationStages(
   if (shouldFetchTeams) {
     data.teamsSearch = teamsSearch;
   }
-  if (deps.shouldFetchCodeHostContext(options.request) && options.codeHostConnected) {
+  if (shouldFetchCodeHost) {
     data.codeHostSearch = await deps.fetchCodeHostSearchContext({
       router: options.codeHostRouter,
       provider: options.codeHostProvider,
       ...base
     });
   }
+}
+
+function resolveSoftDocFetch(
+  request: ContextFetchRequest,
+  timeline: DecisionTimeline | undefined,
+  blastEvidence: BlastRadiusGraphEvidence | undefined
+): boolean {
+  if (isBlastRadiusQuickAction(request.params.quickAction)) {
+    return shouldFetchBlastRadiusSoftDocIntegrations(request, blastEvidence);
+  }
+  return (
+    !shouldFetchTraceDecisionIntegrations(request) ||
+    shouldFetchTraceDecisionSoftDocIntegrations(request, timeline)
+  );
+}
+
+function extractBlastRadiusGraphEvidence(data: unknown): BlastRadiusGraphEvidence | undefined {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  const record = asRecord(data);
+  const report =
+    typeof record.report === "object" && record.report !== null
+      ? (record.report as BlastRadiusGraphEvidence)
+      : undefined;
+  return {
+    directDependents: Array.isArray(record.directDependents)
+      ? (record.directDependents as string[])
+      : report?.directDependents,
+    transitiveDependents: Array.isArray(record.transitiveDependents)
+      ? (record.transitiveDependents as string[])
+      : report?.transitiveDependents,
+    dependentDetails: Array.isArray(record.dependentDetails)
+      ? (record.dependentDetails as unknown[])
+      : report?.dependentDetails,
+    ownersByFile: Array.isArray(record.ownersByFile)
+      ? (record.ownersByFile as unknown[])
+      : report?.ownersByFile,
+    completeness:
+      typeof record.completeness === "string"
+        ? (record.completeness as BlastRadiusGraphEvidence["completeness"])
+        : report?.completeness
+  };
+}
+
+async function enrichBlastRadiusIntegrationsInParallel(input: {
+  options: {
+    secrets: IntegrationSecrets;
+    codeHostRouter: CodeHostRouter;
+    owner?: string;
+    repo?: string;
+    codeHostProvider?: CodeHostProvider;
+    codeHostConnected?: boolean;
+    integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+  };
+  data: Record<string, unknown>;
+  deps: IntegrationChatEnrichmentDeps;
+  base: {
+    owner?: string;
+    repo?: string;
+    queryText?: string;
+    activeFile?: string;
+    contextText?: string[];
+  };
+  integrationTerms: string[];
+  shouldFetchConfluence: boolean;
+  shouldFetchNotion: boolean;
+  shouldFetchJira: boolean;
+  shouldFetchGoogleDocs: boolean;
+  shouldFetchSlack: boolean;
+  shouldFetchTeams: boolean;
+  shouldFetchCodeHost: boolean;
+}): Promise<void> {
+  const { options, data, deps, base, integrationTerms } = input;
+
+  // Assign as each tool settles so a budget snapshot can keep fast results
+  // even while slower tools are still in flight.
+  const tasks: Array<Promise<void>> = [];
+
+  if (input.shouldFetchConfluence) {
+    tasks.push(
+      deps
+        .fetchConfluenceSearchContext({
+          secrets: options.secrets,
+          owner: options.owner,
+          repo: options.repo,
+          extraTerms: integrationTerms,
+          integrationScope: options.integrationScopes?.atlassian
+        })
+        .then((result) => {
+          data.confluenceSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchNotion) {
+    tasks.push(
+      deps
+        .fetchNotionSearchContext({
+          secrets: options.secrets,
+          owner: options.owner,
+          repo: options.repo,
+          extraTerms: integrationTerms,
+          integrationScope: options.integrationScopes?.notion
+        })
+        .then((result) => {
+          data.notionSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchJira) {
+    tasks.push(
+      deps
+        .fetchJiraSearchContext({
+          secrets: options.secrets,
+          ...base,
+          codeHostRouter: options.codeHostRouter,
+          codeHostConnected: options.codeHostConnected,
+          integrationScope: options.integrationScopes?.atlassian
+        })
+        .then((result) => {
+          data.jiraSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchGoogleDocs) {
+    tasks.push(
+      deps
+        .fetchGoogleDocsSearchContext({
+          secrets: options.secrets,
+          ...base,
+          extraTerms: integrationTerms,
+          integrationScope: options.integrationScopes?.["google-docs"]
+        })
+        .then((result) => {
+          data.googleDocsSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchSlack) {
+    tasks.push(
+      deps
+        .fetchSlackSearchContext({
+          secrets: options.secrets,
+          ...base,
+          integrationScope: options.integrationScopes?.slack
+        })
+        .then((result) => {
+          data.slackSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchTeams) {
+    tasks.push(
+      deps
+        .fetchTeamsSearchContext({
+          secrets: options.secrets,
+          ...base
+        })
+        .then((result) => {
+          data.teamsSearch = result;
+        })
+    );
+  }
+  if (input.shouldFetchCodeHost) {
+    tasks.push(
+      deps
+        .fetchCodeHostSearchContext({
+          router: options.codeHostRouter,
+          provider: options.codeHostProvider,
+          ...base
+        })
+        .then((result) => {
+          data.codeHostSearch = result;
+        })
+    );
+  }
+
+  await Promise.all(tasks);
 }
 
 async function resolveTraceDecisionSearchSeeds(options: {
