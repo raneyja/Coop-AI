@@ -14,10 +14,10 @@ import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
 import {
   isBlastRadiusQuickAction,
-  shouldFetchBlastRadiusSoftDocIntegrations,
+  shouldFetchSoftDocIntegrations,
   shouldFetchTraceDecisionIntegrations,
-  shouldFetchTraceDecisionSoftDocIntegrations,
-  type BlastRadiusGraphEvidence
+  type BlastRadiusGraphEvidence,
+  type KnowledgeGapsScanEvidence
 } from "./integrationFetchPolicy";
 import {
   buildIntegrationSearchTermList,
@@ -80,6 +80,8 @@ export async function enrichChatContextWithIntegrations(options: {
    * cancelled. When unset, all requested integrations are awaited to completion.
    */
   budgetMs?: number;
+  /** Precomputed knowledge-gap scan — used to skip soft docs when gaps are already confirmed. */
+  knowledgeGapScan?: KnowledgeGapsScanEvidence;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const deps = {
@@ -120,6 +122,7 @@ async function enrichIntegrationStages(
     codeHostProvider?: CodeHostProvider;
     codeHostConnected?: boolean;
     integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+    knowledgeGapScan?: KnowledgeGapsScanEvidence;
   },
   data: Record<string, unknown>,
   deps: IntegrationChatEnrichmentDeps
@@ -140,7 +143,14 @@ async function enrichIntegrationStages(
   const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
   const timeline = asRecord(options.result.data).timeline as DecisionTimeline | undefined;
   const blastEvidence = extractBlastRadiusGraphEvidence(options.result.data);
-  const softDocs = resolveSoftDocFetch(options.request, timeline, blastEvidence);
+  const knowledgeGapScan =
+    options.knowledgeGapScan ??
+    (asRecord(options.result.data).jobScan as KnowledgeGapsScanEvidence | undefined);
+  const softDocs = shouldFetchSoftDocIntegrations(options.request, {
+    timeline,
+    blastEvidence,
+    knowledgeGapScan
+  });
   const shouldFetchNotion = softDocs && deps.shouldFetchNotionContext(options.request);
   const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
   const shouldFetchGoogleDocs = softDocs && deps.shouldFetchGoogleDocsContext(options.request);
@@ -265,20 +275,6 @@ async function enrichIntegrationStages(
       ...base
     });
   }
-}
-
-function resolveSoftDocFetch(
-  request: ContextFetchRequest,
-  timeline: DecisionTimeline | undefined,
-  blastEvidence: BlastRadiusGraphEvidence | undefined
-): boolean {
-  if (isBlastRadiusQuickAction(request.params.quickAction)) {
-    return shouldFetchBlastRadiusSoftDocIntegrations(request, blastEvidence);
-  }
-  return (
-    !shouldFetchTraceDecisionIntegrations(request) ||
-    shouldFetchTraceDecisionSoftDocIntegrations(request, timeline)
-  );
 }
 
 function extractBlastRadiusGraphEvidence(data: unknown): BlastRadiusGraphEvidence | undefined {
