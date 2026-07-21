@@ -42,6 +42,21 @@ const SPECULATIVE_TRADEOFF_PATTERNS = [
   /\bpotential trade-?offs\b/i
 ];
 
+const UNKNOWN_FILLER_HEADINGS = [
+  "Business context",
+  "Known limitations",
+  "Decision status",
+  "Domain experts",
+  "Who to engage"
+];
+
+const DOC_REVIEW_CLAIM_HEADINGS = [
+  "Notion pages reviewed",
+  "Confluence pages reviewed",
+  "Google Docs reviewed",
+  "Related documentation"
+];
+
 export function responseHasSpeculativeTradeoffs(content: string): boolean {
   return SPECULATIVE_TRADEOFF_PATTERNS.some((pattern) => pattern.test(content));
 }
@@ -75,6 +90,14 @@ function replaceSectionBody(content: string, heading: string, body: string): str
     return `${content.trimEnd()}\n\n**${heading}**\n${body}`;
   }
   return content.replace(pattern, `$1${body.trim()}\n`);
+}
+
+function removeSection(content: string, heading: string): string {
+  const pattern = new RegExp(
+    `\\n\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n[\\s\\S]*?(?=\\n\\*\\*[^*]|$)`,
+    "i"
+  );
+  return content.replace(pattern, "\n");
 }
 
 function discussionGroundingTokens(timeline: DecisionTimeline): string[] {
@@ -203,6 +226,42 @@ function shouldReplaceWithGroundedAlternatives(
   return alternativesSectionsLackGrounding(content, timeline);
 }
 
+function collectWhoToEngage(timeline: DecisionTimeline): string[] {
+  const people = new Set<string>();
+  if (timeline.originalCommit?.author?.trim()) {
+    people.add(timeline.originalCommit.author.trim());
+  }
+  for (const approver of timeline.linkedPR?.approvers ?? []) {
+    if (approver.trim()) {
+      people.add(approver.trim());
+    }
+  }
+  for (const participant of timeline.slackThread?.participants ?? []) {
+    if (participant.trim()) {
+      people.add(participant.trim());
+    }
+  }
+  for (const participant of timeline.teamsThread?.participants ?? []) {
+    if (participant.trim()) {
+      people.add(participant.trim());
+    }
+  }
+  return [...people];
+}
+
+function technicalDecisionFromTimeline(timeline: DecisionTimeline, file: string): string {
+  if (timeline.linkedPR?.description?.trim()) {
+    return truncate(timeline.linkedPR.description.trim().replace(/\s+/g, " "), 280);
+  }
+  if (timeline.originalCommit?.message?.trim()) {
+    return `Introduced in commit ${timeline.originalCommit.sha.slice(0, 7)}: ${truncate(
+      timeline.originalCommit.message.trim().replace(/\s+/g, " "),
+      220
+    )}`;
+  }
+  return `No commit or PR rationale attached for \`${file}\`.`;
+}
+
 /** Compact, evidence-honest answer when only an introducing commit is available. */
 export function buildThinAlternativesTradeOffsResponse(
   timeline: DecisionTimeline,
@@ -216,19 +275,25 @@ export function buildThinAlternativesTradeOffsResponse(
   // Default: omit Unknown fillers. Only include one-line unknowns when the caller
   // asked about alternatives/trade-offs explicitly.
   const includeUnknown = options?.includeUnknownSections === true;
+  const people = collectWhoToEngage(timeline);
 
   const lines = [
     "**Summary**",
     `Evidence is **limited** — only the introducing commit for \`${file}\` is attached.`,
+    "",
+    "**Technical decision**",
+    technicalDecisionFromTimeline(timeline, file),
     ""
   ];
+
+  if (people.length > 0) {
+    lines.push("**Who to engage**", people.map((person) => `- ${person}`).join("\n"), "");
+  }
 
   if (includeUnknown) {
     lines.push(
       "**Alternatives considered**",
-      warningNote
-        ? `Not documented (${warningNote}).`
-        : "Not documented in attached sources.",
+      warningNote ? `Not documented (${warningNote}).` : "Not documented in attached sources.",
       "",
       "**Trade-offs**",
       "Not documented in attached sources.",
@@ -241,7 +306,9 @@ export function buildThinAlternativesTradeOffsResponse(
     lines.push("**Sources**");
     for (const item of checklist) {
       if (commitLabel && item.startsWith(commitLabel)) {
-        lines.push(`- ${commitLabel} — original introduction; does not record rejected alternatives or trade-offs.`);
+        lines.push(
+          `- ${commitLabel} — original introduction; does not record rejected alternatives or trade-offs.`
+        );
       } else {
         lines.push(`- ${item}`);
       }
@@ -258,13 +325,70 @@ export function buildThinAlternativesTradeOffsResponse(
 export function stripSpeculativeAlternativesTradeOffs(content: string): string {
   let result = content;
   for (const heading of ["Alternatives considered", "Trade-offs"]) {
-    const pattern = new RegExp(
-      `\\n\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n[\\s\\S]*?(?=\\n\\*\\*[^*]|$)`,
-      "i"
-    );
-    result = result.replace(pattern, "\n");
+    result = removeSection(result, heading);
   }
   return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function isUnknownFillerBody(body: string): boolean {
+  const trimmed = body
+    .replace(/^[-*]\s+/gm, "")
+    .replace(/\*\*/g, "")
+    .trim()
+    .toLowerCase();
+  if (!trimmed) {
+    return true;
+  }
+  return (
+    /^unknown(\s*[—–-]\s*.*)?\.?$/.test(trimmed) ||
+    /^not (recorded|documented|available|known)(\s+in\s+.+)?\.?$/.test(trimmed) ||
+    /^n\/a\.?$/.test(trimmed) ||
+    /^none\.?$/.test(trimmed) ||
+    /^unclear\.?$/.test(trimmed)
+  );
+}
+
+/** Drop Unknown / empty optional Trace sections the model pads with. */
+export function stripUnknownFillerSections(content: string): string {
+  let result = `\n${content.replace(/\r\n/g, "\n")}`;
+  for (const heading of UNKNOWN_FILLER_HEADINGS) {
+    const body = extractSectionBody(result, heading);
+    if (body !== undefined && isUnknownFillerBody(body)) {
+      result = removeSection(result, heading);
+    }
+  }
+  return result.replace(/^\n/, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * Remove "pages reviewed" / "content was not retrievable" claims when Trace only had
+ * title matches (or the model invented a review list). Prefer GitHub/discussion Sources.
+ */
+export function stripTitleOnlyDocReviewClaims(content: string): string {
+  let result = `\n${content.replace(/\r\n/g, "\n")}`;
+  for (const heading of DOC_REVIEW_CLAIM_HEADINGS) {
+    result = removeSection(result, heading);
+  }
+  // Inline claims like "6 Notion pages reviewed" / "content was not retrievable"
+  result = result.replace(
+    /^[ \t]*[-*]?\s*\d+\s+(notion|confluence|google docs?)\s+pages?\s+reviewed\.?[ \t]*$/gim,
+    ""
+  );
+  result = result.replace(
+    /^[ \t]*[-*]?\s*.{0,80}\bcontent was not retriev(?:able|ed)\b.*$/gim,
+    ""
+  );
+  result = result.replace(
+    /^[ \t]*[-*]?\s*.{0,80}\b(pages?|documents?)\s+reviewed\b(?![^\n]{0,40}\bexcerpt\b).*$/gim,
+    ""
+  );
+  return result.replace(/^\n/, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function finalizeTraceResponse(content: string): string {
+  return stripDisallowedNarrativeSourceCitations(
+    stripUnknownFillerSections(stripTitleOnlyDocReviewClaims(content))
+  );
 }
 
 /**
@@ -283,7 +407,7 @@ export function enrichTraceDecisionResponse(options: {
   const bundle = Array.isArray(options.contextBundle) ? options.contextBundle : [];
   const timeline = decisionTimelineFromBundle(bundle) ?? options.fallbackTimeline;
   if (!timeline) {
-    return options.content;
+    return finalizeTraceResponse(options.content);
   }
 
   const thin = !timelineHasDiscussionEvidence(timeline);
@@ -293,7 +417,7 @@ export function enrichTraceDecisionResponse(options: {
     const speculative = responseHasSpeculativeTradeoffs(options.content);
 
     if (asksAlternatives) {
-      return stripDisallowedNarrativeSourceCitations(
+      return finalizeTraceResponse(
         buildThinAlternativesTradeOffsResponse(
           timeline,
           options.activeFile?.trim() || timeline.file,
@@ -308,7 +432,7 @@ export function enrichTraceDecisionResponse(options: {
         /\*\*(Summary|Technical decision)\*\*/i.test(stripped) &&
         stripped.replace(/\*\*[^*]+\*\*/g, "").trim().length >= 12;
       if (!hasLead) {
-        return stripDisallowedNarrativeSourceCitations(
+        return finalizeTraceResponse(
           buildThinAlternativesTradeOffsResponse(
             timeline,
             options.activeFile?.trim() || timeline.file,
@@ -316,13 +440,11 @@ export function enrichTraceDecisionResponse(options: {
           )
         );
       }
-      return stripDisallowedNarrativeSourceCitations(stripped);
+      return finalizeTraceResponse(stripped);
     }
   } else if (shouldReplaceWithGroundedAlternatives(options.content, timeline, options.userQuestion)) {
-    return stripDisallowedNarrativeSourceCitations(
-      injectGroundedAlternativesSections(options.content, timeline)
-    );
+    return finalizeTraceResponse(injectGroundedAlternativesSections(options.content, timeline));
   }
 
-  return stripDisallowedNarrativeSourceCitations(options.content);
+  return finalizeTraceResponse(options.content);
 }

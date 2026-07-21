@@ -5,6 +5,8 @@ import {
   buildThinAlternativesTradeOffsResponse,
   enrichTraceDecisionResponse,
   responseHasSpeculativeTradeoffs,
+  stripTitleOnlyDocReviewClaims,
+  stripUnknownFillerSections,
   timelineHasDiscussionEvidence
 } from "./decisionResponseEnrichment";
 
@@ -62,18 +64,22 @@ test("responseHasSpeculativeTradeoffs detects generic inference filler", () => {
 test("buildThinAlternativesTradeOffsResponse stays compact and omits Unknown by default", () => {
   const text = buildThinAlternativesTradeOffsResponse(thinTimeline, "fastify.js");
   assert.ok(text.includes("**Summary**"));
+  assert.ok(text.includes("**Technical decision**"));
+  assert.ok(text.includes("Some random code."));
+  assert.ok(text.includes("**Who to engage**"));
+  assert.ok(text.includes("mcollina"));
   assert.ok(!text.includes("Unknown — not recorded"));
   assert.ok(!text.includes("**Alternatives considered**"));
   assert.ok(text.includes("[Sources: GitHub commit dd2bb73]"));
   assert.ok(!text.includes("Performance vs"));
-  assert.ok(text.split("\n").length < 12);
+  assert.ok(text.split("\n").length < 18);
 
   const asked = buildThinAlternativesTradeOffsResponse(thinTimeline, "fastify.js", {
     includeUnknownSections: true
   });
   assert.ok(asked.includes("**Alternatives considered**"));
   assert.ok(asked.includes("Not documented"));
-  assert.ok(asked.split("\n").length < 20);
+  assert.ok(asked.split("\n").length < 24);
 });
 
 test("enrichTraceDecisionResponse does not replace initial trace run when model prompt mentions trade-offs", () => {
@@ -250,6 +256,79 @@ test("enrichTraceDecisionResponse strips narrative source pills on thin evidence
 
   assert.ok(!enriched.includes("[Sources: Ownership signals]"));
   assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73] — introducing commit"));
+});
+
+test("stripUnknownFillerSections removes Unknown Decision status padding", () => {
+  const padded = [
+    "**Summary**",
+    "Introduced in dd2bb73.",
+    "",
+    "**Technical decision**",
+    "Some random code.",
+    "",
+    "**Decision status**",
+    "Unknown — not recorded in attached sources.",
+    "",
+    "**Business context**",
+    "Not documented.",
+    "",
+    "**Sources**",
+    "- [Sources: GitHub commit dd2bb73]"
+  ].join("\n");
+  const stripped = stripUnknownFillerSections(padded);
+  assert.ok(stripped.includes("**Summary**"));
+  assert.ok(stripped.includes("**Technical decision**"));
+  assert.ok(!stripped.includes("**Decision status**"));
+  assert.ok(!stripped.includes("**Business context**"));
+  assert.ok(stripped.includes("**Sources**"));
+});
+
+test("stripTitleOnlyDocReviewClaims removes Notion reviewed empty-body UX", () => {
+  const bad = [
+    "**Summary**",
+    "Retry helper from commit.",
+    "",
+    "**Notion pages reviewed**",
+    "- ADR COOP-55 — content was not retrievable",
+    "- 6 pages reviewed",
+    "",
+    "**Sources**",
+    "- [Sources: GitHub commit dd2bb73]"
+  ].join("\n");
+  const stripped = stripTitleOnlyDocReviewClaims(bad);
+  assert.ok(!stripped.includes("**Notion pages reviewed**"));
+  assert.ok(!stripped.includes("content was not retrievable"));
+  assert.ok(!stripped.includes("6 pages reviewed"));
+  assert.ok(stripped.includes("**Summary**"));
+});
+
+test("enrichTraceDecisionResponse strips title-only Notion reviewed claims", () => {
+  const withNotionNoise = [
+    "**Summary**",
+    "Introduced in dd2bb73.",
+    "",
+    "**Technical decision**",
+    "Some random code.",
+    "",
+    "**Notion pages reviewed**",
+    "- ADR COOP-55 — content was not retrievable",
+    "",
+    "**Sources**",
+    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: withNotionNoise,
+    userQuestion: "[trace-decision] Trace the engineering decision behind this code.",
+    contextBundle: bundle,
+    activeFile: "fastify.js",
+    fallbackTimeline: thinTimeline,
+    isFollowUp: false
+  });
+
+  assert.ok(!enriched.includes("**Notion pages reviewed**"));
+  assert.ok(!enriched.includes("content was not retrievable"));
+  assert.ok(enriched.includes("**Technical decision**"));
 });
 
 console.log(`\ndecisionResponseEnrichment: ${passed}/${passed + failed} tests passed`);

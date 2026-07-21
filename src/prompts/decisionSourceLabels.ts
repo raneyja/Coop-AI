@@ -60,23 +60,15 @@ export function listDecisionSourceLabels(timeline: DecisionTimeline): string[] {
       labels.push(decisionSourceLabelJira(issue.key));
     }
   }
-  const confluencePages = timeline.integrationSearch?.confluence?.pages ?? [];
-  if (confluencePages.length === 1) {
-    labels.push(decisionSourceLabelConfluence(confluencePages[0]!.title));
-  } else if (confluencePages.length > 1) {
-    labels.push(groupedIntegrationDocLabel("Confluence", confluencePages.length));
-  }
-  const notionPages = timeline.integrationSearch?.notion?.pages ?? [];
-  if (notionPages.length === 1) {
-    labels.push(decisionSourceLabelNotion(notionPages[0]!.title));
-  } else if (notionPages.length > 1) {
-    labels.push(groupedIntegrationDocLabel("Notion", notionPages.length));
-  }
-  const googleDocs = timeline.integrationSearch?.googleDocs?.documents ?? [];
-  if (googleDocs.length === 1) {
-    labels.push(decisionSourceLabelGoogleDocs(googleDocs[0]!.title));
-  } else if (googleDocs.length > 1) {
-    labels.push(groupedIntegrationDocLabel("Google Docs", googleDocs.length));
+  // Only Confluence pages with an excerpt count as documentation sources.
+  // Title-only Notion / Google Docs / Confluence hits are never checklist sources.
+  const confluenceWithBody = (timeline.integrationSearch?.confluence?.pages ?? []).filter((page) =>
+    Boolean(page.excerpt?.trim())
+  );
+  if (confluenceWithBody.length === 1) {
+    labels.push(decisionSourceLabelConfluence(confluenceWithBody[0]!.title));
+  } else if (confluenceWithBody.length > 1) {
+    labels.push(groupedIntegrationDocLabel("Confluence", confluenceWithBody.length));
   }
   return labels;
 }
@@ -114,18 +106,6 @@ function decisionSourceChecklistSuffix(label: string): string {
   }
   if (label.startsWith("[Sources: Confluence")) {
     return "architecture or ADR documentation from Confluence search";
-  }
-  if (label.startsWith("[Sources: Notion pages")) {
-    return "design or decision documentation from Notion search (grouped pages)";
-  }
-  if (label.startsWith("[Sources: Notion")) {
-    return "design or decision documentation from Notion search";
-  }
-  if (label.startsWith("[Sources: Google Docs (")) {
-    return "design or decision documentation from Google Docs search (grouped documents)";
-  }
-  if (label.startsWith("[Sources: Google Docs")) {
-    return "design or decision documentation from Google Docs search";
   }
   return "summarize what this source contributed to the decision";
 }

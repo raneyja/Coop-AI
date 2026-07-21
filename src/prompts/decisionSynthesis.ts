@@ -19,9 +19,7 @@ import {
 import {
   decisionSourceLabelCommit,
   decisionSourceLabelConfluence,
-  decisionSourceLabelGoogleDocs,
   decisionSourceLabelJira,
-  decisionSourceLabelNotion,
   decisionSourceLabelPr,
   decisionSourceLabelSlack,
   decisionSourceLabelTeams,
@@ -33,16 +31,18 @@ export const DECISION_HISTORIAN_SYSTEM = `You are a code historian. You have bee
 
 Each evidence section is labeled with an exact citation key like \`[Sources: PR #1506]\` or \`[Sources: Slack #engineering]\`.
 
-Lead with a scannable **Summary** (1–2 sentences). Expand only when evidence supports it — default short, not essay-length:
-1. Business need — omit when the bundle has no business signal beyond a bare commit.
-2. Technical decision — what was chosen and why (commit message, PR body, or discussion).
-3. Alternatives / trade-offs — only from PR review, Slack/Jira/Teams, or extracted alternatives; never invent.
-4. Known limitations / follow-ups — omit if none in evidence.
-5. Domain experts / who to engage — name people from evidence (authors, approvers, participants); omit if none.
-6. Decision status (active / superseded / unclear) — one short line when useful; omit when pure guesswork.
+Default answer shape (scannable in seconds — IDE, not a memo). Same structure for local workspace and remote repo traces:
+1. **Summary** — 1–2 sentences; state evidence strength when thin.
+2. **Technical decision** — what was chosen and why (commit message, PR body, or discussion).
+3. **Who to engage** — people named in evidence (author, approvers, participants); omit if none.
+4. **Sources** — checklist only.
 
-When Trace completeness is minimal/partial and there is no discussion evidence, keep the whole answer short (often under ~8 sentences): Summary + Technical decision + Sources is enough.
-Prefer **omitting** empty sections over "Unknown — not recorded" filler paragraphs. If the user explicitly asks about a missing topic, one honest line max.
+Expand beyond that only when evidence supports it:
+- Business context — omit when the bundle has no business signal beyond a bare commit.
+- Alternatives / trade-offs — only from PR review, Slack/Jira/Teams, or extracted alternatives; never invent.
+- Known limitations / Decision status — omit if none or speculative.
+
+Hard length cap for first-turn Trace: often under ~6 sentences / ~120 words when evidence is thin or partial without discussion. Prefer omit over "Unknown — not recorded" filler. Never claim Notion / Google Docs / Confluence pages were **reviewed** unless the evidence bundle includes a body or excerpt for that page — title-only hits are not reviews.
 
 The primary trace target is the file in ## Task and the decision timeline in ## Evidence bundle — not @-attached paths unless listed as in-scope in ## @ attachments.
 Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ attachments.
@@ -127,7 +127,10 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     appendFirstTurnLengthGuidance(lines, timeline);
   }
   lines.push(
-    "Include **Decision status** and **Who to engage** only when evidence names people or status clearly — omit rather than filler."
+    "Default sections: **Summary**, **Technical decision**, **Who to engage** (people from evidence only — omit if none), **Sources**. Omit **Decision status**, Business context, Alternatives, and Trade-offs unless evidence clearly supports them — never Unknown fillers."
+  );
+  lines.push(
+    "Title-only Notion / Google Docs hits (if any) are not reviewed content — do not say pages were reviewed or invent that content was not retrievable; omit them from narrative and Sources unless a body/excerpt is attached."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
@@ -154,18 +157,18 @@ function isThinTraceEvidence(timeline: DecisionTimeline): boolean {
 function appendFirstTurnLengthGuidance(lines: string[], timeline: DecisionTimeline): void {
   if (timelineHasDiscussionEvidence(timeline)) {
     lines.push(
-      "Discussion evidence is attached — cover Summary, Business context, and Technical decision; expand Alternatives/Trade-offs only with grounded quotes. Still omit sections with no evidence."
+      "Discussion evidence is attached — cover **Summary**, **Technical decision**, and **Who to engage**; add Business context only if stated; expand Alternatives/Trade-offs only with grounded quotes. Still omit sections with no evidence. Keep scannable (often under ~12 sentences)."
     );
     return;
   }
   if (isThinTraceEvidence(timeline)) {
     lines.push(
-      "Evidence is thin — produce the SHORT form for the primary file: **Summary**, **Technical decision** (from the introducing commit when that is all you have), and **Sources**. Omit empty sections; do not pad with Unknown essays."
+      "Evidence is thin — produce the SHORT form for the primary file: **Summary**, **Technical decision** (from the introducing commit when that is all you have), **Who to engage** (commit author if present), and **Sources**. Often under ~6 sentences. Omit empty sections; do not pad with Unknown essays."
     );
     return;
   }
   lines.push(
-    "Produce a compact first-turn trace for the primary file — Summary and Technical decision first; expand other sections only when evidence supports them. Prefer omit over Unknown fillers."
+    "Produce a compact first-turn trace for the primary file — Summary, Technical decision, Who to engage, Sources. Expand other sections only when evidence supports them. Prefer omit over Unknown fillers."
   );
 }
 
@@ -387,18 +390,56 @@ function appendIntegrationSearchSections(sections: string[], timeline: DecisionT
     );
   }
 
-  for (const page of search.confluence?.pages ?? []) {
+  const confluenceWithExcerpt = (search.confluence?.pages ?? []).filter((page) =>
+    Boolean(page.excerpt?.trim())
+  );
+  const confluenceTitleOnly = (search.confluence?.pages ?? []).filter(
+    (page) => !page.excerpt?.trim()
+  );
+  for (const page of confluenceWithExcerpt) {
     sections.push(
-      `### ${decisionSourceLabelConfluence(page.title)}\n- Excerpt: ${truncate(page.excerpt ?? "(none)", 300)}`
+      `### ${decisionSourceLabelConfluence(page.title)}\n- Excerpt: ${truncate(page.excerpt ?? "", 300)}`
+    );
+  }
+  if (confluenceTitleOnly.length > 0) {
+    sections.push(
+      "### Confluence title matches (not reviewed)\n" +
+        `- ${confluenceTitleOnly.length} title-only hit(s); no excerpt retrieved.\n` +
+        "- Do **not** claim these pages were reviewed.\n" +
+        confluenceTitleOnly
+          .slice(0, 5)
+          .map((page) => `- Title only: ${page.title}`)
+          .join("\n")
     );
   }
 
-  for (const page of search.notion?.pages ?? []) {
-    sections.push(`### ${decisionSourceLabelNotion(page.title)}\n- Notion page from targeted search`);
+  // Notion / Google Docs search returns titles only — never present as reviewed body evidence.
+  const notionTitleOnly = (search.notion?.pages ?? []).filter((page) => page.title.trim());
+  if (notionTitleOnly.length > 0) {
+    sections.push(
+      "### Notion title matches (not reviewed)\n" +
+        `- ${notionTitleOnly.length} title-only hit(s); page body was not retrieved.\n` +
+        "- Do **not** claim these pages were reviewed or invent their contents.\n" +
+        "- Omit from **Sources** narrative unless the user asks about docs by name.\n" +
+        notionTitleOnly
+          .slice(0, 5)
+          .map((page) => `- Title only: ${page.title}`)
+          .join("\n")
+    );
   }
 
-  for (const doc of search.googleDocs?.documents ?? []) {
-    sections.push(`### ${decisionSourceLabelGoogleDocs(doc.title)}\n- Google Doc from targeted search`);
+  const googleTitleOnly = (search.googleDocs?.documents ?? []).filter((doc) => doc.title.trim());
+  if (googleTitleOnly.length > 0) {
+    sections.push(
+      "### Google Docs title matches (not reviewed)\n" +
+        `- ${googleTitleOnly.length} title-only hit(s); document body was not retrieved.\n` +
+        "- Do **not** claim these documents were reviewed or invent their contents.\n" +
+        "- Omit from **Sources** narrative unless the user asks about docs by name.\n" +
+        googleTitleOnly
+          .slice(0, 5)
+          .map((doc) => `- Title only: ${doc.title}`)
+          .join("\n")
+    );
   }
 
   if ((search.slack?.messages.length ?? 0) > 0 && !timeline.slackThread) {
