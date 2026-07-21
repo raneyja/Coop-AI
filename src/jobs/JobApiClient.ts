@@ -137,8 +137,11 @@ export function jobTypeForQuickAction(actionId: string): JobType | undefined {
   switch (actionId) {
     case "knowledge-gaps":
       return JobType.SCAN_KNOWLEDGE_GAPS;
+    // Blast Radius answers from the Lightning/index sync path (dependents +
+    // CODEOWNERS). BUILD_DEPENDENCY_GRAPH is estimated ~120s and must not block
+    // the IDE quick action — keep the job type available for ops/indexing only.
     case "blast-radius":
-      return JobType.BUILD_DEPENDENCY_GRAPH;
+      return undefined;
     default:
       return undefined;
   }

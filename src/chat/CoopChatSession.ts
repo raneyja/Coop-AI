@@ -279,7 +279,7 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
-import { TRACE_DECISION_INTEGRATION_BUDGET_MS } from "../context/integrationFetchPolicy";
+import { BLAST_RADIUS_INTEGRATION_BUDGET_MS, TRACE_DECISION_INTEGRATION_BUDGET_MS } from "../context/integrationFetchPolicy";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -1884,14 +1884,17 @@ export class CoopChatSession {
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected(),
       integrationScopes,
-      // Understand Repo and Trace Decision pull connected tools but are time-bounded
-      // so a single slow integration can't block synthesis. Slower tools are dropped.
+      // Understand Repo, Trace Decision, and Blast Radius pull connected tools but
+      // are time-bounded so a single slow integration can't block synthesis.
+      // Slower tools are dropped. Blast also skips soft docs when graph is Strong.
       budgetMs:
         request.params.quickAction === "understand-repo"
           ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
           : request.params.quickAction === "trace-decision"
             ? TRACE_DECISION_INTEGRATION_BUDGET_MS
-            : undefined
+            : request.params.quickAction === "blast-radius"
+              ? BLAST_RADIUS_INTEGRATION_BUDGET_MS
+              : undefined
     });
   }
 

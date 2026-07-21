@@ -7,8 +7,11 @@ import { shouldFetchNotionContext } from "./notionContext";
 import { shouldFetchSlackContext } from "./slackContext";
 import { shouldFetchTeamsContext } from "./teamsContext";
 import {
+  BLAST_RADIUS_INTEGRATION_BUDGET_MS,
   REPO_WIDE_INTEGRATION_QUICK_ACTIONS,
   TRACE_DECISION_INTEGRATION_BUDGET_MS,
+  blastRadiusHasSufficientGraphEvidence,
+  shouldFetchBlastRadiusSoftDocIntegrations,
   shouldFetchDiscussionIntegrations,
   shouldFetchRepoWideIntegrations,
   shouldFetchTraceDecisionIntegrations,
@@ -154,6 +157,58 @@ test("trace-decision always skips soft title-only Notion/Docs", () => {
   // Repo-wide actions keep soft docs even with a timeline shape attached.
   assert.equal(
     shouldFetchTraceDecisionSoftDocIntegrations(request("understand-repo"), {
+      originalCommit: {
+        sha: "abc123",
+        author: "alice",
+        date: "2024-01-01",
+        message: "Add retry"
+      },
+      linkedPR: {
+        number: 1,
+        title: "Add retry",
+        state: "merged",
+        description: "Retries",
+        approvers: [],
+        reviews: []
+      }
+    }),
+    true
+  );
+});
+
+test("blast-radius soft docs skip when graph dependents are already Strong", () => {
+  const blastRequest = request("blast-radius", "dependencies");
+  assert.equal(BLAST_RADIUS_INTEGRATION_BUDGET_MS, 10_000);
+  assert.equal(blastRadiusHasSufficientGraphEvidence(undefined), false);
+  assert.equal(blastRadiusHasSufficientGraphEvidence({ directDependents: [] }), false);
+  assert.equal(
+    blastRadiusHasSufficientGraphEvidence({ directDependents: ["src/extension.ts"] }),
+    true
+  );
+  assert.equal(
+    blastRadiusHasSufficientGraphEvidence({
+      dependentDetails: [{ path: "src/extension.ts" }]
+    }),
+    true
+  );
+  assert.equal(
+    blastRadiusHasSufficientGraphEvidence({
+      completeness: "partial",
+      ownersByFile: [{ file: "src/CoopSettingsPanel.ts", owner: "@team", source: "codeowners" }]
+    }),
+    true
+  );
+  assert.equal(shouldFetchBlastRadiusSoftDocIntegrations(blastRequest), true);
+  assert.equal(
+    shouldFetchBlastRadiusSoftDocIntegrations(blastRequest, {
+      directDependents: ["src/extension.ts"]
+    }),
+    false
+  );
+  // Trace soft-doc helper still treats blast as repo-wide (keeps soft docs) —
+  // blast-specific policy is shouldFetchBlastRadiusSoftDocIntegrations.
+  assert.equal(
+    shouldFetchTraceDecisionSoftDocIntegrations(blastRequest, {
       originalCommit: {
         sha: "abc123",
         author: "alice",

@@ -264,6 +264,184 @@ test("enrichChatContextWithIntegrations returns partial results when budget elap
   }
 });
 
+test("blast-radius skips soft docs when graph dependents are Strong", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+  const started: string[] = [];
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const request = {
+      id: "ctx-blast",
+      type: "dependencies",
+      params: { quickAction: "blast-radius", file: "src/CoopSettingsPanel.ts" },
+      intent: { context: { queryText: "blast" } }
+    } as ContextFetchRequest;
+
+    const result = {
+      requestId: "ctx-blast",
+      type: "dependencies",
+      data: {
+        file: "src/CoopSettingsPanel.ts",
+        directDependents: ["src/extension.ts"],
+        dependentDetails: [{ path: "src/extension.ts", depth: 1, source: "remote" }],
+        completeness: "partial"
+      },
+      fetchedAt: new Date()
+    } as ContextFetchResult;
+
+    const enriched = await enrichChatContextWithIntegrations({
+      result,
+      request,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "acme",
+      repo: "coop-ai",
+      codeHostConnected: false,
+      budgetMs: 10_000,
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () => {
+          started.push("confluence");
+          return { pages: [] } as never;
+        },
+        shouldFetchNotionContext: () => true,
+        fetchNotionSearchContext: async () => {
+          started.push("notion");
+          return { pages: [{ title: "Notion page" }] } as never;
+        },
+        shouldFetchJiraContext: () => true,
+        fetchJiraSearchContext: async () => {
+          started.push("jira");
+          return { issues: [{ key: "COOP-1" }] } as never;
+        },
+        shouldFetchGoogleDocsContext: () => true,
+        fetchGoogleDocsSearchContext: async () => {
+          started.push("google-docs");
+          return { documents: [{ title: "Doc" }] } as never;
+        },
+        shouldFetchSlackContext: () => true,
+        fetchSlackSearchContext: async () => {
+          started.push("slack");
+          return { messages: [] } as never;
+        },
+        shouldFetchTeamsContext: () => false,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+
+    const data = enriched.data as Record<string, unknown>;
+    assert.ok(started.includes("confluence"));
+    assert.ok(started.includes("jira"));
+    assert.ok(started.includes("slack"));
+    assert.equal(started.includes("notion"), false, "Notion must skip when graph is Strong");
+    assert.equal(started.includes("google-docs"), false, "Google Docs must skip when graph is Strong");
+    assert.equal(data.notionSearch, undefined);
+    assert.equal(data.googleDocsSearch, undefined);
+    assert.ok(data.jiraSearch);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});
+
+test("blast-radius budget drops slow integrations without waiting for sequential stages", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const request = {
+      id: "ctx-blast-budget",
+      type: "dependencies",
+      params: { quickAction: "blast-radius", file: "src/CoopSettingsPanel.ts" },
+      intent: { context: { queryText: "blast" } }
+    } as ContextFetchRequest;
+
+    const result = {
+      requestId: "ctx-blast-budget",
+      type: "dependencies",
+      data: {
+        file: "src/CoopSettingsPanel.ts",
+        directDependents: ["src/extension.ts"],
+        completeness: "partial"
+      },
+      fetchedAt: new Date()
+    } as ContextFetchResult;
+
+    const startedAt = Date.now();
+    const enriched = await enrichChatContextWithIntegrations({
+      result,
+      request,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "acme",
+      repo: "coop-ai",
+      codeHostConnected: false,
+      budgetMs: 40,
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () => ({ pages: [{ title: "Fast" }] }) as never,
+        shouldFetchNotionContext: () => true,
+        fetchNotionSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchJiraContext: () => true,
+        fetchJiraSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchGoogleDocsContext: () => true,
+        fetchGoogleDocsSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchSlackContext: () => true,
+        fetchSlackSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchTeamsContext: () => false,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+    const elapsed = Date.now() - startedAt;
+
+    assert.ok(elapsed < 1000, `expected blast budget to bound latency, took ${elapsed}ms`);
+    const data = enriched.data as Record<string, unknown>;
+    assert.ok(data.confluenceSearch);
+    assert.equal(data.jiraSearch, undefined);
+    assert.equal(data.slackSearch, undefined);
+    // Soft docs skipped entirely when graph is Strong — never started.
+    assert.equal(data.notionSearch, undefined);
+    assert.equal(data.googleDocsSearch, undefined);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});
+
 test("trace-decision always skips title-only Notion/Docs (even without a linked PR)", async () => {
   const localFileResolverPath = require.resolve("./localFileResolver");
   const originalLocalFileResolverCache = require.cache[localFileResolverPath];
@@ -359,6 +537,86 @@ test("trace-decision always skips title-only Notion/Docs (even without a linked 
     assert.ok(data.confluenceSearch);
     assert.equal(data.notionSearch, undefined);
     assert.equal(data.googleDocsSearch, undefined);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});
+
+test("blast-radius budget drops slow tools and fans out in parallel", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const request = {
+      id: "ctx-blast-budget",
+      type: "dependencies",
+      params: { quickAction: "blast-radius", file: "src/CoopSettingsPanel.ts" },
+      intent: { context: { queryText: "blast radius" } }
+    } as ContextFetchRequest;
+
+    const result = {
+      requestId: "ctx-blast-budget",
+      type: "dependencies",
+      data: {
+        file: "src/CoopSettingsPanel.ts",
+        // Thin graph — soft docs stay eligible but must still respect budget.
+        directDependents: [],
+        completeness: "minimal"
+      },
+      fetchedAt: new Date()
+    } as ContextFetchResult;
+
+    const startedAt = Date.now();
+    const enriched = await enrichChatContextWithIntegrations({
+      result,
+      request,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "acme",
+      repo: "coop-ai",
+      codeHostConnected: false,
+      budgetMs: 40,
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () => ({ pages: [{ title: "Fast Confluence" }] }) as never,
+        shouldFetchNotionContext: () => true,
+        fetchNotionSearchContext: async () => ({ pages: [{ title: "Fast Notion" }] }) as never,
+        shouldFetchJiraContext: () => true,
+        fetchJiraSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchGoogleDocsContext: () => true,
+        fetchGoogleDocsSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchSlackContext: () => true,
+        fetchSlackSearchContext: () => new Promise(() => undefined) as never,
+        shouldFetchTeamsContext: () => false,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+    const elapsed = Date.now() - startedAt;
+
+    assert.ok(elapsed < 1000, `expected blast budget to bound latency, took ${elapsed}ms`);
+    const data = enriched.data as Record<string, unknown>;
+    assert.ok(data.confluenceSearch);
+    assert.ok(data.notionSearch);
+    assert.equal(data.jiraSearch, undefined);
+    assert.equal(data.slackSearch, undefined);
   } finally {
     delete require.cache[integrationChatEnrichmentPath];
     if (originalLocalFileResolverCache) {

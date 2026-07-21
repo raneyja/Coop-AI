@@ -311,7 +311,9 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return ["file_metadata", "ownership"];
   }
   if (action === "blast-radius") {
-    return ["file_metadata", "dependencies"];
+    // Dependencies first so integration enrichment can see graph evidence and
+    // skip soft docs when dependents are already Strong.
+    return ["dependencies", "file_metadata"];
   }
   if (action === "knowledge-gaps") {
     return ["file_metadata", "ownership", "dependencies", "knowledge_gaps"];
