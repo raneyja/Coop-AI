@@ -49,6 +49,7 @@ type ChatComposerProps = {
   onLaunchIntroSkip?: () => void;
   mentions?: ChatFileMention[];
   onMentionsChange?: (mentions: ChatFileMention[]) => void;
+  onMentionOpen?: (mention: ChatFileMention) => void;
   onMentionSearch?: (pattern: string) => void;
   mentionResults?: MentionSearchResult[];
   mentionLoading?: boolean;
@@ -157,6 +158,7 @@ export function ChatComposer({
   onLaunchIntroSkip,
   mentions = [],
   onMentionsChange,
+  onMentionOpen,
   onMentionSearch,
   mentionResults = [],
   mentionLoading = false,
@@ -555,6 +557,7 @@ export function ChatComposer({
                       : `${mention.path} · ${sourceLabel}`
                   }
                   disabled={isStreaming}
+                  onOpen={() => onMentionOpen?.(mention)}
                   onRemove={() =>
                     onMentionsChange?.(
                       mentions.filter(

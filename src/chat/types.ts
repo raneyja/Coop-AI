@@ -420,7 +420,7 @@ export type WebviewInbound =
     }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string; line?: number; preserveContext?: boolean } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number; preserveContext?: boolean; repoId?: string; source?: "local" | "indexed" } }
   | { type: "link:open"; payload: { url: string } }
   | { type: "github:repos:list"; payload?: { query?: string; requestId?: string } }
   | { type: "workspace:repos:save"; payload: { repoIds: string[] } }

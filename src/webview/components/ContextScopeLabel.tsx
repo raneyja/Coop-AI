@@ -16,30 +16,26 @@ function RepoIcon(): React.ReactElement {
   );
 }
 
-function FileIcon(): React.ReactElement {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 opacity-80">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
 type ContextScopeLabelProps = {
   context: RepoContext;
   onOpenExplorer?: () => void;
   onOpenFile?: () => void;
 };
 
-function remoteFileDetail(context: RepoContext): string | undefined {
-  if (context.fileSource !== "remote") {
-    return undefined;
+function isLocalFileContext(context: RepoContext): boolean {
+  return context.fileSource === "workspace" || context.fileSource === "git" || !context.fileSource;
+}
+
+function fileSourceDetail(context: RepoContext): string {
+  if (isLocalFileContext(context)) {
+    return "Local Workspace";
   }
   const owner = context.owner?.trim();
   const repo = context.repo?.trim();
   if (owner && repo) {
     return `${owner}/${repo}`;
   }
-  return "remote";
+  return "Remote";
 }
 
 export function ContextScopeLabel({
@@ -57,26 +53,38 @@ export function ContextScopeLabel({
 
   if (filePath) {
     const label = displayFileLabel(filePath);
-    const remoteDetail = remoteFileDetail(context);
-    const title = remoteDetail ? `${filePath} · ${remoteDetail}` : filePath;
-    const className = remoteDetail
-      ? "coop-source-chip ml-auto min-w-0 max-w-[min(100%,18rem)] !gap-1 !px-2 !py-0.5 leading-none font-normal"
-      : "ml-auto inline-flex min-w-0 max-w-[min(100%,14rem)] items-center gap-1 rounded-md px-2 py-0.5 text-[11px] " +
-        "bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]";
+    const isLocal = isLocalFileContext(context);
+    const sourceDetail = fileSourceDetail(context);
+    const badge = isLocal ? "L" : "R";
+    const title = `${filePath} · ${sourceDetail} — click to open in editor`;
+    const className =
+      "ml-auto inline-flex min-w-0 max-w-[min(100%,18rem)] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] " +
+      (isLocal
+        ? "border-[var(--coop-pill-border)] bg-[var(--coop-pill-surface)] text-[var(--coop-panel-foreground)]"
+        : "border-[var(--vscode-focusBorder)]/50 bg-[var(--coop-pill-surface)] text-[var(--coop-panel-foreground)]");
 
     const body = (
       <>
-        {remoteDetail ? <RepoIcon /> : <FileIcon />}
-        <span className="truncate">{label}</span>
-        {remoteDetail ? (
-          <span className="shrink-0 truncate text-[10px] opacity-80">{remoteDetail}</span>
-        ) : null}
+        <span
+          className={`shrink-0 rounded px-1 text-[10px] font-semibold leading-none ${
+            isLocal
+              ? "bg-[var(--coop-pill-border)]/40 text-[var(--coop-panel-muted)]"
+              : "bg-[var(--vscode-focusBorder)]/25 text-[var(--coop-panel-foreground)]"
+          }`}
+          aria-hidden="true"
+        >
+          {badge}
+        </span>
+        <span className="max-w-[120px] truncate font-medium">{label}</span>
+        <span className="shrink-0 max-w-[100px] truncate text-[10px] text-[var(--coop-panel-muted)]">
+          {sourceDetail}
+        </span>
       </>
     );
 
     if (!onOpenFile) {
       return (
-        <span className={className} title={title}>
+        <span className={className} title={title} data-context-source={isLocal ? "local" : "remote"}>
           {body}
         </span>
       );
@@ -88,8 +96,9 @@ export function ContextScopeLabel({
         className={`${className} cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]`}
         title={title}
         aria-label={
-          remoteDetail ? `Open ${filePath} from ${remoteDetail}` : `Open ${filePath} in editor`
+          isLocal ? `Open local file ${filePath}` : `Open remote file ${filePath} from ${sourceDetail}`
         }
+        data-context-source={isLocal ? "local" : "remote"}
         onClick={onOpenFile}
       >
         <span className="inline-flex min-w-0 items-center gap-1 underline decoration-transparent underline-offset-2 hover:decoration-current">

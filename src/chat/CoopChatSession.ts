@@ -215,7 +215,8 @@ import {
   isQuickActionBlocked,
   quickActionBlockedMessage
 } from "../context/quickActionScope";
-import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
+import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext, isRepoRelativePathOpenInTabs } from "../context/editorManifestContext";
+import { reconcileMentionsAfterEditorSnap } from "../context/activeFileMention";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
 import {
@@ -560,6 +561,31 @@ export class CoopChatSession {
     });
 
     void this.intentDebouncer.debounce(event, (debounced) => this.handleEditorIntent(debounced));
+  }
+
+  /** Drop auto-attached file context when its editor tab is gone (not merely unfocused). */
+  public reconcileOpenFileContext(): void {
+    if (Date.now() < this.editorContextSuppressedUntil) {
+      return;
+    }
+    const tagged = this.currentContext.file?.trim();
+    if (!tagged) {
+      return;
+    }
+    if (isRepoRelativePathOpenInTabs(tagged)) {
+      return;
+    }
+    this.pinnedContextFile = undefined;
+    this.currentContext = {
+      ...this.currentContext,
+      file: undefined,
+      fileSource: undefined,
+      selectedLines: undefined,
+      selectedSymbol: undefined,
+      languageId: undefined,
+      scope: isExplicitRepoScope(this.currentContext) ? "repo" : undefined
+    };
+    this.postContext();
   }
 
   public handleThemeChange(): void {
@@ -1444,7 +1470,8 @@ export class CoopChatSession {
       incoming.file &&
       !pathsReferToSameFile(incoming.file, this.pinnedContextFile)
     ) {
-      return [];
+      // User switched files in the editor — release the prior quick-action pin.
+      this.pinnedContextFile = undefined;
     }
     const toMerge =
       isExplicitRepoScope(this.currentContext) && !incoming.file?.trim()
@@ -1456,6 +1483,35 @@ export class CoopChatSession {
             scope: "repo"
           } as RepoContext)
         : incoming;
+
+    // Focus steal (sidebar) must keep the tagged file when its tab is still open.
+    // Closing the tab must drop the ghost chip.
+    if (
+      !toMerge.file?.trim() &&
+      this.currentContext.file?.trim() &&
+      !isRepoRelativePathOpenInTabs(this.currentContext.file)
+    ) {
+      this.pinnedContextFile = undefined;
+      this.currentContext = {
+        ...mergeRepoContext(this.currentContext, {
+          ...toMerge,
+          file: undefined,
+          fileSource: undefined,
+          selectedLines: undefined,
+          selectedSymbol: undefined,
+          languageId: undefined,
+          scope: isExplicitRepoScope(this.currentContext) ? "repo" : toMerge.scope
+        }),
+        file: undefined,
+        fileSource: undefined,
+        selectedLines: undefined,
+        selectedSymbol: undefined,
+        languageId: undefined
+      };
+      this.postContext();
+      return this.runIntentFetch(event, { quiet: true });
+    }
+
     this.currentContext = mergeRepoContext(this.currentContext, toMerge);
     this.postContext();
     return this.runIntentFetch(event, { quiet: true });
@@ -1465,8 +1521,12 @@ export class CoopChatSession {
     path: string;
     line?: number;
     preserveContext?: boolean;
+    repoId?: string;
+    source?: "local" | "indexed";
   }): Promise<void> {
     const { path, line, preserveContext } = intent;
+    const isLocalMention =
+      intent.source === "local" || intent.repoId === WORKSPACE_LOCAL_REPO_ID;
 
     if (preserveContext) {
       await this.openRepoFileForReview(path, line);
@@ -1476,7 +1536,7 @@ export class CoopChatSession {
 
     this.pinnedContextFile = undefined;
 
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+    if (isLocalMention || !canUseRemoteCodeGraph(this.preferences.plan)) {
       const absolute = resolveLocalAbsolutePath(path);
       if (absolute) {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
@@ -1499,9 +1559,71 @@ export class CoopChatSession {
         this.postContext();
         return;
       }
+      if (isLocalMention) {
+        void vscode.window.showWarningMessage(
+          "CoopAI could not open that local file. Open the repo folder (File → Open Folder) and try again."
+        );
+        return;
+      }
       void vscode.window.showWarningMessage(
         "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
       );
+      return;
+    }
+
+    // Remote-tagged chip: prefer an open tab first, then local clone, then remote VFS.
+    const openRef = collectOpenEditorFileRefs().find((ref) =>
+      pathsReferToSameFile(ref.relativePath, path)
+    );
+    if (openRef) {
+      try {
+        const uri = isRemoteTabAbsolutePath(openRef.absolutePath)
+          ? vscode.Uri.parse(openRef.absolutePath)
+          : vscode.Uri.file(openRef.absolutePath);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: false
+        });
+        if (line) {
+          const position = new vscode.Position(Math.max(0, line - 1), 0);
+          editor.selection = new vscode.Selection(position, position);
+          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        }
+        this.currentContext = mergeRepoContext(
+          this.currentContext,
+          repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
+            fileSource: "remote"
+          }) as RepoContext
+        );
+        this.postContext();
+        return;
+      } catch {
+        // Fall through to clone / remote open.
+      }
+    }
+
+    const localAbsolute = resolveLocalAbsolutePath(path);
+    if (localAbsolute) {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(localAbsolute));
+      const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preview: false,
+        preserveFocus: false
+      });
+      if (line) {
+        const position = new vscode.Position(Math.max(0, line - 1), 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      }
+      this.currentContext = mergeRepoContext(
+        this.currentContext,
+        repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
+          fileSource: "remote"
+        }) as RepoContext
+      );
+      this.postContext();
       return;
     }
 
@@ -2446,10 +2568,16 @@ export class CoopChatSession {
       }
     }
 
+    const previousFile = this.currentContext.file;
     this.snapEditorContextBeforeSend({
       allowLocalFileForEdit: options?.composerMode === "edit"
     });
-    if (options?.mentions?.length) {
+    const reconciledMentions = reconcileMentionsAfterEditorSnap(
+      options?.mentions,
+      previousFile,
+      this.currentContext
+    );
+    if (reconciledMentions?.length) {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
     }
@@ -2464,12 +2592,12 @@ export class CoopChatSession {
         hasPriorThreadMessages: this.chatHistory.length > 0,
         hasQuickAction: Boolean(quickAction),
         hasAttachments: Boolean(attachments?.length),
-        hasMentions: Boolean(options?.mentions?.length),
+        hasMentions: Boolean(reconciledMentions?.length),
         hasSourceHint: Boolean(options?.sourceHint),
         hasIntegrationProvider: Boolean(integrationProviderForGuard)
       })
     ) {
-      await this.completeMissingIntentClarification(message, options?.mentions, attachments);
+      await this.completeMissingIntentClarification(message, reconciledMentions, attachments);
       return;
     }
 
@@ -2513,7 +2641,7 @@ export class CoopChatSession {
     const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
     const intentQuickAction = quickAction ?? inheritedQuickAction;
 
-    const mentionRefs = this.quickActionMentionRefs(options?.mentions);
+    const mentionRefs = this.quickActionMentionRefs(reconciledMentions);
     const modelMessage = quickAction
       ? options?.slashUserArgs !== undefined
         ? appendQuickActionMentionScope(
@@ -2583,7 +2711,7 @@ export class CoopChatSession {
         }
         await this.postEvidenceCardsFromBundle(quickAction);
         await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
-          mentions: options?.mentions,
+          mentions: reconciledMentions,
           composerMode: options?.composerMode
         });
         return;
@@ -2596,7 +2724,7 @@ export class CoopChatSession {
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
-    this.pendingChatMentions = options?.mentions;
+    this.pendingChatMentions = reconciledMentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
     await this.runIntentFetch(intentEvent);
     this.enrichKnowledgeGapsBundle(quickAction);
@@ -2609,7 +2737,7 @@ export class CoopChatSession {
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
       sourceHint: options?.sourceHint,
       integrationProvider,
-      mentions: options?.mentions,
+      mentions: reconciledMentions,
       composerMode: options?.composerMode
     });
   }

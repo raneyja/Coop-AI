@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { resolveEditorFile } from "./editorFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
-import { parseGithubVfsUri } from "./githubVfsUri";
+import { parseGithubVfsUri, pathsReferToSameFile } from "./githubVfsUri";
 import type { EditorContext } from "../manifest/types";
 import type { RepoContext } from "../chat/types";
 
@@ -25,6 +25,15 @@ function mentionPathFromAbsolute(absolutePath: string): string {
   }
   const parts = normalized.split("/").filter(Boolean);
   return parts.slice(-4).join("/");
+}
+
+/** True when a repo-relative path still has an open editor tab (local or remote VFS). */
+export function isRepoRelativePathOpenInTabs(relativePath: string | undefined): boolean {
+  const wanted = relativePath?.trim();
+  if (!wanted) {
+    return false;
+  }
+  return collectOpenEditorFileRefs().some((ref) => pathsReferToSameFile(ref.relativePath, wanted));
 }
 
 /** Open text editor tabs with repo-relative paths (local disk and GitHub remote). */

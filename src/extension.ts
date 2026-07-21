@@ -582,6 +582,14 @@ export function activate(context: vscode.ExtensionContext): void {
         session.refreshEditorContext(editor);
       }
     }),
+    vscode.window.tabGroups.onDidChangeTabs((event) => {
+      if (event.closed.length === 0 && event.changed.length === 0) {
+        return;
+      }
+      for (const session of coopSessionRegistry.getAll()) {
+        session.reconcileOpenFileContext();
+      }
+    }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
       for (const session of coopSessionRegistry.getAll()) {
         session.refreshEditorContext(event.textEditor);
