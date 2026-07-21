@@ -31,8 +31,9 @@ export function hasLocalDiskContext(params: { file?: string; fileSource?: string
   if (!params.file?.trim()) {
     return false;
   }
+  // Outside-workspace local files are still on disk; chat reads via editor buffer / absolute path.
   if (params.fileSource === "external") {
-    return false;
+    return true;
   }
   // workspace/git: local clone. remote: may be remote-first identity for the same path — callers
   // still need resolveAbsolutePath to succeed (pure VFS tabs simply yield no files).

@@ -35,6 +35,20 @@ async function run(): Promise<void> {
     assert.equal(merged.file, "src/old.ts");
   });
 
+  await test("mergeRepoContext replaces remote when active external file arrives", () => {
+    const merged = mergeRepoContext(
+      { file: "src/chat/CoopChatSession.ts", fileSource: "remote", owner: "raneyja", repo: "Coop-AI" },
+      {
+        file: "/Users/jonraney/Downloads/notes.md",
+        fileSource: "external",
+        languageId: "markdown",
+        contextWarning: "outside workspace"
+      }
+    );
+    assert.equal(merged.file, "/Users/jonraney/Downloads/notes.md");
+    assert.equal(merged.fileSource, "external");
+  });
+
   await test("mergeRepoContext clears disk-link warning when sidebar steals editor focus", () => {
     const diskWarning =
       "Only files on disk can be linked to GitHub. Open a local clone with File → Open Folder.";

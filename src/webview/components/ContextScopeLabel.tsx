@@ -23,10 +23,18 @@ type ContextScopeLabelProps = {
 };
 
 function isLocalFileContext(context: RepoContext): boolean {
-  return context.fileSource === "workspace" || context.fileSource === "git" || !context.fileSource;
+  return (
+    context.fileSource === "workspace" ||
+    context.fileSource === "git" ||
+    context.fileSource === "external" ||
+    !context.fileSource
+  );
 }
 
 function fileSourceDetail(context: RepoContext): string {
+  if (context.fileSource === "external") {
+    return "Outside workspace";
+  }
   if (isLocalFileContext(context)) {
     return "Local Workspace";
   }

@@ -4933,7 +4933,7 @@ export class CoopChatSession {
     const tryVisibleEditors = (targetPath?: string): LocalFileContextPayload | undefined => {
       for (const visible of vscode.window.visibleTextEditors) {
         const resolved = resolveEditorFile(visible);
-        if (!resolved.file?.trim() || resolved.fileSource === "external") {
+        if (!resolved.file?.trim()) {
           continue;
         }
         const relativePath = normalizeRelativePath(resolved.file);
@@ -4949,7 +4949,7 @@ export class CoopChatSession {
       if (!targetPath && vscode.window.visibleTextEditors.length === 1) {
         const visible = vscode.window.visibleTextEditors[0];
         const resolved = resolveEditorFile(visible);
-        if (resolved.file?.trim() && resolved.fileSource !== "external" && visible.document.getText().trim()) {
+        if (resolved.file?.trim() && visible.document.getText().trim()) {
           return payloadFromEditorDocument(
             visible,
             normalizeRelativePath(resolved.file),
@@ -5130,7 +5130,7 @@ export class CoopChatSession {
 
     for (const visible of vscode.window.visibleTextEditors) {
       const resolved = resolveEditorFile(visible);
-      if (!resolved.file?.trim() || resolved.fileSource === "external") {
+      if (!resolved.file?.trim()) {
         continue;
       }
       const normalized = normalizeRelativePath(resolved.file);

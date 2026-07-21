@@ -51,6 +51,10 @@ export function promoteRepoContextFileIdentity<T extends {
   if (!ctx.file?.trim()) {
     return ctx;
   }
+  // Outside-workspace local files stay local — never promote to remote.
+  if (ctx.fileSource === "external") {
+    return ctx;
+  }
   const promoted = applyRemoteFirstFileIdentity(
     {
       file: ctx.file,
@@ -76,4 +80,39 @@ export function promoteRepoContextFileIdentity<T extends {
     repo: promoted.repo ?? ctx.repo,
     contextWarning: promoted.warning
   };
+}
+
+export type EditorFileIdentityDecoration = {
+  badge: "L" | "R";
+  tooltip: string;
+};
+
+/** Tab decoration for open editors — L = local disk (workspace/git/external), R = remote/codehost. */
+export function classifyEditorFileIdentityDecoration(
+  resolved: FileIdentitySnapshot
+): EditorFileIdentityDecoration | undefined {
+  if (!resolved.file?.trim()) {
+    return undefined;
+  }
+  if (resolved.fileSource === "remote") {
+    const owner = resolved.owner?.trim();
+    const repo = resolved.repo?.trim();
+    return {
+      badge: "R",
+      tooltip: owner && repo ? `Remote · ${owner}/${repo}` : "Remote file"
+    };
+  }
+  if (resolved.fileSource === "external") {
+    return {
+      badge: "L",
+      tooltip: "Local · outside workspace"
+    };
+  }
+  if (resolved.fileSource === "workspace" || resolved.fileSource === "git" || !resolved.fileSource) {
+    return {
+      badge: "L",
+      tooltip: "Local workspace file"
+    };
+  }
+  return undefined;
 }

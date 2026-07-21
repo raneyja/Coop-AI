@@ -22,12 +22,24 @@ function isFocusLossDiskLinkWarning(warning: string | undefined): boolean {
 /**
  * Merge incoming editor/webview context without clobbering repo/file fields
  * when the incoming snapshot is incomplete (e.g. virtual editor URIs, focus loss).
+ * Active editor switches that include a file path (including outside-workspace local)
+ * always replace the prior file chip.
  */
 export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): RepoContext {
   const merged: RepoContext = {
     ...existing,
     ...incoming
   };
+
+  // Explicit active-file switch (workspace / git / remote / external with a path).
+  if (incoming.file?.trim()) {
+    merged.file = incoming.file;
+    merged.fileSource = incoming.fileSource ?? existing.fileSource;
+    if ("selectedLines" in incoming) {
+      merged.selectedLines = incoming.selectedLines;
+    }
+    return stripStaleContextWarning(normalizeRepoContext(merged));
+  }
 
   if (!incoming.file?.trim() && existing.file?.trim()) {
     const preserveFile =

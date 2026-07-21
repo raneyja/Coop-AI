@@ -1369,6 +1369,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                         const isLocal =
                           context.fileSource === "workspace" ||
                           context.fileSource === "git" ||
+                          context.fileSource === "external" ||
                           !context.fileSource;
                         handleOpenFile(filePath, undefined, {
                           preserveContext: false,

@@ -8,6 +8,7 @@ import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
 import { resolveSearchScopeForPlan } from "./license/planSearchScope";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
+import { registerEditorFileIdentityDecorations } from "./extension/editorFileIdentityDecorations";
 import {
   registerCoopAutocomplete,
   registerAutocompleteCommands,
@@ -418,6 +419,7 @@ export function activate(context: vscode.ExtensionContext): void {
     agentOrchestrator
   };
   const provider = new CoopSidebarProvider(context.extensionUri, context, api, services);
+  const editorFileIdentityDecorations = registerEditorFileIdentityDecorations(context);
 
   const refreshAllSessions = async () => {
     for (const session of coopSessionRegistry.getAll()) {
@@ -578,6 +580,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
+      editorFileIdentityDecorations.refresh();
       for (const session of coopSessionRegistry.getAll()) {
         session.refreshEditorContext(editor);
       }
@@ -586,6 +589,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (event.closed.length === 0 && event.changed.length === 0) {
         return;
       }
+      editorFileIdentityDecorations.refresh();
       for (const session of coopSessionRegistry.getAll()) {
         session.reconcileOpenFileContext();
       }

@@ -64,10 +64,46 @@ async function run(): Promise<void> {
     );
     assert.equal(
       applyRemoteFirstFileIdentity(
-        { fileSource: "external", warning: "nope" },
+        {
+          file: "/Users/jonraney/Downloads/notes.md",
+          fileSource: "external",
+          warning: "outside"
+        },
         { owner: "o", repo: "r" }
       ).fileSource,
       "external"
+    );
+  });
+
+  await test("promoteRepoContextFileIdentity does not promote external files", () => {
+    const kept = promoteRepoContextFileIdentity(
+      {
+        file: "/Users/jonraney/Downloads/notes.md",
+        fileSource: "external" as const,
+        owner: "raneyja",
+        repo: "Coop-AI"
+      }
+    );
+    assert.equal(kept.fileSource, "external");
+  });
+
+  await test("classifyEditorFileIdentityDecoration badges external as L", async () => {
+    const { classifyEditorFileIdentityDecoration } = await import("./remoteFirstFileIdentity");
+    assert.equal(
+      classifyEditorFileIdentityDecoration({
+        file: "/Users/jonraney/Downloads/notes.md",
+        fileSource: "external"
+      })?.badge,
+      "L"
+    );
+    assert.equal(
+      classifyEditorFileIdentityDecoration({
+        file: "src/a.ts",
+        fileSource: "remote",
+        owner: "o",
+        repo: "r"
+      })?.badge,
+      "R"
     );
   });
 

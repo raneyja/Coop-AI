@@ -26,10 +26,14 @@ export type ResolvedEditorFile = {
 
 /**
  * Map the active editor file to a GitHub-friendly repo-relative path.
- * Cmd+O can open files outside the VS Code workspace; those must not be sent as absolute paths.
+ * Files outside the workspace still get a path (absolute) so chat can chip + attach them as local.
  */
 export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile {
-  const uri = editor.document.uri;
+  return resolveEditorFileUri(editor.document.uri);
+}
+
+/** Same as resolveEditorFile but for tab URIs (decorations) without an active TextEditor. */
+export function resolveEditorFileUri(uri: vscode.Uri): ResolvedEditorFile {
   if (uri.scheme === "vscode-vfs" || uri.scheme === "github") {
     const remote = parseVfsGithubFile(uri);
     if (remote) {
@@ -42,7 +46,9 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
     }
   }
   if (uri.scheme !== "file") {
+    const label = uri.path?.split("/").filter(Boolean).pop() || uri.toString();
     return {
+      file: label,
       fileSource: "external",
       warning: "Only files on disk can be linked to GitHub. Open a local clone with File → Open Folder."
     };
@@ -79,9 +85,10 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
   }
 
   return {
+    file: fsPath.replace(/\\/g, "/"),
     fileSource: "external",
     warning:
-      "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone, or pick a file from the remote tree in chat."
+      "This file is outside your opened workspace. Coop attaches it as local context; GitHub Trace/graph need a project folder or remote pick."
   };
 }
 
@@ -217,7 +224,7 @@ export function pickEditorForContext(preferredPath?: string): vscode.TextEditor 
 
   for (const editor of vscode.window.visibleTextEditors) {
     const resolved = resolveEditorFile(editor);
-    if (resolved.file?.trim() && resolved.fileSource !== "external") {
+    if (resolved.file?.trim()) {
       return editor;
     }
   }
@@ -225,7 +232,7 @@ export function pickEditorForContext(preferredPath?: string): vscode.TextEditor 
   const active = vscode.window.activeTextEditor;
   if (active) {
     const resolved = resolveEditorFile(active);
-    if (resolved.file?.trim() && resolved.fileSource !== "external") {
+    if (resolved.file?.trim()) {
       return active;
     }
   }
@@ -246,7 +253,7 @@ export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEd
   const active = vscode.window.activeTextEditor;
   if (active?.document.uri.scheme === "file") {
     const resolved = resolveEditorFile(active);
-    if (isLocalDiskFileSource(resolved.fileSource)) {
+    if (isLocalDiskFileSource(resolved.fileSource) || resolved.fileSource === "external") {
       return active;
     }
   }
@@ -255,7 +262,8 @@ export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEd
     if (editor.document.uri.scheme !== "file") {
       return false;
     }
-    return isLocalDiskFileSource(resolveEditorFile(editor).fileSource);
+    const source = resolveEditorFile(editor).fileSource;
+    return isLocalDiskFileSource(source) || source === "external";
   });
 }
 
@@ -269,7 +277,7 @@ export function readActiveEditorFileForChat(
   }
 
   const resolved = resolveEditorFile(editor);
-  if (!resolved.file?.trim() || resolved.fileSource === "external") {
+  if (!resolved.file?.trim()) {
     return undefined;
   }
 

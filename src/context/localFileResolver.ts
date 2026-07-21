@@ -47,6 +47,17 @@ function resolvePathInWorkspaceFolders(normalized: string): string | undefined {
 }
 
 export function resolveLocalAbsolutePath(relativePath: string): string | undefined {
+  const raw = relativePath.trim().replace(/\\/g, "/");
+  if ((path.isAbsolute(raw) || /^[A-Za-z]:\//.test(raw)) && fs.existsSync(raw)) {
+    return raw;
+  }
+  if (/^Users\/[^/]+\//i.test(raw) || /^home\/[^/]+\//i.test(raw)) {
+    const abs = `/${raw}`;
+    if (fs.existsSync(abs)) {
+      return abs;
+    }
+  }
+
   const normalized = toRepositoryRelativePath(relativePath);
 
   for (const ref of collectOpenEditorFileRefs()) {
