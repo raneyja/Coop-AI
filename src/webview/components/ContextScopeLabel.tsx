@@ -30,6 +30,18 @@ type ContextScopeLabelProps = {
   onOpenFile?: () => void;
 };
 
+function remoteFileDetail(context: RepoContext): string | undefined {
+  if (context.fileSource !== "remote") {
+    return undefined;
+  }
+  const owner = context.owner?.trim();
+  const repo = context.repo?.trim();
+  if (owner && repo) {
+    return `${owner}/${repo}`;
+  }
+  return "remote";
+}
+
 export function ContextScopeLabel({
   context,
   onOpenExplorer,
@@ -45,15 +57,27 @@ export function ContextScopeLabel({
 
   if (filePath) {
     const label = displayFileLabel(filePath);
-    const className =
-      "ml-auto inline-flex min-w-0 max-w-[min(100%,14rem)] items-center gap-1 rounded-md px-2 py-0.5 text-[11px] " +
-      "bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]";
+    const remoteDetail = remoteFileDetail(context);
+    const title = remoteDetail ? `${filePath} · ${remoteDetail}` : filePath;
+    const className = remoteDetail
+      ? "coop-source-chip ml-auto min-w-0 max-w-[min(100%,18rem)] !gap-1 !px-2 !py-0.5 leading-none font-normal"
+      : "ml-auto inline-flex min-w-0 max-w-[min(100%,14rem)] items-center gap-1 rounded-md px-2 py-0.5 text-[11px] " +
+        "bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]";
+
+    const body = (
+      <>
+        {remoteDetail ? <RepoIcon /> : <FileIcon />}
+        <span className="truncate">{label}</span>
+        {remoteDetail ? (
+          <span className="shrink-0 truncate text-[10px] opacity-80">{remoteDetail}</span>
+        ) : null}
+      </>
+    );
 
     if (!onOpenFile) {
       return (
-        <span className={className} title={filePath}>
-          <FileIcon />
-          <span className="truncate">{label}</span>
+        <span className={className} title={title}>
+          {body}
         </span>
       );
     }
@@ -62,13 +86,14 @@ export function ContextScopeLabel({
       <button
         type="button"
         className={`${className} cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]`}
-        title={filePath}
-        aria-label={`Open ${filePath} in editor`}
+        title={title}
+        aria-label={
+          remoteDetail ? `Open ${filePath} from ${remoteDetail}` : `Open ${filePath} in editor`
+        }
         onClick={onOpenFile}
       >
-        <FileIcon />
-        <span className="truncate underline decoration-transparent underline-offset-2 hover:decoration-current">
-          {label}
+        <span className="inline-flex min-w-0 items-center gap-1 underline decoration-transparent underline-offset-2 hover:decoration-current">
+          {body}
         </span>
       </button>
     );

@@ -44,6 +44,12 @@ import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashComm
 import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
 import { appendFileMention } from "./lib/fileMentionUtils";
+import {
+  mentionFromActiveFile,
+  mentionKey,
+  normalizeMentionPath,
+  syncActiveFileMention
+} from "./lib/activeFileMention";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
@@ -353,6 +359,26 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [scrollEpoch, setScrollEpoch] = useState(0);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const debouncedStream = useDebouncedProse(streamingBuffer, 75);
+  const activeFileMentionKeyRef = useRef<string | undefined>(undefined);
+  const dismissedActiveFileMentionKeyRef = useRef<string | undefined>(undefined);
+
+  const applyActiveFileMention = useCallback((ctx: RepoContext, current: ChatFileMention[]) => {
+    const auto = mentionFromActiveFile(ctx);
+    const autoKey = auto ? mentionKey(auto) : undefined;
+    if (
+      autoKey &&
+      dismissedActiveFileMentionKeyRef.current &&
+      dismissedActiveFileMentionKeyRef.current === autoKey
+    ) {
+      return syncActiveFileMention(current, undefined, activeFileMentionKeyRef.current);
+    }
+    if (autoKey !== dismissedActiveFileMentionKeyRef.current) {
+      dismissedActiveFileMentionKeyRef.current = undefined;
+    }
+    const next = syncActiveFileMention(current, auto, activeFileMentionKeyRef.current);
+    activeFileMentionKeyRef.current = autoKey;
+    return next;
+  }, []);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
@@ -538,11 +564,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       });
       setInput("");
       setAttachments([]);
-      setMentions([]);
+      dismissedActiveFileMentionKeyRef.current = undefined;
+      setMentions(applyActiveFileMention(context, []));
       setMentionResults([]);
       setMentionError("");
     },
-    [post]
+    [applyActiveFileMention, context, post]
   );
 
   const handleEvidenceQuickAction = useCallback(
@@ -571,11 +598,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       });
       setInput("");
       setAttachments([]);
-      setMentions([]);
+      dismissedActiveFileMentionKeyRef.current = undefined;
+      setMentions(applyActiveFileMention(context, []));
       setMentionResults([]);
       setMentionError("");
     },
-    [post]
+    [applyActiveFileMention, context, post]
   );
 
   const evidenceActionContext = useMemo<EvidenceActionContext>(
@@ -651,6 +679,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "context:update":
           setContext(message.payload);
+          setMentions((current) => applyActiveFileMention(message.payload, current));
           if (message.payload.projectInstructions?.hasAgentsMd) {
             setDismissedAgentsNoticeFor(undefined);
           }
@@ -682,6 +711,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
+          dismissedActiveFileMentionKeyRef.current = undefined;
+          activeFileMentionKeyRef.current = undefined;
+          setMentions([]);
           setPendingPromptActionId(undefined);
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
@@ -921,11 +953,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     post({ type: "webview-ready" });
     post({ type: "lightning:ready" });
     return () => window.removeEventListener("message", listener);
-  }, [post]);
+  }, [applyActiveFileMention, post]);
 
   useEffect(() => {
     vscode.setState({ draftInput: input } satisfies PersistedWebviewState);
   }, [input, vscode]);
+
+  const handleMentionsChange = useCallback(
+    (next: ChatFileMention[]) => {
+      const autoKey = activeFileMentionKeyRef.current;
+      if (autoKey && !next.some((entry) => mentionKey(entry) === autoKey)) {
+        dismissedActiveFileMentionKeyRef.current = autoKey;
+        activeFileMentionKeyRef.current = undefined;
+      }
+      setMentions(next);
+    },
+    []
+  );
 
   const submitPrompt = useCallback(
     (
@@ -959,12 +1003,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       });
       setInput("");
       setAttachments([]);
-      setMentions([]);
+      dismissedActiveFileMentionKeyRef.current = undefined;
+      setMentions(applyActiveFileMention(context, []));
       setMentionResults([]);
       setMentionError("");
       setPendingPromptActionId(undefined);
     },
-    [attachments, mentions, post]
+    [applyActiveFileMention, attachments, context, mentions, post]
   );
 
   const handleMentionSearch = useCallback(
@@ -1249,7 +1294,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         attachments={attachments}
         attachmentError={attachmentError}
         mentions={mentions}
-        onMentionsChange={setMentions}
+        onMentionsChange={handleMentionsChange}
         onMentionSearch={handleMentionSearch}
         mentionResults={mentionResults}
         mentionLoading={mentionLoading}
@@ -1329,21 +1374,36 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               Save to library
             </button>
           ) : null}
-          {context.file || (context.owner && context.repo) ? (
-            <ContextScopeLabel
-              context={context}
-              onOpenExplorer={openExplorer}
-              onOpenFile={
-                context.file
-                  ? () => {
-                      if (context.file) {
-                        handleOpenFile(context.file, undefined, { preserveContext: false });
+          {(() => {
+            const filePath = context.file?.trim();
+            const coveredByMention = Boolean(
+              filePath &&
+                mentions.some(
+                  (entry) => normalizeMentionPath(entry.path) === normalizeMentionPath(filePath)
+                )
+            );
+            // Mention chip is the universal local/remote indicator; keep scope label only when
+            // there is no file mention (repo-only scope, or user dismissed the chip).
+            if (coveredByMention) {
+              return null;
+            }
+            if (!filePath && !(context.owner && context.repo)) {
+              return null;
+            }
+            return (
+              <ContextScopeLabel
+                context={context}
+                onOpenExplorer={openExplorer}
+                onOpenFile={
+                  filePath
+                    ? () => {
+                        handleOpenFile(filePath, undefined, { preserveContext: false });
                       }
-                    }
-                  : undefined
-              }
-            />
-          ) : null}
+                    : undefined
+                }
+              />
+            );
+          })()}
         </div>
       </div>
       {composerInner}

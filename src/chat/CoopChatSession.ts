@@ -205,6 +205,7 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import { promoteRepoContextFileIdentity } from "../context/remoteFirstFileIdentity";
 import { buildRepoId } from "./buildRepoId";
 import {
   buildTraceDecisionSearchSeeds,
@@ -3490,10 +3491,12 @@ export class CoopChatSession {
           .map((ref) => `${ref.relativePath}@${ref.absolutePath}`)
           .join("; ");
         this.logContextDebug(`Attach failed. workspaceRoots=${roots || "none"} tabs=${tabs || "none"}`);
-        const remoteTab = this.currentContext.fileSource === "remote";
+        const remoteTabOnly =
+          this.currentContext.fileSource === "remote" &&
+          !resolveLocalAbsolutePath(this.currentContext.file ?? "");
         this.currentContext = {
           ...this.currentContext,
-          contextWarning: remoteTab
+          contextWarning: remoteTabOnly
             ? "CoopAI could not read the open remote file tab. Keep the file open in the editor and try again."
             : vscode.workspace.workspaceFolders?.length
               ? "CoopAI could not read open file content. Keep the file tab open and reload the window."
@@ -4646,6 +4649,10 @@ export class CoopChatSession {
 
   private postContext(): void {
     this.currentContext = normalizeRepoContext(this.currentContext);
+    this.currentContext = promoteRepoContextFileIdentity(this.currentContext, {
+      owner: this.preferences.owner,
+      repo: this.preferences.repo
+    });
     this.currentContext = {
       ...this.currentContext,
       projectInstructions: this.resolveProjectInstructionsContext()
@@ -4673,15 +4680,6 @@ export class CoopChatSession {
       this.currentContext,
       repoContextFromEditor(editor, chatPrefs, this.currentContext)
     );
-    if (
-      this.currentContext.file &&
-      resolveLocalAbsolutePath(this.currentContext.file) &&
-      this.currentContext.fileSource !== "external" &&
-      this.currentContext.fileSource !== "remote"
-    ) {
-      this.currentContext.fileSource = "workspace";
-      this.currentContext.contextWarning = undefined;
-    }
     this.postContext();
   }
 
@@ -4721,10 +4719,17 @@ export class CoopChatSession {
       fileSource: RepoContext["fileSource"]
     ): LocalFileContextPayload => {
       const sliced = sliceFileContent(visible.document.getText(), lines);
+      // Keep remote-first identity when reading a local clone buffer for bytes.
+      const nextSource =
+        this.currentContext.fileSource === "remote" && fileSource !== "external"
+          ? "remote"
+          : fileSource === "external"
+            ? "external"
+            : fileSource ?? "workspace";
       this.currentContext = {
         ...this.currentContext,
         file: relativePath,
-        fileSource: fileSource === "external" ? "external" : fileSource ?? "workspace",
+        fileSource: nextSource,
         contextWarning: undefined
       };
       return {
@@ -4849,7 +4854,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: this.currentContext.fileSource === "remote" ? "remote" : "workspace",
           contextWarning: undefined
         };
         return fromTabUri;
@@ -4864,7 +4869,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: this.currentContext.fileSource === "remote" ? "remote" : "workspace",
           contextWarning: undefined
         };
         return {

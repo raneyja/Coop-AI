@@ -45,6 +45,32 @@ test("buildContextPreviewChips includes selection range", () => {
   assert.ok(chips.some((c) => c.kind === "selection" && c.label === "L10–20"));
 });
 
+test("buildContextPreviewChips labels remote-first file with owner/repo", () => {
+  const chips = buildContextPreviewChips({
+    context: {
+      owner: "acme",
+      repo: "widgets",
+      file: "src/auth.ts",
+      fileSource: "remote",
+      scope: "file"
+    }
+  });
+  const fileChip = chips.find((c) => c.kind === "file");
+  assert.equal(fileChip?.detail, "acme/widgets");
+});
+
+test("buildContextPreviewChips labels VFS-only remote without owner as remote tab", () => {
+  const chips = buildContextPreviewChips({
+    context: {
+      file: "src/auth.ts",
+      fileSource: "remote",
+      scope: "file"
+    }
+  });
+  const fileChip = chips.find((c) => c.kind === "file");
+  assert.equal(fileChip?.detail, "remote tab");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

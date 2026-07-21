@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { enrichRepoContextWithEditorState } from "./editorManifestContext";
+import { applyRemoteFirstFileIdentity } from "./remoteFirstFileIdentity";
 import { resolveEditorFile } from "./editorFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
@@ -201,7 +202,10 @@ export function repoContextFromEditor(
   };
 
   if (preferences.includeActiveFile) {
-    const resolved = resolveEditorFile(editor);
+    const resolved = applyRemoteFirstFileIdentity(resolveEditorFile(editor), {
+      owner: next.owner,
+      repo: next.repo
+    });
     next.file = resolved.file;
     next.fileSource = resolved.fileSource;
     next.contextWarning = resolved.warning;

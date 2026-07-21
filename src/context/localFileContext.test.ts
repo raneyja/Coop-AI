@@ -35,11 +35,11 @@ async function run(): Promise<void> {
     assert.equal(isLocalDiskFileSource(undefined), false);
   });
 
-  await test("hasLocalDiskContext requires file path and local source", () => {
+  await test("hasLocalDiskContext allows remote-first identity for local clone reads", () => {
     assert.equal(hasLocalDiskContext({ file: "src/a.ts", fileSource: "workspace" }), true);
     assert.equal(hasLocalDiskContext({ file: "src/a.ts", fileSource: "git" }), true);
     assert.equal(hasLocalDiskContext({ file: "src/a.ts" }), true);
-    assert.equal(hasLocalDiskContext({ file: "src/a.ts", fileSource: "remote" }), false);
+    assert.equal(hasLocalDiskContext({ file: "src/a.ts", fileSource: "remote" }), true);
     assert.equal(hasLocalDiskContext({ file: "src/a.ts", fileSource: "external" }), false);
     assert.equal(hasLocalDiskContext({ fileSource: "workspace" }), false);
   });
@@ -78,6 +78,26 @@ async function run(): Promise<void> {
       assert.equal(payload.source, "local-workspace");
       assert.equal(payload.files[0]?.path, "src/panel.ts");
       assert.ok(payload.files[0]?.content.includes("bindSession"));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  await test("readLocalWorkspaceFiles still reads disk when identity is remote-first", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-remote-first-"));
+    const filePath = path.join(root, "src", "panel.ts");
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, "export const remoteFirst = true;", "utf8");
+
+    try {
+      const payload = await readLocalWorkspaceFiles({
+        file: "src/panel.ts",
+        fileSource: "remote",
+        resolveAbsolutePath: (relativePath) => path.join(root, relativePath)
+      });
+
+      assert.ok(payload);
+      assert.ok(payload.files[0]?.content.includes("remoteFirst"));
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

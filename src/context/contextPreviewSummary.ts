@@ -37,11 +37,17 @@ export function buildContextPreviewChips(options: {
   const filePath = ctx.file?.trim();
 
   if (filePath) {
+    const remoteDetail =
+      ctx.fileSource === "remote"
+        ? ctx.owner?.trim() && ctx.repo?.trim()
+          ? `${ctx.owner.trim()}/${ctx.repo.trim()}`
+          : "remote tab"
+        : undefined;
     chips.push({
       id: "active-file",
       kind: "file",
       label: displayFileLabel(filePath),
-      detail: ctx.fileSource === "remote" ? "remote tab" : undefined,
+      detail: remoteDetail,
       state: "confirmed"
     });
   }

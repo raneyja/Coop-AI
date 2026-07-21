@@ -11,6 +11,7 @@ import {
 import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { parseGithubRemoteFromGitConfig } from "./gitRemoteConfig";
 import { toRepositoryRelativePath } from "./repoFilePath";
+export { applyRemoteFirstFileIdentity } from "./remoteFirstFileIdentity";
 
 export type EditorFileSource = "workspace" | "git" | "remote" | "external";
 
@@ -51,10 +52,13 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
   if (workspaceFolder) {
     const relative = path.relative(workspaceFolder.uri.fsPath, fsPath).replace(/\\/g, "/");
+    const remote = readGithubRemote(workspaceFolder.uri.fsPath);
     return {
       file: toRepositoryRelativePath(relative),
       fileSource: "workspace",
-      gitRoot: workspaceFolder.uri.fsPath
+      gitRoot: workspaceFolder.uri.fsPath,
+      owner: remote?.owner,
+      repo: remote?.repo
     };
   }
 

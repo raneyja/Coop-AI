@@ -31,11 +31,13 @@ export function hasLocalDiskContext(params: { file?: string; fileSource?: string
   if (!params.file?.trim()) {
     return false;
   }
-  if (isLocalDiskFileSource(params.fileSource)) {
-    return true;
+  if (params.fileSource === "external") {
+    return false;
   }
-  // Restored context may omit fileSource; still attempt a workspace read unless explicitly non-local.
-  return params.fileSource !== "remote" && params.fileSource !== "external";
+  // workspace/git: local clone. remote: may be remote-first identity for the same path — callers
+  // still need resolveAbsolutePath to succeed (pure VFS tabs simply yield no files).
+  // Omitted fileSource (restored threads): attempt a workspace read.
+  return true;
 }
 
 export function rankLocalFilePaths(options: {

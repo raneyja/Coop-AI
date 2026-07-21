@@ -5,6 +5,7 @@ import {
   LOCAL_WORKSPACE_MENTION_TITLE,
   WORKSPACE_LOCAL_REPO_ID
 } from "../../chat/mentionSearchMerge";
+import { shortMentionSourceLabel } from "../lib/activeFileMention";
 import { LaunchTypewriter } from "./LaunchTypewriter";
 import type { LaunchIntroPhase } from "../hooks/useLaunchTypewriter";
 import {
@@ -541,12 +542,18 @@ export function ChatComposer({
               const isLocal =
                 mention.source === "local" || mention.repoId === WORKSPACE_LOCAL_REPO_ID;
               const basename = mention.path.split("/").pop() ?? mention.path;
+              const sourceLabel = shortMentionSourceLabel(mention);
               return (
                 <MentionAttachmentChip
                   key={`${mention.repoId}:${mention.path}`}
                   basename={basename}
+                  sourceLabel={sourceLabel}
                   isLocal={isLocal}
-                  title={isLocal ? `${mention.path} · local workspace` : `${mention.repoId} · ${mention.path}`}
+                  title={
+                    isLocal
+                      ? `${mention.path} · ${LOCAL_WORKSPACE_MENTION_TITLE}`
+                      : `${mention.path} · ${sourceLabel}`
+                  }
                   disabled={isStreaming}
                   onRemove={() =>
                     onMentionsChange?.(
