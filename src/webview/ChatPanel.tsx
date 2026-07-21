@@ -46,7 +46,7 @@ import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
-import { useDebouncedProse } from "./hooks/useDebouncedProse";
+import { useCoalescedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
   ConflictActionId,
@@ -351,7 +351,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
   const [scrollEpoch, setScrollEpoch] = useState(0);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const debouncedStream = useDebouncedProse(streamingBuffer, 75);
+  const coalescedStream = useCoalescedProse(streamingBuffer);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
@@ -384,16 +384,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [quotaNotice?.resetsAt]);
 
   const streamMessage = useMemo<ChatMessage | null>(() => {
-    if (!debouncedStream) {
+    if (!coalescedStream) {
       return null;
     }
     return {
       role: "assistant",
-      content: debouncedStream,
+      content: coalescedStream,
       timestamp: Date.now(),
       links: []
     };
-  }, [debouncedStream]);
+  }, [coalescedStream]);
 
   const inlineThinkingOptions = useMemo(
     () => ({ awaitingResponse: isStreaming && !streamMessage }),

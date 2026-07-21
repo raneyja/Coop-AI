@@ -1,33 +1,33 @@
 import { useEffect, useRef, useState } from "react";
+import { createProseFrameCoalescer } from "./proseFrameCoalescer";
 
-export function useDebouncedProse(content: string, delayMs = 75): string {
-  const [debouncedContent, setDebouncedContent] = useState(content);
-  const hasContentRef = useRef(Boolean(content));
+/**
+ * Coalesce rapid stream updates to at most one paint per animation frame.
+ *
+ * Unlike a trailing debounce (which only paints after tokens pause), this keeps
+ * the visible text advancing while the model streams — closer to a normal
+ * token feed, without re-parsing markdown on every SSE chunk.
+ */
+export function useCoalescedProse(content: string): string {
+  const [display, setDisplay] = useState(content);
+  const coalescerRef = useRef<ReturnType<typeof createProseFrameCoalescer> | null>(null);
 
   useEffect(() => {
-    if (!content) {
-      hasContentRef.current = false;
-      setDebouncedContent(content);
-      return;
+    if (!coalescerRef.current) {
+      coalescerRef.current = createProseFrameCoalescer(setDisplay);
     }
+    coalescerRef.current.push(content);
+  }, [content]);
 
-    // Show the first visible token immediately — only throttle the rapid follow-up
-    // re-renders once a stream is already flowing, so markdown isn't re-parsed on
-    // every SSE chunk.
-    if (!hasContentRef.current) {
-      hasContentRef.current = true;
-      setDebouncedContent(content);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setDebouncedContent(content);
-    }, delayMs);
-
+  useEffect(() => {
     return () => {
-      window.clearTimeout(timeoutId);
+      coalescerRef.current?.dispose();
+      coalescerRef.current = null;
     };
-  }, [content, delayMs]);
+  }, []);
 
-  return debouncedContent;
+  return display;
 }
+
+/** @deprecated Prefer useCoalescedProse — kept for older imports. */
+export const useDebouncedProse = useCoalescedProse;
