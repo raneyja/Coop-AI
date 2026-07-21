@@ -21,6 +21,11 @@ const hubCards = [
     href: "/docs/getting-started"
   },
   {
+    title: "File context",
+    description: "Remote vs local — read the composer chip (`owner/repo` vs Local Workspace) before you send.",
+    href: "/docs/file-context"
+  },
+  {
     title: "Admin portal",
     description: "Connect integrations org-wide, invite teammates, and issue automation API keys for CI.",
     href: "/docs/admin-portal"
@@ -89,6 +94,11 @@ export default function DocsHubPage() {
               <div className="coop-panel mt-8 p-6">
                 <h2 className="text-base font-semibold text-gray-900">Quick links</h2>
                 <ul className="mt-4 space-y-2 text-sm">
+                  <li>
+                    <Link href="/docs/file-context" className={docsInlineLinkClassName}>
+                      File context — remote vs local chips
+                    </Link>
+                  </li>
                   <li>
                     <Link href="/manual#get-started" className={docsInlineLinkClassName}>
                       Install guide (Owner&apos;s Manual)

@@ -2,7 +2,7 @@
 title: Inline autocomplete
 description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
 section: extension
-order: 3
+order: 4
 lastUpdated: "2026-07-12"
 ---
 

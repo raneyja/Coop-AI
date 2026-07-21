@@ -2,7 +2,7 @@
 title: Edit mode
 description: Generate search-replace patches from chat — slash commands, apply, undo, and selection context.
 section: extension
-order: 4
+order: 5
 lastUpdated: "2026-07-10"
 ---
 
@@ -60,6 +60,8 @@ Coop attaches editor context automatically:
 | **Active file path** | `coopAI.includeActiveFile` | `true` |
 
 **Best practice:** highlight the code you want changed, then run `/edit <instruction>`. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
+
+Check the composer **file chip** before sending: **`owner/repo`** = remote/codehost identity for that path; **Local Workspace** = local buffer. `/edit` still prefers live editor bytes when the tab is open. See [File context — remote vs local](/docs/file-context).
 
 Workspace **owner / repo / branch** (Settings → Workspace) help resolve indexed-repo context when the repo is Deep-Indexed.
 

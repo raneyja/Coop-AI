@@ -3,7 +3,7 @@ title: Getting started
 description: Install CoopAI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-21"
 ---
 
 This guide gets you from signup to your first useful chat in CoopAI.
@@ -64,10 +64,19 @@ Automation API keys are for CI/scripts only — create them in the [admin portal
 Open the Coop icon in the activity bar. Click a quick action or type in the composer.
 
 1. Open a file in your workspace.
-2. **Extension UI** — Type in the chat composer or click **Understand Repo**.
-3. Try: `Explain this codebase. What are the main entry points?`
+2. **Extension UI** — Confirm the **file chip** in the composer:
+   - **`filename` · `owner/repo`** → remote / codehost context
+   - **`filename` · Local Workspace** → local disk / editor context
+3. Type in the chat composer or click **Understand Repo**.
+4. Try: `Explain this codebase. What are the main entry points?`
 
-Coop streams an answer grounded in your workspace files and any connected integrations. Plain chat uses **GPT-4o mini** — see [Model assignments](/docs/model-assignments).
+<!-- figures md -->
+![Remote file chip in the Coop chat composer — Dockerfile labeled raneyja/Coop-AI](/screenshots/docs/extension-remote-file-chip.png)
+<!-- /figures -->
+
+*Remote chip example — filename plus `owner/repo` means Coop is attaching remote context. See [File context — remote vs local](/docs/file-context).*
+
+Coop streams an answer grounded in your attached file context, workspace, and any connected integrations. Plain chat uses **GPT-4o mini** — see [Model assignments](/docs/model-assignments).
 
 ## Step 5 — Try a quick action
 
@@ -128,6 +137,7 @@ See [Plans & billing](/docs/plans-billing) for details.
 
 ## Next
 
+- [File context — remote vs local](/docs/file-context) — composer chips: `owner/repo` vs Local Workspace
 - [Model assignments](/docs/model-assignments) — per-feature models and settings UI
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions
 - [Extension settings](/docs/extension-settings) — workspace, tools, preferences

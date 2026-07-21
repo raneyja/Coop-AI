@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-21"
 ---
 
 ## Extension
@@ -14,6 +14,8 @@ lastUpdated: "2026-07-10"
 | **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
 | **SSO required** | Your org requires SAML — extension: **Sign in with SSO** (enter org name); admin portal: **Organization name** + **Continue with SSO** on `/login` |
 | **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm **Enable live LLM chat** under Model & chat |
+| **Answers feel like the wrong repo** | Check the composer **file chip**: `owner/repo` = remote; **Local Workspace** = local — see [File context](/docs/file-context) |
+| **Expected remote context but chip says Local Workspace** | Confirm Settings → Workspace primary repo; open a file from that clone or pick via the folder (Remote workspace) icon |
 | **No model picker in settings** | Expected in production — models are Coop-assigned; see [Model assignments](/docs/model-assignments) |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |

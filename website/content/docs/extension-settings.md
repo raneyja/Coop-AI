@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-21"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -99,6 +99,8 @@ Pick indexed repos your org admin authorized and set your primary branch.
 | **AGENTS.md** | Project instructions loaded on every message |
 
 Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**) use your selected repo and branch.
+
+**Chat file chips:** when a file is attached in the composer, a chip labeled **`owner/repo`** means remote/codehost context; **Local Workspace** means local disk/editor context. See [File context — remote vs local](/docs/file-context).
 
 ## Preferences
 

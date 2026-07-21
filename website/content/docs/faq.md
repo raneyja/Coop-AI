@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-15"
+lastUpdated: "2026-07-21"
 ---
 
 ## General
@@ -60,6 +60,17 @@ In production mode, **org admins** connect integrations once in the [admin porta
 `coopAI.devMode: true` lets individual developers paste PATs locally for testing. Disable for production orgs.
 
 ## Features
+
+### How do I know if Coop is using a remote file or a local file?
+
+Look at the **file chip** in the chat composer:
+
+| Chip | Meaning |
+| --- | --- |
+| **`filename` · `owner/repo`** | Remote / codehost context |
+| **`filename` · Local Workspace** | Local disk / editor context |
+
+Open a mapped repo file, use the folder (Remote workspace) icon, or `@` an indexed hit to attach remote. Details: [File context — remote vs local](/docs/file-context).
 
 ### What are quick actions?
 

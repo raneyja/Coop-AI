@@ -2,7 +2,7 @@
 title: Model assignments
 description: How CoopAI routes chat, quick actions, edit mode, and autocomplete to assigned models.
 section: extension
-order: 2
+order: 3
 lastUpdated: "2026-07-10"
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-21"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -270,11 +270,33 @@ Type free-form questions in the composer. Coop streams answers grounded in your 
 - Responses stream in real time with markdown formatting.
 - Chat history persists in the session.
 
+### File context chips
+
+Before you send, look at the **file chip** inside the composer. That chip is the universal indicator for whether Coop is attaching a **remote** (codehost) file or a **local** workspace file.
+
+<!-- figures md -->
+![Remote file chip in the Coop chat composer — Dockerfile labeled raneyja/Coop-AI](/screenshots/docs/extension-remote-file-chip.png)
+<!-- /figures -->
+
+| Chip | Meaning |
+| --- | --- |
+| **`filename` · `owner/repo`** | **Remote** — indexed / codehost context (example: `Dockerfile` · `raneyja/Coop-AI`) |
+| **`filename` · Local Workspace** | **Local** — open editor / on-disk folder |
+| **No file chip** | No active file attached |
+
+**How a remote chip appears**
+
+- Open a file that maps to your primary / indexed repo — Coop auto-seeds the chip as remote-first when owner/repo are known
+- Click the **folder** icon → Remote workspace → pick a file
+- Type `@` and choose an indexed-repo hit
+
+The folder icon opens the remote picker; the **chip with `owner/repo`** is what proves remote context is attached. Full detail: [File context — remote vs local](/docs/file-context).
+
 ### @-mentions and attachments
 
-- Type `@` to search files in your workspace (up to 3 @-mentions per message).
-- Use the paperclip to attach files — images, PDFs, or text (up to 4 per message).
-- Selected lines in the editor are included automatically as context.
+- Type `@` to search indexed repos and local workspace files (up to 3 @-mentions per message). Indexed hits show `owner/repo`; local hits show **Local Workspace**.
+- Use the paperclip to attach images, PDFs, or text (up to 4 per message) — separate from the file-context chip.
+- Selected lines in the editor are included automatically when selection context is enabled.
 
 ### Slash commands
 
