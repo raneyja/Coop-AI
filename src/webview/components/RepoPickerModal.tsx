@@ -8,6 +8,7 @@ import {
   type ExplorerTreeState
 } from "./RemoteExplorerTree";
 import type { CodeHostProviderPreference, GithubRepoOption, RepoContext } from "../../chat/types";
+import { parentExplorerPath } from "../lib/explorerPaths";
 
 type RepoPickerModalProps = {
   open: boolean;
@@ -65,10 +66,20 @@ export function RepoPickerModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
+  const [browsePath, setBrowsePath] = useState<string | null>(null);
+
   const breadcrumb = useMemo(
     () => buildExplorerBreadcrumb(browseContext, treeState),
     [browseContext, treeState]
   );
+
+  const isRepoList = treeState.scope === "repos";
+
+  useEffect(() => {
+    if (!open || isRepoList) {
+      setBrowsePath(null);
+    }
+  }, [open, isRepoList]);
 
   const handleOpenRepo = useCallback(
     (path: string) => {
@@ -86,11 +97,36 @@ export function RepoPickerModal({
     [onOpenRepo]
   );
 
+  const handleNavigateToPath = useCallback(
+    (path: string) => {
+      setBrowsePath(path);
+      onExpandPath(path);
+    },
+    [onExpandPath]
+  );
+
+  const handleBrowseUp = useCallback(() => {
+    if (browsePath === null) {
+      return;
+    }
+    const parent = parentExplorerPath(browsePath);
+    if (!parent) {
+      setBrowsePath(null);
+      onExpandPath("");
+      return;
+    }
+    setBrowsePath(parent);
+    onExpandPath(parent);
+  }, [browsePath, onExpandPath]);
+
+  const handleBrowseRepos = useCallback(() => {
+    setBrowsePath(null);
+    onBrowseRepos();
+  }, [onBrowseRepos]);
+
   if (!open) {
     return null;
   }
-
-  const isRepoList = treeState.scope === "repos";
 
   return (
     <div className="coop-prompt-modal-stack coop-prompt-modal-stack--picker" role="presentation" onClick={onClose}>
@@ -110,10 +146,11 @@ export function RepoPickerModal({
           subtitle={subtitle ? `${subtitle} · ${breadcrumb}` : breadcrumb}
           onClose={onClose}
           closeAriaLabel="Close"
+          onBack={browsePath ? handleBrowseUp : undefined}
           actions={
             <>
               {!isRepoList ? (
-                <button type="button" className="coop-settings-action-btn" onClick={onBrowseRepos}>
+                <button type="button" className="coop-settings-action-btn" onClick={handleBrowseRepos}>
                   Repos
                 </button>
               ) : null}
@@ -121,7 +158,9 @@ export function RepoPickerModal({
                 type="button"
                 className="coop-settings-action-btn"
                 onClick={() =>
-                  isRepoList ? onRefreshRepos() : onExpandPath(treeState.path || "")
+                  isRepoList
+                    ? onRefreshRepos()
+                    : onExpandPath(browsePath ?? (treeState.path || ""))
                 }
               >
                 Refresh
@@ -140,9 +179,11 @@ export function RepoPickerModal({
             actionLabel={actionLabel}
             disabledRepoIds={disabledRepoIds}
             repoMetadata={repoMetadata}
+            browsePath={browsePath}
+            onNavigateToPath={handleNavigateToPath}
             onRefreshRepos={onRefreshRepos}
             onRefreshPath={onExpandPath}
-            onBrowseRepos={onBrowseRepos}
+            onBrowseRepos={handleBrowseRepos}
             onExpand={onExpandPath}
             onSearch={onSearchFiles}
             onOpenRepo={handleOpenRepo}

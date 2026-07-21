@@ -772,6 +772,18 @@
     @apply truncate;
   }
 
+  .coop-panel-back-btn--icon {
+    @apply h-7 w-7 max-w-none items-center justify-center rounded-full p-0;
+    background: var(--coop-pill-surface);
+    border: 1px solid var(--coop-pill-border);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-panel-back-btn--icon:hover {
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+    color: var(--coop-panel-foreground);
+  }
+
   .coop-prompt-modal-header {
     @apply flex items-center justify-between gap-2;
   }
@@ -1913,8 +1925,24 @@
       0 2px 8px color-mix(in srgb, var(--coop-panel-foreground) 4%, transparent);
   }
 
+  .coop-explorer-resize-handle {
+    @apply flex h-3 shrink-0 cursor-ns-resize items-center justify-center;
+    touch-action: none;
+  }
+
+  .coop-explorer-resize-handle::after {
+    content: "";
+    @apply block h-1 w-8 rounded-full;
+    background: color-mix(in srgb, var(--coop-panel-muted) 55%, transparent);
+  }
+
+  .coop-explorer-resize-handle:hover::after,
+  .coop-explorer-resize-handle:focus-visible::after {
+    background: color-mix(in srgb, var(--coop-panel-foreground) 40%, transparent);
+  }
+
   .coop-explorer-search-wrap {
-    @apply px-3 pb-2;
+    @apply px-3 pb-2 pt-3;
   }
 
   .coop-explorer-search-hint {
@@ -1927,11 +1955,18 @@
   }
 
   .coop-explorer-list {
-    @apply m-0 max-h-52 list-none overflow-y-auto p-0;
+    @apply m-0 list-none overflow-y-auto p-0;
+    max-height: var(--coop-explorer-list-max-h, 13rem);
+  }
+
+  /* Keep the list viewport at the dragged size even when search returns few rows. */
+  .coop-explorer-list--fixed-h {
+    height: var(--coop-explorer-list-max-h);
+    min-height: var(--coop-explorer-list-max-h);
   }
 
   .coop-explorer-list--modal {
-    @apply max-h-[min(42vh,360px)];
+    --coop-explorer-list-max-h: min(42vh, 360px);
   }
 
   .coop-prompt-modal-body--explorer {
@@ -1939,7 +1974,7 @@
   }
 
   .coop-prompt-modal-body--explorer .coop-explorer-search-wrap {
-    @apply px-4 pt-1;
+    @apply px-4 pt-3;
   }
 
   .coop-prompt-modal-body--explorer .coop-explorer-body {
