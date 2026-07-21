@@ -77,4 +77,33 @@ assert.ok(checklist.some((line) => line.includes("introducing commit and message
 assert.ok(checklist.every((line) => line.includes(" — ")));
 assert.ok(!checklist.some((line) => line.includes("No Slack thread")));
 
+const withTitleOnlyDocs: DecisionTimeline = {
+  ...timeline,
+  integrationSearch: {
+    notion: {
+      pages: [{ id: "1", title: "ADR COOP-55" }]
+    },
+    googleDocs: {
+      documents: [{ id: "2", title: "Design doc" }]
+    },
+    confluence: {
+      pages: [{ id: "3", title: "Architecture", excerpt: "Retries", htmlUrl: "https://confluence/3" }]
+    }
+  }
+};
+const titleOnlyLabels = listDecisionSourceLabels(withTitleOnlyDocs);
+assert.ok(titleOnlyLabels.some((label) => label.includes("Confluence")));
+assert.ok(!titleOnlyLabels.some((label) => label.includes("Notion")));
+assert.ok(!titleOnlyLabels.some((label) => label.includes("Google Docs")));
+
+const confluenceTitleOnly: DecisionTimeline = {
+  ...timeline,
+  integrationSearch: {
+    confluence: {
+      pages: [{ id: "4", title: "No excerpt page", htmlUrl: "https://confluence/4" }]
+    }
+  }
+};
+assert.ok(!listDecisionSourceLabels(confluenceTitleOnly).some((label) => label.includes("Confluence")));
+
 console.log("decisionSourceLabels: ok");

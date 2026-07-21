@@ -136,22 +136,23 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 
   decision_archaeology: `
 ## Required response structure
-Adapt length to evidence. Prefer a scannable short answer over an essay. Use **Title** on its own line; blank line before each included section.
+Default short answer for IDE scanning (local and remote Trace use the same shape). Use **Title** on its own line; blank line before each included section.
 
 **Always include**
 **Summary** — 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin.
-**Sources** — ${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed or returned no results.
+**Technical decision** — what was chosen and why (from commit, PR, or discussion).
+**Sources** — ${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed, returned no results, or are title-only with no body/excerpt.
+
+**Include when evidence names people**
+**Who to engage** — authors, approvers, discussion participants from evidence only. **Omit** if none.
 
 **Include only when evidence supports — omit empty sections (no "Unknown" filler paragraphs)**
 **Business context** — only if commit/PR/ticket/discussion states a need.
-**Technical decision** — what was chosen and why (from commit, PR, or discussion).
 **Alternatives considered** / **Trade-offs** — only when discussion evidence (PR review, Slack/Jira/Teams, extracted alternatives) documents them. Otherwise omit entirely; if the user asked, one honest line max. Never invent.
-**Known limitations** — omit if none.
-**Domain experts** / **Who to engage** — people named in evidence only; omit if none.
-**Decision status** — one line (active / superseded / unclear) when useful; omit when speculative.
+**Known limitations** / **Decision status** — omit if none or speculative.
 **Out-of-scope @ attachments** — only when ## @ attachments lists out-of-repo paths. **Never** when all @ files are in scope.
 
-Thin / minimal completeness (often introducing commit only): Summary + Technical decision + Sources is enough — often under ~8 sentences total.
+Hard cap: thin / minimal or partial without discussion → Summary + Technical decision + Who to engage (if named) + Sources — often under ~6 sentences / ~120 words total. Never claim Notion / Google Docs / Confluence pages were **reviewed** unless a body or excerpt is in the evidence bundle.
 When PR reviews / Slack / Jira / Teams / extracted alternatives exist: expand Alternatives and Trade-offs with quotes and plain provenance.
 Follow-up turns: answer only what was asked; omit unrelated empty sections.`,
 

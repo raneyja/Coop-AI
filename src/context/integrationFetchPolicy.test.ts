@@ -106,9 +106,20 @@ test("integrations auto-fetch on trace-decision", () => {
   }
 });
 
-test("trace-decision soft docs skip when commit+PR evidence is enough", () => {
+test("trace-decision always skips soft title-only Notion/Docs", () => {
   const traceRequest = request("trace-decision", "decision_history");
-  assert.equal(shouldFetchTraceDecisionSoftDocIntegrations(traceRequest), true);
+  assert.equal(shouldFetchTraceDecisionSoftDocIntegrations(traceRequest), false);
+  assert.equal(
+    shouldFetchTraceDecisionSoftDocIntegrations(traceRequest, {
+      originalCommit: {
+        sha: "abc123",
+        author: "alice",
+        date: "2024-01-01",
+        message: "Add retry"
+      }
+    }),
+    false
+  );
   assert.equal(
     shouldFetchTraceDecisionSoftDocIntegrations(traceRequest, {
       originalCommit: {
@@ -135,14 +146,6 @@ test("trace-decision soft docs skip when commit+PR evidence is enough", () => {
         author: "alice",
         date: "2024-01-01",
         message: "Add retry"
-      },
-      linkedPR: {
-        number: 1,
-        title: "Add retry",
-        state: "merged",
-        description: "Retries",
-        approvers: [],
-        reviews: []
       }
     }),
     true

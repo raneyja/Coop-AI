@@ -61,28 +61,27 @@ export function shouldFetchTraceDecisionDocIntegrations(request: ContextFetchReq
 }
 
 /**
- * True when GitHub (or code-host) commit + PR evidence is already enough that title-only
- * Notion / Google Docs waits are unlikely to improve the first-turn answer.
+ * True when GitHub (or code-host) archaeology already grounds the first-turn Trace answer.
+ * Commit alone is enough — Notion / Google Docs search never returns page bodies today.
  */
 export function timelineHasSufficientCodeHostEvidence(
   timeline: Pick<DecisionTimeline, "originalCommit" | "linkedPR"> | undefined
 ): boolean {
-  return Boolean(timeline?.originalCommit && timeline.linkedPR);
+  return Boolean(timeline?.originalCommit || timeline?.linkedPR);
 }
 
 /**
- * Soft title-only doc tools (Notion / Google Docs) for Trace Decision when code-host
- * evidence is already strong. Repo-wide actions always keep them.
+ * Soft title-only doc tools (Notion / Google Docs) for Trace Decision.
+ * Always skip on Trace — search returns titles only (no body), so waiting adds latency
+ * and invites "N reviewed" / "content was not retrievable" UX. Confluence (excerpts),
+ * Jira, Slack, and Teams still run. Repo-wide actions keep soft docs.
  */
 export function shouldFetchTraceDecisionSoftDocIntegrations(
   request: ContextFetchRequest,
-  timeline?: Pick<DecisionTimeline, "originalCommit" | "linkedPR">
+  _timeline?: Pick<DecisionTimeline, "originalCommit" | "linkedPR">
 ): boolean {
   if (!shouldFetchTraceDecisionIntegrations(request)) {
     return shouldFetchTraceDecisionDocIntegrations(request);
   }
-  if (timelineHasSufficientCodeHostEvidence(timeline)) {
-    return false;
-  }
-  return true;
+  return false;
 }

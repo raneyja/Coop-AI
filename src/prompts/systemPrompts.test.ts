@@ -118,12 +118,14 @@ test("blast_radius use case enforces short graph-grounded structure", () => {
 test("decision_archaeology prefers short form and omits Unknown fillers", () => {
   const prompt = systemPromptForUseCase("decision_archaeology");
   assert.ok(prompt.includes("## Required response structure"));
-  assert.ok(prompt.includes("scannable short answer"));
+  assert.ok(prompt.includes("Default short answer for IDE scanning"));
   assert.ok(prompt.includes("no \"Unknown\" filler paragraphs"));
   assert.ok(prompt.includes("**Summary**"));
   assert.ok(prompt.includes("**Technical decision**"));
+  assert.ok(prompt.includes("**Who to engage**"));
   assert.ok(prompt.includes("**Sources**"));
-  assert.ok(prompt.includes("under ~8 sentences"));
+  assert.ok(prompt.includes("under ~6 sentences"));
+  assert.ok(prompt.includes("were **reviewed** unless a body or excerpt"));
   assert.ok(!prompt.includes('write "Unknown — not recorded in attached sources."'));
 });
 

@@ -264,7 +264,7 @@ test("enrichChatContextWithIntegrations returns partial results when budget elap
   }
 });
 
-test("trace-decision skips title-only Notion/Docs when commit+PR evidence is enough", async () => {
+test("trace-decision always skips title-only Notion/Docs (even without a linked PR)", async () => {
   const localFileResolverPath = require.resolve("./localFileResolver");
   const originalLocalFileResolverCache = require.cache[localFileResolverPath];
   const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
@@ -296,24 +296,16 @@ test("trace-decision skips title-only Notion/Docs when commit+PR evidence is eno
       data: {
         timeline: {
           file: "src/server/example.ts",
-          completeness: "partial",
+          completeness: "minimal",
           originalCommit: {
             sha: "abc123456789",
             author: "alice",
             date: "2024-01-01",
             message: "Add retry helper"
           },
-          linkedPR: {
-            number: 42,
-            title: "Add retry helper",
-            state: "merged",
-            description: "Retries transient failures",
-            approvers: ["bob"],
-            reviews: []
-          },
           alternatives: [],
           chronology: [],
-          warnings: []
+          warnings: ["No linked pull request found for the introducing commit."]
         }
       },
       fetchedAt: new Date()

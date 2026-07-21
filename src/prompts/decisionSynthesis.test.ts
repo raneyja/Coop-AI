@@ -175,10 +175,12 @@ test("decision synthesis includes trace completeness and omits status fillers wh
   });
   assert.ok(prompt.includes("### Trace completeness"));
   assert.ok(prompt.includes("Completeness: minimal"));
-  assert.ok(prompt.includes("**Decision status**"));
   assert.ok(prompt.includes("**Who to engage**"));
-  assert.ok(prompt.includes("only when evidence names people"));
+  assert.ok(prompt.includes("Omit **Decision status**"));
+  assert.ok(prompt.includes("never Unknown fillers"));
+  assert.ok(prompt.includes("Title-only Notion / Google Docs"));
   assert.ok(prompt.includes("introducing commit and message — provenance"));
+  assert.ok(prompt.includes("under ~6 sentences"));
 });
 
 test("decision synthesis expands when discussion evidence is attached", () => {
@@ -250,6 +252,25 @@ test("formatTimelineForPrompt includes integration search evidence", () => {
   assert.ok(formatted.includes("Cross-tool search seeds"));
   assert.ok(formatted.includes("COOP-101"));
   assert.ok(formatted.includes("ADR: GitHub App API"));
+});
+
+test("formatTimelineForPrompt labels Notion title-only hits as not reviewed", () => {
+  const withNotion: DecisionTimeline = {
+    ...timeline,
+    integrationSearch: {
+      notion: {
+        pages: [
+          { id: "n1", title: "ADR COOP-55" },
+          { id: "n2", title: "Retry design" }
+        ]
+      }
+    }
+  };
+  const formatted = formatTimelineForPrompt(withNotion);
+  assert.ok(formatted.includes("Notion title matches (not reviewed)"));
+  assert.ok(formatted.includes("Do **not** claim these pages were reviewed"));
+  assert.ok(formatted.includes("ADR COOP-55"));
+  assert.ok(!formatted.includes("Notion page from targeted search"));
 });
 
 console.log(`\ndecisionSynthesis: ${passed}/${passed + failed} tests passed`);
