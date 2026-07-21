@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { settingsScreenForProvider } from "../../chat/settingsScreens";
 import type { SettingsScreen } from "../../chat/settingsScreens";
 import type { CodeHostProviderPreference, GithubRepoOption, RemoteTreeNode, RepoContext } from "../../chat/types";
+import { normalizeExplorerPath } from "../lib/explorerPaths";
 
 export type ExplorerTreeState = {
   path: string;
@@ -334,6 +335,15 @@ type RemoteExplorerTreePanelProps = {
   onOpenSettings?: (screen?: SettingsScreen) => void;
   /** Opens the org admin portal in the browser (repo grants live there). */
   onOpenAdminPortal?: () => void;
+  /**
+   * When set, the panel shows that directory's entries as the list root
+   * (used after clicking a folder in search results).
+   */
+  browsePath?: string | null;
+  /** Enter directory browse mode at path (search folder click). */
+  onNavigateToPath?: (path: string) => void;
+  /** Optional max height override for the file list (px). */
+  listMaxHeightPx?: number;
 };
 
 export function RemoteExplorerTreePanel({
@@ -357,7 +367,10 @@ export function RemoteExplorerTreePanel({
   onPickRepo,
   onUseRepo,
   onOpenSettings,
-  onOpenAdminPortal
+  onOpenAdminPortal,
+  browsePath = null,
+  onNavigateToPath,
+  listMaxHeightPx
 }: RemoteExplorerTreePanelProps): React.ReactElement {
   const [nodes, setNodes] = useState<TreeNodeState[]>([]);
   const [query, setQuery] = useState("");
@@ -366,6 +379,7 @@ export function RemoteExplorerTreePanel({
   const trimmedQuery = query.trim();
   const isFileSearch = !isRepoList && trimmedQuery.length > 0;
   const searchResultsStale = isFileSearch && searchState.query !== trimmedQuery;
+  const browseFocus = browsePath !== null && browsePath !== undefined ? normalizeExplorerPath(browsePath) : null;
 
   useEffect(() => {
     setQuery("");
@@ -376,8 +390,15 @@ export function RemoteExplorerTreePanel({
       setNodes(treeState.items.map((item) => toTreeNode(item, treeState.loading)));
       return;
     }
+    const treePath = normalizeExplorerPath(treeState.path || "");
+    // Directory browse mode: replace the list with this folder's entries so a
+    // search hit like "src" opens into that folder instead of the repo root.
+    if (browseFocus !== null && treePath === browseFocus) {
+      setNodes(treeState.items.map((item) => toTreeNode(item, treeState.loading)));
+      return;
+    }
     setNodes((current) => mergeTreeLevel(current, treeState.path || "", treeState.items, treeState.loading));
-  }, [isRepoList, treeState.items, treeState.path, treeState.loading]);
+  }, [isRepoList, treeState.items, treeState.path, treeState.loading, browseFocus]);
 
   useEffect(() => {
     if (isRepoList) {
@@ -507,7 +528,14 @@ export function RemoteExplorerTreePanel({
 
       <div className="coop-explorer-body">
         <div className="coop-settings-card !space-y-0 !p-0">
-          <ul className={`${listClassName} no-scrollbar`}>
+          <ul
+            className={`${listClassName}${listMaxHeightPx !== undefined ? " coop-explorer-list--fixed-h" : ""} no-scrollbar`}
+            style={
+              listMaxHeightPx !== undefined
+                ? ({ ["--coop-explorer-list-max-h" as string]: `${listMaxHeightPx}px` } as React.CSSProperties)
+                : undefined
+            }
+          >
             {isFileSearch ? (
               awaitingRemoteSearch ? (
                 <li className="coop-explorer-empty">Searching files…</li>
@@ -538,7 +566,12 @@ export function RemoteExplorerTreePanel({
                         type="button"
                         className="coop-explorer-row"
                         onClick={() => {
-                          onExpand(node.path);
+                          const target = normalizeExplorerPath(node.path);
+                          if (onNavigateToPath) {
+                            onNavigateToPath(target);
+                          } else {
+                            onExpand(target);
+                          }
                           setQuery("");
                         }}
                       >
@@ -748,7 +781,7 @@ function toTreeNode(item: RemoteTreeNode, loading?: boolean): TreeNodeState {
 }
 
 function normalizeDir(path: string): string {
-  return path.replace(/^\/+/, "").replace(/\/+$/, "");
+  return normalizeExplorerPath(path);
 }
 
 function flattenLoadedTree(nodes: TreeNodeState[]): TreeNodeState[] {
