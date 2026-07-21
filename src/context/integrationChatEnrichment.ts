@@ -12,7 +12,11 @@ import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionContext";
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
-import { shouldFetchTraceDecisionIntegrations, shouldFetchTraceDecisionSoftDocIntegrations } from "./integrationFetchPolicy";
+import {
+  shouldFetchSoftDocIntegrations,
+  shouldFetchTraceDecisionIntegrations,
+  type KnowledgeGapsScanEvidence
+} from "./integrationFetchPolicy";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -74,6 +78,8 @@ export async function enrichChatContextWithIntegrations(options: {
    * cancelled. When unset, all requested integrations are awaited to completion.
    */
   budgetMs?: number;
+  /** Precomputed knowledge-gap scan — used to skip soft docs when gaps are already confirmed. */
+  knowledgeGapScan?: KnowledgeGapsScanEvidence;
 }): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const deps = {
@@ -114,6 +120,7 @@ async function enrichIntegrationStages(
     codeHostProvider?: CodeHostProvider;
     codeHostConnected?: boolean;
     integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+    knowledgeGapScan?: KnowledgeGapsScanEvidence;
   },
   data: Record<string, unknown>,
   deps: IntegrationChatEnrichmentDeps
@@ -133,9 +140,13 @@ async function enrichIntegrationStages(
 
   const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
   const timeline = asRecord(options.result.data).timeline as DecisionTimeline | undefined;
-  const softDocs =
-    !shouldFetchTraceDecisionIntegrations(options.request) ||
-    shouldFetchTraceDecisionSoftDocIntegrations(options.request, timeline);
+  const knowledgeGapScan =
+    options.knowledgeGapScan ??
+    (asRecord(options.result.data).jobScan as KnowledgeGapsScanEvidence | undefined);
+  const softDocs = shouldFetchSoftDocIntegrations(options.request, {
+    timeline,
+    knowledgeGapScan
+  });
   const shouldFetchNotion = softDocs && deps.shouldFetchNotionContext(options.request);
   const [confluenceSearch, notionSearch] = await Promise.all([
     shouldFetchConfluence

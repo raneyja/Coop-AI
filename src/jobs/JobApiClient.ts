@@ -38,18 +38,26 @@ export class JobApiClient {
     return response.data as JobSubmitResponse;
   }
 
-  public async getJob(jobId: string): Promise<Record<string, unknown>> {
+  public async getJob(
+    jobId: string,
+    requestTimeoutMs?: number
+  ): Promise<Record<string, unknown>> {
     const response = await this.request({
       method: "GET",
-      url: `/api/jobs/${encodeURIComponent(jobId)}`
+      url: `/api/jobs/${encodeURIComponent(jobId)}`,
+      timeoutMs: requestTimeoutMs
     });
     return response.data as Record<string, unknown>;
   }
 
-  public async getJobResult(jobId: string): Promise<Record<string, unknown>> {
+  public async getJobResult(
+    jobId: string,
+    requestTimeoutMs?: number
+  ): Promise<Record<string, unknown>> {
     const response = await this.request({
       method: "GET",
-      url: `/api/jobs/${encodeURIComponent(jobId)}/result`
+      url: `/api/jobs/${encodeURIComponent(jobId)}/result`,
+      timeoutMs: requestTimeoutMs
     });
     return response.data as Record<string, unknown>;
   }
@@ -65,14 +73,15 @@ export class JobApiClient {
   public async pollUntilComplete(
     jobId: string,
     onProgress: (event: JobProgressEvent) => void,
-    options: { intervalMs?: number; timeoutMs?: number } = {}
+    options: { intervalMs?: number; timeoutMs?: number; requestTimeoutMs?: number } = {}
   ): Promise<Record<string, unknown>> {
     const intervalMs = options.intervalMs ?? 1500;
     const timeoutMs = options.timeoutMs ?? 600_000;
+    const requestTimeoutMs = options.requestTimeoutMs ?? 120_000;
     const started = Date.now();
 
     while (Date.now() - started < timeoutMs) {
-      const job = await this.getJob(jobId);
+      const job = await this.getJob(jobId, requestTimeoutMs);
       const status = String(job.status ?? "queued");
       const progress = Number(job.progress ?? 0);
       onProgress({
@@ -84,7 +93,7 @@ export class JobApiClient {
       });
 
       if (status === "completed" || status === "partial") {
-        return this.getJobResult(jobId);
+        return this.getJobResult(jobId, requestTimeoutMs);
       }
       if (status === "failed" || status === "cancelled") {
         throw new Error(String(job.error ?? `Job ${status}`));
@@ -94,10 +103,15 @@ export class JobApiClient {
     throw new Error("Job polling timed out");
   }
 
-  private async request(config: { method: string; url: string; data?: unknown }): Promise<{ data: unknown; status: number }> {
+  private async request(config: {
+    method: string;
+    url: string;
+    data?: unknown;
+    timeoutMs?: number;
+  }): Promise<{ data: unknown; status: number }> {
     const headers = await this.authHeaders();
     const response = await runResilientRequest({
-      timeoutMs: 120_000,
+      timeoutMs: config.timeoutMs ?? 120_000,
       shouldRetryError: (error) => isRetryableError(error),
       run: async () =>
         this.http.request({
@@ -105,6 +119,7 @@ export class JobApiClient {
           url: config.url,
           data: config.data,
           headers,
+          timeout: config.timeoutMs ?? 120_000,
           validateStatus: () => true
         })
     });

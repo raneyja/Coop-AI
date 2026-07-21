@@ -9,8 +9,14 @@ import { shouldFetchTeamsContext } from "./teamsContext";
 import {
   REPO_WIDE_INTEGRATION_QUICK_ACTIONS,
   TRACE_DECISION_INTEGRATION_BUDGET_MS,
+  KNOWLEDGE_GAPS_INTEGRATION_BUDGET_MS,
+  KNOWLEDGE_GAPS_JOB_POLL_TIMEOUT_MS,
+  integrationBudgetMsForQuickAction,
+  knowledgeGapScanHasConfirmedGaps,
   shouldFetchDiscussionIntegrations,
+  shouldFetchKnowledgeGapsSoftDocIntegrations,
   shouldFetchRepoWideIntegrations,
+  shouldFetchSoftDocIntegrations,
   shouldFetchTraceDecisionIntegrations,
   shouldFetchTraceDecisionSoftDocIntegrations,
   timelineHasSufficientCodeHostEvidence
@@ -168,6 +174,44 @@ test("trace-decision soft docs skip when commit+PR evidence is enough", () => {
     }),
     true
   );
+});
+
+test("knowledge-gaps soft docs skip when gap scan already confirmed findings", () => {
+  const gapsRequest = request("knowledge-gaps");
+  assert.equal(shouldFetchKnowledgeGapsSoftDocIntegrations(gapsRequest), true);
+  assert.equal(
+    shouldFetchKnowledgeGapsSoftDocIntegrations(gapsRequest, {
+      foundGaps: 2,
+      gaps: [{ type: "missing_docs", message: "No README" }]
+    }),
+    false
+  );
+  assert.equal(knowledgeGapScanHasConfirmedGaps({ foundGaps: 0, gaps: [] }), false);
+  assert.equal(knowledgeGapScanHasConfirmedGaps({ gaps: [{ type: "missing_owner" }] }), true);
+  assert.equal(
+    shouldFetchSoftDocIntegrations(gapsRequest, {
+      knowledgeGapScan: { foundGaps: 3, gaps: [{ type: "missing_docs" }] }
+    }),
+    false
+  );
+  // Understand Repo still fetches soft docs even when a gaps-shaped scan is attached.
+  assert.equal(shouldFetchSoftDocIntegrations(request("understand-repo")), true);
+  assert.equal(
+    shouldFetchKnowledgeGapsSoftDocIntegrations(request("understand-repo"), {
+      foundGaps: 5,
+      gaps: [{ type: "missing_docs" }]
+    }),
+    true
+  );
+});
+
+test("knowledge-gaps has an 8–12s-class integration budget and bounded job poll", () => {
+  assert.equal(KNOWLEDGE_GAPS_INTEGRATION_BUDGET_MS, 10_000);
+  assert.equal(KNOWLEDGE_GAPS_JOB_POLL_TIMEOUT_MS, 15_000);
+  assert.equal(integrationBudgetMsForQuickAction("knowledge-gaps"), 10_000);
+  assert.equal(integrationBudgetMsForQuickAction("understand-repo"), 10_000);
+  assert.equal(integrationBudgetMsForQuickAction("trace-decision"), 10_000);
+  assert.equal(integrationBudgetMsForQuickAction("blast-radius"), undefined);
 });
 
 test("integration provider slash commands always fetch", () => {

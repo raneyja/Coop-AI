@@ -279,7 +279,13 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
-import { TRACE_DECISION_INTEGRATION_BUDGET_MS } from "../context/integrationFetchPolicy";
+import {
+  KNOWLEDGE_GAPS_JOB_POLL_TIMEOUT_MS,
+  integrationBudgetMsForQuickAction,
+  knowledgeGapScanHasConfirmedGaps,
+  shouldFetchSoftDocIntegrations,
+  type KnowledgeGapsScanEvidence
+} from "../context/integrationFetchPolicy";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -311,13 +317,6 @@ export type CoopChatSessionOptions = {
   /** When set, enables persisted multi-thread history for this session (sidebar). */
   threadScopeKey?: string;
 };
-
-/**
- * Time budget for Understand Repo's connected-tool search. It queries every
- * connected integration but drops any that don't return within this window so a
- * slow tool can't stall the overview.
- */
-const UNDERSTAND_REPO_INTEGRATION_BUDGET_MS = 10_000;
 
 export class CoopChatSession {
   private webview?: vscode.Webview;
@@ -1884,14 +1883,13 @@ export class CoopChatSession {
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected(),
       integrationScopes,
-      // Understand Repo and Trace Decision pull connected tools but are time-bounded
-      // so a single slow integration can't block synthesis. Slower tools are dropped.
-      budgetMs:
-        request.params.quickAction === "understand-repo"
-          ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
-          : request.params.quickAction === "trace-decision"
-            ? TRACE_DECISION_INTEGRATION_BUDGET_MS
-            : undefined
+      // Understand Repo, Trace Decision, and Knowledge Gaps pull connected tools but
+      // are time-bounded so a single slow integration can't block synthesis.
+      budgetMs: integrationBudgetMsForQuickAction(request.params.quickAction),
+      knowledgeGapScan:
+        request.params.quickAction === "knowledge-gaps"
+          ? this.knowledgeGapScanForEnrichment()
+          : undefined
     });
   }
 
@@ -1902,6 +1900,13 @@ export class CoopChatSession {
       return undefined;
     }
 
+    const softDocs = shouldFetchSoftDocIntegrations(request, {
+      knowledgeGapScan:
+        request.params.quickAction === "knowledge-gaps"
+          ? this.knowledgeGapScanForEnrichment()
+          : undefined
+    });
+
     const providers: ScopedIntegrationProvider[] = [];
     if (shouldFetchSlackContext(request)) {
       providers.push("slack");
@@ -1909,10 +1914,10 @@ export class CoopChatSession {
     if (shouldFetchJiraContext(request) || shouldFetchConfluenceContext(request)) {
       providers.push("atlassian");
     }
-    if (shouldFetchNotionContext(request)) {
+    if (softDocs && shouldFetchNotionContext(request)) {
       providers.push("notion");
     }
-    if (shouldFetchGoogleDocsContext(request)) {
+    if (softDocs && shouldFetchGoogleDocsContext(request)) {
       providers.push("google-docs");
     }
     if (providers.length === 0) {
@@ -2564,6 +2569,11 @@ export class CoopChatSession {
     if (quickAction && shouldUseAsyncJob(quickAction)) {
       const ranAsync = await this.runAsyncQuickAction(quickAction, modelMessage);
       if (ranAsync) {
+        // Merge gap scan before intent fetch so soft-doc policy can skip Notion/Docs
+        // when the scan already has confirmed gaps.
+        if (quickAction === "knowledge-gaps") {
+          this.applyKnowledgeGapJobResultToBundle(quickAction);
+        }
         const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, modelMessage);
         await this.runIntentFetch(intentEvent, { quiet: true });
         this.enrichKnowledgeGapsBundle(quickAction);
@@ -3761,19 +3771,30 @@ export class CoopChatSession {
         estimatedWaitTime: submit.estimatedWaitTime
       });
 
-      const resultPayload = await this.jobClient.pollUntilComplete(submit.jobId, (event) => {
-        if (jobToken !== this.jobRunToken) {
-          throw new Error("Job aborted");
-        }
-        const terminal = event.status === "completed" || event.status === "partial";
-        this.postQuickActionJobActivity(quickAction, {
-          jobId: event.jobId,
-          status: terminal ? "running" : event.status,
-          message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
-          progress: terminal ? Math.max(event.progress, 90) : event.progress,
-          estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
-        });
-      });
+      const resultPayload = await this.jobClient.pollUntilComplete(
+        submit.jobId,
+        (event) => {
+          if (jobToken !== this.jobRunToken) {
+            throw new Error("Job aborted");
+          }
+          const terminal = event.status === "completed" || event.status === "partial";
+          this.postQuickActionJobActivity(quickAction, {
+            jobId: event.jobId,
+            status: terminal ? "running" : event.status,
+            message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
+            progress: terminal ? Math.max(event.progress, 90) : event.progress,
+            estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
+          });
+        },
+        quickAction === "knowledge-gaps"
+          ? {
+              timeoutMs: KNOWLEDGE_GAPS_JOB_POLL_TIMEOUT_MS,
+              // Keep each poll snappy so a hung Jobs API cannot eat the whole IDE budget.
+              requestTimeoutMs: 5_000,
+              intervalMs: 1_000
+            }
+          : undefined
+      );
 
       const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
       this.lastJobResult = result;
@@ -3901,6 +3922,27 @@ export class CoopChatSession {
       gaps: gaps.slice(0, 50)
     };
     this.mergeKnowledgeGapScanIntoBundle(jobScan);
+  }
+
+  /** Scan evidence available before/during integration enrichment for soft-doc skip. */
+  private knowledgeGapScanForEnrichment(): KnowledgeGapsScanEvidence | undefined {
+    const fromBundle = this.lastContextBundle.find((entry) => entry.type === "knowledge_gaps");
+    const bundleScan = asRecord(fromBundle?.data).jobScan as KnowledgeGapsScanEvidence | undefined;
+    if (bundleScan && knowledgeGapScanHasConfirmedGaps(bundleScan)) {
+      return bundleScan;
+    }
+    if (!this.lastJobResult || typeof this.lastJobResult !== "object") {
+      return bundleScan;
+    }
+    const result = this.lastJobResult as Record<string, unknown>;
+    const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+    return {
+      foundGaps: typeof result.foundGaps === "number" ? result.foundGaps : gaps.length,
+      highPriority: Number(result.highPriority ?? 0),
+      mediumPriority: Number(result.mediumPriority ?? 0),
+      lowPriority: Number(result.lowPriority ?? 0),
+      gaps: gaps.slice(0, 50)
+    };
   }
 
   private enrichKnowledgeGapsBundle(quickAction: string | undefined): void {
