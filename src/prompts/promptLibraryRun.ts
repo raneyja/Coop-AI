@@ -1,5 +1,9 @@
 import { parseSlashCommand, type ParsedSlashCommand } from "../context/slashCommands";
-import type { QuickActionId } from "../webview/types";
+import { isQuickActionId, type QuickActionId } from "../webview/types";
+
+/** Defensive caps for workspace-provided prompt files (untrusted on-disk content). */
+export const MAX_WORKSPACE_PROMPTS = 200;
+export const MAX_WORKSPACE_TEMPLATE_CHARS = 20_000;
 
 export type PromptLibraryRunPlan =
   | { kind: "chat"; message: string }
@@ -13,7 +17,9 @@ export type PromptLibraryRunPlan =
  */
 export function resolvePromptLibraryRun(template: string, actionId?: string): PromptLibraryRunPlan {
   const trimmed = template.trim();
-  const quickActionId = actionId as QuickActionId | undefined;
+  // Validate against the known set instead of a blind cast — an unknown actionId
+  // falls through to slash/chat routing rather than forging an invalid quick action.
+  const quickActionId = isQuickActionId(actionId) ? actionId : undefined;
 
   if (quickActionId) {
     const parsed = parseSlashCommand(trimmed);
@@ -29,6 +35,30 @@ export function resolvePromptLibraryRun(template: string, actionId?: string): Pr
     return { kind: "slash", parsed };
   }
   return { kind: "chat", message: trimmed };
+}
+
+type SanitizedPromptEntry = {
+  id: string;
+  title: string;
+  template: string;
+  actionId?: string;
+  scope?: "workspace";
+};
+
+/**
+ * Defensively bound workspace prompt files: keep only well-formed entries, cap the
+ * total count, and truncate oversized templates so a malformed/huge on-disk file
+ * cannot blow up the prompt payload.
+ */
+export function sanitizeWorkspacePromptEntries<T extends SanitizedPromptEntry>(entries: T[]): T[] {
+  return entries
+    .filter((entry) => entry.id && entry.title && entry.template)
+    .slice(0, MAX_WORKSPACE_PROMPTS)
+    .map((entry) =>
+      entry.template.length > MAX_WORKSPACE_TEMPLATE_CHARS
+        ? { ...entry, template: entry.template.slice(0, MAX_WORKSPACE_TEMPLATE_CHARS) }
+        : entry
+    );
 }
 
 export function mergeComposerWithPromptTemplate(composerText: string | undefined, template: string): string {

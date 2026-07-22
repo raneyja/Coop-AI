@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { applyPromptTemplate, mergeComposerWithPromptTemplate, resolvePromptLibraryRun } from "./promptLibraryRun";
+import {
+  applyPromptTemplate,
+  MAX_WORKSPACE_PROMPTS,
+  MAX_WORKSPACE_TEMPLATE_CHARS,
+  mergeComposerWithPromptTemplate,
+  resolvePromptLibraryRun,
+  sanitizeWorkspacePromptEntries
+} from "./promptLibraryRun";
 
 let passed = 0;
 let failed = 0;
@@ -68,6 +75,35 @@ test("applyPromptTemplate substitutes context variables", () => {
     branch: "main"
   });
   assert.equal(text, "Review lib/plugin-utils.js in coop-demo-lab/fastify");
+});
+
+test("resolvePromptLibraryRun ignores unknown actionId (no blind cast)", () => {
+  const plan = resolvePromptLibraryRun("Focus on plugins", "not-a-real-action");
+  assert.equal(plan.kind, "chat");
+  if (plan.kind === "chat") {
+    assert.equal(plan.message, "Focus on plugins");
+  }
+});
+
+test("sanitizeWorkspacePromptEntries drops malformed entries and caps count", () => {
+  const entries = Array.from({ length: MAX_WORKSPACE_PROMPTS + 25 }, (_, i) => ({
+    id: `p${i}`,
+    title: `Prompt ${i}`,
+    template: `Body ${i}`
+  }));
+  entries.push({ id: "", title: "bad", template: "x" } as { id: string; title: string; template: string });
+  const sanitized = sanitizeWorkspacePromptEntries(entries);
+  assert.equal(sanitized.length, MAX_WORKSPACE_PROMPTS);
+  assert.ok(sanitized.every((entry) => entry.id && entry.title && entry.template));
+});
+
+test("sanitizeWorkspacePromptEntries truncates oversized templates", () => {
+  const huge = "x".repeat(MAX_WORKSPACE_TEMPLATE_CHARS + 500);
+  const sanitized = sanitizeWorkspacePromptEntries([
+    { id: "big", title: "Big", template: huge }
+  ]);
+  assert.equal(sanitized.length, 1);
+  assert.equal(sanitized[0]?.template.length, MAX_WORKSPACE_TEMPLATE_CHARS);
 });
 
 console.log(`\npromptLibraryRun: ${passed}/${passed + failed} tests passed`);

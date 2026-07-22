@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { sanitizeWorkspacePromptEntries } from "./promptLibraryRun";
 
 export type WorkspacePromptEntry = {
   id: string;
@@ -27,7 +28,7 @@ export async function loadWorkspacePrompts(): Promise<WorkspacePromptEntry[]> {
     if (!parsed || !Array.isArray(parsed.prompts)) {
       return [];
     }
-    return parsed.prompts.filter((entry) => entry.id && entry.title && entry.template);
+    return sanitizeWorkspacePromptEntries(parsed.prompts);
   } catch {
     return [];
   }
@@ -42,7 +43,9 @@ async function writeWorkspacePrompts(prompts: WorkspacePromptEntry[]): Promise<v
   const promptsUri = vscode.Uri.joinPath(folder.uri, PROMPT_RELATIVE_PATH);
   const payload: WorkspacePromptFile = {
     version: 1,
-    prompts: prompts.map((entry) => ({ ...entry, scope: "workspace" as const }))
+    prompts: sanitizeWorkspacePromptEntries(
+      prompts.map((entry) => ({ ...entry, scope: "workspace" as const }))
+    )
   };
   try {
     await vscode.workspace.fs.createDirectory(coopDir);

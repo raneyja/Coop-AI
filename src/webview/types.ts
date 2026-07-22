@@ -5,6 +5,19 @@ export type QuickActionId =
   | "blast-radius"
   | "knowledge-gaps";
 
+/** Runtime allow-list of valid quick-action ids — keep in sync with QuickActionId. */
+export const KNOWN_QUICK_ACTION_IDS: readonly QuickActionId[] = [
+  "understand-repo",
+  "trace-decision",
+  "find-owner",
+  "blast-radius",
+  "knowledge-gaps"
+];
+
+export function isQuickActionId(value: unknown): value is QuickActionId {
+  return typeof value === "string" && (KNOWN_QUICK_ACTION_IDS as readonly string[]).includes(value);
+}
+
 export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
 
 export type CodeHostProviderPreference = "github" | "gitlab" | "bitbucket";
