@@ -29,14 +29,14 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     ...incoming
   };
 
-  // Real Cmd+O / Downloads file — drop stale in-repo file so quick actions cannot
-  // target a previous path or invent an absolute Downloads path as a repo file.
+  // Real Cmd+O / Downloads file — keep the absolute path for the composer chip and
+  // plain-chat attach, but mark fileSource external so quick actions stay blocked.
   if (incoming.fileSource === "external" && !isFocusLossDiskLinkWarning(incoming.contextWarning)) {
-    merged.file = undefined;
+    merged.file = incoming.file?.trim() || undefined;
     merged.fileSource = "external";
     merged.selectedLines = undefined;
     merged.selectedSymbol = undefined;
-    merged.languageId = undefined;
+    merged.languageId = incoming.languageId;
     merged.contextWarning = incoming.contextWarning;
   } else if (!incoming.file?.trim() && existing.file?.trim()) {
     const preserveFile =

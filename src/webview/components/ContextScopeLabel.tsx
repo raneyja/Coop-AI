@@ -36,24 +36,43 @@ export function ContextScopeLabel({
   onOpenFile
 }: ContextScopeLabelProps): React.ReactElement | null {
   const filePath = context.file?.trim();
+  const outsideWorkspace = context.fileSource === "external";
   const showRepoChip =
-    !filePath && Boolean(context.owner?.trim() && context.repo?.trim()) && isExplicitRepoScope(context);
+    !filePath &&
+    !outsideWorkspace &&
+    Boolean(context.owner?.trim() && context.repo?.trim()) &&
+    isExplicitRepoScope(context);
 
-  if (!filePath && !showRepoChip) {
+  if (!filePath && !showRepoChip && !outsideWorkspace) {
     return null;
   }
 
-  if (filePath) {
-    const label = displayFileLabel(filePath);
+  if (filePath || outsideWorkspace) {
+    const label = filePath ? displayFileLabel(filePath) : "Outside workspace";
+    const detail = outsideWorkspace && filePath ? "Outside workspace" : undefined;
+    const title = outsideWorkspace
+      ? filePath
+        ? `${filePath} · Outside workspace`
+        : "Open file is outside the workspace"
+      : filePath ?? "";
     const className =
       "ml-auto inline-flex min-w-0 max-w-[min(100%,14rem)] items-center gap-1 rounded-md px-2 py-0.5 text-[11px] " +
       "bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]";
 
-    if (!onOpenFile) {
+    const body = (
+      <>
+        <FileIcon />
+        <span className="truncate">{label}</span>
+        {detail ? (
+          <span className="shrink-0 text-[10px] opacity-75">{detail}</span>
+        ) : null}
+      </>
+    );
+
+    if (!onOpenFile || !filePath) {
       return (
-        <span className={className} title={filePath}>
-          <FileIcon />
-          <span className="truncate">{label}</span>
+        <span className={className} title={title}>
+          {body}
         </span>
       );
     }
@@ -62,7 +81,7 @@ export function ContextScopeLabel({
       <button
         type="button"
         className={`${className} cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]`}
-        title={filePath}
+        title={title}
         aria-label={`Open ${filePath} in editor`}
         onClick={onOpenFile}
       >
@@ -70,6 +89,9 @@ export function ContextScopeLabel({
         <span className="truncate underline decoration-transparent underline-offset-2 hover:decoration-current">
           {label}
         </span>
+        {detail ? (
+          <span className="shrink-0 text-[10px] opacity-75 no-underline">{detail}</span>
+        ) : null}
       </button>
     );
   }

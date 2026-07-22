@@ -1375,7 +1375,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               Save to library
             </button>
           ) : null}
-          {context.file || (context.owner && context.repo) ? (
+          {context.file || context.fileSource === "external" || (context.owner && context.repo) ? (
             <ContextScopeLabel
               context={context}
               onOpenExplorer={openExplorer}

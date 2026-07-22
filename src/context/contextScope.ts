@@ -41,6 +41,11 @@ export function normalizeRepoContext(ctx: RepoContext): RepoContext {
     branch: normalizeText(ctx.branch),
     file: normalizeText(ctx.file)
   };
+  // Outside-workspace absolute paths stay file-scoped for the composer chip / chat attach.
+  if (normalized.fileSource === "external" && normalized.file) {
+    normalized.scope = "file";
+    return normalized;
+  }
   const scope = inferContextScope(normalized);
   normalized.scope = scope;
   if (scope === "repo") {

@@ -75,6 +75,7 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
   }
 
   return {
+    file: fsPath.replace(/\\/g, "/"),
     fileSource: "external",
     warning:
       "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone, or pick a file from the remote tree in chat."

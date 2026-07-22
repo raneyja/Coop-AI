@@ -58,6 +58,19 @@ async function run(): Promise<void> {
     assert.equal(normalized.contextWarning, "Only files on disk can be linked to GitHub");
   });
 
+  await test("normalizeRepoContext keeps external absolute file for composer chip", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI",
+      file: "/Users/jonraney/Downloads/cursor_session.md",
+      fileSource: "external",
+      contextWarning: "This file is not in your opened workspace or a git repo."
+    });
+    assert.equal(normalized.scope, "file");
+    assert.equal(normalized.file, "/Users/jonraney/Downloads/cursor_session.md");
+    assert.equal(normalized.fileSource, "external");
+  });
+
   await test("normalizeRepoContext keeps external fileSource at repo scope", () => {
     const normalized = normalizeRepoContext({
       owner: "coop-ai",

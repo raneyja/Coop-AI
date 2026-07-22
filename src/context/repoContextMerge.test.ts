@@ -70,7 +70,7 @@ async function run(): Promise<void> {
     assert.equal(merged.repo, "coop-ai");
   });
 
-  await test("mergeRepoContext clears file for real outside-workspace editor", () => {
+  await test("mergeRepoContext keeps absolute path for real outside-workspace editor", () => {
     const merged = mergeRepoContext(
       {
         file: "src/chat/CoopChatSession.ts",
@@ -79,13 +79,16 @@ async function run(): Promise<void> {
         repo: "coop-ai"
       },
       {
+        file: "/Users/jonraney/Downloads/cursor_session.md",
         fileSource: "external",
+        languageId: "markdown",
         contextWarning:
           "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone."
       }
     );
-    assert.equal(merged.file, undefined);
+    assert.equal(merged.file, "/Users/jonraney/Downloads/cursor_session.md");
     assert.equal(merged.fileSource, "external");
+    assert.equal(merged.scope, "file");
     assert.equal(merged.owner, "acme");
     assert.equal(merged.repo, "coop-ai");
   });
