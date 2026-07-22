@@ -222,10 +222,7 @@ const PROVIDER_CONFIGS: Record<LlmProvider, ZeroRetentionProviderConfig> = {
     },
     bodyAnnotations: {
       disable_web_search: true,
-      retention_policy: STRICT_RETENTION_POLICY,
-      systemInstruction: {
-        parts: [{ text: "This conversation data must not be retained." }]
-      }
+      retention_policy: STRICT_RETENTION_POLICY
     },
     compliance: {
       noTrainingOnApi: true,

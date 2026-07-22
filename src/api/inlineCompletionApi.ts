@@ -41,16 +41,7 @@ const MAX_SUFFIX_CHARS = 2_000;
 const DEFAULT_MAX_TOKENS = 96;
 const MAX_INLINE_TOKENS = 200;
 
-const INLINE_SYSTEM = `${systemPromptForUseCase("inline_completion")}
-
-RULES:
-- Match indentation and style of surrounding code
-- Complete ONE logical statement (not multiple)
-- If uncertain, return JUST the most likely completion
-- Never explain, never add comments, just code
-- Respect language syntax and conventions
-- If completion would be trivial (auto-semicolon), return empty
-- Return ONLY the completion text. No markdown, no explanations.`;
+const INLINE_SYSTEM = systemPromptForUseCase("inline_completion");
 
 export async function handleInlineCompletionRequest(
   body: unknown,

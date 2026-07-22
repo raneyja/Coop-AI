@@ -41,9 +41,6 @@ import { ownershipTierLabel } from "./ownershipSourceLabels";
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
 List scan-backed gaps and integration hits — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, or explicit integration errors in the bundle.
-Omit **Ownership & maintenance** unless the scan contains a missing_owner gap. Ownership signals in the card are context only — not a reason to invent owner questions.
-Omit **Integration & operations** unless the scan contains an integration or operations gap type. Never invent plugin, deploy, or third-party configuration questions.
-When Notion or Confluence pages are attached with count > 0, review those exact titles under **Documentation gaps** before scan gap subsections.
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 

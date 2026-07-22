@@ -341,7 +341,6 @@ Answer clearly using supplied repository and organizational context. Cite concre
 When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that.
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
-For decision questions, weight pull requests and commit history above Slack/Teams chat when sources conflict.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
@@ -353,9 +352,6 @@ TASK: Produce minimal, correct patches that fully implement the user's request u
 
 RULES:
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
-- Multi-step edits (extract + call, rename + update callers, add helper + use it): emit every required hunk in this turn. Do not stop after adding a definition if call sites must change.
-- When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as authoritative source — never invent symbols or branches not in the attachment. Search the full attached file for all sites that must change.
-- When \`<project_instructions>\` is attached, follow those rules alongside this prompt.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
 - Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`);
 
@@ -434,6 +430,23 @@ export function resolveChatUseCase(
 type ManifestSnippet = { path: string; content: string; lineRange?: [number, number] };
 type MentionFileSnippet = ManifestSnippet & { repoId: string };
 
+/** Shared `<local_files>` block with the authoritative-source guardrail — single owner for both user-turn builders. */
+function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
+  lines.push("<local_files>");
+  lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
+  lines.push("Answer ONLY from this code. Quote exact conditions; do not invent identifiers.");
+  for (const file of files) {
+    const range =
+      file.lineRange && file.lineRange.length === 2
+        ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
+        : "";
+    lines.push(`<file_content path="${file.path}"${range}>`);
+    lines.push(file.content);
+    lines.push("</file_content>");
+  }
+  lines.push("</local_files>");
+}
+
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
@@ -458,19 +471,8 @@ export function formatChatMessageWithLocalFiles(options: {
         : "";
     lines.push(`<file path="${options.file}"${range} />`);
   }
-  lines.push("<local_files>");
-  lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
-  lines.push("Answer ONLY from this code. Quote exact conditions; do not invent identifiers.");
-  for (const file of options.files) {
-    const range =
-      file.lineRange && file.lineRange.length === 2
-        ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
-        : "";
-    lines.push(`<file_content path="${file.path}"${range}>`);
-    lines.push(file.content);
-    lines.push("</file_content>");
-  }
-  lines.push("</local_files>", "</attached_context>", "", options.message.trim());
+  emitLocalFilesBlock(lines, options.files);
+  lines.push("</attached_context>", "", options.message.trim());
   return lines.join("\n");
 }
 
@@ -632,18 +634,7 @@ export function buildUserMessageWithContext(
     }
   }
   if (localSnippets.length > 0) {
-    lines.push("<local_files>");
-    lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
-    for (const file of localSnippets) {
-      const range =
-        file.lineRange && file.lineRange.length === 2
-          ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
-          : "";
-      lines.push(`<file_content path="${file.path}"${range}>`);
-      lines.push(file.content);
-      lines.push("</file_content>");
-    }
-    lines.push("</local_files>");
+    emitLocalFilesBlock(lines, localSnippets);
   }
   if (repoSummarySnippets.length > 0) {
     lines.push("<repo_entry_files>");
@@ -1048,11 +1039,6 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
   if (pageCount === 0 && !confluence.error) {
     lines.push("<empty>No matching Confluence pages found.</empty>");
   }
-  if (pageCount > 0) {
-    lines.push(
-      `<instruction>List all ${pageCount} page titles under **Confluence pages reviewed** in Knowledge Gaps responses.</instruction>`
-    );
-  }
   for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
     const excerpt = page.excerpt ? ` excerpt="${escapeXml(page.excerpt)}"` : "";
@@ -1079,11 +1065,6 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
   if (pageCount === 0 && !notion.error) {
     lines.push("<empty>No matching Notion pages found.</empty>");
   }
-  if (pageCount > 0) {
-    lines.push(
-      `<instruction>List all ${pageCount} page titles under **Notion pages reviewed** in Knowledge Gaps responses.</instruction>`
-    );
-  }
   for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
     lines.push(
@@ -1108,11 +1089,6 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
   }
   if (docCount === 0 && !googleDocs.error) {
     lines.push("<empty>No matching Google Docs found.</empty>");
-  }
-  if (docCount > 0) {
-    lines.push(
-      `<instruction>List all ${docCount} document titles under **Google Docs reviewed** in Knowledge Gaps responses.</instruction>`
-    );
   }
   for (const doc of documents) {
     const url = doc.htmlUrl ? ` url="${escapeXml(doc.htmlUrl)}"` : "";

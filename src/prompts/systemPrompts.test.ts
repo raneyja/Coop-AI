@@ -36,7 +36,6 @@ test("chat use case includes enterprise evidence rules", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("strong / medium / weak / limited"));
   assert.ok(prompt.includes("integration blocks show <empty>"));
-  assert.ok(prompt.includes("pull requests and commit history above Slack/Teams"));
   assert.ok(prompt.includes("Never invent ticket IDs, PR numbers"));
   assert.ok(prompt.includes("Weight sources by reliability for decisions"));
 });
@@ -223,7 +222,6 @@ test("buildUserMessageWithContext renders confluence_pages from context bundle",
   });
 
   assert.ok(message.includes('<confluence_pages count="1">'));
-  assert.ok(message.includes("List all 1 page titles under **Confluence pages reviewed**"));
   assert.ok(message.includes("Auth middleware RFC"));
 });
 
