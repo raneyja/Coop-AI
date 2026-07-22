@@ -51,24 +51,13 @@ export const NARRATIVE_CITATION_RULES = `Narrative citation rules:
 - In all other narrative sections (**Architecture**, **Technical decision**, **Direct impact**, **Alternatives considered**, etc.), do **not** use \`[Sources: …]\` labels — describe evidence in plain language (file paths, PR numbers, ticket keys, channel names).
 - Never cite a \`[Sources: …]\` label in narrative when that source is absent from the required **Sources** checklist.`;
 
-export const EVIDENCE_QUALITY_RULES = `Evidence quality rules:
-- In **Summary**, state overall evidence strength using one of: strong, medium, weak, or limited.
-- Distinguish provenance (what a source directly shows) from rationale (your inference or synthesis).
-- Name missing evidence explicitly when the bundle lacks PRs, issues, discussions, or documentation.
-- When evidence is limited or weak, keep each section to one short line; omit sections with nothing to say (always keep **Summary** and **Sources**).
-- Never list hypothetical trade-offs or rejected alternatives (e.g. performance vs simplicity, libraries vs custom) unless a source explicitly discusses them.
-- Do not pepper narrative sections with \`[Sources: …]\` pill labels — keep citations in **Sources** (and at most 1-2 in **Summary**).
-- Keep strength and confidence aligned with the Sources card sections the user sees.`;
-
 export function appendEvidenceQualityInstructions(lines: string[]): void {
   lines.push("## Evidence quality");
   lines.push("- Lead **Summary** with what can be responsibly concluded from the attached bundle.");
   lines.push("- State evidence strength (strong / medium / weak / limited) and lower confidence when evidence is thin.");
   lines.push("- Call out missing PR, issue, discussion, or documentation when not present in the bundle.");
-  lines.push("- Match each \`[Sources: …]\` citation key to that source's contribution in your **Sources** bullets.");
   lines.push("- Distinguish provenance (direct source facts) from rationale (your synthesis).");
   lines.push("- When evidence is thin, use one line per section — do not pad with generic software trade-offs.");
-  lines.push("- Keep \`[Sources: …]\` labels in **Sources** only (at most 1-2 inline in **Summary**); use plain language elsewhere.");
   lines.push("");
 }
 
@@ -79,13 +68,6 @@ export function appendNarrativeCitationInstructions(lines: string[]): void {
   lines.push("- Never cite a source label in narrative when that label is absent from the required **Sources** checklist.");
   lines.push("");
 }
-
-export const EVIDENCE_ENRICHMENT_RULES = `Evidence enrichment rules:
-- When \`targetLabel\` is present, use it for precise target identification in **Summary** instead of inferring scope from the file path alone.
-- When \`introducingDiffSummary\` is present, use its summary (and change stats) in **Technical decision** or **Business context** to explain what the introducing change actually did.
-- When \`evolution\` includes \`commitCountSinceIntroduction\`, mention file activity since introduction in **Summary** (e.g. commit count, last modifier).
-- When \`rationaleRanking\` is present, call out the primary \`rationale\` source in **Summary** and weight narrative sections by rationale vs provenance vs background roles.
-- When \`pathEvolution\` is present (ownership), note recent commit activity and the last modifier when assessing who to contact today.`;
 
 export function sourcesChecklistIncludes(checklist: string[], citationKey: string): boolean {
   return checklist.some((item) => item.startsWith(citationKey));
@@ -202,7 +184,15 @@ export function stripDisallowedNarrativeSourceCitations(
   return out.join("\n");
 }
 
-export function appendEvidenceEnrichmentInstructions(lines: string[]): void {
+/**
+ * Enrichment guidance is only useful when the bundle actually carries an enriched
+ * field (targetLabel/introducingDiffSummary/evolution/rationaleRanking/pathEvolution),
+ * so callers thread a `hasEnrichment` flag to keep the prompt lean otherwise.
+ */
+export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichment: boolean): void {
+  if (!hasEnrichment) {
+    return;
+  }
   lines.push("## Evidence enrichment");
   lines.push("- When the bundle includes a precise `targetLabel`, cite that label in **Summary**.");
   lines.push("- When `introducingDiffSummary` is present, use its summary to describe what the introducing commit changed.");
@@ -228,7 +218,6 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 
 export const EVIDENCE_CITATION_RULES = `Citation rules:
 ${NARRATIVE_CITATION_RULES}
-- In **Sources**, include **at most 3 bullets** — prioritize commits, PRs, Jira, and Slack/Teams, then scans and dependency evidence; group multiple Confluence/Notion/Google Docs pages into one bullet each.
 - Format each **Sources** bullet as: \`[Sources: …] — one sentence on what that source contributed\` (plain text labels — not links).
 - The Sources evidence card lists every file, page, and integration hit — do not repeat full lists in **Sources** bullets.
 - Align quality and confidence statements with each source's contribution and the Sources card the user sees.
@@ -237,3 +226,8 @@ Never invent URLs, ticket IDs, PR numbers, people, or quotes not present in the 
 
 /** Shared **Sources** footer contract for quick-action system prompts. */
 export const SOURCES_FOOTER_OUTPUT_RULE = `Include **at most 3 bullets** — one sentence each on what the highest-priority sources contributed (commits, PRs, Jira, Slack/Teams, then scans/dependencies; group multiple doc pages into one bullet). Use plain \`[Sources: …]\` text labels. Full detail is in the Sources evidence card.`;
+
+/** Shared truncation marker appended after a `.slice(0, shown)` list so the model knows rows were omitted. */
+export function truncationNote(total: number, shown: number): string {
+  return total > shown ? `\n- …and ${total - shown} more (omitted)` : "";
+}

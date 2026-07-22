@@ -5,10 +5,9 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
-  EVIDENCE_CITATION_RULES,
-  EVIDENCE_ENRICHMENT_RULES
+  truncationNote,
+  EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import {
   appendMentionScopePromptSection,
@@ -47,7 +46,6 @@ Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ at
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}
-${EVIDENCE_ENRICHMENT_RULES}
 State confidence when evidence is thin. Keep answers concise — limited evidence warrants short sections, not speculative essays.
 Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
 For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
@@ -107,14 +105,13 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   const sourcesChecklist = listDecisionSourcesChecklist(timeline);
   appendCitationKeysSection(lines, citationKeys);
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(
     lines,
     sourcesChecklist,
     supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   );
   appendEvidenceQualityInstructions(lines);
-  appendEvidenceEnrichmentInstructions(lines);
+  appendEvidenceEnrichmentInstructions(lines, hasDecisionEnrichment(timeline));
   appendAlternativesTradeOffGuidance(lines, timeline);
   if (input.isFollowUp) {
     appendFollowUpInstructions(lines, input.userBubble ?? userQuestion);
@@ -133,6 +130,15 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+function hasDecisionEnrichment(timeline: DecisionTimeline): boolean {
+  return (
+    Boolean(timeline.targetLabel) ||
+    Boolean(timeline.introducingDiffSummary) ||
+    Boolean(timeline.evolution) ||
+    (timeline.rationaleRanking?.length ?? 0) > 0
+  );
 }
 
 function appendFollowUpInstructions(lines: string[], userQuestion: string | undefined): void {
@@ -261,7 +267,8 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
           pr.reviews
             .slice(0, 30)
             .map((r) => `- @${r.author} (${r.createdAt})${r.path ? ` on ${r.path}:${r.line ?? "?"}` : ""}: ${truncate(r.body, 400)}`)
-            .join("\n")
+            .join("\n") +
+          truncationNote(pr.reviews.length, 30)
       );
     }
   }
@@ -286,7 +293,8 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
         s.messages
           .slice(0, 40)
           .map((m) => `- @${m.user}: ${truncate(m.text, 300)}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(s.messages.length, 40)
     );
   }
 
@@ -297,7 +305,8 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
         t.messages
           .slice(0, 40)
           .map((m) => `- @${m.user}: ${truncate(m.text, 300)}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(t.messages.length, 40)
     );
   }
 
@@ -377,7 +386,8 @@ function appendIntegrationSearchSections(sections: string[], timeline: DecisionT
           .map((message) =>
             `- ${message.userName ?? "unknown"}${message.channelName ? ` in #${message.channelName}` : ""}: ${truncate(message.text, 250)}`
           )
-          .join("\n")
+          .join("\n") +
+        truncationNote(search.slack?.messages?.length ?? 0, 10)
     );
   }
 
@@ -387,7 +397,8 @@ function appendIntegrationSearchSections(sections: string[], timeline: DecisionT
         (search.teams?.messages ?? [])
           .slice(0, 10)
           .map((message) => `- ${message.fromUserName ?? "unknown"}: ${truncate(message.text, 250)}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(search.teams?.messages?.length ?? 0, 10)
     );
   }
 

@@ -12,12 +12,11 @@ import {
 } from "./integrationSourceLabels";
 import {
   appendCitationKeysSection,
-  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
+  truncationNote,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 
@@ -67,7 +66,6 @@ export function buildIntegrationSynthesisUserPrompt(input: IntegrationSynthesisI
   const citationKeys = listIntegrationSourceLabels(input.provider);
   const sourcesChecklist = listIntegrationSourcesChecklist(input.provider, { error, resultCount });
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(
     lines,
     sourcesChecklist,
@@ -135,7 +133,7 @@ function formatIntegrationEvidenceForPrompt(
                 (issue) =>
                   `- ${String(issue.key)} (${String(issue.status)}): ${String(issue.summary ?? "")}`
               )
-              .join("\n")
+              .join("\n") + truncationNote(issues.length, 20)
           : "- No issues found")
       );
     }
@@ -150,7 +148,7 @@ function formatIntegrationEvidenceForPrompt(
                 (message) =>
                   `- ${String(message.channelName ?? message.fromUserName ?? "unknown")}: ${String(message.text ?? "").slice(0, 200)}`
               )
-              .join("\n")
+              .join("\n") + truncationNote(messages.length, 20)
           : "- No messages found")
       );
     }
@@ -165,7 +163,7 @@ function formatIntegrationEvidenceForPrompt(
                 (message) =>
                   `- ${String(message.fromUserName ?? "unknown")}: ${String(message.body ?? message.text ?? "").slice(0, 200)}`
               )
-              .join("\n")
+              .join("\n") + truncationNote(messages.length, 20)
           : "- No messages found")
       );
     }
@@ -183,7 +181,7 @@ function formatIntegrationEvidenceForPrompt(
                 const htmlUrl = page.htmlUrl ? String(page.htmlUrl) : undefined;
                 return htmlUrl ? `- [${title}](${htmlUrl})${excerpt}` : `- ${title}${excerpt}`;
               })
-              .join("\n")
+              .join("\n") + truncationNote(pages.length, 20)
           : "- No pages found")
       );
     }
@@ -192,7 +190,8 @@ function formatIntegrationEvidenceForPrompt(
       return (
         `### ${label}\n` +
         (documents.length
-          ? documents.slice(0, 20).map((doc) => `- ${String(doc.title)}`).join("\n")
+          ? documents.slice(0, 20).map((doc) => `- ${String(doc.title)}`).join("\n") +
+            truncationNote(documents.length, 20)
           : "- No documents found")
       );
     }

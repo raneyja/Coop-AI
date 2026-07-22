@@ -33,12 +33,11 @@ import {
 } from "./blastRadiusSourceLabels";
 import {
   appendCitationKeysSection,
-  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
+  truncationNote,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
@@ -96,7 +95,6 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
     googleDocs: evidence.googleDocsSearch?.documents,
     targetSection: "APIs & integrations"
   });
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(
     lines,
     sourcesChecklist,
@@ -104,7 +102,6 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   );
   appendEvidenceQualityInstructions(lines);
   appendBlastRadiusSummaryGuidance(lines, evidence);
-  appendEvidenceEnrichmentInstructions(lines);
   if (evidence.ciWorkflows?.length) {
     lines.push(
       "- CI workflows reference this path — include rollout/verification guidance: which workflows run, what to watch during deploy, and how to validate the change."
@@ -175,7 +172,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
 
   if (evidence.directDependents?.length) {
     sections.push(
-      `- Code dependents (${evidence.directDependents.length}):\n${evidence.directDependents.slice(0, 12).map((dep) => `  - ${dep}`).join("\n")}`
+      `- Code dependents (${evidence.directDependents.length}):\n${evidence.directDependents.slice(0, 12).map((dep) => `  - ${dep}`).join("\n")}` +
+        truncationNote(evidence.directDependents.length, 12)
     );
   }
   if (evidence.docsReferences?.length) {
@@ -184,12 +182,14 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.docsReferences
           .slice(0, 10)
           .map((entry) => `- ${entry.path} (${entry.source})`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.docsReferences.length, 10)
     );
   }
   if (evidence.transitiveDependents?.length) {
     sections.push(
-      `- Transitive dependents (${evidence.transitiveDependents.length}):\n${evidence.transitiveDependents.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}`
+      `- Transitive dependents (${evidence.transitiveDependents.length}):\n${evidence.transitiveDependents.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}` +
+        truncationNote(evidence.transitiveDependents.length, 15)
     );
   }
   if (evidence.dependentDetails?.length) {
@@ -197,7 +197,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
       `- Code dependent details:\n${evidence.dependentDetails
         .slice(0, 12)
         .map((entry) => `  - ${entry.path} (depth ${entry.depth}, ${entry.source})`)
-        .join("\n")}`
+        .join("\n")}` + truncationNote(evidence.dependentDetails.length, 12)
     );
   } else if (!evidence.directDependents?.length && !evidence.transitiveDependents?.length) {
     sections.push("- Impact unverified — no dependents found in index or fallback search.");
@@ -211,7 +211,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   if (evidence.testFiles?.length) {
     sections.push(
       `### ${blastRadiusSourceLabelTests()}\n` +
-        evidence.testFiles.slice(0, 10).map((entry) => `- ${entry.path} (${entry.source})`).join("\n")
+        evidence.testFiles.slice(0, 10).map((entry) => `- ${entry.path} (${entry.source})`).join("\n") +
+        truncationNote(evidence.testFiles.length, 10)
     );
   }
 
@@ -221,7 +222,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.publicExports
           .slice(0, 10)
           .map((entry) => `- ${entry.symbol} (${entry.kind}, line ${entry.line})`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.publicExports.length, 10)
     );
   }
 
@@ -231,7 +233,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.recentChanges
           .slice(0, 10)
           .map((change) => `- #${change.number} (${change.state}): ${change.title}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.recentChanges.length, 10)
     );
   }
 
@@ -241,7 +244,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.openPullRequests
           .slice(0, 10)
           .map((pr) => `- #${pr.number} (${pr.state}): ${pr.title}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.openPullRequests.length, 10)
     );
   }
 
@@ -251,7 +255,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.ownersByFile
           .slice(0, 10)
           .map((entry) => `- ${entry.file}: @${entry.owner} (${entry.source})`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.ownersByFile.length, 10)
     );
   }
 
@@ -264,7 +269,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.jiraSearch.issues
                 .slice(0, 8)
                 .map((issue) => `- ${issue.key}: ${issue.summary} (${issue.status})`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.jiraSearch.issues.length, 8)
             : "- No matching Jira issues")
     );
   }
@@ -278,7 +283,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.confluenceSearch.pages
                 .slice(0, 8)
                 .map((page) => `- ${page.title}`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.confluenceSearch.pages.length, 8)
             : "- No matching Confluence pages")
     );
   }
@@ -289,7 +294,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.ciWorkflows
           .slice(0, 8)
           .map((entry) => `- ${entry.path} references ${entry.matchedPath}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.ciWorkflows.length, 8)
     );
   }
 
@@ -299,7 +305,8 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
         evidence.crossRepoConsumers
           .slice(0, 8)
           .map((entry) => `- ${entry.repoId}: ${entry.path} (${entry.source})`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(evidence.crossRepoConsumers.length, 8)
     );
   }
 
@@ -312,7 +319,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.slackSearch.messages
                 .slice(0, 8)
                 .map((message) => `- ${message.channelName ?? "Slack"}: ${message.text.slice(0, 160)}`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.slackSearch.messages.length, 8)
             : "- No matching Slack messages")
     );
   }
@@ -326,7 +333,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.notionSearch.pages
                 .slice(0, 8)
                 .map((page) => `- ${page.title}`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.notionSearch.pages.length, 8)
             : "- No matching Notion pages")
     );
   }
@@ -340,7 +347,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.googleDocsSearch.documents
                 .slice(0, 8)
                 .map((doc) => `- ${doc.title}`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.googleDocsSearch.documents.length, 8)
             : "- No matching Google Docs")
     );
   }
@@ -354,7 +361,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
             ? evidence.teamsSearch.messages
                 .slice(0, 8)
                 .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
-                .join("\n")
+                .join("\n") + truncationNote(evidence.teamsSearch.messages.length, 8)
             : "- No matching Teams messages")
     );
   }

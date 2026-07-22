@@ -7,10 +7,9 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
-  EVIDENCE_CITATION_RULES,
-  EVIDENCE_ENRICHMENT_RULES
+  truncationNote,
+  EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import {
   appendMentionScopePromptSection,
@@ -46,8 +45,7 @@ Distinguish code authors from reviewers. Use plain language in narrative section
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
-${EVIDENCE_CITATION_RULES}
-${EVIDENCE_ENRICHMENT_RULES}`;
+${EVIDENCE_CITATION_RULES}`;
 
 export type OwnershipSynthesisInput = {
   report: OwnershipReport;
@@ -83,18 +81,17 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push("## Evidence bundle");
   lines.push(formatOwnershipReportForPrompt(report, input.slackSearch));
   lines.push("");
-  appendCitationKeysSection(lines, listOwnershipSourceLabels(report, input.slackSearch));
-  const sourcesChecklist = listOwnershipSourcesChecklist(report, input.slackSearch);
   const citationKeys = listOwnershipSourceLabels(report, input.slackSearch);
+  const sourcesChecklist = listOwnershipSourcesChecklist(report, input.slackSearch);
+  appendCitationKeysSection(lines, citationKeys);
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
     ownershipSourceLabelSlackDiscussions(),
     ...supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   ]);
   appendEvidenceQualityInstructions(lines);
   appendOwnershipSlackCitationGuidance(lines, report, input.slackSearch);
-  appendEvidenceEnrichmentInstructions(lines);
+  appendEvidenceEnrichmentInstructions(lines, Boolean(report.pathEvolution));
   appendPathEvolutionGuidance(lines, report.pathEvolution);
   if (repoWide) {
     lines.push(
@@ -178,7 +175,8 @@ export function formatOwnershipReportForPrompt(
               `${s.reviewApprovals ? ` · ${s.reviewApprovals} PR approvals` : ""}` +
               `${s.presence ? ` · Slack: ${s.presence.label}` : ""}`
           )
-          .join("\n")
+          .join("\n") +
+        truncationNote(report.scores.length, 10)
     );
   } else {
     sections.push("### Ownership scores\nNo scored owners identified.");
@@ -191,7 +189,8 @@ export function formatOwnershipReportForPrompt(
         presenceScores
           .slice(0, 10)
           .map((score) => `- @${score.owner}: ${score.presence!.label}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(presenceScores.length, 10)
     );
   }
 
@@ -243,7 +242,8 @@ export function formatOwnershipReportForPrompt(
         slackSearch.messages
           .slice(0, 10)
           .map((message) => `- ${message.channelName ? `#${message.channelName}` : "Slack"} · ${message.userName ?? "unknown"}: ${message.text.slice(0, 160)}`)
-          .join("\n")
+          .join("\n") +
+        truncationNote(slackSearch.messages.length, 10)
     );
   }
 
