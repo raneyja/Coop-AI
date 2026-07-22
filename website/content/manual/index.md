@@ -276,11 +276,13 @@ Type free-form questions in the composer. Coop streams answers grounded in your 
 
 The chip above the composer (right side) shows which file Coop is using as chat context. It is **not** an `@` mention and is separate from the **AGENTS.md** pill.
 
-<!-- figures -->
+<!-- figures ml -->
 ![Active file context chip — L badge, filename, and Local above the Coop chat composer](/screenshots/docs/extension-context-chip-local.png)
 
 *Local file (**L**)*
+<!-- /figures -->
 
+<!-- figures ml -->
 ![Active file context chip — R badge, filename, and owner/repo above the Coop chat composer](/screenshots/docs/extension-context-chip-remote.png)
 
 *Remote / codehost file (**R**)*
