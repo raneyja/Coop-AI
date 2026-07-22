@@ -238,10 +238,12 @@ import { applyLocalFallbackToResult, contextResultHasLocalFiles } from "../conte
 import { localFilesFromContextData } from "../context/localFileContext";
 import {
   readActiveEditorFileForChat,
+  readExternalOpenFileForChat,
   pickEditorForContext,
   pickLocalEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
+import { looksLikeAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import {
@@ -5184,6 +5186,22 @@ export class CoopChatSession {
       }
     }
 
+    // Plain chat /edit: attach Cmd+O / Downloads buffer like ChatGPT file upload —
+    // keep fileSource external so quick actions stay blocked.
+    const fromExternal = readExternalOpenFileForChat({
+      selectedLines: fullFile ? undefined : ctx.selectedLines,
+      fullFile
+    });
+    if (fromExternal?.files.length) {
+      this.currentContext = {
+        ...this.currentContext,
+        file: fromExternal.activeFile,
+        fileSource: "external",
+        scope: "file"
+      };
+      return fromExternal;
+    }
+
     return undefined;
   }
 
@@ -5203,11 +5221,42 @@ export class CoopChatSession {
       return this.pendingChatLocalFiles;
     }
 
+    // Outside-workspace buffer already captured at send time, or still open.
+    if (this.currentContext.fileSource === "external" || looksLikeAbsoluteDiskPath(this.currentContext.file)) {
+      if (this.pendingChatLocalFiles?.files.length) {
+        return this.pendingChatLocalFiles;
+      }
+      const fromExternal = readExternalOpenFileForChat({
+        selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
+        fullFile: this.pendingCodeEditIntent
+      });
+      if (fromExternal?.files.length) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: fromExternal.activeFile,
+          fileSource: "external",
+          scope: "file"
+        };
+        return fromExternal;
+      }
+      return undefined;
+    }
+
     const fromOpenTabs = await readOpenTabFilesForChat({
       file: this.currentContext.file,
       selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines
     });
     if (fromOpenTabs?.files.length) {
+      // Never promote absolute / outside-workspace paths into repo context.
+      if (looksLikeAbsoluteDiskPath(fromOpenTabs.activeFile)) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: fromOpenTabs.activeFile,
+          fileSource: "external",
+          scope: "file"
+        };
+        return fromOpenTabs;
+      }
       this.currentContext = {
         ...this.currentContext,
         file: fromOpenTabs.activeFile,
@@ -5225,8 +5274,7 @@ export class CoopChatSession {
         repoContextFromEditor(editor, chatPrefs, this.currentContext)
       );
     } else if (this.currentContext.file && resolveLocalAbsolutePath(this.currentContext.file)) {
-      this.currentContext.fileSource =
-        this.currentContext.fileSource === "external" ? "external" : "workspace";
+      this.currentContext.fileSource = "workspace";
     }
 
     const ctx = this.currentContext;

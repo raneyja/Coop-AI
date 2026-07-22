@@ -41,7 +41,19 @@ export function buildContextPreviewChips(options: {
       id: "active-file",
       kind: "file",
       label: displayFileLabel(filePath),
-      detail: ctx.fileSource === "remote" ? "remote tab" : undefined,
+      detail:
+        ctx.fileSource === "remote"
+          ? "remote tab"
+          : ctx.fileSource === "external"
+            ? "Outside workspace"
+            : undefined,
+      state: "confirmed"
+    });
+  } else if (ctx.fileSource === "external") {
+    chips.push({
+      id: "outside-workspace",
+      kind: "file",
+      label: "Outside workspace",
       state: "confirmed"
     });
   }

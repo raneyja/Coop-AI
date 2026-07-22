@@ -29,7 +29,16 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     ...incoming
   };
 
-  if (!incoming.file?.trim() && existing.file?.trim()) {
+  // Real Cmd+O / Downloads file — drop stale in-repo file so quick actions cannot
+  // target a previous path or invent an absolute Downloads path as a repo file.
+  if (incoming.fileSource === "external" && !isFocusLossDiskLinkWarning(incoming.contextWarning)) {
+    merged.file = undefined;
+    merged.fileSource = "external";
+    merged.selectedLines = undefined;
+    merged.selectedSymbol = undefined;
+    merged.languageId = undefined;
+    merged.contextWarning = incoming.contextWarning;
+  } else if (!incoming.file?.trim() && existing.file?.trim()) {
     const preserveFile =
       !isExplicitRepoScope(existing) ||
       incoming.scope === "file" ||

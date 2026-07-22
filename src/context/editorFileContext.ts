@@ -255,6 +255,60 @@ export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEd
   });
 }
 
+/**
+ * Attach an outside-workspace / Cmd+O buffer for plain chat (ChatGPT-style file attach).
+ * Does not invent a repo-relative path — callers must keep fileSource "external".
+ */
+export function readExternalOpenFileForChat(options?: {
+  selectedLines?: [number, number];
+  fullFile?: boolean;
+}): LocalFileContextPayload | undefined {
+  const candidates: vscode.TextEditor[] = [];
+  const active = vscode.window.activeTextEditor;
+  if (active) {
+    candidates.push(active);
+  }
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (editor !== active) {
+      candidates.push(editor);
+    }
+  }
+
+  for (const editor of candidates) {
+    if (editor.document.uri.scheme !== "file") {
+      continue;
+    }
+    const resolved = resolveEditorFile(editor);
+    if (resolved.fileSource !== "external") {
+      continue;
+    }
+    const raw = editor.document.getText();
+    if (!raw.trim()) {
+      continue;
+    }
+    const absolutePath = editor.document.uri.fsPath.replace(/\\/g, "/");
+    const lines =
+      options?.fullFile || !options?.selectedLines
+        ? undefined
+        : { start: options.selectedLines[0], end: options.selectedLines[1] };
+    const sliced = sliceFileContent(raw, lines);
+    return {
+      source: "local-workspace",
+      activeFile: absolutePath,
+      files: [
+        {
+          path: absolutePath,
+          content: sliced.content,
+          encoding: "utf8",
+          ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+        }
+      ],
+      fallbackLevel: "partial"
+    };
+  }
+  return undefined;
+}
+
 /** Read live editor buffer content for chat (includes unsaved edits; local or remote tab). */
 export function readActiveEditorFileForChat(
   ctx: Pick<RepoContext, "file" | "fileSource" | "selectedLines">

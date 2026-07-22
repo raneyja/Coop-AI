@@ -103,6 +103,33 @@ test("integrations auto-fetch on trace-decision", () => {
   }
 });
 
+test("outside-workspace file skips Notion and other integration auto-fetch", () => {
+  const externalRequest = {
+    type: "knowledge_gaps",
+    params: {
+      quickAction: "knowledge-gaps",
+      fileSource: "external",
+      file: "/Users/jonraney/Downloads/cursor_session.md"
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchRepoWideIntegrations(externalRequest), false);
+  assert.equal(shouldFetchDiscussionIntegrations(externalRequest), false);
+  assert.equal(shouldFetchNotionContext(externalRequest), false);
+  assert.equal(shouldFetchTraceDecisionIntegrations(externalRequest), false);
+});
+
+test("absolute disk path skips integration auto-fetch even without fileSource", () => {
+  const absoluteRequest = {
+    type: "knowledge_gaps",
+    params: {
+      quickAction: "knowledge-gaps",
+      file: "/Users/jonraney/Downloads/cursor_session.md"
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchRepoWideIntegrations(absoluteRequest), false);
+  assert.equal(shouldFetchNotionContext(absoluteRequest), false);
+});
+
 test("integration provider slash commands always fetch", () => {
   const notionRequest = {
     type: "chat_context",

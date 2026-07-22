@@ -47,6 +47,21 @@ function resolvePathInWorkspaceFolders(normalized: string): string | undefined {
 }
 
 export function resolveLocalAbsolutePath(relativePath: string): string | undefined {
+  const raw = relativePath?.trim().replace(/\\/g, "/");
+  if (!raw) {
+    return undefined;
+  }
+  // Outside-workspace chat attach uses absolute paths (Cmd+O / Downloads).
+  if (path.isAbsolute(raw.replace(/\//g, path.sep)) && fs.existsSync(raw)) {
+    return raw;
+  }
+  if (/^Users\/[^/]+\//i.test(raw) || /^home\/[^/]+\//i.test(raw)) {
+    const restored = `/${raw}`;
+    if (fs.existsSync(restored)) {
+      return restored;
+    }
+  }
+
   const normalized = toRepositoryRelativePath(relativePath);
 
   for (const ref of collectOpenEditorFileRefs()) {

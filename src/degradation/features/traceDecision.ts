@@ -1,4 +1,5 @@
 import { toRepositoryRelativePath } from "../../context/repoFilePath";
+import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { DecisionTimeline } from "../../types/decisionTimeline";
 import { getDecisionArchaeologyEngine } from "../../engines/decisionArchaeologyRegistry";
@@ -47,7 +48,12 @@ export async function traceDecision(context: FeatureExecutionContext) {
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
   const fileSource = params.fileSource as string | undefined;
 
-  if (fileSource === "external" || (!file && params.file)) {
+  if (
+    fileSource === "external" ||
+    looksLikeAbsoluteDiskPath(params.file) ||
+    looksLikeAbsoluteDiskPath(file) ||
+    (!file && params.file)
+  ) {
     return contextResult(
       context,
       placeholderDecisionData(params, codeHost?.provider, context.status.level, "Active file is not in the workspace or a git repo."),

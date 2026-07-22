@@ -59,6 +59,56 @@ async function run(): Promise<void> {
     assert.equal(isQuickActionBlocked("find-owner", {}), true);
   });
 
+  test("all quick actions block outside-workspace active file", () => {
+    const external: RepoContext = {
+      owner: "acme",
+      repo: "widgets",
+      branch: "main",
+      fileSource: "external",
+      contextWarning: "This file is not in your opened workspace or a git repo."
+    };
+    assert.equal(isQuickActionBlocked("trace-decision", external), true);
+    assert.equal(isQuickActionBlocked("blast-radius", external), true);
+    assert.equal(isQuickActionBlocked("knowledge-gaps", external), true);
+    assert.equal(isQuickActionBlocked("understand-repo", external), true);
+    assert.equal(isQuickActionBlocked("find-owner", external), true);
+    assert.match(quickActionBlockedMessage("understand-repo", external), /outside the workspace/i);
+    assert.match(quickActionBlockedMessage("find-owner", external), /outside the workspace/i);
+  });
+
+  test("absolute Downloads path is treated as outside-workspace even without fileSource", () => {
+    const absolute: RepoContext = {
+      owner: "acme",
+      repo: "widgets",
+      file: "/Users/jonraney/Downloads/cursor_session.md"
+    };
+    assert.equal(isQuickActionBlocked("knowledge-gaps", absolute), true);
+    assert.equal(isQuickActionBlocked("trace-decision", absolute), true);
+    assert.equal(isQuickActionBlocked("understand-repo", absolute), true);
+    assert.equal(isQuickActionBlocked("find-owner", absolute), true);
+  });
+
+  test("chat-attached outside-workspace file still blocks every quick action", () => {
+    // After plain-chat attach we keep absolute path + fileSource external.
+    const attached: RepoContext = {
+      owner: "acme",
+      repo: "widgets",
+      branch: "main",
+      file: "/Users/jonraney/Downloads/cursor_session.md",
+      fileSource: "external",
+      scope: "file"
+    };
+    for (const action of [
+      "understand-repo",
+      "trace-decision",
+      "find-owner",
+      "blast-radius",
+      "knowledge-gaps"
+    ] as const) {
+      assert.equal(isQuickActionBlocked(action, attached), true);
+    }
+  });
+
   const total = passed + failed;
   console.log(`\nquickActionScope: ${passed}/${total} tests passed`);
   if (failed > 0) {

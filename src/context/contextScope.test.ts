@@ -58,6 +58,18 @@ async function run(): Promise<void> {
     assert.equal(normalized.contextWarning, "Only files on disk can be linked to GitHub");
   });
 
+  await test("normalizeRepoContext keeps external fileSource at repo scope", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI",
+      fileSource: "external",
+      contextWarning: "This file is not in your opened workspace or a git repo."
+    });
+    assert.equal(normalized.scope, "repo");
+    assert.equal(normalized.file, undefined);
+    assert.equal(normalized.fileSource, "external");
+  });
+
   await test("normalizeRepoContext preserves file details for file scope", () => {
     const normalized = normalizeRepoContext({
       owner: "coop-ai",

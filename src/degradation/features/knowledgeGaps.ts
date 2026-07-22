@@ -1,6 +1,7 @@
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 const DOC_PROVIDERS = ["confluence", "notion", "google-docs"] as const;
@@ -17,6 +18,19 @@ export async function knowledgeGaps(context: FeatureExecutionContext) {
   const params = context.request.params;
   const provider = resolveCodeHostProvider(params);
   const key = degradationCacheKey("knowledge", [params.repoId, params.file]);
+
+  if (params.fileSource === "external" || looksLikeAbsoluteDiskPath(params.file)) {
+    return contextResult(
+      context,
+      {
+        file: params.file,
+        error: "Active file is not in the workspace or a git repo.",
+        fallbackLevel: context.status.level
+      },
+      "Open the project with File → Open Folder (the repo root), or use the remote file tree in chat.",
+      false
+    );
+  }
 
   if (context.status.level === "cached" || context.status.level === "unavailable") {
     const cached = await context.cache.get(key);

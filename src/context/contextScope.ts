@@ -45,7 +45,11 @@ export function normalizeRepoContext(ctx: RepoContext): RepoContext {
   normalized.scope = scope;
   if (scope === "repo") {
     normalized.file = undefined;
-    normalized.fileSource = undefined;
+    // Keep external so Trace/Blast/Gaps stay blocked while a Downloads/Cmd+O
+    // tab is active — even though there is no repo-relative file path.
+    if (normalized.fileSource !== "external") {
+      normalized.fileSource = undefined;
+    }
     normalized.selectedLines = undefined;
     normalized.selectedSymbol = undefined;
     normalized.languageId = undefined;

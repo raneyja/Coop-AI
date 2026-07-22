@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { resolveEditorFile } from "./editorFileContext";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import { parseGithubVfsUri } from "./githubVfsUri";
+import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import type { EditorContext } from "../manifest/types";
 import type { RepoContext } from "../chat/types";
 
@@ -14,17 +14,15 @@ export type OpenEditorFileRef = {
   absolutePath: string;
 };
 
-function mentionPathFromAbsolute(absolutePath: string): string {
+function pathUnderWorkspaceFolder(absolutePath: string): string | undefined {
   const normalized = absolutePath.replace(/\\/g, "/");
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     const root = folder.uri.fsPath.replace(/\\/g, "/");
     if (normalized === root || normalized.startsWith(`${root}/`)) {
-      const suffix = normalized.slice(root.length).replace(/^\//, "");
-      return `${folder.name}/${suffix}`;
+      return normalized.slice(root.length).replace(/^\//, "");
     }
   }
-  const parts = normalized.split("/").filter(Boolean);
-  return parts.slice(-4).join("/");
+  return undefined;
 }
 
 /** Open text editor tabs with repo-relative paths (local disk and GitHub remote). */
@@ -39,13 +37,18 @@ export function collectOpenEditorFileRefs(): OpenEditorFileRef[] {
       }
 
       if (input.uri.scheme === "file") {
-        let relative = vscode.workspace.asRelativePath(input.uri);
         const absolutePath = input.uri.fsPath;
-        if (!relative || relative.startsWith("..")) {
-          relative = mentionPathFromAbsolute(absolutePath);
+        // Cmd+O / Downloads tabs are not repo files — never attach or promote them.
+        const underWorkspace = pathUnderWorkspaceFolder(absolutePath);
+        if (underWorkspace === undefined) {
+          continue;
+        }
+        let relative = vscode.workspace.asRelativePath(input.uri);
+        if (!relative || relative.startsWith("..") || looksLikeAbsoluteDiskPath(relative)) {
+          relative = underWorkspace;
         }
         const relativePath = toRepositoryRelativePath(relative);
-        if (seen.has(relativePath)) {
+        if (!relativePath || looksLikeAbsoluteDiskPath(relativePath) || seen.has(relativePath)) {
           continue;
         }
         seen.add(relativePath);

@@ -1,4 +1,5 @@
 import { toRepositoryRelativePath } from "../../context/repoFilePath";
+import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
@@ -43,8 +44,27 @@ export async function blastRadius(context: FeatureExecutionContext) {
 
   const codeHost = resolveCodeHostContext(params);
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
+  const fileSource = params.fileSource as string | undefined;
   const directOnly = context.status.level === "partial";
   const engine = getBlastRadiusAnalysisEngine();
+
+  if (
+    fileSource === "external" ||
+    looksLikeAbsoluteDiskPath(params.file) ||
+    looksLikeAbsoluteDiskPath(file) ||
+    (!file && params.file)
+  ) {
+    return contextResult(
+      context,
+      placeholderBlastRadiusData(
+        params,
+        directOnly,
+        "Active file is not in the workspace or a git repo."
+      ),
+      "Open the project with File → Open Folder (the repo root), or use the remote file tree in chat.",
+      false
+    );
+  }
 
   if (engine && codeHost && file) {
     try {
