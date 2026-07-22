@@ -260,7 +260,7 @@ Use the chat header at the top of the sidebar:
 ![New chat — click + in the Coop sidebar header to start a fresh thread](/screenshots/docs/extension-new-chat-button.png)
 <!-- /figures -->
 
-Previous threads stay in the dropdown until you delete them. Quick actions and slash commands always run in the **active** thread.
+Previous threads stay in the dropdown until you delete them. Starting a **new chat** or switching threads does **not** cancel an in-flight reply — that turn keeps generating in the background (shown as “Generating…” in the thread list). Open the thread again to watch it finish, or press **Stop** on that thread to cancel only that turn. Quick actions and slash commands always run in the **active** thread.
 
 ### Chat composer
 

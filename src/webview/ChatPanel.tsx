@@ -76,9 +76,10 @@ type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
-  | { type: "chat:delta"; payload: { chunk: string } }
-  | { type: "chat:complete"; payload: { message: ChatMessage } }
-  | { type: "chat:error"; payload: { message: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
+  | { type: "chat:error"; payload: { message: string; threadId?: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
   | {
       type: "chat:quota-exceeded";
       payload: {
@@ -347,6 +348,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     activeTitle: string;
     threads: ThreadListItem[];
   } | null>(null);
+  const threadsStateRef = useRef(threadsState);
+  threadsStateRef.current = threadsState;
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
@@ -664,9 +667,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setMessages(historyMessages);
           setInlineArtifacts(historyArtifacts);
           setChatHistorySynced(true);
-          setStreamingBuffer("");
-          setIsStreaming(false);
+          // Do not clear isStreaming on mid-turn history echoes. Only clear when
+          // the thread is emptied (new/clear chat without a stream-resume).
           if (historyMessages.length === 0) {
+            setStreamingBuffer("");
+            setIsStreaming(false);
             setInput("");
             setAttachments([]);
             resetEphemeralChatState();
@@ -678,22 +683,57 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setThreadsState(message.payload);
           break;
         case "chat:thread-changed":
+          setThreadsState((prev) => {
+            const next = prev
+              ? {
+                  ...prev,
+                  activeId: message.payload.threadId,
+                  activeTitle: message.payload.title
+                }
+              : prev;
+            threadsStateRef.current = next;
+            return next;
+          });
           resetEphemeralChatState();
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
           setPendingPromptActionId(undefined);
+          setIsStreaming(false);
+          setStreamingBuffer("");
+          setIntentFeedback(undefined);
+          setJobProgress(undefined);
+          setError("");
           vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
         case "lightning:state":
           setLightningState(message.payload);
           break;
-        case "chat:delta":
+        case "chat:stream-resume": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
+          setIntentFeedback(undefined);
+          setIsStreaming(true);
+          setStreamingBuffer(message.payload.partialText);
+          break;
+        }
+        case "chat:delta": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
           setIntentFeedback(undefined);
           setIsStreaming(true);
           setStreamingBuffer((prev) => prev + message.payload.chunk);
           break;
-        case "chat:complete":
+        }
+        case "chat:complete": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
           setMessages((prev) => [...prev, message.payload.message]);
           setIntentFeedback(undefined);
           setJobProgress((current) =>
@@ -702,7 +742,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setStreamingBuffer("");
           setIsStreaming(false);
           break;
-        case "chat:error":
+        }
+        case "chat:error": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -711,6 +756,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           setStreamingBuffer("");
           break;
+        }
         case "chat:quota-exceeded":
           setIntentFeedback(undefined);
           setJobProgress((current) =>
@@ -1368,7 +1414,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             activeId={threadsState.activeId}
             activeTitle={threadsState.activeTitle}
             threads={threadsState.threads}
-            disabled={isStreaming}
             onSelect={(threadId) => post({ type: "threads:switch", payload: { threadId } })}
             onNewThread={() => post({ type: "threads:new" })}
           />

@@ -66,6 +66,7 @@ import {
 import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerms";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
+import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
@@ -342,17 +343,14 @@ export class CoopChatSession {
     updatedAt: new Date(0).toISOString()
   };
   private readonly conflictAudit = new ConflictAuditStore();
-  private streamToken = 0;
   private chatTurnStartedAt = 0;
   private readonly jobClient: JobApiClient;
-  private activeJobId?: string;
-  private jobRunToken = 0;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
   private lastTraceDecisionTimeline?: DecisionTimeline;
   private pendingEvidenceArtifactId?: string;
   private sessionCostUsd = 0;
-  private streamAbortController?: AbortController;
+  private readonly threadRuns = new ThreadRunManager();
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
@@ -425,6 +423,7 @@ export class CoopChatSession {
   }
 
   public dispose(): void {
+    this.threadRuns.abortAll();
     this.intentDebouncer.dispose();
     this.requestBatcher.cancelAll("Session disposed.");
     this.requestPrioritizer.clear("Session disposed.");
@@ -577,19 +576,36 @@ export class CoopChatSession {
     this.postContext();
   }
 
-  private abortActiveJob(): void {
-    this.jobRunToken++;
-    const jobId = this.activeJobId;
-    this.activeJobId = undefined;
+  private activeThreadId(): string {
+    return this.threadStore?.getActiveThreadId() ?? SESSION_RUN_THREAD_ID;
+  }
+
+  private isViewingThread(threadId: string): boolean {
+    return this.activeThreadId() === threadId;
+  }
+
+  /** Post to the webview only when the user is viewing that thread. */
+  private postForThread(threadId: string, message: WebviewOutbound): void {
+    if (!this.isViewingThread(threadId)) {
+      return;
+    }
+    this.post(message);
+  }
+
+  private abortActiveJob(threadId?: string): void {
+    const id = threadId ?? this.activeThreadId();
+    const turn = this.threadRuns.get(id);
+    const jobId = turn?.jobId;
     if (jobId) {
       void this.jobClient.cancelJob(jobId).catch(() => undefined);
+      if (turn) {
+        turn.jobId = undefined;
+      }
     }
   }
 
   private resetChatState(): void {
-    this.streamToken++;
-    this.streamAbortController?.abort();
-    this.abortActiveJob();
+    this.threadRuns.abortAll();
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
     this.sessionCostUsd = 0;
@@ -619,25 +635,62 @@ export class CoopChatSession {
     void this.syncActiveThreadToBackend();
   }
 
+  private persistTurnThread(turn: ChatTurn): void {
+    if (!this.threadStore) {
+      return;
+    }
+    const stored = this.threadStore.getThreadById(turn.threadId);
+    const title = stored?.title ?? "New Chat";
+    this.threadStore.setThread(
+      turn.threadId,
+      turn.history,
+      turn.sessionCostUsd,
+      title,
+      turn.artifacts,
+      turn.context
+    );
+    const thread = this.threadStore.getThreadById(turn.threadId);
+    if (thread) {
+      void syncThreadToBackend(thread, this.threadSyncOptions());
+    }
+  }
+
+  private finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): void {
+    turn.history.push(finalMessage);
+    if (this.isViewingThread(turn.threadId)) {
+      this.chatHistory.push(finalMessage);
+      this.post({ type: "chat:complete", payload: { message: finalMessage, threadId: turn.threadId } });
+      this.postChatHistory();
+      this.sessionCostUsd = turn.sessionCostUsd;
+      this.persistActiveThread();
+    } else {
+      this.persistTurnThread(turn);
+    }
+    this.threadRuns.complete(turn);
+    this.pushThreadsList();
+  }
+
   private pushThreadsList(): void {
     if (!this.threadStore) {
       return;
     }
     const active = this.threadStore.getActiveThread();
+    const running = new Set(this.threadRuns.runningThreadIds());
     this.post({
       type: "threads:list",
       payload: {
         activeId: active.id,
         activeTitle: active.title,
-        threads: this.threadStore.listSummaries()
+        threads: this.threadStore.listSummaries().map((thread) => ({
+          ...thread,
+          isRunning: running.has(thread.id)
+        }))
       }
     });
   }
 
   private activateThread(thread: ReturnType<ChatThreadStore["getActiveThread"]>): void {
-    this.streamToken++;
-    this.streamAbortController?.abort();
-    this.abortActiveJob();
+    // Do not abort background turns — other threads keep generating.
     this.pinnedContextFile = undefined;
     this.chatHistory.length = 0;
     this.threadArtifacts = [];
@@ -656,6 +709,28 @@ export class CoopChatSession {
     });
     this.postContext();
     this.postChatHistory();
+    const running = this.threadRuns.get(thread.id);
+    if (running && running.status === "running") {
+      this.chatHistory.length = 0;
+      this.chatHistory.push(...running.history);
+      this.threadArtifacts = [...running.artifacts];
+      this.sessionCostUsd = running.sessionCostUsd;
+      this.postChatHistory();
+      this.post({
+        type: "chat:stream-resume",
+        payload: { threadId: thread.id, partialText: running.partialAssistant }
+      });
+      if (running.partialAssistant.length === 0) {
+        // Still in intent/job phase — restore loading strip for this thread.
+        this.postIntentFeedbackForThread(thread.id, {
+          status: "loading",
+          intent: UserIntent.MANUAL_CHAT_SUBMIT,
+          title: "Working",
+          message: "Still generating in this thread…"
+        });
+      }
+    }
+    this.pushThreadsList();
   }
 
   private async switchThread(threadId: string): Promise<void> {
@@ -681,6 +756,7 @@ export class CoopChatSession {
 
   public clearChat(): void {
     if (this.threadStore) {
+      this.threadRuns.abort(this.threadStore.getActiveThreadId());
       this.persistActiveThread();
       const thread = this.threadStore.clearActiveThread();
       this.activateThread(thread);
@@ -905,10 +981,13 @@ export class CoopChatSession {
       case "collections:list-request":
         await this.handleCollectionsListRequest();
         return;
-      case "chat:stream-cancel":
-        this.streamToken++;
-        this.streamAbortController?.abort();
+      case "chat:stream-cancel": {
+        const threadId = this.activeThreadId();
+        this.abortActiveJob(threadId);
+        this.threadRuns.abort(threadId);
+        this.pushThreadsList();
         return;
+      }
       case "prompts:list-request":
         await this.pushWorkspacePrompts();
         return;
@@ -1645,17 +1724,23 @@ export class CoopChatSession {
 
   private async runIntentFetch(
     event: IntentEvent,
-    options: { quiet?: boolean } = {}
+    options: { quiet?: boolean; turn?: ChatTurn } = {}
   ): Promise<ContextFetchResult[]> {
     const requestTypes = requestTypesForIntent(event);
     if (requestTypes.length === 0) {
-      return [];
+      return options.turn?.contextBundle ?? this.lastContextBundle;
     }
 
     const loadingState = this.loadingFeedbackFor(event);
+    const turn = options.turn;
+    const feedbackThreadId = turn?.threadId;
 
     if (!options.quiet) {
-      this.postIntentFeedback(loadingState);
+      if (feedbackThreadId) {
+        this.postIntentFeedbackForThread(feedbackThreadId, loadingState);
+      } else {
+        this.postIntentFeedback(loadingState);
+      }
     }
 
     const requests = buildContextRequests(event, requestTypes);
@@ -1675,8 +1760,15 @@ export class CoopChatSession {
       if (!options.quiet) {
         const stale = results.find((result) => result.stale);
         const error = results.find((result) => result.error);
+        const postFeedback = (payload: IntentFeedbackState) => {
+          if (feedbackThreadId) {
+            this.postIntentFeedbackForThread(feedbackThreadId, payload);
+          } else {
+            this.postIntentFeedback(payload);
+          }
+        };
         if (stale) {
-          this.postIntentFeedback({
+          postFeedback({
             status: "rate-limited",
             intent: event.intent,
             actionId: event.context.buttonClicked,
@@ -1685,7 +1777,7 @@ export class CoopChatSession {
             stale: true
           });
         } else if (error) {
-          this.postIntentFeedback({
+          postFeedback({
             status: "error",
             intent: event.intent,
             actionId: event.context.buttonClicked,
@@ -1694,7 +1786,7 @@ export class CoopChatSession {
           });
         } else if (!isPlainChatIntent(event) && event.context.buttonClicked !== "trace-decision") {
           // Plain chat keeps the loading strip until the first streamed token.
-          this.postIntentFeedback({
+          postFeedback({
             status: "complete",
             intent: event.intent,
             actionId: event.context.buttonClicked,
@@ -1704,20 +1796,36 @@ export class CoopChatSession {
         }
       }
 
+      if (turn) {
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return turn.contextBundle;
+        }
+        turn.contextBundle = mergeContextBundleResults(turn.contextBundle, results);
+        if (this.isViewingThread(turn.threadId)) {
+          this.lastContextBundle = turn.contextBundle;
+        }
+        return turn.contextBundle;
+      }
+
       this.lastContextBundle = mergeContextBundleResults(this.lastContextBundle, results);
       return this.lastContextBundle;
     } catch (error) {
       if (!options.quiet) {
         const message = error instanceof Error ? error.message : "Context fetch failed";
-        this.postIntentFeedback({
+        const payload: IntentFeedbackState = {
           status: "error",
           intent: event.intent,
           actionId: event.context.buttonClicked,
           title: "Context fetch failed",
           message
-        });
+        };
+        if (feedbackThreadId) {
+          this.postIntentFeedbackForThread(feedbackThreadId, payload);
+        } else {
+          this.postIntentFeedback(payload);
+        }
       }
-      return this.lastContextBundle;
+      return turn?.contextBundle ?? this.lastContextBundle;
     }
   }
 
@@ -2549,30 +2657,55 @@ export class CoopChatSession {
     this.persistActiveThread();
     this.chatTurnStartedAt = Date.now();
 
+    const turn = this.threadRuns.begin({
+      threadId: this.activeThreadId(),
+      context: { ...this.currentContext },
+      history: [...this.chatHistory],
+      artifacts: [...this.threadArtifacts],
+      sessionCostUsd: this.sessionCostUsd,
+      modelMessage,
+      quickAction,
+      pendingMentions: options?.mentions,
+      codeEditIntent: options?.composerMode === "edit"
+    });
+    turn.startedAt = this.chatTurnStartedAt;
+    this.pushThreadsList();
+
     const prefetchIntentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, {
           integrationProvider:
             options?.integrationProvider ?? this.detectChatIntegrationProvider(message)
         });
-    this.postIntentFeedback(this.loadingFeedbackFor(prefetchIntentEvent));
+    this.postIntentFeedbackForThread(turn.threadId, this.loadingFeedbackFor(prefetchIntentEvent));
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
-      const ranAsync = await this.runAsyncQuickAction(quickAction, modelMessage);
+      const ranAsync = await this.runAsyncQuickAction(quickAction, modelMessage, turn);
+      if (!this.threadRuns.isStreamActive(turn)) {
+        return;
+      }
       if (ranAsync) {
-        const intentEvent = this.intentDetector.fromQuickAction(quickAction, this.currentContext, modelMessage);
-        await this.runIntentFetch(intentEvent, { quiet: true });
-        this.enrichKnowledgeGapsBundle(quickAction);
-        if (quickAction === "blast-radius") {
-          this.applyBlastRadiusJobResultToBundle(quickAction);
+        const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
+        await this.runIntentFetch(intentEvent, { quiet: true, turn });
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return;
         }
-        await this.postEvidenceCardsFromBundle(quickAction);
+        this.enrichKnowledgeGapsBundle(quickAction, turn);
+        if (quickAction === "blast-radius") {
+          this.applyBlastRadiusJobResultToBundle(quickAction, turn);
+        }
+        await this.postEvidenceCardsFromBundle(quickAction, undefined, turn);
         await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
           mentions: options?.mentions,
-          composerMode: options?.composerMode
+          composerMode: options?.composerMode,
+          turn
         });
         return;
       }
+    }
+
+    if (!this.threadRuns.isStreamActive(turn)) {
+      return;
     }
 
     const integrationProvider =
@@ -2580,22 +2713,29 @@ export class CoopChatSession {
       (quickAction ? undefined : this.detectChatIntegrationProvider(message));
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
-      : this.intentDetector.fromManualChatSubmit(this.currentContext, message, { integrationProvider });
+      : this.intentDetector.fromManualChatSubmit(turn.context, message, { integrationProvider });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
-    await this.runIntentFetch(intentEvent);
-    this.enrichKnowledgeGapsBundle(quickAction);
+    await this.runIntentFetch(intentEvent, { turn });
+    if (!this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
+    this.enrichKnowledgeGapsBundle(quickAction, turn);
     if (quickAction === "understand-repo") {
       // Don't block synthesis on graph enrichment for the evidence card.
-      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
     } else {
-      await this.postEvidenceCardsFromBundle(quickAction, integrationProvider);
+      await this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
+    }
+    if (!this.threadRuns.isStreamActive(turn)) {
+      return;
     }
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
       sourceHint: options?.sourceHint,
       integrationProvider,
       mentions: options?.mentions,
-      composerMode: options?.composerMode
+      composerMode: options?.composerMode,
+      turn
     });
   }
 
@@ -2854,31 +2994,51 @@ export class CoopChatSession {
 
   private async postEvidenceCardsFromBundle(
     quickAction?: string,
-    integrationProvider?: IntegrationChatProvider
+    integrationProvider?: IntegrationChatProvider,
+    turn?: ChatTurn
   ): Promise<void> {
-    if (quickAction === "trace-decision") {
-      this.postDecisionTimelineFromBundle();
-      return;
-    }
-    if (quickAction === "find-owner") {
-      this.postOwnershipCardFromBundle();
-      return;
-    }
-    if (quickAction === "understand-repo") {
-      await this.postRepoSummaryEvidenceFromBundle();
-      return;
-    }
-    if (quickAction === "blast-radius") {
-      this.postBlastRadiusEvidenceFromBundle();
-      return;
-    }
-    if (quickAction === "knowledge-gaps") {
-      this.postKnowledgeGapsEvidenceFromBundle();
-      return;
-    }
-    if (integrationProvider) {
-      this.postIntegrationEvidenceFromBundle(integrationProvider);
-    }
+    await this.withTurnSessionMirrors(turn, async () => {
+      if (turn && !this.isViewingThread(turn.threadId)) {
+        // Still allocate evidence ids / artifacts onto the turn; skip UI posts.
+        if (quickAction === "trace-decision") {
+          this.beginEvidenceArtifact();
+          return;
+        }
+        if (
+          quickAction === "find-owner" ||
+          quickAction === "understand-repo" ||
+          quickAction === "blast-radius" ||
+          quickAction === "knowledge-gaps" ||
+          integrationProvider
+        ) {
+          this.beginEvidenceArtifact();
+        }
+        return;
+      }
+      if (quickAction === "trace-decision") {
+        this.postDecisionTimelineFromBundle();
+        return;
+      }
+      if (quickAction === "find-owner") {
+        this.postOwnershipCardFromBundle();
+        return;
+      }
+      if (quickAction === "understand-repo") {
+        await this.postRepoSummaryEvidenceFromBundle();
+        return;
+      }
+      if (quickAction === "blast-radius") {
+        this.postBlastRadiusEvidenceFromBundle();
+        return;
+      }
+      if (quickAction === "knowledge-gaps") {
+        this.postKnowledgeGapsEvidenceFromBundle();
+        return;
+      }
+      if (integrationProvider) {
+        this.postIntegrationEvidenceFromBundle(integrationProvider);
+      }
+    });
   }
 
   private async enrichRepoSummaryGraphEvidence(
@@ -3133,9 +3293,24 @@ export class CoopChatSession {
       integrationProvider?: IntegrationChatProvider;
       mentions?: ChatFileMention[];
       composerMode?: ComposerMode;
+      turn?: ChatTurn;
     }
   ): Promise<void> {
-    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
+    const turn =
+      options?.turn ??
+      this.threadRuns.begin({
+        threadId: this.activeThreadId(),
+        context: { ...this.currentContext },
+        history: [...this.chatHistory],
+        artifacts: [...this.threadArtifacts],
+        sessionCostUsd: this.sessionCostUsd,
+        modelMessage: content,
+        quickAction,
+        pendingMentions: options?.mentions,
+        codeEditIntent: options?.composerMode === "edit"
+      });
+    const turnContext = turn.context;
+    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
     const minResponseVisibleMs = 0;
@@ -3156,29 +3331,25 @@ export class CoopChatSession {
       attachments,
       sourceHint,
       integrationProvider,
-      context: this.currentContext,
+      context: turnContext,
       model: runtimeModel.model,
       provider: runtimeModel.provider,
       useCase: chatUseCase
     });
     // Never replay cached chat answers — stale cache returned hallucinations when file attach failed.
     const skipResponseCache = true;
-    const token = ++this.streamToken;
-    this.streamAbortController?.abort();
-    this.streamAbortController = new AbortController();
-    const signal = this.streamAbortController.signal;
+    const signal = turn.streamAbort.signal;
+    const isCancelled = () => !this.threadRuns.isStreamActive(turn);
 
     if (this.preferences.useCachedResponses && !skipResponseCache) {
       const cached = this.readCache(cacheKey);
       if (cached) {
-        await delayUntilMinResponseVisible(this.chatTurnStartedAt, Date.now(), minResponseVisibleMs);
-        if (token !== this.streamToken) {
+        await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
+        if (isCancelled()) {
           return;
         }
-        this.clearIntentFeedback();
-        this.post({ type: "chat:complete", payload: { message: cached as ChatMessage } });
-        this.chatHistory.push(cached as ChatMessage);
-        this.postChatHistory();
+        this.clearIntentFeedback(turn.threadId);
+        this.finishTurnAssistantMessage(turn, cached as ChatMessage);
         return;
       }
     }
@@ -3188,10 +3359,10 @@ export class CoopChatSession {
     if (!quickAction) {
       const synthesisMessages = appendThinkingProcessingTerms(
         [],
-        `synthesis-${token}-${Date.now()}`,
+        `synthesis-${turn.streamGeneration}-${Date.now()}`,
         8
       );
-      this.postIntentFeedback({
+      this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
         intent: UserIntent.MANUAL_CHAT_SUBMIT,
         title: "Preparing answer",
@@ -3201,10 +3372,10 @@ export class CoopChatSession {
     } else {
       const synthesisMessages = appendThinkingProcessingTerms(
         [],
-        `synthesis-${quickAction}-${token}-${Date.now()}`,
+        `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
         8
       );
-      this.postIntentFeedback({
+      this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
         intent: UserIntent.QUICK_ACTION_CLICKED,
         actionId: quickAction,
@@ -3216,7 +3387,7 @@ export class CoopChatSession {
 
     try {
       const mentionRefs = this.quickActionMentionRefs(options?.mentions);
-      const activeRepoId = buildRepoId(this.preferences, this.currentContext);
+      const activeRepoId = buildRepoId(this.preferences, turnContext);
       const allMentionsOutOfScope = allMentionsOutOfScopeForActiveRepo(mentionRefs, activeRepoId);
 
       const skipLocalAttach =
@@ -3225,10 +3396,10 @@ export class CoopChatSession {
         (!effectiveQuickAction && !integrationProvider && allMentionsOutOfScope);
       const localPayload = skipLocalAttach ? undefined : await this.resolveChatLocalFiles();
       if (localPayload?.files.length) {
-        this.injectLocalFilesIntoBundle(localPayload);
+        this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
 
-      let contextBundle: ContextFetchResult[] = [...this.lastContextBundle];
+      let contextBundle: ContextFetchResult[] = [...turn.contextBundle];
       if (localPayload?.files.length && !contextBundle.some((entry) => contextResultHasLocalFiles(entry))) {
         contextBundle = [
           {
@@ -3239,13 +3410,19 @@ export class CoopChatSession {
           },
           ...contextBundle
         ];
+        turn.contextBundle = contextBundle;
       }
 
-      const decisionTimeline = this.enrichedDecisionTimelineFromBundle();
+      const { decisionTimeline, ownershipReport } = this.withTurnSessionMirrors(turn, () => ({
+        decisionTimeline: this.enrichedDecisionTimelineFromBundle(),
+        ownershipReport: this.ownershipReportFromBundle()
+      }));
       if (effectiveQuickAction === "trace-decision" && decisionTimeline) {
-        this.lastTraceDecisionTimeline = decisionTimeline;
+        turn.lastTraceTimeline = decisionTimeline;
+        if (this.isViewingThread(turn.threadId)) {
+          this.lastTraceDecisionTimeline = decisionTimeline;
+        }
       }
-      const ownershipReport = this.ownershipReportFromBundle();
       const repoSummary = repoSummaryFromBundle(contextBundle);
       const blastRadiusEvidence = blastRadiusFromBundle(contextBundle);
       const knowledgeGapsEvidence = knowledgeGapsFromBundle(contextBundle);
@@ -3267,40 +3444,37 @@ export class CoopChatSession {
       ) {
         const outOfScopePaths = resolveOutOfScopeMentionLabels("integration", mentionRefs, {
           activeRepoId,
-          owner: this.currentContext.owner ?? this.preferences.owner,
-          repo: this.currentContext.repo ?? this.preferences.repo,
+          owner: turnContext.owner ?? this.preferences.owner,
+          repo: turnContext.repo ?? this.preferences.repo,
           contextBundle
         });
         const targetLabel =
-          this.currentContext.owner && this.currentContext.repo
-            ? `${this.currentContext.owner}/${this.currentContext.repo}`
+          turnContext.owner && turnContext.repo
+            ? `${turnContext.owner}/${turnContext.repo}`
             : "this repository";
         const responseContent = buildOutOfScopeMentionOnlyResponse({ outOfScopePaths, targetLabel });
-        await delayUntilMinResponseVisible(this.chatTurnStartedAt);
-        if (token !== this.streamToken) {
+        await delayUntilMinResponseVisible(turn.startedAt);
+        if (isCancelled()) {
           return;
         }
-        this.clearIntentFeedback();
+        this.clearIntentFeedback(turn.threadId);
         const finalMessage: ChatMessage = {
           role: "assistant",
           content: responseContent,
           timestamp: Date.now()
         };
-        this.chatHistory.push(finalMessage);
-        this.post({ type: "chat:complete", payload: { message: finalMessage } });
-        this.postChatHistory();
-        this.persistActiveThread();
+        this.finishTurnAssistantMessage(turn, finalMessage);
         return;
       }
 
-      const lastUserBubble = [...this.chatHistory].reverse().find((entry) => entry.role === "user")?.content;
+      const lastUserBubble = [...turn.history].reverse().find((entry) => entry.role === "user")?.content;
       const llmMessage =
         effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
-              file: this.currentContext.file ?? decisionTimeline.file,
-              owner: this.currentContext.owner ?? this.preferences.owner,
-              repo: this.currentContext.repo ?? this.preferences.repo,
+              file: turnContext.file ?? decisionTimeline.file,
+              owner: turnContext.owner ?? this.preferences.owner,
+              repo: turnContext.repo ?? this.preferences.repo,
               lineRange: decisionTimeline.lineRange,
               codeSnippet: decisionTimeline.codeSnippet,
               userQuestion: content,
@@ -3312,7 +3486,7 @@ export class CoopChatSession {
           : effectiveQuickAction === "find-owner" && ownershipReport
             ? buildOwnershipSynthesisUserPrompt({
                 report: ownershipReport,
-                file: this.currentContext.file ?? ownershipReport.path,
+                file: turnContext.file ?? ownershipReport.path,
                 slackSearch: slackEvidence,
                 userQuestion: content,
                 mentionedFiles: mentionRefs,
@@ -3320,10 +3494,10 @@ export class CoopChatSession {
               })
             : effectiveQuickAction === "understand-repo" && repoSummary
               ? buildRepoSummarySynthesisUserPrompt({
-                  owner: this.currentContext.owner ?? this.preferences.owner ?? "unknown",
-                  repo: this.currentContext.repo ?? this.preferences.repo ?? "unknown",
-                  branch: this.currentContext.branch ?? this.preferences.branch,
-                  activeFile: this.currentContext.file,
+                  owner: turnContext.owner ?? this.preferences.owner ?? "unknown",
+                  repo: turnContext.repo ?? this.preferences.repo ?? "unknown",
+                  branch: turnContext.branch ?? this.preferences.branch,
+                  activeFile: turnContext.file,
                   summary: repoSummary,
                   userQuestion: content,
                   mentionedFiles: mentionRefs,
@@ -3332,25 +3506,25 @@ export class CoopChatSession {
               : effectiveQuickAction === "blast-radius" && blastRadiusEvidence
                 ? buildBlastRadiusSynthesisUserPrompt({
                     evidence: blastRadiusEvidence,
-                    file: this.currentContext.file ?? blastRadiusEvidence.file ?? "unknown",
-                    owner: this.currentContext.owner ?? this.preferences.owner,
-                    repo: this.currentContext.repo ?? this.preferences.repo,
+                    file: turnContext.file ?? blastRadiusEvidence.file ?? "unknown",
+                    owner: turnContext.owner ?? this.preferences.owner,
+                    repo: turnContext.repo ?? this.preferences.repo,
                     userQuestion: content,
                     mentionedFiles: mentionRefs,
                     activeRepoId
                   })
                 : effectiveQuickAction === "knowledge-gaps"
                   ? buildKnowledgeGapsSynthesisUserPrompt({
-                      evidence: knowledgeGapsEvidence ?? { file: this.currentContext.file },
+                      evidence: knowledgeGapsEvidence ?? { file: turnContext.file },
                       confluence: confluenceEvidence,
                       jira: jiraEvidence,
                       slack: slackEvidence,
                       notion: notionEvidence,
                       googleDocs: googleDocsEvidence,
                       teams: teamsEvidence,
-                      file: this.currentContext.file,
-                      owner: this.currentContext.owner ?? this.preferences.owner,
-                      repo: this.currentContext.repo ?? this.preferences.repo,
+                      file: turnContext.file,
+                      owner: turnContext.owner ?? this.preferences.owner,
+                      repo: turnContext.repo ?? this.preferences.repo,
                       userQuestion: content,
                       mentionedFiles: mentionRefs,
                       activeRepoId
@@ -3359,9 +3533,9 @@ export class CoopChatSession {
                     ? buildIntegrationSynthesisUserPrompt({
                         provider: integrationProvider,
                         evidence: integrationEvidence,
-                        owner: this.currentContext.owner,
-                        repo: this.currentContext.repo,
-                        file: this.currentContext.file,
+                        owner: turnContext.owner,
+                        repo: turnContext.repo,
+                        file: turnContext.file,
                         userQuestion: content,
                         mentionedFiles: mentionRefs,
                         activeRepoId
@@ -3395,8 +3569,8 @@ export class CoopChatSession {
         const inScopeKeys = new Set(
           partitionMentionsForQuickAction(scopeAction, mentionRefs, {
             activeRepoId,
-            owner: this.currentContext.owner ?? this.preferences.owner,
-            repo: this.currentContext.repo ?? this.preferences.repo,
+            owner: turnContext.owner ?? this.preferences.owner,
+            repo: turnContext.repo ?? this.preferences.repo,
             repoSummary: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
           }).inRepo.map((mention) => mentionAttachmentKey(mention))
         );
@@ -3410,33 +3584,33 @@ export class CoopChatSession {
           ? formatChatMessageWithMentionFiles({
               message: llmMessage,
               files: mentionFiles,
-              owner: this.currentContext.owner,
-              repo: this.currentContext.repo,
-              branch: this.currentContext.branch
+              owner: turnContext.owner,
+              repo: turnContext.repo,
+              branch: turnContext.branch
             })
           : useContextBundle || !localPayload?.files.length
             ? buildUserMessageWithContext(llmMessage, {
-                owner: this.currentContext.owner,
-                repo: this.currentContext.repo,
-                branch: this.currentContext.branch,
+                owner: turnContext.owner,
+                repo: turnContext.repo,
+                branch: turnContext.branch,
                 file:
                   effectiveQuickAction === "understand-repo" || integrationProvider
                     ? undefined
                     : allMentionsOutOfScope
                       ? undefined
-                      : this.currentContext.file,
-                selectedLines: this.currentContext.selectedLines,
-                languageId: this.currentContext.languageId,
+                      : turnContext.file,
+                selectedLines: turnContext.selectedLines,
+                languageId: turnContext.languageId,
                 contextBundle
               })
             : formatChatMessageWithLocalFiles({
                 message: llmMessage,
                 files: localPayload.files,
-                file: this.currentContext.file,
-                selectedLines: this.currentContext.selectedLines,
-                owner: this.currentContext.owner,
-                repo: this.currentContext.repo,
-                branch: this.currentContext.branch
+                file: turnContext.file,
+                selectedLines: turnContext.selectedLines,
+                owner: turnContext.owner,
+                repo: turnContext.repo,
+                branch: turnContext.branch
               });
       const projectInstructionsBlock = this.buildProjectInstructionsBlock();
       if (projectInstructionsBlock) {
@@ -3473,7 +3647,7 @@ export class CoopChatSession {
                 : `Confluence: ${confluenceSearch?.pages?.length ?? 0} page(s) in context bundle`
               : localPayload?.files.length
                 ? `Attached ${localPayload.files[0]?.content.length ?? 0} chars from ${localPayload.activeFile}`
-                : `No file content attached (file=${this.currentContext.file ?? "none"}, openTabs=${collectOpenEditorPaths().join(", ") || "none"})`
+                : `No file content attached (file=${turnContext.file ?? "none"}, openTabs=${collectOpenEditorPaths().join(", ") || "none"})`
       );
 
       if (
@@ -3487,34 +3661,42 @@ export class CoopChatSession {
           .map((ref) => `${ref.relativePath}@${ref.absolutePath}`)
           .join("; ");
         this.logContextDebug(`Attach failed. workspaceRoots=${roots || "none"} tabs=${tabs || "none"}`);
-        const remoteTab = this.currentContext.fileSource === "remote";
-        this.currentContext = {
-          ...this.currentContext,
-          contextWarning: remoteTab
-            ? "CoopAI could not read the open remote file tab. Keep the file open in the editor and try again."
-            : vscode.workspace.workspaceFolders?.length
-              ? "CoopAI could not read open file content. Keep the file tab open and reload the window."
-              : "CoopAI could not read open file content. Open the repo folder (File → Open Folder) or open the workspace file .vscode/extension-dev.code-workspace, then reload."
-        };
-        this.postContext();
-      } else if (effectiveQuickAction === "understand-repo" && entryFileCount > 0 && this.currentContext.contextWarning) {
-        this.currentContext = { ...this.currentContext, contextWarning: undefined };
-        this.postContext();
+        const remoteTab = turnContext.fileSource === "remote";
+        const warning = remoteTab
+          ? "CoopAI could not read the open remote file tab. Keep the file open in the editor and try again."
+          : vscode.workspace.workspaceFolders?.length
+            ? "CoopAI could not read open file content. Keep the file tab open and reload the window."
+            : "CoopAI could not read open file content. Open the repo folder (File → Open Folder) or open the workspace file .vscode/extension-dev.code-workspace, then reload.";
+        turn.context = { ...turn.context, contextWarning: warning };
+        if (this.isViewingThread(turn.threadId)) {
+          this.currentContext = { ...this.currentContext, contextWarning: warning };
+          this.postContext();
+        }
+      } else if (effectiveQuickAction === "understand-repo" && entryFileCount > 0 && turnContext.contextWarning) {
+        turn.context = { ...turn.context, contextWarning: undefined };
+        if (this.isViewingThread(turn.threadId)) {
+          this.currentContext = { ...this.currentContext, contextWarning: undefined };
+          this.postContext();
+        }
       }
 
-      const priorHistory = this.chatHistory.slice(0, -1);
+      const priorHistory = turn.history.slice(0, -1);
       let clearedIntentForOutput = false;
       const outputGate = createChatOutputGate({
-        startedAt: this.chatTurnStartedAt,
+        startedAt: turn.startedAt,
         minVisibleMs: minResponseVisibleMs,
-        isCancelled: () => token !== this.streamToken,
+        isCancelled,
         onChunk: (chunk) => {
           if (!clearedIntentForOutput) {
             clearedIntentForOutput = true;
-            this.clearIntentFeedback();
+            this.clearIntentFeedback(turn.threadId);
           }
           full += chunk;
-          this.post({ type: "chat:delta", payload: { chunk } });
+          this.threadRuns.appendPartial(turn, chunk);
+          this.postForThread(turn.threadId, {
+            type: "chat:delta",
+            payload: { chunk, threadId: turn.threadId }
+          });
         }
       });
 
@@ -3526,11 +3708,10 @@ export class CoopChatSession {
         {
           message: apiMessage,
           context: {
-            owner: this.currentContext.owner,
-            repo: this.currentContext.repo,
-            branch: this.currentContext.branch,
-            file:
-              effectiveQuickAction === "understand-repo" ? this.currentContext.file : undefined
+            owner: turnContext.owner,
+            repo: turnContext.repo,
+            branch: turnContext.branch,
+            file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
           },
           history: priorHistory,
           attachments: attachments?.length ? attachments : undefined,
@@ -3550,12 +3731,12 @@ export class CoopChatSession {
 
       await outputGate.waitUntilOpen();
 
-      if (token !== this.streamToken) {
+      if (isCancelled()) {
         return;
       }
 
-      await delayUntilMinResponseVisible(this.chatTurnStartedAt, Date.now(), minResponseVisibleMs);
-      if (token !== this.streamToken) {
+      await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
+      if (isCancelled()) {
         return;
       }
 
@@ -3564,66 +3745,86 @@ export class CoopChatSession {
         integrationProvider,
         content: full,
         contextBundle,
-        activeFile: this.currentContext.file,
+        activeFile: turnContext.file,
         mentions: mentionRefs,
         activeRepoId,
-        owner: this.currentContext.owner ?? this.preferences.owner,
-        repo: this.currentContext.repo ?? this.preferences.repo,
+        owner: turnContext.owner ?? this.preferences.owner,
+        repo: turnContext.repo ?? this.preferences.repo,
         userQuestion: lastUserBubble,
-        fallbackTimeline: this.lastTraceDecisionTimeline,
+        fallbackTimeline: turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,
         isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
       });
       const finalMessage: ChatMessage = {
         ...result.message,
         content: enrichedContent,
-        ...(this.pendingEvidenceArtifactId ? { relatedArtifactId: this.pendingEvidenceArtifactId } : {})
+        ...(turn.pendingEvidenceArtifactId
+          ? { relatedArtifactId: turn.pendingEvidenceArtifactId }
+          : {})
       };
-      this.pendingEvidenceArtifactId = undefined;
-      this.chatHistory.push(finalMessage);
-            this.clearIntentFeedback();
-      this.post({ type: "chat:complete", payload: { message: finalMessage } });
-      if (options?.composerMode === "edit") {
+      turn.pendingEvidenceArtifactId = undefined;
+      if (this.isViewingThread(turn.threadId)) {
+        this.pendingEvidenceArtifactId = undefined;
+      }
+      this.clearIntentFeedback(turn.threadId);
+      if (options?.composerMode === "edit" && this.isViewingThread(turn.threadId)) {
         void handlePatchComplete(finalMessage.content, {
           messageTimestamp: finalMessage.timestamp,
           publish: (state) => this.postPatchUpdate(state)
         });
       }
-      this.postChatHistory();
-      this.persistActiveThread();
+      if (result.usage) {
+        turn.sessionCostUsd += result.usage.estimatedCostUsd;
+      }
+      this.finishTurnAssistantMessage(turn, finalMessage);
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
       }
 
       if (result.usage) {
-        this.sessionCostUsd += result.usage.estimatedCostUsd;
-        this.post({
+        this.postForThread(turn.threadId, {
           type: "chat:usage",
           payload: {
             ...result.usage,
-            sessionCostUsd: this.sessionCostUsd
+            sessionCostUsd: turn.sessionCostUsd
           }
         });
-        this.persistActiveThread();
+        if (this.isViewingThread(turn.threadId)) {
+          this.sessionCostUsd = turn.sessionCostUsd;
+          this.persistActiveThread();
+        } else {
+          this.persistTurnThread(turn);
+        }
       }
 
       await this.notifyQuotaExceededIfNeeded();
     } catch (error) {
-      if (token !== this.streamToken) {
+      if (isCancelled()) {
         return;
       }
+      this.threadRuns.markError(turn);
+      this.pushThreadsList();
       if (error instanceof ChatQuotaExceededError) {
-        this.postQuotaExceeded({
-          resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-          upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-          retryAfterMs: error.retryAfterMs
+        this.postForThread(turn.threadId, {
+          type: "chat:quota-exceeded",
+          payload: {
+            resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+            upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+            timezone: this.preferences.timezone,
+            retryAfterMs: error.retryAfterMs
+          }
         });
         return;
       }
       const message = formatUserFacingNetworkError(error);
-      this.post({ type: "chat:error", payload: { message } });
+      this.postForThread(turn.threadId, {
+        type: "chat:error",
+        payload: { message, threadId: turn.threadId }
+      });
     } finally {
-      this.pendingChatLocalFiles = undefined;
-      this.pendingCodeEditIntent = false;
+      if (this.isViewingThread(turn.threadId)) {
+        this.pendingChatLocalFiles = undefined;
+        this.pendingCodeEditIntent = false;
+      }
     }
   }
 
@@ -3698,25 +3899,83 @@ export class CoopChatSession {
     });
   }
 
-  private async runAsyncQuickAction(quickAction: string, _message: string): Promise<boolean> {
+  private withTurnSessionMirrors<T>(turn: ChatTurn | undefined, fn: () => T): T {
+    if (!turn) {
+      return fn();
+    }
+    const previousBundle = this.lastContextBundle;
+    const previousJob = this.lastJobResult;
+    const previousEvidenceId = this.pendingEvidenceArtifactId;
+    const previousTrace = this.lastTraceDecisionTimeline;
+    this.lastContextBundle = turn.contextBundle;
+    this.lastJobResult = turn.jobResult;
+    this.pendingEvidenceArtifactId = turn.pendingEvidenceArtifactId;
+    this.lastTraceDecisionTimeline = turn.lastTraceTimeline;
+
+    const commitAndRestore = () => {
+      turn.contextBundle = this.lastContextBundle;
+      turn.jobResult = this.lastJobResult;
+      turn.pendingEvidenceArtifactId = this.pendingEvidenceArtifactId;
+      turn.lastTraceTimeline = this.lastTraceDecisionTimeline;
+      if (!this.isViewingThread(turn.threadId)) {
+        this.lastContextBundle = previousBundle;
+        this.lastJobResult = previousJob;
+        this.pendingEvidenceArtifactId = previousEvidenceId;
+        this.lastTraceDecisionTimeline = previousTrace;
+      }
+    };
+
+    try {
+      const result = fn();
+      if (result && typeof (result as { then?: unknown }).then === "function") {
+        return Promise.resolve(result).then(
+          (value) => {
+            commitAndRestore();
+            return value;
+          },
+          (error) => {
+            commitAndRestore();
+            throw error;
+          }
+        ) as T;
+      }
+      commitAndRestore();
+      return result;
+    } catch (error) {
+      commitAndRestore();
+      throw error;
+    }
+  }
+
+  private async runAsyncQuickAction(
+    quickAction: string,
+    _message: string,
+    turn: ChatTurn
+  ): Promise<boolean> {
     const jobType = jobTypeForQuickAction(quickAction);
     if (!jobType) {
       return false;
     }
 
     if (quickAction === "knowledge-gaps") {
-      this.lastJobResult = undefined;
+      turn.jobResult = undefined;
+      if (this.isViewingThread(turn.threadId)) {
+        this.lastJobResult = undefined;
+      }
     }
 
-    const repoId = buildRepoId(this.preferences, this.currentContext);
-    const jobToken = ++this.jobRunToken;
+    const repoId = buildRepoId(this.preferences, turn.context);
     this.jobClient.setBaseUrl(resolveCoopBaseUrl().baseUrl);
-    this.postQuickActionJobActivity(quickAction, {
-      jobId: "pending",
-      status: "queued",
-      message: activeJobMessageForAction(quickAction),
-      progress: 5
-    });
+    this.postQuickActionJobActivity(
+      quickAction,
+      {
+        jobId: "pending",
+        status: "queued",
+        message: activeJobMessageForAction(quickAction),
+        progress: 5
+      },
+      turn.threadId
+    );
 
     try {
       const submit = await this.jobClient.submitJob({
@@ -3724,66 +3983,88 @@ export class CoopChatSession {
         priority: "normal",
         params: {
           repoId,
-          file: this.currentContext.file,
-          branch: this.currentContext.branch ?? this.preferences.branch,
-          owner: this.currentContext.owner ?? this.preferences.owner,
-          repo: this.currentContext.repo ?? this.preferences.repo
+          file: turn.context.file,
+          branch: turn.context.branch ?? this.preferences.branch,
+          owner: turn.context.owner ?? this.preferences.owner,
+          repo: turn.context.repo ?? this.preferences.repo
         },
         userId: vscode.env.machineId
       });
 
-      this.activeJobId = submit.jobId;
+      turn.jobId = submit.jobId;
 
       if (submit.cached) {
-        this.postQuickActionJobActivity(quickAction, {
-          jobId: submit.jobId,
-          status: "running",
-          message: preparingAnswerMessageForAction(quickAction),
-          progress: 80
-        });
+        this.postQuickActionJobActivity(
+          quickAction,
+          {
+            jobId: submit.jobId,
+            status: "running",
+            message: preparingAnswerMessageForAction(quickAction),
+            progress: 80
+          },
+          turn.threadId
+        );
         const resultPayload = await this.jobClient.getJobResult(submit.jobId);
         const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
-        this.lastJobResult = result;
+        turn.jobResult = result;
+        if (this.isViewingThread(turn.threadId)) {
+          this.lastJobResult = result;
+        }
         return true;
       }
 
-      this.postQuickActionJobActivity(quickAction, {
-        jobId: submit.jobId,
-        status: "queued",
-        message: `Queued (est. ${submit.estimatedWaitTime ?? "a few minutes"})…`,
-        progress: 10,
-        estimatedWaitTime: submit.estimatedWaitTime
-      });
+      this.postQuickActionJobActivity(
+        quickAction,
+        {
+          jobId: submit.jobId,
+          status: "queued",
+          message: `Queued (est. ${submit.estimatedWaitTime ?? "a few minutes"})…`,
+          progress: 10,
+          estimatedWaitTime: submit.estimatedWaitTime
+        },
+        turn.threadId
+      );
 
       const resultPayload = await this.jobClient.pollUntilComplete(submit.jobId, (event) => {
-        if (jobToken !== this.jobRunToken) {
+        if (!this.threadRuns.isJobActive(turn)) {
           throw new Error("Job aborted");
         }
         const terminal = event.status === "completed" || event.status === "partial";
-        this.postQuickActionJobActivity(quickAction, {
-          jobId: event.jobId,
-          status: terminal ? "running" : event.status,
-          message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
-          progress: terminal ? Math.max(event.progress, 90) : event.progress,
-          estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
-        });
+        this.postQuickActionJobActivity(
+          quickAction,
+          {
+            jobId: event.jobId,
+            status: terminal ? "running" : event.status,
+            message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
+            progress: terminal ? Math.max(event.progress, 90) : event.progress,
+            estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
+          },
+          turn.threadId
+        );
       });
 
       const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
-      this.lastJobResult = result;
+      turn.jobResult = result;
+      if (this.isViewingThread(turn.threadId)) {
+        this.lastJobResult = result;
+      }
       return true;
     } catch (error) {
-      if (jobToken !== this.jobRunToken) {
+      if (!this.threadRuns.isJobActive(turn)) {
         return false;
       }
-      this.postQuickActionJobActivity(quickAction, {
-        jobId: this.activeJobId ?? "unknown",
-        status: "running",
-        message: preparingAnswerMessageForAction(quickAction),
-        progress: 75
-      });
+      this.postQuickActionJobActivity(
+        quickAction,
+        {
+          jobId: turn.jobId ?? "unknown",
+          status: "running",
+          message: preparingAnswerMessageForAction(quickAction),
+          progress: 75
+        },
+        turn.threadId
+      );
       if (quickAction === "knowledge-gaps") {
-        this.lastJobResult = undefined;
+        turn.jobResult = undefined;
       }
       return false;
     }
@@ -3822,89 +4103,105 @@ export class CoopChatSession {
     }
   }
 
-  private postJobProgress(payload: JobProgressPayload): void {
-    this.post({ type: "job:progress", payload });
+  private postJobProgress(payload: JobProgressPayload, threadId?: string): void {
+    this.postForThread(threadId ?? this.activeThreadId(), { type: "job:progress", payload });
   }
 
   private postQuickActionJobActivity(
     quickAction: string,
-    patch: Partial<JobProgressPayload> & Pick<JobProgressPayload, "jobId" | "progress">
+    patch: Partial<JobProgressPayload> & Pick<JobProgressPayload, "jobId" | "progress">,
+    threadId?: string
   ): void {
     const deliverable = deliverableForQuickAction(quickAction);
     const status = patch.status ?? "running";
-    this.postJobProgress({
-      title: jobTitleForAction(quickAction),
-      deliverable,
-      showViewResults: deliverable === "standalone" && this.preferences.devMode,
-      ...patch,
-      status: deliverable === "chat" ? displayStatusForChatDeliverable(status) : status
-    });
+    this.postJobProgress(
+      {
+        title: jobTitleForAction(quickAction),
+        deliverable,
+        showViewResults: deliverable === "standalone" && this.preferences.devMode,
+        ...patch,
+        status: deliverable === "chat" ? displayStatusForChatDeliverable(status) : status
+      },
+      threadId
+    );
   }
 
-  private applyBlastRadiusJobResultToBundle(quickAction: string | undefined): void {
-    if (quickAction !== "blast-radius" || !this.lastJobResult) {
-      return;
-    }
-    const result = this.lastJobResult as Record<string, unknown>;
-    const targetFile = this.currentContext.file?.trim();
-    const jobScan = {
-      source: "dependency-graph-job",
-      edgeCount: Number(result.edgeCount ?? 0),
-      lastIndexedAt: String(result.lastIndexedAt ?? ""),
-      dependentsSample: Array.isArray(result.dependentsSample) ? result.dependentsSample : []
-    };
-    const index = this.lastContextBundle.findIndex((entry) => entry.type === "dependencies");
-    if (index >= 0) {
-      const existing = this.lastContextBundle[index];
-      const data =
-        typeof existing.data === "object" && existing.data !== null
-          ? { ...(existing.data as Record<string, unknown>) }
-          : {};
-      this.lastContextBundle[index] = {
-        ...existing,
-        data: {
-          ...data,
-          ...(targetFile ? { file: targetFile } : {}),
-          jobScan,
-          graphMeta: { edgeCount: jobScan.edgeCount, lastIndexedAt: jobScan.lastIndexedAt }
-        }
+  private applyBlastRadiusJobResultToBundle(
+    quickAction: string | undefined,
+    turn?: ChatTurn
+  ): void {
+    this.withTurnSessionMirrors(turn, () => {
+      if (quickAction !== "blast-radius" || !this.lastJobResult) {
+        return;
+      }
+      const result = this.lastJobResult as Record<string, unknown>;
+      const targetFile = (turn?.context ?? this.currentContext).file?.trim();
+      const jobScan = {
+        source: "dependency-graph-job",
+        edgeCount: Number(result.edgeCount ?? 0),
+        lastIndexedAt: String(result.lastIndexedAt ?? ""),
+        dependentsSample: Array.isArray(result.dependentsSample) ? result.dependentsSample : []
       };
-      return;
-    }
-    this.lastContextBundle.push({
-      requestId: `blast-radius-${Date.now()}`,
-      type: "dependencies",
-      data: { ...(targetFile ? { file: targetFile } : {}), jobScan },
-      fetchedAt: new Date()
+      const index = this.lastContextBundle.findIndex((entry) => entry.type === "dependencies");
+      if (index >= 0) {
+        const existing = this.lastContextBundle[index];
+        const data =
+          typeof existing.data === "object" && existing.data !== null
+            ? { ...(existing.data as Record<string, unknown>) }
+            : {};
+        this.lastContextBundle[index] = {
+          ...existing,
+          data: {
+            ...data,
+            ...(targetFile ? { file: targetFile } : {}),
+            jobScan,
+            graphMeta: { edgeCount: jobScan.edgeCount, lastIndexedAt: jobScan.lastIndexedAt }
+          }
+        };
+        return;
+      }
+      this.lastContextBundle.push({
+        requestId: `blast-radius-${Date.now()}`,
+        type: "dependencies",
+        data: { ...(targetFile ? { file: targetFile } : {}), jobScan },
+        fetchedAt: new Date()
+      });
     });
   }
 
-  private applyKnowledgeGapJobResultToBundle(quickAction: string | undefined): void {
-    if (quickAction !== "knowledge-gaps" || !this.lastJobResult) {
-      return;
-    }
-    const result = this.lastJobResult as Record<string, unknown>;
-    const gaps = Array.isArray(result.gaps) ? result.gaps : [];
-    const jobScan = {
-      source: "knowledge-gap-job",
-      cached: Boolean(result.cached),
-      foundGaps: typeof result.foundGaps === "number" ? result.foundGaps : gaps.length,
-      highPriority: Number(result.highPriority ?? 0),
-      mediumPriority: Number(result.mediumPriority ?? 0),
-      lowPriority: Number(result.lowPriority ?? 0),
-      gaps: gaps.slice(0, 50)
-    };
-    this.mergeKnowledgeGapScanIntoBundle(jobScan);
+  private applyKnowledgeGapJobResultToBundle(
+    quickAction: string | undefined,
+    turn?: ChatTurn
+  ): void {
+    this.withTurnSessionMirrors(turn, () => {
+      if (quickAction !== "knowledge-gaps" || !this.lastJobResult) {
+        return;
+      }
+      const result = this.lastJobResult as Record<string, unknown>;
+      const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+      const jobScan = {
+        source: "knowledge-gap-job",
+        cached: Boolean(result.cached),
+        foundGaps: typeof result.foundGaps === "number" ? result.foundGaps : gaps.length,
+        highPriority: Number(result.highPriority ?? 0),
+        mediumPriority: Number(result.mediumPriority ?? 0),
+        lowPriority: Number(result.lowPriority ?? 0),
+        gaps: gaps.slice(0, 50)
+      };
+      this.mergeKnowledgeGapScanIntoBundle(jobScan);
+    });
   }
 
-  private enrichKnowledgeGapsBundle(quickAction: string | undefined): void {
+  private enrichKnowledgeGapsBundle(quickAction: string | undefined, turn?: ChatTurn): void {
     if (quickAction !== "knowledge-gaps") {
       return;
     }
-    this.applyKnowledgeGapJobResultToBundle(quickAction);
-    if (!this.knowledgeGapScanInBundle()) {
-      this.applyHeuristicKnowledgeGapScan();
-    }
+    this.withTurnSessionMirrors(turn, () => {
+      this.applyKnowledgeGapJobResultToBundle(quickAction);
+      if (!this.knowledgeGapScanInBundle()) {
+        this.applyHeuristicKnowledgeGapScan();
+      }
+    });
   }
 
   private knowledgeGapScanInBundle(): boolean {
@@ -5383,15 +5680,19 @@ export class CoopChatSession {
     void this.options.lightningStatusBar.refresh();
   }
 
-  private clearIntentFeedback(): void {
-    this.post({
+  private clearIntentFeedback(threadId?: string): void {
+    this.postForThread(threadId ?? this.activeThreadId(), {
       type: "intent:feedback",
       payload: { status: "complete", title: "" }
     });
   }
 
   private postIntentFeedback(payload: IntentFeedbackState): void {
-    this.post({ type: "intent:feedback", payload });
+    this.postIntentFeedbackForThread(this.activeThreadId(), payload);
+  }
+
+  private postIntentFeedbackForThread(threadId: string, payload: IntentFeedbackState): void {
+    this.postForThread(threadId, { type: "intent:feedback", payload });
   }
 
   private async healthForQuickAction(action: QuickActionFeatureId): Promise<IntegrationHealth[]> {
