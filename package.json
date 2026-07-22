@@ -841,7 +841,7 @@
     "smoke:autocomplete": "bash scripts/smoke-autocomplete.sh",
     "smoke:autocomplete:mock": "npx tsx scripts/autocomplete-smoke.mjs",
     "smoke:autocomplete:live": "npx tsx scripts/autocomplete-smoke-live.mjs",
-    "test:fim": "npx tsx src/api/fimRouter.test.ts",
+    "test:fim": "npx tsx src/api/fimRouter.test.ts && npx tsx src/api/providers/deepseekClient.test.ts",
     "test:autocomplete": "npx tsx src/config/featureModelAssignments.test.ts && npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/autocompletePersistence.test.ts && npx tsx src/autocomplete/coopAutocompleteProvider.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/suggestWidgetCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts && npx tsx src/autocomplete/memberCompletionProvider.test.ts",
     "test:indexed-repo-quota": "npx tsx src/server/indexedRepoQuota.test.ts",
     "test:estate-sync": "npx tsx src/server/estateSyncService.test.ts",

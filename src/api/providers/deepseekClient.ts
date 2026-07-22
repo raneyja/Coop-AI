@@ -1,4 +1,4 @@
-import { getZeroRetentionConfig } from "../zeroRetentionConfig";
+import { buildProviderHeaders, getZeroRetentionConfig } from "../zeroRetentionConfig";
 import { BaseProviderClient } from "./baseClient";
 import { parseOpenAiSseLine } from "./openaiClient";
 import { parseCompletionSseLine } from "./fimSse";
@@ -33,6 +33,7 @@ export class DeepSeekProviderClient extends BaseProviderClient {
       {
         method: "POST",
         headers: {
+          ...buildProviderHeaders("deepseek", { requestId: options.requestId }),
           authorization: `Bearer ${this.options.apiKey}`,
           "content-type": "application/json"
         },
