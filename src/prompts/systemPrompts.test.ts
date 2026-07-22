@@ -17,7 +17,7 @@ function test(name: string, fn: () => void): void {
 }
 
 const AUDIENCE_MARKER = "## Audience & environment";
-const OUTPUT_CONTRACT_MARKER = "## Response style";
+const OUTPUT_CONTRACT_MARKER = "## Response structure";
 const TYPOGRAPHY_MARKER = "## Typography (not markdown)";
 
 test("chat use case includes audience and output contract", () => {
@@ -27,7 +27,8 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("Do NOT use: # headings"));
   assert.ok(prompt.includes("*italics* for uncertainty"));
-  assert.ok(prompt.includes("Uniform response template"));
+  assert.ok(prompt.includes("whose FIRST line is `startLine:endLine:path`"));
+  assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("User-attached files (paperclip)"));
   assert.ok(prompt.includes("## Required response structure"));
 });
@@ -60,14 +61,14 @@ test("comprehension use case requires active file section when activeFile is set
 
 test("knowledge_gaps use case requires grouped subsection structure", () => {
   const prompt = systemPromptForUseCase("knowledge_gaps");
-  assert.ok(prompt.includes("## Grouping"));
+  assert.ok(prompt.includes("## Response structure"));
   assert.ok(prompt.includes("**Documentation gaps**"));
   assert.ok(prompt.includes("**Notion pages reviewed**"));
   assert.ok(prompt.includes("**Confluence pages reviewed**"));
   assert.ok(prompt.includes('count="N"'));
   assert.ok(prompt.includes("Forbidden section names"));
   assert.ok(prompt.includes("subsection title"));
-  assert.ok(prompt.includes("Never alternate **Open question:**"));
+  assert.ok(prompt.includes("never top-level bullets without a subsection title"));
   assert.ok(prompt.includes("**What to check:**"));
   assert.ok(prompt.includes("Never bullet the title"));
   assert.ok(prompt.includes("Omit the entire section"));

@@ -29,26 +29,17 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Subsection titles (H2): same **Title** pattern nested under a main section — one short topic phrase per line, never a bullet.
 - Inline emphasis: **bold** for key terms and field labels; *italics* for uncertainty, caveats, inferred vs confirmed claims, and brief asides.
 - Lists: \`-\` bullets or \`1.\` numbered lists only — not nested markdown outlines.
-- Code: inline \`backticks\` for identifiers; fenced blocks for multi-line code with a language tag.
-- Cite repo code: \`\`\`startLine:endLine:filepath\` fence format.
+- Code: inline \`backticks\` for identifiers; for plain multi-line code, open a fenced block with a language tag (\`\`\`lang).
+- Cite repo code with a plain \`\`\` fence (no language tag) whose FIRST line is \`startLine:endLine:path\`, then the code on the following lines — do not put the location on the fence line as an info-string.
 - File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\`.
 - Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
 
-## Uniform response template (all chat — quick actions included)
-1. **Summary** or **Answer** — direct 1-2 sentence lead (always first).
-2. Main sections from the use-case structure below — each **Title** on its own line with a blank line before it.
-3. Under each main section: optional one-line lead, then either bullets or numbered items.
-4. Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item, then 2-4 bullets beneath — never a flat peer list.
-
-## Response style
-- Put a blank line before every main and subsection title.
-- Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are always bullets inside a subsection — never section titles and never top-level bullets without a subsection title above.
-- Complete sentences. No fabricated URLs or paths.
-- Prefer 4-8 topical sections over 15+ peer-level bullets.
-
-## Grouping
-- One theme per subsection. Category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
-- Never alternate **Open question:** and **What to check:** as peer bullets without the subsection title directly above them.
+## Response structure (all chat — quick actions included)
+- Lead with **Summary** or **Answer** — a direct 1-2 sentence answer, always first; put a blank line before every main and subsection title.
+- Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
+- Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
+- One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
+- Complete sentences; prefer 4-8 topical sections over 15+ peer-level bullets. No fabricated URLs or paths.
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
