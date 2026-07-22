@@ -1169,8 +1169,8 @@ function formatCodeHostActivityForLlm(codeHost: CodeHostSearchSnippet): string[]
   return lines;
 }
 
-function escapeXml(value: string): string {
-  return value
+function escapeXml(value: string | undefined | null): string {
+  return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

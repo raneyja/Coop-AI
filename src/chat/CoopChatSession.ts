@@ -245,6 +245,7 @@ import {
   resolveEditorFile
 } from "../context/editorFileContext";
 import { looksLikeAbsoluteDiskPath, isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
+import { isSameRepoFilePath } from "../context/fileChipIdentity";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import {
@@ -360,6 +361,11 @@ export class CoopChatSession {
   private editorContextSuppressedUntil = 0;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
+  /**
+   * Repo-relative path picked via Coop remote explorer (or restored from a thread with
+   * fileSource:"remote"). Survives local-clone editor opens so the chip stays R.
+   */
+  private remoteProvenanceFile?: string;
   private pendingChatMentions?: ChatFileMention[];
   /** Set during /edit sends so semantic retrieval uses the edit gate. */
   private pendingCodeEditIntent = false;
@@ -649,6 +655,7 @@ export class CoopChatSession {
       this.currentContext,
       repoContextFromEditor(editor, snapPrefs, this.currentContext)
     );
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
     return Boolean(this.currentContext.file?.trim());
   }
 
@@ -679,11 +686,20 @@ export class CoopChatSession {
   public newChat(): void {
     if (this.threadStore) {
       this.persistActiveThread();
-      const thread = this.threadStore.startNewThread(this.currentContext);
+      this.remoteProvenanceFile = undefined;
+      // Fresh thread: keep owner/repo only — never inherit the prior file chip.
+      const thread = this.threadStore.startNewThread({
+        provider: this.currentContext.provider,
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        branch: this.currentContext.branch
+      });
       this.activateThread(thread);
       return;
     }
+    this.remoteProvenanceFile = undefined;
     this.resetChatState();
+    this.clearFileFieldsFromContext();
     this.post({ type: "chat:history", payload: { messages: [], artifacts: [] } });
     this.postContext();
   }
@@ -844,12 +860,26 @@ export class CoopChatSession {
   private async restoreContextForActivatedThread(
     thread: ReturnType<ChatThreadStore["getActiveThread"]>
   ): Promise<void> {
-    if (thread.repoContext) {
+    if (thread.repoContext?.file?.trim()) {
       await this.applyThreadRepoContext(thread.repoContext);
     } else {
-      // Leave the previous thread's file behind unless it's still the live open tab.
+      this.remoteProvenanceFile = undefined;
       this.clearFileFieldsFromContext();
-      this.snapContextFromOpenEditors();
+      if (thread.repoContext) {
+        this.currentContext = stripStaleContextWarning(
+          normalizeRepoContext(
+            mergeRepoContext(this.currentContext, {
+              provider: thread.repoContext.provider,
+              owner: thread.repoContext.owner,
+              repo: thread.repoContext.repo,
+              branch: thread.repoContext.branch,
+              scope: thread.repoContext.scope === "repo" ? "repo" : undefined
+            })
+          )
+        );
+      }
+      // Do not snap the open editor onto a new/empty thread — that recreated the
+      // leftover L chip after New Chat while CoopSettingsPanel.ts stayed open.
     }
     this.postContext();
   }
@@ -865,8 +895,14 @@ export class CoopChatSession {
     );
     const file = this.currentContext.file?.trim();
     if (!file) {
-      this.snapContextFromOpenEditors();
+      this.remoteProvenanceFile = undefined;
       return;
+    }
+
+    if (repoContext.fileSource === "remote" || this.currentContext.fileSource === "remote") {
+      this.setRemoteProvenance(file);
+    } else {
+      this.remoteProvenanceFile = undefined;
     }
 
     const alreadyOpen = pickLocalEditorForContext(file) ?? pickEditorForContext(file);
@@ -880,13 +916,16 @@ export class CoopChatSession {
       } catch {
         // Chip still valid — tab exists.
       }
+      this.currentContext = this.withRemoteProvenance(this.currentContext);
       return;
     }
 
     const opened = await this.openContextFileInEditor(file);
     if (!opened) {
+      this.remoteProvenanceFile = undefined;
       this.clearFileFieldsFromContext();
-      this.snapContextFromOpenEditors();
+    } else {
+      this.currentContext = this.withRemoteProvenance(this.currentContext);
     }
   }
 
@@ -943,6 +982,40 @@ export class CoopChatSession {
     });
   }
 
+  private setRemoteProvenance(path: string): void {
+    const trimmed = path.trim().replace(/\\/g, "/");
+    if (!trimmed || isOsAbsoluteDiskPath(trimmed)) {
+      this.remoteProvenanceFile = undefined;
+      return;
+    }
+    this.remoteProvenanceFile = trimmed.replace(/^\/+/, "");
+  }
+
+  /**
+   * Keep R on the chip when the open buffer is the local clone of a remote-picked path.
+   * Clears the pin when the user navigates to a different file.
+   */
+  private withRemoteProvenance(ctx: RepoContext): RepoContext {
+    const pin = this.remoteProvenanceFile?.trim();
+    if (!pin) {
+      return ctx;
+    }
+    if (!ctx.file?.trim() || isOsAbsoluteDiskPath(ctx.file)) {
+      this.remoteProvenanceFile = undefined;
+      return ctx;
+    }
+    if (!isSameRepoFilePath(ctx.file, pin)) {
+      this.remoteProvenanceFile = undefined;
+      return ctx;
+    }
+    return {
+      ...ctx,
+      file: pin,
+      fileSource: "remote",
+      scope: "file"
+    };
+  }
+
   private async switchThread(threadId: string): Promise<void> {
     if (!this.threadStore) {
       return;
@@ -957,6 +1030,7 @@ export class CoopChatSession {
 
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
     this.pinnedContextFile = undefined;
+    this.remoteProvenanceFile = undefined;
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextForRepoSelect(context) as RepoContext
@@ -1750,6 +1824,7 @@ export class CoopChatSession {
           branch: incoming.branch
         } as RepoContext);
     this.currentContext = mergeRepoContext(this.currentContext, toMerge);
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.postContext();
     return this.runIntentFetch(event, { quiet: true });
   }
@@ -1778,6 +1853,7 @@ export class CoopChatSession {
     // Use isOsAbsoluteDiskPath only (not looksLikeAbsoluteDiskPath) so "/src/foo.ts"
     // repo-relative paths are not misclassified as Downloads.
     if (isOsAbsoluteDiskPath(path)) {
+      this.remoteProvenanceFile = undefined;
       const absolute = resolveLocalAbsolutePath(path) ?? path.replace(/\\/g, "/");
       try {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
@@ -1805,6 +1881,7 @@ export class CoopChatSession {
     }
 
     if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      this.remoteProvenanceFile = undefined;
       const absolute = resolveLocalAbsolutePath(path);
       if (absolute) {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
@@ -1833,6 +1910,7 @@ export class CoopChatSession {
       return;
     }
 
+    this.setRemoteProvenance(path);
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
@@ -1842,7 +1920,7 @@ export class CoopChatSession {
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
-      // May open local clone for viewing — merge keeps remote provenance for same path.
+      // May open local clone for viewing — remote provenance pin keeps the chip R.
       let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
@@ -1862,6 +1940,9 @@ export class CoopChatSession {
         );
       }
     }
+
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
+    this.postContext();
 
     const event = this.intentDetector.create(UserIntent.FILE_SWITCHED, {
       ...repoContextToIntentContext(this.currentContext),
@@ -5206,6 +5287,7 @@ export class CoopChatSession {
   }
 
   private postContext(): void {
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.currentContext = normalizeRepoContext(this.currentContext);
     this.currentContext = {
       ...this.currentContext,
@@ -5236,6 +5318,7 @@ export class CoopChatSession {
       this.currentContext,
       repoContextFromEditor(editor, chatPrefs, this.currentContext)
     );
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
     if (
       this.currentContext.file &&
       resolveLocalAbsolutePath(this.currentContext.file) &&
