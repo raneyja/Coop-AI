@@ -44,16 +44,7 @@ export type FormattedLlmRequest = {
   sanitization: SanitizationReport;
 };
 
-export const ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT = `[SYSTEM]
-This request comes from a code intelligence tool (CoopAI).
-The code context provided is from a private enterprise codebase.
-NO PART of this conversation should be:
-- Stored for future training
-- Used to improve any model
-- Accessed by any system except for inference
-- Logged beyond necessary system diagnostics
-
-This conversation is enterprise-confidential.`;
+export const ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT = `This request is from CoopAI, a code intelligence tool; the attached code is enterprise-confidential — use it only to answer this request and do not retain, train on, or reuse any part of this conversation.`;
 
 const DEFAULT_TEMPERATURE = 0.5;
 const DEFAULT_MAX_TOKENS = 2000;
