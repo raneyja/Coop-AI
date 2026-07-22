@@ -145,6 +145,12 @@ test("buildUserMessageWithContext renders jira_tickets from context bundle", () 
   assert.ok(message.includes('<jira_tickets match="text">'));
   assert.ok(message.includes('key="COOP-101"'));
   assert.ok(message.includes("Auth hardening"));
+
+  // B7: integration records are XML-only — not double-sent inside <graph_context>.
+  const graphContext = message.slice(message.indexOf("<graph_context>"), message.indexOf("</graph_context>"));
+  assert.equal(graphContext.includes("jiraSearch"), false, "graph_context must not duplicate jiraSearch");
+  // B7: graph_context JSON is compact (no pretty-print indentation).
+  assert.equal(graphContext.includes('\n  "'), false, "graph_context should be compact JSON");
 });
 
 test("buildUserMessageWithContext renders slack_messages from context bundle", () => {

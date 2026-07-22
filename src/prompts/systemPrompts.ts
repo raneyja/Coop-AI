@@ -745,7 +745,7 @@ export function buildUserMessageWithContext(
       lines.push(qualityNote);
     }
     lines.push("<graph_context>");
-    lines.push(JSON.stringify(sanitizeContextBundleForLlm(context.contextBundle), null, 2));
+    lines.push(JSON.stringify(sanitizeContextBundleForLlm(context.contextBundle)));
     lines.push("</graph_context>");
   }
   lines.push("</attached_context>", "", message.trim());
@@ -1383,124 +1383,22 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
       };
     }
 
-    if (source.jiraSearch?.issues?.length) {
-      mutated = true;
-      data.jiraSearch = {
-        ...source.jiraSearch,
-        issues: source.jiraSearch.issues.map((issue) =>
-          issue && typeof issue === "object"
-            ? {
-                key: (issue as { key?: string }).key,
-                status: (issue as { status?: string }).status,
-                issueType: (issue as { issueType?: string }).issueType
-              }
-            : issue
-        )
-      };
-    }
-
-    if (source.slackSearch?.messages?.length) {
-      mutated = true;
-      data.slackSearch = {
-        ...source.slackSearch,
-        messages: source.slackSearch.messages.map((msg) =>
-          msg && typeof msg === "object"
-            ? {
-                channelName: (msg as { channelName?: string }).channelName,
-                userName: (msg as { userName?: string }).userName,
-                ts: (msg as { ts?: string }).ts
-              }
-            : msg
-        )
-      };
-    }
-
-    if (source.teamsSearch?.messages?.length) {
-      mutated = true;
-      data.teamsSearch = {
-        ...source.teamsSearch,
-        messages: source.teamsSearch.messages.map((msg) =>
-          msg && typeof msg === "object"
-            ? {
-                fromUserName: (msg as { fromUserName?: string }).fromUserName,
-                createdAt: (msg as { createdAt?: string }).createdAt
-              }
-            : msg
-        )
-      };
-    }
-
-    if (source.codeHostSearch) {
-      mutated = true;
-      data.codeHostSearch = {
-        ...source.codeHostSearch,
-        pullRequests: source.codeHostSearch.pullRequests?.map((pr) =>
-          pr && typeof pr === "object"
-            ? {
-                number: (pr as { number?: number }).number,
-                title: (pr as { title?: string }).title,
-                state: (pr as { state?: string }).state
-              }
-            : pr
-        ),
-        issues: source.codeHostSearch.issues?.map((issue) =>
-          issue && typeof issue === "object"
-            ? {
-                number: (issue as { number?: number }).number,
-                title: (issue as { title?: string }).title,
-                state: (issue as { state?: string }).state
-              }
-            : issue
-        )
-      };
-    }
-
-    if (source.confluenceSearch?.pages?.length) {
-      mutated = true;
-      data.confluenceSearch = {
-        ...source.confluenceSearch,
-        pages: source.confluenceSearch.pages.map((page) =>
-          page && typeof page === "object"
-            ? {
-                id: (page as { id?: string }).id,
-                title: (page as { title?: string }).title,
-                updated: (page as { updated?: string }).updated
-              }
-            : page
-        )
-      };
-    }
-
-    if (source.notionSearch?.pages?.length) {
-      mutated = true;
-      data.notionSearch = {
-        ...source.notionSearch,
-        pages: source.notionSearch.pages.map((page) =>
-          page && typeof page === "object"
-            ? {
-                id: (page as { id?: string }).id,
-                title: (page as { title?: string }).title,
-                updated: (page as { updated?: string }).updated
-              }
-            : page
-        )
-      };
-    }
-
-    if (source.googleDocsSearch?.documents?.length) {
-      mutated = true;
-      data.googleDocsSearch = {
-        ...source.googleDocsSearch,
-        documents: source.googleDocsSearch.documents.map((doc) =>
-          doc && typeof doc === "object"
-            ? {
-                id: (doc as { id?: string }).id,
-                title: (doc as { title?: string }).title,
-                updated: (doc as { updated?: string }).updated
-              }
-            : doc
-        )
-      };
+    // Integration search results are already rendered as dedicated XML blocks
+    // (<jira_tickets>, <slack_messages>, <confluence_pages>, …) earlier in the user
+    // message, so drop them from graph_context to avoid double-sending them (B7).
+    for (const key of [
+      "jiraSearch",
+      "slackSearch",
+      "teamsSearch",
+      "codeHostSearch",
+      "confluenceSearch",
+      "notionSearch",
+      "googleDocsSearch"
+    ] as const) {
+      if (source[key] !== undefined) {
+        mutated = true;
+        delete data[key];
+      }
     }
 
     if (!mutated) {
