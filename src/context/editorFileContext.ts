@@ -76,9 +76,7 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
 
   return {
     file: fsPath.replace(/\\/g, "/"),
-    fileSource: "external",
-    warning:
-      "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone, or pick a file from the remote tree in chat."
+    fileSource: "external"
   };
 }
 
@@ -143,17 +141,32 @@ function readGithubRemote(gitRoot: string): { owner: string; repo: string } | un
 
 export function findEditorForRepoFile(
   relativePath: string,
-  options?: { includeRemote?: boolean }
+  options?: { includeRemote?: boolean; includeExternal?: boolean }
 ): vscode.TextEditor | undefined {
-  const normalized = normalizeRelativePath(relativePath);
+  const preferred = relativePath.trim().replace(/\\/g, "/");
+  const normalized = preferred.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(preferred)
+    ? preferred
+    : normalizeRelativePath(preferred);
   const matchesPath = (resolved: ResolvedEditorFile): boolean => {
     if (!resolved.file?.trim()) {
       return false;
     }
-    const fileNorm = normalizeRelativePath(resolved.file);
-    if (fileNorm === normalized || fileNorm.endsWith(`/${normalized}`) || normalized.endsWith(`/${fileNorm}`)) {
+    const fileNorm = resolved.file.replace(/\\/g, "/");
+    const fileCmp =
+      fileNorm.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(fileNorm)
+        ? fileNorm
+        : normalizeRelativePath(fileNorm);
+    if (
+      fileCmp === normalized ||
+      fileCmp.endsWith(`/${normalized}`) ||
+      normalized.endsWith(`/${fileCmp}`) ||
+      fileNorm === preferred
+    ) {
+      if (resolved.fileSource === "external") {
+        return options?.includeExternal === true || options?.includeRemote === true;
+      }
       if (options?.includeRemote) {
-        return resolved.fileSource !== "external";
+        return true;
       }
       return isLocalDiskFileSource(resolved.fileSource);
     }
@@ -205,45 +218,77 @@ export function findEditorForRemoteFile(
   return undefined;
 }
 
-/** Prefer matching path, then any visible editor with readable content (local or GitHub remote). */
-export function pickEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
-  const normalized = preferredPath?.trim() ? normalizeRelativePath(preferredPath) : undefined;
-  if (normalized) {
-    return findEditorForRepoFile(normalized, { includeRemote: true });
-  }
+function editorHasReadableFile(editor: vscode.TextEditor): boolean {
+  return Boolean(resolveEditorFile(editor).file?.trim());
+}
 
-  for (const editor of vscode.window.visibleTextEditors) {
-    const resolved = resolveEditorFile(editor);
-    if (resolved.file?.trim() && resolved.fileSource !== "external") {
-      return editor;
-    }
+function pathsMatchPreferred(resolvedFile: string, preferredPath?: string): boolean {
+  if (!preferredPath?.trim()) {
+    return true;
+  }
+  const preferred = preferredPath.trim().replace(/\\/g, "/");
+  const fileNorm = resolvedFile.replace(/\\/g, "/");
+  // Absolute OS paths (Downloads / Cmd+O): exact match only — basename endsWith grabbed wrong tabs.
+  if (
+    preferred.startsWith("/Users/") ||
+    preferred.startsWith("/home/") ||
+    preferred.startsWith("/tmp/") ||
+    preferred.startsWith("/var/") ||
+    preferred.startsWith("/private/") ||
+    /^[a-zA-Z]:[\\/]/.test(preferred) ||
+    /^Users\/[^/]+\//i.test(preferred) ||
+    /^home\/[^/]+\//i.test(preferred)
+  ) {
+    const preferredAbs = preferred.startsWith("Users/") || preferred.startsWith("home/")
+      ? `/${preferred}`
+      : preferred;
+    return fileNorm === preferredAbs || fileNorm === preferred;
+  }
+  const normalized = normalizeRelativePath(preferred);
+  const fileRel = normalizeRelativePath(fileNorm);
+  return (
+    fileRel === normalized ||
+    fileRel.endsWith(`/${normalized}`) ||
+    normalized.endsWith(`/${fileRel}`) ||
+    fileNorm === preferred
+  );
+}
+
+/** Prefer matching path, then any visible editor with readable content (including external). */
+export function pickEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
+  if (preferredPath?.trim()) {
+    // When a specific path is requested, never fall back to an unrelated active tab —
+    // that made the file picker "open" CoopSettingsPanel instead of the picked file.
+    return findMatchingEditorForPreferredPath(preferredPath, { includeRemote: true });
   }
 
   const active = vscode.window.activeTextEditor;
-  if (active) {
-    const resolved = resolveEditorFile(active);
-    if (resolved.file?.trim() && resolved.fileSource !== "external") {
-      return active;
+  if (active && editorHasReadableFile(active)) {
+    return active;
+  }
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (editorHasReadableFile(editor)) {
+      return editor;
     }
   }
 
   return undefined;
 }
 
-/** Prefer matching path, then any visible on-disk editor (chat webview steals editor focus). */
+/**
+ * Prefer matching path, then any visible on-disk editor (workspace / git / external).
+ * Chat webview steals editor focus — visible tabs still count.
+ */
 export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
-  const normalized = preferredPath?.trim() ? normalizeRelativePath(preferredPath) : undefined;
-  if (normalized) {
-    const matched = findEditorForRepoFile(normalized);
-    if (matched) {
-      return matched;
-    }
+  if (preferredPath?.trim()) {
+    return findMatchingEditorForPreferredPath(preferredPath, { includeRemote: false });
   }
 
   const active = vscode.window.activeTextEditor;
   if (active?.document.uri.scheme === "file") {
     const resolved = resolveEditorFile(active);
-    if (isLocalDiskFileSource(resolved.fileSource)) {
+    if (resolved.file?.trim() && (isLocalDiskFileSource(resolved.fileSource) || resolved.fileSource === "external")) {
       return active;
     }
   }
@@ -252,8 +297,39 @@ export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEd
     if (editor.document.uri.scheme !== "file") {
       return false;
     }
-    return isLocalDiskFileSource(resolveEditorFile(editor).fileSource);
+    const resolved = resolveEditorFile(editor);
+    return Boolean(
+      resolved.file?.trim() &&
+        (isLocalDiskFileSource(resolved.fileSource) || resolved.fileSource === "external")
+    );
   });
+}
+
+/** Match preferred path only — no fallback to a different open file. */
+function findMatchingEditorForPreferredPath(
+  preferredPath: string,
+  options: { includeRemote: boolean }
+): vscode.TextEditor | undefined {
+  const matched = findEditorForRepoFile(preferredPath, {
+    includeRemote: options.includeRemote,
+    includeExternal: true
+  });
+  if (matched) {
+    return matched;
+  }
+  for (const editor of [
+    vscode.window.activeTextEditor,
+    ...vscode.window.visibleTextEditors
+  ].filter(Boolean) as vscode.TextEditor[]) {
+    if (!options.includeRemote && editor.document.uri.scheme !== "file") {
+      continue;
+    }
+    const resolved = resolveEditorFile(editor);
+    if (resolved.file?.trim() && pathsMatchPreferred(resolved.file, preferredPath)) {
+      return editor;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -263,6 +339,8 @@ export function pickLocalEditorForContext(preferredPath?: string): vscode.TextEd
 export function readExternalOpenFileForChat(options?: {
   selectedLines?: [number, number];
   fullFile?: boolean;
+  /** Prefer this absolute path when multiple external tabs are open. */
+  preferredPath?: string;
 }): LocalFileContextPayload | undefined {
   const candidates: vscode.TextEditor[] = [];
   const active = vscode.window.activeTextEditor;
@@ -272,6 +350,25 @@ export function readExternalOpenFileForChat(options?: {
   for (const editor of vscode.window.visibleTextEditors) {
     if (editor !== active) {
       candidates.push(editor);
+    }
+  }
+
+  const preferred = options?.preferredPath?.trim().replace(/\\/g, "/");
+  if (preferred) {
+    const preferredIdx = candidates.findIndex((editor) => {
+      if (editor.document.uri.scheme !== "file") {
+        return false;
+      }
+      const resolved = resolveEditorFile(editor);
+      return (
+        resolved.fileSource === "external" &&
+        Boolean(resolved.file?.trim()) &&
+        pathsMatchPreferred(resolved.file!, preferred)
+      );
+    });
+    if (preferredIdx > 0) {
+      const [match] = candidates.splice(preferredIdx, 1);
+      candidates.unshift(match);
     }
   }
 
@@ -310,7 +407,7 @@ export function readExternalOpenFileForChat(options?: {
   return undefined;
 }
 
-/** Read live editor buffer content for chat (includes unsaved edits; local or remote tab). */
+/** Read live editor buffer content for chat (includes unsaved edits; local, remote, or external). */
 export function readActiveEditorFileForChat(
   ctx: Pick<RepoContext, "file" | "fileSource" | "selectedLines">
 ): LocalFileContextPayload | undefined {
@@ -320,11 +417,15 @@ export function readActiveEditorFileForChat(
   }
 
   const resolved = resolveEditorFile(editor);
-  if (!resolved.file?.trim() || resolved.fileSource === "external") {
+  if (!resolved.file?.trim()) {
     return undefined;
   }
 
-  const normalized = normalizeRelativePath(resolved.file);
+  // Outside-workspace: keep absolute path; do not strip to a fake repo-relative path.
+  const pathForChat =
+    resolved.fileSource === "external"
+      ? resolved.file.replace(/\\/g, "/")
+      : normalizeRelativePath(resolved.file);
   const sliced = sliceFileContent(
     editor.document.getText(),
     ctx.selectedLines ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] } : undefined
@@ -332,10 +433,10 @@ export function readActiveEditorFileForChat(
 
   return {
     source: "local-workspace",
-    activeFile: normalized,
+    activeFile: pathForChat,
     files: [
       {
-        path: normalized,
+        path: pathForChat,
         content: sliced.content,
         encoding: "utf8",
         ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
@@ -356,26 +457,39 @@ function revealLineInEditor(editor: vscode.TextEditor, line?: number): void {
 
 /** Focus an open tab or open a workspace file in the main editor (user-initiated navigation). */
 export async function focusRepoFileInEditor(path: string, line?: number): Promise<boolean> {
+  // Must match `path` — pickEditorForContext(path) no longer returns unrelated tabs.
   const existing = pickEditorForContext(path);
   if (existing) {
-    const editor = await vscode.window.showTextDocument(existing.document, {
-      viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
-      preview: false,
-      preserveFocus: false
-    });
-    revealLineInEditor(editor, line);
-    return true;
+    const resolved = resolveEditorFile(existing);
+    if (resolved.file?.trim() && pathsMatchPreferred(resolved.file, path)) {
+      const editor = await vscode.window.showTextDocument(existing.document, {
+        viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
+        preview: false,
+        preserveFocus: false
+      });
+      revealLineInEditor(editor, line);
+      return true;
+    }
   }
 
   const absolute = resolveLocalAbsolutePath(path);
   if (absolute) {
-    const editor = await vscode.window.showTextDocument(vscode.Uri.file(absolute), {
-      viewColumn: vscode.ViewColumn.One,
-      preview: false,
-      preserveFocus: false
-    });
-    revealLineInEditor(editor, line);
-    return true;
+    try {
+      const editor = await vscode.window.showTextDocument(vscode.Uri.file(absolute), {
+        viewColumn: vscode.ViewColumn.One,
+        preview: false,
+        preserveFocus: false
+      });
+      revealLineInEditor(editor, line);
+      return true;
+    } catch {
+      try {
+        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(absolute));
+        return true;
+      } catch {
+        return false;
+      }
+    }
   }
 
   return false;

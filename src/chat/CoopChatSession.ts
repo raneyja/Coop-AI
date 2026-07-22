@@ -147,6 +147,7 @@ import {
   appendQuickActionMentionScope,
   quickActionHistoryContent,
   quickActionModelPrompt,
+  quickActionPromptParts,
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
 import { resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
@@ -243,7 +244,7 @@ import {
   pickLocalEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
-import { looksLikeAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
+import { looksLikeAbsoluteDiskPath, isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import {
@@ -489,11 +490,24 @@ export class CoopChatSession {
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
       if (active.repoContext) {
+        // Cold start / extension reload: restore owner/repo only.
+        // Do NOT chip or open last session's file — that runs when the user
+        // explicitly switches to (opens) that thread in the UI.
         this.currentContext = stripStaleContextWarning(
-          normalizeRepoContext(mergeRepoContext(this.currentContext, active.repoContext))
+          normalizeRepoContext(
+            mergeRepoContext(this.currentContext, {
+              provider: active.repoContext.provider,
+              owner: active.repoContext.owner,
+              repo: active.repoContext.repo,
+              branch: active.repoContext.branch,
+              scope: active.repoContext.scope === "repo" ? "repo" : undefined
+            })
+          )
         );
       }
     }
+    this.dropFileChipUnlessOpenInEditor();
+    this.snapContextFromOpenEditors();
     this.postContext();
     this.postChatHistory();
     this.pushThreadsList();
@@ -543,8 +557,25 @@ export class CoopChatSession {
     if (Date.now() < this.editorContextSuppressedUntil) {
       return;
     }
-    const intent = this.intentDetector.detectEditorIntent(editor);
-    const nextContext = repoContextFromEditor(editor, this.preferences, this.currentContext);
+    // Coop sidebar / settings webview steals focus → activeTextEditor is often undefined
+    // while Downloads / Cmd+O tabs remain visible. Never chip from an empty editor alone.
+    const effective = this.resolveEditorForContextRefresh(editor);
+    if (!effective) {
+      // File closed / Welcome only — drop the chip when the preferred path is gone.
+      // Explorer mid-open is protected by editorContextSuppressedUntil above.
+      const before = this.currentContext.file;
+      this.dropFileChipUnlessOpenInEditor();
+      if (before !== this.currentContext.file) {
+        this.postContext();
+      }
+      return;
+    }
+    const intent = this.intentDetector.detectEditorIntent(effective);
+    const snapPrefs = {
+      ...this.preferences,
+      includeActiveFile: true
+    };
+    const nextContext = repoContextFromEditor(effective, snapPrefs, this.currentContext);
     const event = this.intentDetector.create(intent, {
       file: nextContext.file,
       fileSource: nextContext.fileSource,
@@ -560,6 +591,85 @@ export class CoopChatSession {
     });
 
     void this.intentDebouncer.debounce(event, (debounced) => this.handleEditorIntent(debounced));
+  }
+
+  /** Tab close / visible-editors change — clear chip if the chipped file is gone. */
+  public reconcileEditorFileChips(): void {
+    if (Date.now() < this.editorContextSuppressedUntil) {
+      return;
+    }
+    const before = this.currentContext.file;
+    this.dropFileChipUnlessOpenInEditor();
+    if (before !== this.currentContext.file) {
+      this.postContext();
+      return;
+    }
+    this.refreshEditorContext(vscode.window.activeTextEditor);
+  }
+
+  /**
+   * Prefer the passed editor, else a tab matching current context file, else any visible
+   * tab when there is no file chip yet (Downloads / Cmd+O on startup).
+   */
+  private resolveEditorForContextRefresh(
+    editor: vscode.TextEditor | undefined
+  ): vscode.TextEditor | undefined {
+    const preferred = this.currentContext.file;
+    if (editor && !editor.document.isClosed) {
+      const resolved = resolveEditorFile(editor);
+      if (resolved.file?.trim()) {
+        return editor;
+      }
+    }
+    const matched =
+      pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
+    if (matched) {
+      return matched;
+    }
+    // Explorer pick set a file chip but the tab isn't open yet — don't steal it with
+    // an unrelated visible editor (that was the false "opened" CoopSettingsPanel bug).
+    if (preferred?.trim()) {
+      return undefined;
+    }
+    return (
+      pickLocalEditorForContext() ??
+      pickEditorForContext() ??
+      vscode.window.activeTextEditor
+    );
+  }
+
+  /** Immediate chip sync (no debounce) — used on initialize / webview-ready. */
+  private snapContextFromOpenEditors(): boolean {
+    const editor = this.resolveEditorForContextRefresh(vscode.window.activeTextEditor);
+    if (!editor) {
+      return false;
+    }
+    const snapPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
+    this.currentContext = mergeRepoContext(
+      this.currentContext,
+      repoContextFromEditor(editor, snapPrefs, this.currentContext)
+    );
+    return Boolean(this.currentContext.file?.trim());
+  }
+
+  /**
+   * Clear a file chip that isn't backed by an open editor tab.
+   * Used on cold start when there is no thread file to restore — Welcome-only must not
+   * ghost yesterday's file. Thread open uses applyThreadRepoContext (chip + open) instead.
+   */
+  private dropFileChipUnlessOpenInEditor(): void {
+    const preferred = this.currentContext.file?.trim();
+    if (!preferred) {
+      if (this.currentContext.fileSource || this.currentContext.selectedLines) {
+        this.clearFileFieldsFromContext();
+      }
+      return;
+    }
+    const open = pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
+    if (open) {
+      return;
+    }
+    this.clearFileFieldsFromContext();
   }
 
   public handleThemeChange(): void {
@@ -699,17 +809,11 @@ export class CoopChatSession {
     this.chatHistory.push(...thread.messages);
     this.threadArtifacts = [...(thread.artifacts ?? [])];
     this.sessionCostUsd = thread.sessionCostUsd;
-    if (thread.repoContext) {
-      this.currentContext = stripStaleContextWarning(
-        normalizeRepoContext(mergeRepoContext(this.currentContext, thread.repoContext))
-      );
-    }
     this.setThreadTitle(thread.title);
     this.post({
       type: "chat:thread-changed",
       payload: { threadId: thread.id, title: thread.title }
     });
-    this.postContext();
     this.postChatHistory();
     const running = this.threadRuns.get(thread.id);
     if (running && running.status === "running") {
@@ -733,6 +837,110 @@ export class CoopChatSession {
       }
     }
     this.pushThreadsList();
+    // Thread-scoped file: chip + open in editor. Not a global "last session" ghost.
+    void this.restoreContextForActivatedThread(thread);
+  }
+
+  private async restoreContextForActivatedThread(
+    thread: ReturnType<ChatThreadStore["getActiveThread"]>
+  ): Promise<void> {
+    if (thread.repoContext) {
+      await this.applyThreadRepoContext(thread.repoContext);
+    } else {
+      // Leave the previous thread's file behind unless it's still the live open tab.
+      this.clearFileFieldsFromContext();
+      this.snapContextFromOpenEditors();
+    }
+    this.postContext();
+  }
+
+  /**
+   * Apply a chat thread's saved repo/file context: chip it and open the file in the editor.
+   * Global cold-start persistence must NOT use this for arbitrary last-session files —
+   * only when the user is opening a specific thread.
+   */
+  private async applyThreadRepoContext(repoContext: RepoContext): Promise<void> {
+    this.currentContext = stripStaleContextWarning(
+      normalizeRepoContext(mergeRepoContext(this.currentContext, repoContext))
+    );
+    const file = this.currentContext.file?.trim();
+    if (!file) {
+      this.snapContextFromOpenEditors();
+      return;
+    }
+
+    const alreadyOpen = pickLocalEditorForContext(file) ?? pickEditorForContext(file);
+    if (alreadyOpen) {
+      try {
+        await vscode.window.showTextDocument(alreadyOpen.document, {
+          viewColumn: alreadyOpen.viewColumn ?? vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: false
+        });
+      } catch {
+        // Chip still valid — tab exists.
+      }
+      return;
+    }
+
+    const opened = await this.openContextFileInEditor(file);
+    if (!opened) {
+      this.clearFileFieldsFromContext();
+      this.snapContextFromOpenEditors();
+    }
+  }
+
+  /** Open a repo-relative or absolute path for thread restore / picker. */
+  private async openContextFileInEditor(path: string): Promise<boolean> {
+    this.editorContextSuppressedUntil = Date.now() + 8_000;
+    this.intentDebouncer.cancelAll();
+
+    const absolute = resolveLocalAbsolutePath(path);
+    if (absolute) {
+      try {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: false
+        });
+        return true;
+      } catch {
+        // fall through to remote
+      }
+    }
+
+    if (!this.currentContext.owner?.trim() || !this.currentContext.repo?.trim()) {
+      return false;
+    }
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      return false;
+    }
+
+    let opened = await openRemoteFileInEditor({
+      owner: this.currentContext.owner,
+      repo: this.currentContext.repo,
+      filePath: path,
+      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+      branch: this.currentContext.branch,
+      preserveSidebarFocus: false
+    });
+    if (!opened) {
+      opened = await this.openRemoteFileFromApi(path, undefined, { preserveFocus: false });
+    }
+    return opened;
+  }
+
+  private clearFileFieldsFromContext(): void {
+    this.currentContext = normalizeRepoContext({
+      ...this.currentContext,
+      file: undefined,
+      fileSource: undefined,
+      selectedLines: undefined,
+      selectedSymbol: undefined,
+      languageId: undefined,
+      scope: this.currentContext.scope === "repo" ? "repo" : undefined
+    });
   }
 
   private async switchThread(threadId: string): Promise<void> {
@@ -874,7 +1082,8 @@ export class CoopChatSession {
 
   public async submitQuickAction(actionId: QuickActionId, context?: RepoContext): Promise<void> {
     if (context) {
-      this.currentContext = { ...this.currentContext, ...context };
+      // Merge so an explicit file (including outside-workspace) is never dropped.
+      this.currentContext = mergeRepoContext(this.currentContext, context);
       this.postContext();
     }
     await this.handleChatSend("", actionId);
@@ -911,6 +1120,8 @@ export class CoopChatSession {
       case "webview-ready":
         this.postTheme();
         if (source === "chat") {
+          // Snap open tabs only — do not drop thread file chips mid-open.
+          this.snapContextFromOpenEditors();
           this.postContext();
           try {
             await this.pushSettingsState();
@@ -1524,18 +1735,20 @@ export class CoopChatSession {
       incoming.file &&
       !pathsReferToSameFile(incoming.file, this.pinnedContextFile)
     ) {
-      return [];
+      // User switched files in the editor — release the prior quick-action pin.
+      this.pinnedContextFile = undefined;
     }
-    const toMerge =
-      isExplicitRepoScope(this.currentContext) && !incoming.file?.trim()
-        ? ({
-            provider: incoming.provider,
-            owner: incoming.owner,
-            repo: incoming.repo,
-            branch: incoming.branch,
-            scope: "repo"
-          } as RepoContext)
-        : incoming;
+    // Never force scope:"repo" on an empty editor event — that wiped Downloads chips when
+    // the sidebar stole focus (normalize stamped scope:repo → isExplicitRepoScope true).
+    // Explicit explorer "Use repo" goes through setRepoContext / repoContextForRepoSelect.
+    const toMerge = incoming.file?.trim()
+      ? ({ ...incoming, scope: "file" } as RepoContext)
+      : ({
+          provider: incoming.provider,
+          owner: incoming.owner,
+          repo: incoming.repo,
+          branch: incoming.branch
+        } as RepoContext);
     this.currentContext = mergeRepoContext(this.currentContext, toMerge);
     this.postContext();
     return this.runIntentFetch(event, { quiet: true });
@@ -1554,7 +1767,42 @@ export class CoopChatSession {
       return;
     }
 
+    // Cancel pending editor snaps so a late FILE_SWITCHED can't overwrite this pick.
+    this.intentDebouncer.cancelAll();
     this.pinnedContextFile = undefined;
+    // Hold editor refresh while we open — otherwise local clone URI demotes R→L
+    // or clears a brand-new chip before the tab exists.
+    this.editorContextSuppressedUntil = Date.now() + 8_000;
+
+    // Absolute Downloads / Cmd+O path — always local (L), never stamp remote.
+    // Use isOsAbsoluteDiskPath only (not looksLikeAbsoluteDiskPath) so "/src/foo.ts"
+    // repo-relative paths are not misclassified as Downloads.
+    if (isOsAbsoluteDiskPath(path)) {
+      const absolute = resolveLocalAbsolutePath(path) ?? path.replace(/\\/g, "/");
+      try {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: false
+        });
+        if (line) {
+          const position = new vscode.Position(Math.max(0, line - 1), 0);
+          editor.selection = new vscode.Selection(position, position);
+          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        }
+      } catch {
+        void vscode.window.showWarningMessage(`CoopAI could not open ${path} in the editor.`);
+      }
+      this.currentContext = mergeRepoContext(
+        this.currentContext,
+        repoContextForFile(absolute, this.currentContext.owner, this.currentContext.repo, {
+          fileSource: "external"
+        }) as RepoContext
+      );
+      this.postContext();
+      return;
+    }
 
     if (!canUseRemoteCodeGraph(this.preferences.plan)) {
       const absolute = resolveLocalAbsolutePath(path);
@@ -1594,6 +1842,7 @@ export class CoopChatSession {
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
+      // May open local clone for viewing — merge keeps remote provenance for same path.
       let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
@@ -1604,7 +1853,7 @@ export class CoopChatSession {
         preserveSidebarFocus: false
       });
       if (!opened) {
-        opened = await this.openRemoteFileFromApi(path, line);
+        opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: false });
       }
       if (!opened) {
         const relative = path.replace(/^\/+/, "");
@@ -2625,6 +2874,15 @@ export class CoopChatSession {
         : quickActionModelPrompt(quickAction as QuickActionId, actionContext, mentionRefs)
       : message;
 
+    // For a standard quick-action click, synthesis prompts only need the imperative
+    // task sentence — the DIRECTIVE/context/evidence-bundle boilerplate is already
+    // covered by the synthesis system prompt. Slash-arg and plain-chat turns keep the
+    // full message so the user's own words survive.
+    const taskMessage =
+      quickAction && options?.slashUserArgs === undefined
+        ? quickActionPromptParts(quickAction as QuickActionId, actionContext, mentionRefs).task
+        : modelMessage;
+
     const historyContent =
       options?.historyContent ??
       (quickAction
@@ -2700,6 +2958,7 @@ export class CoopChatSession {
         await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
           mentions: options?.mentions,
           composerMode: options?.composerMode,
+          taskContent: taskMessage,
           turn
         });
         return;
@@ -2737,6 +2996,7 @@ export class CoopChatSession {
       integrationProvider,
       mentions: options?.mentions,
       composerMode: options?.composerMode,
+      taskContent: taskMessage,
       turn
     });
   }
@@ -3296,6 +3556,8 @@ export class CoopChatSession {
       mentions?: ChatFileMention[];
       composerMode?: ComposerMode;
       turn?: ChatTurn;
+      /** Imperative task sentence for synthesis prompts; falls back to full content. */
+      taskContent?: string;
     }
   ): Promise<void> {
     const turn =
@@ -3469,8 +3731,11 @@ export class CoopChatSession {
         return;
       }
 
-      const lastUserBubble = [...turn.history].reverse().find((entry) => entry.role === "user")?.content;
-      const llmMessage =
+    const lastUserBubble = [...turn.history].reverse().find((entry) => entry.role === "user")?.content;
+    // Synthesis builders receive the compact task sentence; the no-synthesis fallback
+    // below keeps the full `content` so DIRECTIVE/context/confidence lines still reach the model.
+    const taskContent = options?.taskContent ?? content;
+    const llmMessage =
         effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
@@ -3479,7 +3744,7 @@ export class CoopChatSession {
               repo: turnContext.repo ?? this.preferences.repo,
               lineRange: decisionTimeline.lineRange,
               codeSnippet: decisionTimeline.codeSnippet,
-              userQuestion: content,
+              userQuestion: taskContent,
               userBubble: lastUserBubble,
               mentionedFiles: mentionRefs,
               activeRepoId,
@@ -3490,7 +3755,7 @@ export class CoopChatSession {
                 report: ownershipReport,
                 file: turnContext.file ?? ownershipReport.path,
                 slackSearch: slackEvidence,
-                userQuestion: content,
+                userQuestion: taskContent,
                 mentionedFiles: mentionRefs,
                 activeRepoId
               })
@@ -3501,7 +3766,7 @@ export class CoopChatSession {
                   branch: turnContext.branch ?? this.preferences.branch,
                   activeFile: turnContext.file,
                   summary: repoSummary,
-                  userQuestion: content,
+                  userQuestion: taskContent,
                   mentionedFiles: mentionRefs,
                   activeRepoId
                 })
@@ -3511,7 +3776,7 @@ export class CoopChatSession {
                     file: turnContext.file ?? blastRadiusEvidence.file ?? "unknown",
                     owner: turnContext.owner ?? this.preferences.owner,
                     repo: turnContext.repo ?? this.preferences.repo,
-                    userQuestion: content,
+                    userQuestion: taskContent,
                     mentionedFiles: mentionRefs,
                     activeRepoId
                   })
@@ -3527,7 +3792,7 @@ export class CoopChatSession {
                       file: turnContext.file,
                       owner: turnContext.owner ?? this.preferences.owner,
                       repo: turnContext.repo ?? this.preferences.repo,
-                      userQuestion: content,
+                      userQuestion: taskContent,
                       mentionedFiles: mentionRefs,
                       activeRepoId
                     })
@@ -3538,7 +3803,7 @@ export class CoopChatSession {
                         owner: turnContext.owner,
                         repo: turnContext.repo,
                         file: turnContext.file,
-                        userQuestion: content,
+                        userQuestion: taskContent,
                         mentionedFiles: mentionRefs,
                         activeRepoId
                       })
@@ -4917,15 +5182,15 @@ export class CoopChatSession {
       return;
     }
     if (this.preferences.owner?.trim() && this.preferences.repo?.trim()) {
-      this.currentContext = mergeRepoContext(
-        this.currentContext,
-        repoContextForRepoSelect({
-          provider: this.preferences.defaultCodeHost,
-          owner: this.preferences.owner,
-          repo: this.preferences.repo,
-          branch: this.preferences.branch
-        }) as RepoContext
-      );
+      // Seed owner/repo from settings only — do NOT stamp scope:"repo".
+      // Explicit repo scope is reserved for explorer "Use repo" and must not
+      // block active-editor file promotion for Downloads / Cmd+O tabs.
+      this.currentContext = mergeRepoContext(this.currentContext, {
+        provider: this.preferences.defaultCodeHost,
+        owner: this.preferences.owner,
+        repo: this.preferences.repo,
+        branch: this.preferences.branch
+      });
     }
   }
 
@@ -4958,13 +5223,15 @@ export class CoopChatSession {
   /** Snap active editor file/selection into context immediately before chat send. */
   private snapEditorContextBeforeSend(options?: { allowLocalFileForEdit?: boolean }): void {
     const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
-    if (isExplicitRepoScope(this.currentContext) && !allowLocalFileForEdit) {
-      return;
-    }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
+    // Always follow the live open/active editor — including under explorer "Use repo"
+    // scope — so the chip and chat attach match the tab the user is looking at.
     const editor = allowLocalFileForEdit
       ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
-      : pickEditorForContext(this.currentContext.file);
+      : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
+    if (!editor) {
+      return;
+    }
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextFromEditor(editor, chatPrefs, this.currentContext)
@@ -4987,20 +5254,20 @@ export class CoopChatSession {
     fullFile?: boolean;
   }): LocalFileContextPayload | undefined {
     const fullFile = options?.fullFile === true || this.pendingCodeEditIntent;
-    // Repo-only explorer scope normally means "don't attach a file". /edit always needs the
-    // open local buffer — otherwise a prior "Use repo" click blocks Apply-worthy patches.
-    if (isExplicitRepoScope(this.currentContext) && !fullFile) {
-      return undefined;
-    }
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
+    // Always prefer the live open editor (including outside-workspace) so chat/edit
+    // attach the buffer the user is looking at — even after explorer "Use repo".
     const editor = fullFile
       ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
-      : pickEditorForContext(this.currentContext.file);
+      : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
     if (editor) {
       this.currentContext = mergeRepoContext(
         this.currentContext,
         repoContextFromEditor(editor, chatPrefs, this.currentContext)
       );
+    } else if (isExplicitRepoScope(this.currentContext) && !fullFile) {
+      // No editor tab — honor explicit repo-only scope (don't invent a file).
+      return undefined;
     }
 
     const ctx = this.currentContext;
@@ -5009,7 +5276,11 @@ export class CoopChatSession {
         ? undefined
         : { start: ctx.selectedLines[0], end: ctx.selectedLines[1] };
     const editorCtx = fullFile ? { ...ctx, selectedLines: undefined } : ctx;
-    const wantedPath = ctx.file?.trim() ? normalizeRelativePath(ctx.file) : undefined;
+    const wantedPath = ctx.file?.trim()
+      ? looksLikeAbsoluteDiskPath(ctx.file)
+        ? ctx.file.trim().replace(/\\/g, "/")
+        : normalizeRelativePath(ctx.file)
+      : undefined;
 
     const payloadFromEditorDocument = (
       visible: vscode.TextEditor,
@@ -5021,6 +5292,7 @@ export class CoopChatSession {
         ...this.currentContext,
         file: relativePath,
         fileSource: fileSource === "external" ? "external" : fileSource ?? "workspace",
+        scope: "file",
         contextWarning: undefined
       };
       return {
@@ -5042,6 +5314,12 @@ export class CoopChatSession {
       if (!targetPath) {
         return true;
       }
+      if (looksLikeAbsoluteDiskPath(relativePath) || looksLikeAbsoluteDiskPath(targetPath)) {
+        const a = relativePath.replace(/\\/g, "/");
+        const b = targetPath.replace(/\\/g, "/");
+        // Exact only for absolute OS paths — basename endsWith attached the wrong tab.
+        return a === b;
+      }
       const normalized = normalizeRelativePath(relativePath);
       return (
         normalized === targetPath ||
@@ -5053,28 +5331,31 @@ export class CoopChatSession {
     const tryVisibleEditors = (targetPath?: string): LocalFileContextPayload | undefined => {
       for (const visible of vscode.window.visibleTextEditors) {
         const resolved = resolveEditorFile(visible);
-        if (!resolved.file?.trim() || resolved.fileSource === "external") {
+        if (!resolved.file?.trim()) {
           continue;
         }
-        const relativePath = normalizeRelativePath(resolved.file);
-        if (!pathsMatch(relativePath, targetPath)) {
+        const pathForChat =
+          resolved.fileSource === "external"
+            ? resolved.file.replace(/\\/g, "/")
+            : normalizeRelativePath(resolved.file);
+        if (!pathsMatch(pathForChat, targetPath)) {
           continue;
         }
         if (!visible.document.getText().trim()) {
           continue;
         }
-        return payloadFromEditorDocument(visible, relativePath, resolved.fileSource);
+        return payloadFromEditorDocument(visible, pathForChat, resolved.fileSource);
       }
 
       if (!targetPath && vscode.window.visibleTextEditors.length === 1) {
         const visible = vscode.window.visibleTextEditors[0];
         const resolved = resolveEditorFile(visible);
-        if (resolved.file?.trim() && resolved.fileSource !== "external" && visible.document.getText().trim()) {
-          return payloadFromEditorDocument(
-            visible,
-            normalizeRelativePath(resolved.file),
-            resolved.fileSource
-          );
+        if (resolved.file?.trim() && visible.document.getText().trim()) {
+          const pathForChat =
+            resolved.fileSource === "external"
+              ? resolved.file.replace(/\\/g, "/")
+              : normalizeRelativePath(resolved.file);
+          return payloadFromEditorDocument(visible, pathForChat, resolved.fileSource);
         }
       }
 
@@ -5086,14 +5367,8 @@ export class CoopChatSession {
       return fromVisible;
     }
 
-    // /edit: if chat still holds a stale path (e.g. after remote "Use repo"), attach any
-    // visible local editor rather than asking the model for file contents.
-    if (fullFile && wantedPath) {
-      const fromAnyVisible = tryVisibleEditors(undefined);
-      if (fromAnyVisible) {
-        return fromAnyVisible;
-      }
-    }
+    // Do not attach an unrelated visible buffer when the preferred path missed —
+    // that sent the wrong file after a stale remote path / failed open.
 
     const fromEditor = readActiveEditorFileForChat(editorCtx);
     if (fromEditor?.files.length) {
@@ -5190,7 +5465,8 @@ export class CoopChatSession {
     // keep fileSource external so quick actions stay blocked.
     const fromExternal = readExternalOpenFileForChat({
       selectedLines: fullFile ? undefined : ctx.selectedLines,
-      fullFile
+      fullFile,
+      preferredPath: ctx.file
     });
     if (fromExternal?.files.length) {
       this.currentContext = {
@@ -5228,7 +5504,8 @@ export class CoopChatSession {
       }
       const fromExternal = readExternalOpenFileForChat({
         selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
-        fullFile: this.pendingCodeEditIntent
+        fullFile: this.pendingCodeEditIntent,
+        preferredPath: this.currentContext.file
       });
       if (fromExternal?.files.length) {
         this.currentContext = {
@@ -5402,16 +5679,30 @@ export class CoopChatSession {
     if (!saved) {
       return;
     }
-    this.currentContext = normalizeRepoContext(mergeRepoContext(this.currentContext, saved));
+    // Restore repo identity only — never resurrect a file chip across reloads.
+    // Editors don't survive EDH restart; Welcome-only must not show yesterday's file.
+    this.currentContext = normalizeRepoContext(
+      mergeRepoContext(this.currentContext, {
+        provider: saved.provider,
+        owner: saved.owner,
+        repo: saved.repo,
+        branch: saved.branch
+      })
+    );
     this.currentContext = stripStaleContextWarning(this.currentContext);
-    this.post({ type: "context:update", payload: this.currentContext });
   }
 
   private async persistRepoContext(): Promise<void> {
     if (!this.currentContext.owner && !this.currentContext.repo && !this.currentContext.file) {
       return;
     }
-    await this.options.extensionContext.globalState.update("coopAI.lastRepoContext", this.currentContext);
+    // Persist owner/repo for next session; omit file/scope so cold start can't ghost-chip.
+    await this.options.extensionContext.globalState.update("coopAI.lastRepoContext", {
+      provider: this.currentContext.provider,
+      owner: this.currentContext.owner,
+      repo: this.currentContext.repo,
+      branch: this.currentContext.branch
+    } satisfies RepoContext);
   }
 
   public openLightningPanel(): void {
@@ -5788,15 +6079,26 @@ export class CoopChatSession {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
       const next = repoContextFromEditor(editor, this.preferences, this.currentContext);
+      const file =
+        next.fileSource === "external" || looksLikeAbsoluteDiskPath(next.file)
+          ? next.file?.replace(/\\/g, "/")
+          : next.file
+            ? toRepositoryRelativePath(next.file)
+            : next.file;
       this.currentContext = mergeRepoContext(this.currentContext, {
         ...next,
-        file: next.file ? toRepositoryRelativePath(next.file) : next.file
+        file
       });
       this.postContext();
     } else if (this.currentContext.file) {
+      const file =
+        this.currentContext.fileSource === "external" ||
+        looksLikeAbsoluteDiskPath(this.currentContext.file)
+          ? this.currentContext.file.replace(/\\/g, "/")
+          : toRepositoryRelativePath(this.currentContext.file);
       this.currentContext = {
         ...this.currentContext,
-        file: toRepositoryRelativePath(this.currentContext.file)
+        file
       };
       this.postContext();
     }

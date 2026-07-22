@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isExternalFileContext, looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
+import { isExternalFileContext, isOsAbsoluteDiskPath, looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 
 let passed = 0;
 let failed = 0;
@@ -21,6 +21,12 @@ test("looksLikeAbsoluteDiskPath detects macOS Downloads paths", () => {
   assert.equal(looksLikeAbsoluteDiskPath("Users/jonraney/Downloads/cursor_session.md"), true);
   assert.equal(looksLikeAbsoluteDiskPath("src/chat/CoopChatSession.ts"), false);
   assert.equal(looksLikeAbsoluteDiskPath("docs/handoff.md"), false);
+});
+
+test("isOsAbsoluteDiskPath ignores leading-slash repo paths", () => {
+  assert.equal(isOsAbsoluteDiskPath("/Users/jonraney/Downloads/notes.md"), true);
+  assert.equal(isOsAbsoluteDiskPath("/src/chat/CoopChatSession.ts"), false);
+  assert.equal(isOsAbsoluteDiskPath("src/chat/CoopChatSession.ts"), false);
 });
 
 test("isExternalFileContext uses fileSource or absolute path", () => {

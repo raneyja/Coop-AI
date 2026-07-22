@@ -16,6 +16,7 @@ import {
   truncationNote,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
+import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
 import {
   appendMentionScopePromptSection,
   OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE,
@@ -140,6 +141,12 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     ...supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   ]);
   appendEvidenceQualityInstructions(lines);
+  appendIntegrationDocsResponseContract(lines, {
+    notionPages: input.notion?.pages,
+    confluencePages: input.confluence?.pages,
+    googleDocs: input.googleDocs?.documents,
+    targetSection: "Documentation gaps"
+  });
   appendKnowledgeGapsResponseContract(lines, input);
   lines.push(
     repoWide
@@ -165,28 +172,7 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   );
 
   lines.push("## Response contract (required)");
-  lines.push("**Documentation gaps** must include, in order:");
-  if (input.notion?.pages?.length) {
-    lines.push(
-      `- **Notion pages reviewed** with exactly ${input.notion.pages.length} titled bullets in this order: ${input.notion.pages
-        .map((page) => page.title)
-        .join("; ")}`
-    );
-  }
-  if (input.confluence?.pages?.length) {
-    lines.push(
-      `- **Confluence pages reviewed** with exactly ${input.confluence.pages.length} titled bullets in this order: ${input.confluence.pages
-        .map((page) => page.title)
-        .join("; ")}`
-    );
-  }
-  if (input.googleDocs?.documents?.length) {
-    lines.push(
-      `- **Google Docs reviewed** with exactly ${input.googleDocs.documents.length} titled bullets in this order: ${input.googleDocs.documents
-        .map((doc) => doc.title)
-        .join("; ")}`
-    );
-  }
+  lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
   for (const gap of documentationGaps) {
     lines.push(`- Scan gap subsection from [Sources: Knowledge gap scan]: ${String(gap.message ?? gap.type ?? "gap")}`);
   }

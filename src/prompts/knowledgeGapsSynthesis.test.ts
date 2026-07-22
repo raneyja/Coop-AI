@@ -95,7 +95,8 @@ test("knowledge-gaps synthesis requires Notion pages and scan gaps in response c
     owner: "coop-demo-lab",
     repo: "fastify"
   });
-  assert.ok(prompt.includes("**Notion pages reviewed** with exactly 2 titled bullets"));
+  assert.ok(prompt.includes("**Notion pages reviewed** — exactly 2 titled bullet(s)"));
+  assert.ok(prompt.includes("In **Documentation gaps**, name every attached page or document title"));
   assert.ok(prompt.includes("No Confluence pages matched repo scope"));
   assert.ok(prompt.includes("No Google Docs matched repo scope"));
   assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));

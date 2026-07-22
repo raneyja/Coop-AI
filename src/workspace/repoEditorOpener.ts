@@ -187,7 +187,8 @@ export async function openRemoteFileInEditor(params: {
       : {
           viewColumn: existing.viewColumn ?? vscode.ViewColumn.One,
           preview: false,
-          preserveFocus: !preserveSidebarFocus
+          // preserveSidebarFocus true → keep webview focused; false → focus the editor.
+          preserveFocus: preserveSidebarFocus
         });
     revealLineInEditor(editor, params.line);
     return finish(true);

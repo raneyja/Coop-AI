@@ -43,7 +43,6 @@ import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
-import { appendFileMention } from "./lib/fileMentionUtils";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
@@ -1215,24 +1214,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [closeExplorer, postRepoSelect, rememberExplorerRepo]
   );
 
-  const addFileMention = useCallback((filePath: string, repoId: string) => {
-    setMentions((current) =>
-      appendFileMention(current, { repoId, path: filePath, source: "indexed" })
-    );
-  }, []);
-
   const handleSelectFileFromExplorer = useCallback(
     (filePath: string) => {
-      const browse = explorerRepoRef.current;
-      const provider = browse?.provider ?? context.provider ?? "github";
-      const owner = (browse?.owner ?? context.owner)?.trim();
-      const repo = (browse?.repo ?? context.repo)?.trim();
-      if (owner && repo) {
-        addFileMention(filePath, `${provider}:${owner}/${repo}`);
-      }
+      // Scope chip + open editor only — do not also seed a composer @ mention.
+      // Dual chips caused send to attach mention bytes and drop the live buffer/selection.
       handleOpenFile(filePath, undefined, { preserveContext: false });
     },
-    [addFileMention, context.owner, context.provider, context.repo, handleOpenFile]
+    [handleOpenFile]
   );
 
   const requestReposForExplorer = useCallback(() => {

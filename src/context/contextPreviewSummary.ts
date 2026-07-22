@@ -1,5 +1,6 @@
 import type { ChatFileMention, RepoContext } from "../chat/types";
 import { displayFileLabel, displayRepoLabel, isExplicitRepoScope } from "./contextScope";
+import { isRemoteChip } from "./fileChipIdentity";
 import { INTEGRATION_PREVIEW_HINTS } from "./integrationPreviewHints";
 
 export type ContextPreviewChipKind =
@@ -42,18 +43,9 @@ export function buildContextPreviewChips(options: {
       kind: "file",
       label: displayFileLabel(filePath),
       detail:
-        ctx.fileSource === "remote"
-          ? "remote tab"
-          : ctx.fileSource === "external"
-            ? "Outside workspace"
-            : undefined,
-      state: "confirmed"
-    });
-  } else if (ctx.fileSource === "external") {
-    chips.push({
-      id: "outside-workspace",
-      kind: "file",
-      label: "Outside workspace",
+        isRemoteChip(ctx)
+          ? "Remote"
+          : "Local",
       state: "confirmed"
     });
   }

@@ -244,17 +244,9 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
 
-When \`<notion_pages count="N">\` has \`count\` > 0, the first subsection in this section must be exactly:
+For each attached documentation source with \`count\` > 0, add its subsection first in this section, in this order: Notion (\`<notion_pages count="N">\` → **Notion pages reviewed**), Confluence (\`<confluence_pages count="N">\` → **Confluence pages reviewed**), then Google Docs (\`<google_docs count="N">\` → **Google Docs reviewed**). Under each, list exactly N bullets — one per \`<page>\`/\`<doc>\` title, in the same order as the XML:
 
-**Notion pages reviewed**
-
-List exactly N bullets — one per \`<page>\` title, in the same order as the XML:
-
-- **{exact <page> title}:** one sentence on whether it documents the active file/area and what it covers or omits
-
-When \`<confluence_pages count="N">\` has \`count\` > 0, add **Confluence pages reviewed** with exactly N titled bullets in XML order (after Notion when both exist).
-
-When \`<google_docs count="N">\` has \`count\` > 0, add **Google Docs reviewed** with exactly N titled bullets in XML order.
+- **{exact title}:** one sentence on whether it documents the active file/area and what it covers or omits
 
 When \`<knowledge_gap_scan>\` contains \`<gap>\` entries with type \`missing_docs\` or \`impact_unknown\`: add one subsection per scan gap using the two-bullet pattern below (title from gap message).
 
