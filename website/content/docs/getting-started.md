@@ -3,7 +3,7 @@ title: Getting started
 description: Install CoopAI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-22"
 ---
 
 This guide gets you from signup to your first useful chat in CoopAI.
@@ -63,7 +63,7 @@ Automation API keys are for CI/scripts only — create them in the [admin portal
 
 Open the Coop icon in the activity bar. Click a quick action or type in the composer.
 
-1. Open a file in your workspace.
+1. Open a file in your workspace. Coop shows it as the **L** (local) or **R** (remote) context chip above the composer — see [Active file context chip](/manual#active-file-context-chip).
 2. **Extension UI** — Type in the chat composer or click **Understand Repo**.
 3. Try: `Explain this codebase. What are the main entry points?`
 

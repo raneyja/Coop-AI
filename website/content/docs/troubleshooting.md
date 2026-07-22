@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-22"
 ---
 
 ## Extension
@@ -18,6 +18,9 @@ lastUpdated: "2026-07-10"
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
 | **No integration context** | Ask admin to connect tools in admin portal |
+| **File chip shows R for a Downloads / Cmd+O file** | Should be **L** (local). Reload the window; see [Active file context chip](/manual#active-file-context-chip) |
+| **Ghost file chip after reload with no editor tab** | Reload should not keep a closed file. Switch threads or open a file; see [Manual](/manual#active-file-context-chip) |
+| **Quick actions blocked on outside-workspace file** | Expected for graph actions — use plain chat, or open a file inside the repo |
 
 ## Verify production
 

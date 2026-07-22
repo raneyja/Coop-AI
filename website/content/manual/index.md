@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-22"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -262,6 +262,8 @@ Use the chat header at the top of the sidebar:
 
 Previous threads stay in the dropdown until you delete them. Starting a **new chat** or switching threads does **not** cancel an in-flight reply — that turn keeps generating in the background (shown as “Generating…” in the thread list). Open the thread again to watch it finish, or press **Stop** on that thread to cancel only that turn. Quick actions and slash commands always run in the **active** thread.
 
+If a past thread was working on a specific file, **switching back to that thread** restores the file chip and opens that file in the editor. Reloading VS Code alone does **not** reopen last session’s file.
+
 ### Chat composer
 
 Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-4o mini** — assigned by Coop, not user-selected.
@@ -270,9 +272,39 @@ Type free-form questions in the composer. Coop streams answers grounded in your 
 - Responses stream in real time with markdown formatting.
 - Chat history persists in the session.
 
+### Active file context chip
+
+The chip above the composer (right side) shows which file Coop is using as chat context. It is **not** an `@` mention and is separate from the **AGENTS.md** pill.
+
+<!-- figures -->
+![Active file context chip — L badge, filename, and Local above the Coop chat composer](/screenshots/docs/extension-context-chip-local.png)
+
+*Local file (**L**)*
+
+![Active file context chip — R badge, filename, and owner/repo above the Coop chat composer](/screenshots/docs/extension-context-chip-remote.png)
+
+*Remote / codehost file (**R**)*
+<!-- /figures -->
+
+| Badge | Meaning |
+| --- | --- |
+| **L** · filename · **Local** | File on disk — workspace, a git clone opened outside the folder, or Cmd+O / Downloads |
+| **R** · filename · **owner/repo** | Remote / codehost — chosen in Coop’s file explorer (stays **R** even if Coop opens your local clone to view it) |
+
+- Open a file in the editor → the chip follows the active (last-focused) text tab.
+- Choose a file in Coop’s explorer → the chip updates and the file opens in the editor.
+- Click the chip → focuses that file in the editor.
+- Close that tab → the file chip clears.
+- Reload VS Code → Coop does **not** reopen last session’s file or leave a ghost file chip (unless that file is already open).
+- Switch back to a past chat thread that used a file → that file chips and opens again.
+
+A **repo-only** chip (`/RepoName`) appears only when you choose **Use repo** in the explorer with no file selected.
+
+Outside-workspace files (for example Downloads) stay **L** and work for plain chat. Quick actions that need the code graph may stay blocked until you open a repo file — the chip is not removed.
+
 ### @-mentions and attachments
 
-- Type `@` to search files in your workspace (up to 3 @-mentions per message).
+- Type `@` to search files and attach extra paths for **one message** (up to 3 @-mentions). These are separate from the active-file chip above.
 - Use the paperclip to attach files — images, PDFs, or text (up to 4 per message).
 - Selected lines in the editor are included automatically as context.
 

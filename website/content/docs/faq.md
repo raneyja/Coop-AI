@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-15"
+lastUpdated: "2026-07-22"
 ---
 
 ## General
@@ -72,6 +72,10 @@ Not on Developer or Pro. Coop assigns models per feature (chat, quick actions, e
 ### What is Lightning Mode?
 
 Deep-Index builds a searchable code graph on Coop infrastructure for faster cross-repo symbol-graph search. Available on **all plans**; free orgs are capped at **3 Deep-Indexed repos** org-wide. Pro adds unlimited indexing.
+
+### What is the L / R chip above the chat composer?
+
+That is the **active file context chip** — which file Coop is using for chat. **L** means local disk (workspace, clone, or Cmd+O / Downloads). **R** means you picked the file in Coop’s remote explorer (codehost). It is not an `@` mention. Reloading VS Code does not reopen last session’s file; switching back to a past thread that used a file does. See [Active file context chip](/manual#active-file-context-chip).
 
 ### Can I share prompts with my team?
 
