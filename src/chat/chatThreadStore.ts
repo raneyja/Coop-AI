@@ -8,6 +8,8 @@ export type ChatThreadSummary = {
   updatedAt: number;
   createdAt: number;
   messageCount: number;
+  /** True when a generation turn is still running for this thread. */
+  isRunning?: boolean;
 };
 
 export type ChatThreadRecord = ChatThreadSummary & {
@@ -143,7 +145,19 @@ export class ChatThreadStore {
     artifacts: ChatPersistedArtifact[] = [],
     repoContext?: RepoContext
   ): void {
-    const thread = this.getThread(this.snapshot.activeThreadId);
+    this.setThread(this.snapshot.activeThreadId, messages, sessionCostUsd, title, artifacts, repoContext);
+  }
+
+  /** Persist messages/artifacts for any thread (active or background). */
+  public setThread(
+    threadId: string,
+    messages: ChatMessage[],
+    sessionCostUsd: number,
+    title: string,
+    artifacts: ChatPersistedArtifact[] = [],
+    repoContext?: RepoContext
+  ): void {
+    const thread = this.getThread(threadId);
     if (!thread) {
       return;
     }
@@ -156,8 +170,37 @@ export class ChatThreadStore {
     if (repoContext) {
       thread.repoContext = snapshotThreadRepoContext(repoContext);
     }
-    this.snapshot.lastActiveAt = Date.now();
+    if (threadId === this.snapshot.activeThreadId) {
+      this.snapshot.lastActiveAt = Date.now();
+    }
     this.writeSnapshot();
+  }
+
+  public appendMessage(
+    threadId: string,
+    message: ChatMessage,
+    options?: { sessionCostUsd?: number; title?: string }
+  ): boolean {
+    const thread = this.getThread(threadId);
+    if (!thread) {
+      return false;
+    }
+    thread.messages = [...thread.messages, message];
+    thread.messageCount = thread.messages.length;
+    thread.updatedAt = Date.now();
+    if (options?.sessionCostUsd !== undefined) {
+      thread.sessionCostUsd = options.sessionCostUsd;
+    }
+    if (options?.title) {
+      thread.title = options.title;
+    }
+    this.writeSnapshot();
+    return true;
+  }
+
+  public getThreadById(threadId: string): ChatThreadRecord | undefined {
+    const thread = this.getThread(threadId);
+    return thread ? { ...thread, messages: [...thread.messages], artifacts: [...thread.artifacts] } : undefined;
   }
 
   public updateActiveTitle(title: string): void {

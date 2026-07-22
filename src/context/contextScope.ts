@@ -1,4 +1,6 @@
 import type { RepoContext } from "../chat/types";
+import { coerceChipFileSource } from "./fileChipIdentity";
+import { isOsAbsoluteDiskPath } from "./outsideWorkspaceFile";
 
 export type ContextScope = "repo" | "file";
 
@@ -41,15 +43,40 @@ export function normalizeRepoContext(ctx: RepoContext): RepoContext {
     branch: normalizeText(ctx.branch),
     file: normalizeText(ctx.file)
   };
-  const scope = inferContextScope(normalized);
-  normalized.scope = scope;
-  if (scope === "repo") {
+  // Outside-workspace disk file: absolute path is always local (L), never remote.
+  if (normalized.file && isOsAbsoluteDiskPath(normalized.file)) {
+    normalized.scope = "file";
+    normalized.fileSource = "external";
+    normalized.contextWarning = undefined;
+    return normalized;
+  }
+  if (normalized.file && normalized.fileSource === "external") {
+    normalized.scope = "file";
+    normalized.contextWarning = undefined;
+    return normalized;
+  }
+  // Never keep orphan "external" without a path — that produced a useless "Outside workspace" chip.
+  if (normalized.fileSource === "external" && !normalized.file) {
+    normalized.fileSource = undefined;
+  }
+  // Explicit explorer "Use repo" only — clears file fields.
+  // Do NOT invent scope:"repo" from a bare owner/repo seed; that made isExplicitRepoScope
+  // true and showed /Coop-AI while a Downloads tab was still open.
+  if (ctx.scope === "repo") {
+    normalized.scope = "repo";
     normalized.file = undefined;
     normalized.fileSource = undefined;
     normalized.selectedLines = undefined;
     normalized.selectedSymbol = undefined;
     normalized.languageId = undefined;
+    return normalized;
   }
+  if (normalized.file) {
+    normalized.scope = "file";
+    normalized.fileSource = coerceChipFileSource(normalized.file, normalized.fileSource);
+    return normalized;
+  }
+  normalized.scope = undefined;
   return normalized;
 }
 
@@ -75,7 +102,7 @@ export function repoContextForFile(
     repo,
     branch: options.branch,
     file,
-    fileSource: options.fileSource,
+    fileSource: coerceChipFileSource(file, options.fileSource),
     selectedLines: options.selectedLines,
     selectedSymbol: options.selectedSymbol,
     languageId: options.languageId,

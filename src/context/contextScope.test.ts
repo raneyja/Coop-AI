@@ -58,6 +58,54 @@ async function run(): Promise<void> {
     assert.equal(normalized.contextWarning, "Only files on disk can be linked to GitHub");
   });
 
+  await test("normalizeRepoContext drops orphan external without a file path", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI",
+      fileSource: "external",
+      contextWarning: "This file is not in your opened workspace or a git repo."
+    });
+    // No invented scope:"repo" — that would show a false /Coop-AI chip.
+    assert.equal(normalized.scope, undefined);
+    assert.equal(normalized.file, undefined);
+    assert.equal(normalized.fileSource, undefined);
+  });
+
+  await test("normalizeRepoContext does not invent repo scope from owner/repo seed", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI"
+    });
+    assert.equal(normalized.scope, undefined);
+    assert.equal(isExplicitRepoScope(normalized), false);
+  });
+
+  await test("normalizeRepoContext keeps external absolute file for composer chip", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI",
+      file: "/Users/jonraney/Downloads/cursor_session.md",
+      fileSource: "external",
+      contextWarning: "This file is not in your opened workspace or a git repo."
+    });
+    assert.equal(normalized.scope, "file");
+    assert.equal(normalized.file, "/Users/jonraney/Downloads/cursor_session.md");
+    assert.equal(normalized.fileSource, "external");
+    assert.equal(normalized.contextWarning, undefined);
+  });
+
+  await test("normalizeRepoContext promotes absolute path without fileSource to external", () => {
+    const normalized = normalizeRepoContext({
+      owner: "coop-ai",
+      repo: "Coop-AI",
+      scope: "repo",
+      file: "/Users/jonraney/Downloads/notes.md"
+    });
+    assert.equal(normalized.scope, "file");
+    assert.equal(normalized.file, "/Users/jonraney/Downloads/notes.md");
+    assert.equal(normalized.fileSource, "external");
+  });
+
   await test("normalizeRepoContext preserves file details for file scope", () => {
     const normalized = normalizeRepoContext({
       owner: "coop-ai",
@@ -115,6 +163,10 @@ async function run(): Promise<void> {
 
   await test("displayFileLabel returns filename for nested path", () => {
     assert.equal(displayFileLabel("src/context/contextScope.ts"), "contextScope.ts");
+  });
+
+  await test("displayFileLabel returns basename for Downloads absolute path", () => {
+    assert.equal(displayFileLabel("/Users/jonraney/Downloads/cursor_session.md"), "cursor_session.md");
   });
 
   await test("displayFileLabel handles windows-style separators", () => {

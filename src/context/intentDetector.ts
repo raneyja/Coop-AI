@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
+import {
+  activeEditorIdentityToRepoContext,
+  resolveActiveEditorIdentity
+} from "./activeEditorIdentity";
 import { enrichRepoContextWithEditorState } from "./editorManifestContext";
-import { resolveEditorFile } from "./editorFileContext";
+import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
 
@@ -184,43 +188,11 @@ export function repoContextFromEditor(
   preferences: Pick<UserPreferences, "includeActiveFile" | "includeSelection" | "owner" | "repo" | "branch">,
   previous: RepoContext = {}
 ): RepoContext {
-  if (!editor) {
-    return {
-      owner: preferences.owner || previous.owner || undefined,
-      repo: preferences.repo || previous.repo || undefined,
-      branch: preferences.branch || previous.branch || undefined
-    };
-  }
-
-  const selection = editor.selection;
+  const identity = resolveActiveEditorIdentity(editor, preferences, previous);
   const next: RepoContext = {
-    owner: preferences.owner || previous.owner || undefined,
-    repo: preferences.repo || previous.repo || undefined,
-    branch: preferences.branch || previous.branch || undefined,
-    languageId: editor.document.languageId
+    ...activeEditorIdentityToRepoContext(identity),
+    branch: preferences.branch || previous.branch || undefined
   };
-
-  if (preferences.includeActiveFile) {
-    const resolved = resolveEditorFile(editor);
-    next.file = resolved.file;
-    next.fileSource = resolved.fileSource;
-    next.contextWarning = resolved.warning;
-    if (resolved.owner && resolved.repo) {
-      next.owner = resolved.owner;
-      next.repo = resolved.repo;
-    }
-    if (next.file?.trim()) {
-      // Promote out of explorer repo-only scope so normalizeRepoContext keeps the file.
-      next.scope = "file";
-    }
-  }
-
-  if (preferences.includeSelection) {
-    next.selectedLines = selection.isEmpty
-      ? undefined
-      : [selection.start.line + 1, selection.end.line + 1];
-  }
-
   return enrichRepoContextWithEditorState(next, editor);
 }
 
@@ -348,15 +320,24 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
     : undefined;
   const owner = emptyToUndefined(context.owner);
   const repo = emptyToUndefined(context.repo);
+  // Keep absolute disk paths intact so the composer chip can show the real file name.
+  const normalizedFile =
+    !file
+      ? undefined
+      : looksLikeAbsoluteDiskPath(file) || context.fileSource === "external"
+        ? file
+        : toRepositoryRelativePath(file);
   return {
     ...context,
-    file: file ? toRepositoryRelativePath(file) : undefined,
+    file: normalizedFile,
     owner,
     repo,
     branch: emptyToUndefined(context.branch),
     languageId: emptyToUndefined(context.languageId),
     repoId: context.repoId || (owner && repo ? `${owner}/${repo}` : undefined),
-    openEditors: context.openEditors?.map((path) => toRepositoryRelativePath(path)),
+    openEditors: context.openEditors?.map((path) =>
+      looksLikeAbsoluteDiskPath(path) ? path.replace(/\\/g, "/") : toRepositoryRelativePath(path)
+    ),
     selectedSymbol: emptyToUndefined(context.selectedSymbol),
     queryText: emptyToUndefined(context.queryText),
     lines

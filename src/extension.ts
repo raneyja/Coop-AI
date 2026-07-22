@@ -587,6 +587,16 @@ export function activate(context: vscode.ExtensionContext): void {
         session.refreshEditorContext(event.textEditor);
       }
     }),
+    vscode.workspace.onDidCloseTextDocument(() => {
+      for (const session of coopSessionRegistry.getAll()) {
+        session.reconcileEditorFileChips();
+      }
+    }),
+    vscode.window.onDidChangeVisibleTextEditors(() => {
+      for (const session of coopSessionRegistry.getAll()) {
+        session.reconcileEditorFileChips();
+      }
+    }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       for (const session of coopSessionRegistry.getAll()) {
         session.handleThemeChange();

@@ -149,8 +149,17 @@ export class IntentDebouncer {
 }
 
 export function defaultDebounceKey(event: IntentEvent): string {
-  const file = event.context.file ?? "workspace";
   const repo = event.context.repoId ?? "repo";
+  // Editor snaps share one key per intent+repo so A→B cancels pending A.
+  // Including `file` let a late FILE_SWITCHED(A) overwrite a good snap to B.
+  if (
+    event.intent === UserIntent.FILE_SWITCHED ||
+    event.intent === UserIntent.EDITOR_OPENED ||
+    event.intent === UserIntent.SELECTION_CHANGE
+  ) {
+    return `${event.intent}:${repo}`;
+  }
+  const file = event.context.file ?? "workspace";
   return `${event.intent}:${repo}:${file}`;
 }
 

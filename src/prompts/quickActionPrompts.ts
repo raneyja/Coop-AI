@@ -24,6 +24,8 @@ export type QuickActionContextChip = {
 export type QuickActionPromptParts = {
   /** One-line intent shown in the chat bubble. */
   display: string;
+  /** Imperative task sentence only — passed as the synthesis userQuestion. */
+  task: string;
   /** Full user turn sent to the model (before synthesis/context wrapping). */
   model: string;
   /** Context keys for compact bubble rendering. */
@@ -81,9 +83,6 @@ function mentionBudgetRule(mentions: QuickActionMentionRef[]): string {
   return "";
 }
 
-const REPO_WIDE_CROSS_ACTION_HINT =
-  "When the answer points to a specific file or subsystem, suggest the matching quick action: Trace Decision for decision history, Find Owner for escalation, Blast Radius before editing a hot path, Knowledge Gaps for documentation holes.";
-
 const FIND_OWNER_REPO_WIDE_CROSS_ACTION_HINT =
   "When routing ownership for a subsystem, suggest cross-actions: Understand Repo for architecture context, Trace Decision for evolution history, Blast Radius before changes through a single owner, Knowledge Gaps for undocumented areas.";
 
@@ -101,8 +100,7 @@ function mentionModelGuidance(
         preamble,
         budgetRule,
         `Only treat paths that belong to ${repo} as in-scope subsystems — weight those while keeping a repo-wide overview.`,
-        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT describe it under Architecture or Key subsystems for ${repo}.`,
-        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT describe it under Architecture or Key subsystems for ${repo}.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -113,8 +111,7 @@ function mentionModelGuidance(
         budgetRule,
         `The trace target is the primary open file (${file}) — use the decision timeline for that path only.`,
         `In-repo @ paths in ${repo} may supplement the narrative; local workspace or foreign-repo paths are NOT part of ${repo}'s decision timeline.`,
-        `Do NOT attribute timeline commits, PRs, or tickets to out-of-scope @ files.`,
-        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+        `Do NOT attribute timeline commits, PRs, or tickets to out-of-scope @ files.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -126,8 +123,7 @@ function mentionModelGuidance(
         ctx.file?.trim()
           ? `Include ownership for in-repo paths alongside the active file in ${repo}.`
           : `Map repository-wide ownership for ${repo} — top committers, CODEOWNERS teams, and escalation paths.`,
-        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT attribute ${repo} owners to it.`,
-        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+        `If a path is outside ${repo} (different repo, local workspace file, or foreign project layout), do NOT attribute ${repo} owners to it.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -138,8 +134,7 @@ function mentionModelGuidance(
         budgetRule,
         `The blast-radius target is the primary open file (${file}) — analyze impact for that path first.`,
         `In-repo @ paths in ${repo} may add blast surfaces; local workspace or foreign-repo paths are NOT part of ${repo}'s dependency graph.`,
-        `Do NOT attribute dependents or risk from the evidence bundle to out-of-scope @ files.`,
-        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+        `Do NOT attribute dependents or risk from the evidence bundle to out-of-scope @ files.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -152,8 +147,7 @@ function mentionModelGuidance(
         budgetRule,
         `The knowledge-gaps audit target is ${target} unless user args say otherwise.`,
         `In-repo @ paths in ${repo} may be audited alongside the active scope; local workspace or foreign-repo paths are outside ${repo}.`,
-        `Do NOT report ${repo} documentation or ownership gaps for out-of-scope @ files.`,
-        `Add **Out-of-scope @ attachments** only when the synthesis prompt ## @ attachments section lists out-of-repo paths — omit that section when all @ files are in scope.`
+        `Do NOT report ${repo} documentation or ownership gaps for out-of-scope @ files.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -197,10 +191,12 @@ export function quickActionPromptParts(
       if (ctx.file) {
         chips.push({ key: "active file", value: ctx.file });
       }
+      const task = "Explain this repository for a new engineer joining the team.";
       return {
         display: "Understand this repository's architecture, subsystems, and risks.",
+        task,
         model: [
-          "Explain this repository for a new engineer joining the team.",
+          task,
           DIRECTIVE,
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`
@@ -208,8 +204,7 @@ export function quickActionPromptParts(
           "Use attached repo entry files, graph context, and manifest metadata from the evidence bundle.",
           mentions.length
             ? mentionModelGuidance("understand-repo", mentions, ctx)
-            : "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern.",
-          repoWide ? REPO_WIDE_CROSS_ACTION_HINT : ""
+            : "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern."
         ]
           .filter(Boolean)
           .join("\n"),
@@ -225,10 +220,12 @@ export function quickActionPromptParts(
       if (repo !== "unknown") {
         chips.push({ key: "repo", value: repo }, { key: "branch", value: branch });
       }
+      const task = "Explain why this code exists and what trade-offs were accepted.";
       return {
         display: "Trace the engineering decision behind this code.",
+        task,
         model: [
-          "Explain why this code exists and what trade-offs were accepted.",
+          task,
           DIRECTIVE,
           `Context: file ${file}, lines ${lineHint}, repo ${repo}, branch ${branch}${host}${source}.`,
           "Use attached decision timeline, blame, PR, Slack, Teams, and Jira evidence from the evidence bundle — cite sources explicitly.",
@@ -249,14 +246,16 @@ export function quickActionPromptParts(
             { key: "file", value: file },
             { key: "repo", value: repo }
           ];
+      const task = repoWide
+        ? "Map repository-wide ownership: top experts, CODEOWNERS coverage, team structure, and escalation paths."
+        : "Identify true owners for this path and who to contact first.";
       return {
         display: repoWide
           ? "Map repository ownership and who to contact."
           : "Find who owns this area and how to reach them.",
+        task,
         model: [
-          repoWide
-            ? "Map repository-wide ownership: top experts, CODEOWNERS coverage, team structure, and escalation paths."
-            : "Identify true owners for this path and who to contact first.",
+          task,
           DIRECTIVE,
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`
@@ -282,10 +281,12 @@ export function quickActionPromptParts(
       if (ctx.languageId) {
         chips.push({ key: "language", value: ctx.languageId });
       }
+      const task = "Analyze what breaks if this area is modified.";
       return {
         display: "Estimate the impact of changing this code.",
+        task,
         model: [
-          "Analyze what breaks if this area is modified.",
+          task,
           DIRECTIVE,
           `Context: file ${file}, repo ${repo}, branch ${branch}${host}${ctx.languageId ? `, language ${ctx.languageId}` : ""}${source}.`,
           "Use dependency graph data, evidence bundle context, and open-file content when present.",
@@ -307,14 +308,16 @@ export function quickActionPromptParts(
             { key: "branch", value: branch },
             ...(repo !== "unknown" ? [{ key: "repo", value: repo }] : [])
           ];
+      const task = repoWide
+        ? "Audit documentation, ownership, and operational unknowns across this repository."
+        : "Audit documentation, ownership, and operational unknowns for this file or area.";
       return {
         display: repoWide
           ? "Audit documentation and ownership gaps across this repository."
           : "Audit documentation and ownership gaps for this area.",
+        task,
         model: [
-          repoWide
-            ? "Audit documentation, ownership, and operational unknowns across this repository."
-            : "Audit documentation, ownership, and operational unknowns for this file or area.",
+          task,
           DIRECTIVE,
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`

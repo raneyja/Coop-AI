@@ -155,6 +155,8 @@ export type ChatThreadListItem = {
   title: string;
   updatedAt: number;
   messageCount: number;
+  /** Generation still running after the user switched away. */
+  isRunning?: boolean;
 };
 
 export type ChatThreadsListPayload = {
@@ -537,9 +539,10 @@ export type WebviewOutbound =
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "threads:list"; payload: ChatThreadsListPayload }
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
-  | { type: "chat:delta"; payload: { chunk: string } }
-  | { type: "chat:complete"; payload: { message: ChatMessage } }
-  | { type: "chat:error"; payload: { message: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
+  | { type: "chat:error"; payload: { message: string; threadId?: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
   | {
       type: "chat:quota-exceeded";
       payload: {

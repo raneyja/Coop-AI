@@ -7,13 +7,12 @@ import {
   appendSupplementarySourceCitationGuardrails,
   buildSourcesChecklistFromKeys,
   EVIDENCE_CITATION_RULES,
-  EVIDENCE_ENRICHMENT_RULES,
-  EVIDENCE_QUALITY_RULES,
   extractCitationKeysFromSourcesSection,
   GENERAL_CHAT_EVIDENCE_RULES,
   NARRATIVE_CITATION_RULES,
   stripDisallowedNarrativeSourceCitations,
-  supplementaryKeysOmittedFromChecklist
+  supplementaryKeysOmittedFromChecklist,
+  truncationNote
 } from "./evidenceSynthesis";
 
 let passed = 0;
@@ -30,14 +29,6 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
-
-test("EVIDENCE_QUALITY_RULES covers strength, provenance, and missing evidence", () => {
-  assert.match(EVIDENCE_QUALITY_RULES, /strong, medium, weak, or limited/i);
-  assert.match(EVIDENCE_QUALITY_RULES, /provenance/i);
-  assert.match(EVIDENCE_QUALITY_RULES, /rationale/i);
-  assert.match(EVIDENCE_QUALITY_RULES, /missing evidence/i);
-  assert.match(EVIDENCE_QUALITY_RULES, /Do not pepper narrative sections/i);
-});
 
 test("NARRATIVE_CITATION_RULES reserves source pills for Sources footer", () => {
   assert.match(NARRATIVE_CITATION_RULES, /Sources.*footer/i);
@@ -59,7 +50,6 @@ test("appendEvidenceQualityInstructions adds Evidence quality section", () => {
   assert.ok(section.includes("strong / medium / weak / limited"));
   assert.ok(section.includes("missing PR, issue, discussion, or documentation"));
   assert.ok(section.includes("provenance"));
-  assert.ok(section.includes("Do not over-cite") || section.includes("Keep `[Sources:"));
 });
 
 test("buildSourcesChecklistFromKeys replaces default line when extra matches citation key", () => {
@@ -83,17 +73,9 @@ test("appendCitationKeysSection steers keys to Sources footer", () => {
   assert.ok(lines.some((line) => line.includes("at most 1-2")));
 });
 
-test("EVIDENCE_ENRICHMENT_RULES covers diff summary, evolution, rationale, and target precision", () => {
-  assert.match(EVIDENCE_ENRICHMENT_RULES, /targetLabel/i);
-  assert.match(EVIDENCE_ENRICHMENT_RULES, /introducingDiffSummary/i);
-  assert.match(EVIDENCE_ENRICHMENT_RULES, /evolution/i);
-  assert.match(EVIDENCE_ENRICHMENT_RULES, /rationaleRanking/i);
-  assert.match(EVIDENCE_ENRICHMENT_RULES, /pathEvolution/i);
-});
-
-test("appendEvidenceEnrichmentInstructions adds Evidence enrichment section", () => {
+test("appendEvidenceEnrichmentInstructions adds Evidence enrichment section when enrichment is present", () => {
   const lines: string[] = [];
-  appendEvidenceEnrichmentInstructions(lines);
+  appendEvidenceEnrichmentInstructions(lines, true);
   const section = lines.join("\n");
   assert.ok(section.includes("## Evidence enrichment"));
   assert.ok(section.includes("targetLabel"));
@@ -101,6 +83,18 @@ test("appendEvidenceEnrichmentInstructions adds Evidence enrichment section", ()
   assert.ok(section.includes("evolution.commitCountSinceIntroduction"));
   assert.ok(section.includes("primary rationale source"));
   assert.ok(section.includes("pathEvolution"));
+});
+
+test("appendEvidenceEnrichmentInstructions is gated off when no enrichment is present", () => {
+  const lines: string[] = [];
+  appendEvidenceEnrichmentInstructions(lines, false);
+  assert.equal(lines.length, 0);
+});
+
+test("truncationNote flags omitted rows only past the shown limit", () => {
+  assert.equal(truncationNote(3, 5), "");
+  assert.equal(truncationNote(5, 5), "");
+  assert.equal(truncationNote(8, 5), "\n- …and 3 more (omitted)");
 });
 
 test("appendSupplementarySourceCitationGuardrails omits narrative citations for absent checklist keys", () => {

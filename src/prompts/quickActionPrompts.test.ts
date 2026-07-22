@@ -151,7 +151,6 @@ async function run(): Promise<void> {
     ]);
     assert.ok(model.includes("primary open file"));
     assert.ok(model.includes("local workspace"));
-    assert.ok(model.includes("Out-of-scope @ attachments"));
     assert.ok(model.includes("Do NOT attribute timeline commits"));
   });
 
@@ -170,7 +169,7 @@ async function run(): Promise<void> {
   test("find-owner model prompt handles out-of-scope @ attachments", () => {
     const model = quickActionModelPrompt("find-owner", ctx, [{ path: "other/repo/file.ts" }]);
     assert.ok(model.includes("<mentioned_files>"));
-    assert.ok(model.includes("Out-of-scope @ attachments"));
+    assert.ok(model.includes("do NOT attribute"));
   });
 
   test("blast-radius model prompt prioritizes top ranked risk surfaces", () => {
@@ -181,7 +180,7 @@ async function run(): Promise<void> {
     assert.ok(model.includes("operational risk"));
   });
 
-  test("understand-repo repo-wide model prompt suggests cross-actions", () => {
+  test("understand-repo repo-wide model prompt defers cross-action pointer to the synthesis closer", () => {
     const repoCtx: RepoContext = {
       owner: "acme",
       repo: "widgets",
@@ -189,9 +188,8 @@ async function run(): Promise<void> {
       scope: "repo"
     };
     const model = quickActionModelPrompt("understand-repo", repoCtx);
-    assert.ok(model.includes("Trace Decision"));
-    assert.ok(model.includes("Find Owner"));
-    assert.ok(model.includes("Blast Radius"));
+    // The cross-action pointer is owned once by the repo-summary synthesis closer, not duplicated here.
+    assert.ok(!model.includes("Trace Decision for decision history"));
   });
 
   test("find-owner repo-wide model prompt suggests cross-actions", () => {
@@ -219,7 +217,6 @@ async function run(): Promise<void> {
     assert.ok(text.startsWith("include API clients"));
     assert.ok(text.includes("blast surfaces"));
     assert.ok(text.includes("client.ts"));
-    assert.ok(text.includes("Out-of-scope @ attachments"));
   });
 
   test("quickActionHistoryContent matches grid button format", () => {
@@ -266,7 +263,6 @@ async function run(): Promise<void> {
     assert.ok(model.includes("<mentioned_files>"));
     assert.ok(model.includes("plugins/index.js"));
     assert.ok(model.includes("do NOT describe it under Architecture"));
-    assert.ok(model.includes("omit that section when all @ files are in scope"));
   });
 
   test("appendQuickActionMentionScope adds guidance to slash args", () => {
@@ -276,7 +272,6 @@ async function run(): Promise<void> {
     assert.ok(text.startsWith("focus on auth"));
     assert.ok(text.includes("<mentioned_files>"));
     assert.ok(text.includes("middleware.ts"));
-    assert.ok(text.includes("Out-of-scope @ attachments"));
   });
 
   test("display and model differ for all actions", () => {

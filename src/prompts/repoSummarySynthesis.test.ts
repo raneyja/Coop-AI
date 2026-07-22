@@ -156,7 +156,6 @@ async function run(): Promise<void> {
     });
     assert.ok(prompt.includes("## Attached documentation (required in response)"));
     assert.ok(prompt.includes("Coop AI — Architecture Overview"));
-    assert.ok(prompt.includes("## Narrative citation rules"));
     assert.ok(prompt.includes("## Citation guardrails"));
     assert.ok(prompt.includes("[Sources: Ownership signals]"));
     assert.ok(prompt.includes("[Sources: Dependency graph]"));

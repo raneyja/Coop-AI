@@ -70,13 +70,91 @@ async function run(): Promise<void> {
     assert.equal(merged.repo, "coop-ai");
   });
 
-  await test("mergeRepoContext clears file when repo scope is active", () => {
+  await test("mergeRepoContext keeps absolute path for real outside-workspace editor", () => {
     const merged = mergeRepoContext(
-      { owner: "acme", repo: "coop-ai", scope: "repo", file: undefined },
-      { owner: "acme", repo: "coop-ai", fileSource: "external", contextWarning: "focus loss" }
+      {
+        file: "src/chat/CoopChatSession.ts",
+        fileSource: "workspace",
+        owner: "acme",
+        repo: "coop-ai"
+      },
+      {
+        file: "/Users/jonraney/Downloads/cursor_session.md",
+        fileSource: "external",
+        languageId: "markdown",
+        contextWarning:
+          "This file is not in your opened workspace or a git repo. Use File → Open Folder on the project clone."
+      }
+    );
+    assert.equal(merged.file, "/Users/jonraney/Downloads/cursor_session.md");
+    assert.equal(merged.fileSource, "external");
+    assert.equal(merged.scope, "file");
+    assert.equal(merged.contextWarning, undefined);
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "coop-ai");
+  });
+
+  await test("mergeRepoContext promotes Downloads file over Use-repo scope without scope in incoming", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", scope: "repo" },
+      {
+        file: "/Users/jonraney/Downloads/notes.md",
+        fileSource: "external",
+        languageId: "markdown"
+      }
+    );
+    assert.equal(merged.scope, "file");
+    assert.equal(merged.file, "/Users/jonraney/Downloads/notes.md");
+    assert.equal(merged.fileSource, "external");
+    assert.equal(merged.contextWarning, undefined);
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "coop-ai");
+  });
+
+  await test("mergeRepoContext keeps L-chip fields when repo scope meets absolute Downloads path", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "Coop-AI", scope: "repo" },
+      {
+        file: "/Users/jonraney/Downloads/cursor_session.md",
+        fileSource: "external",
+        scope: "file",
+        languageId: "markdown"
+      }
+    );
+    assert.equal(merged.scope, "file");
+    assert.equal(merged.file, "/Users/jonraney/Downloads/cursor_session.md");
+    assert.equal(merged.fileSource, "external");
+    assert.equal(merged.languageId, "markdown");
+  });
+
+  await test("mergeRepoContext Use-repo clears Downloads / Cmd+O chip", () => {
+    const merged = mergeRepoContext(
+      {
+        owner: "acme",
+        repo: "coop-ai",
+        file: "/Users/jonraney/Downloads/notes.md",
+        fileSource: "external",
+        scope: "file",
+        languageId: "markdown"
+      },
+      { owner: "acme", repo: "coop-ai", scope: "repo" }
     );
     assert.equal(merged.scope, "repo");
     assert.equal(merged.file, undefined);
+    assert.equal(merged.fileSource, undefined);
+    assert.equal(merged.languageId, undefined);
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "coop-ai");
+  });
+
+  await test("mergeRepoContext clears file when repo scope is active", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", scope: "repo", file: undefined },
+      { owner: "acme", repo: "coop-ai", fileSource: "external", contextWarning: "Only files on disk can be linked to GitHub" }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.fileSource, undefined);
     assert.equal(merged.owner, "acme");
     assert.equal(merged.repo, "coop-ai");
   });

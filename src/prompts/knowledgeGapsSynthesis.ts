@@ -12,10 +12,11 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
+  truncationNote,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
+import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
 import {
   appendMentionScopePromptSection,
   OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE,
@@ -134,13 +135,18 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     input.teams
   );
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
     knowledgeGapsSourceLabelOwnership(),
     knowledgeGapsSourceLabelDependencies(),
     ...supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   ]);
   appendEvidenceQualityInstructions(lines);
+  appendIntegrationDocsResponseContract(lines, {
+    notionPages: input.notion?.pages,
+    confluencePages: input.confluence?.pages,
+    googleDocs: input.googleDocs?.documents,
+    targetSection: "Documentation gaps"
+  });
   appendKnowledgeGapsResponseContract(lines, input);
   lines.push(
     repoWide
@@ -166,28 +172,7 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   );
 
   lines.push("## Response contract (required)");
-  lines.push("**Documentation gaps** must include, in order:");
-  if (input.notion?.pages?.length) {
-    lines.push(
-      `- **Notion pages reviewed** with exactly ${input.notion.pages.length} titled bullets in this order: ${input.notion.pages
-        .map((page) => page.title)
-        .join("; ")}`
-    );
-  }
-  if (input.confluence?.pages?.length) {
-    lines.push(
-      `- **Confluence pages reviewed** with exactly ${input.confluence.pages.length} titled bullets in this order: ${input.confluence.pages
-        .map((page) => page.title)
-        .join("; ")}`
-    );
-  }
-  if (input.googleDocs?.documents?.length) {
-    lines.push(
-      `- **Google Docs reviewed** with exactly ${input.googleDocs.documents.length} titled bullets in this order: ${input.googleDocs.documents
-        .map((doc) => doc.title)
-        .join("; ")}`
-    );
-  }
+  lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
   for (const gap of documentationGaps) {
     lines.push(`- Scan gap subsection from [Sources: Knowledge gap scan]: ${String(gap.message ?? gap.type ?? "gap")}`);
   }
@@ -284,8 +269,8 @@ function formatKnowledgeGapsForPrompt(
         (scan.gaps?.length
           ? scan.gaps
               .slice(0, 20)
-              .map((gap) => `- ${String(gap.type ?? "gap")}: ${String(gap.message ?? gap.summary ?? gap.description ?? gap)}`)
-              .join("\n")
+              .map((gap) => `- ${String(gap.type ?? "gap")}: ${String(gap.message ?? gap.summary ?? gap.description ?? gap.type ?? "gap")}`)
+              .join("\n") + truncationNote(scan.gaps.length, 20)
           : "- (scan completed with no structured gaps in this pass)")
     );
   } else {
@@ -304,7 +289,7 @@ function formatKnowledgeGapsForPrompt(
             ? confluence.pages
                 .slice(0, 15)
                 .map((page) => `- ${page.title}${page.excerpt ? `: ${page.excerpt.slice(0, 120)}` : ""}`)
-                .join("\n")
+                .join("\n") + truncationNote(confluence.pages.length, 15)
             : "- No matching Confluence pages")
     );
   }
@@ -317,7 +302,7 @@ function formatKnowledgeGapsForPrompt(
             ? jira.issues
                 .slice(0, 15)
                 .map((issue) => `- ${issue.key} (${issue.status}): ${issue.summary}`)
-                .join("\n")
+                .join("\n") + truncationNote(jira.issues.length, 15)
             : "- No matching Jira issues")
     );
   }
@@ -330,7 +315,7 @@ function formatKnowledgeGapsForPrompt(
             ? slack.messages
                 .slice(0, 10)
                 .map((message) => `- ${message.channelName ? `#${message.channelName}` : "Slack"}: ${message.text.slice(0, 160)}`)
-                .join("\n")
+                .join("\n") + truncationNote(slack.messages.length, 10)
             : "- No matching Slack discussions")
     );
   }
@@ -343,7 +328,7 @@ function formatKnowledgeGapsForPrompt(
             ? notion.pages
                 .slice(0, 15)
                 .map((page) => `- ${page.title}`)
-                .join("\n")
+                .join("\n") + truncationNote(notion.pages.length, 15)
             : "- No matching Notion pages")
     );
   }
@@ -356,7 +341,7 @@ function formatKnowledgeGapsForPrompt(
             ? googleDocs.documents
                 .slice(0, 15)
                 .map((doc) => `- ${doc.title}`)
-                .join("\n")
+                .join("\n") + truncationNote(googleDocs.documents.length, 15)
             : "- No matching Google Docs")
     );
   }
@@ -369,7 +354,7 @@ function formatKnowledgeGapsForPrompt(
             ? teams.messages
                 .slice(0, 10)
                 .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
-                .join("\n")
+                .join("\n") + truncationNote(teams.messages.length, 10)
             : "- No matching Teams discussions")
     );
   }
@@ -384,7 +369,7 @@ function formatKnowledgeGapsForPrompt(
                   `- @${score.owner} (${ownershipTierLabel(score.tier)})` +
                   `${score.commitCount ? ` · ${score.commitCount} commits (6mo)` : ""}`
               )
-              .join("\n")
+              .join("\n") + truncationNote(evidence.ownershipReport.scores.length, 8)
           : "- No ownership scores for this path")
     );
   }
@@ -393,7 +378,8 @@ function formatKnowledgeGapsForPrompt(
     sections.push(
       `### ${knowledgeGapsSourceLabelDependencies()}\n` +
         (deps.length
-          ? `- Direct dependents (${deps.length}):\n${deps.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}`
+          ? `- Direct dependents (${deps.length}):\n${deps.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}` +
+            truncationNote(deps.length, 15)
           : `- Indexed edges: ${evidence.dependencyGraph.edgeCount ?? 0} (no direct dependents listed)`)
     );
   }

@@ -123,6 +123,7 @@ export class CoopChatPanel {
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.visible) {
         this.session.touch();
+        this.session.refreshEditorContext(vscode.window.activeTextEditor);
       }
     });
 

@@ -1,5 +1,6 @@
 import type { ChatFileMention, RepoContext } from "../chat/types";
 import { displayFileLabel, displayRepoLabel, isExplicitRepoScope } from "./contextScope";
+import { isRemoteChip } from "./fileChipIdentity";
 import { INTEGRATION_PREVIEW_HINTS } from "./integrationPreviewHints";
 
 export type ContextPreviewChipKind =
@@ -41,7 +42,10 @@ export function buildContextPreviewChips(options: {
       id: "active-file",
       kind: "file",
       label: displayFileLabel(filePath),
-      detail: ctx.fileSource === "remote" ? "remote tab" : undefined,
+      detail:
+        isRemoteChip(ctx)
+          ? "Remote"
+          : "Local",
       state: "confirmed"
     });
   }

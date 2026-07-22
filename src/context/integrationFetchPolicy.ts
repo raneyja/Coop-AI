@@ -1,4 +1,5 @@
 import type { ContextFetchRequest } from "./requestBatcher";
+import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
@@ -30,16 +31,33 @@ export function isTraceDecisionIntegrationQuickAction(
   return quickAction === "trace-decision";
 }
 
+function isOutsideWorkspaceTarget(request: ContextFetchRequest): boolean {
+  if (looksLikeAbsoluteDiskPath(request.params.file)) {
+    return true;
+  }
+  // External editor focused — do not auto-fetch integrations for any quick action.
+  return request.params.fileSource === "external";
+}
+
 export function shouldFetchRepoWideIntegrations(request: ContextFetchRequest): boolean {
+  if (isOutsideWorkspaceTarget(request)) {
+    return false;
+  }
   return isRepoWideIntegrationQuickAction(request.params.quickAction);
 }
 
 export function shouldFetchTraceDecisionIntegrations(request: ContextFetchRequest): boolean {
+  if (isOutsideWorkspaceTarget(request)) {
+    return false;
+  }
   return isTraceDecisionIntegrationQuickAction(request.params.quickAction);
 }
 
 /** Slack / Teams also run on Find Owner for discussion-based ownership signals. */
 export function shouldFetchDiscussionIntegrations(request: ContextFetchRequest): boolean {
+  if (isOutsideWorkspaceTarget(request)) {
+    return false;
+  }
   const action = request.params.quickAction;
   return (
     action === "find-owner" ||

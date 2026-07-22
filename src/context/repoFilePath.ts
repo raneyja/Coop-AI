@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 /**
  * GitHub/GitLab APIs expect paths relative to the repository root (e.g. src/foo.ts),
  * not absolute workspace paths.
+ * Outside-workspace absolute disk paths (Downloads / Cmd+O) are returned unchanged.
  */
 export function toRepositoryRelativePath(filePath: string): string {
   const trimmed = filePath?.trim();
@@ -21,6 +22,11 @@ export function toRepositoryRelativePath(filePath: string): string {
   const fromWorkspace = stripWorkspaceFolderPrefix(normalized);
   if (fromWorkspace !== undefined) {
     return fromWorkspace.replace(/^\/+/, "");
+  }
+
+  // Real OS absolute paths outside the workspace (Downloads, Cmd+O) — never strip.
+  if (isOutsideWorkspaceAbsoluteDiskPath(normalized)) {
+    return normalized;
   }
 
   const fromProjectFolder = stripEmbeddedProjectRoot(normalized);
@@ -42,14 +48,32 @@ export function toRepositoryRelativePath(filePath: string): string {
       false
     );
     const relNorm = relative.replace(/\\/g, "/");
-    if (relNorm && !isAbsoluteFilePath(relNorm)) {
+    if (relNorm && !isAbsoluteFilePath(relNorm) && !isOutsideWorkspaceAbsoluteDiskPath(relNorm)) {
       return relNorm.replace(/^\/+/, "");
     }
   } catch {
     // fall through
   }
 
+  // Absolute but unrecognized — keep leading slash only for real disk roots.
+  if (isOutsideWorkspaceAbsoluteDiskPath(normalized)) {
+    return normalized;
+  }
   return normalized.replace(/^\/+/, "");
+}
+
+/** Absolute home/tmp/drive paths that must not become fake repo-relative targets. */
+function isOutsideWorkspaceAbsoluteDiskPath(normalized: string): boolean {
+  if (/^[a-zA-Z]:[\\/]/.test(normalized)) {
+    return true;
+  }
+  return (
+    normalized.startsWith("/Users/") ||
+    normalized.startsWith("/home/") ||
+    normalized.startsWith("/tmp/") ||
+    normalized.startsWith("/var/") ||
+    normalized.startsWith("/private/")
+  );
 }
 
 /** When VS Code has no workspace root, strip ".../CoopAI/..." from a local path. */

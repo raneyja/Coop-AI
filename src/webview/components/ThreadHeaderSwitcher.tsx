@@ -5,13 +5,13 @@ export type ThreadListItem = {
   title: string;
   updatedAt: number;
   messageCount: number;
+  isRunning?: boolean;
 };
 
 type ThreadHeaderSwitcherProps = {
   activeId: string;
   activeTitle: string;
   threads: ThreadListItem[];
-  disabled?: boolean;
   onSelect: (threadId: string) => void;
   onNewThread: () => void;
 };
@@ -63,7 +63,6 @@ export function ThreadHeaderSwitcher({
   activeId,
   activeTitle,
   threads,
-  disabled,
   onSelect,
   onNewThread
 }: ThreadHeaderSwitcherProps): React.ReactElement {
@@ -92,36 +91,35 @@ export function ThreadHeaderSwitcher({
     };
   }, [open]);
 
+  const activeRunning = threads.some((thread) => thread.id === activeId && thread.isRunning);
+
   return (
     <div ref={rootRef} className="thread-switcher min-w-0 flex-1">
       <div className="flex min-w-0 items-center gap-1">
         <button
           type="button"
           className="thread-switcher-trigger min-w-0 flex-1"
-          disabled={disabled}
           aria-expanded={open}
           aria-haspopup="listbox"
           title={activeTitle}
           onClick={() => {
-            if (!disabled) {
-              setOpen((value) => !value);
-            }
+            setOpen((value) => !value);
           }}
         >
-          <span className="thread-switcher-status" aria-hidden="true" />
+          <span
+            className={`thread-switcher-status${activeRunning ? " thread-switcher-status--running" : ""}`}
+            aria-hidden="true"
+          />
           <span className="thread-switcher-title truncate">{activeTitle}</span>
           <ChevronIcon open={open} />
         </button>
         <button
           type="button"
           className="coop-icon-btn shrink-0"
-          disabled={disabled}
           aria-label="New chat thread"
           title="New chat"
           onClick={() => {
-            if (!disabled) {
-              onNewThread();
-            }
+            onNewThread();
           }}
         >
           <PlusIcon />
@@ -149,10 +147,19 @@ export function ThreadHeaderSwitcher({
                         }
                       }}
                     >
-                      <span className="thread-switcher-item-title truncate">{thread.title}</span>
+                      <span className="thread-switcher-item-title truncate">
+                        {thread.isRunning ? (
+                          <span className="thread-switcher-running-dot" aria-hidden="true" />
+                        ) : null}
+                        {thread.title}
+                      </span>
                       <span className="thread-switcher-item-meta">
-                        {thread.messageCount > 0 ? `${thread.messageCount} msgs · ` : ""}
-                        {formatRelativeTime(thread.updatedAt)}
+                        {thread.isRunning
+                          ? "Generating…"
+                          : thread.messageCount > 0
+                            ? `${thread.messageCount} msgs · `
+                            : ""}
+                        {thread.isRunning ? "" : formatRelativeTime(thread.updatedAt)}
                       </span>
                     </button>
                   </li>

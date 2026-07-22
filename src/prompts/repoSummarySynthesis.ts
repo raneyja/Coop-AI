@@ -1,11 +1,9 @@
 import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
 import {
   appendCitationKeysSection,
-  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
-  appendNarrativeCitationInstructions,
   supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
@@ -93,17 +91,15 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   const sourcesChecklist = listRepoSummarySourcesChecklist(summaryEvidence);
   appendSourcesChecklistSection(lines, sourcesChecklist);
   appendIntegrationDocsResponseContract(lines, integrationDocsFromRepoSummary(summaryEvidence));
-  appendNarrativeCitationInstructions(lines);
   appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
     repoSummarySourceLabelOwnership(),
     repoSummarySourceLabelDependencies(),
     ...supplementaryKeysOmittedFromChecklist(listRepoSummarySourceLabels(summaryEvidence), sourcesChecklist)
   ]);
   appendEvidenceQualityInstructions(lines);
-  appendEvidenceEnrichmentInstructions(lines);
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
-    "Close with a one-line pointer to **Find Owner** (CODEOWNERS and commit history) and **Blast Radius** (dependency impact) for paths that need deeper follow-up."
+    "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
   );
   return lines.join("\n");
 }
