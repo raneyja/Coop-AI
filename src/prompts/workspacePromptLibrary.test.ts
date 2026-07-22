@@ -106,6 +106,16 @@ test("sanitizeWorkspacePromptEntries truncates oversized templates", () => {
   assert.equal(sanitized[0]?.template.length, MAX_WORKSPACE_TEMPLATE_CHARS);
 });
 
+test("sanitizeWorkspacePromptEntries drops invalid actionIds", () => {
+  const sanitized = sanitizeWorkspacePromptEntries([
+    { id: "ok", title: "Ok", template: "body", actionId: "understand-repo" },
+    { id: "bad", title: "Bad", template: "body", actionId: "not-a-real-action" }
+  ]);
+  assert.equal(sanitized.length, 2);
+  assert.equal(sanitized[0]?.actionId, "understand-repo");
+  assert.equal(sanitized[1]?.actionId, undefined);
+});
+
 console.log(`\npromptLibraryRun: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

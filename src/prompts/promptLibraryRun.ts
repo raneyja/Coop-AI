@@ -54,11 +54,19 @@ export function sanitizeWorkspacePromptEntries<T extends SanitizedPromptEntry>(e
   return entries
     .filter((entry) => entry.id && entry.title && entry.template)
     .slice(0, MAX_WORKSPACE_PROMPTS)
-    .map((entry) =>
-      entry.template.length > MAX_WORKSPACE_TEMPLATE_CHARS
-        ? { ...entry, template: entry.template.slice(0, MAX_WORKSPACE_TEMPLATE_CHARS) }
-        : entry
-    );
+    .map((entry) => {
+      const template =
+        entry.template.length > MAX_WORKSPACE_TEMPLATE_CHARS
+          ? entry.template.slice(0, MAX_WORKSPACE_TEMPLATE_CHARS)
+          : entry.template;
+      // Drop invalid actionIds so they cannot persist in .coop/prompts.json and
+      // silently fall through to chat/slash at resolve time.
+      if (entry.actionId !== undefined && !isQuickActionId(entry.actionId)) {
+        const { actionId: _dropped, ...rest } = entry;
+        return { ...rest, template } as T;
+      }
+      return template === entry.template ? entry : ({ ...entry, template } as T);
+    });
 }
 
 export function mergeComposerWithPromptTemplate(composerText: string | undefined, template: string): string {

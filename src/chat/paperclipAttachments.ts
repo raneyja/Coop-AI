@@ -170,7 +170,7 @@ export function isValidPaperclipDataUrl(dataUrl: string): boolean {
   return typeof dataUrl === "string" && dataUrl.startsWith("data:") && dataUrl.includes(",");
 }
 
-/** System prompt rule — referenced from every non-inline chat use case. */
+/** System prompt rule — injected only when the turn (or prior history) carries paperclip uploads. */
 export const USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE = `When the user message includes a ## User-attached files (paperclip) section, those files were uploaded from outside the editor via the paperclip control — not from the repository index or @-mention picker. Use the listed file contents and any multimodal document/image payloads sent with the message. Do not treat them as @-attached repo paths or \`<local_files>\` / \`<file_content>\` blocks inside \`<attached_context>\`.`;
 
 function attachmentDeliveryNote(kind: PaperclipAttachmentKind): string {

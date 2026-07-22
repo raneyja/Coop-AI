@@ -13,13 +13,22 @@ import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachmen
 // The enterprise-confidential retention preamble is owned solely by
 // requestFormatter.injectZeroRetentionSystemPrompt, so it is prepended once at
 // format time regardless of caller — do not add it here (see B1).
+function requestHasPaperclipAttachments(request: CompletionRequest): boolean {
+  if ((request.attachments?.length ?? 0) > 0) {
+    return true;
+  }
+  // Follow-up turns re-emit prior paperclip sections via history; keep the
+  // system rule so the model still knows not to treat them as @-mentions / local_files.
+  return (request.history ?? []).some((entry) => (entry.attachments?.length ?? 0) > 0);
+}
+
 function buildChatSystemContent(request: CompletionRequest, overridePrompt?: string): string {
   if (overridePrompt) {
     return overridePrompt;
   }
   const basePrompt = systemPromptForUseCase(request.useCase, {
     activeFile: request.context?.file,
-    hasPaperclipAttachments: (request.attachments?.length ?? 0) > 0
+    hasPaperclipAttachments: requestHasPaperclipAttachments(request)
   });
   const instructionsBlock =
     request.useCase !== "inline_completion"
