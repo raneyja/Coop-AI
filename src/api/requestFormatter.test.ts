@@ -71,6 +71,15 @@ function anthropicBody(userId?: string): Record<string, unknown> {
 assert.equal("retention_policy" in anthropicBody(), false);
 assert.equal("usage_type" in anthropicBody(), false);
 
+// B4: the standard zero-retention headers describe all code-intelligence inference, not just completion.
+const anthropicHeaders = formatZeroRetentionRequest({
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  messages: baseMessages,
+  allowUnapprovedProvider: true
+}).headers;
+assert.equal(anthropicHeaders["x-use-case"], "code-intelligence-inference");
+
 const metadata = anthropicBody().metadata as Record<string, unknown> | undefined;
 assert.equal(metadata, undefined);
 

@@ -52,7 +52,9 @@ export type RequestAnnotations = {
 
 export const STANDARD_ZERO_RETENTION_HEADERS: ZeroRetentionHeaders = {
   "x-data-retention-policy": "none",
-  "x-use-case": "code-completion-only",
+  // Applies to every routed feature (chat, comprehension, blast radius, inline, …),
+  // not just completion — keep this accurate for all code-intelligence inference.
+  "x-use-case": "code-intelligence-inference",
   "x-enterprise-mode": true,
   "x-no-training": true,
   "x-no-logging": true
