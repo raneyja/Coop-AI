@@ -62,24 +62,9 @@ export async function handleInlineCompletionRequest(
   let message = parsed.message;
   let graphContextHeader: string | undefined;
 
-  if (
-    record.useGraphContext === true &&
-    typeof record.repoId === "string" &&
-    typeof record.file === "string"
-  ) {
-    const slice = await fetchInlineGraphSlice(graphDeps, {
-      repoId: record.repoId,
-      file: record.file,
-      plan: org.plan,
-      orgId: org.orgId
-    });
-    if (slice.status === "ok") {
-      message = `${message}\n\n${slice.block}`;
-    } else if (slice.status === "degraded") {
-      graphContextHeader = "degraded";
-    }
-  }
-
+  // B3: resolve the FIM vs chat-fallback route FIRST. FIM consumes only `segments`,
+  // so on the FIM hot path we skip the graph-slice fetch, the INLINE_SYSTEM prompt,
+  // and any chat user-message assembly.
   const enforceAssignment = !config.allowUnapprovedProvider;
   const assignedAutocomplete = enforceAssignment
     ? getFeatureModelAssignment("autocomplete")
@@ -97,8 +82,29 @@ export async function handleInlineCompletionRequest(
         ? record.model
         : undefined
   });
+  const isFim = route.mode === "fim";
+
+  if (
+    !isFim &&
+    record.useGraphContext === true &&
+    typeof record.repoId === "string" &&
+    typeof record.file === "string"
+  ) {
+    const slice = await fetchInlineGraphSlice(graphDeps, {
+      repoId: record.repoId,
+      file: record.file,
+      plan: org.plan,
+      orgId: org.orgId
+    });
+    if (slice.status === "ok") {
+      message = `${message}\n\n${slice.block}`;
+    } else if (slice.status === "degraded") {
+      graphContextHeader = "degraded";
+    }
+  }
+
   const model = route.model;
-  const resolvedProvider = route.mode === "fim" ? route.provider : route.provider;
+  const resolvedProvider = route.provider;
   const maxTokens =
     typeof record.maxTokens === "number"
       ? Math.min(record.maxTokens, MAX_INLINE_TOKENS)
@@ -111,7 +117,7 @@ export async function handleInlineCompletionRequest(
     requestId,
     orgId: org.orgId,
     plan: org.plan,
-    message,
+    message: isFim ? "" : message,
     history: [] as [],
     context: {
       file: typeof record.file === "string" ? record.file : undefined,
@@ -150,7 +156,7 @@ export async function handleInlineCompletionRequest(
     try {
       for await (const chunk of router.streamInline(
         completionRequest,
-        INLINE_SYSTEM,
+        isFim ? undefined : INLINE_SYSTEM,
         abortController.signal
       )) {
         writeSse(response, chunk);
@@ -194,7 +200,7 @@ export async function handleInlineCompletionRequest(
   }
 
   try {
-    const result = await router.completeInline(completionRequest, INLINE_SYSTEM);
+    const result = await router.completeInline(completionRequest, isFim ? undefined : INLINE_SYSTEM);
 
     writeJson(
       response,

@@ -294,5 +294,70 @@ void (async () => {
   assert.equal(freeRes.headers?.["x-graph-context"], undefined, "free plan should use indexed graph when available");
   passed++;
 
+  // B3: FIM route skips the graph-slice fetch entirely — a missing repo that would
+  // degrade a chat-fallback request must NOT produce x-graph-context on the FIM hot path.
+  const fimNoGraphRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      segments: { prefix: "const x = ", suffix: ";" },
+      useGraphContext: true,
+      repoId: "github:acme/missing",
+      file: "src/example.ts",
+      languageId: "typescript"
+    },
+    fimNoGraphRes,
+    router,
+    router["config"],
+    org,
+    undefined,
+    { graphQuery: new GraphQueryApi({ cache: new GraphCache() }) }
+  );
+  assert.equal(fimNoGraphRes.statusCode, 200);
+  const fimNoGraphPayload = JSON.parse(fimNoGraphRes.body ?? "{}") as Record<string, unknown>;
+  assert.equal(fimNoGraphPayload.fim, true, "segments route to FIM");
+  assert.equal(
+    fimNoGraphRes.headers?.["x-graph-context"],
+    undefined,
+    "FIM must skip fetchInlineGraphSlice (no degraded header even for a missing repo)"
+  );
+  passed++;
+
+  // B3: FIM output is byte-identical with or without useGraphContext (graph/system never leak into FIM).
+  const fimPlainRes = mockResponse();
+  await handleInlineCompletionRequest(
+    { segments: { prefix: "const x = ", suffix: ";" }, languageId: "typescript" },
+    fimPlainRes,
+    router,
+    router["config"],
+    org
+  );
+  const fimPlainText = (JSON.parse(fimPlainRes.body ?? "{}") as Record<string, unknown>).text;
+  assert.equal(fimNoGraphPayload.text, fimPlainText, "graph context must not change FIM output");
+  passed++;
+
+  // B3 contrast: chat-fallback (message only) with the same missing repo still fetches the graph slice.
+  const chatDegradeRes = mockResponse();
+  await handleInlineCompletionRequest(
+    {
+      message: "const value = ",
+      useGraphContext: true,
+      repoId: "github:acme/missing",
+      file: "src/example.ts",
+      languageId: "typescript"
+    },
+    chatDegradeRes,
+    router,
+    router["config"],
+    org,
+    undefined,
+    { graphQuery: new GraphQueryApi({ cache: new GraphCache() }) }
+  );
+  assert.equal(
+    chatDegradeRes.headers?.["x-graph-context"],
+    "degraded",
+    "chat-fallback still fetches the graph slice"
+  );
+  passed++;
+
   console.log(`inlineCompletionApi: ${passed}/${passed} tests passed`);
 })();
