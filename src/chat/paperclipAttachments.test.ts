@@ -38,6 +38,8 @@ test("appendUserPaperclipAttachmentsPrompt inlines text file content", () => {
   assert.ok(result.includes("<user_attached_files>"));
   assert.ok(result.includes("# Title"));
   assert.ok(!result.includes("multimodal image"));
+  // B6: the "Do not conflate…" sentence now lives only in USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE.
+  assert.ok(!result.includes("Do not conflate these uploads"));
 });
 
 test("appendUserPaperclipAttachmentsPrompt lists images without saying image-only", () => {

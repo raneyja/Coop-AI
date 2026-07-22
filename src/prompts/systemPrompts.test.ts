@@ -29,8 +29,23 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("*italics* for uncertainty"));
   assert.ok(prompt.includes("whose FIRST line is `startLine:endLine:path`"));
   assert.ok(prompt.includes("one **subsection title** per item"));
-  assert.ok(prompt.includes("User-attached files (paperclip)"));
   assert.ok(prompt.includes("## Required response structure"));
+});
+
+test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {
+  const withoutAttachments = systemPromptForUseCase("chat");
+  assert.equal(withoutAttachments.includes("User-attached files (paperclip)"), false);
+
+  const withAttachments = systemPromptForUseCase("chat", { hasPaperclipAttachments: true });
+  assert.ok(withAttachments.includes("User-attached files (paperclip)"));
+
+  // Applies to the patch-output (edit) contract too.
+  assert.equal(systemPromptForUseCase("code_edit").includes("User-attached files (paperclip)"), false);
+  assert.ok(
+    systemPromptForUseCase("code_edit", { hasPaperclipAttachments: true }).includes(
+      "User-attached files (paperclip)"
+    )
+  );
 });
 
 test("chat use case includes enterprise evidence rules", () => {

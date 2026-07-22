@@ -18,7 +18,8 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
     return overridePrompt;
   }
   const basePrompt = systemPromptForUseCase(request.useCase, {
-    activeFile: request.context?.file
+    activeFile: request.context?.file,
+    hasPaperclipAttachments: (request.attachments?.length ?? 0) > 0
   });
   const instructionsBlock =
     request.useCase !== "inline_completion"

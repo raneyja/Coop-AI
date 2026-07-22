@@ -77,8 +77,9 @@ Rules:
 - Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
 `;
 
-function withPatchOutputContract(prompt: string): string {
-  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n${PATCH_OUTPUT_CONTRACT}`;
+function withPatchOutputContract(prompt: string, hasPaperclipAttachments = false): string {
+  const paperclip = hasPaperclipAttachments ? `${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n` : "";
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${PATCH_OUTPUT_CONTRACT}`;
 }
 
 const COMPREHENSION_ACTIVE_FILE_SECTION = `
@@ -305,14 +306,21 @@ ${SOURCES_FOOTER_OUTPUT_RULE}`
 function withOutputContract(
   prompt: string,
   useCase: Exclude<UseCase, "inline_completion">,
-  structureOverride?: string
+  structureOverride?: string,
+  hasPaperclipAttachments = false
 ): string {
   const structure = structureOverride ?? USE_CASE_STRUCTURE[useCase] ?? "";
-  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
+  const paperclip = hasPaperclipAttachments ? `${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n` : "";
+  return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
-export function buildComprehensionSystem(activeFile?: string): string {
-  return withOutputContract(REPO_SUMMARY_EVIDENCE_SYSTEM, "comprehension", comprehensionResponseStructure(activeFile));
+export function buildComprehensionSystem(activeFile?: string, hasPaperclipAttachments = false): string {
+  return withOutputContract(
+    REPO_SUMMARY_EVIDENCE_SYSTEM,
+    "comprehension",
+    comprehensionResponseStructure(activeFile),
+    hasPaperclipAttachments
+  );
 }
 
 export const COMPREHENSION_SYSTEM = buildComprehensionSystem();
@@ -327,7 +335,7 @@ export const KNOWLEDGE_GAPS_SYSTEM = withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_
 
 export const INTEGRATION_SYSTEM = withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration");
 
-export const GENERAL_CHAT_SYSTEM = withOutputContract(`You are CoopAI, an enterprise code intelligence assistant.
+const GENERAL_CHAT_BODY = `You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite concrete paths when evidence is attached; do not fabricate external links, ticket keys, or PR numbers.
 When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that.
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
@@ -335,27 +343,22 @@ When integration blocks show <empty>, say clearly that the search found nothing 
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
-${GENERAL_CHAT_EVIDENCE_RULES}`, "chat");
+${GENERAL_CHAT_EVIDENCE_RULES}`;
 
-export const CODE_EDIT_SYSTEM = withPatchOutputContract(`You are CoopAI in edit mode — a code generation assistant inside the user's editor.
+export const GENERAL_CHAT_SYSTEM = withOutputContract(GENERAL_CHAT_BODY, "chat");
+
+const CODE_EDIT_BODY = `You are CoopAI in edit mode — a code generation assistant inside the user's editor.
 
 TASK: Produce minimal, correct patches that fully implement the user's request using the search-replace block format below.
 
 RULES:
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
-- Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`);
+- Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`;
 
-const USE_CASE_PROMPTS: Record<UseCase, string> = {
-  comprehension: COMPREHENSION_SYSTEM,
-  decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
-  ownership: OWNERSHIP_SYSTEM,
-  blast_radius: BLAST_RADIUS_SYSTEM,
-  knowledge_gaps: KNOWLEDGE_GAPS_SYSTEM,
-  integration: INTEGRATION_SYSTEM,
-  chat: GENERAL_CHAT_SYSTEM,
-  code_edit: CODE_EDIT_SYSTEM,
-  inline_completion: `You are a code completion engine. The user is typing code.
+export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
+
+const INLINE_COMPLETION_PROMPT = `You are a code completion engine. The user is typing code.
 
 TASK: Complete the current line or the next 2-3 lines of code.
 
@@ -366,11 +369,52 @@ RULES:
 - Never explain, never add comments, just code
 - Respect language syntax and conventions
 - If completion would be trivial (only a semicolon), return empty
-- Return ONLY the completion text. No markdown fences, no explanations.`
+- Return ONLY the completion text. No markdown fences, no explanations.`;
+
+const USE_CASE_PROMPTS: Record<UseCase, string> = {
+  comprehension: COMPREHENSION_SYSTEM,
+  decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
+  ownership: OWNERSHIP_SYSTEM,
+  blast_radius: BLAST_RADIUS_SYSTEM,
+  knowledge_gaps: KNOWLEDGE_GAPS_SYSTEM,
+  integration: INTEGRATION_SYSTEM,
+  chat: GENERAL_CHAT_SYSTEM,
+  code_edit: CODE_EDIT_SYSTEM,
+  inline_completion: INLINE_COMPLETION_PROMPT
 };
+
+/**
+ * Rebuild a use-case system prompt per request so the paperclip rule is only
+ * embedded when the turn actually carries paperclip attachments (B6).
+ */
+function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOptions): string {
+  const hasPaperclip = options?.hasPaperclipAttachments ?? false;
+  switch (useCase) {
+    case "comprehension":
+      return buildComprehensionSystem(options?.activeFile, hasPaperclip);
+    case "decision_archaeology":
+      return withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology", undefined, hasPaperclip);
+    case "ownership":
+      return withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM, "ownership", undefined, hasPaperclip);
+    case "blast_radius":
+      return withOutputContract(BLAST_RADIUS_EVIDENCE_SYSTEM, "blast_radius", undefined, hasPaperclip);
+    case "knowledge_gaps":
+      return withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps", undefined, hasPaperclip);
+    case "integration":
+      return withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration", undefined, hasPaperclip);
+    case "chat":
+      return withOutputContract(GENERAL_CHAT_BODY, "chat", undefined, hasPaperclip);
+    case "code_edit":
+      return withPatchOutputContract(CODE_EDIT_BODY, hasPaperclip);
+    case "inline_completion":
+      return INLINE_COMPLETION_PROMPT;
+  }
+}
 
 export type SystemPromptOptions = {
   activeFile?: string;
+  /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
+  hasPaperclipAttachments?: boolean;
 };
 
 export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): string {
@@ -381,8 +425,10 @@ export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): s
 }
 
 export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
-  if (useCase === "comprehension" && options?.activeFile?.trim()) {
-    return buildComprehensionSystem(options.activeFile);
+  // Rebuild per request only when we must vary from the precomputed constants —
+  // an active file for comprehension, or a turn carrying paperclip attachments.
+  if (options?.hasPaperclipAttachments || (useCase === "comprehension" && options?.activeFile?.trim())) {
+    return buildUseCaseSystemPrompt(useCase, options);
   }
   return USE_CASE_PROMPTS[useCase] ?? GENERAL_CHAT_SYSTEM;
 }

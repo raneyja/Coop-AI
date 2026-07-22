@@ -225,10 +225,6 @@ export function appendUserPaperclipAttachmentsPrompt(
     }
   }
 
-  lines.push(
-    "Do not conflate these uploads with @-attached repository files or `<local_files>` / `<file_content>` blocks in `<attached_context>`."
-  );
-
   if (textBlocks.length > 0) {
     lines.push("");
     lines.push("<user_attached_files>");
