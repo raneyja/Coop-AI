@@ -435,6 +435,13 @@ export function summarizeOwnershipReport(
   };
 }
 
+function dependentDetailsHavePreciseSource(evidence: BlastRadiusEvidence): boolean {
+  return (evidence.dependentDetails ?? []).some((entry) => {
+    const source = (entry.source ?? "").toLowerCase();
+    return source.includes("scip") || source === "zoekt" || source === "precise";
+  });
+}
+
 export function summarizeBlastRadius(
   evidence: BlastRadiusEvidence,
   file: string
@@ -449,6 +456,7 @@ export function summarizeBlastRadius(
   const exportCount = evidence.publicExports?.length ?? 0;
   const recentCount = evidence.recentChanges?.length ?? 0;
   const graphSource = evidence.graphMeta?.source;
+  const graphSourceKey = (graphSource ?? "").toLowerCase();
   const lightningDisabled = evidence.graphMeta?.lightningEnabled === false;
   const hasOtherSignals =
     !!evidence.graphMeta ||
@@ -461,9 +469,27 @@ export function summarizeBlastRadius(
 
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0)) {
+  const scipOrIndexBacked =
+    graphSourceKey.includes("scip") ||
+    graphSourceKey === "zoekt" ||
+    graphSourceKey === "precise" ||
+    dependentDetailsHavePreciseSource(evidence);
+  const heuristicOnly =
+    dependentCount > 0 &&
+    !scipOrIndexBacked &&
+    (graphSourceKey.includes("heuristic") || graphSourceKey === "" || graphSourceKey === "remote");
+
+  if (dependentCount > 0 && scipOrIndexBacked && (prCount > 0 || ownerCount > 0 || testCount > 0)) {
     quality = "strong";
-    qualityReason = "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
+    qualityReason =
+      "Dependency impact is backed by SCIP/index dependents plus PR, test, or ownership evidence.";
+  } else if (dependentCount > 0 && scipOrIndexBacked) {
+    quality = "medium";
+    qualityReason = "Indexed dependents are present, but owner/release context is limited.";
+  } else if (dependentCount > 0 && heuristicOnly) {
+    quality = "medium";
+    qualityReason =
+      "Dependents were found via heuristic import matching — verify coupling before treating as strong impact.";
   } else if (dependentCount > 0) {
     quality = "medium";
     qualityReason = "Dependency graph shows impact paths, but owner/release context is limited.";

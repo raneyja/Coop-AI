@@ -234,6 +234,19 @@ test("ownership summary highlights primary owner", () => {
   assert.ok(summary.recommendedActions.some((action) => action.kind === "open-file"));
 });
 
+test("blast radius summary marks heuristic-only dependents as medium not strong", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "src/CoopSettingsPanel.ts",
+    directDependents: ["src/a.ts", "src/b.ts"],
+    testFiles: [{ path: "src/a.test.ts", source: "heuristic" }],
+    ownersByFile: [{ file: "src/a.ts", owner: "@team", source: "codeowners" }],
+    graphMeta: { edgeCount: 31, source: "heuristic", lightningEnabled: true }
+  };
+  const summary = summarizeBlastRadius(evidence, "src/CoopSettingsPanel.ts");
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason ?? "", /heuristic/i);
+});
+
 test("blast radius summary handles no dependents with unverified messaging", () => {
   const evidence: BlastRadiusEvidence = {
     file: "src/server/routes.ts",

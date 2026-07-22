@@ -4,7 +4,6 @@ import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
-import { buildRepoSearchQuery, fetchSlackSearchContext } from "../context/slackContext";
 import { fetchCodeHostSearchContext, type CodeHostPullRequestSnippet } from "../context/codeHostContext";
 import { getOwnershipGraphEngine } from "./ownershipGraphRegistry";
 import type { IndexBackend } from "../indexing/indexBackend";
@@ -222,37 +221,9 @@ export class BlastRadiusAnalysisEngine {
       crossRepoConsumers = await searchCrossRepoConsumers(this.options.indexBackend, repoId, file);
     }
 
-    let slackSearch: BlastRadiusReport["slackSearch"];
-    try {
-      const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
-      const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
-      const query = [repoQuery, fileStem, ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)]
-        .filter(Boolean)
-        .join(" OR ");
-      const slackScope = await this.options.resolveSlackScope?.();
-      const slack = await fetchSlackSearchContext({
-        secrets: this.options.integrationSecrets,
-        owner: resolved.owner,
-        repo: resolved.repo,
-        queryText: query,
-        integrationScope: slackScope
-      });
-      slackSearch = {
-        query: slack.query,
-        messages: slack.messages.slice(0, 15).map((message) => ({
-          channelName: message.channelName,
-          userName: message.userName,
-          text: message.text,
-          permalink: message.permalink
-        })),
-        error: slack.error
-      };
-      if (slack.error) {
-        warnings.push(slack.error);
-      }
-    } catch (error) {
-      warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
-    }
+    // Slack is off the Blast Radius hot path — code dependents + CODEOWNERS + PRs
+    // are the primary signal. Discussion search belongs in enrichment for other actions.
+    const slackSearch: BlastRadiusReport["slackSearch"] = undefined;
 
     const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);
 

@@ -137,8 +137,8 @@ export function jobTypeForQuickAction(actionId: string): JobType | undefined {
   switch (actionId) {
     case "knowledge-gaps":
       return JobType.SCAN_KNOWLEDGE_GAPS;
-    case "blast-radius":
-      return JobType.BUILD_DEPENDENCY_GRAPH;
+    // Blast Radius no longer waits on BUILD_DEPENDENCY_GRAPH — live dependents
+    // come from analyzeImpact / Lightning. The job was a multi-minute serial gate.
     default:
       return undefined;
   }

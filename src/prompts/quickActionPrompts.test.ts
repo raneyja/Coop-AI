@@ -174,10 +174,10 @@ async function run(): Promise<void> {
 
   test("blast-radius model prompt prioritizes top ranked risk surfaces", () => {
     const model = quickActionModelPrompt("blast-radius", ctx);
-    assert.ok(model.includes("top 5 ranked risk surfaces"));
+    assert.ok(model.includes("top 5 ranked code risk surfaces"));
     assert.ok(model.includes("do not enumerate every dependent"));
     assert.ok(model.includes("dependency graph"));
-    assert.ok(model.includes("operational risk"));
+    assert.ok(model.includes("SCIP before heuristic"));
   });
 
   test("understand-repo repo-wide model prompt defers cross-action pointer to the synthesis closer", () => {
