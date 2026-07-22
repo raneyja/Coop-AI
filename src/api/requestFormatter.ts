@@ -90,8 +90,13 @@ export function formatZeroRetentionRequest(options: FormatRequestOptions): Forma
 export function injectZeroRetentionSystemPrompt(messages: ChatRequestMessage[]): ChatRequestMessage[] {
   const existingSystem = messages.find((message) => message.role === "system");
   const nonSystemMessages = messages.filter((message) => message.role !== "system");
+  // Sole owner of the preamble — but stay idempotent so a system message that
+  // already carries it (legacy callers) is not prefixed twice.
+  const alreadyPrefixed = existingSystem?.content.startsWith(ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT) ?? false;
   const systemContent = existingSystem
-    ? `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${existingSystem.content}`
+    ? alreadyPrefixed
+      ? existingSystem.content
+      : `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${existingSystem.content}`
     : ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT;
 
   return [{ role: "system", content: systemContent }, ...nonSystemMessages.map((message) => ({ ...message }))];

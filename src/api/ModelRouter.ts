@@ -9,11 +9,13 @@ import { createProviderClient, createFimClient } from "./providers";
 import { selectFimProvider } from "./fimRouter";
 import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
-import { ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT } from "./requestFormatter";
 
+// The enterprise-confidential retention preamble is owned solely by
+// requestFormatter.injectZeroRetentionSystemPrompt, so it is prepended once at
+// format time regardless of caller — do not add it here (see B1).
 function buildChatSystemContent(request: CompletionRequest, overridePrompt?: string): string {
   if (overridePrompt) {
-    return `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${overridePrompt}`;
+    return overridePrompt;
   }
   const basePrompt = systemPromptForUseCase(request.useCase, {
     activeFile: request.context?.file
@@ -22,7 +24,7 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
     request.useCase !== "inline_completion"
       ? buildProjectInstructionsSystemBlock((request.context?.projectInstructions?.length ?? 0) > 0)
       : "";
-  return `${ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT}\n\n${basePrompt}${instructionsBlock}`;
+  return `${basePrompt}${instructionsBlock}`;
 }
 
 export type ModelRouterOptions = {
