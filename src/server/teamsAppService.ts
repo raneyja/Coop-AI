@@ -36,9 +36,9 @@ export class TeamsAppService {
       redirect_uri: redirectUri,
       response_mode: "query",
       scope: TEAMS_SCOPES,
-      // Force account picker + consent UI. Without this, Microsoft often silently
-      // reuses a prior tenant admin consent and Connect appears to "just work".
-      prompt: "select_account consent",
+      // Entra accepts only one prompt value (AADSTS90023 if space-combined).
+      // `consent` forces the permissions dialog (needed for offline_access / Graph).
+      prompt: "consent",
       state: signOAuthState(orgId, this.options.stateSecret)
     });
     return `${MICROSOFT_AUTHORIZE}?${params.toString()}`;

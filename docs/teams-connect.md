@@ -65,7 +65,7 @@ Then **Grant admin consent for {your tenant}** (operator tenant). Customer tenan
 
 **Note:** `ChannelMessage.Read.All` is admin-consent in most orgs. Org admins connecting from [admin.coop-ai.dev/integrations](https://admin.coop-ai.dev/integrations) need sufficient Entra role, or IT must pre-consent the app.
 
-Coop’s authorize URL includes `prompt=select_account consent` so Connect always shows Microsoft’s account picker and consent screen (instead of silently finishing when the tenant already granted admin consent).
+Coop’s authorize URL includes `prompt=consent` so Connect always shows Microsoft’s consent screen (instead of silently finishing when the tenant already granted admin consent). Entra rejects combined values like `select_account consent` with `AADSTS90023`.
 
 ---
 
@@ -109,6 +109,7 @@ docker compose up -d --build api
 
 | Symptom | Fix |
 |---------|-----|
+| `AADSTS90023` — Unsupported `prompt` value | Authorize URL must use a single Entra-supported value (`consent`, `select_account`, `login`, `none`, or `create`) — not space-combined. Fixed in API to `prompt=consent`; redeploy if you still see this. |
 | `AADSTS700016` — application identifier `jVw8Q~…` not found | **`TEAMS_APP_CLIENT_ID` is set to the client secret.** Azure Entra → App registrations → **Overview** → copy **Application (client) ID** (UUID) into `TEAMS_APP_CLIENT_ID`. Put the secret **Value** (contains `~`) in `TEAMS_APP_CLIENT_SECRET` only. Redeploy API. |
 | 503 / not configured on server | Set `TEAMS_APP_CLIENT_ID` and `TEAMS_APP_CLIENT_SECRET`; redeploy API |
 | `redirect_uri` mismatch | Azure → Authentication → Web redirect URI must match exactly (`https://api.coop-ai.dev/v1/teams/app/callback`) |
