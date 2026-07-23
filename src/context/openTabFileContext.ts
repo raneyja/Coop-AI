@@ -16,6 +16,11 @@ import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "./githubVfsUri";
 export async function readOpenTabFilesForChat(ctx: {
   file?: string;
   selectedLines?: [number, number];
+  /**
+   * When true (remote explorer / codehost provenance), only read remote URI tabs.
+   * Never fall through to local disk or workspace clones.
+   */
+  remoteOnly?: boolean;
 }): Promise<LocalFileContextPayload | undefined> {
   const lines = ctx.selectedLines
     ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] }
@@ -43,6 +48,9 @@ export async function readOpenTabFilesForChat(ctx: {
       } catch {
         continue;
       }
+    } else if (ctx.remoteOnly) {
+      // Remote provenance: ignore local clone / workspace tabs for the same path.
+      continue;
     } else if (fs.existsSync(ref.absolutePath)) {
       try {
         raw = (await vscode.workspace.openTextDocument(vscode.Uri.file(ref.absolutePath))).getText();
@@ -63,7 +71,7 @@ export async function readOpenTabFilesForChat(ctx: {
 
     const sliced = sliceFileContent(raw, lines);
     return {
-      source: "local-workspace",
+      source: ctx.remoteOnly ? "remote-codehost" : "local-workspace",
       activeFile: relativePath,
       files: [
         {
@@ -77,7 +85,7 @@ export async function readOpenTabFilesForChat(ctx: {
     };
   }
 
-  if (wantedPath) {
+  if (wantedPath && !ctx.remoteOnly) {
     return readWorkspaceFileFromDisk(wantedPath, lines);
   }
 

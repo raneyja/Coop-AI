@@ -157,9 +157,15 @@ export async function openRemoteFileInEditor(params: {
   preserveSidebarFocus?: boolean;
   /** Open beside the active editor without stealing context focus. */
   reviewOpen?: boolean;
+  /**
+   * Remote explorer / chip provenance: never open a local clone or workspace file.
+   * Prefer existing remote tab → GitHub VFS only (caller may fall back to API content).
+   */
+  preferRemoteOnly?: boolean;
 }): Promise<boolean> {
   const preserveSidebarFocus = params.preserveSidebarFocus ?? true;
   const reviewOpen = params.reviewOpen ?? false;
+  const preferRemoteOnly = params.preferRemoteOnly === true;
   const openOptions: vscode.TextDocumentShowOptions = reviewOpen
     ? REVIEW_OPEN_OPTIONS
     : preserveSidebarFocus
@@ -194,17 +200,19 @@ export async function openRemoteFileInEditor(params: {
     return finish(true);
   }
 
-  // 1. File already on disk in the open workspace (no git-remote match required).
-  if (!preserveSidebarFocus) {
-    const openedInWorkspace = await focusRepoFileInEditor(relative, params.line);
-    if (openedInWorkspace) {
+  if (!preferRemoteOnly) {
+    // 1. File already on disk in the open workspace (no git-remote match required).
+    if (!preserveSidebarFocus) {
+      const openedInWorkspace = await focusRepoFileInEditor(relative, params.line);
+      if (openedInWorkspace) {
+        return finish(true);
+      }
+    }
+
+    // 2. Local clone on disk — open the file without switching the workspace folder.
+    if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
       return finish(true);
     }
-  }
-
-  // 2. Local clone on disk — open the file without switching the workspace folder.
-  if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
-    return finish(true);
   }
 
   // 3. GitHub virtual file — no openFolder; works when GitHub Repositories is installed.
@@ -215,9 +223,12 @@ export async function openRemoteFileInEditor(params: {
     }
   }
 
-  // 4. Repo mounted in the workspace — retry local/vfs paths.
+  // 4. Repo mounted in the workspace — retry local/vfs paths (skip local when remote-only).
   if (isRepoOpenInEditorWorkspace(params.owner, params.repo, provider)) {
-    if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
+    if (
+      !preferRemoteOnly &&
+      (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line))
+    ) {
       return finish(true);
     }
     if (provider === "github") {

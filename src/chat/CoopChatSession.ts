@@ -242,10 +242,15 @@ import {
   readExternalOpenFileForChat,
   pickEditorForContext,
   pickLocalEditorForContext,
+  pickRemoteEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
 import { looksLikeAbsoluteDiskPath, isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
-import { isSameRepoFilePath } from "../context/fileChipIdentity";
+import {
+  isRemoteProvenanceContext,
+  isSameRepoFilePath,
+  preserveRemoteChipSource
+} from "../context/fileChipIdentity";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import {
@@ -272,7 +277,7 @@ import {
   graphHitsToMentionResults,
   localPathsToMentionResults,
   mergeHybridMentionSearchResults,
-  preferMentionFileContent,
+  resolveMentionFileContent,
   rankMentionSearchResults
 } from "./mentionSearchMerge";
 import { canUseRemoteCodeGraph, isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
@@ -362,8 +367,8 @@ export class CoopChatSession {
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
   /**
-   * Repo-relative path picked via Coop remote explorer (or restored from a thread with
-   * fileSource:"remote"). Survives local-clone editor opens so the chip stays R.
+   * Repo-relative path from Coop remote explorer (or a thread restored with
+   * fileSource:"remote"). Gates open + attach to codehost/VFS only — never local disk.
    */
   private remoteProvenanceFile?: string;
   private pendingChatMentions?: ChatFileMention[];
@@ -624,8 +629,21 @@ export class CoopChatSession {
     if (editor && !editor.document.isClosed) {
       const resolved = resolveEditorFile(editor);
       if (resolved.file?.trim()) {
+        // Remote session: ignore focus on a local clone of the chipped path.
+        if (
+          this.isWorkingOnRemoteProvenance() &&
+          preferred?.trim() &&
+          resolved.fileSource !== "remote" &&
+          resolved.fileSource !== "external" &&
+          isSameRepoFilePath(resolved.file, preferred)
+        ) {
+          return pickRemoteEditorForContext(preferred);
+        }
         return editor;
       }
+    }
+    if (this.isWorkingOnRemoteProvenance()) {
+      return pickRemoteEditorForContext(preferred);
     }
     const matched =
       pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
@@ -672,8 +690,14 @@ export class CoopChatSession {
       }
       return;
     }
-    const open = pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
+    const open = this.isWorkingOnRemoteProvenance()
+      ? pickRemoteEditorForContext(preferred)
+      : pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
     if (open) {
+      return;
+    }
+    // Remote chip may still be valid with API-backed content and no VFS tab yet.
+    if (this.isWorkingOnRemoteProvenance()) {
       return;
     }
     this.clearFileFieldsFromContext();
@@ -905,7 +929,10 @@ export class CoopChatSession {
       this.remoteProvenanceFile = undefined;
     }
 
-    const alreadyOpen = pickLocalEditorForContext(file) ?? pickEditorForContext(file);
+    const alreadyOpen =
+      this.currentContext.fileSource === "remote"
+        ? pickRemoteEditorForContext(file)
+        : pickLocalEditorForContext(file) ?? pickEditorForContext(file);
     if (alreadyOpen) {
       try {
         await vscode.window.showTextDocument(alreadyOpen.document, {
@@ -934,18 +961,21 @@ export class CoopChatSession {
     this.editorContextSuppressedUntil = Date.now() + 8_000;
     this.intentDebouncer.cancelAll();
 
-    const absolute = resolveLocalAbsolutePath(path);
-    if (absolute) {
-      try {
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.One,
-          preview: false,
-          preserveFocus: false
-        });
-        return true;
-      } catch {
-        // fall through to remote
+    const remoteOnly = isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);
+    if (!remoteOnly) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+          await vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.One,
+            preview: false,
+            preserveFocus: false
+          });
+          return true;
+        } catch {
+          // fall through to remote
+        }
       }
     }
 
@@ -962,7 +992,8 @@ export class CoopChatSession {
       filePath: path,
       provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
       branch: this.currentContext.branch,
-      preserveSidebarFocus: false
+      preserveSidebarFocus: false,
+      preferRemoteOnly: remoteOnly
     });
     if (!opened) {
       opened = await this.openRemoteFileFromApi(path, undefined, { preserveFocus: false });
@@ -992,15 +1023,41 @@ export class CoopChatSession {
   }
 
   /**
-   * Keep R on the chip when the open buffer is the local clone of a remote-picked path.
-   * Clears the pin when the user navigates to a different file.
+   * Re-assert remote chip + pin for a remote-picked path.
+   * Does not authorize local-disk attach — remote content must come from VFS/API.
    */
   private withRemoteProvenance(ctx: RepoContext): RepoContext {
+    // Re-pin from an existing remote stamp so attach/send paths that skipped
+    // setRemoteProvenance still survive local-clone editor snaps.
+    if (
+      !this.remoteProvenanceFile?.trim() &&
+      ctx.fileSource === "remote" &&
+      ctx.file?.trim() &&
+      !isOsAbsoluteDiskPath(ctx.file)
+    ) {
+      this.setRemoteProvenance(ctx.file);
+    }
+
     const pin = this.remoteProvenanceFile?.trim();
     if (!pin) {
       return ctx;
     }
-    if (!ctx.file?.trim() || isOsAbsoluteDiskPath(ctx.file)) {
+    if (!ctx.file?.trim()) {
+      // Transient empty editor events must not drop the remote pin.
+      return ctx;
+    }
+    if (isOsAbsoluteDiskPath(ctx.file)) {
+      // Same path reported as a local fsPath (leftover tab) — keep remote intent on the pin.
+      // Attach still refuses local disk when isWorkingOnRemoteProvenance().
+      const pinAbs = resolveLocalAbsolutePath(pin);
+      if (pinAbs && pathsReferToSameFile(pinAbs, ctx.file)) {
+        return {
+          ...ctx,
+          file: pin,
+          fileSource: "remote",
+          scope: "file"
+        };
+      }
       this.remoteProvenanceFile = undefined;
       return ctx;
     }
@@ -1014,6 +1071,19 @@ export class CoopChatSession {
       fileSource: "remote",
       scope: "file"
     };
+  }
+
+  /** Existing chip source for local-buffer attach — pin counts as remote even if stamp was demoted. */
+  private chipSourceBeforeLocalAttach(): RepoContext["fileSource"] {
+    if (this.isWorkingOnRemoteProvenance()) {
+      return "remote";
+    }
+    return this.currentContext.fileSource;
+  }
+
+  /** User chose remote explorer / codehost — never fall through to local disk. */
+  private isWorkingOnRemoteProvenance(): boolean {
+    return isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);
   }
 
   private async switchThread(threadId: string): Promise<void> {
@@ -1812,6 +1882,28 @@ export class CoopChatSession {
       // User switched files in the editor — release the prior quick-action pin.
       this.pinnedContextFile = undefined;
     }
+    // Remote provenance: ignore leftover local-clone snaps for the SAME path.
+    // Explicit local choice (Downloads / different workspace file) clears remote — Rule B.
+    if (this.isWorkingOnRemoteProvenance() && incoming.file?.trim()) {
+      const explicitLocal =
+        incoming.fileSource === "external" || isOsAbsoluteDiskPath(incoming.file);
+      const differentLocalFile =
+        (incoming.fileSource === "workspace" || incoming.fileSource === "git") &&
+        this.currentContext.file?.trim() &&
+        !isSameRepoFilePath(incoming.file, this.currentContext.file);
+      if (explicitLocal || differentLocalFile) {
+        this.remoteProvenanceFile = undefined;
+        // Fall through to merge as local.
+      } else if (
+        incoming.fileSource !== "remote" &&
+        this.currentContext.file?.trim() &&
+        isSameRepoFilePath(incoming.file, this.currentContext.file)
+      ) {
+        this.currentContext = this.withRemoteProvenance(this.currentContext);
+        this.postContext();
+        return this.runIntentFetch(event, { quiet: true });
+      }
+    }
     // Never force scope:"repo" on an empty editor event — that wiped Downloads chips when
     // the sidebar stole focus (normalize stamped scope:repo → isExplicitRepoScope true).
     // Explicit explorer "Use repo" goes through setRepoContext / repoContextForRepoSelect.
@@ -1845,8 +1937,8 @@ export class CoopChatSession {
     // Cancel pending editor snaps so a late FILE_SWITCHED can't overwrite this pick.
     this.intentDebouncer.cancelAll();
     this.pinnedContextFile = undefined;
-    // Hold editor refresh while we open — otherwise local clone URI demotes R→L
-    // or clears a brand-new chip before the tab exists.
+    // Hold editor refresh while we open — remote pick must not be overwritten by a
+    // leftover local clone tab of the same path before VFS/API content is ready.
     this.editorContextSuppressedUntil = Date.now() + 8_000;
 
     // Absolute Downloads / Cmd+O path — always local (L), never stamp remote.
@@ -1920,7 +2012,7 @@ export class CoopChatSession {
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
-      // May open local clone for viewing — remote provenance pin keeps the chip R.
+      // Remote explorer pick: VFS / API only — never a local clone of the same path.
       let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
@@ -1928,7 +2020,8 @@ export class CoopChatSession {
         line,
         provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
         branch: this.currentContext.branch,
-        preserveSidebarFocus: false
+        preserveSidebarFocus: false,
+        preferRemoteOnly: true
       });
       if (!opened) {
         opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: false });
@@ -1951,21 +2044,24 @@ export class CoopChatSession {
     await this.runIntentFetch(event, { quiet: true });
   }
 
-  /** Open a repo file for manual review without changing chat context. Prefer local disk. */
+  /** Open a repo file for manual review without changing chat context. */
   private async openRepoFileForReview(path: string, line?: number): Promise<void> {
     this.editorContextSuppressedUntil = Date.now() + 15_000;
     this.intentDebouncer.cancelAll();
 
-    const absolute = resolveLocalAbsolutePath(path);
-    if (absolute) {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-      const editor = await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.Beside,
-        preview: true,
-        preserveFocus: true
-      });
-      this.revealLineInEditor(editor, line);
-      return;
+    const remoteOnly = this.isWorkingOnRemoteProvenance();
+    if (!remoteOnly) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: true,
+          preserveFocus: true
+        });
+        this.revealLineInEditor(editor, line);
+        return;
+      }
     }
 
     if (!canUseRemoteCodeGraph(this.preferences.plan)) {
@@ -1984,7 +2080,8 @@ export class CoopChatSession {
         provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
         branch: this.currentContext.branch,
         preserveSidebarFocus: true,
-        reviewOpen: true
+        reviewOpen: true,
+        preferRemoteOnly: remoteOnly
       });
       if (!opened) {
         opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true });
@@ -2913,6 +3010,9 @@ export class CoopChatSession {
       quickAction === "understand-repo"
         ? undefined
         : this.loadLocalFilesSyncForChat({ fullFile: options?.composerMode === "edit" });
+    // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
+    this.postContext();
 
     if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
@@ -5306,11 +5406,12 @@ export class CoopChatSession {
   private snapEditorContextBeforeSend(options?: { allowLocalFileForEdit?: boolean }): void {
     const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    // Always follow the live open/active editor — including under explorer "Use repo"
-    // scope — so the chip and chat attach match the tab the user is looking at.
-    const editor = allowLocalFileForEdit
-      ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
-      : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
+    // Remote provenance: only snap a remote (VFS) tab — never a local clone of the same path.
+    const editor = this.isWorkingOnRemoteProvenance()
+      ? pickRemoteEditorForContext(this.currentContext.file)
+      : allowLocalFileForEdit
+        ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
+        : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
     if (!editor) {
       return;
     }
@@ -5337,6 +5438,17 @@ export class CoopChatSession {
     fullFile?: boolean;
   }): LocalFileContextPayload | undefined {
     const fullFile = options?.fullFile === true || this.pendingCodeEditIntent;
+    const lines =
+      fullFile || !this.currentContext.selectedLines
+        ? undefined
+        : { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] };
+
+    // Remote explorer / codehost provenance: never attach from local disk or clone buffers.
+    // Sync path can only use an open remote URI tab; API fetch happens in resolveChatLocalFiles.
+    if (this.isWorkingOnRemoteProvenance()) {
+      return this.loadRemoteFilesSyncForChat(lines);
+    }
+
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
     // Always prefer the live open editor (including outside-workspace) so chat/edit
     // attach the buffer the user is looking at — even after explorer "Use repo".
@@ -5354,10 +5466,6 @@ export class CoopChatSession {
     }
 
     const ctx = this.currentContext;
-    const lines =
-      fullFile || !ctx.selectedLines
-        ? undefined
-        : { start: ctx.selectedLines[0], end: ctx.selectedLines[1] };
     const editorCtx = fullFile ? { ...ctx, selectedLines: undefined } : ctx;
     const wantedPath = ctx.file?.trim()
       ? looksLikeAbsoluteDiskPath(ctx.file)
@@ -5371,10 +5479,11 @@ export class CoopChatSession {
       fileSource: RepoContext["fileSource"]
     ): LocalFileContextPayload => {
       const sliced = sliceFileContent(visible.document.getText(), lines);
+      const proposedSource = fileSource === "external" ? "external" : fileSource ?? "workspace";
       this.currentContext = {
         ...this.currentContext,
         file: relativePath,
-        fileSource: fileSource === "external" ? "external" : fileSource ?? "workspace",
+        fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), proposedSource),
         scope: "file",
         contextWarning: undefined
       };
@@ -5482,7 +5591,7 @@ export class CoopChatSession {
             contextWarning: undefined
           };
           return {
-            source: "local-workspace",
+            source: "remote-codehost",
             activeFile: ref.relativePath,
             files: [
               {
@@ -5503,7 +5612,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), "workspace"),
           contextWarning: undefined
         };
         return fromTabUri;
@@ -5518,7 +5627,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), "workspace"),
           contextWarning: undefined
         };
         return {
@@ -5564,6 +5673,84 @@ export class CoopChatSession {
     return undefined;
   }
 
+  /** Attach content from an open remote URI tab only (no local clone / disk). */
+  private loadRemoteFilesSyncForChat(
+    lines?: { start: number; end: number }
+  ): LocalFileContextPayload | undefined {
+    const wanted = this.currentContext.file?.trim()
+      ? normalizeRelativePath(this.currentContext.file)
+      : undefined;
+    const remoteEditor = pickRemoteEditorForContext(wanted);
+    if (remoteEditor) {
+      const resolved = resolveEditorFile(remoteEditor);
+      const relativePath = resolved.file?.trim()
+        ? normalizeRelativePath(resolved.file)
+        : wanted ?? "remote-file";
+      const sliced = sliceFileContent(remoteEditor.document.getText(), lines);
+      if (sliced.content.trim()) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: relativePath,
+          fileSource: "remote",
+          scope: "file",
+          contextWarning: undefined
+        };
+        return {
+          source: "remote-codehost",
+          activeFile: relativePath,
+          files: [
+            {
+              path: relativePath,
+              content: sliced.content,
+              encoding: "utf8",
+              ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+            }
+          ],
+          fallbackLevel: "partial"
+        };
+      }
+    }
+
+    for (const ref of collectOpenEditorFileRefs()) {
+      if (!isRemoteTabAbsolutePath(ref.absolutePath)) {
+        continue;
+      }
+      if (wanted && !pathsReferToSameFile(ref.relativePath, wanted)) {
+        continue;
+      }
+      const visibleEditor = vscode.window.visibleTextEditors.find(
+        (editor) => editor.document.uri.toString() === ref.absolutePath
+      );
+      if (!visibleEditor?.document.getText().trim()) {
+        continue;
+      }
+      const relativePath = normalizeRelativePath(ref.relativePath);
+      const sliced = sliceFileContent(visibleEditor.document.getText(), lines);
+      this.currentContext = {
+        ...this.currentContext,
+        file: relativePath,
+        fileSource: "remote",
+        scope: "file",
+        contextWarning: undefined
+      };
+      return {
+        source: "remote-codehost",
+        activeFile: relativePath,
+        files: [
+          {
+            path: relativePath,
+            content: sliced.content,
+            encoding: "utf8",
+            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+          }
+        ],
+        fallbackLevel: "partial"
+      };
+    }
+
+    return undefined;
+  }
+
   private pendingChatLocalFilesMatchesContext(): boolean {
     if (!this.pendingChatLocalFiles?.files.length) {
       return false;
@@ -5602,6 +5789,35 @@ export class CoopChatSession {
       return undefined;
     }
 
+    // Remote provenance: remote URI tabs or codehost API only — never local clone/disk.
+    if (this.isWorkingOnRemoteProvenance()) {
+      const lines = this.pendingCodeEditIntent
+        ? undefined
+        : this.currentContext.selectedLines
+          ? { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] }
+          : undefined;
+      const fromRemoteTabs = await readOpenTabFilesForChat({
+        file: this.currentContext.file,
+        selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
+        remoteOnly: true
+      });
+      if (fromRemoteTabs?.files.length) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: fromRemoteTabs.activeFile,
+          fileSource: "remote",
+          scope: "file",
+          contextWarning: undefined
+        };
+        return { ...fromRemoteTabs, source: "remote-codehost" };
+      }
+      const syncRemote = this.loadRemoteFilesSyncForChat(lines);
+      if (syncRemote?.files.length) {
+        return syncRemote;
+      }
+      return this.fetchRemoteFileForChatAttach(lines);
+    }
+
     const fromOpenTabs = await readOpenTabFilesForChat({
       file: this.currentContext.file,
       selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines
@@ -5634,7 +5850,10 @@ export class CoopChatSession {
         repoContextFromEditor(editor, chatPrefs, this.currentContext)
       );
     } else if (this.currentContext.file && resolveLocalAbsolutePath(this.currentContext.file)) {
-      this.currentContext.fileSource = "workspace";
+      this.currentContext.fileSource = preserveRemoteChipSource(
+        this.chipSourceBeforeLocalAttach(),
+        "workspace"
+      );
     }
 
     const ctx = this.currentContext;
@@ -5722,6 +5941,57 @@ export class CoopChatSession {
       lines,
       resolveAbsolutePath: resolveLocalAbsolutePath
     });
+  }
+
+  /** Fetch active remote file content from the code host — never local disk. */
+  private async fetchRemoteFileForChatAttach(
+    lines?: { start: number; end: number }
+  ): Promise<LocalFileContextPayload | undefined> {
+    const filePath = this.currentContext.file?.trim();
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!filePath || !owner || !repo || isOsAbsoluteDiskPath(filePath)) {
+      return undefined;
+    }
+    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+      return undefined;
+    }
+    try {
+      const remote = await this.options.codeHostRouter.getFileContent(filePath, {
+        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+        owner,
+        repo,
+        branch: this.currentContext.branch
+      });
+      const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
+      if (!text.trim()) {
+        return undefined;
+      }
+      const relativePath = normalizeRelativePath(filePath);
+      const sliced = sliceFileContent(text, lines);
+      this.currentContext = {
+        ...this.currentContext,
+        file: relativePath,
+        fileSource: "remote",
+        scope: "file",
+        contextWarning: undefined
+      };
+      return {
+        source: "remote-codehost",
+        activeFile: relativePath,
+        files: [
+          {
+            path: relativePath,
+            content: sliced.content,
+            encoding: "utf8",
+            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+          }
+        ],
+        fallbackLevel: "partial"
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   private logContextDebug(message: string): void {
@@ -6728,29 +6998,37 @@ export class CoopChatSession {
       let content = mention.snippet?.trim() ?? "";
       if (!content || !mention.lines) {
         const lineRange = mention.lines ? { start: mention.lines[0], end: mention.lines[1] } : undefined;
-        if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+        const preferLocal =
+          mention.source === "local" || mention.repoId === WORKSPACE_LOCAL_REPO_ID;
+        if (preferLocal || !canUseRemoteCodeGraph(this.preferences.plan)) {
+          // Explicit local @mention (or Free plan): disk only — never pretend remote is local.
           const local = readWorkspaceFileFromDisk(mention.path, lineRange);
-          content = local?.files[0]?.content ?? "";
+          content = resolveMentionFileContent({
+            prefer: "local",
+            localContent: local?.files[0]?.content,
+            existingSnippet: mention.snippet
+          });
         } else {
-          const local = readWorkspaceFileFromDisk(mention.path, lineRange);
-          const localContent = local?.files[0]?.content;
+          // Indexed / remote @mention: codehost fetch only — never a local clone of the same path.
           let remoteContent: string | undefined;
-          if (!localContent?.trim() && mention.repoId !== WORKSPACE_LOCAL_REPO_ID) {
-            try {
-              const file = await this.options.api
-                .getBackendClient()
-                .fetchRepoFile(
-                  this.preferences.apiBaseUrl,
-                  mention.repoId,
-                  mention.path,
-                  this.currentContext.branch ?? this.preferences.branch
-                );
-              remoteContent = file.content ?? "";
-            } catch {
-              remoteContent = undefined;
-            }
+          try {
+            const file = await this.options.api
+              .getBackendClient()
+              .fetchRepoFile(
+                this.preferences.apiBaseUrl,
+                mention.repoId,
+                mention.path,
+                this.currentContext.branch ?? this.preferences.branch
+              );
+            remoteContent = file.content ?? "";
+          } catch {
+            remoteContent = undefined;
           }
-          content = preferMentionFileContent(localContent, remoteContent, mention.snippet);
+          content = resolveMentionFileContent({
+            prefer: "remote",
+            remoteContent,
+            existingSnippet: mention.snippet
+          });
           if (!content.trim()) {
             continue;
           }

@@ -13,7 +13,7 @@ export type LocalFileSnippet = {
 };
 
 export type LocalFileContextPayload = {
-  source: "local-workspace";
+  source: "local-workspace" | "remote-codehost";
   activeFile: string;
   files: LocalFileSnippet[];
   fallbackLevel: "partial";

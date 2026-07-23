@@ -194,7 +194,8 @@ export function findEditorForRemoteFile(
 
   for (const editor of vscode.window.visibleTextEditors) {
     const resolved = resolveEditorFile(editor);
-    if (!resolved.file?.trim()) {
+    // Remote picker opens must not match a local clone of the same path.
+    if (resolved.fileSource !== "remote" || !resolved.file?.trim()) {
       continue;
     }
     const ownerMatch =
@@ -215,6 +216,26 @@ export function findEditorForRemoteFile(
     }
   }
 
+  return undefined;
+}
+
+/**
+ * Prefer a matching remote (VFS / github) editor tab only — never a local clone.
+ */
+export function pickRemoteEditorForContext(preferredPath?: string): vscode.TextEditor | undefined {
+  const preferred = preferredPath?.trim();
+  for (const editor of [
+    vscode.window.activeTextEditor,
+    ...vscode.window.visibleTextEditors
+  ].filter(Boolean) as vscode.TextEditor[]) {
+    const resolved = resolveEditorFile(editor);
+    if (resolved.fileSource !== "remote" || !resolved.file?.trim()) {
+      continue;
+    }
+    if (!preferred || pathsMatchPreferred(resolved.file, preferred)) {
+      return editor;
+    }
+  }
   return undefined;
 }
 

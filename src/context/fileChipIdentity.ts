@@ -10,7 +10,8 @@ function normalizeRelativePath(filePath: string): string {
 /**
  * Single rules for L vs R chip provenance:
  * - Absolute OS path (Downloads / Cmd+O) → always "external" (L). Never "remote".
- * - "remote" = codehost / explorer pick / vfs — even if a local clone buffer is used to view it.
+ * - "remote" = codehost / explorer pick / vfs. Content attach and open must NOT
+ *   fall through to a local clone unless the user explicitly picks a local path.
  * - workspace / git = on-disk repo buffers opened from the editor (L).
  */
 export function coerceChipFileSource(
@@ -35,6 +36,20 @@ export function isRemoteChip(ctx: Pick<RepoContext, "file" | "fileSource">): boo
   return ctx.fileSource === "remote";
 }
 
+/**
+ * True when the user is working a remote explorer / codehost file.
+ * Callers must not read local workspace/disk for attach or open fallbacks.
+ */
+export function isRemoteProvenanceContext(
+  ctx: Pick<RepoContext, "file" | "fileSource">,
+  remoteProvenanceFile?: string
+): boolean {
+  if (remoteProvenanceFile?.trim() && !isOsAbsoluteDiskPath(remoteProvenanceFile)) {
+    return true;
+  }
+  return isRemoteChip(ctx);
+}
+
 export function isSameRepoFilePath(a: string | undefined, b: string | undefined): boolean {
   if (!a?.trim() || !b?.trim()) {
     return false;
@@ -50,8 +65,8 @@ export function isSameRepoFilePath(a: string | undefined, b: string | undefined)
 }
 
 /**
- * After a remote explorer pick, VS Code may open the local clone (workspace/git URI).
- * Keep chip provenance "remote" when the relative path still matches.
+ * Leftover local-clone editor events for the same path must not steal provenance
+ * or imply the session switched to local. Content attach stays remote-only.
  */
 export function shouldKeepRemoteProvenance(
   existing: Pick<RepoContext, "file" | "fileSource">,
@@ -71,4 +86,24 @@ export function shouldKeepRemoteProvenance(
     incoming.fileSource === "git" ||
     incoming.fileSource === undefined
   );
+}
+
+/**
+ * Defensive: do not demote an existing remote stamp when a local buffer event fires
+ * for the same path. Prefer skipping local attach entirely when remote (see
+ * isRemoteProvenanceContext) — R must mean codehost/VFS content, not a local clone.
+ */
+export function preserveRemoteChipSource(
+  existing: RepoContext["fileSource"],
+  proposed: RepoContext["fileSource"]
+): RepoContext["fileSource"] {
+  if (existing === "remote") {
+    if (proposed === "external") {
+      return "external";
+    }
+    if (proposed === "workspace" || proposed === "git" || proposed === undefined) {
+      return "remote";
+    }
+  }
+  return proposed ?? existing;
 }

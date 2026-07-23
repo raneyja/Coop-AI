@@ -171,19 +171,36 @@ export function mergeHybridMentionSearchResults(
   );
 }
 
-/** Pro+ resolution: prefer on-disk workspace content over indexed remote fetch. */
+/**
+ * Resolve @-mention file body by explicit provenance.
+ * - local: workspace disk only (never substitute remote as if local)
+ * - remote: codehost/index fetch only (never substitute a local clone as if remote)
+ */
+export function resolveMentionFileContent(options: {
+  prefer: "local" | "remote";
+  localContent?: string;
+  remoteContent?: string;
+  existingSnippet?: string;
+}): string {
+  const local = options.localContent?.trim() ?? "";
+  const remote = options.remoteContent?.trim() ?? "";
+  const snippet = options.existingSnippet?.trim() ?? "";
+  if (options.prefer === "local") {
+    return local || snippet;
+  }
+  return remote || snippet;
+}
+
+/** @deprecated Prefer resolveMentionFileContent with explicit provenance. */
 export function preferMentionFileContent(
   localContent: string | undefined,
   remoteContent: string | undefined,
   existingSnippet: string | undefined
 ): string {
-  const local = localContent?.trim();
-  if (local) {
-    return local;
-  }
-  const remote = remoteContent?.trim();
-  if (remote) {
-    return remote;
-  }
-  return existingSnippet?.trim() ?? "";
+  return resolveMentionFileContent({
+    prefer: "local",
+    localContent,
+    remoteContent,
+    existingSnippet
+  });
 }
