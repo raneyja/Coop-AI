@@ -79,6 +79,8 @@ import { handleGoogleDocsAppApiRequest } from "../server/googleDocsAppApi";
 import { loadTeamsAppConfig } from "../server/teamsAppConfig";
 import { createTeamsAppService } from "../server/teamsAppService";
 import { handleTeamsAppApiRequest } from "../server/teamsAppApi";
+import { resolveAdminPortalUrl } from "../config/publicUrls";
+import { resolvePublicBaseUrl } from "../server/publicBaseUrl";
 import { IntegrationConnectionStore } from "../server/integrationConnectionStore";
 import { IntegrationScopePolicyStore } from "../server/integrationScopePolicyStore";
 import { handleIntegrationApiRequest } from "../server/integrationApi";
@@ -891,6 +893,24 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           return;
         }
         writeJson(response, 200, { tokens: tokenPool.list() });
+        return;
+      }
+
+      if (parsed.method === "GET" && parsed.pathname === "/") {
+        const adminPortal = resolveAdminPortalUrl(process.env, resolvePublicBaseUrl());
+        const integrationsUrl = `${adminPortal.replace(/\/$/, "")}/integrations`;
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end(
+          `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Coop AI API</title></head>` +
+            `<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;line-height:1.5">` +
+            `<h1>Coop AI API</h1>` +
+            `<p>This host serves the Coop backend (not the admin UI).</p>` +
+            `<p>If you were connecting Microsoft Teams, return to ` +
+            `<a href="${integrationsUrl}">${integrationsUrl}</a> and click Connect again.</p>` +
+            `<p>Azure redirect URI must be exactly ` +
+            `<code>https://api.coop-ai.dev/v1/teams/app/callback</code> (not the API root).</p>` +
+            `</body></html>`
+        );
         return;
       }
 

@@ -29,11 +29,23 @@ export async function handleTeamsAppApiRequest(
   if (parsed.pathname === "/v1/teams/app/install-url" && parsed.method === "GET") {
     return handleInstallUrl(response, deps, auth);
   }
-  if (parsed.pathname === "/v1/teams/app/callback" && parsed.method === "GET") {
+  // Canonical callback + trailing-slash variant. Also accept API-root OAuth returns when
+  // Azure Entra has a misconfigured redirect URI of https://api.coop-ai.dev (no path).
+  if (parsed.method === "GET" && isTeamsOAuthCallbackPath(parsed.pathname, parsed.query)) {
     return handleCallback(parsed, response, deps);
   }
   if (parsed.pathname === "/v1/orgs/teams/installation" && parsed.method === "GET") {
     return handleInstallationStatus(response, deps, auth);
+  }
+  return false;
+}
+
+function isTeamsOAuthCallbackPath(pathname: string, query: URLSearchParams): boolean {
+  if (pathname === "/v1/teams/app/callback" || pathname === "/v1/teams/app/callback/") {
+    return true;
+  }
+  if (pathname === "/" && (query.has("code") || query.has("error"))) {
+    return true;
   }
   return false;
 }
@@ -95,7 +107,9 @@ async function handleCallback(
   }
 
   try {
-    const redirectUri = buildRedirectUri(deps.teamsAppConfig);
+    // Token exchange redirect_uri must match the authorize request exactly. If Entra
+    // redirected to API root, exchange against the root URI; otherwise the canonical callback.
+    const redirectUri = buildRedirectUri(deps.teamsAppConfig, parsed.pathname);
     const tokens = await deps.teamsApp.exchangeCode(code, redirectUri);
     const label = tokens.displayName ?? tokens.email ?? "Microsoft account";
     await deps.integrationStore.upsert(orgId, "teams", tokens.accessToken, {
@@ -145,8 +159,11 @@ async function handleInstallationStatus(
   return true;
 }
 
-function buildRedirectUri(config: TeamsAppConfig): string {
-  return `${config.publicBaseUrl}/v1/teams/app/callback`;
+function buildRedirectUri(config: TeamsAppConfig, callbackPath = "/v1/teams/app/callback"): string {
+  if (callbackPath === "/" || callbackPath === "") {
+    return config.publicBaseUrl.replace(/\/$/, "");
+  }
+  return `${config.publicBaseUrl.replace(/\/$/, "")}/v1/teams/app/callback`;
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

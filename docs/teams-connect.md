@@ -110,6 +110,7 @@ docker compose up -d --build api
 | Symptom | Fix |
 |---------|-----|
 | `AADSTS90023` — Unsupported `prompt` value | Authorize URL must use a single Entra-supported value (`consent`, `select_account`, `login`, `none`, or `create`) — not space-combined. Fixed in API to `prompt=consent`; redeploy if you still see this. |
+| Browser shows `{"error":"not found"}` on `api.coop-ai.dev` | That is the **API root**, not the Teams callback. Azure → App registrations → your Coop app → **Authentication** → Web redirect URI must be exactly `https://api.coop-ai.dev/v1/teams/app/callback` (include the path; do not use the bare API host). Then Connect again from [admin Integrations](https://admin.coop-ai.dev/integrations). |
 | `AADSTS700016` — application identifier `jVw8Q~…` not found | **`TEAMS_APP_CLIENT_ID` is set to the client secret.** Azure Entra → App registrations → **Overview** → copy **Application (client) ID** (UUID) into `TEAMS_APP_CLIENT_ID`. Put the secret **Value** (contains `~`) in `TEAMS_APP_CLIENT_SECRET` only. Redeploy API. |
 | 503 / not configured on server | Set `TEAMS_APP_CLIENT_ID` and `TEAMS_APP_CLIENT_SECRET`; redeploy API |
 | `redirect_uri` mismatch | Azure → Authentication → Web redirect URI must match exactly (`https://api.coop-ai.dev/v1/teams/app/callback`) |
