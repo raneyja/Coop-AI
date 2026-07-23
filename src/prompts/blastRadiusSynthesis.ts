@@ -48,7 +48,9 @@ Open PRs touching the path are optional context when present.
 Never claim zero impact when dependency evidence is empty or unverified — say impact was not found in the index.
 Be concise: the Sources card already lists files — summarize and prioritize; do not dump every path.
 The primary blast-radius target is the open file — do not rewrite impact around out-of-scope @ attachments.
-Do not list tsconfig / build-config files as risk surfaces.
+Do not list tsconfig / build-config files as risk surfaces or elevate them under Transitive dependents.
+Never invent an **APIs & integrations** section — use **Related docs** only when docs evidence is attached.
+When CODEOWNERS or open PRs are in the evidence bundle, include **Owners to notify** / **Related PRs** briefly.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -109,11 +111,23 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
     "Synthesize impact for the primary target file only. Prefer SCIP-confirmed paths over heuristic ones in Top risk surfaces."
   );
   lines.push(
-    "Keep the narrative short: lead Summary with Top risk surfaces (up to 5), mirror them exactly in Direct impact, cite tests in Testing surfaces. Omit empty sections. Treat any docs/chat/tickets as secondary."
+    "Keep the narrative short: lead Summary with Top risk surfaces (up to 5), mirror them exactly in Direct impact, cite tests in Testing surfaces. Omit empty sections. Treat any docs/chat/tickets as secondary. Never invent **APIs & integrations**."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+/** Drop legacy/hallucinated APIs section — Blast Radius uses Related docs instead. */
+export function stripForbiddenBlastRadiusSections(content: string): string {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(
+      /(?:^|\n)\*\*APIs & integrations\*\*\s*\n[\s\S]*?(?=\n\*\*[^*]+\*\*\s*\n|$)/gi,
+      "\n"
+    )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {

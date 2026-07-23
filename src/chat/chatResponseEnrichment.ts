@@ -19,6 +19,7 @@ import {
 } from "../prompts/decisionResponseEnrichment";
 import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
 import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
+import { stripForbiddenBlastRadiusSections } from "../prompts/blastRadiusSynthesis";
 import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
@@ -110,6 +111,9 @@ export function enrichChatResponseForAction(options: {
       enriched = enrichCompactIntegrationDocs(enriched, docContext, {
         mode: quickAction === "understand-repo" ? "understand-repo" : "blast-radius"
       });
+      if (quickAction === "blast-radius") {
+        enriched = stripForbiddenBlastRadiusSections(enriched);
+      }
       break;
     }
     default:

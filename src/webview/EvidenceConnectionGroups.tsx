@@ -75,7 +75,7 @@ function EvidenceConnectionGroupInner({
     () => resolveConnectionBrief(briefSummary, children),
     [briefSummary, children]
   );
-  const body = useMemo(() => renderConnectionBody(children), [children]);
+  const body = useMemo(() => renderConnectionBody(children, brief), [children, brief]);
 
   const ensureOpen = () => {
     setOpen(true);

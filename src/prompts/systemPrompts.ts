@@ -203,7 +203,7 @@ ${SOURCES_FOOTER_OUTPUT_RULE}`,
 Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer concise — the Sources card already lists files. Code impact first.
 
 **Summary**
-2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order — prefer SCIP over index over heuristic). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. Match evidence strength to the graph: heuristic-only is not "strong". When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact.
+2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order — prefer SCIP over index over heuristic). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. Match evidence strength to the graph: heuristic-majority is not "strong". When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact.
 
 **Direct impact**
 Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no tsconfig/build-config as risk surfaces; no "Additional impacted files" section.
@@ -218,13 +218,13 @@ Only when CODEOWNERS evidence is attached — who to ping before merging. One sh
 Only when open PR evidence is attached. Max 3 bullets. Omit if none.
 
 **Transitive dependents**
-One short paragraph, or omit. No file dump. Do not elevate build-config files.
+One short paragraph on runtime/code dependents only, or omit. No file dump. **Never** elevate tsconfig/build-config files.
 
 **Operational risk**
 Only CI/deploy evidence from the bundle. Omit if none. Do not speculate.
 
 **Related docs**
-Only when docs references (or secondary doc integrations) are attached — max 2 titles, one concrete sentence each. Omit if none. Never invent docs.
+Only when docs references (or secondary doc integrations) are attached — max 2 titles, one concrete sentence each. Omit if none. Never invent docs. **Never** use an **APIs & integrations** heading.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.

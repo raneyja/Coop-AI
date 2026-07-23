@@ -103,14 +103,64 @@ function collectCollapsibleInventory(
   });
 }
 
-export function renderConnectionBody(children: React.ReactNode): React.ReactNode {
+export function renderConnectionBody(
+  children: React.ReactNode,
+  brief?: EvidenceConnectionBrief
+): React.ReactNode {
   const single = findSingleCollapsibleElement(children);
-  if (!single) {
-    return children;
+  if (single) {
+    return React.cloneElement(single, {
+      open: true,
+      hideHeader: true
+    } as Partial<{ open: boolean; hideHeader: boolean }>);
   }
 
-  return React.cloneElement(single, {
-    open: true,
-    hideHeader: true
-  } as Partial<{ open: boolean; hideHeader: boolean }>);
+  // Parent toggle already shows the brief title — hide the matching nested header.
+  if (brief?.title?.trim()) {
+    return hideMatchingCollapsibleHeader(children, brief.title.trim());
+  }
+
+  return children;
+}
+
+function hideMatchingCollapsibleHeader(
+  node: React.ReactNode,
+  title: string
+): React.ReactNode {
+  let matched = false;
+  return mapConnectionChildren(node, (child) => {
+    if (matched || !isCollapsibleElement(child)) {
+      return child;
+    }
+    const props = child.props as { title?: string };
+    if ((props.title ?? "").trim() !== title) {
+      return child;
+    }
+    matched = true;
+    return React.cloneElement(child, {
+      hideHeader: true
+    } as Partial<{ hideHeader: boolean }>);
+  });
+}
+
+function mapConnectionChildren(
+  node: React.ReactNode,
+  mapCollapsible: (child: React.ReactElement) => React.ReactElement
+): React.ReactNode {
+  return React.Children.map(node, (child) => {
+    if (!React.isValidElement(child)) {
+      return child;
+    }
+    if (isCollapsibleElement(child)) {
+      return mapCollapsible(child);
+    }
+    if (child.props && typeof child.props === "object" && "children" in child.props) {
+      const nextChildren = mapConnectionChildren(
+        child.props.children as React.ReactNode,
+        mapCollapsible
+      );
+      return React.cloneElement(child, undefined, nextChildren);
+    }
+    return child;
+  });
 }

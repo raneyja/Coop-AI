@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt } from "./blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, stripForbiddenBlastRadiusSections } from "./blastRadiusSynthesis";
 
 const evidence = {
   file: "fastify.js",
@@ -150,7 +150,26 @@ test("blast-radius synthesis does not require integration doc titles on the hot 
     file: "fastify.js"
   });
   assert.equal(prompt.includes("## Attached documentation (required in response)"), false);
-  assert.equal(prompt.includes("APIs & integrations"), false);
+  assert.ok(prompt.includes("Never invent **APIs & integrations**"));
+});
+
+test("stripForbiddenBlastRadiusSections removes hallucinated APIs heading", () => {
+  const stripped = stripForbiddenBlastRadiusSections(
+    [
+      "**Testing surfaces**",
+      "- a.test.ts",
+      "",
+      "**APIs & integrations**",
+      "Panel lifecycle details that should not appear.",
+      "",
+      "**Sources**",
+      "- Dependency graph"
+    ].join("\n")
+  );
+  assert.equal(stripped.includes("APIs & integrations"), false);
+  assert.equal(stripped.includes("Panel lifecycle"), false);
+  assert.ok(stripped.includes("**Testing surfaces**"));
+  assert.ok(stripped.includes("**Sources**"));
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);
