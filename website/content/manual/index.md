@@ -149,7 +149,7 @@ Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) if you ne
 
 1. **Extension UI** — Open **Settings → Workspace**.
 2. Pick an indexed repo from your org catalog and set **Primary branch** (e.g. `main`).
-3. Repo-wide quick actions like **Understand Repo** and **Find Owner** use these defaults.
+3. Click **Use repo** in the Remote workspace picker for **Understand Repo**. **Find Owner** / **Knowledge Gaps** can use a file chip or **Use repo**.
 
 <!-- figures -->
 ![Workspace settings — org repos, AGENTS.md, and primary branch](/screenshots/docs/extension-settings-workspace.png)
@@ -346,7 +346,7 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
 | **Preferences** | Assigned models, prompt library, identity links, timezone |
 
-Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, **Understand Repo**, or **Knowledge Gaps**.
+Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use the grid or `/understand` after **Use repo** in the Remote workspace picker.
 
 ### Model assignments
 
@@ -442,7 +442,7 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace
 
 **Slash:** `/understand` (aliases: `/understandrepo`, `/repo`, `/architecture`, `/explain`)
 
-**Works without open file:** Yes — repo-wide if no file; deeper if a file is open.
+**Works without open file:** Required — Understand Repo is **repo-wide only**. Click **Use repo** in the Remote workspace picker (select the repository, not a file). If a file chip is active, the action is blocked until you select the repo.
 
 **Default prompt:** "Understand this repository's architecture, subsystems, and risks."
 
@@ -532,7 +532,7 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 | Action | Works without open file | Notes |
 | --- | --- | --- |
-| Understand Repo | Yes | Repo-wide if no file; deeper if file open |
+| Understand Repo | **Use repo required** | Repo-wide only — blocked while a file chip is active |
 | Find Owner | Yes | Needs owner/repo in Workspace settings |
 | Knowledge Gaps | Yes | Repo-wide audit vs file-level |
 | Trace Decision | **No** | Requires open file |

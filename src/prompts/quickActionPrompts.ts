@@ -183,14 +183,10 @@ export function quickActionPromptParts(
 
   switch (actionId) {
     case "understand-repo": {
-      const repoWide = !ctx.file?.trim();
       const chips: QuickActionContextChip[] = [
         { key: "repo", value: repo },
         { key: "branch", value: branch }
       ];
-      if (ctx.file) {
-        chips.push({ key: "active file", value: ctx.file });
-      }
       const task = "Explain this repository for a new engineer joining the team.";
       return {
         display: "Understand this repository's architecture, subsystems, and risks.",
@@ -198,13 +194,11 @@ export function quickActionPromptParts(
         model: [
           task,
           DIRECTIVE,
-          repoWide
-            ? `Context: repo ${repo}, branch ${branch}${host}.`
-            : `Context: repo ${repo}, branch ${branch}${host}, active file ${file}${ctx.languageId ? `, language ${ctx.languageId}` : ""}.`,
+          `Context: repo ${repo}, branch ${branch}${host}.`,
           "Use attached repo entry files, graph context, and manifest metadata from the evidence bundle.",
           mentions.length
             ? mentionModelGuidance("understand-repo", mentions, ctx)
-            : "Cover architecture repo-wide — not a deep dive on only the active file unless it illustrates a cross-cutting pattern."
+            : "Cover architecture repo-wide — do not deep-dive a single file unless it illustrates a cross-cutting pattern."
         ]
           .filter(Boolean)
           .join("\n"),

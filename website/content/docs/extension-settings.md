@@ -98,7 +98,7 @@ Pick indexed repos your org admin authorized and set your primary branch.
 | **Primary branch** | Default branch for repo-wide quick actions (e.g. `main`) |
 | **AGENTS.md** | Project instructions loaded on every message |
 
-Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**) use your selected repo and branch.
+Repo-wide quick actions (**Understand Repo**, **Find Owner**, **Knowledge Gaps**) use your selected repo and branch. **Understand Repo** requires an explicit **Use repo** selection in the Remote workspace picker — it does not run against a file chip.
 
 ## Preferences
 

@@ -71,7 +71,7 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 ## Step 5 — Try a quick action
 
-With a file open, highlight a few lines of code, then **right-click** the selection. Choose **CoopAI: Trace Decision for Selection** (or **Find Owner**, **Blast Radius**, **Understand Repo**, **Knowledge Gaps**).
+With a file open, highlight a few lines of code, then **right-click** the selection. Choose **CoopAI: Trace Decision for Selection** (or **Find Owner**, **Blast Radius**, **Knowledge Gaps**). For **Understand Repo**, click **Use repo** in the Remote workspace picker first — it is repo-wide only.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)

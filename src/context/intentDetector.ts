@@ -285,11 +285,8 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return ["file_metadata", "ownership", "dependencies", "knowledge_gaps"];
   }
   if (action === "understand-repo") {
-    // Repo-wide runs only need the live summary; file-scoped runs add ownership + graph.
-    if (!event.context.file?.trim()) {
-      return ["file_metadata"];
-    }
-    return ["file_metadata", "ownership", "dependencies"];
+    // Always repo-wide — never hitch ownership/blast when an editor file is open.
+    return ["file_metadata"];
   }
   return ["chat_context"];
 }
