@@ -75,7 +75,33 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     ...incoming
   };
 
-  // Active editor file always wins over explorer "Use repo" scope — including Downloads.
+  // Sticky Use repo: ignore passive editor workspace files so Understand Repo stays
+  // on the repo chip. Coop remote picks and outside-workspace tabs may still take over.
+  if (isExplicitRepoScope(existing) && incoming.file?.trim()) {
+    const outside =
+      isOsAbsoluteDiskPath(incoming.file) || incoming.fileSource === "external";
+    const coopFilePick = incoming.fileSource === "remote";
+    if (!outside && !coopFilePick) {
+      return stripStaleContextWarning(
+        normalizeRepoContext({
+          ...existing,
+          provider: incoming.provider ?? existing.provider,
+          owner: incoming.owner?.trim() ? incoming.owner : existing.owner,
+          repo: incoming.repo?.trim() ? incoming.repo : existing.repo,
+          branch: incoming.branch?.trim() ? incoming.branch : existing.branch,
+          scope: "repo",
+          file: undefined,
+          fileSource: undefined,
+          selectedLines: undefined,
+          selectedSymbol: undefined,
+          languageId: undefined,
+          contextWarning: undefined
+        })
+      );
+    }
+  }
+
+  // Active editor / Coop file pick wins over explorer "Use repo" when allowed above.
   if (incoming.file?.trim()) {
     merged.file = incoming.file.trim();
     merged.scope = "file";

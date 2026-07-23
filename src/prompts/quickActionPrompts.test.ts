@@ -115,6 +115,8 @@ async function run(): Promise<void> {
     const model = quickActionModelPrompt("understand-repo", ctx);
     assert.ok(model.includes("repo-wide"));
     assert.ok(model.includes("acme/widgets"));
+    assert.ok(!/Context:.*active file/.test(model));
+    assert.ok(!model.includes("Dockerfile"));
   });
 
   test("trace-decision model prompt references integration evidence", () => {

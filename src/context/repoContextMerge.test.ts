@@ -59,15 +59,25 @@ async function run(): Promise<void> {
     assert.equal(merged.contextWarning, undefined);
   });
 
-  await test("mergeRepoContext promotes file when editor provides file under explicit repo scope", () => {
+  await test("mergeRepoContext keeps Use-repo sticky against editor workspace files", () => {
     const merged = mergeRepoContext(
       { owner: "acme", repo: "coop-ai", scope: "repo" },
       { file: "src/a.ts", fileSource: "workspace", scope: "file" }
     );
-    assert.equal(merged.scope, "file");
-    assert.equal(merged.file, "src/a.ts");
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
     assert.equal(merged.owner, "acme");
     assert.equal(merged.repo, "coop-ai");
+  });
+
+  await test("mergeRepoContext allows Coop remote file pick to leave Use-repo scope", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", scope: "repo" },
+      { file: "src/a.ts", fileSource: "remote", scope: "file" }
+    );
+    assert.equal(merged.scope, "file");
+    assert.equal(merged.file, "src/a.ts");
+    assert.equal(merged.fileSource, "remote");
   });
 
   await test("mergeRepoContext keeps absolute path for real outside-workspace editor", () => {

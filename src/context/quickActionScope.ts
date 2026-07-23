@@ -36,6 +36,12 @@ export function isQuickActionBlocked(actionId: QuickActionId, context: RepoConte
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
     return true;
   }
+
+  // Understand Repo is always repo-wide — never bind to a file chip.
+  if (actionId === "understand-repo") {
+    return Boolean(context.file?.trim()) || !hasExplicitRepoSelection(context);
+  }
+
   if (context.file?.trim()) {
     return false;
   }
@@ -44,7 +50,7 @@ export function isQuickActionBlocked(actionId: QuickActionId, context: RepoConte
   }
   // Prefs-seeded owner/repo is NOT a selection. Repo-wide actions need an explicit
   // explorer "Use repo" (scope:"repo") or an open file — otherwise empty-state
-  // Understand Repo silently analyzes the Workspace default.
+  // actions silently analyze the Workspace default.
   return !hasExplicitRepoSelection(context);
 }
 
@@ -58,6 +64,12 @@ export function hasExplicitRepoSelection(context: RepoContext): boolean {
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
     return externalFileMessage(actionId);
+  }
+  if (actionId === "understand-repo") {
+    if (context.file?.trim()) {
+      return "Understand Repo is repo-wide only. Click Use repo in the Remote workspace picker (select the repository, not a file), then try again.";
+    }
+    return "Understand Repo needs a selected repository. Click Use repo in the Remote workspace picker.";
   }
   if (actionId === "trace-decision") {
     return fileLevelOnlyMessage("Trace Decision");

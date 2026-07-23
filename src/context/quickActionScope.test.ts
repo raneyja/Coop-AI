@@ -37,6 +37,25 @@ async function run(): Promise<void> {
     assert.equal(isQuickActionBlocked("understand-repo", repoContext), false);
   });
 
+  test("Understand Repo is blocked when a file chip is active", () => {
+    const withFile: RepoContext = {
+      owner: "acme",
+      repo: "widgets",
+      branch: "main",
+      file: "src/CoopSettingsPanel.ts",
+      scope: "file"
+    };
+    assert.equal(isQuickActionBlocked("understand-repo", withFile), true);
+    assert.match(
+      quickActionBlockedMessage("understand-repo", withFile),
+      /repo-wide only/i
+    );
+    assert.match(quickActionBlockedMessage("understand-repo", withFile), /Use repo/i);
+    // Other actions still allow a file chip.
+    assert.equal(isQuickActionBlocked("find-owner", withFile), false);
+    assert.equal(isQuickActionBlocked("knowledge-gaps", withFile), false);
+  });
+
   test("prefs-seeded owner/repo without Use repo does not unlock Understand Repo", () => {
     const prefsOnly: RepoContext = {
       owner: "raneyja",
@@ -48,6 +67,10 @@ async function run(): Promise<void> {
     assert.equal(isQuickActionBlocked("knowledge-gaps", prefsOnly), true);
     assert.equal(isQuickActionBlocked("find-owner", prefsOnly), true);
     assert.match(quickActionBlockedMessage("understand-repo", prefsOnly), /Use repo/i);
+    assert.equal(
+      /open a file/i.test(quickActionBlockedMessage("understand-repo", prefsOnly)),
+      false
+    );
   });
 
   test("empty context blocks repo-wide actions", () => {
