@@ -40,7 +40,7 @@ export type OwnershipGraphEngineOptions = {
 };
 
 const CODEOWNERS_PATHS = [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"];
-const COMMIT_LIMIT = 500;
+const COMMIT_LIMIT = 100;
 
 export class OwnershipGraphEngine {
   public constructor(private readonly options: OwnershipGraphEngineOptions) {}

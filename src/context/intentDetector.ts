@@ -273,24 +273,26 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return ["chat_context"];
   }
   if (TRACE_ACTIONS.has(action)) {
-    return ["decision_history", "blame"];
+    // blame is already inside DecisionArchaeologyEngine.traceDecision — a second
+    // request type was running the full engine twice.
+    return ["decision_history"];
   }
   if (OWNER_ACTIONS.has(action)) {
-    return ["file_metadata", "ownership"];
+    // file_metadata also resolved to ownership_map and doubled mapOwnership.
+    return ["ownership"];
   }
   if (action === "blast-radius") {
     // Single dependencies fetch — file_metadata also resolved to blast_radius and doubled analyzeImpact.
     return ["dependencies"];
   }
   if (action === "knowledge-gaps") {
-    return ["file_metadata", "ownership", "dependencies", "knowledge_gaps"];
+    // Docs/integrations + heuristic scan on the hot path. Ownership/blast hitchhikers
+    // and SCAN_KNOWLEDGE_GAPS job waits were multi-minute gates (same class as old blast-radius).
+    return ["knowledge_gaps"];
   }
   if (action === "understand-repo") {
-    // Repo-wide runs only need the live summary; file-scoped runs add ownership + graph.
-    if (!event.context.file?.trim()) {
-      return ["file_metadata"];
-    }
-    return ["file_metadata", "ownership", "dependencies"];
+    // Live repo summary only — file-scoped ownership + blast_radius were hitchhikers.
+    return ["file_metadata"];
   }
   return ["chat_context"];
 }

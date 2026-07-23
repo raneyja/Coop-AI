@@ -21,8 +21,12 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-test("chat-deliverable quick actions hide terminal scan complete row", () => {
-  assert.equal(deliverableForQuickAction("knowledge-gaps"), "chat");
+test("quick actions no longer map to chat-deliverable background jobs", () => {
+  assert.equal(deliverableForQuickAction("knowledge-gaps"), "standalone");
+  assert.equal(deliverableForQuickAction("blast-radius"), "standalone");
+});
+
+test("chat-deliverable jobs hide terminal scan complete row", () => {
   assert.equal(
     shouldShowJobActivityLine({ status: "completed", deliverable: "chat" }),
     false

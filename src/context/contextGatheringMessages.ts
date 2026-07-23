@@ -189,7 +189,6 @@ function findOwnerMessages(
   const resolved = resolvedOptions(options);
   const requests = buildContextRequests(event, requestTypesForIntent(event));
   return finalizeActivityMessages(event, [
-    "Reading file metadata…",
     "Finding code owners…",
     "Checking ownership signals…",
     ...integrationMessagesForRequests(requests, resolved)

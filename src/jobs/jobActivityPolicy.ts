@@ -15,7 +15,7 @@ export type JobActivityState = {
 };
 
 /** Quick actions that enqueue a background job then synthesize a chat answer. */
-export const CHAT_DELIVERABLE_QUICK_ACTIONS = new Set(["knowledge-gaps", "blast-radius"]);
+export const CHAT_DELIVERABLE_QUICK_ACTIONS = new Set<string>([]);
 
 export function deliverableForQuickAction(actionId: string): JobActivityDeliverable {
   return CHAT_DELIVERABLE_QUICK_ACTIONS.has(actionId) ? "chat" : "standalone";

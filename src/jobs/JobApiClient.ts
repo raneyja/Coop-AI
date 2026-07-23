@@ -133,15 +133,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function jobTypeForQuickAction(actionId: string): JobType | undefined {
-  switch (actionId) {
-    case "knowledge-gaps":
-      return JobType.SCAN_KNOWLEDGE_GAPS;
-    // Blast Radius no longer waits on BUILD_DEPENDENCY_GRAPH — live dependents
-    // come from analyzeImpact / Lightning. The job was a multi-minute serial gate.
-    default:
-      return undefined;
-  }
+export function jobTypeForQuickAction(_actionId: string): JobType | undefined {
+  // Knowledge Gaps no longer waits on SCAN_KNOWLEDGE_GAPS — live heuristic +
+  // budgeted doc integrations feed synthesis. The job was a multi-minute serial gate
+  // (same class as the old Blast Radius BUILD_DEPENDENCY_GRAPH wait).
+  // Blast Radius no longer waits on BUILD_DEPENDENCY_GRAPH — live dependents
+  // come from analyzeImpact / Lightning.
+  return undefined;
 }
 
 export function shouldUseAsyncJob(actionId: string): boolean {

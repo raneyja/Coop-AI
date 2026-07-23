@@ -321,6 +321,13 @@ export type CoopChatSessionOptions = {
  * slow tool can't stall the overview.
  */
 const UNDERSTAND_REPO_INTEGRATION_BUDGET_MS = 10_000;
+/** Shared hot-path budget so one slow tool cannot stall quick-action answers. */
+const QUICK_ACTION_INTEGRATION_BUDGET_MS: Record<string, number> = {
+  "understand-repo": UNDERSTAND_REPO_INTEGRATION_BUDGET_MS,
+  "knowledge-gaps": 10_000,
+  "find-owner": 8_000,
+  "trace-decision": 10_000
+};
 
 export class CoopChatSession {
   private webview?: vscode.Webview;
@@ -2322,12 +2329,12 @@ export class CoopChatSession {
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected(),
       integrationScopes,
-      // Understand Repo pulls from every connected tool but is time-bounded so a
-      // single slow integration can't block the overview. Slower tools are dropped.
-      budgetMs:
-        request.params.quickAction === "understand-repo"
-          ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
-          : undefined
+      // Quick actions pull connected tools under a hard budget so a single slow
+      // integration cannot block the answer. Over-budget tools are dropped.
+      budgetMs: (() => {
+        const action = request.params.quickAction;
+        return action ? QUICK_ACTION_INTEGRATION_BUDGET_MS[action] : undefined;
+      })()
     });
   }
 
@@ -4574,7 +4581,9 @@ export class CoopChatSession {
     const gaps: Array<Record<string, unknown>> = [];
     const target = file ?? evidence.file;
 
-    if (!evidence.ownershipReport?.scores?.length) {
+    if (!evidence.ownershipReport) {
+      /* Ownership is off the knowledge-gaps hot path — do not invent missing_owner. */
+    } else if (!evidence.ownershipReport.scores?.length) {
       gaps.push({
         file: target,
         type: "missing_owner",
@@ -4582,7 +4591,9 @@ export class CoopChatSession {
         message: "No ownership scores attached for this path"
       });
     }
-    if (
+    if (!evidence.dependencyGraph) {
+      /* Dependency graph is off the knowledge-gaps hot path — do not invent impact_unknown. */
+    } else if (
       target &&
       !evidence.dependencyGraph?.directDependents?.length &&
       !evidence.dependencyGraph?.edgeCount
