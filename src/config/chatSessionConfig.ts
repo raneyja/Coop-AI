@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
 
-/** Default: 4 hours idle before sidebar opens on a fresh thread instead of the last one. */
+/** @deprecated Activate always starts on a blank thread; kept for package.json / callers. */
 const DEFAULT_SESSION_IDLE_MINUTES = 240;
 
 /**
- * Milliseconds of inactivity before the sidebar starts on the landing screen.
- * Set `coopAI.chat.sessionIdleMinutes` to 0 to always restore the last thread.
+ * @deprecated Idle no longer gates startup restore — activate always lands on a blank thread.
+ * Retained so existing settings keys and callers keep compiling.
  */
 export function readChatSessionIdleMs(): number {
   const minutes = vscode.workspace

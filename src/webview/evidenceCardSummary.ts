@@ -435,6 +435,21 @@ export function summarizeOwnershipReport(
   };
 }
 
+function isPreciseDependentSource(source: string | undefined): boolean {
+  const key = (source ?? "").toLowerCase();
+  return key.includes("scip") || key === "zoekt" || key === "precise";
+}
+
+/** Count SCIP/index-backed dependent edges when per-edge sources are present. */
+function countPreciseDependentDetails(evidence: BlastRadiusEvidence): {
+  precise: number;
+  total: number;
+} {
+  const details = evidence.dependentDetails ?? [];
+  const precise = details.filter((entry) => isPreciseDependentSource(entry.source)).length;
+  return { precise, total: details.length };
+}
+
 export function summarizeBlastRadius(
   evidence: BlastRadiusEvidence,
   file: string
@@ -449,6 +464,7 @@ export function summarizeBlastRadius(
   const exportCount = evidence.publicExports?.length ?? 0;
   const recentCount = evidence.recentChanges?.length ?? 0;
   const graphSource = evidence.graphMeta?.source;
+  const graphSourceKey = (graphSource ?? "").toLowerCase();
   const lightningDisabled = evidence.graphMeta?.lightningEnabled === false;
   const hasOtherSignals =
     !!evidence.graphMeta ||
@@ -461,9 +477,41 @@ export function summarizeBlastRadius(
 
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0)) {
+  const { precise: preciseDetailCount, total: detailTotal } = countPreciseDependentDetails(evidence);
+  const graphMetaPrecise =
+    graphSourceKey.includes("scip") ||
+    graphSourceKey === "zoekt" ||
+    graphSourceKey === "precise";
+  const graphMetaHeuristic =
+    graphSourceKey.includes("heuristic") || graphSourceKey === "" || graphSourceKey === "remote";
+  // Strong requires a predominantly precise graph — a few SCIP hits among mostly heuristic edges is not strong.
+  const predominantlyPrecise =
+    detailTotal > 0
+      ? preciseDetailCount / detailTotal >= 0.5
+      : graphMetaPrecise && !graphSourceKey.includes("heuristic");
+  const mostlyHeuristic =
+    dependentCount > 0 &&
+    (graphSourceKey.includes("heuristic") ||
+      (detailTotal > 0 && preciseDetailCount / detailTotal < 0.5) ||
+      (detailTotal === 0 && !graphMetaPrecise && graphMetaHeuristic));
+
+  if (
+    dependentCount > 0 &&
+    predominantlyPrecise &&
+    (prCount > 0 || ownerCount > 0 || testCount > 0)
+  ) {
     quality = "strong";
-    qualityReason = "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
+    qualityReason =
+      "Dependency impact is backed by mostly SCIP/index dependents plus PR, test, or ownership evidence.";
+  } else if (dependentCount > 0 && predominantlyPrecise) {
+    quality = "medium";
+    qualityReason = "Indexed dependents are present, but owner/release context is limited.";
+  } else if (dependentCount > 0 && mostlyHeuristic) {
+    quality = "medium";
+    qualityReason =
+      preciseDetailCount > 0 && detailTotal > 0
+        ? `Only ${preciseDetailCount} of ${detailTotal} dependents are SCIP/index-confirmed; the rest are heuristic — verify before treating as strong impact.`
+        : "Dependents were found via heuristic import matching — verify coupling before treating as strong impact.";
   } else if (dependentCount > 0) {
     quality = "medium";
     qualityReason = "Dependency graph shows impact paths, but owner/release context is limited.";
@@ -485,6 +533,9 @@ export function summarizeBlastRadius(
   const limitations = dedupeLimitations([
     dependentCount === 0
       ? "Impact unverified — no dependents found in index; do not assume zero blast radius."
+      : undefined,
+    preciseDetailCount > 0 && detailTotal > preciseDetailCount
+      ? `Only ${preciseDetailCount} of ${detailTotal} code dependents are SCIP/index-confirmed; treat heuristic edges as candidates to verify.`
       : undefined,
     lightningDisabled ? "Deep index (Lightning Mode) is not enabled for this repository." : undefined,
     ownerCount === 0 ? "No CODEOWNERS mapping was attached for impacted files." : undefined,

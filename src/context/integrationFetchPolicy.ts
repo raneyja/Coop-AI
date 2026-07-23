@@ -1,11 +1,14 @@
 import type { ContextFetchRequest } from "./requestBatcher";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 
-/** Quick actions that auto-fetch all connected doc/discussion integrations. */
+/**
+ * Quick actions that auto-fetch connected doc/discussion integrations.
+ * Blast Radius is intentionally excluded — it is code-impact-first (dependents,
+ * CODEOWNERS, optional PRs) and must not wait on Notion/Jira/Slack/etc.
+ */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
   "knowledge-gaps",
-  "understand-repo",
-  "blast-radius"
+  "understand-repo"
 ] as const;
 
 export type RepoWideIntegrationQuickAction = (typeof REPO_WIDE_INTEGRATION_QUICK_ACTIONS)[number];
@@ -18,11 +21,7 @@ export type TraceDecisionIntegrationQuickAction = (typeof TRACE_DECISION_INTEGRA
 export function isRepoWideIntegrationQuickAction(
   quickAction: string | undefined
 ): quickAction is RepoWideIntegrationQuickAction {
-  return (
-    quickAction === "knowledge-gaps" ||
-    quickAction === "understand-repo" ||
-    quickAction === "blast-radius"
-  );
+  return quickAction === "knowledge-gaps" || quickAction === "understand-repo";
 }
 
 export function isTraceDecisionIntegrationQuickAction(

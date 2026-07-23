@@ -105,14 +105,15 @@ export class ChatThreadStore {
   }
 
   /**
-   * Restore the active thread, or start a fresh one when the session has been idle.
-   * Expired sessions keep prior threads in history; only the default view changes.
+   * Cold start: blank landing thread. Prior threads with messages stay in history
+   * for explicit switch (which restores that thread's file chip + editor).
+   * @param _idleMs retained for API compatibility; activate no longer waits on idle.
    */
-  public resolveStartupThread(idleMs: number): ChatThreadRecord {
+  public resolveStartupThread(_idleMs = 0): ChatThreadRecord {
     this.ensureActiveThread();
     const active = this.getActiveThread();
 
-    if (!shouldStartFreshThreadOnRestore(active, this.snapshot.lastActiveAt, idleMs)) {
+    if (!shouldStartFreshThreadOnRestore(active)) {
       this.recordActivity();
       return active;
     }

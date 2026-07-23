@@ -137,6 +137,10 @@ export class HybridQueryLayer {
         if (!file) {
           break;
         }
+        // Blast Radius already ran analyzeImpact (including dependents) — skip a second SCIP walk.
+        if (request.params.quickAction === "blast-radius") {
+          break;
+        }
         const dependents = await this.options.indexBackend.dependents(repoId, file);
         enrichment.dependents = dependents.dependents;
         enrichment.dependentsSource = dependents.source;

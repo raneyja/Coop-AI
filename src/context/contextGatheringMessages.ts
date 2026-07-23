@@ -97,12 +97,9 @@ function traceDecisionMessages(provider: CodeHostProviderPreference, codeHostCon
 }
 
 function blastRadiusMessages(provider: CodeHostProviderPreference, codeHostConnected: boolean): string[] {
-  const messages = ["Analyzing dependencies…", "Mapping change impact…"];
-  if (codeHostConnected) {
-    messages.push(codeHostPullRequestMessage(provider));
-  }
-  messages.push("Building context before sending your prompt…");
-  return messages;
+  void provider;
+  void codeHostConnected;
+  return ["Analyzing dependencies…", "Mapping change impact…", "Building context before sending your prompt…"];
 }
 
 function integrationMessagesForRequests(
@@ -192,7 +189,6 @@ function findOwnerMessages(
   const resolved = resolvedOptions(options);
   const requests = buildContextRequests(event, requestTypesForIntent(event));
   return finalizeActivityMessages(event, [
-    "Reading file metadata…",
     "Finding code owners…",
     "Checking ownership signals…",
     ...integrationMessagesForRequests(requests, resolved)

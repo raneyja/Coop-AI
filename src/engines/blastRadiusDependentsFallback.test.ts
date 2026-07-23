@@ -30,6 +30,20 @@ test("isDocsReferencePath detects markdown, docs trees, and d.ts", () => {
   assert.equal(isDocsReferencePath("examples/https.js"), false);
 });
 
+test("splitBlastRadiusDependents drops tsconfig build-config noise", () => {
+  const split = splitBlastRadiusDependents([
+    { path: "src/a.ts", depth: 1, source: "heuristic" },
+    { path: "tsconfig.json", depth: 2, source: "heuristic" },
+    { path: "website/tsconfig.json", depth: 2, source: "heuristic" },
+    { path: "README.md", depth: 1, source: "zoekt" }
+  ]);
+  assert.deepEqual(
+    split.codeDependentDetails.map((entry) => entry.path),
+    ["src/a.ts"]
+  );
+  assert.equal(split.docsReferences.length, 1);
+});
+
 test("splitBlastRadiusDependents separates code from docs references", () => {
   const split = splitBlastRadiusDependents([
     { path: "examples/https.js", depth: 1, source: "heuristic" },

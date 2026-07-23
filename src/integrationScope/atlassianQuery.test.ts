@@ -35,9 +35,36 @@ test("applyJiraProjectScope appends project in filters", () => {
   assert.equal(queries[0], '(bug OR crash) AND (project in ("COOP", "OPS"))');
 });
 
+test("applyJiraProjectScope keeps ORDER BY outside the scoped WHERE clause", () => {
+  const queries = applyJiraProjectScope(
+    ['(text ~ "CoopSettingsPanel") ORDER BY updated DESC'],
+    [],
+    ["COOP"]
+  );
+  assert.equal(
+    queries[0],
+    '((text ~ "CoopSettingsPanel")) AND (project in ("COOP")) ORDER BY updated DESC'
+  );
+  // ORDER BY must trail the query — never appear inside a parenthesized WHERE fragment.
+  assert.match(queries[0] ?? "", /\)\s+ORDER BY updated DESC$/i);
+  assert.equal(/\([^()]*ORDER BY/i.test(queries[0] ?? ""), false);
+});
+
 test("applyConfluenceSpaceScope appends space in filters", () => {
   const queries = applyConfluenceSpaceScope(["docs"], [], ["ENG"]);
   assert.equal(queries[0], '(docs) AND (space in ("ENG"))');
+});
+
+test("applyConfluenceSpaceScope keeps ORDER BY outside the scoped WHERE clause", () => {
+  const queries = applyConfluenceSpaceScope(
+    ['text ~ "settings" ORDER BY lastmodified DESC'],
+    [],
+    ["ENG"]
+  );
+  assert.equal(
+    queries[0],
+    '(text ~ "settings") AND (space in ("ENG")) ORDER BY lastmodified DESC'
+  );
 });
 
 test("filterJiraIssuesByProject keeps only allowlisted project keys", () => {

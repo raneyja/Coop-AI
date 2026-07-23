@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt } from "./blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, stripForbiddenBlastRadiusSections } from "./blastRadiusSynthesis";
 
 const evidence = {
   file: "fastify.js",
@@ -65,7 +65,7 @@ test("blast-radius synthesis includes dependent details when present", () => {
   assert.ok(prompt.includes("lib/plugin.js (depth 1, zoekt)"));
 });
 
-test("blast-radius synthesis includes docs references section when present", () => {
+test("blast-radius synthesis treats docs as secondary when present", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
@@ -74,8 +74,10 @@ test("blast-radius synthesis includes docs references section when present", () 
     },
     file: "fastify.js"
   });
+  assert.ok(prompt.includes("Secondary context"));
   assert.ok(prompt.includes("[Sources: Docs references]"));
   assert.ok(prompt.includes("README.md"));
+  assert.equal(prompt.includes("## Attached documentation (required in response)"), false);
 });
 
 test("blast-radius synthesis includes top risk surfaces ranking", () => {
@@ -136,24 +138,38 @@ test("blast-radius synthesis leads Summary with partial index caveat when graph 
   );
 });
 
-test("blast-radius synthesis requires attached documentation titles", () => {
+test("blast-radius synthesis does not require integration doc titles on the hot path", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
       directDependents: ["lib/plugin.js"],
       confluenceSearch: {
         pages: [{ id: "1", title: "Fastify rollout runbook", updated: "2026-01-01", htmlUrl: "https://wiki/1" }]
-      },
-      notionSearch: {
-        pages: [{ id: "2", title: "Fastify architecture notes", updated: "2026-01-02", url: "https://notion/2" }]
       }
     },
     file: "fastify.js"
   });
-  assert.ok(prompt.includes("## Attached documentation (required in response)"));
-  assert.ok(prompt.includes("APIs & integrations"));
-  assert.ok(prompt.includes("Fastify rollout runbook"));
-  assert.ok(prompt.includes("Fastify architecture notes"));
+  assert.equal(prompt.includes("## Attached documentation (required in response)"), false);
+  assert.ok(prompt.includes("Never invent **APIs & integrations**"));
+});
+
+test("stripForbiddenBlastRadiusSections removes hallucinated APIs heading", () => {
+  const stripped = stripForbiddenBlastRadiusSections(
+    [
+      "**Testing surfaces**",
+      "- a.test.ts",
+      "",
+      "**APIs & integrations**",
+      "Panel lifecycle details that should not appear.",
+      "",
+      "**Sources**",
+      "- Dependency graph"
+    ].join("\n")
+  );
+  assert.equal(stripped.includes("APIs & integrations"), false);
+  assert.equal(stripped.includes("Panel lifecycle"), false);
+  assert.ok(stripped.includes("**Testing surfaces**"));
+  assert.ok(stripped.includes("**Sources**"));
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);

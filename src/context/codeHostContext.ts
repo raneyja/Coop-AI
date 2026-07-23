@@ -52,8 +52,9 @@ export function shouldFetchCodeHostContext(request: ContextFetchRequest): boolea
   if (request.type !== "chat_context" && request.type !== "dependencies") {
     return false;
   }
+  // Blast Radius keeps PRs off the hot path — CODEOWNERS + dependents only.
   if (request.params.quickAction === "blast-radius") {
-    return true;
+    return false;
   }
   return wantsCodeHostContext(request.intent.context.queryText ?? "");
 }

@@ -6,18 +6,12 @@ export function isChatSessionIdle(lastActiveAt: number, idleMs: number, now = Da
 }
 
 /**
- * When idle, open the landing screen on a new thread while keeping prior threads in history.
+ * Cold start / extension activate: always land on a blank thread when the previous
+ * active thread has messages. Prior threads stay in history for explicit switch.
+ * Empty active threads are reused so we do not spam New Chat rows on every reload.
  */
-export function shouldStartFreshThreadOnRestore(
-  activeThread: { messages: unknown[] },
-  lastActiveAt: number,
-  idleMs: number,
-  now = Date.now()
-): boolean {
-  if (activeThread.messages.length === 0) {
-    return false;
-  }
-  return isChatSessionIdle(lastActiveAt, idleMs, now);
+export function shouldStartFreshThreadOnRestore(activeThread: { messages: unknown[] }): boolean {
+  return activeThread.messages.length > 0;
 }
 
 export function resolveLastActiveAt(stored: number | undefined, threads: Array<{ updatedAt: number }>): number {

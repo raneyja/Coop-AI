@@ -291,7 +291,7 @@ export function quickActionPromptParts(
           `Context: file ${file}, repo ${repo}, branch ${branch}${host}${ctx.languageId ? `, language ${ctx.languageId}` : ""}${source}.`,
           "Use dependency graph data, evidence bundle context, and open-file content when present.",
           ...(mentions.length ? [mentionModelGuidance("blast-radius", mentions, ctx)] : []),
-          "Prioritize the top 5 ranked risk surfaces from dependency evidence — summarize APIs, integrations, operational risk, and testing surfaces; do not enumerate every dependent path."
+          "Prioritize the top 5 ranked code risk surfaces from dependency evidence (SCIP before heuristic). Summarize testing surfaces and owners; do not enumerate every dependent path or wait on docs/chat."
         ].join("\n"),
         chips: mentionChip(mentions) ? [...chips, mentionChip(mentions)!] : chips
       };

@@ -116,14 +116,12 @@ export class CoopChatPanel {
     });
     this.session.attachWebview(panel.webview);
 
-    void this.session.initialize().then(() => {
-      this.session.refreshEditorContext(vscode.window.activeTextEditor);
-    });
+    void this.session.initialize();
 
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.visible) {
         this.session.touch();
-        this.session.refreshEditorContext(vscode.window.activeTextEditor);
+        // Do not re-chip leftover editor tabs when the chat panel becomes visible.
       }
     });
 

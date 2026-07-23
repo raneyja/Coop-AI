@@ -13,19 +13,13 @@ import {
 import {
   blastRadiusSourceLabelCiWorkflows,
   blastRadiusSourceLabelCodeowners,
-  blastRadiusSourceLabelConfluence,
   blastRadiusSourceLabelCrossRepo,
   blastRadiusSourceLabelDependencies,
   blastRadiusSourceLabelDocsReferences,
-  blastRadiusSourceLabelJira,
   blastRadiusSourceLabelLocalFiles,
   blastRadiusSourceLabelOpenPrs,
   blastRadiusSourceLabelPublicApi,
   blastRadiusSourceLabelRecentChanges,
-  blastRadiusSourceLabelSlack,
-  blastRadiusSourceLabelNotion,
-  blastRadiusSourceLabelGoogleDocs,
-  blastRadiusSourceLabelTeams,
   blastRadiusSourceLabelTests,
   hasPartialIndexCoverage,
   listBlastRadiusSourceLabels,
@@ -40,13 +34,23 @@ import {
   truncationNote,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
-import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
 
-export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
-Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
-Code dependents (tests, examples, integration) are the primary blast surface; docs/README/.d.ts hits are secondary references — mention counts, not full lists.
-Be explicit about transitive effects and testing surfaces when dependency data is available.
-The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
+/**
+ * Blast Radius = code impact first.
+ * Prefer SCIP → index → heuristic. CODEOWNERS = who to ping. Open PRs optional.
+ * Docs/chat/tickets are secondary only when already attached — never invent them.
+ */
+export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You estimate code change impact for the primary file in ## Task.
+Rank dependents by evidence quality: SCIP (compiler) first, then index, then heuristic import matching last.
+Lead with who/what breaks — code dependents and tests. Treat docs/README/.d.ts hits as secondary references (counts only).
+CODEOWNERS means who to notify before merging — keep that short.
+Open PRs touching the path are optional context when present.
+Never claim zero impact when dependency evidence is empty or unverified — say impact was not found in the index.
+Be concise: the Sources card already lists files — summarize and prioritize; do not dump every path.
+The primary blast-radius target is the open file — do not rewrite impact around out-of-scope @ attachments.
+Do not list tsconfig / build-config files as risk surfaces or elevate them under Transitive dependents.
+Never invent an **APIs & integrations** section — use **Related docs** only when docs evidence is attached.
+When CODEOWNERS or open PRs are in the evidence bundle, include **Owners to notify** / **Related PRs** briefly.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -82,16 +86,10 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   lines.push(formatBlastRadiusForPrompt(evidence, file));
   lines.push("");
 
-  appendCitationKeysSection(lines, listBlastRadiusSourceLabels(evidence));
-  const sourcesChecklist = listBlastRadiusSourcesChecklist(evidence);
   const citationKeys = listBlastRadiusSourceLabels(evidence);
+  const sourcesChecklist = listBlastRadiusSourcesChecklist(evidence);
+  appendCitationKeysSection(lines, citationKeys);
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendIntegrationDocsResponseContract(lines, {
-    confluencePages: evidence.confluenceSearch?.pages,
-    notionPages: evidence.notionSearch?.pages,
-    googleDocs: evidence.googleDocsSearch?.documents,
-    targetSection: "APIs & integrations"
-  });
   appendSupplementarySourceCitationGuardrails(
     lines,
     sourcesChecklist,
@@ -101,23 +99,35 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   appendBlastRadiusSummaryGuidance(lines, evidence);
   if (evidence.ciWorkflows?.length) {
     lines.push(
-      "- CI workflows reference this path — include rollout/verification guidance: which workflows run, what to watch during deploy, and how to validate the change."
+      "- CI workflows reference this path — include brief rollout/verification guidance under **Operational risk**."
     );
   }
   if (evidence.ownersByFile?.length) {
     lines.push(
-      "- CODEOWNERS data is attached — recommend notifying owners of **Top risk surfaces** before merging."
+      "- CODEOWNERS data is attached — name owners to notify for **Top risk surfaces** under **Owners to notify**."
     );
   }
   lines.push(
-    "Synthesize impact for the primary target file only. Out-of-scope @ paths must not replace the dependency evidence for the open file."
+    "Synthesize impact for the primary target file only. Prefer SCIP-confirmed paths over heuristic ones in Top risk surfaces."
   );
   lines.push(
-    "Keep the narrative short: lead with ## Top risk surfaces in **Summary**, mirror them exactly in **Direct impact** (no extra paths), cite test files in **Testing surfaces**, treat docs references as secondary."
+    "Keep the narrative short: lead Summary with Top risk surfaces (up to 5), mirror them exactly in Direct impact, cite tests in Testing surfaces. Omit empty sections. Treat any docs/chat/tickets as secondary. Never invent **APIs & integrations**."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
+}
+
+/** Drop legacy/hallucinated APIs section — Blast Radius uses Related docs instead. */
+export function stripForbiddenBlastRadiusSections(content: string): string {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(
+      /(?:^|\n)\*\*APIs & integrations\*\*\s*\n[\s\S]*?(?=\n\*\*[^*]+\*\*\s*\n|$)/gi,
+      "\n"
+    )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
@@ -126,12 +136,8 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
   }
   lines.push("## Summary guidance");
   lines.push(
-    "- Open **Summary** with the partial index coverage caveat from `[Sources: Dependency graph]` before impact conclusions or **Top risk surfaces**."
+    "- Apply the partial index coverage caveat: open **Summary** by stating that dependency impact may be incomplete before listing Top risk surfaces."
   );
-  lines.push(
-    "- Lower evidence strength when the dependency graph notes partial index coverage; do not treat listed dependents as exhaustive."
-  );
-  lines.push("");
 }
 
 function appendMentionScopeSection(lines: string[], input: BlastRadiusSynthesisInput): void {
@@ -154,6 +160,7 @@ function appendMentionScopeSection(lines: string[], input: BlastRadiusSynthesisI
   });
 }
 
+/** Code-first evidence order for the model. Secondary context last and only if present. */
 function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string): string {
   const sections: string[] = [`### ${blastRadiusSourceLabelDependencies()}`, `- Target file: ${file}`];
   const codeDetails = codeDependentDetailsFromEvidence(evidence);
@@ -167,20 +174,16 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
     );
   }
 
+  if (evidence.graphMeta) {
+    sections.push(
+      `- Graph source: ${evidence.graphMeta.source ?? "unknown"} · edges: ${evidence.graphMeta.edgeCount ?? "?"} · lightning: ${evidence.graphMeta.lightningEnabled === false ? "disabled" : "enabled"}`
+    );
+  }
+
   if (evidence.directDependents?.length) {
     sections.push(
       `- Code dependents (${evidence.directDependents.length}):\n${evidence.directDependents.slice(0, 12).map((dep) => `  - ${dep}`).join("\n")}` +
         truncationNote(evidence.directDependents.length, 12)
-    );
-  }
-  if (evidence.docsReferences?.length) {
-    sections.push(
-      `### ${blastRadiusSourceLabelDocsReferences()}\n` +
-        evidence.docsReferences
-          .slice(0, 10)
-          .map((entry) => `- ${entry.path} (${entry.source})`)
-          .join("\n") +
-        truncationNote(evidence.docsReferences.length, 10)
     );
   }
   if (evidence.transitiveDependents?.length) {
@@ -199,11 +202,6 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   } else if (!evidence.directDependents?.length && !evidence.transitiveDependents?.length) {
     sections.push("- Impact unverified — no dependents found in index or fallback search.");
   }
-  if (evidence.graphMeta) {
-    sections.push(
-      `- Graph source: ${evidence.graphMeta.source ?? "unknown"} · edges: ${evidence.graphMeta.edgeCount ?? "?"} · lightning: ${evidence.graphMeta.lightningEnabled === false ? "disabled" : "enabled"}`
-    );
-  }
 
   if (evidence.testFiles?.length) {
     sections.push(
@@ -213,25 +211,14 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
     );
   }
 
-  if (evidence.publicExports?.length) {
+  if (evidence.ownersByFile?.length) {
     sections.push(
-      `### ${blastRadiusSourceLabelPublicApi()}\n` +
-        evidence.publicExports
+      `### ${blastRadiusSourceLabelCodeowners()}\n` +
+        evidence.ownersByFile
           .slice(0, 10)
-          .map((entry) => `- ${entry.symbol} (${entry.kind}, line ${entry.line})`)
+          .map((entry) => `- ${entry.file}: ${entry.owner} (${entry.source})`)
           .join("\n") +
-        truncationNote(evidence.publicExports.length, 10)
-    );
-  }
-
-  if (evidence.recentChanges?.length) {
-    sections.push(
-      `### ${blastRadiusSourceLabelRecentChanges()}\n` +
-        evidence.recentChanges
-          .slice(0, 10)
-          .map((change) => `- #${change.number} (${change.state}): ${change.title}`)
-          .join("\n") +
-        truncationNote(evidence.recentChanges.length, 10)
+        truncationNote(evidence.ownersByFile.length, 10)
     );
   }
 
@@ -239,49 +226,21 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
     sections.push(
       `### ${blastRadiusSourceLabelOpenPrs()}\n` +
         evidence.openPullRequests
-          .slice(0, 10)
+          .slice(0, 8)
           .map((pr) => `- #${pr.number} (${pr.state}): ${pr.title}`)
           .join("\n") +
-        truncationNote(evidence.openPullRequests.length, 10)
+        truncationNote(evidence.openPullRequests.length, 8)
     );
   }
 
-  if (evidence.ownersByFile?.length) {
+  if (evidence.publicExports?.length) {
     sections.push(
-      `### ${blastRadiusSourceLabelCodeowners()}\n` +
-        evidence.ownersByFile
-          .slice(0, 10)
-          .map((entry) => `- ${entry.file}: @${entry.owner} (${entry.source})`)
+      `### ${blastRadiusSourceLabelPublicApi()}\n` +
+        evidence.publicExports
+          .slice(0, 8)
+          .map((entry) => `- ${entry.symbol} (${entry.kind}, line ${entry.line})`)
           .join("\n") +
-        truncationNote(evidence.ownersByFile.length, 10)
-    );
-  }
-
-  if (evidence.jiraSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelJira()}\n` +
-        (evidence.jiraSearch.error
-          ? `- Error: ${evidence.jiraSearch.error}`
-          : evidence.jiraSearch.issues?.length
-            ? evidence.jiraSearch.issues
-                .slice(0, 8)
-                .map((issue) => `- ${issue.key}: ${issue.summary} (${issue.status})`)
-                .join("\n") + truncationNote(evidence.jiraSearch.issues.length, 8)
-            : "- No matching Jira issues")
-    );
-  }
-
-  if (evidence.confluenceSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelConfluence()}\n` +
-        (evidence.confluenceSearch.error
-          ? `- Error: ${evidence.confluenceSearch.error}`
-          : evidence.confluenceSearch.pages?.length
-            ? evidence.confluenceSearch.pages
-                .slice(0, 8)
-                .map((page) => `- ${page.title}`)
-                .join("\n") + truncationNote(evidence.confluenceSearch.pages.length, 8)
-            : "- No matching Confluence pages")
+        truncationNote(evidence.publicExports.length, 8)
     );
   }
 
@@ -290,9 +249,20 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
       `### ${blastRadiusSourceLabelCiWorkflows()}\n` +
         evidence.ciWorkflows
           .slice(0, 8)
-          .map((entry) => `- ${entry.path} references ${entry.matchedPath}`)
+          .map((wf) => `- ${wf.path}${wf.matchedPath ? ` (matched ${wf.matchedPath})` : ""}`)
           .join("\n") +
         truncationNote(evidence.ciWorkflows.length, 8)
+    );
+  }
+
+  if (evidence.recentChanges?.length) {
+    sections.push(
+      `### ${blastRadiusSourceLabelRecentChanges()}\n` +
+        evidence.recentChanges
+          .slice(0, 8)
+          .map((change) => `- #${change.number} (${change.state}): ${change.title}`)
+          .join("\n") +
+        truncationNote(evidence.recentChanges.length, 8)
     );
   }
 
@@ -301,80 +271,42 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
       `### ${blastRadiusSourceLabelCrossRepo()}\n` +
         evidence.crossRepoConsumers
           .slice(0, 8)
-          .map((entry) => `- ${entry.repoId}: ${entry.path} (${entry.source})`)
+          .map((entry) => `- ${entry.repoId}: ${entry.path}`)
           .join("\n") +
         truncationNote(evidence.crossRepoConsumers.length, 8)
     );
   }
 
-  if (evidence.slackSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelSlack()}\n` +
-        (evidence.slackSearch.error
-          ? `- Error: ${evidence.slackSearch.error}`
-          : evidence.slackSearch.messages?.length
-            ? evidence.slackSearch.messages
-                .slice(0, 8)
-                .map((message) => `- ${message.channelName ?? "Slack"}: ${message.text.slice(0, 160)}`)
-                .join("\n") + truncationNote(evidence.slackSearch.messages.length, 8)
-            : "- No matching Slack messages")
+  // Secondary context — only when already attached (not fetched on the hot path).
+  const secondary: string[] = [];
+  if (evidence.docsReferences?.length) {
+    secondary.push(
+      `### ${blastRadiusSourceLabelDocsReferences()} (secondary)\n` +
+        evidence.docsReferences
+          .slice(0, 6)
+          .map((entry) => `- ${entry.path} (${entry.source})`)
+          .join("\n") +
+        truncationNote(evidence.docsReferences.length, 6)
     );
   }
-
-  if (evidence.notionSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelNotion()}\n` +
-        (evidence.notionSearch.error
-          ? `- Error: ${evidence.notionSearch.error}`
-          : evidence.notionSearch.pages?.length
-            ? evidence.notionSearch.pages
-                .slice(0, 8)
-                .map((page) => `- ${page.title}`)
-                .join("\n") + truncationNote(evidence.notionSearch.pages.length, 8)
-            : "- No matching Notion pages")
-    );
-  }
-
-  if (evidence.googleDocsSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelGoogleDocs()}\n` +
-        (evidence.googleDocsSearch.error
-          ? `- Error: ${evidence.googleDocsSearch.error}`
-          : evidence.googleDocsSearch.documents?.length
-            ? evidence.googleDocsSearch.documents
-                .slice(0, 8)
-                .map((doc) => `- ${doc.title}`)
-                .join("\n") + truncationNote(evidence.googleDocsSearch.documents.length, 8)
-            : "- No matching Google Docs")
-    );
-  }
-
-  if (evidence.teamsSearch) {
-    sections.push(
-      `### ${blastRadiusSourceLabelTeams()}\n` +
-        (evidence.teamsSearch.error
-          ? `- Error: ${evidence.teamsSearch.error}`
-          : evidence.teamsSearch.messages?.length
-            ? evidence.teamsSearch.messages
-                .slice(0, 8)
-                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
-                .join("\n") + truncationNote(evidence.teamsSearch.messages.length, 8)
-            : "- No matching Teams messages")
-    );
-  }
-
   if (evidence.localFiles?.files?.length) {
-    sections.push(
+    secondary.push(
       `### ${blastRadiusSourceLabelLocalFiles()}\n` +
-        evidence.localFiles.files.map((entry) => `- ${entry.path}`).join("\n")
+        evidence.localFiles.files
+          .slice(0, 4)
+          .map((entry) => `- ${entry.path}`)
+          .join("\n")
     );
+  }
+  if (secondary.length) {
+    sections.push("### Secondary context (do not displace code impact)\n" + secondary.join("\n\n"));
   }
 
   if (evidence.warnings?.length) {
-    sections.push("### Warnings\n" + evidence.warnings.map((warning) => `- ${warning}`).join("\n"));
+    sections.push(`- Warnings:\n${evidence.warnings.slice(0, 5).map((w) => `  - ${w}`).join("\n")}`);
   }
 
-  return sections.join("\n\n");
+  return sections.join("\n");
 }
 
 function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastRadiusDependentDetail[] {
@@ -384,9 +316,15 @@ function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastR
       source: asGraphEdgeSource(entry.source)
     }));
   }
-  const source = asGraphEdgeSource(evidence.graphMeta?.source);
-  return [
-    ...(evidence.directDependents ?? []).map((path) => ({ path, depth: 1, source })),
-    ...(evidence.transitiveDependents ?? []).map((path) => ({ path, depth: 2, source }))
-  ];
+  const direct = (evidence.directDependents ?? []).map((path) => ({
+    path,
+    depth: 1 as const,
+    source: asGraphEdgeSource(evidence.graphMeta?.source)
+  }));
+  const transitive = (evidence.transitiveDependents ?? []).map((path) => ({
+    path,
+    depth: 2 as const,
+    source: asGraphEdgeSource(evidence.graphMeta?.source)
+  }));
+  return [...direct, ...transitive];
 }

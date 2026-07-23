@@ -579,7 +579,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       for (const session of coopSessionRegistry.getAll()) {
-        session.refreshEditorContext(editor);
+        session.onActiveTextEditorChanged(editor);
       }
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {

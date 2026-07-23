@@ -234,6 +234,51 @@ test("ownership summary highlights primary owner", () => {
   assert.ok(summary.recommendedActions.some((action) => action.kind === "open-file"));
 });
 
+test("blast radius summary marks heuristic-only dependents as medium not strong", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "src/CoopSettingsPanel.ts",
+    directDependents: ["src/a.ts", "src/b.ts"],
+    testFiles: [{ path: "src/a.test.ts", source: "heuristic" }],
+    ownersByFile: [{ file: "src/a.ts", owner: "@team", source: "codeowners" }],
+    graphMeta: { edgeCount: 31, source: "heuristic", lightningEnabled: true }
+  };
+  const summary = summarizeBlastRadius(evidence, "src/CoopSettingsPanel.ts");
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason ?? "", /heuristic/i);
+});
+
+test("blast radius summary stays medium when only a minority of edges are SCIP", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "src/CoopSettingsPanel.ts",
+    directDependents: Array.from({ length: 23 }, (_, i) => `src/dep${i}.ts`),
+    transitiveDependents: ["src/a.test.ts", "src/b.test.ts"],
+    dependentDetails: [
+      ...Array.from({ length: 23 }, (_, i) => ({
+        path: `src/dep${i}.ts`,
+        depth: 1,
+        source: "heuristic" as const
+      })),
+      { path: "src/a.test.ts", depth: 2, source: "scip" as const },
+      { path: "src/b.test.ts", depth: 2, source: "scip" as const }
+    ],
+    openPullRequests: [
+      {
+        number: 1,
+        title: "wip",
+        state: "open",
+        merged: false,
+        updatedAt: "2026-07-01T00:00:00Z"
+      }
+    ],
+    ownersByFile: [{ file: "src/CoopSettingsPanel.ts", owner: "@jon", source: "codeowners" }],
+    graphMeta: { edgeCount: 30, source: "heuristic", lightningEnabled: true }
+  };
+  const summary = summarizeBlastRadius(evidence, "src/CoopSettingsPanel.ts");
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason ?? "", /Only 2 of 25/);
+  assert.ok(summary.limitations.some((line) => /SCIP\/index-confirmed/i.test(line)));
+});
+
 test("blast radius summary handles no dependents with unverified messaging", () => {
   const evidence: BlastRadiusEvidence = {
     file: "src/server/routes.ts",

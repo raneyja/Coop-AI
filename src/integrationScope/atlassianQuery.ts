@@ -34,6 +34,28 @@ export function confluenceScopeBlockMessage(scope: ResolvedIntegrationScope | un
   );
 }
 
+/** Split a JQL/CQL string into WHERE clause + trailing ORDER BY (if any). */
+function splitOrderByClause(query: string): { where: string; orderBy: string } {
+  const match = /\sORDER\s+BY\s+/i.exec(query);
+  if (!match || match.index === undefined) {
+    return { where: query, orderBy: "" };
+  }
+  return {
+    where: query.slice(0, match.index).trim(),
+    orderBy: query.slice(match.index).trim()
+  };
+}
+
+function applyScopeKeepingOrderBy(query: string, scopeClause: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return scopeClause;
+  }
+  const { where, orderBy } = splitOrderByClause(trimmed);
+  const scoped = where ? `(${where}) AND (${scopeClause})` : scopeClause;
+  return orderBy ? `${scoped} ${orderBy}` : scoped;
+}
+
 /** Append Jira `project in (...)` filters so queries only hit allowlisted projects. */
 export function applyJiraProjectScope(
   queries: string[],
@@ -47,13 +69,7 @@ export function applyJiraProjectScope(
   }
   const keyList = keys.map((key) => `"${escapeJqlString(key)}"`).join(", ");
   const scopeClause = `project in (${keyList})`;
-  return queries.map((query) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      return scopeClause;
-    }
-    return `(${trimmed}) AND (${scopeClause})`;
-  });
+  return queries.map((query) => applyScopeKeepingOrderBy(query, scopeClause));
 }
 
 /** Append Confluence `space in (...)` filters so queries only hit allowlisted spaces. */
@@ -69,13 +85,7 @@ export function applyConfluenceSpaceScope(
   }
   const keyList = keys.map((key) => `"${escapeCqlString(key)}"`).join(", ");
   const scopeClause = `space in (${keyList})`;
-  return queries.map((query) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      return scopeClause;
-    }
-    return `(${trimmed}) AND (${scopeClause})`;
-  });
+  return queries.map((query) => applyScopeKeepingOrderBy(query, scopeClause));
 }
 
 export function filterJiraIssuesByProject<T extends { key: string }>(

@@ -53,8 +53,7 @@ const DISCUSSION_INTEGRATIONS = [
 test("repo-wide quick actions are enumerated consistently", () => {
   assert.deepEqual([...REPO_WIDE_INTEGRATION_QUICK_ACTIONS], [
     "knowledge-gaps",
-    "understand-repo",
-    "blast-radius"
+    "understand-repo"
   ]);
 });
 
@@ -62,6 +61,15 @@ test("understand-repo fetches from all connected tools", () => {
   assert.equal(shouldFetchRepoWideIntegrations(request("understand-repo")), true);
   assert.equal(shouldFetchJiraContext(request("understand-repo")), true);
   assert.equal(shouldFetchSlackContext(request("understand-repo")), true);
+});
+
+test("blast-radius skips repo-wide doc/discussion auto-fetch (code-impact hot path)", () => {
+  const blast = request("blast-radius", "dependencies");
+  assert.equal(shouldFetchRepoWideIntegrations(blast), false);
+  assert.equal(shouldFetchJiraContext(blast), false);
+  assert.equal(shouldFetchNotionContext(blast), false);
+  assert.equal(shouldFetchSlackContext(blast), false);
+  assert.equal(shouldFetchDiscussionIntegrations(blast), false);
 });
 
 for (const action of REPO_WIDE_INTEGRATION_QUICK_ACTIONS) {

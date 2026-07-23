@@ -5,6 +5,7 @@ import { IntegrationResultCollapsible } from "./components/IntegrationResultCard
 import {
   extractConnectionBriefs,
   findSingleCollapsibleElement,
+  renderConnectionBody,
   resolveConnectionBrief
 } from "./evidenceConnectionBriefs";
 
@@ -57,4 +58,29 @@ test("findSingleCollapsibleElement returns lone section", () => {
     ),
     null
   );
+});
+
+test("renderConnectionBody hides nested header matching connection brief", () => {
+  const dependents = collapsible({
+    title: "Code dependents (30)",
+    sourceLabel: "[Sources: Dependency graph]",
+    open: false,
+    onToggle: () => undefined,
+    children: React.createElement("p", null, "deps")
+  });
+  const docs = collapsible({
+    title: "Docs references (1)",
+    sourceLabel: "[Sources: Docs references]",
+    open: false,
+    onToggle: () => undefined,
+    children: React.createElement("p", null, "docs")
+  });
+  const body = renderConnectionBody([dependents, docs], {
+    title: "Code dependents (30)",
+    sourceLabel: "[Sources: Dependency graph]"
+  });
+  const elements = React.Children.toArray(body).filter(React.isValidElement) as React.ReactElement[];
+  assert.equal(elements.length, 2);
+  assert.equal((elements[0]?.props as { hideHeader?: boolean }).hideHeader, true);
+  assert.equal((elements[1]?.props as { hideHeader?: boolean }).hideHeader, undefined);
 });

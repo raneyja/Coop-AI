@@ -411,7 +411,7 @@
           "type": "number",
           "default": 240,
           "minimum": 0,
-          "description": "Minutes away from CoopAI before the sidebar opens on a fresh thread instead of restoring the last one. Prior threads stay in the thread list. Set to 0 to always restore the last thread."
+          "description": "Legacy. CoopAI always opens on a blank thread; prior chats stay in the thread list until you open one."
         },
         "coopAI.projectInstructions.enabled": {
           "type": "boolean",
