@@ -196,7 +196,6 @@ import {
   updatePinnedPromptIds
 } from "../prompts/pinnedPrompts";
 import { ChatThreadStore } from "./chatThreadStore";
-import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
 import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
 import {
@@ -366,6 +365,11 @@ export class CoopChatSession {
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
   private editorContextSuppressedUntil = 0;
+  /**
+   * When false (cold start / New Chat), do not create a file chip from leftover
+   * focused or selecting editors. Becomes true after the user focuses a text tab.
+   */
+  private allowEditorAutoChip = false;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
   /**
@@ -497,15 +501,15 @@ export class CoopChatSession {
     this.postTheme();
     await this.pushSettingsState();
     if (this.threadStore) {
-      const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
+      // Always blank chat on activate — history is only restored when the user
+      // opens a past thread (activateThread → restoreContextForActivatedThread).
+      const active = this.threadStore.resolveStartupThread();
       this.chatHistory.push(...active.messages);
       this.threadArtifacts = [...(active.artifacts ?? [])];
       this.sessionCostUsd = active.sessionCostUsd;
       this.setThreadTitle(active.title);
       if (active.repoContext) {
-        // Cold start / extension reload: restore owner/repo only.
-        // Do NOT chip or open last session's file — that runs when the user
-        // explicitly switches to (opens) that thread in the UI.
+        // Owner/repo only — never chip or open last session's file on cold start.
         this.currentContext = stripStaleContextWarning(
           normalizeRepoContext(
             mergeRepoContext(this.currentContext, {
@@ -519,8 +523,12 @@ export class CoopChatSession {
         );
       }
     }
-    this.dropFileChipUnlessOpenInEditor();
-    this.snapContextFromOpenEditors();
+    // Blank landing: no file chip from leftover VS Code tabs (e.g. CoopSettingsPanel.ts).
+    // Auto-chip resumes when the user focuses an editor or opens a past thread.
+    this.remoteProvenanceFile = undefined;
+    this.allowEditorAutoChip = false;
+    this.clearFileFieldsFromContext();
+    this.editorContextSuppressedUntil = Date.now() + 8_000;
     this.postContext();
     this.postChatHistory();
     this.pushThreadsList();
@@ -583,6 +591,11 @@ export class CoopChatSession {
       }
       return;
     }
+    // Cold start / New Chat: ignore leftover focus and selection until the user
+    // focuses a text editor (see onActiveTextEditorChanged).
+    if (!this.allowEditorAutoChip && !this.currentContext.file?.trim()) {
+      return;
+    }
     const intent = this.intentDetector.detectEditorIntent(effective);
     const snapPrefs = {
       ...this.preferences,
@@ -606,6 +619,22 @@ export class CoopChatSession {
     void this.intentDebouncer.debounce(event, (debounced) => this.handleEditorIntent(debounced));
   }
 
+  /**
+   * User focused a text editor tab — allow auto-chip from that point forward.
+   * Called only from onDidChangeActiveTextEditor (not selection / visibility).
+   * Ignored during cold-start / New Chat suppress so layout restore cannot enable chipping.
+   */
+  public onActiveTextEditorChanged(editor: vscode.TextEditor | undefined): void {
+    if (
+      editor &&
+      !editor.document.isClosed &&
+      Date.now() >= this.editorContextSuppressedUntil
+    ) {
+      this.allowEditorAutoChip = true;
+    }
+    this.refreshEditorContext(editor);
+  }
+
   /** Tab close / visible-editors change — clear chip if the chipped file is gone. */
   public reconcileEditorFileChips(): void {
     if (Date.now() < this.editorContextSuppressedUntil) {
@@ -621,8 +650,9 @@ export class CoopChatSession {
   }
 
   /**
-   * Prefer the passed editor, else a tab matching current context file, else any visible
-   * tab when there is no file chip yet (Downloads / Cmd+O on startup).
+   * Prefer the passed (focused) editor, else a tab matching the current file chip.
+   * Do NOT fall back to an arbitrary visible tab — that re-chipped leftover layout
+   * files as Local on cold start / New Chat / webview focus.
    */
   private resolveEditorForContextRefresh(
     editor: vscode.TextEditor | undefined
@@ -634,42 +664,15 @@ export class CoopChatSession {
         return editor;
       }
     }
-    const matched =
-      pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
-    if (matched) {
-      return matched;
-    }
-    // Explorer pick set a file chip but the tab isn't open yet — don't steal it with
-    // an unrelated visible editor (that was the false "opened" CoopSettingsPanel bug).
-    if (preferred?.trim()) {
+    if (!preferred?.trim()) {
       return undefined;
     }
-    return (
-      pickLocalEditorForContext() ??
-      pickEditorForContext() ??
-      vscode.window.activeTextEditor
-    );
-  }
-
-  /** Immediate chip sync (no debounce) — used on initialize / webview-ready. */
-  private snapContextFromOpenEditors(): boolean {
-    const editor = this.resolveEditorForContextRefresh(vscode.window.activeTextEditor);
-    if (!editor) {
-      return false;
-    }
-    const snapPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    this.currentContext = mergeRepoContext(
-      this.currentContext,
-      repoContextFromEditor(editor, snapPrefs, this.currentContext)
-    );
-    this.currentContext = this.withRemoteProvenance(this.currentContext);
-    return Boolean(this.currentContext.file?.trim());
+    return pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
   }
 
   /**
    * Clear a file chip that isn't backed by an open editor tab.
-   * Used on cold start when there is no thread file to restore — Welcome-only must not
-   * ghost yesterday's file. Thread open uses applyThreadRepoContext (chip + open) instead.
+   * Used when editors close; thread open uses applyThreadRepoContext (chip + open) instead.
    */
   private dropFileChipUnlessOpenInEditor(): void {
     const preferred = this.currentContext.file?.trim();
@@ -701,10 +704,14 @@ export class CoopChatSession {
         repo: this.currentContext.repo,
         branch: this.currentContext.branch
       });
+      this.allowEditorAutoChip = false;
+      this.editorContextSuppressedUntil = Date.now() + 8_000;
       this.activateThread(thread);
       return;
     }
     this.remoteProvenanceFile = undefined;
+    this.allowEditorAutoChip = false;
+    this.editorContextSuppressedUntil = Date.now() + 8_000;
     this.resetChatState();
     this.clearFileFieldsFromContext();
     this.post({ type: "chat:history", payload: { messages: [], artifacts: [] } });
@@ -868,6 +875,7 @@ export class CoopChatSession {
     thread: ReturnType<ChatThreadStore["getActiveThread"]>
   ): Promise<void> {
     if (thread.repoContext?.file?.trim()) {
+      this.allowEditorAutoChip = true;
       await this.applyThreadRepoContext(thread.repoContext);
     } else {
       this.remoteProvenanceFile = undefined;
@@ -1201,8 +1209,8 @@ export class CoopChatSession {
       case "webview-ready":
         this.postTheme();
         if (source === "chat") {
-          // Snap open tabs only — do not drop thread file chips mid-open.
-          this.snapContextFromOpenEditors();
+          // Do not snap leftover editor tabs — cold start / New Chat stay blank until
+          // the user focuses a file or opens a past thread.
           this.postContext();
           try {
             await this.pushSettingsState();

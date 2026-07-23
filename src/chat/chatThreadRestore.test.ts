@@ -33,24 +33,11 @@ async function run(): Promise<void> {
   });
 
   await test("shouldStartFreshThreadOnRestore keeps empty threads on landing", () => {
-    assert.equal(
-      shouldStartFreshThreadOnRestore({ messages: [] }, now - 86_400_000, 60_000, now),
-      false
-    );
+    assert.equal(shouldStartFreshThreadOnRestore({ messages: [] }), false);
   });
 
-  await test("shouldStartFreshThreadOnRestore restores recent threads with messages", () => {
-    assert.equal(
-      shouldStartFreshThreadOnRestore({ messages: [{ content: "hi" }] }, now - 60_000, 4 * 60_000, now),
-      false
-    );
-  });
-
-  await test("shouldStartFreshThreadOnRestore starts fresh after idle when messages exist", () => {
-    assert.equal(
-      shouldStartFreshThreadOnRestore({ messages: [{ content: "hi" }] }, now - 5 * 60_000, 60_000, now),
-      true
-    );
+  await test("shouldStartFreshThreadOnRestore starts fresh when prior thread has messages", () => {
+    assert.equal(shouldStartFreshThreadOnRestore({ messages: [{ content: "hi" }] }), true);
   });
 
   await test("resolveLastActiveAt migrates legacy snapshots from thread timestamps", () => {

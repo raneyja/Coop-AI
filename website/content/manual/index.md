@@ -297,7 +297,7 @@ The chip above the composer (right side) shows which file Coop is using as chat 
 - Choose a file in Coop’s explorer → the chip updates and the file opens in the editor.
 - Click the chip → focuses that file in the editor.
 - Close that tab → the file chip clears.
-- Reload VS Code → Coop does **not** reopen last session’s file or leave a ghost file chip (unless that file is already open).
+- Open or reload Coop → blank chat with **no** file chip and **no** prior conversation loaded. Leftover editor tabs from VS Code’s layout are not attached until you focus them or open a past thread.
 - Switch back to a past chat thread that used a file → that file chips and opens again.
 
 A **repo-only** chip (`/RepoName`) appears only when you choose **Use repo** in the explorer with no file selected.
