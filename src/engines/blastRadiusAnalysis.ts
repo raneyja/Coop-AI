@@ -3,24 +3,28 @@ import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
+import { parseCodeowners } from "../api/codeHosts/ownershipAnalysis";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
-import { fetchCodeHostSearchContext, type CodeHostPullRequestSnippet } from "../context/codeHostContext";
-import { getOwnershipGraphEngine } from "./ownershipGraphRegistry";
+import type { CodeHostPullRequestSnippet } from "../context/codeHostContext";
 import type { IndexBackend } from "../indexing/indexBackend";
 import {
   type BlastRadiusDependentDetail,
   type GraphEdgeSource,
   codePathsFromDependentDetails,
   normalizeGraphRepoId,
-  searchCiWorkflowReferences,
-  searchCrossRepoConsumers,
   searchDependentsFallback,
-  searchPublicExports,
-  searchTestFilesReferencingTarget,
   splitBlastRadiusDependents
 } from "./blastRadiusDependentsFallback";
 
 export type { BlastRadiusDependentDetail, GraphEdgeSource };
+
+const CODEOWNERS_CANDIDATES = [".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"];
+/** Expand at most this many direct edges for one parallel transitive hop. */
+const TRANSITIVE_EXPAND_LIMIT = 5;
+/** Cap transitive paths returned on the hot path. */
+const TRANSITIVE_RESULT_LIMIT = 15;
+/** CODEOWNERS lookup for target + a few top dependents only. */
+const OWNER_PATH_LIMIT = 6;
 
 export type BlastRadiusOwnerEntry = {
   file: string;
@@ -185,44 +189,16 @@ export class BlastRadiusAnalysisEngine {
     }
 
     const impactedFiles = uniquePaths([file, ...directDependents, ...transitiveDependents]).slice(0, 30);
-    const ownersByFile = await this.resolveOwners(resolved, impactedFiles, warnings);
+    // CODEOWNERS only — never mapOwnership (commit/PR history per file) on this hot path.
+    const ownersByFile = await this.resolveOwnersFromCodeowners(resolved, impactedFiles, warnings);
 
-    let openPullRequests: CodeHostPullRequestSnippet[] = [];
-    let recentChanges: BlastRadiusRecentChange[] = [];
-    try {
-      const impactedTerms = [file, ...directDependents.slice(0, 5)].join(" ");
-      const search = await fetchCodeHostSearchContext({
-        router: this.options.codeHostRouter,
-        provider: resolved.provider,
-        owner: resolved.owner,
-        repo: resolved.repo,
-        queryText: `open pull requests ${impactedTerms}`,
-        limit: 30
-      });
-      if (search.error) {
-        warnings.push(search.error);
-      } else {
-        openPullRequests = search.pullRequests.filter((pr) => pr.state === "open" || !pr.merged);
-        recentChanges = filterRecentChangesForImpact(search.pullRequests, file, directDependents);
-      }
-    } catch (error) {
-      warnings.push(`Open PR search failed: ${errorMessage(error)}`);
-    }
-
-    let testFiles: BlastRadiusTestFile[] = [];
-    let publicExports: BlastRadiusPublicExport[] = [];
-    let ciWorkflows: BlastRadiusCiWorkflow[] = [];
-    let crossRepoConsumers: BlastRadiusCrossRepoConsumer[] = [];
-
-    if (this.options.indexBackend && lightningEnabled) {
-      testFiles = await searchTestFilesReferencingTarget(this.options.indexBackend, repoId, file);
-      publicExports = await searchPublicExports(this.options.indexBackend, repoId, file);
-      ciWorkflows = await searchCiWorkflowReferences(this.options.indexBackend, repoId, impactedFiles);
-      crossRepoConsumers = await searchCrossRepoConsumers(this.options.indexBackend, repoId, file);
-    }
-
-    // Slack is off the Blast Radius hot path — code dependents + CODEOWNERS + PRs
-    // are the primary signal. Discussion search belongs in enrichment for other actions.
+    // Open PRs / CI / cross-repo / export scans are deferred off the critical path.
+    // Dependents + CODEOWNERS are enough to start synthesis in seconds, not minutes.
+    const openPullRequests: CodeHostPullRequestSnippet[] = [];
+    const recentChanges: BlastRadiusRecentChange[] = [];
+    const publicExports: BlastRadiusPublicExport[] = [];
+    const ciWorkflows: BlastRadiusCiWorkflow[] = [];
+    const crossRepoConsumers: BlastRadiusCrossRepoConsumer[] = [];
     const slackSearch: BlastRadiusReport["slackSearch"] = undefined;
 
     const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);
@@ -233,6 +209,7 @@ export class BlastRadiusAnalysisEngine {
     transitiveDependents = codePaths.transitiveDependents;
     dependentDetails = split.codeDependentDetails;
     const docsReferences = split.docsReferences;
+    const testFiles = testFilesFromDependentDetails(dependentDetails);
 
     return {
       file,
@@ -255,72 +232,75 @@ export class BlastRadiusAnalysisEngine {
     };
   }
 
+  /**
+   * One parallel hop from the top direct dependents — no serial BFS of 50 nodes.
+   * Keeps SCIP depth-2 signals (tests) without multi-minute fan-out.
+   */
   private async collectTransitiveDependents(
     repoId: string,
     rootFile: string,
     direct: string[]
   ): Promise<{ paths: string[]; details: BlastRadiusDependentDetail[] }> {
     const seen = new Set<string>([rootFile, ...direct]);
-    const queue = direct.map((path) => ({ path, depth: 1 }));
+    const toExpand = direct.slice(0, TRANSITIVE_EXPAND_LIMIT);
+    const results = await Promise.all(
+      toExpand.map(async (path) => {
+        try {
+          return await this.options.indexBackend!.dependents(repoId, path);
+        } catch {
+          return { dependents: [] as string[], source: "heuristic" as GraphEdgeSource };
+        }
+      })
+    );
+
     const transitive: string[] = [];
     const details: BlastRadiusDependentDetail[] = [];
-
-    while (queue.length > 0 && transitive.length < 50) {
-      const current = queue.shift()!;
-      try {
-        const result = await this.options.indexBackend!.dependents(repoId, current.path);
-        for (const dep of result.dependents) {
-          if (!seen.has(dep)) {
-            seen.add(dep);
-            transitive.push(dep);
-            const detail = {
-              path: dep,
-              depth: current.depth + 1,
-              source: result.source as GraphEdgeSource
-            };
-            details.push(detail);
-            queue.push({ path: dep, depth: current.depth + 1 });
-          }
+    for (const result of results) {
+      for (const dep of result.dependents) {
+        if (seen.has(dep) || transitive.length >= TRANSITIVE_RESULT_LIMIT) {
+          continue;
         }
-      } catch {
-        break;
+        seen.add(dep);
+        transitive.push(dep);
+        details.push({
+          path: dep,
+          depth: 2,
+          source: result.source as GraphEdgeSource
+        });
       }
     }
 
     return { paths: transitive, details };
   }
 
-  private async resolveOwners(
+  /** Single CODEOWNERS file read + parse — no per-file commit history. */
+  private async resolveOwnersFromCodeowners(
     coords: RepoCoordinates,
     files: string[],
     warnings: string[]
   ): Promise<BlastRadiusOwnerEntry[]> {
-    const engine = getOwnershipGraphEngine();
-    if (!engine) {
-      warnings.push("Ownership engine unavailable for dependent owners.");
+    let content: string | undefined;
+    for (const candidate of CODEOWNERS_CANDIDATES) {
+      try {
+        const file = await this.options.codeHostRouter.getFileContent(candidate, coords);
+        content = file.content;
+        break;
+      } catch {
+        /* try next path */
+      }
+    }
+
+    if (!content) {
+      warnings.push("No CODEOWNERS file found — owner notify list omitted.");
       return [];
     }
 
     const owners: BlastRadiusOwnerEntry[] = [];
-    for (const path of files.slice(0, 20)) {
-      try {
-        const report = await engine.mapOwnership({
-          provider: coords.provider,
-          owner: coords.owner,
-          repo: coords.repo,
-          path,
-          branch: coords.branch
-        });
-        const primary = report.scores.find((score) => score.tier === "primary") ?? report.scores[0];
-        if (primary) {
-          owners.push({
-            file: path,
-            owner: primary.owner,
-            source: report.orgContext?.source === "codeowners" ? "codeowners" : "commits"
-          });
-        }
-      } catch {
-        /* skip individual file owner failures */
+    for (const path of files.slice(0, OWNER_PATH_LIMIT)) {
+      const match = parseCodeowners(content, path);
+      const owner = match?.owners[0];
+      if (owner) {
+        owners.push({ file: path, owner, source: "codeowners" });
       }
     }
     return owners;
@@ -331,29 +311,6 @@ export function createBlastRadiusAnalysisEngine(
   options: BlastRadiusAnalysisOptions
 ): BlastRadiusAnalysisEngine {
   return new BlastRadiusAnalysisEngine(options);
-}
-
-function filterRecentChangesForImpact(
-  pullRequests: CodeHostPullRequestSnippet[],
-  file: string,
-  directDependents: string[]
-): BlastRadiusRecentChange[] {
-  const needles = [file, ...directDependents.slice(0, 10)].map((entry) => entry.toLowerCase());
-  return pullRequests
-    .filter((pr) => {
-      const haystack = `${pr.title} ${pr.number}`.toLowerCase();
-      return needles.some((needle) => haystack.includes(needle.split("/").pop() ?? needle));
-    })
-    .slice(0, 10)
-    .map((pr) => ({
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      author: pr.author,
-      updatedAt: pr.updatedAt,
-      htmlUrl: pr.htmlUrl,
-      kind: "pull_request" as const
-    }));
 }
 
 function assessCompleteness(
@@ -369,6 +326,22 @@ function assessCompleteness(
     return "partial";
   }
   return warnings.length <= 1 ? "partial" : "minimal";
+}
+
+function testFilesFromDependentDetails(details: BlastRadiusDependentDetail[]): BlastRadiusTestFile[] {
+  return details
+    .filter((entry) => isTestPath(entry.path))
+    .slice(0, 10)
+    .map((entry) => ({ path: entry.path, source: entry.source }));
+}
+
+function isTestPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/");
+  return (
+    /\.(test|spec)\.[a-z0-9]+$/i.test(normalized) ||
+    /(^|\/)__tests__\//i.test(normalized) ||
+    /(^|\/)tests?\//i.test(normalized)
+  );
 }
 
 function uniquePaths(paths: string[]): string[] {

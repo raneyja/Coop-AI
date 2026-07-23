@@ -279,7 +279,8 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return ["file_metadata", "ownership"];
   }
   if (action === "blast-radius") {
-    return ["file_metadata", "dependencies"];
+    // Single dependencies fetch — file_metadata also resolved to blast_radius and doubled analyzeImpact.
+    return ["dependencies"];
   }
   if (action === "knowledge-gaps") {
     return ["file_metadata", "ownership", "dependencies", "knowledge_gaps"];

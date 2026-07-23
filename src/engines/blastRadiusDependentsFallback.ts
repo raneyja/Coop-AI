@@ -94,23 +94,33 @@ export async function searchDependentsFallback(
   const dependents: BlastRadiusDependentDetail[] = [];
   let bestSource: GraphEdgeSource = "heuristic";
 
-  for (const pattern of patterns.slice(0, 8)) {
-    try {
-      const result = await indexBackend.search(normalizedRepoId, pattern);
-      const source = mapSearchSourceToGraphSource(result.source);
-      if (source === "zoekt" || source === "scip") {
-        bestSource = source;
+  // Parallel, capped — serial ×8 search was a multi-minute trap when SCIP was empty.
+  const settled = await Promise.all(
+    patterns.slice(0, 3).map(async (pattern) => {
+      try {
+        return await indexBackend.search(normalizedRepoId, pattern);
+      } catch (error) {
+        warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
+        return undefined;
       }
-      for (const hit of result.hits) {
-        const depPath = normalizeHitPath(hit.fileName);
-        if (!depPath || seen.has(depPath)) {
-          continue;
-        }
-        seen.add(depPath);
-        dependents.push({ path: depPath, depth: 1, source });
+    })
+  );
+
+  for (const result of settled) {
+    if (!result) {
+      continue;
+    }
+    const source = mapSearchSourceToGraphSource(result.source);
+    if (source === "zoekt" || source === "scip") {
+      bestSource = source;
+    }
+    for (const hit of result.hits) {
+      const depPath = normalizeHitPath(hit.fileName);
+      if (!depPath || seen.has(depPath)) {
+        continue;
       }
-    } catch (error) {
-      warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
+      seen.add(depPath);
+      dependents.push({ path: depPath, depth: 1, source });
     }
   }
 
@@ -268,6 +278,12 @@ export function isDocsReferencePath(path: string): boolean {
   return false;
 }
 
+/** tsconfig / jsconfig build graph noise — never elevate as blast-radius risk. */
+export function isBuildConfigPath(path: string): boolean {
+  const base = path.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  return /^(tsconfig|jsconfig)(\..+)?\.json$/.test(base);
+}
+
 export function splitBlastRadiusDependents(details: BlastRadiusDependentDetail[]): {
   codeDependentDetails: BlastRadiusDependentDetail[];
   docsReferences: BlastRadiusDependentDetail[];
@@ -275,6 +291,9 @@ export function splitBlastRadiusDependents(details: BlastRadiusDependentDetail[]
   const codeDependentDetails: BlastRadiusDependentDetail[] = [];
   const docsReferences: BlastRadiusDependentDetail[] = [];
   for (const entry of details) {
+    if (isBuildConfigPath(entry.path)) {
+      continue;
+    }
     if (isDocsReferencePath(entry.path)) {
       docsReferences.push(entry);
     } else {
