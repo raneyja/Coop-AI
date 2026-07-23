@@ -65,7 +65,11 @@ import {
 } from "../context/contextGatheringMessages";
 import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerms";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
-import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
+import {
+  createChatDeltaCoalescer,
+  createChatOutputGate,
+  delayUntilMinResponseVisible
+} from "./chatResponseTiming";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
@@ -4030,6 +4034,15 @@ export class CoopChatSession {
 
       const priorHistory = turn.history.slice(0, -1);
       let clearedIntentForOutput = false;
+      const deltaCoalescer = createChatDeltaCoalescer({
+        isCancelled,
+        onFlush: (chunk) => {
+          this.postForThread(turn.threadId, {
+            type: "chat:delta",
+            payload: { chunk, threadId: turn.threadId }
+          });
+        }
+      });
       const outputGate = createChatOutputGate({
         startedAt: turn.startedAt,
         minVisibleMs: minResponseVisibleMs,
@@ -4041,10 +4054,7 @@ export class CoopChatSession {
           }
           full += chunk;
           this.threadRuns.appendPartial(turn, chunk);
-          this.postForThread(turn.threadId, {
-            type: "chat:delta",
-            payload: { chunk, threadId: turn.threadId }
-          });
+          deltaCoalescer.push(chunk);
         }
       });
 
@@ -4052,32 +4062,37 @@ export class CoopChatSession {
         return;
       }
 
-      const result = await this.options.api.streamChat(
-        {
-          message: apiMessage,
-          context: {
-            owner: turnContext.owner,
-            repo: turnContext.repo,
-            branch: turnContext.branch,
-            file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
+      const result = await this.options.api
+        .streamChat(
+          {
+            message: apiMessage,
+            context: {
+              owner: turnContext.owner,
+              repo: turnContext.repo,
+              branch: turnContext.branch,
+              file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
+            },
+            history: priorHistory,
+            attachments: attachments?.length ? attachments : undefined,
+            mentions: options?.mentions,
+            model: runtimeModel.model,
+            provider: runtimeModel.provider,
+            useCase: chatUseCase,
+            temperature: this.preferences.temperature,
+            maxTokens: this.preferences.maxTokens
           },
-          history: priorHistory,
-          attachments: attachments?.length ? attachments : undefined,
-          mentions: options?.mentions,
-          model: runtimeModel.model,
-          provider: runtimeModel.provider,
-          useCase: chatUseCase,
-          temperature: this.preferences.temperature,
-          maxTokens: this.preferences.maxTokens
-        },
-        (chunk) => {
-          outputGate.push(chunk);
-        },
-        this.preferences.apiBaseUrl,
-        signal
-      );
+          (chunk) => {
+            outputGate.push(chunk);
+          },
+          this.preferences.apiBaseUrl,
+          signal
+        )
+        .finally(() => {
+          deltaCoalescer.flush();
+        });
 
       await outputGate.waitUntilOpen();
+      deltaCoalescer.flush();
 
       if (isCancelled()) {
         return;

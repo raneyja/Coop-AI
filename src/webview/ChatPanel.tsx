@@ -46,7 +46,7 @@ import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
-import { useDebouncedProse } from "./hooks/useDebouncedProse";
+import { useStreamDisplayText } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
   ConflictActionId,
@@ -354,11 +354,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
   const [scrollEpoch, setScrollEpoch] = useState(0);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const debouncedStream = useDebouncedProse(streamingBuffer, 75);
+  const streamDisplay = useStreamDisplayText(streamingBuffer);
+  const streamStartedAtRef = useRef<number | null>(null);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
     setIsStreaming(false);
+    streamStartedAtRef.current = null;
     setError("");
     setQuotaNotice(undefined);
     setUsageLabel(undefined);
@@ -387,16 +389,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [quotaNotice?.resetsAt]);
 
   const streamMessage = useMemo<ChatMessage | null>(() => {
-    if (!debouncedStream) {
+    if (!streamDisplay) {
       return null;
     }
     return {
       role: "assistant",
-      content: debouncedStream,
-      timestamp: Date.now(),
+      content: streamDisplay,
+      timestamp: streamStartedAtRef.current ?? Date.now(),
       links: []
     };
-  }, [debouncedStream]);
+  }, [streamDisplay]);
 
   const inlineThinkingOptions = useMemo(
     () => ({ awaitingResponse: isStreaming && !streamMessage }),
@@ -463,7 +465,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const renderBody = useCallback(
-    (content: string, relatedArtifactId?: string, messageTimestamp?: number) => {
+    (
+      content: string,
+      relatedArtifactId?: string,
+      messageTimestamp?: number,
+      options?: { isStreaming?: boolean }
+    ) => {
       const card =
         messageTimestamp !== undefined
           ? patchCards.find((entry) => entry.messageTimestamp === messageTimestamp)
@@ -500,6 +507,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           content={content}
           relatedArtifactId={relatedArtifactId}
           hidePatchFences={hidePatchFences}
+          isStreaming={Boolean(options?.isStreaming)}
         />
       );
       return elements;
@@ -715,6 +723,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIntentFeedback(undefined);
           setIsStreaming(true);
+          if (streamStartedAtRef.current == null) {
+            streamStartedAtRef.current = Date.now();
+          }
           setStreamingBuffer(message.payload.partialText);
           break;
         }
@@ -725,6 +736,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIntentFeedback(undefined);
           setIsStreaming(true);
+          if (streamStartedAtRef.current == null) {
+            streamStartedAtRef.current = Date.now();
+          }
           setStreamingBuffer((prev) => prev + message.payload.chunk);
           break;
         }
@@ -740,6 +754,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           );
           setStreamingBuffer("");
           setIsStreaming(false);
+          streamStartedAtRef.current = null;
           break;
         }
         case "chat:error": {
@@ -754,6 +769,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setError(message.payload.message);
           setIsStreaming(false);
           setStreamingBuffer("");
+          streamStartedAtRef.current = null;
           break;
         }
         case "chat:quota-exceeded":

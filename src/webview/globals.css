@@ -1031,6 +1031,28 @@
     animation-delay: 0.3s;
   }
 
+  .chat-stream-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.05em;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--coop-panel-foreground) 82%, transparent);
+    animation: chat-stream-caret-blink 1.05s step-end infinite;
+  }
+
+  @keyframes chat-stream-caret-blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
   .chat-message--thinking {
     @apply w-full min-w-0;
   }
@@ -2749,7 +2771,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .coop-launch-typewriter-cursor {
+    .coop-launch-typewriter-cursor,
+    .chat-stream-caret {
       animation: none;
       opacity: 1;
     }

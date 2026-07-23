@@ -14,6 +14,8 @@ type ChatProseProps = {
   content: string;
   relatedArtifactId?: string;
   hidePatchFences?: boolean;
+  /** Growing assistant reply — lighter render + trailing caret. */
+  isStreaming?: boolean;
   onOpenFile?: (path: string, line?: number) => void;
   onOpenLink?: (url: string) => void;
   className?: string;
@@ -22,12 +24,19 @@ type ChatProseProps = {
 type RenderOptions = {
   relatedArtifactId?: string;
   plainSourceCitations?: boolean;
+  deferCodeHighlight?: boolean;
+  showStreamCaret?: boolean;
 };
+
+function StreamCaret(): React.ReactElement {
+  return <span className="chat-stream-caret" aria-hidden="true" />;
+}
 
 export function ChatProse({
   content,
   relatedArtifactId,
   hidePatchFences = false,
+  isStreaming = false,
   onOpenFile,
   onOpenLink,
   className
@@ -37,28 +46,44 @@ export function ChatProse({
   const openLink = onOpenLink ?? contextLinks.onOpenLink;
   const document = useMemo(() => parseChatProse(content), [content]);
 
-  const blocks: React.ReactElement[] = [];
-  let inSourcesSection = false;
-
+  const visibleIndexes: number[] = [];
   for (let index = 0; index < document.blocks.length; index += 1) {
     const block = document.blocks[index]!;
     if (hidePatchFences && shouldHidePatchBlock(block)) {
       continue;
     }
+    visibleIndexes.push(index);
+  }
+  const lastVisibleIndex = visibleIndexes[visibleIndexes.length - 1];
+
+  const blocks: React.ReactElement[] = [];
+  let inSourcesSection = false;
+
+  for (const index of visibleIndexes) {
+    const block = document.blocks[index]!;
     if (block.type === "section-heading") {
       inSourcesSection = block.text.trim().toLowerCase() === "sources";
     }
     blocks.push(
       renderBlock(block, index, openFile, openLink, {
         relatedArtifactId,
-        plainSourceCitations: inSourcesSection
+        plainSourceCitations: inSourcesSection,
+        deferCodeHighlight: isStreaming,
+        showStreamCaret: isStreaming && index === lastVisibleIndex
       })
     );
   }
 
   return (
-    <div className={className ? `coop-chat-prose ${className}` : "coop-chat-prose"}>
+    <div
+      className={
+        className
+          ? `coop-chat-prose${isStreaming ? " coop-chat-prose--streaming" : ""} ${className}`
+          : `coop-chat-prose${isStreaming ? " coop-chat-prose--streaming" : ""}`
+      }
+    >
       {blocks}
+      {isStreaming && blocks.length === 0 ? <StreamCaret /> : null}
     </div>
   );
 }
@@ -105,6 +130,7 @@ function renderBlock(
   onOpenLink: ((url: string) => void) | undefined,
   options: RenderOptions
 ): React.ReactElement {
+  const caret = options.showStreamCaret ? <StreamCaret /> : null;
   switch (block.type) {
     case "section-heading":
       return (
@@ -113,31 +139,43 @@ function renderBlock(
           className={block.headingLevel === 2 ? "coop-chat-subheading" : "coop-chat-heading"}
         >
           {block.text}
+          {caret}
         </p>
       );
     case "code-fence":
       return (
-        <ChatCodeBlock key={`code-${index}`} language={block.language} code={block.code} />
+        <React.Fragment key={`code-${index}`}>
+          <ChatCodeBlock
+            language={block.language}
+            code={block.code}
+            deferHighlight={options.deferCodeHighlight}
+          />
+          {caret}
+        </React.Fragment>
       );
     case "code-citation":
       return (
-        <ChatCodeCitation
-          key={`citation-${index}`}
-          startLine={block.startLine}
-          endLine={block.endLine}
-          path={block.path}
-          code={block.code}
-          onOpenFile={onOpenFile}
-        />
+        <React.Fragment key={`citation-${index}`}>
+          <ChatCodeCitation
+            startLine={block.startLine}
+            endLine={block.endLine}
+            path={block.path}
+            code={block.code}
+            onOpenFile={onOpenFile}
+          />
+          {caret}
+        </React.Fragment>
       );
     case "list": {
       const ordered = block.items.every((item) => item.marker === "ordered");
       const ListTag = ordered ? "ol" : "ul";
+      const lastItem = block.items.length - 1;
       return (
         <ListTag key={`list-${index}`} className="coop-chat-list">
           {block.items.map((item, itemIndex) => (
             <li key={`list-${index}-${itemIndex}`}>
               {renderInlineNodes(item.content, onOpenFile, onOpenLink, options)}
+              {caret && itemIndex === lastItem ? caret : null}
             </li>
           ))}
         </ListTag>
@@ -145,22 +183,22 @@ function renderBlock(
     }
     case "jira-ticket-stack":
       return (
-        <ChatJiraTicketStack
-          key={`jira-${index}`}
-          tickets={block.tickets}
-          onOpenLink={onOpenLink}
-        />
+        <React.Fragment key={`jira-${index}`}>
+          <ChatJiraTicketStack tickets={block.tickets} onOpenLink={onOpenLink} />
+          {caret}
+        </React.Fragment>
       );
     case "paragraph":
       return (
         <p key={`paragraph-${index}`} className="coop-chat-paragraph">
           {renderInlineNodes(block.content, onOpenFile, onOpenLink, options)}
+          {caret}
         </p>
       );
     default:
       return (
         <p key={`unknown-${index}`} className="coop-chat-paragraph">
-          {""}
+          {caret}
         </p>
       );
   }
