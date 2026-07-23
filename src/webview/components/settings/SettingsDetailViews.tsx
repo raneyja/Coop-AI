@@ -260,9 +260,9 @@ export function SettingsDetailView({
 
 function assignmentFeatureEnabled(
   feature: CoopFeatureId,
-  draft: { llmEnabled: boolean; autocompleteEnabled: boolean }
+  draft: { autocompleteEnabled: boolean }
 ): boolean {
-  return feature === "autocomplete" ? draft.autocompleteEnabled : draft.llmEnabled;
+  return feature === "autocomplete" ? draft.autocompleteEnabled : true;
 }
 
 function AssignedModelRow({
@@ -300,7 +300,6 @@ function ModelDetail({
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({
-    llmEnabled: prefs.llmEnabled,
     autocompleteEnabled: prefs.autocompleteEnabled
   });
   const [dirty, setDirty] = useState(false);
@@ -310,11 +309,10 @@ function ModelDetail({
   useEffect(() => {
     if (!dirty) {
       setDraft({
-        llmEnabled: prefs.llmEnabled,
         autocompleteEnabled: prefs.autocompleteEnabled
       });
     }
-  }, [prefs.llmEnabled, prefs.autocompleteEnabled, dirty]);
+  }, [prefs.autocompleteEnabled, dirty]);
 
   useEffect(
     () => () => {
@@ -333,7 +331,6 @@ function ModelDetail({
 
   const handleSave = () => {
     onUpdate({
-      llmEnabled: draft.llmEnabled,
       autocompleteEnabled: draft.autocompleteEnabled
     });
     setDirty(false);
@@ -364,11 +361,6 @@ function ModelDetail({
           ))}
         </div>
 
-        <SettingsCheckboxRow
-          title="Enable live LLM chat"
-          checked={draft.llmEnabled}
-          onChange={(checked) => update({ llmEnabled: checked })}
-        />
         <SettingsCheckboxRow
           title="Enable inline autocomplete"
           checked={draft.autocompleteEnabled}
@@ -870,7 +862,6 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
-            llmEnabled: prefs.llmEnabled,
             autocompleteEnabled: prefs.autocompleteEnabled
           })}
           onClick={() => onNavigate("model")}

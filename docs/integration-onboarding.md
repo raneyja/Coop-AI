@@ -273,7 +273,7 @@ Provider and model are selected in the UI. **LLM API keys are not entered in the
 
 **Non-technical setup guide:** [llm-provider-keys.md](./llm-provider-keys.md) — step-by-step instructions to register Anthropic, OpenAI, Gemini, or DeepSeek and hand keys to your operator.
 
-**In the extension:** open **Model**, choose **LLM provider** and **Model**, keep **Enable live LLM chat** on, then try chat after your admin confirms keys are installed.
+**In the extension:** open **Model**, choose **LLM provider** and **Model**, then try chat after your admin confirms keys are installed.
 
 ---
 

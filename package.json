@@ -322,11 +322,6 @@
           "maximum": 8192,
           "description": "Maximum tokens for chat completions."
         },
-        "coopAI.llm.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable live LLM chat via the CoopAI API (/v1/chat)."
-        },
         "coopAI.autocomplete.enabled": {
           "type": "boolean",
           "default": true,

@@ -68,8 +68,8 @@ assert.equal(stripped.model, undefined);
 assert.equal(stripped.llmEnabled, true);
 
 assert.equal(
-  assignedModelsHubSubtitle({ llmEnabled: true, autocompleteEnabled: false }),
-  "Assigned models · Chat on · Autocomplete off"
+  assignedModelsHubSubtitle({ autocompleteEnabled: false }),
+  "Assigned models · Autocomplete off"
 );
 
 console.log("featureModelAssignments: 1/1 tests passed");

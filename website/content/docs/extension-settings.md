@@ -108,10 +108,10 @@ Profile and chat defaults — moved out of Account:
 | --- | --- |
 | **Timezone** | Usage reset times and scheduling context in chat |
 | **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
-| **Model & chat** | Read-only assigned models, **Enable live LLM chat**, **Enable inline autocomplete** |
+| **Model & chat** | Read-only assigned models, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
 
-The Preferences hub subtitle shows **Assigned models** plus chat and autocomplete status.
+The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
 
 <!-- figures -->
 ![Model & chat — Enable inline autocomplete on or off](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
@@ -136,10 +136,9 @@ Production users see these rows as **read-only** with **On** / **Off** badges. C
 
 | Toggle | Setting | Default |
 | --- | --- | --- |
-| **Enable live LLM chat** | `coopAI.llm.enabled` | `true` |
 | **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `true` |
 
-Click **Save model settings** to persist toggles. Provider and model fields are not writable in production — the extension blocks updates to `coopAI.llmProvider` and `coopAI.defaultModel` unless `coopAI.devMode: true`.
+Chat, quick actions, and edit mode are always enabled. Click **Save model settings** to persist the autocomplete toggle. Provider and model fields are not writable in production — the extension blocks updates to `coopAI.llmProvider` and `coopAI.defaultModel` unless `coopAI.devMode: true`.
 
 Full table and routing details: [Model assignments](/docs/model-assignments).
 

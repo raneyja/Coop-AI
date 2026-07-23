@@ -13,7 +13,7 @@ lastUpdated: "2026-07-22"
 | **Not signed in** | **Settings → Account** — **Continue with Google**, **Continue with email**, or **Sign in with SSO** |
 | **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
 | **SSO required** | Your org requires SAML — extension: **Sign in with SSO** (enter org name); admin portal: **Organization name** + **Continue with SSO** on `/login` |
-| **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm **Enable live LLM chat** under Model & chat |
+| **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm you are signed in under Account |
 | **No model picker in settings** | Expected in production — models are Coop-assigned; see [Model assignments](/docs/model-assignments) |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |

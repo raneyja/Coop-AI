@@ -131,8 +131,7 @@ After your administrator confirms keys are on the server:
 3. Open **Model**.
 4. Set **LLM provider** to the brand you registered (e.g. **Anthropic**).
 5. Pick a **Model** from the dropdown (your admin may recommend one).
-6. Leave **Enable live LLM chat** turned **on**.
-7. Try a short message in chat.
+6. Try a short message in chat.
 
 If chat responds with real answers (not a placeholder or “mock” message), setup is working.
 

@@ -602,10 +602,6 @@ export class SecureApiClient {
     baseUrl: string,
     signal?: AbortSignal
   ): Promise<{ message: ChatMessage; usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd: number; provider: string; model: string } }> {
-    if (!readLlmConfiguration().llmEnabled) {
-      throw new Error("LLM chat is disabled. Enable coopAI.llm.enabled in settings.");
-    }
-
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
     this.setBaseUrl(baseUrl);
@@ -791,7 +787,7 @@ export function readConfiguration(): Omit<
     llmProvider,
     temperature: config.get<number>("temperature", 0.5),
     maxTokens: config.get<number>("maxTokens", 2000),
-    llmEnabled: config.get<boolean>("llm.enabled", true),
+    llmEnabled: true,
     autocompleteEnabled: config.get<boolean>("autocomplete.enabled", true),
     useCachedResponses: config.get<boolean>("useCachedResponses", true),
     includeSelection: config.get<boolean>("includeSelection", true),
@@ -1172,9 +1168,6 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   }
   if (safeUpdates.maxTokens !== undefined) {
     ops.push(["maxTokens", safeUpdates.maxTokens]);
-  }
-  if (safeUpdates.llmEnabled !== undefined) {
-    ops.push(["llm.enabled", safeUpdates.llmEnabled]);
   }
   if (safeUpdates.autocompleteEnabled !== undefined) {
     ops.push(["autocomplete.enabled", safeUpdates.autocompleteEnabled]);

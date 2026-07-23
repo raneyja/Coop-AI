@@ -32,12 +32,12 @@ Production users see:
 
 - Copy: *Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).*
 - Four **read-only** rows — feature name, provider · model, and an **On** / **Off** badge
-- Two toggles you **can** change:
-  - **Enable live LLM chat** — master switch for chat, quick actions, and edit mode
+- One toggle you **can** change:
   - **Enable inline autocomplete** — master switch for ghost-text completions
-- **Save model settings** persists only the toggles
+- Chat, quick actions, and edit mode are always on (no toggle)
+- **Save model settings** persists the autocomplete toggle
 
-The Preferences hub subtitle shows **Assigned models** plus chat and autocomplete status (for example, `Assigned models · Chat on · Autocomplete on`).
+The Preferences hub subtitle shows **Assigned models** plus autocomplete status (for example, `Assigned models · Autocomplete on`).
 
 There is **no provider or model picker** in settings. Model routing is operator cost — not user-facing credits or per-model pricing.
 
@@ -49,7 +49,6 @@ Set `coopAI.devMode: true` in VS Code User settings to unlock local `coopAI.llmP
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `coopAI.llm.enabled` | `true` | Same as **Enable live LLM chat** |
 | `coopAI.autocomplete.enabled` | `true` | Same as **Enable inline autocomplete** (global scope) |
 | `coopAI.devMode` | `false` | Unlock provider/model overrides and local PAT flows |
 

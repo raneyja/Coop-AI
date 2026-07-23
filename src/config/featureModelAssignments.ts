@@ -120,12 +120,10 @@ export function resolveRuntimeAutocompleteModel(
 }
 
 export function assignedModelsHubSubtitle(options: {
-  llmEnabled: boolean;
   autocompleteEnabled: boolean;
 }): string {
-  const chat = options.llmEnabled ? "Chat on" : "Chat off";
   const autocomplete = options.autocompleteEnabled ? "Autocomplete on" : "Autocomplete off";
-  return `Assigned models · ${chat} · ${autocomplete}`;
+  return `Assigned models · ${autocomplete}`;
 }
 
 export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {

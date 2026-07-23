@@ -361,14 +361,13 @@ Coop assigns a model per feature — you do **not** pick provider or model on Pr
 
 Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
 
-Two toggles remain editable:
+One toggle remains editable:
 
 | Toggle | Effect |
 | --- | --- |
-| **Enable live LLM chat** | Chat, quick actions, and edit patches (badges show **Off** when disabled) |
 | **Enable inline autocomplete** | Inline ghost text (syncs with the header **Autocomplete** toggle) |
 
-Click **Save model settings** after changing toggles.
+Chat, quick actions, and edit patches are always on. Click **Save model settings** after changing the autocomplete toggle.
 
 ### Inline complete and edit selection
 

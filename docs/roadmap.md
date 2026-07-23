@@ -22,7 +22,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Capability | Notes |
 |------------|-------|
 | Unified `coopAI.apiBaseUrl` | Chat, graph, jobs on one host; `jobsBaseUrl` deprecated |
-| Live chat via `streamChat` | Calls `/v1/chat`; `coopAI.llm.enabled` |
+| Live chat via `streamChat` | Calls `/v1/chat` |
 | Provider / model / temperature settings | Keys stay on server, not in VS Code |
 | Usage footer | Per-request + session cost estimate |
 | Stream cancel | `AbortController` |

@@ -22,10 +22,10 @@ Autocomplete is controlled from **Settings → Preferences → Model & chat** �
 4. Click **Save model settings**.
 
 <!-- figures lg -->
-![Model & chat — assigned models, Enable live LLM chat, and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
+![Model & chat — assigned models and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
-The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Use **Enable live LLM chat** on the same screen to control chat, quick actions, and edit mode. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
+The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
 
 **Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
