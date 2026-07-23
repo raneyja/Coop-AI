@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-07-22"
+lastUpdated: "2026-07-23"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -25,7 +25,7 @@ CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs �
 
 | Action | What it does |
 | --- | --- |
-| **Understand Repo** | Architecture, ownership, and key files — without cloning the whole codebase |
+| **Understand Repo** | Repo-wide architecture, subsystems, and risks — requires **Use repo** (ignores a file chip) |
 | **Trace Decision** | Why this code exists — pull rationale from commits, PRs, and team context |
 | **Find Owner** | Who owns this area and the escalation path when you need a human |
 | **Blast Radius** | Impact of changing this code — integrations, APIs, and operational risk |
@@ -149,7 +149,9 @@ Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) if you ne
 
 1. **Extension UI** — Open **Settings → Workspace**.
 2. Pick an indexed repo from your org catalog and set **Primary branch** (e.g. `main`).
-3. Click **Use repo** in the Remote workspace picker for **Understand Repo**. **Find Owner** / **Knowledge Gaps** can use a file chip or **Use repo**.
+3. **Extension UI** — Select the repository with **Use repo** (not a file). The three steps below match the screenshots under [Understand Repo](#understand-repo).
+
+**Understand Repo** and `/understand` **require** that **Use repo** step — Settings owner/repo alone is not enough, and a file chip blocks the action. **Find Owner** / **Knowledge Gaps** can run with either a file chip or **Use repo**.
 
 <!-- figures -->
 ![Workspace settings — org repos, AGENTS.md, and primary branch](/screenshots/docs/extension-settings-workspace.png)
@@ -422,7 +424,7 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 ## Quick Actions
 
-Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace`, `/owner`, …), or the **editor context menu** — right-click a selection to see all five actions. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
+Run quick actions from the **sidebar grid**, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use the grid or `/understand` after **Use repo**. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -432,7 +434,7 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace
 
 | Action | Best for |
 | --- | --- |
-| Understand Repo | Onboarding, architecture questions, "where do I start?" |
+| Understand Repo | Onboarding, architecture questions, "where do I start?" — **repo selected via Use repo** |
 | Trace Decision | "Why was this written this way?" before changing legacy code |
 | Find Owner | CODEOWNERS vs blame mismatches, reviewer suggestions |
 | Blast Radius | Refactors, API changes, pre-merge impact analysis |
@@ -442,9 +444,33 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/trace
 
 **Slash:** `/understand` (aliases: `/understandrepo`, `/repo`, `/architecture`, `/explain`)
 
-**Works without open file:** Required — Understand Repo is **repo-wide only**. Click **Use repo** in the Remote workspace picker (select the repository, not a file). If a file chip is active, the action is blocked until you select the repo.
+**Requires:** An explicit **Use repo** selection in the **Remote workspace** picker (repository row, not a file). Settings → Workspace owner/repo alone does **not** unlock it.
+
+**Ignores individual files:** If a file chip is active (open editor file or remote file pick), the grid button and `/understand` stay blocked until you click **Use repo** on the repository. This action never deep-dives a single file — use plain chat, **Trace Decision**, or **Blast Radius** for that.
+
+#### Select a repository (then run Understand Repo)
+
+1. **Extension UI** — Open the remote file / repos picker (repos control in the Coop sidebar).
+2. Select the **repository** (not a file) and click **Use repo**.
+3. Success: a repo-only chip (`/RepoName`), **In use** on the picker, and **Understand Repo** / `/understand` available.
+
+<!-- figures -->
+![Remote workspace — open the repos picker to choose a repository](/screenshots/docs/extension-understand-file-picker.png)
+
+*1 — Open the repos picker*
+
+![Remote workspace — repository selected before Use repo](/screenshots/docs/extension-understand-repo-select.png)
+
+*2 — Select the repository (not a file)*
+
+![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success.png)
+
+*3 — Repo chipped — run Understand Repo or `/understand`*
+<!-- /figures -->
 
 **Default prompt:** "Understand this repository's architecture, subsystems, and risks."
+
+**What you get:** A repo-wide overview (Summary → Architecture → Key subsystems → Entry points → Risks & unknowns → optional Related documentation → Suggested next steps → Sources), plus a Sources / evidence card when index and integrations return in time.
 
 **Example:**
 
@@ -482,7 +508,7 @@ Pull the Slack thread and Jira ticket tied to auth_middleware.go — why did we 
 
 **Slash:** `/owner` (aliases: `/who`, `/find-owner`)
 
-**Works without open file:** Yes — requires owner + repo in Settings → Workspace.
+**Works without open file:** Yes — with **Use repo** in the Remote workspace picker, or with a file chip. Settings → Workspace owner/repo alone is not enough.
 
 **Default prompt (file):** "Find who owns this area and how to reach them."
 
@@ -516,7 +542,7 @@ If I refactor TokenValidator.validate() in internal/auth/token_validator.ts, wha
 
 **Slash:** `/gaps` (aliases: `/unknowns`, `/knowledge-gaps`)
 
-**Works without open file:** Yes.
+**Works without open file:** Yes — with **Use repo**, or with a file chip. Settings → Workspace alone is not enough.
 
 **Default prompt (file):** "Audit documentation and ownership gaps for this area."
 
@@ -530,13 +556,13 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 ### File-level vs repo-wide
 
-| Action | Works without open file | Notes |
+| Action | Scope | Notes |
 | --- | --- | --- |
-| Understand Repo | **Use repo required** | Repo-wide only — blocked while a file chip is active |
-| Find Owner | Yes | Needs owner/repo in Workspace settings |
-| Knowledge Gaps | Yes | Repo-wide audit vs file-level |
-| Trace Decision | **No** | Requires open file |
-| Blast Radius | **No** | Requires open file |
+| Understand Repo | **Repo only** | **Use repo** required; blocked while a file chip is active; never binds to a single file |
+| Find Owner | File or repo | File chip **or** **Use repo** (not Settings prefs alone) |
+| Knowledge Gaps | File or repo | File chip **or** **Use repo** (not Settings prefs alone) |
+| Trace Decision | **File only** | Requires open file / selection |
+| Blast Radius | **File only** | Requires open file / selection |
 
 ### Integration slash commands
 
@@ -737,7 +763,8 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | --- | --- |
 | **Not signed in** | **Settings → Account** — use Google, **Continue with email**, or **Sign in with SSO** (Enterprise) |
 | **/trace or /blast disabled** | Open a file in the editor first |
-| **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
+| **/understand or Understand Repo blocked** | Click **Use repo** on the **repository** in the Remote workspace picker (not a file). A file chip blocks this action — it is repo-wide only |
+| **Repo-wide /owner or /gaps fails** | Click **Use repo**, or open a file so a file chip is active. Settings → Workspace alone is not enough |
 | **No Slack/Jira context** | Ask admin to connect integrations in admin portal |
 | **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** on the password step |
 | **Can't sign in** | Verify email is verified; try Google; Enterprise: enter org name → **Sign in with SSO** (browser handoff) |

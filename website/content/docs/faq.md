@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-22"
+lastUpdated: "2026-07-23"
 ---
 
 ## General
@@ -63,7 +63,9 @@ In production mode, **org admins** connect integrations once in the [admin porta
 
 ### What are quick actions?
 
-Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. They route to **Claude Sonnet 4.6** in production. See the [Owner's Manual](/manual#quick-actions) and [Model assignments](/docs/model-assignments).
+Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. They route to **Claude Sonnet 4.6** in production.
+
+**Understand Repo** / `/understand` is **repo-wide only** — click **Use repo** on the repository in the Remote workspace picker. A file chip blocks it. The other actions use a file selection and/or **Use repo** as documented in the [Owner's Manual](/manual#quick-actions). See also [Model assignments](/docs/model-assignments).
 
 ### Can I choose the LLM provider or model?
 

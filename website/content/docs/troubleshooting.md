@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-22"
+lastUpdated: "2026-07-23"
 ---
 
 ## Extension
@@ -16,7 +16,8 @@ lastUpdated: "2026-07-22"
 | **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm you are signed in under Account |
 | **No model picker in settings** | Expected in production — models are Coop-assigned; see [Model assignments](/docs/model-assignments) |
 | **/trace or /blast disabled** | Open a file in the editor first |
-| **Repo-wide /owner fails** | Set owner + repo in Settings → Workspace |
+| **/understand or Understand Repo blocked** | Click **Use repo** on the **repository** in the Remote workspace picker (not a file). Clear any file chip first — Understand Repo is repo-wide only |
+| **Repo-wide /owner or /gaps fails** | Click **Use repo** in the Remote workspace picker, or open a file so a file chip is active. Settings → Workspace alone is not enough |
 | **No integration context** | Ask admin to connect tools in admin portal |
 | **File chip shows R for a Downloads / Cmd+O file** | Should be **L** (local). Reload the window; see [Active file context chip](/manual#active-file-context-chip) |
 | **Ghost file chip after reload with no editor tab** | Reload should not keep a closed file. Switch threads or open a file; see [Manual](/manual#active-file-context-chip) |
