@@ -459,11 +459,11 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/under
 
 *1 — Open the repos picker*
 
-![Remote workspace — repository selected before Use repo](/screenshots/docs/extension-understand-repo-select.png)
+![Remote workspace — repository selected before Use repo](/screenshots/docs/extension-understand-repo-select-v2.png)
 
 *2 — Select the repository (not a file)*
 
-![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success.png)
+![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success-v2.png)
 
 *3 — Repo chipped — run Understand Repo or `/understand`*
 <!-- /figures -->
