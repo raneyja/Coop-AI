@@ -42,10 +42,17 @@ export function isQuickActionBlocked(actionId: QuickActionId, context: RepoConte
   if (!quickActionWorksWithoutFile(actionId)) {
     return true;
   }
-  if (actionId === "find-owner") {
-    return !context.owner?.trim() || !context.repo?.trim();
-  }
-  return false;
+  // Prefs-seeded owner/repo is NOT a selection. Repo-wide actions need an explicit
+  // explorer "Use repo" (scope:"repo") or an open file — otherwise empty-state
+  // Understand Repo silently analyzes the Workspace default.
+  return !hasExplicitRepoSelection(context);
+}
+
+/** Explicit explorer "Use repo" with coordinates — not Settings prefs alone. */
+export function hasExplicitRepoSelection(context: RepoContext): boolean {
+  return (
+    isExplicitRepoScope(context) && Boolean(context.owner?.trim() && context.repo?.trim())
+  );
 }
 
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {
@@ -58,13 +65,25 @@ export function quickActionBlockedMessage(actionId: QuickActionId, context: Repo
   if (actionId === "blast-radius") {
     return fileLevelOnlyMessage("Blast Radius");
   }
-  if (actionId === "find-owner") {
-    return "Find Owner needs a repository. Select a repo in the explorer or set Owner/Repo in Settings.";
+  if (quickActionWorksWithoutFile(actionId) && !context.file?.trim() && !hasExplicitRepoSelection(context)) {
+    return repoSelectionRequiredMessage(actionId);
   }
   if (isExplicitRepoScope(context)) {
     return "Select a file in the explorer or open one in the editor.";
   }
   return "Open a file in the editor first.";
+}
+
+function repoSelectionRequiredMessage(actionId: QuickActionId): string {
+  const labels: Record<QuickActionId, string> = {
+    "understand-repo": "Understand Repo",
+    "trace-decision": "Trace Decision",
+    "find-owner": "Find Owner",
+    "blast-radius": "Blast Radius",
+    "knowledge-gaps": "Knowledge Gaps"
+  };
+  const label = labels[actionId] ?? "This action";
+  return `${label} needs a selected repository. Click Use repo in the explorer, or open a file in the editor.`;
 }
 
 function externalFileMessage(actionId: QuickActionId): string {

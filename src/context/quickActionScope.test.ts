@@ -37,6 +37,25 @@ async function run(): Promise<void> {
     assert.equal(isQuickActionBlocked("understand-repo", repoContext), false);
   });
 
+  test("prefs-seeded owner/repo without Use repo does not unlock Understand Repo", () => {
+    const prefsOnly: RepoContext = {
+      owner: "raneyja",
+      repo: "Coop-AI",
+      branch: "main"
+      // no scope: "repo" — Settings default, not an explicit selection
+    };
+    assert.equal(isQuickActionBlocked("understand-repo", prefsOnly), true);
+    assert.equal(isQuickActionBlocked("knowledge-gaps", prefsOnly), true);
+    assert.equal(isQuickActionBlocked("find-owner", prefsOnly), true);
+    assert.match(quickActionBlockedMessage("understand-repo", prefsOnly), /Use repo/i);
+  });
+
+  test("empty context blocks repo-wide actions", () => {
+    assert.equal(isQuickActionBlocked("understand-repo", {}), true);
+    assert.equal(isQuickActionBlocked("knowledge-gaps", {}), true);
+    assert.equal(isQuickActionBlocked("find-owner", {}), true);
+  });
+
   test("file-level actions are blocked at repo scope", () => {
     assert.equal(isFileLevelQuickAction("blast-radius"), true);
     assert.equal(isQuickActionBlocked("blast-radius", repoContext), true);
@@ -57,6 +76,13 @@ async function run(): Promise<void> {
 
   test("find-owner is blocked without repo coordinates", () => {
     assert.equal(isQuickActionBlocked("find-owner", {}), true);
+  });
+
+  test("find-owner with prefs-only coordinates still needs Use repo", () => {
+    assert.equal(
+      isQuickActionBlocked("find-owner", { owner: "acme", repo: "widgets" }),
+      true
+    );
   });
 
   test("all quick actions block outside-workspace active file", () => {

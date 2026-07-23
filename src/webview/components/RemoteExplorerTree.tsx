@@ -491,7 +491,8 @@ export function RemoteExplorerTreePanel({
   );
 
   const selectedRepo = useMemo<SelectedRepoContext | undefined>(() => {
-    if (!context.owner || !context.repo) {
+    // Prefs-seeded owner/repo must not show "In use" — only explicit Use repo.
+    if (context.scope !== "repo" || !context.owner || !context.repo) {
       return undefined;
     }
     return {
@@ -499,7 +500,7 @@ export function RemoteExplorerTreePanel({
       repo: context.repo,
       provider: context.provider
     };
-  }, [context.owner, context.provider, context.repo]);
+  }, [context.owner, context.provider, context.repo, context.scope]);
 
   return (
     <>
