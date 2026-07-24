@@ -46,7 +46,7 @@ import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
-import { useStreamDisplayText } from "./hooks/useDebouncedProse";
+import { useSmoothStreamText } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
 import type {
   ConflictActionId,
@@ -306,6 +306,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [quotaNotice, setQuotaNotice] = useState<QuotaExceededNoticeState | undefined>();
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [pendingCompleteMessage, setPendingCompleteMessage] = useState<ChatMessage | null>(null);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const explorerRepoRef = useRef<{
     provider: import("../chat/types").CodeHostProviderPreference;
@@ -354,12 +355,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
   const [scrollEpoch, setScrollEpoch] = useState(0);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const streamDisplay = useStreamDisplayText(streamingBuffer);
+  const streamDisplay = useSmoothStreamText(streamingBuffer, isStreaming);
   const streamStartedAtRef = useRef<number | null>(null);
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
     setIsStreaming(false);
+    setPendingCompleteMessage(null);
     streamStartedAtRef.current = null;
     setError("");
     setQuotaNotice(undefined);
@@ -369,6 +371,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setCommandConfirm(undefined);
     setAttachmentError("");
   }, []);
+
+  // Keep the ChatGPT-style reveal running through the final tokens, then commit
+  // the assistant message once the visible text has caught up.
+  useEffect(() => {
+    if (!pendingCompleteMessage) {
+      return;
+    }
+    const finalText = pendingCompleteMessage.content;
+    if (streamDisplay.length < finalText.length) {
+      return;
+    }
+    setMessages((prev) => [...prev, pendingCompleteMessage]);
+    setPendingCompleteMessage(null);
+    setStreamingBuffer("");
+    setIsStreaming(false);
+    streamStartedAtRef.current = null;
+  }, [pendingCompleteMessage, streamDisplay]);
 
   useEffect(() => {
     if (!quotaNotice?.resetsAt) {
@@ -747,14 +766,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
-          setMessages((prev) => [...prev, message.payload.message]);
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
           );
-          setStreamingBuffer("");
-          setIsStreaming(false);
-          streamStartedAtRef.current = null;
+          // Do not clear the bubble yet — finish revealing any backlog, then commit.
+          setStreamingBuffer(message.payload.message.content);
+          setPendingCompleteMessage(message.payload.message);
+          setIsStreaming(true);
           break;
         }
         case "chat:error": {
@@ -769,6 +788,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setError(message.payload.message);
           setIsStreaming(false);
           setStreamingBuffer("");
+          setPendingCompleteMessage(null);
           streamStartedAtRef.current = null;
           break;
         }

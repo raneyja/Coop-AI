@@ -1,59 +1,126 @@
 import { useEffect, useRef, useState } from "react";
 
-/**
- * Coalesce rapid stream buffer updates to at most one React paint per animation
- * frame. First non-empty content paints immediately so the reply doesn't feel
- * delayed; clears flush synchronously when the buffer resets.
- */
-export function useStreamDisplayText(content: string): string {
-  const [display, setDisplay] = useState(content);
-  const latestRef = useRef(content);
-  const frameRef = useRef<number | null>(null);
-  const hasPaintedRef = useRef(Boolean(content));
+/** Base reveal speed — close to ChatGPT's visible token flow. */
+const BASE_CHARS_PER_SEC = 110;
+/** Hard cap per frame so a huge backlog still animates instead of dumping. */
+const MAX_CHARS_PER_FRAME = 22;
 
-  latestRef.current = content;
+/**
+ * How many characters to reveal this frame given backlog and elapsed time.
+ * Exported for unit tests.
+ */
+export function streamRevealStep(backlog: number, dtSec: number): number {
+  if (backlog <= 0) {
+    return 0;
+  }
+  // Accelerate when far behind (large SSE burst or final enriched content),
+  // but never jump the whole backlog in one paint.
+  const rate =
+    backlog > 600
+      ? BASE_CHARS_PER_SEC * 4.5
+      : backlog > 220
+        ? BASE_CHARS_PER_SEC * 2.8
+        : backlog > 64
+          ? BASE_CHARS_PER_SEC * 1.7
+          : BASE_CHARS_PER_SEC;
+  const dt = Math.min(0.05, Math.max(0, dtSec));
+  return Math.max(1, Math.min(MAX_CHARS_PER_FRAME, Math.ceil(rate * dt)));
+}
+
+/**
+ * ChatGPT-style streaming: tokens accumulate in `target`, and the visible
+ * string catches up at a steady character rate so large SSE bursts still read
+ * as a continuous flow instead of one dump.
+ */
+export function useSmoothStreamText(target: string, isStreaming: boolean): string {
+  const [displayed, setDisplayed] = useState("");
+  const displayedLenRef = useRef(0);
+  const targetRef = useRef(target);
+  const streamingRef = useRef(isStreaming);
+  const rafRef = useRef<number | null>(null);
+  const lastTsRef = useRef<number | null>(null);
+
+  targetRef.current = target;
+  streamingRef.current = isStreaming;
 
   useEffect(() => {
-    if (!content) {
-      hasPaintedRef.current = false;
-      if (frameRef.current != null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
+    const stopLoop = (): void => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
-      setDisplay("");
+      lastTsRef.current = null;
+    };
+
+    // Buffer cleared (complete/error/reset).
+    if (!target) {
+      stopLoop();
+      displayedLenRef.current = 0;
+      setDisplayed("");
       return;
     }
 
-    // First visible token: paint immediately (Cursor-like start).
-    if (!hasPaintedRef.current) {
-      hasPaintedRef.current = true;
-      setDisplay(content);
+    // Caller stopped streaming with text still on screen (error path) — keep
+    // whatever was revealed; ChatPanel clears the buffer separately.
+    if (!isStreaming) {
+      stopLoop();
       return;
     }
 
-    if (frameRef.current != null) {
-      return;
-    }
+    const tick = (ts: number): void => {
+      const goal = targetRef.current;
+      if (!goal) {
+        rafRef.current = null;
+        lastTsRef.current = null;
+        return;
+      }
+      if (!streamingRef.current) {
+        rafRef.current = null;
+        lastTsRef.current = null;
+        return;
+      }
 
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = null;
-      setDisplay(latestRef.current);
-    });
-  }, [content]);
+      let len = displayedLenRef.current;
+      if (len > goal.length) {
+        // Target shrank (thread switch) — snap down.
+        len = goal.length;
+        displayedLenRef.current = len;
+        setDisplayed(goal.slice(0, len));
+      } else if (len < goal.length) {
+        const last = lastTsRef.current ?? ts;
+        const step = streamRevealStep(goal.length - len, (ts - last) / 1000);
+        len = Math.min(goal.length, len + step);
+        displayedLenRef.current = len;
+        setDisplayed(goal.slice(0, len));
+      }
+
+      lastTsRef.current = ts;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  }, [target, isStreaming]);
 
   useEffect(() => {
     return () => {
-      if (frameRef.current != null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
     };
   }, []);
 
-  return display;
+  return displayed;
 }
 
-/** @deprecated Prefer useStreamDisplayText — kept for existing call sites. */
+/** @deprecated Prefer useSmoothStreamText. */
+export function useStreamDisplayText(content: string): string {
+  return useSmoothStreamText(content, Boolean(content));
+}
+
+/** @deprecated Prefer useSmoothStreamText. */
 export function useDebouncedProse(content: string, _delayMs = 75): string {
-  return useStreamDisplayText(content);
+  return useSmoothStreamText(content, Boolean(content));
 }
