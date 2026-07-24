@@ -4041,6 +4041,8 @@ export class CoopChatSession {
           }
           full += chunk;
           this.threadRuns.appendPartial(turn, chunk);
+          // Post every delta immediately so the webview can animate a ChatGPT-style
+          // reveal. Do not batch here — end-of-stream flush looked like one dump.
           this.postForThread(turn.threadId, {
             type: "chat:delta",
             payload: { chunk, threadId: turn.threadId }

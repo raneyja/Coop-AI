@@ -5,11 +5,21 @@ type ChatCodeBlockProps = {
   language?: string;
   code: string;
   className?: string;
+  /** Skip tokenizer work while the fence is still growing mid-stream. */
+  deferHighlight?: boolean;
 };
 
-export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps): React.ReactElement {
+export function ChatCodeBlock({
+  language,
+  code,
+  className,
+  deferHighlight = false
+}: ChatCodeBlockProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
-  const tokens = useMemo(() => lightHighlight(code, language), [code, language]);
+  const tokens = useMemo(
+    () => (deferHighlight ? null : lightHighlight(code, language)),
+    [code, deferHighlight, language]
+  );
   const languageLabel = language?.trim() ? language.trim() : "text";
 
   useEffect(() => {
@@ -41,16 +51,20 @@ export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps)
       </div>
       <pre>
         <code>
-          {tokens.map((token, index) => (
-            <span
-              key={`token-${index}`}
-              className={
-                token.kind === "plain" ? undefined : `coop-chat-code-token coop-chat-code-token--${token.kind}`
-              }
-            >
-              {token.text}
-            </span>
-          ))}
+          {tokens
+            ? tokens.map((token, index) => (
+                <span
+                  key={`token-${index}`}
+                  className={
+                    token.kind === "plain"
+                      ? undefined
+                      : `coop-chat-code-token coop-chat-code-token--${token.kind}`
+                  }
+                >
+                  {token.text}
+                </span>
+              ))
+            : code}
         </code>
       </pre>
     </div>

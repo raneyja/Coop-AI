@@ -93,6 +93,10 @@ export type ChatInlineArtifact =
       evidence: Record<string, unknown>;
     };
 
+export type ChatRenderBodyOptions = {
+  isStreaming?: boolean;
+};
+
 type ChatStreamProps = {
   messages: ChatMessage[];
   artifacts: ChatInlineArtifact[];
@@ -100,7 +104,12 @@ type ChatStreamProps = {
   /** Context-gathering status shown inline after the latest user turn. */
   thinkingMessage?: string;
   endRef: React.RefObject<HTMLDivElement | null>;
-  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
+  renderBody: (
+    content: string,
+    relatedArtifactId?: string,
+    messageTimestamp?: number,
+    options?: ChatRenderBodyOptions
+  ) => React.ReactElement[];
   actionContext: EvidenceActionContext;
   conflicts?: ConflictSummary[];
   /** Bumps when thread/history loads so the view jumps to the latest messages. */
@@ -243,7 +252,12 @@ function MessageBlock({
   isStreaming = false
 }: {
   message: ChatMessage;
-  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
+  renderBody: (
+    content: string,
+    relatedArtifactId?: string,
+    messageTimestamp?: number,
+    options?: ChatRenderBodyOptions
+  ) => React.ReactElement[];
   isStreaming?: boolean;
 }): React.ReactElement {
   const isUser = message.role === "user";
@@ -307,7 +321,9 @@ function MessageBlock({
             <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
           ) : (
             <div className="chat-message-body">
-              {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}
+              {renderBody(parsed.body, message.relatedArtifactId, message.timestamp, {
+                isStreaming
+              })}
             </div>
           )
         ) : null}
@@ -542,12 +558,21 @@ export function ChatStream({
       pinnedToBottomRef.current = true;
     }
 
-    if (pinnedToBottomRef.current) {
-      endRef.current?.scrollIntoView({
-        behavior: streamingMessage ? "auto" : "smooth",
-        block: "end"
-      });
+    if (!pinnedToBottomRef.current) {
+      return;
     }
+
+    // During streaming, coalesce scrollIntoView to one call per animation frame
+    // so layout work doesn't fight the text paint.
+    if (streamingMessage) {
+      let frameId = 0;
+      frameId = requestAnimationFrame(() => {
+        endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, artifacts, streamingMessage, thinkingMessage, endRef]);
 
   return (
