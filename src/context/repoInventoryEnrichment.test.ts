@@ -4,6 +4,7 @@ import {
   isRepoStructureQuery,
   isUsableManifestInventory,
   mergeRepoInventoryContext,
+  needsRepoTreeOverview,
   resolveInventoryRepoIds,
   type RepoInventoryStats
 } from "./repoInventoryEnrichment";
@@ -45,6 +46,13 @@ test("isRepoStructureQuery covers monorepo / top-level structure questions", () 
   assert.equal(isRepoStructureQuery("list the top-level directories"), true);
   assert.equal(isRepoStructureQuery("how many files are inside of this repo?"), true);
   assert.equal(isRepoStructureQuery("how does auth work?"), false);
+});
+
+test("needsRepoTreeOverview skips pure file-count questions", () => {
+  assert.equal(needsRepoTreeOverview("how many files are inside of this repo?"), false);
+  assert.equal(needsRepoTreeOverview("What's the file count?"), false);
+  assert.equal(needsRepoTreeOverview("is this a monorepo?"), true);
+  assert.equal(needsRepoTreeOverview("list the top-level directories"), true);
 });
 
 test("resolveInventoryRepoIds prefers provider-prefixed ids from bare owner/repo", () => {

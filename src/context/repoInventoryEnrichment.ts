@@ -177,21 +177,50 @@ export async function fetchRepoInventoryStats(
   }
 
   const resolved = resolveInventoryRepoIds(repoId, options);
-  const fromManifest = await tryManifestCount(options, resolved.candidates);
-  if (fromManifest) {
-    return fromManifest;
-  }
+  // Race manifest vs live tree — cold manifests often miss while recursive count is cached later.
+  return await firstResolvedInventory([
+    tryManifestCount(options, resolved.candidates),
+    tryTreeCount(options, resolved.coords)
+  ]);
+}
 
-  const fromTree = await tryTreeCount(options, resolved.coords);
-  if (fromTree) {
-    return fromTree;
-  }
+/** True when we need a live top-level listing (monorepo / structure), not only a file total. */
+export function needsRepoTreeOverview(queryText: string | undefined): boolean {
+  return isRepoStructureQuery(queryText) && !isRepoInventoryQuery(queryText);
+}
 
-  return {
-    source: "unavailable",
-    note:
-      "No indexed structure manifest or recursive tree count is available for this repository yet. Do not estimate file count from semantic search samples."
-  };
+async function firstResolvedInventory(
+  attempts: Array<Promise<RepoInventoryStats | undefined>>
+): Promise<RepoInventoryStats | undefined> {
+  return new Promise((resolve) => {
+    let pending = attempts.length;
+    let settled = false;
+    if (pending === 0) {
+      resolve(undefined);
+      return;
+    }
+    for (const attempt of attempts) {
+      void attempt.then(
+        (stats) => {
+          if (stats && !settled) {
+            settled = true;
+            resolve(stats);
+            return;
+          }
+          pending -= 1;
+          if (pending === 0 && !settled) {
+            resolve(undefined);
+          }
+        },
+        () => {
+          pending -= 1;
+          if (pending === 0 && !settled) {
+            resolve(undefined);
+          }
+        }
+      );
+    }
+  });
 }
 
 export async function fetchRepoTreeOverview(
@@ -239,23 +268,25 @@ async function tryManifestCount(
   options: FetchRepoInventoryOptions,
   candidateRepoIds: string[]
 ): Promise<RepoInventoryStats | undefined> {
-  for (const candidate of candidateRepoIds) {
-    try {
-      const manifest = await options.api.fetchRepoManifest(options.apiBaseUrl, candidate);
-      const usable = isUsableManifestInventory(manifest);
-      if (!usable) {
-        continue;
+  const hits = await Promise.all(
+    candidateRepoIds.map(async (candidate) => {
+      try {
+        const manifest = await options.api.fetchRepoManifest(options.apiBaseUrl, candidate);
+        const usable = isUsableManifestInventory(manifest);
+        if (!usable) {
+          return undefined;
+        }
+        return {
+          source: "manifest" as const,
+          fileCount: usable.fileCount,
+          lastCrawledAt: usable.lastCrawledAt
+        };
+      } catch {
+        return undefined;
       }
-      return {
-        source: "manifest",
-        fileCount: usable.fileCount,
-        lastCrawledAt: usable.lastCrawledAt
-      };
-    } catch {
-      // Try the next id shape (bare owner/repo vs provider-prefixed).
-    }
-  }
-  return undefined;
+    })
+  );
+  return hits.find((hit) => hit !== undefined);
 }
 
 async function tryTreeCount(

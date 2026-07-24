@@ -25,18 +25,9 @@ function parseAttachedValue(value: string): HistoryAttachment[] {
     .map(parseAttachmentLabel);
 }
 
-/** Split plain-chat bubble text from stored `attached:` chip line. */
-export function splitPlainChatHistoryBody(content: string): {
-  message: string;
-  attachments: HistoryAttachment[];
-} {
-  const trimmed = content.trim();
-  const match = trimmed.match(/\nattached:\s*(.+)$/s);
-  if (!match || match.index === undefined) {
-    return { message: trimmed, attachments: [] };
-  }
-  const message = trimmed.slice(0, match.index).trim();
-  return { message, attachments: parseAttachedValue(match[1]) };
+/** True for quick-action / first-chat chip lines: `key: value · key: value`. */
+export function isCompactContextChipLine(line: string): boolean {
+  return /^[\w ]+: .+( · [\w ]+: .+)*$/.test(line.trim());
 }
 
 /** Extract @ attachment chips from quick-action context lines (`file: … · attached: …`). */
@@ -64,4 +55,49 @@ export function parseContextLineAttachments(contextLine: string): {
   }
 
   return { withoutAttachments: meta.join(" · "), attachments };
+}
+
+/**
+ * Split plain-chat bubble text from stored context / attached chip lines.
+ * Supports:
+ * - First-message compact chips: `message\nfile: x · repo: y · branch: z`
+ * - Follow-up mentions: `message\nattached: path`
+ */
+export function splitPlainChatHistoryBody(content: string): {
+  message: string;
+  contextLine?: string;
+  attachments: HistoryAttachment[];
+} {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return { message: "", attachments: [] };
+  }
+
+  const newline = trimmed.indexOf("\n");
+  if (newline === -1) {
+    return { message: trimmed, attachments: [] };
+  }
+
+  const message = trimmed.slice(0, newline).trim();
+  const rest = trimmed.slice(newline + 1).trim();
+  if (!rest) {
+    return { message, attachments: [] };
+  }
+
+  if (isCompactContextChipLine(rest)) {
+    const parsed = parseContextLineAttachments(rest);
+    return {
+      message,
+      contextLine: parsed.withoutAttachments || undefined,
+      attachments: parsed.attachments
+    };
+  }
+
+  const legacyAttached = rest.match(/^attached:\s*(.+)$/s);
+  if (legacyAttached) {
+    return { message, attachments: parseAttachedValue(legacyAttached[1]) };
+  }
+
+  // Multi-line user message with no chip footer — keep full body.
+  return { message: trimmed, attachments: [] };
 }
