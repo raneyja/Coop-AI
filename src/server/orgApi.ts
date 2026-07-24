@@ -8,6 +8,7 @@ import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId, countRepoBlobsViaCodeHost } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
+import { RepoStatsStore } from "../workspace/repoStatsStore";
 import { requireDbPool, getDbPool } from "./db";
 import { JobType } from "../jobs/types";
 import {
@@ -484,7 +485,7 @@ export async function handleOrgApiRequest(
 
   const remoteRepoApiMatch =
     parsed.method === "GET" &&
-    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|metadata|files|tree|file-count|search|blame|history|commits|pulls|issues)/.test(
+    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|inventory|metadata|files|tree|file-count|search|blame|history|commits|pulls|issues)/.test(
       parsed.pathname
     );
   if (remoteRepoApiMatch) {
@@ -497,6 +498,13 @@ export async function handleOrgApiRequest(
   if (parsed.method === "GET" && manifestMatch) {
     const repoId = decodeURIComponent(manifestMatch[1]);
     await handleGetRepoManifest(repoId, response, auth!.orgId);
+    return true;
+  }
+
+  const inventoryMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/inventory$/);
+  if (parsed.method === "GET" && inventoryMatch) {
+    const repoId = decodeURIComponent(inventoryMatch[1]);
+    await handleGetRepoInventory(repoId, response, auth!.orgId);
     return true;
   }
 
@@ -1398,6 +1406,46 @@ async function handleGetRepoManifest(
     files: files.map((file) => ({ path: file.filePath, symbols: file.symbols })),
     fileCount: files.length,
     lastCrawledAt: crawled ? new Date(crawled).toISOString() : undefined
+  });
+}
+
+/**
+ * Durable repository facts recorded by Deep-Index. Canonical source for chat
+ * repo-fact questions — returns `unavailable` rather than a guess.
+ */
+async function handleGetRepoInventory(
+  repoId: string,
+  response: ServerResponse,
+  orgId: string
+): Promise<void> {
+  const pool = requireDbPool(await getDbPool());
+  if (!pool) {
+    writeJson(response, 503, { error: "organization database not configured" });
+    return;
+  }
+
+  const target = parseRepoId(repoId);
+  const canonicalId = repoId.includes(":")
+    ? repoId
+    : `${target.provider}:${target.owner}/${target.repo}`;
+
+  const store = new RepoStatsStore(pool);
+  const stats = (await store.loadStats(orgId, repoId)) ?? (await store.loadStats(orgId, canonicalId));
+  if (!stats) {
+    writeJson(response, 200, { repoId: canonicalId, source: "unavailable" });
+    return;
+  }
+
+  writeJson(response, 200, {
+    repoId: canonicalId,
+    source: "index-stats",
+    branch: stats.branch,
+    fileCount: stats.fileCount,
+    lineCount: stats.lineCount,
+    byteCount: stats.byteCount,
+    languages: stats.languages,
+    headCommit: stats.headCommit,
+    indexedAt: stats.indexedAt
   });
 }
 

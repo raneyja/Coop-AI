@@ -2,7 +2,7 @@ import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
-import { isRepoStructureQuery } from "./repoInventoryEnrichment";
+import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -65,7 +65,7 @@ export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGat
     return false;
   }
   const query = semanticRetrievalQueryText(options);
-  // Inventory / structure questions need tree or file counts, not a 3-file semantic sample.
+  // Repo facts (counts, structure) come from IndexedRepoWorkspace, never a 3-file sample.
   if (!options.codeEditIntent && isRepoStructureQuery(query)) {
     return false;
   }

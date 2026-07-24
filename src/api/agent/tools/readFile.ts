@@ -19,21 +19,27 @@ export async function handleReadFile(
       : undefined;
 
   const absolutePath = ctx.resolveAbsolutePath(path);
-  if (!absolutePath) {
-    return JSON.stringify({ error: `Could not resolve path: ${path}` });
-  }
-
-  const payload = lines
-    ? readWorkspaceFileFromAbsolutePath(absolutePath, path, lines)
-    : await readLocalWorkspaceFiles({
-        file: path,
-        fileSource: "workspace",
-        resolveAbsolutePath: () => absolutePath,
-        maxFiles: 1,
-        lines
-      });
+  const payload = absolutePath
+    ? lines
+      ? readWorkspaceFileFromAbsolutePath(absolutePath, path, lines)
+      : await readLocalWorkspaceFiles({
+          file: path,
+          fileSource: "workspace",
+          resolveAbsolutePath: () => absolutePath,
+          maxFiles: 1,
+          lines
+        })
+    : undefined;
 
   if (!payload?.files.length) {
+    // Remote repos are indexed but not cloned — read the body on demand.
+    const remote = await ctx.readRemoteFile?.({ path, repoId: args.repoId as string | undefined });
+    if (remote?.content) {
+      return JSON.stringify({
+        path: remote.path,
+        files: [{ path: remote.path, content: sliceLines(remote.content, lines) }]
+      });
+    }
     return JSON.stringify({ error: `Could not read file: ${path}` });
   }
 
@@ -45,4 +51,14 @@ export async function handleReadFile(
       ...(file.lineRange ? { lineRange: file.lineRange } : {})
     }))
   });
+}
+
+function sliceLines(content: string, lines?: { start: number; end: number }): string {
+  if (!lines) {
+    return content;
+  }
+  return content
+    .split("\n")
+    .slice(Math.max(0, lines.start - 1), lines.end)
+    .join("\n");
 }

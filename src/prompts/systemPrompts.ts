@@ -342,7 +342,7 @@ When drawing conclusions from attached evidence, state strength (strong / medium
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
-When \`<repo_inventory>\` is attached, use it as the authoritative file count / inventory signal (or say clearly when source="unavailable").
+When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`;
@@ -843,9 +843,13 @@ function extractRepoSummaryEntryFiles(bundle: unknown): ManifestSnippet[] {
 type RepoSemanticSnippet = ManifestSnippet & { repoId?: string; truncated?: boolean };
 
 type RepoInventorySnippet = {
-  source: "manifest" | "tree" | "unavailable";
+  source: "index-stats" | "manifest" | "tree" | "unavailable";
   fileCount?: number;
+  lineCount?: number;
+  byteCount?: number;
+  languages?: string[];
   truncated?: boolean;
+  indexedAt?: string;
   lastCrawledAt?: string;
   note?: string;
 };
@@ -913,14 +917,26 @@ function extractRepoInventory(bundle: unknown): RepoInventorySnippet | undefined
 function formatRepoInventoryForLlm(inventory: RepoInventorySnippet): string[] {
   const lines = ["<repo_inventory>"];
   lines.push(
-    "Authoritative repository inventory for structure / file-count questions. Prefer this over <repo_semantic_files> for totals."
+    "Measured repository totals from the indexed workspace. This is the only valid source for file, line, or size totals — never compute them from <repo_semantic_files>, attached files, or earlier turns."
   );
   lines.push(`source="${inventory.source}"`);
   if (typeof inventory.fileCount === "number") {
     lines.push(`file_count="${inventory.fileCount}"`);
   }
+  if (typeof inventory.lineCount === "number") {
+    lines.push(`line_count="${inventory.lineCount}"`);
+  }
+  if (typeof inventory.byteCount === "number") {
+    lines.push(`byte_count="${inventory.byteCount}"`);
+  }
+  if (inventory.languages?.length) {
+    lines.push(`languages="${inventory.languages.join(", ")}"`);
+  }
   if (inventory.truncated) {
     lines.push('truncated="true"');
+  }
+  if (inventory.indexedAt) {
+    lines.push(`indexed_at="${inventory.indexedAt}"`);
   }
   if (inventory.lastCrawledAt) {
     lines.push(`last_crawled_at="${inventory.lastCrawledAt}"`);
@@ -929,14 +945,18 @@ function formatRepoInventoryForLlm(inventory: RepoInventorySnippet): string[] {
     lines.push(inventory.note);
   } else if (inventory.source === "unavailable") {
     lines.push(
-      "Inventory is unavailable. Say so clearly — do not estimate file count from semantic search samples or attached file snippets."
+      "Inventory is unavailable. Say so clearly — do not estimate totals from semantic search samples or attached file snippets."
     );
   } else if (typeof inventory.fileCount === "number") {
     const caveat = inventory.truncated
       ? " The host reported a truncated tree; treat this as a lower bound."
       : "";
+    const linePart =
+      typeof inventory.lineCount === "number"
+        ? ` and ${inventory.lineCount} line(s) of code`
+        : "";
     lines.push(
-      `The repository contains ${inventory.fileCount} file(s) according to the ${inventory.source}.${caveat}`
+      `The repository contains ${inventory.fileCount} file(s)${linePart} according to the ${inventory.source}.${caveat}`
     );
   }
   lines.push("</repo_inventory>");

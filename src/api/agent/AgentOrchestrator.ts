@@ -7,7 +7,7 @@ import type {
 } from "./agentTypes";
 import type { AgentToolContext } from "./agentToolContext";
 import { createAgentToolRegistry } from "./tools/registry";
-import { isRepoStructureQuery } from "../../context/repoInventoryEnrichment";
+import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
 
 const DEFAULT_MAX_STEPS = 8;
 const READ_LINE_PADDING = 25;
@@ -106,6 +106,7 @@ export class AgentOrchestrator {
     const { startLine, endLine } = readLineWindow(topHit.lineNumber);
     const readRaw = await this.executeTool("read_file", {
       path: topHit.fileName,
+      repoId,
       startLine,
       endLine
     });

@@ -217,7 +217,7 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 - State evidence strength using one of: strong, medium, weak, or limited when drawing conclusions from attached evidence.
 - When integration blocks show <empty>, say clearly that the search found nothing — do not speculate about tickets, messages, or pages that are not attached.
 - Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, semantic files) are **search samples / capped result sets**, not complete inventories. Never answer "how many" / "list all" / totals from those samples alone — say the attached set is partial and what would be needed for a full count.
-- When \`<repo_inventory>\` is attached, prefer it for repository file totals.
+- When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (file count, lines of code, size). Use its numbers verbatim; if a total is missing there, say it is unavailable rather than estimating one.
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.
 - Never invent ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
 

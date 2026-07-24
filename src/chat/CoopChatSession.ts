@@ -296,13 +296,11 @@ import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
 import {
-  fetchRepoInventoryStats,
-  fetchRepoTreeOverview,
-  isRepoInventoryQuery,
-  isRepoStructureQuery,
-  mergeRepoInventoryContext,
-  needsRepoTreeOverview
-} from "../context/repoInventoryEnrichment";
+  IndexedRepoWorkspace,
+  mergeRepoInventoryContext
+} from "../workspace/IndexedRepoWorkspace";
+import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
+import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -368,6 +366,7 @@ export class CoopChatSession {
   };
   private readonly conflictAudit = new ConflictAuditStore();
   private chatTurnStartedAt = 0;
+  private workspaceFacade?: IndexedRepoWorkspace;
   private readonly jobClient: JobApiClient;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
@@ -2253,7 +2252,8 @@ export class CoopChatSession {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
       const queryText = request.intent.context?.queryText;
-      if (isRepoStructureQuery(queryText)) {
+      // Repo facts come from the indexed workspace; everything else gets a search sample.
+      if (hasRepoFactNeed(repoFactNeeds(queryText))) {
         result = await this.enrichChatContextWithRepoInventory(request, result);
       } else {
         result = await this.enrichChatContextWithSemanticSearch(request, result);
@@ -2265,49 +2265,53 @@ export class CoopChatSession {
     return result;
   }
 
+  /** Single entry point for indexed-repo facts and remote file reads. */
+  private indexedRepoWorkspace(): IndexedRepoWorkspace {
+    if (!this.workspaceFacade) {
+      this.workspaceFacade = new IndexedRepoWorkspace({
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter
+      });
+    }
+    return this.workspaceFacade;
+  }
+
+  private repoTargetForRequest(request: ContextFetchRequest): RepoTarget {
+    return {
+      repoId: request.params.repoId,
+      branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+      owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
+      repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
+      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github"
+    };
+  }
+
   private async enrichChatContextWithRepoInventory(
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
     const queryText = request.intent.context?.queryText;
-    const needCount = isRepoInventoryQuery(queryText);
-    const needTree = needsRepoTreeOverview(queryText);
-    if (!needCount && !needTree) {
+    const needs = repoFactNeeds(queryText);
+    if (!hasRepoFactNeed(needs)) {
       return result;
     }
 
-    const inventoryOptions = {
-      request,
-      api: this.options.api,
-      apiBaseUrl: this.preferences.apiBaseUrl,
-      codeHostRouter: this.options.codeHostRouter,
-      branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
-      owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
-      repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
-      provider:
-        this.currentContext.provider ??
-        this.preferences.defaultCodeHost ??
-        "github"
-    };
+    const workspace = this.indexedRepoWorkspace();
+    const target = this.repoTargetForRequest(request);
+    const needCount = needs.fileCount || needs.lineCount;
 
     const load = async (): Promise<ContextFetchResult> => {
       try {
         const [inventory, treeOverview] = await Promise.all([
-          needCount ? fetchRepoInventoryStats(inventoryOptions) : Promise.resolve(undefined),
-          needTree ? fetchRepoTreeOverview(inventoryOptions) : Promise.resolve(undefined)
+          needCount ? workspace.getInventory(target, needs) : Promise.resolve(undefined),
+          needs.treeOverview ? workspace.getTreeOverview(target) : Promise.resolve(undefined)
         ]);
-        if (needCount && !inventory) {
-          return mergeRepoInventoryContext(result, {
-            source: "unavailable",
-            note:
-              "No indexed structure manifest or recursive tree count is available for this repository yet. Do not estimate file count from semantic search samples."
-          }, treeOverview);
-        }
         return mergeRepoInventoryContext(result, inventory, treeOverview);
       } catch {
         return mergeRepoInventoryContext(result, {
           source: "unavailable",
-          note: "Failed to load repository inventory. Do not estimate file count from semantic search samples."
+          note: "Failed to load repository inventory. Do not estimate repository totals from search samples."
         });
       }
     };

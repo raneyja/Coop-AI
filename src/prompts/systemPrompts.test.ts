@@ -423,7 +423,74 @@ test("buildUserMessageWithContext renders repo_inventory for file-count question
   assert.ok(message.includes("<repo_inventory>"));
   assert.ok(message.includes('file_count="1842"'));
   assert.ok(message.includes('source="manifest"'));
-  assert.ok(message.includes("Authoritative repository inventory"));
+  assert.ok(message.includes("Measured repository totals"));
+});
+
+test("buildUserMessageWithContext renders line_count for LOC questions", () => {
+  const message = buildUserMessageWithContext("how many lines of code are in this repo?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoInventory: {
+            source: "index-stats",
+            fileCount: 1233,
+            lineCount: 66934,
+            languages: ["ts", "md"],
+            indexedAt: "2026-07-24T00:00:00.000Z"
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes('source="index-stats"'));
+  assert.ok(message.includes('line_count="66934"'));
+  assert.ok(message.includes('file_count="1233"'));
+  assert.ok(message.includes("66934 line(s) of code"));
+});
+
+test("buildUserMessageWithContext forbids estimating a missing line count", () => {
+  const message = buildUserMessageWithContext("how many lines of code are in this repo?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoInventory: {
+            source: "tree",
+            fileCount: 1233,
+            note:
+              "No line count is recorded for this repository — Deep-Index has not stored line stats for it yet. " +
+              "Say the line count is unavailable and offer to re-index. Do not estimate it from file counts or attached snippets."
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes('file_count="1233"'));
+  assert.equal(message.includes("line_count="), false);
+  assert.match(message, /Do not estimate it from file counts/);
+});
+
+test("repo_inventory is declared the only source for totals", () => {
+  const message = buildUserMessageWithContext("how many lines of code?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: { repoInventory: { source: "unavailable", note: "Coop has no indexed inventory." } }
+      }
+    ]
+  });
+
+  assert.match(message, /only valid source for file, line, or size totals/i);
+  assert.match(message, /never compute them from <repo_semantic_files>/i);
 });
 
 test("buildUserMessageWithContext marks semantic files as a retrieval sample", () => {

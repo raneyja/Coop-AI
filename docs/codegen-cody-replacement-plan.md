@@ -54,7 +54,7 @@ Phase 2 can parallel with late Phase 1 if no merge conflicts. Phase 3 depends on
 | `useGraphContext` | Default **false**; server slice in `inlineGraphContext.ts` (150 ms) | Roadmap §3 still listed as unchecked — updated to partial |
 | Graph plan gating | No plan gate in `inlineGraphContext.ts` | Some docs said Pro-only — aligned to "Deep-Indexed repo" |
 | `coopAI.chat.semanticRetrieval` | `semanticRetrievalConfig.ts` default **true** | Missing from `package.json` contributes — **added** |
-| Semantic retrieval hot path | `repoSemanticRetrieval.ts` + tests exist; UI message only in `contextGatheringMessages.ts` | Not wired in `CoopChatSession` — **Phase 1** |
+| Semantic retrieval hot path | `repoSemanticRetrieval.ts` + tests exist; UI message in `contextGatheringMessages.ts` | **Wired** — `enrichChatContextWithSemanticSearch` in `CoopChatSession`; repo-fact turns use `IndexedRepoWorkspace` |
 | Edit selection | Selection in chat via `coopAI.includeSelection`; no `src/edit/` | Manual implied inline diff shipped — **corrected** |
 
 ### Deliverables

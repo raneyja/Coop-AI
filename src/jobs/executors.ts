@@ -15,6 +15,8 @@ import { buildPartialFailure, JobCancelledError, normalizeJobError } from "./err
 import { buildStructureManifest } from "./buildStructureManifest";
 import { runScipIndexer } from "./runScipIndexer";
 import { runZoektIndexer } from "./runZoektIndexer";
+import { collectRepoStats } from "../workspace/collectRepoStats";
+import { RepoStatsStore } from "../workspace/repoStatsStore";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -274,6 +276,25 @@ async function indexRepository(
     graph.lastUpdated = now;
     ctx.cache.setGraph(graph);
 
+    // Measure the repo while the clone still exists — chat answers counts from
+    // this record instead of estimating from a retrieval sample.
+    await report(84, "Recording repository inventory");
+    const repoStats = collectRepoStats(clone.localPath, clone.files);
+    if (orgId) {
+      const pool = await getDbPool();
+      if (pool) {
+        await new RepoStatsStore(pool).upsertStats(orgId, repoId, {
+          branch: target.branch,
+          fileCount: repoStats.fileCount,
+          lineCount: repoStats.lineCount,
+          byteCount: repoStats.byteCount,
+          languages: repoStats.languages,
+          headCommit: clone.headCommit,
+          indexedAt: now
+        });
+      }
+    }
+
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
@@ -307,6 +328,9 @@ async function indexRepository(
     return {
       repoId,
       fileCount: graph.fileTree.length,
+      lineCount: repoStats.lineCount,
+      byteCount: repoStats.byteCount,
+      languages: repoStats.languages,
       indexVersion: graph.metadata.indexVersion,
       lastIndexedAt: graph.metadata.lastIndexedAt.toISOString(),
       headCommit: clone.headCommit,

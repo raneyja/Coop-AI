@@ -851,6 +851,42 @@ export class CoopBackendClient {
     return response.data;
   }
 
+  /** Durable repository facts recorded by Deep-Index (files, lines, languages). */
+  public async fetchRepoInventory(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    source: "index-stats" | "unavailable";
+    branch?: string;
+    fileCount?: number;
+    lineCount?: number;
+    byteCount?: number;
+    languages?: string[];
+    headCommit?: string;
+    indexedAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/inventory`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: branch ? { branch } : undefined,
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
+  }
+
   /** Recursive blob count via org code-host credentials (cloud inventory path). */
   public async fetchRepoFileCount(
     baseUrl: string,

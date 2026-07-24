@@ -17,4 +17,12 @@ export type AgentToolContext = {
   }) => Promise<AgentDirectoryListing>;
   /** Live code-host blame for git_blame. */
   getBlame?: (options: { path: string; repoId?: string }) => Promise<BlameData & { path: string }>;
+  /**
+   * Fetch a file that is not on local disk, via IndexedRepoWorkspace. Required for
+   * remote repos, where the agent has an index but no clone.
+   */
+  readRemoteFile?: (options: {
+    path: string;
+    repoId?: string;
+  }) => Promise<{ path: string; content: string } | undefined>;
 };

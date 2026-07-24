@@ -43,7 +43,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 - File `@`-mentions in chat
 - Edit selection inline diff (accept/retry/undo) — Phase 3 codegen
-- Semantic retrieval on chat hot path — Phase 1 codegen (`repoSemanticRetrieval.ts` exists, not wired)
+- Agentic multi-file retrieval for deep repo questions (today chat attaches a capped search sample; repo facts come from `IndexedRepoWorkspace`)
 
 ---
 
@@ -111,7 +111,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Phase | Focus | Status |
 |-------|--------|--------|
 | **0** | Doc drift, settings exposure | **Complete** — timeout/model defaults aligned; `coopAI.chat.semanticRetrieval` in `package.json`; manual edit-selection honesty |
-| **1** | Wire semantic retrieval + autocomplete graph on hot path | Next — `repoSemanticRetrieval.ts` exists but not called from `CoopChatSession` |
+| **1** | Wire semantic retrieval + autocomplete graph on hot path | **Complete** — `searchRepoForChat` runs from `CoopChatSession`; repo-fact turns route to `IndexedRepoWorkspace` instead |
 | **2** | Telemetry + admin analytics | Partial — completion events exist; edit/quick_action gaps |
 | **3** | Edit loop: parse/apply/undo patches | Not started — no `src/edit/` |
 | **4** | Autocomplete trust (symbol filter, dogfood) | Not started |
