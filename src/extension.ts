@@ -432,7 +432,7 @@ export function activate(context: vscode.ExtensionContext): void {
         ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
         : undefined;
       const blame = await codeHostRouter.getBlameData(filePath, coords ?? undefined);
-      return { path: filePath, ...blame };
+      return { ...blame, path: filePath };
     },
     readRemoteFile: async ({ path: filePath, repoId }) =>
       new IndexedRepoWorkspace({

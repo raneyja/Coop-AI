@@ -20,9 +20,9 @@ export async function handleGitBlame(
   try {
     const blame = await ctx.getBlame({ path, repoId });
     return JSON.stringify({
-      path,
       sampleNote: "Blame ranges for the requested file only — not a repository-wide ownership inventory.",
-      ...blame
+      ...blame,
+      path
     });
   } catch (error) {
     return JSON.stringify({
