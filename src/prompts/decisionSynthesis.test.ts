@@ -130,6 +130,12 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
   const enrichedTimeline: DecisionTimeline = {
     ...timeline,
     targetLabel: "fastify.js:10-20",
+    focusCommit: {
+      sha: "bbbbbbb2deadbeef",
+      author: "@jon",
+      date: "2026-07-22",
+      message: "Keep remote file chips as R and stop New Chat inheriting leftovers."
+    },
     introducingDiffSummary: {
       filesChanged: 2,
       insertions: 30,
@@ -139,11 +145,20 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
     evolution: {
       commitCountSinceIntroduction: 7,
       lastModifiedAt: "2026-06-01",
-      lastModifiedAuthor: "@bob"
+      lastModifiedAuthor: "@bob",
+      recentCommits: [
+        {
+          sha: "bbbbbbb2deadbeef",
+          author: "@jon",
+          date: "2026-07-22",
+          message: "Keep remote file chips as R and stop New Chat inheriting leftovers."
+        }
+      ]
     },
     rationaleRanking: [
       { source: "pr:1506", role: "rationale", label: "PR #1506" },
-      { source: "commit:dd2bb73", role: "provenance", label: "GitHub commit dd2bb73" }
+      { source: "commit:bbbbbbb2", role: "provenance", label: "Recent commit bbbbbbb" },
+      { source: "commit:dd2bb73", role: "background", label: "Introduced in dd2bb73" }
     ],
     completeness: "partial"
   };
@@ -153,9 +168,12 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
     owner: "coop-demo-lab",
     repo: "fastify"
   });
-  assert.ok(prompt.includes("Target: fastify.js:10-20"));
   assert.ok(prompt.includes("## Evidence enrichment"));
+  assert.ok(prompt.includes("lead with this for full-file traces"));
+  assert.ok(prompt.includes("Recent decision commit"));
+  assert.ok(prompt.includes("Originally introduced (background)"));
   assert.ok(prompt.includes("primary rationale source"));
+  assert.ok(prompt.includes("Target: fastify.js:10-20"));
   assert.ok(prompt.includes("Introducing diff summary"));
   assert.ok(prompt.includes("Evolution since introduction"));
   assert.ok(prompt.includes("Rationale ranking"));

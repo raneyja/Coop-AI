@@ -75,6 +75,8 @@ export type DecisionEvolution = {
   commitCountSinceIntroduction: number;
   lastModifiedAt?: string;
   lastModifiedAuthor?: string;
+  /** Newest post-introduction commits (full-file traces) — already fetched with history. */
+  recentCommits?: DecisionCommit[];
 };
 
 export type DecisionRationaleRank = {
@@ -119,7 +121,13 @@ export type DecisionTimeline = {
   targetLabel?: string;
   lineRange?: LineRange;
   codeSnippet?: string;
+  /** First commit that introduced the file/selection (provenance / birth). */
   originalCommit?: DecisionCommit;
+  /**
+   * Commit used for PR/discussion enrichment and primary rationale.
+   * Full-file traces prefer a recent evolution commit; line traces keep blame introduction.
+   */
+  focusCommit?: DecisionCommit;
   introducingDiffSummary?: DecisionIntroducingDiffSummary;
   evolution?: DecisionEvolution;
   rationaleRanking?: DecisionRationaleRank[];
