@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
+import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
 import type { IdentityDirectory } from "../identity/types";
 import type {
   ChatHistoryMessage,
@@ -864,7 +865,8 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const encodedRepo = encodeURIComponent(repoId);
     const response = await runResilientRequest({
-      timeoutMs: 60_000,
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
       shouldRetryError: isRetryableError,
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encodedRepo}/file-count`, {
@@ -1366,7 +1368,8 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const encoded = encodeURIComponent(repoId);
     const response = await runResilientRequest({
-      timeoutMs: 30_000,
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
       shouldRetryError: isRetryableError,
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encoded}/manifest`, {

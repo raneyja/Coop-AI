@@ -112,7 +112,7 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
       merged.fileSource = "external";
       merged.contextWarning = undefined;
     } else if (shouldKeepRemoteProvenance(existing, incoming)) {
-      // Explorer remote pick opened via local clone — keep R + repo-relative path.
+      // Same path via leftover local tab — keep remote provenance; do not treat as local.
       merged.file = existing.file?.trim() || incoming.file.trim();
       merged.fileSource = "remote";
       if ("contextWarning" in incoming) {

@@ -2,6 +2,7 @@ import { estimateCostUsd, estimateTokensFromText } from "../costEstimate";
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import type { ChatRequestMessage } from "../requestFormatter";
 import { NetworkResilienceError, runResilientRequest } from "../networkResilience";
+import { MAX_USER_FACING_RESPONSE_MS } from "../../config/responseDeadline";
 import type { FinishReason, ProviderStreamOptions, StreamChunk, TokenUsage } from "../types";
 import type { LlmProvider } from "../zeroRetentionConfig";
 import { assertStandardInferenceEndpoint, getZeroRetentionConfig } from "../zeroRetentionConfig";
@@ -33,7 +34,9 @@ export abstract class BaseProviderClient {
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: 120_000,
+        // Interactive chat/QA: one attempt inside the platform 15s ceiling — never stack retries.
+        timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+        policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
             ...init,

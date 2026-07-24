@@ -27,7 +27,7 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 | Usage footer | Per-request + session cost estimate |
 | Stream cancel | `AbortController` |
 | Editor context menu | Trace, Find Owner, Blast Radius, Understand Repo, Knowledge Gaps |
-| Open repo in editor (hybrid) | On remote explorer repo pick: local clone via `openFolder`, else GitHub Repositories (`coopAI.openRepoInEditor`) |
+| Open repo in editor (remote-only) | On remote explorer repo pick: GitHub Repositories (VFS) only — a remote selection never opens a local clone. Local clones require explicit `allowLocalClone` opt-in |
 | Workspace prompt library | `.coop/prompts.json` + sidebar chips + Save / Run |
 | API key UX | **Save API key** button (any length for local dev) |
 | Inline autocomplete (T0) | `coopAI.autocomplete.enabled` default **off**; buffer-only ghost text |

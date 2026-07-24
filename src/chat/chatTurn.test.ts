@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID } from "./chatTurn";
+import {
+  isResponseDeadlineAbort,
+  RESPONSE_DEADLINE_REASON,
+  scheduleResponseDeadline
+} from "../config/responseDeadline";
 
 function beginTurn(manager: ThreadRunManager, threadId: string, modelMessage = "hi") {
   return manager.begin({
@@ -60,10 +65,38 @@ function testAppendIgnoredAfterAbort(): void {
   assert.equal(turn.partialAssistant, "");
 }
 
+async function testBeginSchedulesResponseDeadline(): Promise<void> {
+  const manager = new ThreadRunManager();
+  const turn = beginTurn(manager, "thread-deadline");
+  assert.equal(typeof turn.clearResponseDeadline, "function");
+
+  // Replace the long 15s timer with a short one so the test stays fast.
+  turn.clearResponseDeadline();
+  turn.clearResponseDeadline = scheduleResponseDeadline(turn.streamAbort, Date.now(), 20);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+
+  assert.equal(turn.streamAbort.signal.aborted, true);
+  assert.equal(isResponseDeadlineAbort(turn.streamAbort.signal), true);
+  assert.equal(
+    (turn.streamAbort.signal as AbortSignal & { reason?: unknown }).reason,
+    RESPONSE_DEADLINE_REASON
+  );
+  // Deadline aborts the signal only — turn stays running until session finishes it.
+  assert.equal(manager.isStreamActive(turn), true);
+  turn.clearResponseDeadline();
+  manager.complete(turn);
+}
+
 testAbortOnSameThreadOnly();
 testResendAbortsPriorTurnOnSameThread();
 testPartialBufferSurvivesForResume();
 testCompleteRemovesRun();
 testAppendIgnoredAfterAbort();
-
-console.log("chatTurn.test.ts: ok");
+void testBeginSchedulesResponseDeadline()
+  .then(() => {
+    console.log("chatTurn.test.ts: ok");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

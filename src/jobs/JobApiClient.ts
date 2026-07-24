@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 import { runResilientRequest, isRetryableError } from "../api/networkResilience";
+import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
 import { JobType, type JobProgressEvent, type JobSubmitResponse } from "./types";
 
 export type JobApiClientOptions = {
@@ -13,14 +14,14 @@ export class JobApiClient {
   public constructor(private readonly options: JobApiClientOptions) {
     this.http = axios.create({
       baseURL: options.baseUrl.replace(/\/$/, ""),
-      timeout: 120_000
+      timeout: MAX_USER_FACING_RESPONSE_MS
     });
   }
 
   public setBaseUrl(baseUrl: string): void {
     this.http = axios.create({
       baseURL: baseUrl.replace(/\/$/, ""),
-      timeout: 120_000
+      timeout: MAX_USER_FACING_RESPONSE_MS
     });
   }
 
@@ -65,13 +66,16 @@ export class JobApiClient {
   public async pollUntilComplete(
     jobId: string,
     onProgress: (event: JobProgressEvent) => void,
-    options: { intervalMs?: number; timeoutMs?: number } = {}
+    options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {}
   ): Promise<Record<string, unknown>> {
     const intervalMs = options.intervalMs ?? 1500;
-    const timeoutMs = options.timeoutMs ?? 600_000;
+    const timeoutMs = options.timeoutMs ?? MAX_USER_FACING_RESPONSE_MS;
     const started = Date.now();
 
     while (Date.now() - started < timeoutMs) {
+      if (options.signal?.aborted) {
+        throw new Error("Job aborted");
+      }
       const job = await this.getJob(jobId);
       const status = String(job.status ?? "queued");
       const progress = Number(job.progress ?? 0);
@@ -89,7 +93,7 @@ export class JobApiClient {
       if (status === "failed" || status === "cancelled") {
         throw new Error(String(job.error ?? `Job ${status}`));
       }
-      await delay(intervalMs);
+      await delay(intervalMs, options.signal);
     }
     throw new Error("Job polling timed out");
   }
@@ -97,7 +101,9 @@ export class JobApiClient {
   private async request(config: { method: string; url: string; data?: unknown }): Promise<{ data: unknown; status: number }> {
     const headers = await this.authHeaders();
     const response = await runResilientRequest({
-      timeoutMs: 120_000,
+      // Job polls sit on the chat/QA hot path — stay inside one 15s attempt.
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
       shouldRetryError: (error) => isRetryableError(error),
       run: async () =>
         this.http.request({
@@ -129,8 +135,22 @@ export class JobApiClient {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("Job aborted"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new Error("Job aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export function jobTypeForQuickAction(actionId: string): JobType | undefined {

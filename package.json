@@ -827,6 +827,7 @@
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:request-batcher": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/requestBatcher.test.ts",
     "test:chat-response-timing": "npx tsx src/chat/chatResponseTiming.test.ts",
+    "test:response-deadline": "npx tsx src/config/responseDeadline.test.ts && npx tsx src/chat/chatTurn.test.ts",
     "test:chat-message-intent": "npx tsx src/chat/chatMessageIntent.test.ts",
     "test:chat-threads": "npx tsx src/chat/chatThreadRestore.test.ts",
     "test:project-instructions": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/projectInstructionsStatus.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/webview/lib/agentsMdStatus.test.ts",

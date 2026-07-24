@@ -1,0 +1,43 @@
+---
+description: Hard 15s ceiling for all user-facing Coop responses (chat + quick actions)
+alwaysApply: true
+---
+
+# Response latency — 15 second hard ceiling
+
+**Product rule:** Coop must never make a user wait more than **15 seconds** for a chat or quick-action answer. Longer waits are not valuable.
+
+## Scope
+
+Applies to:
+
+- Plain chat
+- Quick actions (Trace Decision, Understand Repo, Blast Radius, Knowledge Gaps, Find Owner, etc.)
+- `/edit` synthesis
+- Context gathering that blocks the answer (search, file fetch, integrations, agent tools, job polling)
+
+Does **not** apply to:
+
+- Background indexing / structure crawls that do not block the first answer
+- Autocomplete (separate latency budgets)
+
+## Implementation requirements
+
+1. Use `MAX_USER_FACING_RESPONSE_MS` from `src/config/responseDeadline.ts` — do not invent other ceilings.
+2. Every user-facing turn must schedule a deadline abort from turn start; clear it on complete/abort.
+3. Cap interactive HTTP / LLM / job-poll waits to the **remaining** turn budget (reserve time for synthesis when gathering context first).
+4. On deadline: return a partial answer if tokens already streamed, otherwise a clear timeout message — never hang.
+5. Do not stack sequential calls that can each take 15s+; parallelize or fail open early.
+6. Never add artificial delays that push a turn past the ceiling.
+
+## Anti-patterns
+
+| Reject | Prefer |
+|--------|--------|
+| Per-call timeouts of 30–120s on the chat hot path | Remaining-budget timeouts from turn start |
+| Polling jobs for minutes before answering | Poll within remaining budget, then answer with partial/cached context |
+| Silent hang after abort | Finish with partial text or explicit timeout error |
+
+## Self-check
+
+Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer”? If yes, cut work or degrade earlier.
