@@ -3,6 +3,7 @@ import { BaseProviderClient, parseSseDataLine, resolveUsage, type ParseState } f
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
+import { MAX_USER_FACING_RESPONSE_MS } from "../../config/responseDeadline";
 
 export class AnthropicProviderClient extends BaseProviderClient {
   public async *streamCompletion(options: ProviderStreamOptions): AsyncGenerator<StreamChunk> {
@@ -38,7 +39,8 @@ export class AnthropicProviderClient extends BaseProviderClient {
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: 120_000,
+        timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+        policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
             method: "POST",

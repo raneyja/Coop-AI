@@ -10,6 +10,7 @@ import {
   partitionMentionsForRepoSummary,
   partitionMentionsForTraceDecision,
   pathLikelyInTargetRepo,
+  plainChatContextChips,
   plainChatHistoryContent,
   plainChatRefersToAttachedFile
 } from "./mentionScope";
@@ -211,6 +212,37 @@ test("plainChatHistoryContent preserves @ attachments in bubble text", () => {
     { path: ".dockerignore", repoId: "workspace:local", source: "local" }
   ]);
   assert.ok(history.includes("attached: .dockerignore (local workspace)"));
+});
+
+test("plainChatHistoryContent adds file/repo/branch chips on first message", () => {
+  const history = plainChatHistoryContent(
+    "Can you summarize this repo for me in 4 sentences or fewer?",
+    [],
+    {
+      includeContextChips: true,
+      context: { owner: "raneyja", repo: "Coop-AI", branch: "main", file: "AGENTS.md" }
+    }
+  );
+  assert.ok(history.startsWith("Can you summarize this repo for me in 4 sentences or fewer?\n"));
+  assert.ok(history.includes("file: AGENTS.md"));
+  assert.ok(history.includes("repo: raneyja/Coop-AI"));
+  assert.ok(history.includes("branch: main"));
+});
+
+test("plainChatHistoryContent omits chips on follow-up messages", () => {
+  const history = plainChatHistoryContent("Tell me more", [], {
+    includeContextChips: false,
+    context: { owner: "raneyja", repo: "Coop-AI", branch: "main" }
+  });
+  assert.equal(history, "Tell me more");
+});
+
+test("plainChatContextChips skips missing file and keeps repo scope", () => {
+  const chips = plainChatContextChips({ owner: "raneyja", repo: "Coop-AI", branch: "main" });
+  assert.deepEqual(chips, [
+    { key: "repo", value: "raneyja/Coop-AI" },
+    { key: "branch", value: "main" }
+  ]);
 });
 
 console.log(`\nmentionScope: ${passed}/${passed + failed} tests passed`);

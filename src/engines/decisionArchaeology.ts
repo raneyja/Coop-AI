@@ -19,6 +19,11 @@ import {
   type TraceEvidenceMatchOptions
 } from "./traceEvidenceRelevance";
 import { collectJiraKeysFromText } from "../context/jiraContext";
+import {
+  isHighSignalCommitMessage,
+  pickRecentEvolutionCommits,
+  selectFocusCommit
+} from "./decisionFocusCommit";
 import type {
   DecisionAlternative,
   DecisionCommit,
@@ -27,6 +32,12 @@ import type {
   DecisionTimeline,
   LineRange
 } from "../types/decisionTimeline";
+
+export {
+  isHighSignalCommitMessage,
+  pickRecentEvolutionCommits,
+  selectFocusCommit
+} from "./decisionFocusCommit";
 
 export type {
   ChronologyEvent,
@@ -158,18 +169,41 @@ export class DecisionArchaeologyEngine {
       );
     }
 
-    const commit = timeline.originalCommit;
+    if (!timeline.originalCommit) {
+      return timeline;
+    }
+
+    // Provenance diff for the introducing commit (UI: "What changed originally").
+    await this.enrichIntroducingDiffSummary(timeline, coords, file, timeline.originalCommit).catch((error) => {
+      timeline.warnings.push(`Introducing diff summary unavailable: ${errorMessage(error)}`);
+    });
+
+    // History already fetched here — reuse for focus selection (no extra round trip).
+    await this.enrichEvolution(timeline, coords, file, timeline.originalCommit).catch((error) => {
+      timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
+    });
+
+    // Full-file: lead with recent evolution. Line selection: keep blame introduction.
+    timeline.focusCommit = selectFocusCommit({
+      lineRange,
+      introduction: timeline.originalCommit,
+      recentCommits: timeline.evolution?.recentCommits ?? []
+    });
+
+    const commit = timeline.focusCommit ?? timeline.originalCommit;
     if (!commit) {
       return timeline;
     }
 
-    await this.enrichIntroducingDiffSummary(timeline, coords, file, commit).catch((error) => {
-      timeline.warnings.push(`Introducing diff summary unavailable: ${errorMessage(error)}`);
-    });
-
-    await this.enrichEvolution(timeline, coords, file, commit).catch((error) => {
-      timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
-    });
+    if (commit.sha !== timeline.originalCommit.sha) {
+      pushChronology(
+        timeline,
+        commit.date,
+        commit.author,
+        "Recent decision commit on file",
+        commit.message
+      );
+    }
 
     const refs = parseReferences(commit.message);
     let prNumber: number | undefined = refs.prNumbers[0];
@@ -233,7 +267,12 @@ export class DecisionArchaeologyEngine {
         timeline.completeness = "partial";
       }
     } else {
-      timeline.warnings.push("No linked pull request found for the introducing commit.");
+      const focusIsIntroduction = commit.sha === timeline.originalCommit?.sha;
+      timeline.warnings.push(
+        focusIsIntroduction
+          ? "No linked pull request found for the introducing commit."
+          : "No linked pull request found for the recent decision commit."
+      );
     }
 
     const issueKeys = collectTraceJiraKeys({
@@ -363,10 +402,13 @@ export class DecisionArchaeologyEngine {
       }
     }
 
+    const recentCommits = pickRecentEvolutionCommits(history, introducingCommit.sha, 3);
+
     timeline.evolution = {
       commitCountSinceIntroduction: Math.max(1, commitCountSinceIntroduction || 1),
       lastModifiedAt: newest.date,
-      lastModifiedAuthor: formatCommitAuthor(newest)
+      lastModifiedAuthor: formatCommitAuthor(newest),
+      ...(recentCommits.length ? { recentCommits } : {})
     };
   }
 
@@ -962,17 +1004,9 @@ function parseReferences(text: string): { prNumbers: number[]; jiraKeys: string[
   return { prNumbers: [...new Set(prNumbers)], jiraKeys };
 }
 
-const WEAK_DECISION_COMMIT_MESSAGE_RE = /^(wip|fix|update|changes?|misc|tmp|test|merge|refactor)\b/i;
-
-function isHighSignalCommitMessage(message: string): boolean {
-  const cleaned = message.replace(/\s+/g, " ").trim();
-  const words = cleaned.split(" ").filter(Boolean).length;
-  return words >= 6 && cleaned.length >= 30 && !WEAK_DECISION_COMMIT_MESSAGE_RE.test(cleaned);
-}
-
 function buildRationaleRanking(
   timeline: DecisionTimeline,
-  hasHighSignalCommitMessage: boolean
+  hasHighSignalFocusCommitMessage: boolean
 ): DecisionRationaleRank[] {
   const ranking: DecisionRationaleRank[] = [];
 
@@ -1016,18 +1050,34 @@ function buildRationaleRanking(
     });
   }
 
-  if (timeline.originalCommit) {
+  const focus = timeline.focusCommit ?? timeline.originalCommit;
+  const introduction = timeline.originalCommit;
+  const focusIsIntroduction = Boolean(
+    focus && introduction && focus.sha === introduction.sha
+  );
+
+  if (focus) {
     const existingRicherSources = ranking.length > 0;
     ranking.push({
-      source: `commit:${timeline.originalCommit.sha}`,
-      role: hasHighSignalCommitMessage
+      source: `commit:${focus.sha}`,
+      role: hasHighSignalFocusCommitMessage
         ? existingRicherSources
           ? "provenance"
           : "rationale"
         : existingRicherSources
           ? "background"
           : "provenance",
-      label: `Commit ${timeline.originalCommit.sha.slice(0, 7)}`
+      label: focusIsIntroduction
+        ? `Commit ${focus.sha.slice(0, 7)}`
+        : `Recent commit ${focus.sha.slice(0, 7)}`
+    });
+  }
+
+  if (introduction && !focusIsIntroduction) {
+    ranking.push({
+      source: `commit:${introduction.sha}`,
+      role: "background",
+      label: `Introduced in ${introduction.sha.slice(0, 7)}`
     });
   }
 
@@ -1041,6 +1091,12 @@ function buildRationaleRanking(
     seen.add(key);
     deduped.push(entry);
   }
+
+  const hasRationale = deduped.some((entry) => entry.role === "rationale");
+  if (!hasRationale && deduped.length > 0) {
+    deduped[0] = { ...deduped[0], role: "rationale" };
+  }
+
   return deduped;
 }
 

@@ -5,6 +5,7 @@ import {
   localPathsToMentionResults,
   mergeHybridMentionSearchResults,
   preferMentionFileContent,
+  resolveMentionFileContent,
   rankMentionSearchResults
 } from "./mentionSearchMerge";
 import type { MentionSearchResult } from "./types";
@@ -82,14 +83,53 @@ test("rankMentionSearchResults surfaces exact basename matches", () => {
   assert.equal(ranked[0]?.path, "src/chat/CoopChatSession.ts");
 });
 
-test("preferMentionFileContent uses local disk content before remote fetch on Pro+", () => {
+test("preferMentionFileContent keeps local-first for legacy callers", () => {
   assert.equal(
     preferMentionFileContent("local wip", "indexed remote", "snippet"),
     "local wip"
   );
-  assert.equal(preferMentionFileContent(undefined, "indexed remote", "snippet"), "indexed remote");
+  assert.equal(preferMentionFileContent(undefined, "indexed remote", "snippet"), "snippet");
   assert.equal(preferMentionFileContent(undefined, undefined, "snippet"), "snippet");
   assert.equal(preferMentionFileContent("", "", ""), "");
+});
+
+test("resolveMentionFileContent never mixes local clone into remote mentions", () => {
+  assert.equal(
+    resolveMentionFileContent({
+      prefer: "remote",
+      localContent: "local clone wip",
+      remoteContent: "codehost content",
+      existingSnippet: "snip"
+    }),
+    "codehost content"
+  );
+  assert.equal(
+    resolveMentionFileContent({
+      prefer: "remote",
+      localContent: "local clone wip",
+      remoteContent: undefined,
+      existingSnippet: "snip"
+    }),
+    "snip"
+  );
+  assert.equal(
+    resolveMentionFileContent({
+      prefer: "local",
+      localContent: "disk",
+      remoteContent: "codehost",
+      existingSnippet: "snip"
+    }),
+    "disk"
+  );
+  assert.equal(
+    resolveMentionFileContent({
+      prefer: "local",
+      localContent: undefined,
+      remoteContent: "codehost",
+      existingSnippet: "snip"
+    }),
+    "snip"
+  );
 });
 
 console.log(`\nmentionSearchMerge: ${passed}/${passed + failed} tests passed`);

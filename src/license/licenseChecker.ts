@@ -49,15 +49,6 @@ export function readConfiguredPlan(): SubscriptionPlan {
   return "free";
 }
 
-/** All org plans — capability limits are token/repo quotas, not plan tier. */
-export function canUseCodeHosts(_plan?: SubscriptionPlan): boolean {
-  return true;
-}
-
-export function canUseRemoteCodeGraph(plan?: SubscriptionPlan): boolean {
-  return canUseCodeHosts(plan);
-}
-
 /** Cloud orgs use server-side Deep-Index; local indexing remains devMode-only. */
 export function usesOrgManagedDeepIndex(
   _plan: SubscriptionPlan,

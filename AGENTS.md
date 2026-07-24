@@ -14,6 +14,10 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 
+## Response latency (15s hard ceiling)
+
+Chat and quick actions must answer within **15 seconds**. Use `MAX_USER_FACING_RESPONSE_MS` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. Do not add per-call timeouts of 30–120s+ on the interactive hot path.
+
 ## VS Code extension webview UI
 
 When adding or changing UI under `src/webview/`, follow the design policy in:

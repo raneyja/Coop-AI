@@ -2,6 +2,7 @@ import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
+import { isRepoStructureQuery } from "./repoInventoryEnrichment";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -20,6 +21,10 @@ export type RepoSemanticSearchContext = {
   query: string;
   searchSource?: LocalSearchResult["source"];
   files: RepoSemanticSnippet[];
+  /** Unique paths ranked from search before the attach cap — not a repo inventory. */
+  matchedPathCount?: number;
+  /** Hard cap used when attaching file bodies (MAX_SEMANTIC_FILES). */
+  attachmentCap?: number;
 };
 
 export type RepoSemanticRetrievalGateOptions = {
@@ -60,6 +65,10 @@ export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGat
     return false;
   }
   const query = semanticRetrievalQueryText(options);
+  // Inventory / structure questions need tree or file counts, not a 3-file semantic sample.
+  if (!options.codeEditIntent && isRepoStructureQuery(query)) {
+    return false;
+  }
   const minLength = options.codeEditIntent ? SEMANTIC_QUERY_MIN_LENGTH_EDIT : SEMANTIC_QUERY_MIN_LENGTH;
   if (query.length < minLength) {
     return false;
@@ -239,7 +248,9 @@ export async function searchRepoForChat(
     source: "repo-semantic-search",
     query,
     searchSource: searchResult.source,
-    files
+    files,
+    matchedPathCount: rankedPaths.length,
+    attachmentCap: MAX_SEMANTIC_FILES
   };
 }
 

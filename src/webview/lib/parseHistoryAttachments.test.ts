@@ -35,6 +35,15 @@ test("splitPlainChatHistoryBody separates message and attached chips", () => {
   assert.equal(split.attachments[0]?.basename, ".dockerignore");
 });
 
+test("splitPlainChatHistoryBody parses first-message context chips", () => {
+  const split = splitPlainChatHistoryBody(
+    "Can you summarize this repo?\nfile: AGENTS.md · repo: raneyja/Coop-AI · branch: main"
+  );
+  assert.equal(split.message, "Can you summarize this repo?");
+  assert.equal(split.contextLine, "file: AGENTS.md · repo: raneyja/Coop-AI · branch: main");
+  assert.equal(split.attachments.length, 0);
+});
+
 test("parseContextLineAttachments extracts attached chips from quick-action context", () => {
   const parsed = parseContextLineAttachments(
     "file: src/a.ts · branch: main · attached: .dockerignore (local workspace)"

@@ -246,6 +246,28 @@ export function parseRepoId(repoId: string): ParsedRepo {
   return { provider, owner, repo, repoId };
 }
 
+/**
+ * Lightweight recursive blob count (no symbol parsing). Used by chat inventory
+ * and the org file-count API. Truncated GitHub trees return a lower-bound count.
+ */
+export async function countRepoBlobsViaCodeHost(
+  repoId: string,
+  token: string
+): Promise<{ fileCount: number; truncated: boolean; branch: string }> {
+  const target = parseRepoId(repoId);
+  try {
+    const { branch, blobs } = await fetchRecursiveTree(target, token);
+    return { fileCount: blobs.length, truncated: false, branch };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (target.provider === "github" && /truncated/i.test(message)) {
+      const partial = await fetchGithubRecursiveTreeAllowTruncated(target, githubHeaders(token));
+      return { fileCount: partial.blobs.length, truncated: true, branch: partial.branch };
+    }
+    throw error;
+  }
+}
+
 function resolveGitlabApiBase(): string {
   return gitlabApiBaseUrl(loadGitLabAppConfig()?.gitlabBaseUrl);
 }
@@ -291,6 +313,17 @@ async function fetchGithubRecursiveTree(
   target: ParsedRepo,
   headers: Record<string, string>
 ): Promise<{ branch: string; blobs: TreeBlob[] }> {
+  const result = await fetchGithubRecursiveTreeAllowTruncated(target, headers);
+  if (result.truncated) {
+    throw new Error("Repository tree response was truncated; manifest crawl requires full tree");
+  }
+  return { branch: result.branch, blobs: result.blobs };
+}
+
+async function fetchGithubRecursiveTreeAllowTruncated(
+  target: ParsedRepo,
+  headers: Record<string, string>
+): Promise<{ branch: string; blobs: TreeBlob[]; truncated: boolean }> {
   const repoUrl = `${GITHUB_API}/repos/${target.owner}/${target.repo}`;
   const repo = await codeHostRequestJson<{ default_branch: string }>(repoUrl, {
     headers,
@@ -306,13 +339,10 @@ async function fetchGithubRecursiveTree(
     `${repoUrl}/git/trees/${commitSha}?recursive=1`,
     { headers, provider: "github" }
   );
-  if (tree.truncated) {
-    throw new Error("Repository tree response was truncated; manifest crawl requires full tree");
-  }
   const blobs = tree.tree
     .filter((entry) => entry.type === "blob")
     .map((entry) => ({ path: entry.path, sha: entry.sha }));
-  return { branch, blobs };
+  return { branch, blobs, truncated: Boolean(tree.truncated) };
 }
 
 async function fetchGithubBlob(

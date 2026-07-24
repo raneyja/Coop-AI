@@ -39,6 +39,13 @@ type EvidenceEvolutionLike = {
   recentCommitCount?: number;
   lastModifiedAt?: string;
   lastModifiedAuthor?: string;
+  recentCommits?: Array<{
+    sha: string;
+    author: string;
+    date: string;
+    message: string;
+    htmlUrl?: string;
+  }>;
 };
 
 const RATIONALE_ORDER: Array<DecisionRationaleRank["role"]> = [
@@ -78,36 +85,61 @@ export function EvidenceTargetMeta({ label }: { label?: string }): React.ReactEl
 export function EvidenceEvolutionLine({
   evolution,
   label = "Evolution",
-  variant = "section"
+  variant = "section",
+  defaultOpen = false
 }: {
   evolution?: EvidenceEvolutionLike;
   label?: string;
   variant?: "section" | "collapsible";
+  /** Prefer open when recent commits are the primary story (full-file traces). */
+  defaultOpen?: boolean;
 }): React.ReactElement | null {
   const text = summarizeEvidenceEvolution(evolution);
-  const [open, setOpen] = useState(false);
-  if (!text) {
+  const recent = evolution?.recentCommits?.slice(0, 3) ?? [];
+  const [open, setOpen] = useState(defaultOpen && recent.length > 0);
+  if (!text && recent.length === 0) {
     return null;
   }
+
+  const body = (
+    <>
+      {text ? <p className="coop-result-text coop-result-text--muted">{text}</p> : null}
+      {recent.length > 0 ? (
+        <ul className="mt-1.5 space-y-1.5">
+          {recent.map((commit) => (
+            <li key={commit.sha} className="coop-result-text text-[12px] leading-snug">
+              <span className="font-medium">{commit.sha.slice(0, 7)}</span>
+              <span className="coop-result-text--muted"> · {commit.author}</span>
+              <div className="coop-result-text--muted">{truncateSingleLine(commit.message, 140)}</div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
 
   if (variant === "collapsible") {
     return (
       <IntegrationResultCollapsible
         title={label}
-        subtitle={open ? undefined : truncateEvolutionSubtitle(text)}
+        subtitle={open ? undefined : truncateEvolutionSubtitle(text ?? `${recent.length} recent commit(s)`)}
         open={open}
         onToggle={() => setOpen((value) => !value)}
       >
-        <p className="coop-result-text coop-result-text--muted">{text}</p>
+        {body}
       </IntegrationResultCollapsible>
     );
   }
 
-  return (
-    <IntegrationResultSection label={label}>
-      <p className="coop-result-text coop-result-text--muted">{text}</p>
-    </IntegrationResultSection>
-  );
+  return <IntegrationResultSection label={label}>{body}</IntegrationResultSection>;
+}
+
+function truncateSingleLine(value: string, max: number): string {
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= max) {
+    return cleaned;
+  }
+  return `${cleaned.slice(0, max - 1)}…`;
 }
 
 function truncateEvolutionSubtitle(text: string, max = 72): string {

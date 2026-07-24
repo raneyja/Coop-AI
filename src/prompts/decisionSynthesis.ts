@@ -50,7 +50,8 @@ State confidence when evidence is thin. Keep answers concise — limited evidenc
 Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
 For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
 When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
-When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking), use them per the Evidence enrichment section in the user prompt.`;
+When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking, focusCommit), use them per the Evidence enrichment section in the user prompt.
+For full-file traces, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as birth/background unless the user selected specific lines.`;
 
 export type DecisionSynthesisInput = {
   timeline: DecisionTimeline;
@@ -137,6 +138,7 @@ function hasDecisionEnrichment(timeline: DecisionTimeline): boolean {
     Boolean(timeline.targetLabel) ||
     Boolean(timeline.introducingDiffSummary) ||
     Boolean(timeline.evolution) ||
+    Boolean(timeline.focusCommit) ||
     (timeline.rationaleRanking?.length ?? 0) > 0
   );
 }
@@ -206,13 +208,50 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
     sections.push(`### Target precision\n- targetLabel: ${timeline.targetLabel}`);
   }
 
-  if (timeline.originalCommit) {
+  if (timeline.evolution) {
+    const evolution = timeline.evolution;
+    const recentLines =
+      evolution.recentCommits
+        ?.map(
+          (commit) =>
+            `- ${commit.sha.slice(0, 7)} (${commit.date}) ${commit.author}: ${truncate(commit.message, 160)}`
+        )
+        .join("\n") ?? "";
+    sections.push(
+      "### Evolution since introduction (lead with this for full-file traces)\n" +
+        `- Commits since introduction: ${evolution.commitCountSinceIntroduction}` +
+        (evolution.lastModifiedAt ? `\n- Last modified: ${evolution.lastModifiedAt}` : "") +
+        (evolution.lastModifiedAuthor ? `\n- Last modifier: ${evolution.lastModifiedAuthor}` : "") +
+        (recentLines ? `\n- Recent commits:\n${recentLines}` : "")
+    );
+  }
+
+  const focus = timeline.focusCommit ?? timeline.originalCommit;
+  if (focus) {
+    const isRecentFocus =
+      timeline.originalCommit && focus.sha !== timeline.originalCommit.sha;
+    sections.push(
+      `### ${isRecentFocus ? "Recent decision commit" : decisionSourceLabelCommit(focus.sha)}\n` +
+        `- SHA: ${focus.sha.slice(0, 12)}\n- Author: ${focus.author}\n- Date: ${focus.date}\n- Message:\n${focus.message}`
+    );
+  } else if (timeline.fallbackMessage) {
+    sections.push(`### Commit history\n${timeline.fallbackMessage}`);
+  }
+
+  if (
+    timeline.originalCommit &&
+    timeline.focusCommit &&
+    timeline.focusCommit.sha !== timeline.originalCommit.sha
+  ) {
+    const c = timeline.originalCommit;
+    sections.push(
+      `### Originally introduced (background)\n- SHA: ${c.sha.slice(0, 12)}\n- Author: ${c.author}\n- Date: ${c.date}\n- Message:\n${c.message}`
+    );
+  } else if (timeline.originalCommit && !timeline.focusCommit) {
     const c = timeline.originalCommit;
     sections.push(
       `### ${decisionSourceLabelCommit(c.sha)}\n- SHA: ${c.sha.slice(0, 12)}\n- Author: ${c.author}\n- Date: ${c.date}\n- Message:\n${c.message}`
     );
-  } else if (timeline.fallbackMessage) {
-    sections.push(`### Commit history\n${timeline.fallbackMessage}`);
   }
 
   if (timeline.introducingDiffSummary) {
@@ -229,16 +268,6 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
       `### Introducing diff summary\n- ${diff.summary}` +
         (stats ? `\n- Change stats: ${stats}` : "") +
         (diff.patchExcerpt ? `\n- Patch excerpt: ${truncate(diff.patchExcerpt, 300)}` : "")
-    );
-  }
-
-  if (timeline.evolution) {
-    const evolution = timeline.evolution;
-    sections.push(
-      "### Evolution since introduction\n" +
-        `- Commits since introduction: ${evolution.commitCountSinceIntroduction}` +
-        (evolution.lastModifiedAt ? `\n- Last modified: ${evolution.lastModifiedAt}` : "") +
-        (evolution.lastModifiedAuthor ? `\n- Last modifier: ${evolution.lastModifiedAuthor}` : "")
     );
   }
 
@@ -439,8 +468,15 @@ function formatTraceCompletenessSection(timeline: DecisionTimeline): string | un
 
 export function decisionTimelineSummary(timeline: DecisionTimeline): string {
   const parts: string[] = [];
-  if (timeline.originalCommit) {
+  const focus = timeline.focusCommit ?? timeline.originalCommit;
+  if (focus && timeline.originalCommit && focus.sha !== timeline.originalCommit.sha) {
+    parts.push(`recent ${focus.sha.slice(0, 7)}`);
+    parts.push(`introduced ${timeline.originalCommit.sha.slice(0, 7)}`);
+  } else if (timeline.originalCommit) {
     parts.push(`introduced in ${timeline.originalCommit.sha.slice(0, 7)}`);
+  }
+  if (timeline.evolution?.commitCountSinceIntroduction) {
+    parts.push(`${timeline.evolution.commitCountSinceIntroduction} commits since intro`);
   }
   if (timeline.linkedPR) {
     parts.push(`PR #${timeline.linkedPR.number}`);

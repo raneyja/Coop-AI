@@ -17,6 +17,8 @@ export type AgentSessionRequest = {
 export type AgentSessionContext = {
   search_code?: Record<string, unknown>;
   read_file?: Record<string, unknown>;
+  list_directory?: Record<string, unknown>;
+  git_blame?: Record<string, unknown>;
 };
 
 export type AgentSessionResult = {

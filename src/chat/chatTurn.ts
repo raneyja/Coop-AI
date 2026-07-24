@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatPersistedArtifact, RepoContext } from "./types";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type { DecisionTimeline } from "../types/decisionTimeline";
+import { scheduleResponseDeadline } from "../config/responseDeadline";
 
 /** Synthetic id for editor panels that do not use ChatThreadStore. */
 export const SESSION_RUN_THREAD_ID = "session";
@@ -29,6 +30,8 @@ export type ChatTurn = {
   jobId?: string;
   jobGeneration: number;
   streamAbort: AbortController;
+  /** Clears the platform 15s response deadline timer. */
+  clearResponseDeadline: () => void;
   streamGeneration: number;
   partialAssistant: string;
   pendingEvidenceArtifactId?: string;
@@ -65,11 +68,13 @@ export class ThreadRunManager {
   public begin(input: BeginChatTurnInput): ChatTurn {
     this.abort(input.threadId);
     const streamGeneration = ++this.streamGenerationSeq;
+    const streamAbort = new AbortController();
+    const startedAt = Date.now();
     const turn: ChatTurn = {
       id: createTurnId(),
       threadId: input.threadId,
       status: "running",
-      startedAt: Date.now(),
+      startedAt,
       context: { ...input.context },
       history: [...input.history],
       artifacts: [...input.artifacts],
@@ -78,7 +83,8 @@ export class ThreadRunManager {
       quickAction: input.quickAction,
       contextBundle: [],
       jobGeneration: ++this.jobGenerationSeq,
-      streamAbort: new AbortController(),
+      streamAbort,
+      clearResponseDeadline: scheduleResponseDeadline(streamAbort, startedAt),
       streamGeneration,
       partialAssistant: "",
       pendingMentions: input.pendingMentions,
@@ -134,6 +140,7 @@ export class ThreadRunManager {
     if (!current || current.id !== turn.id) {
       return;
     }
+    turn.clearResponseDeadline();
     turn.status = "completed";
     this.runs.delete(turn.threadId);
   }
@@ -143,6 +150,7 @@ export class ThreadRunManager {
     if (!current || current.id !== turn.id) {
       return;
     }
+    turn.clearResponseDeadline();
     turn.status = "error";
     this.runs.delete(turn.threadId);
   }
@@ -152,6 +160,7 @@ export class ThreadRunManager {
     if (!turn) {
       return;
     }
+    turn.clearResponseDeadline();
     turn.status = "aborted";
     turn.streamAbort.abort();
     this.runs.delete(threadId);

@@ -162,10 +162,11 @@ function PlainChatBody({
   body: string;
   renderBody: (content: string) => React.ReactElement[];
 }): React.ReactElement {
-  const { message, attachments } = splitPlainChatHistoryBody(body);
+  const { message, contextLine, attachments } = splitPlainChatHistoryBody(body);
   return (
     <div className="chat-message-body">
       {message ? renderBody(message) : null}
+      {contextLine ? <p className="chat-action-context">{contextLine}</p> : null}
       <HistoryAttachmentChips attachments={attachments} />
     </div>
   );

@@ -34,19 +34,6 @@ export function writeCodeHostPlanForbidden(
   );
 }
 
-export function writeRemoteCodePlanForbidden(response: ServerResponse): void {
-  response.writeHead(403, { "content-type": "application/json; charset=utf-8" });
-  response.end(
-    JSON.stringify({
-      error: "remote_code_plan_required",
-      message:
-        "Remote code graph and cloud repo browsing are available on Free, Pro, and Enterprise plans. Free organizations are limited by repository quota.",
-      requiredPlans: CODE_HOST_GITHUB_PLANS,
-      upgradeUrl: PRICING_PAGE_URL
-    })
-  );
-}
-
 export function writeTeamNotAvailableOnFree(response: ServerResponse): void {
   response.writeHead(403, { "content-type": "application/json; charset=utf-8" });
   response.end(

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   coerceChipFileSource,
   isRemoteChip,
+  isRemoteProvenanceContext,
+  preserveRemoteChipSource,
   shouldKeepRemoteProvenance
 } from "./fileChipIdentity";
 import { mergeRepoContext } from "./repoContextMerge";
@@ -38,6 +40,28 @@ async function run(): Promise<void> {
       false
     );
     assert.equal(isRemoteChip({ file: "src/a.ts", fileSource: "remote" }), true);
+  });
+
+  await test("isRemoteProvenanceContext treats pin or remote stamp as remote-only", () => {
+    assert.equal(
+      isRemoteProvenanceContext({ file: "src/a.ts", fileSource: "remote" }),
+      true
+    );
+    assert.equal(
+      isRemoteProvenanceContext({ file: "src/a.ts", fileSource: "workspace" }, "src/a.ts"),
+      true
+    );
+    assert.equal(
+      isRemoteProvenanceContext({ file: "src/a.ts", fileSource: "workspace" }),
+      false
+    );
+    assert.equal(
+      isRemoteProvenanceContext(
+        { file: "/Users/jon/Downloads/a.md", fileSource: "remote" },
+        "/Users/jon/Downloads/a.md"
+      ),
+      false
+    );
   });
 
   await test("normalizeRepoContext overrides remote stamp on absolute path", () => {
@@ -91,6 +115,22 @@ async function run(): Promise<void> {
         { file: "/Users/jon/Downloads/a.md", fileSource: "workspace" }
       ),
       false
+    );
+  });
+
+  await test("preserveRemoteChipSource blocks Trace Decision local-attach demotion", () => {
+    assert.equal(preserveRemoteChipSource("remote", "workspace"), "remote");
+    assert.equal(preserveRemoteChipSource("remote", "git"), "remote");
+    assert.equal(preserveRemoteChipSource("remote", undefined), "remote");
+    assert.equal(preserveRemoteChipSource("remote", "external"), "external");
+    assert.equal(preserveRemoteChipSource("workspace", "workspace"), "workspace");
+    assert.equal(preserveRemoteChipSource(undefined, "workspace"), "workspace");
+    assert.equal(
+      isRemoteChip({
+        file: "src/CoopSettingsPanel.ts",
+        fileSource: preserveRemoteChipSource("remote", "workspace")
+      }),
+      true
     );
   });
 

@@ -226,8 +226,59 @@ export function plainChatRefersToAttachedFile(message: string): boolean {
 }
 
 /** Chat bubble text for plain chat — preserves @ attachment chips in history. */
-export function plainChatHistoryContent(message: string, mentions: MentionScopeRef[] = []): string {
+export type PlainChatHistoryContext = {
+  file?: string;
+  owner?: string;
+  repo?: string;
+  branch?: string;
+};
+
+export type PlainChatHistoryOptions = {
+  /** Active repo/file scope for the turn. */
+  context?: PlainChatHistoryContext;
+  /**
+   * When true (first user message in a thread), append file/repo/branch chips
+   * in the same compact format as quick actions.
+   */
+  includeContextChips?: boolean;
+};
+
+/** Context chips shown under the first plain-chat bubble (mirrors quick-action format). */
+export function plainChatContextChips(
+  context: PlainChatHistoryContext | undefined,
+  mentions: MentionScopeRef[] = []
+): Array<{ key: string; value: string }> {
+  const chips: Array<{ key: string; value: string }> = [];
+  const file = context?.file?.trim();
+  if (file) {
+    chips.push({ key: "file", value: file });
+  }
+  if (context?.owner?.trim() && context?.repo?.trim()) {
+    chips.push({ key: "repo", value: `${context.owner.trim()}/${context.repo.trim()}` });
+    if (context.branch?.trim()) {
+      chips.push({ key: "branch", value: context.branch.trim() });
+    }
+  }
+  if (mentions.length) {
+    chips.push({ key: "attached", value: mentionDisplayPaths(mentions) });
+  }
+  return chips;
+}
+
+export function plainChatHistoryContent(
+  message: string,
+  mentions: MentionScopeRef[] = [],
+  options?: PlainChatHistoryOptions
+): string {
   const trimmed = message.trim();
+  if (options?.includeContextChips) {
+    const chips = plainChatContextChips(options.context, mentions);
+    if (chips.length === 0) {
+      return trimmed;
+    }
+    const chipLine = chips.map((chip) => `${chip.key}: ${chip.value}`).join(" · ");
+    return `${trimmed}\n${chipLine}`;
+  }
   if (!mentions.length) {
     return trimmed;
   }

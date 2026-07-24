@@ -20,7 +20,7 @@ export function formatIntegrationError(
     if (/admin_required|org_admin_required|owners and admins/i.test(message)) {
       return "Only organization owners and admins can connect integrations.";
     }
-    if (/code_host_plan_required|remote_code_plan_required|\bplan\b|upgrade/i.test(message)) {
+    if (/code_host_plan_required|\bplan\b|upgrade/i.test(message)) {
       return `${name} is not available on your current plan. Upgrade your Coop plan to connect this integration.`;
     }
     if (message) {

@@ -157,9 +157,19 @@ export async function openRemoteFileInEditor(params: {
   preserveSidebarFocus?: boolean;
   /** Open beside the active editor without stealing context focus. */
   reviewOpen?: boolean;
+  /**
+   * Opt-in to local-clone / workspace-disk fallbacks. Defaults to FALSE.
+   *
+   * Fail-safe invariant: a remote file selection must NEVER be satisfied by opening a
+   * local `file://` clone. Only callers with genuine local provenance (e.g. restoring a
+   * workspace/git thread) may set this true. A forgotten flag resolves to remote-only
+   * (honest) — never to a local clone (a lie to the user).
+   */
+  allowLocalClone?: boolean;
 }): Promise<boolean> {
   const preserveSidebarFocus = params.preserveSidebarFocus ?? true;
   const reviewOpen = params.reviewOpen ?? false;
+  const allowLocalClone = params.allowLocalClone === true;
   const openOptions: vscode.TextDocumentShowOptions = reviewOpen
     ? REVIEW_OPEN_OPTIONS
     : preserveSidebarFocus
@@ -180,7 +190,11 @@ export async function openRemoteFileInEditor(params: {
     return opened;
   };
 
-  const existing = findEditorForRemoteFile(params.owner, params.repo, relative);
+  // Reuse an already-open REMOTE (VFS) tab only. A local-clone tab of the same path must
+  // not satisfy a remote open unless the caller explicitly allows local clones.
+  const existing = findEditorForRemoteFile(params.owner, params.repo, relative, {
+    remoteOnly: !allowLocalClone
+  });
   if (existing) {
     const editor = await vscode.window.showTextDocument(existing.document, reviewOpen
       ? REVIEW_OPEN_OPTIONS
@@ -194,17 +208,19 @@ export async function openRemoteFileInEditor(params: {
     return finish(true);
   }
 
-  // 1. File already on disk in the open workspace (no git-remote match required).
-  if (!preserveSidebarFocus) {
-    const openedInWorkspace = await focusRepoFileInEditor(relative, params.line);
-    if (openedInWorkspace) {
+  if (allowLocalClone) {
+    // 1. File already on disk in the open workspace (no git-remote match required).
+    if (!preserveSidebarFocus) {
+      const openedInWorkspace = await focusRepoFileInEditor(relative, params.line);
+      if (openedInWorkspace) {
+        return finish(true);
+      }
+    }
+
+    // 2. Local clone on disk — open the file without switching the workspace folder.
+    if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
       return finish(true);
     }
-  }
-
-  // 2. Local clone on disk — open the file without switching the workspace folder.
-  if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
-    return finish(true);
   }
 
   // 3. GitHub virtual file — no openFolder; works when GitHub Repositories is installed.
@@ -215,9 +231,12 @@ export async function openRemoteFileInEditor(params: {
     }
   }
 
-  // 4. Repo mounted in the workspace — retry local/vfs paths.
+  // 4. Repo mounted in the workspace — retry local/vfs paths (skip local unless allowed).
   if (isRepoOpenInEditorWorkspace(params.owner, params.repo, provider)) {
-    if (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line)) {
+    if (
+      allowLocalClone &&
+      (await tryOpenInAllMatchingClones(params.owner, params.repo, provider, relative, openOptions, params.line))
+    ) {
       return finish(true);
     }
     if (provider === "github") {
@@ -317,7 +336,16 @@ export async function openRepoInEditor(params: {
   provider?: CodeHostProviderPreference;
   branch?: string;
   mode?: OpenRepoInEditorMode;
+  /**
+   * Opt-in to opening a local clone FOLDER (`vscode.openFolder` on disk). Defaults to FALSE.
+   *
+   * Fail-safe invariant: selecting a remote repository must NEVER open a local clone. The
+   * `coopAI.openRepoInEditor` preference (preferLocal / remote / ask) only applies once a
+   * caller has explicitly opted into local clones for a genuinely local selection.
+   */
+  allowLocalClone?: boolean;
 }): Promise<OpenRepoInEditorResult> {
+  const allowLocalClone = params.allowLocalClone === true;
   const mode = params.mode ?? readOpenRepoInEditorMode();
   if (mode === "off") {
     return { status: "skipped" };
@@ -332,6 +360,22 @@ export async function openRepoInEditor(params: {
     await restoreCoopSidebar();
     await notifyOpenRepoResult(params.owner, params.repo, result);
     return result;
+  }
+
+  // Remote repository selection (default): open remotely only — never a local clone.
+  if (!allowLocalClone) {
+    if (provider === "github") {
+      return finishOpen(
+        params.owner,
+        params.repo,
+        await openGithubRemoteHub(params.owner, params.repo, params.branch)
+      );
+    }
+    return finishOpen(params.owner, params.repo, {
+      status: "unavailable",
+      reason:
+        "Coop won't open a local clone for a remote repository. Editor viewing without cloning is currently supported for GitHub (install GitHub Repositories)."
+    });
   }
 
   const localPath = await findLocalClone(params.owner, params.repo, provider);
