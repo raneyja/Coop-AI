@@ -200,6 +200,9 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
     "- When `evolution.commitCountSinceIntroduction` is present, mention file activity since introduction in **Summary**."
   );
   lines.push(
+    "- When `evolution.recentCommits` or `focusCommit` is present for a full-file trace, lead **Summary** / **Technical decision** with that recent decision story; treat `originalCommit` as birth/background unless this is a line selection."
+  );
+  lines.push(
     "- When `rationaleRanking` is present, name the primary rationale source in **Summary** and weight sections by rationale vs provenance roles."
   );
   lines.push(
@@ -213,6 +216,8 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 - Cite concrete file paths and source identifiers from the attachment — do not invent paths, URLs, ticket keys, or PR numbers.
 - State evidence strength using one of: strong, medium, weak, or limited when drawing conclusions from attached evidence.
 - When integration blocks show <empty>, say clearly that the search found nothing — do not speculate about tickets, messages, or pages that are not attached.
+- Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, semantic files) are **search samples / capped result sets**, not complete inventories. Never answer "how many" / "list all" / totals from those samples alone — say the attached set is partial and what would be needed for a full count.
+- When \`<repo_inventory>\` is attached, prefer it for repository file totals.
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.
 - Never invent ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
 

@@ -160,6 +160,8 @@ test("GENERAL_CHAT_EVIDENCE_RULES covers citations, strength, empty integrations
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Slack\/Teams/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Never invent ticket IDs, PR numbers/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Cite concrete file paths/i);
+  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /search samples \/ capped result sets/i);
+  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /how many/i);
 });
 
 console.log(`\nevidenceSynthesis: ${passed}/${passed + failed} tests passed`);

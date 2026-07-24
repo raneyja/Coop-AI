@@ -206,6 +206,10 @@ export interface CodeHostClient {
   getPullRequestFiles?(coords: RepoCoordinates, prNumber: number): Promise<string[]>;
   listIssues(coords: RepoCoordinates, options?: { state?: string; limit?: number }): Promise<IssueSummary[]>;
   searchCode?(coords: RepoCoordinates, query: string, limit?: number): Promise<Array<{ path: string }>>;
+  /** Optional full-repo blob count (recursive tree). Used for inventory questions in chat. */
+  countRepositoryFiles?(
+    coords: RepoCoordinates
+  ): Promise<{ fileCount: number; truncated: boolean }>;
 }
 
 export function repoIdFromCoordinates(coords: RepoCoordinates): string {

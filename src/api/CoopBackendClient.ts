@@ -850,6 +850,36 @@ export class CoopBackendClient {
     return response.data;
   }
 
+  /** Recursive blob count via org code-host credentials (cloud inventory path). */
+  public async fetchRepoFileCount(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    fileCount: number;
+    truncated: boolean;
+    branch?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 60_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/file-count`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: branch ? { branch } : undefined,
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
+  }
+
   public async fetchRepoBlame(
     baseUrl: string,
     repoId: string,

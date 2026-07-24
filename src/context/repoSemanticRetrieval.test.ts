@@ -59,6 +59,30 @@ test("shouldRunRepoSemanticRetrieval allows plain chat with long query", () => {
   );
 });
 
+test("shouldRunRepoSemanticRetrieval skips inventory / file-count questions", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "how many files are inside of this repo?",
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval skips structure / monorepo questions", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "is this a monorepo?",
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
 test("shouldRunRepoSemanticRetrieval rejects short query", () => {
   assert.equal(
     shouldRunRepoSemanticRetrieval({

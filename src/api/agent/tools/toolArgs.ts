@@ -6,6 +6,14 @@ export function requireStringArg(args: Record<string, unknown>, key: string): st
   return value.trim();
 }
 
+export function optionalStringArg(args: Record<string, unknown>, key: string): string | undefined {
+  const value = args[key];
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+  return value.trim();
+}
+
 export function optionalPositiveInt(args: Record<string, unknown>, key: string): number | undefined {
   const value = args[key];
   if (value === undefined || value === null) {

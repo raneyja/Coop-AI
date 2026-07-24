@@ -6,7 +6,7 @@ import { BitbucketClient } from "../api/codeHosts/bitbucketClient";
 import { buildExplorerFileSearchQuery } from "../api/codeHosts/explorerSearch";
 import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
-import { parseRepoId } from "../jobs/buildStructureManifest";
+import { parseRepoId, countRepoBlobsViaCodeHost } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { requireDbPool, getDbPool } from "./db";
 import { JobType } from "../jobs/types";
@@ -484,7 +484,7 @@ export async function handleOrgApiRequest(
 
   const remoteRepoApiMatch =
     parsed.method === "GET" &&
-    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|metadata|files|tree|search|blame|history|commits|pulls|issues)/.test(
+    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|metadata|files|tree|file-count|search|blame|history|commits|pulls|issues)/.test(
       parsed.pathname
     );
   if (remoteRepoApiMatch) {
@@ -513,6 +513,14 @@ export async function handleOrgApiRequest(
     const repoId = decodeURIComponent(treeMatch[1]);
     await handleGetRepoTree(repoId, parsed, response, deps, auth!);
     await audit(deps, auth!, "repo.tree.fetch", { repoId, path: parsed.query?.get("path") ?? undefined });
+    return true;
+  }
+
+  const fileCountMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/file-count$/);
+  if (parsed.method === "GET" && fileCountMatch) {
+    const repoId = decodeURIComponent(fileCountMatch[1]);
+    await handleGetRepoFileCount(repoId, parsed, response, deps, auth!);
+    await audit(deps, auth!, "repo.file_count.fetch", { repoId });
     return true;
   }
 
@@ -1467,6 +1475,48 @@ async function handleGetRepoTree(
       return;
     }
     const message = error instanceof Error ? error.message : "failed to fetch tree";
+    writeJson(response, 502, { error: message });
+  }
+}
+
+async function handleGetRepoFileCount(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const target = parseRepoId(repoId);
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
+    orgStore: deps.orgStore!,
+    connector: getConnector(target.provider),
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`
+    });
+    return;
+  }
+
+  try {
+    // Prefer provider-prefixed ids for token/tree resolution consistency with workspace rows.
+    const canonicalId = repoId.includes(":")
+      ? repoId
+      : `${target.provider}:${target.owner}/${target.repo}`;
+    const counted = await countRepoBlobsViaCodeHost(canonicalId, token);
+    writeJson(response, 200, {
+      repoId: canonicalId,
+      fileCount: counted.fileCount,
+      truncated: counted.truncated,
+      branch: counted.branch
+    });
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to count repository files";
     writeJson(response, 502, { error: message });
   }
 }

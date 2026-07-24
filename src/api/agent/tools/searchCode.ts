@@ -31,6 +31,9 @@ export async function handleSearchCode(
     query,
     source: result.source,
     stale: result.stale,
+    sampleNote:
+      "search_code returns ranked hits from the index — not a complete file inventory or exhaustive match list.",
+    hitCount: result.hits.length,
     hits: result.hits.map((hit) => ({
       citation: formatCitation(repoId, hit.fileName, hit.lineNumber),
       fileName: hit.fileName,

@@ -7,6 +7,7 @@ import type {
 } from "./agentTypes";
 import type { AgentToolContext } from "./agentToolContext";
 import { createAgentToolRegistry } from "./tools/registry";
+import { isRepoStructureQuery } from "../../context/repoInventoryEnrichment";
 
 const DEFAULT_MAX_STEPS = 8;
 const READ_LINE_PADDING = 25;
@@ -22,7 +23,7 @@ type SearchPayload = {
   hits?: SearchHit[];
 };
 
-/** Highest-scoring indexed hit; stable order when scores tie. */
+/** Highest-scoring indexed hit; systematic order when scores tie. */
 export function pickTopSearchHit(hits: SearchHit[]): SearchHit | undefined {
   if (!hits.length) {
     return undefined;
@@ -39,7 +40,8 @@ function readLineWindow(lineNumber: number): { startLine: number; endLine: numbe
 
 /**
  * Read-only agent loop (opt-in via `coopAI.chat.agentMode`).
- * Interim: deterministic `search_code` → `read_file` on the top hit.
+ * Structure/inventory questions use `list_directory` first.
+ * Otherwise: deterministic `search_code` → `read_file` on the top hit.
  * Full LLM tool-call parsing is a follow-up.
  */
 export class AgentOrchestrator {
@@ -66,6 +68,19 @@ export class AgentOrchestrator {
     const query = request.message.trim();
     if (!repoId || !query || maxSteps < 1) {
       return { steps, context: undefined };
+    }
+
+    if (isRepoStructureQuery(query) && this.registry.list_directory) {
+      const listRaw = await this.executeTool("list_directory", { path: "", repoId });
+      const listParsed = JSON.parse(listRaw) as Record<string, unknown>;
+      context.list_directory = listParsed;
+      steps.push({
+        index: steps.length,
+        tool: "list_directory",
+        summary: "list_directory: /",
+        completed: true
+      });
+      return { steps, context };
     }
 
     const searchRaw = await this.executeTool("search_code", { query, repoId });

@@ -283,6 +283,12 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import {
+  fetchRepoInventoryStats,
+  fetchRepoTreeOverview,
+  isRepoStructureQuery,
+  mergeRepoInventoryContext
+} from "../context/repoInventoryEnrichment";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -2167,12 +2173,48 @@ export class CoopChatSession {
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
-      result = await this.enrichChatContextWithSemanticSearch(request, result);
+      const queryText = request.intent.context?.queryText;
+      if (isRepoStructureQuery(queryText)) {
+        result = await this.enrichChatContextWithRepoInventory(request, result);
+      } else {
+        result = await this.enrichChatContextWithSemanticSearch(request, result);
+      }
     } else {
       result = await this.buildBaseContextResult(request);
     }
 
     return result;
+  }
+
+  private async enrichChatContextWithRepoInventory(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    try {
+      const inventoryOptions = {
+        request,
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter,
+        branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+        owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
+        repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
+        provider:
+          this.currentContext.provider ??
+          this.preferences.defaultCodeHost ??
+          "github"
+      };
+      const [inventory, treeOverview] = await Promise.all([
+        fetchRepoInventoryStats(inventoryOptions),
+        fetchRepoTreeOverview(inventoryOptions)
+      ]);
+      return mergeRepoInventoryContext(result, inventory, treeOverview);
+    } catch {
+      return mergeRepoInventoryContext(result, {
+        source: "unavailable",
+        note: "Failed to load repository inventory. Do not estimate file count from semantic search samples."
+      });
+    }
   }
 
   private async enrichChatContextWithSemanticSearch(

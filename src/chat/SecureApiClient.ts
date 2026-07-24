@@ -436,6 +436,19 @@ export class SecureApiClient {
     };
   }
 
+  public async fetchRepoFileCountViaCloud(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{ fileCount: number; truncated: boolean; branch?: string }> {
+    const result = await this.backend.fetchRepoFileCount(baseUrl, repoId, branch);
+    return {
+      fileCount: result.fileCount,
+      truncated: result.truncated,
+      branch: result.branch
+    };
+  }
+
   public async fetchRepoBlameViaCloud(
     baseUrl: string,
     repoId: string,
