@@ -463,6 +463,21 @@ export class GitHubClient implements CodeHostClient {
     query: string,
     limit = 20
   ): Promise<string[]> {
+    const { filePaths } = await this.fetchRecursiveBlobPaths(coords);
+    return rankExplorerFilePaths(filePaths, query, limit);
+  }
+
+  /** Full blob count from the Git recursive tree (authoritative inventory when no manifest). */
+  public async countRepositoryFiles(
+    coords: RepoCoordinates
+  ): Promise<{ fileCount: number; truncated: boolean }> {
+    const { filePaths, truncated } = await this.fetchRecursiveBlobPaths(coords);
+    return { fileCount: filePaths.length, truncated };
+  }
+
+  private async fetchRecursiveBlobPaths(
+    coords: RepoCoordinates
+  ): Promise<{ filePaths: string[]; truncated: boolean }> {
     const branch = await this.resolveBranch(coords);
     const ref = await codeHostRequestJson<{ object: { sha: string } }>(
       `${this.repoUrl(coords)}/git/ref/heads/${encodeURIComponent(branch)}`,
@@ -484,7 +499,7 @@ export class GitHubClient implements CodeHostClient {
       tree.tree
         ?.filter((entry) => entry.type === "blob" && entry.path?.trim())
         .map((entry) => entry.path as string) ?? [];
-    return rankExplorerFilePaths(filePaths, query, limit);
+    return { filePaths, truncated: Boolean(tree.truncated) };
   }
 
   private repoUrl(coords: RepoCoordinates): string {

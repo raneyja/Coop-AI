@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
+import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
 import type { IdentityDirectory } from "../identity/types";
 import type {
   ChatHistoryMessage,
@@ -850,6 +851,73 @@ export class CoopBackendClient {
     return response.data;
   }
 
+  /** Durable repository facts recorded by Deep-Index (files, lines, languages). */
+  public async fetchRepoInventory(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    source: "index-stats" | "unavailable";
+    branch?: string;
+    fileCount?: number;
+    lineCount?: number;
+    byteCount?: number;
+    languages?: string[];
+    headCommit?: string;
+    indexedAt?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/inventory`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: branch ? { branch } : undefined,
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
+  }
+
+  /** Recursive blob count via org code-host credentials (cloud inventory path). */
+  public async fetchRepoFileCount(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{
+    repoId: string;
+    fileCount: number;
+    truncated: boolean;
+    branch?: string;
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.get(`/v1/orgs/repos/${encodedRepo}/file-count`, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          params: branch ? { branch } : undefined,
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    return response.data;
+  }
+
   public async fetchRepoBlame(
     baseUrl: string,
     repoId: string,
@@ -1336,7 +1404,8 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const encoded = encodeURIComponent(repoId);
     const response = await runResilientRequest({
-      timeoutMs: 30_000,
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
       shouldRetryError: isRetryableError,
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encoded}/manifest`, {

@@ -194,20 +194,31 @@ export function DecisionTimeline({
         <EvidenceConnectionGroup
           connection="github"
           briefSummary={
-            timeline.originalCommit
+            timeline.focusCommit &&
+            timeline.originalCommit &&
+            timeline.focusCommit.sha !== timeline.originalCommit.sha
               ? {
-                  title: "Original commit",
-                  sourceLabel: decisionSourceLabelCommit(timeline.originalCommit.sha)
+                  title: "Recent decision",
+                  sourceLabel: decisionSourceLabelCommit(timeline.focusCommit.sha)
                 }
-              : timeline.linkedPR
+              : timeline.originalCommit
                 ? {
-                    title: `PR #${timeline.linkedPR.number}`,
-                    sourceLabel: decisionSourceLabelPr(timeline.linkedPR.number)
+                    title: "Original commit",
+                    sourceLabel: decisionSourceLabelCommit(timeline.originalCommit.sha)
                   }
-                : undefined
+                : timeline.linkedPR
+                  ? {
+                      title: `PR #${timeline.linkedPR.number}`,
+                      sourceLabel: decisionSourceLabelPr(timeline.linkedPR.number)
+                    }
+                  : undefined
           }
         >
-          <EvidenceEvolutionLine evolution={timeline.evolution} variant="collapsible" />
+          <EvidenceEvolutionLine
+            evolution={timeline.evolution}
+            variant="collapsible"
+            defaultOpen={Boolean(timeline.evolution?.recentCommits?.length)}
+          />
 
           {showChronology ? <ChronologyView events={timeline.chronology} /> : null}
 
@@ -225,9 +236,34 @@ export function DecisionTimeline({
 
           <EvidenceRationaleRanking ranks={timeline.rationaleRanking} />
 
+          {timeline.focusCommit &&
+          timeline.originalCommit &&
+          timeline.focusCommit.sha !== timeline.originalCommit.sha ? (
+            <IntegrationResultCollapsible
+              title="Recent decision commit"
+              provider="github"
+              destination={timeline.focusCommit.sha.slice(0, 7)}
+              subtitle={truncateSingleLine(timeline.focusCommit.message, 120)}
+              sectionDomId={evidenceSectionDomId(
+                artifactId,
+                decisionSourceLabelCommit(timeline.focusCommit.sha)
+              )}
+              open={expanded.commit}
+              onToggle={() => toggle("commit")}
+              link={timeline.focusCommit.htmlUrl}
+              linkLabel="View commit"
+            >
+              <CommitBlock commit={timeline.focusCommit} />
+            </IntegrationResultCollapsible>
+          ) : null}
+
           {timeline.originalCommit ? (
             <IntegrationResultCollapsible
-              title="Original commit"
+              title={
+                timeline.focusCommit && timeline.focusCommit.sha !== timeline.originalCommit.sha
+                  ? "Originally introduced"
+                  : "Original commit"
+              }
               provider="github"
               destination={timeline.originalCommit.sha.slice(0, 7)}
               subtitle={truncateSingleLine(timeline.originalCommit.message, 120)}
@@ -235,7 +271,10 @@ export function DecisionTimeline({
                 artifactId,
                 decisionSourceLabelCommit(timeline.originalCommit.sha)
               )}
-              open={expanded.commit}
+              open={
+                expanded.commit &&
+                !(timeline.focusCommit && timeline.focusCommit.sha !== timeline.originalCommit.sha)
+              }
               onToggle={() => toggle("commit")}
               link={timeline.originalCommit.htmlUrl}
               linkLabel="View commit"

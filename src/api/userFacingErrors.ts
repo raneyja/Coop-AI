@@ -76,8 +76,6 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   plan_required: "This feature requires an Enterprise plan.",
   code_host_plan_required:
     "Connect a code host in the admin portal (Integrations), then Deep-Index repos under Indexing.",
-  remote_code_plan_required:
-    "Connect a code host and Deep-Index repositories in the admin portal to search remote code.",
   team_not_available:
     "The free plan is individual only — one seat per account. Upgrade to Pro to invite teammates.",
   quota_limit_reached:

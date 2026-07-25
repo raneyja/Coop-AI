@@ -15,7 +15,6 @@ import { SlackWebhookHandler } from "./handlers/slackWebhookHandler";
 import type { NormalizedWebhookEvent } from "./types";
 import { PlaceholderWebhookClient, WebhookRegistry } from "./webhookRegistry";
 import { WebhookMonitor } from "./webhookMonitor";
-import { maybeEnqueueStructureManifest } from "./manifestOnboardingTrigger";
 import { handleJobsApiRequest } from "../jobs/jobsApi";
 import { createJobRuntime, startJobRuntime, type JobRuntime } from "../jobs/jobRuntime";
 import { createChatRouter, handleChatApiRequest, llmHealthPayload } from "../api/chatApi";
@@ -365,7 +364,6 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const queue = {
     enqueue: async (event: NormalizedWebhookEvent) => {
       await consistency.enqueue(event);
-      await maybeEnqueueStructureManifest(jobs.queue, orgStore, event);
     }
   };
 

@@ -54,6 +54,7 @@ test("chat use case includes enterprise evidence rules", () => {
   assert.ok(prompt.includes("integration blocks show <empty>"));
   assert.ok(prompt.includes("Never invent ticket IDs, PR numbers"));
   assert.ok(prompt.includes("Weight sources by reliability for decisions"));
+  assert.ok(prompt.includes("search samples / capped result sets"));
 });
 
 test("comprehension use case includes audience block via withOutputContract", () => {
@@ -142,7 +143,8 @@ test("buildUserMessageWithContext renders jira_tickets from context bundle", () 
     ]
   });
 
-  assert.ok(message.includes('<jira_tickets match="text">'));
+  assert.ok(message.includes('<jira_tickets match="text" shown="1">'));
+  assert.ok(message.includes("Search sample only"));
   assert.ok(message.includes('key="COOP-101"'));
   assert.ok(message.includes("Auth hardening"));
 
@@ -179,7 +181,8 @@ test("buildUserMessageWithContext renders slack_messages from context bundle", (
     ]
   });
 
-  assert.ok(message.includes("<slack_messages>"));
+  assert.ok(message.includes('<slack_messages shown="1">'));
+  assert.ok(message.includes("Search sample only"));
   assert.ok(message.includes('channel="epd"'));
   assert.ok(message.includes("auth hardening"));
 });
@@ -213,7 +216,7 @@ test("buildUserMessageWithContext renders code_host_activity from context bundle
     ]
   });
 
-  assert.ok(message.includes("<code_host_activity>"));
+  assert.ok(message.includes("<code_host_activity"));
   assert.ok(message.includes('number="42"'));
   assert.ok(message.includes("Auth hardening"));
 });
@@ -309,9 +312,9 @@ test("buildUserMessageWithContext tolerates partial integration payloads in blas
   });
 
   assert.ok(message.includes("<graph_context>"));
-  assert.ok(message.includes("<slack_messages>"));
+  assert.ok(message.includes("<slack_messages"));
   assert.ok(message.includes("<empty>No matching Slack messages found.</empty>"));
-  assert.ok(message.includes("<code_host_activity>"));
+  assert.ok(message.includes("<code_host_activity"));
 });
 
 test("buildUserMessageWithContext renders repo entry files from context bundle", () => {
@@ -401,6 +404,138 @@ test("buildUserMessageWithContext omits monorepo note for single top-level dir",
   });
 
   assert.equal(message.includes("<monorepo_context>"), false);
+});
+
+test("buildUserMessageWithContext renders repo_inventory for file-count questions", () => {
+  const message = buildUserMessageWithContext("how many files are inside of this repo?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoInventory: { source: "manifest", fileCount: 1842, lastCrawledAt: "2026-07-01T00:00:00.000Z" }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_inventory>"));
+  assert.ok(message.includes('file_count="1842"'));
+  assert.ok(message.includes('source="manifest"'));
+  assert.ok(message.includes("Measured repository totals"));
+});
+
+test("buildUserMessageWithContext renders line_count for LOC questions", () => {
+  const message = buildUserMessageWithContext("how many lines of code are in this repo?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoInventory: {
+            source: "index-stats",
+            fileCount: 1233,
+            lineCount: 66934,
+            languages: ["ts", "md"],
+            indexedAt: "2026-07-24T00:00:00.000Z"
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes('source="index-stats"'));
+  assert.ok(message.includes('line_count="66934"'));
+  assert.ok(message.includes('file_count="1233"'));
+  assert.ok(message.includes("66934 line(s) of code"));
+});
+
+test("buildUserMessageWithContext forbids estimating a missing line count", () => {
+  const message = buildUserMessageWithContext("how many lines of code are in this repo?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoInventory: {
+            source: "tree",
+            fileCount: 1233,
+            note:
+              "No line count is recorded for this repository — Deep-Index has not stored line stats for it yet. " +
+              "Say the line count is unavailable and offer to re-index. Do not estimate it from file counts or attached snippets."
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes('file_count="1233"'));
+  assert.equal(message.includes("line_count="), false);
+  assert.match(message, /Do not estimate it from file counts/);
+});
+
+test("repo_inventory is declared the only source for totals", () => {
+  const message = buildUserMessageWithContext("how many lines of code?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: { repoInventory: { source: "unavailable", note: "Coop has no indexed inventory." } }
+      }
+    ]
+  });
+
+  assert.match(message, /only valid source for file, line, or size totals/i);
+  assert.match(message, /never compute them from <repo_semantic_files>/i);
+});
+
+test("buildUserMessageWithContext marks semantic files as a retrieval sample", () => {
+  const message = buildUserMessageWithContext("How does indexing work?", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          repoSemanticSearch: {
+            matchedPathCount: 42,
+            attachmentCap: 3,
+            files: [
+              { path: "src/indexing/indexManager.ts", repoId: "github:acme/coop-ai", content: "export class IndexManager {}" }
+            ]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_semantic_files>"));
+  assert.ok(message.includes("Retrieval sample only"));
+  assert.ok(message.includes("attached 1 of 42 matched path(s)"));
+  assert.ok(message.includes("Never count these paths as the total number of files"));
+});
+
+test("buildUserMessageWithContext renders live tree overview", () => {
+  const message = buildUserMessageWithContext("list the top-level directories", {
+    owner: "acme",
+    repo: "coop-ai",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          treeOverview: { topLevelDirs: ["src", "docs"], topLevelFiles: ["package.json", "README.md"] }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_tree_overview>"));
+  assert.ok(message.includes("directories: src, docs"));
+  assert.ok(message.includes("files: package.json, README.md"));
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

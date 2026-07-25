@@ -14,6 +14,20 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 
+## Response latency (15s hard ceiling)
+
+Chat and quick actions must answer within **15 seconds**. Use `MAX_USER_FACING_RESPONSE_MS` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. Do not add per-call timeouts of 30–120s+ on the interactive hot path.
+
+## Indexed repo = remote workspace layer
+
+Deep-Index builds a **searchable map plus durable facts**, then deletes the transient clone. It does **not** keep a copy of every source file. File bodies are fetched on demand from the code host.
+
+All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`** — identity, inventory (file count, lines of code, size), tree overview, and `readFile` (local clone or remote). Intent detection lives in `src/workspace/repoFactIntent.ts`.
+
+**Never estimate a repository fact.** `<repo_inventory>` is the only valid source for totals; `<repo_semantic_files>` is a capped sample and can never answer "how many". When a total is missing, say it is unavailable — do not guess, extrapolate, or reuse a number from an earlier turn.
+
+Do not add new repo-fact regex forks in `CoopChatSession`, new `fetchRepoFile` wrappers, or race inventory sources. Source order is fixed: `index-stats` -> `manifest` -> `tree`. See `.cursor/rules/indexed-repo-workspace.mdc`.
+
 ## VS Code extension webview UI
 
 When adding or changing UI under `src/webview/`, follow the design policy in:

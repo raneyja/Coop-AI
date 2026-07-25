@@ -436,6 +436,47 @@ export class SecureApiClient {
     };
   }
 
+  /** Durable Deep-Index repository facts. Undefined when the repo has no stats yet. */
+  public async fetchRepoInventoryViaCloud(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<
+    | {
+        fileCount: number;
+        lineCount?: number;
+        byteCount?: number;
+        languages?: string[];
+        indexedAt?: string;
+      }
+    | undefined
+  > {
+    const result = await this.backend.fetchRepoInventory(baseUrl, repoId, branch);
+    if (result.source !== "index-stats" || typeof result.fileCount !== "number") {
+      return undefined;
+    }
+    return {
+      fileCount: result.fileCount,
+      lineCount: result.lineCount,
+      byteCount: result.byteCount,
+      languages: result.languages,
+      indexedAt: result.indexedAt
+    };
+  }
+
+  public async fetchRepoFileCountViaCloud(
+    baseUrl: string,
+    repoId: string,
+    branch?: string
+  ): Promise<{ fileCount: number; truncated: boolean; branch?: string }> {
+    const result = await this.backend.fetchRepoFileCount(baseUrl, repoId, branch);
+    return {
+      fileCount: result.fileCount,
+      truncated: result.truncated,
+      branch: result.branch
+    };
+  }
+
   public async fetchRepoBlameViaCloud(
     baseUrl: string,
     repoId: string,

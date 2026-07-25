@@ -26,6 +26,7 @@ import {
 import { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
 import { linesFromText } from "./api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "./api/codeHosts/types";
+import { coordinatesFromRepoId } from "./api/codeHosts/types";
 import { isCoopDevMode, readLightningBackend } from "./config/lightningConfig";
 import { IntegrationSecrets } from "./api/integrations/integrationSecrets";
 import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
@@ -33,6 +34,7 @@ import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeology
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
 import { createAgentOrchestrator } from "./api/agent/AgentOrchestrator";
+import { IndexedRepoWorkspace } from "./workspace/IndexedRepoWorkspace";
 import { resolveLocalAbsolutePath } from "./context/localFileResolver";
 import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
 import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
@@ -100,6 +102,11 @@ export function activate(context: vscode.ExtensionContext): void {
       entries: tree.entries
     };
   };
+  const cloudCodeHostFileCountFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostFileCountFetcher =
+    async ({ repoId, coords }) => {
+      const counted = await api.fetchRepoFileCountViaCloud(getApiBaseUrl(), repoId, coords.branch);
+      return { fileCount: counted.fileCount, truncated: counted.truncated };
+    };
   const cloudCodeHostSearchFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostSearchFetcher = async ({
     repoId,
     query,
@@ -249,6 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
     useCloudCodeHostProxy,
     cloudCodeHostFileFetcher,
     cloudCodeHostTreeFetcher,
+    cloudCodeHostFileCountFetcher,
     cloudCodeHostSearchFetcher,
     cloudCodeHostRepoListFetcher,
     cloudCodeHostBlameFetcher,
@@ -403,7 +411,35 @@ export function activate(context: vscode.ExtensionContext): void {
   registerIdentityDirectoryProvider(() => identityDirectoryStore.load(readConfiguration().apiBaseUrl));
   const agentOrchestrator = createAgentOrchestrator({
     indexBackend,
-    resolveAbsolutePath: resolveLocalAbsolutePath
+    resolveAbsolutePath: resolveLocalAbsolutePath,
+    listDirectory: async ({ path: dirPath, repoId }) => {
+      const coords = repoId
+        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
+        : undefined;
+      const tree = await codeHostRouter.getRepositoryTree(dirPath ?? "", coords ?? undefined);
+      return {
+        path: tree.path,
+        branch: tree.branch,
+        entries: (tree.entries ?? []).map((entry) => ({
+          name: entry.name,
+          path: entry.path,
+          type: entry.type
+        }))
+      };
+    },
+    getBlame: async ({ path: filePath, repoId }) => {
+      const coords = repoId
+        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
+        : undefined;
+      const blame = await codeHostRouter.getBlameData(filePath, coords ?? undefined);
+      return { ...blame, path: filePath };
+    },
+    readRemoteFile: async ({ path: filePath, repoId }) =>
+      new IndexedRepoWorkspace({
+        api,
+        apiBaseUrl: getApiBaseUrl(),
+        codeHostRouter
+      }).readFile({ repoId }, filePath)
   });
   const services = {
     healthMonitor,

@@ -32,7 +32,8 @@ function poolConfig(connectionString) {
 /** Table that must exist before we backfill a migration into schema_migrations. */
 const LEDGER_TABLE_PROBES = {
   "018_org_integration_policies.sql": "org_integration_policies",
-  "019_chat_threads.sql": "chat_threads"
+  "019_chat_threads.sql": "chat_threads",
+  "024_repo_stats.sql": "repo_stats"
 };
 
 async function tableExists(client, tableName) {

@@ -1,4 +1,5 @@
 import { toRepositoryRelativePath } from "../../context/repoFilePath";
+import { countFilesViaDirectoryWalk } from "../../context/countFilesViaDirectoryWalk";
 import { CacheManager } from "../../cache/CacheManager";
 import { readCodeHostConfiguration } from "../../config/codeHostConfig";
 import { readConfiguration } from "../../chat/SecureApiClient";
@@ -43,6 +44,11 @@ export type CloudCodeHostTreeFetcher = (options: {
   path: string;
   coords: RepoCoordinates;
 }) => Promise<RemoteTree>;
+
+export type CloudCodeHostFileCountFetcher = (options: {
+  repoId: string;
+  coords: RepoCoordinates;
+}) => Promise<{ fileCount: number; truncated: boolean }>;
 
 export type CloudCodeHostSearchFetcher = (options: {
   repoId: string;
@@ -157,6 +163,7 @@ export type CodeHostRouterOptions = {
   useCloudCodeHostProxy?: () => boolean;
   cloudCodeHostFileFetcher?: CloudCodeHostFileFetcher;
   cloudCodeHostTreeFetcher?: CloudCodeHostTreeFetcher;
+  cloudCodeHostFileCountFetcher?: CloudCodeHostFileCountFetcher;
   cloudCodeHostSearchFetcher?: CloudCodeHostSearchFetcher;
   cloudCodeHostRepoListFetcher?: CloudCodeHostRepoListFetcher;
   cloudCodeHostBlameFetcher?: CloudCodeHostBlameFetcher;
@@ -238,6 +245,53 @@ export class CodeHostRouter {
     return this.cached(this.key("tree", resolved, normalized), "tree", async () =>
       (await this.getClient(resolved.provider)).getRepositoryTree(resolved, normalized)
     );
+  }
+
+  /**
+   * Recursive blob count for inventory questions (e.g. "how many files?").
+   * Prefer structure manifest when available; this is the live-tree fallback.
+   * Cloud mode: dedicated file-count proxy when wired, else directory walk via tree proxy.
+   */
+  public async countRepositoryFiles(
+    coords?: Partial<RepoCoordinates>
+  ): Promise<{ fileCount: number; truncated: boolean }> {
+    const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.()) {
+      const repoId = repoIdFromCoordinates(resolved);
+      return this.cached(this.key("fileCount", resolved, "cloud"), "tree", async () => {
+        if (this.options.cloudCodeHostFileCountFetcher) {
+          try {
+            return await this.options.cloudCodeHostFileCountFetcher!({ repoId, coords: resolved });
+          } catch {
+            // Fall through to directory walk when the dedicated endpoint is missing/unavailable.
+          }
+        }
+        if (!this.options.cloudCodeHostTreeFetcher) {
+          throw new CodeHostError(
+            "Recursive file counts are unavailable through the cloud code-host proxy.",
+            "unsupported",
+            400,
+            resolved.provider
+          );
+        }
+        const walked = await countFilesViaDirectoryWalk((path) =>
+          this.options.cloudCodeHostTreeFetcher!({ repoId, path, coords: resolved })
+        );
+        return { fileCount: walked.fileCount, truncated: walked.truncated };
+      });
+    }
+    return this.cached(this.key("fileCount", resolved), "tree", async () => {
+      const client = await this.getClient(resolved.provider);
+      if (!client.countRepositoryFiles) {
+        throw new CodeHostError(
+          "Recursive file counts aren't supported for this code host yet.",
+          "unsupported",
+          400,
+          resolved.provider
+        );
+      }
+      return client.countRepositoryFiles(resolved);
+    });
   }
 
   public async searchRepositoryFiles(

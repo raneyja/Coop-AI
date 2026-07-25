@@ -1,0 +1,62 @@
+---
+description: Contract for repository context — indexed repos, inventory facts, and file reads
+globs: src/workspace/**,src/context/**,src/chat/**,src/api/agent/**,src/jobs/executors.ts,src/prompts/systemPrompts.ts
+alwaysApply: false
+---
+
+# Indexed repo = remote workspace layer
+
+## What "indexed" means
+
+Deep-Index (`INDEX_REPOSITORY` in `src/jobs/executors.ts`) clones a repo **temporarily**, builds a
+searchable map, records **durable facts**, then **deletes the clone**.
+
+| Persisted | Not persisted |
+|---|---|
+| SCIP symbols, Zoekt shards, embeddings | A full copy of every source file |
+| `repo_stats` (file count, line count, bytes, languages) | The git working tree |
+| Graph file tree (path + size) | File bodies for later prompt stuffing |
+
+File bodies are **fetched on demand** from the code host. Indexed does not mean mirrored.
+
+## One entry point
+
+All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`**:
+
+| Need | Method |
+|---|---|
+| What repo/branch am I on | `getIdentity` |
+| File count, lines of code, size | `getInventory` |
+| Top-level structure | `getTreeOverview` |
+| Read any file (local clone or remote) | `readFile` |
+
+Intent detection lives in `src/workspace/repoFactIntent.ts` (`repoFactNeeds`, `hasRepoFactNeed`).
+
+## Evidence kinds are not interchangeable
+
+- **Inventory** (`<repo_inventory>`) — measured totals. The only valid source for counts.
+- **Sample** (`<repo_semantic_files>`) — a capped retrieval sample. Never a total, never an inventory.
+- **File** — a full body for an explicit path.
+
+## Never estimate a repository fact
+
+If a total is missing, the answer is "unavailable" plus a suggestion to Deep-Index — never a guess,
+never extrapolation from a sample, never a number reused from an earlier turn. Two phrasings of the
+same question must produce the same number.
+
+## Banned patterns
+
+| Do not | Instead |
+|---|---|
+| Add a new repo-fact regex fork inside `CoopChatSession` | Extend `repoFactIntent.ts` |
+| Call inventory/search adapters directly from new code | Call `IndexedRepoWorkspace` |
+| Add another `fetchRepoFile` wrapper | Use `IndexedRepoWorkspace.readFile` |
+| Race inventory sources for latency | Keep the fixed order: `index-stats` -> `manifest` -> `tree` |
+| Prompt the model to estimate counts when evidence is thin | Say the total is unavailable |
+| Revive the Zero-Clone structure manifest crawl as primary | `repo_stats` is canonical; manifest is legacy fallback |
+
+## Latency
+
+Repo-fact lookups run inside the gather budget (`remainingContextGatherBudgetMs`). Ordered sources are
+sequential by design; the fast path (`repo_stats`) is a single indexed DB read. See
+`.cursor/rules/response-latency.mdc`.

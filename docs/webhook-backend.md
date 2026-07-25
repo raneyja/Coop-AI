@@ -46,7 +46,7 @@ psql "$DATABASE_URL" -f migrations/001_jobs.sql
 # ... through migrations/013_org_billing.sql
 ```
 
-Current migrations: `001_jobs` through `013_org_billing` (jobs, orgs, graph cache, manifests, billing, collections, users, integrations, etc.).
+Current migrations: `001_jobs` through `024_repo_stats` (jobs, orgs, graph cache, manifests, billing, collections, users, integrations, repo stats, etc.).
 
 The server listens on `PORT` or `8787` by default.
 
@@ -73,7 +73,8 @@ Legacy single-token auth via `COOP_API_TOKEN` remains supported during migration
 - `POST /v1/orgs/repos/:repoId/lightning/enable` enqueues cloud index job (Pro or Enterprise; 403 otherwise).
 - `POST /v1/orgs/repos/:repoId/lightning/disable` disables Lightning for a repo (Pro+).
 - `GET /v1/orgs/repos/:repoId/lightning/status` returns index status for a repo (Pro+).
-- `GET /v1/orgs/repos/:repoId/manifest` returns Zero-Clone structure manifest (all plans).
+- `GET /v1/orgs/repos/:repoId/inventory` returns durable repo facts recorded by Deep-Index (file count, line count, bytes, languages). Canonical source for chat repo-fact questions; returns `source: "unavailable"` when the repo has not been indexed.
+- `GET /v1/orgs/repos/:repoId/manifest` returns the legacy structure manifest (paths + symbols). Populated only by an explicit `BUILD_STRUCTURE_MANIFEST` job — no webhook enqueues it.
 - `POST /v1/chat` streams chat completions (org API key; all plans — see [api-v1.md](./api-v1.md)).
 - `POST /v1/completions/inline` inline editor completions (same auth as chat).
 - `GET /webhooks/health` returns webhook delivery and registration health.

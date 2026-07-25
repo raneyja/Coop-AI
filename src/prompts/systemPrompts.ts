@@ -341,6 +341,8 @@ When the user message has no discernible question or task, ask a brief clarifyin
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
+When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
+When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`;
@@ -614,6 +616,7 @@ export function buildUserMessageWithContext(
     (file) => !instructionPaths.has(normalizeInstructionPathForDedup(file.path))
   );
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const repoInventory = extractRepoInventory(context?.contextBundle);
   const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
   const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
@@ -631,6 +634,7 @@ export function buildUserMessageWithContext(
     projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
     repoSemanticSnippets.length === 0 &&
+    !repoInventory &&
     agentFileSnippets.length === 0 &&
     !agentSearch &&
     localSnippets.length === 0 &&
@@ -665,6 +669,7 @@ export function buildUserMessageWithContext(
   }
   const treeOverview = extractTreeOverview(context?.contextBundle);
   if (treeOverview) {
+    lines.push(...formatTreeOverviewForLlm(treeOverview));
     const monorepoNote = buildMonorepoContextNote(treeOverview, context?.file);
     if (monorepoNote) {
       lines.push(monorepoNote);
@@ -683,10 +688,18 @@ export function buildUserMessageWithContext(
     }
     lines.push("</repo_entry_files>");
   }
+  if (repoInventory) {
+    lines.push(...formatRepoInventoryForLlm(repoInventory));
+  }
   if (repoSemanticSnippets.length > 0) {
+    const semanticMeta = extractRepoSemanticMeta(context?.contextBundle);
+    const matched = semanticMeta?.matchedPathCount;
+    const cap = semanticMeta?.attachmentCap ?? repoSemanticSnippets.length;
     lines.push("<repo_semantic_files>");
     lines.push(
-      "Indexed repository files retrieved from the user's question (semantic / full-text search). Use for implementation detail; prefer @-attached files when both cover the same path."
+      matched !== undefined && matched > repoSemanticSnippets.length
+        ? `Retrieval sample only: attached ${repoSemanticSnippets.length} of ${matched} matched path(s) (cap ${cap}). This is not a complete inventory of the repository. Use for implementation detail; prefer @-attached files when both cover the same path. Never count these paths as the total number of files in the repo.`
+        : `Retrieval sample only (at most ${repoSemanticSnippets.length} file(s) from semantic / full-text search — not a complete inventory of the repository). Use for implementation detail; prefer @-attached files when both cover the same path. Never count these paths as the total number of files in the repo.`
     );
     for (const file of repoSemanticSnippets) {
       const truncated = file.truncated ? ' truncated="true"' : "";
@@ -766,11 +779,29 @@ function extractTreeOverview(bundle: unknown): TreeOverviewSnippet | undefined {
       continue;
     }
     const treeOverview = (entry as { data?: { treeOverview?: TreeOverviewSnippet } }).data?.treeOverview;
-    if (treeOverview?.topLevelDirs?.length) {
+    if (
+      treeOverview &&
+      ((treeOverview.topLevelDirs?.length ?? 0) > 0 || (treeOverview.topLevelFiles?.length ?? 0) > 0)
+    ) {
       return treeOverview;
     }
   }
   return undefined;
+}
+
+function formatTreeOverviewForLlm(treeOverview: TreeOverviewSnippet): string[] {
+  const dirs = treeOverview.topLevelDirs ?? [];
+  const files = treeOverview.topLevelFiles ?? [];
+  const lines = ["<repo_tree_overview>"];
+  lines.push("Top-level entries from the live repository tree (not a full recursive inventory).");
+  if (dirs.length) {
+    lines.push(`directories: ${dirs.join(", ")}`);
+  }
+  if (files.length) {
+    lines.push(`files: ${files.join(", ")}`);
+  }
+  lines.push("</repo_tree_overview>");
+  return lines;
 }
 
 function buildMonorepoContextNote(treeOverview: TreeOverviewSnippet, activeFile?: string): string | undefined {
@@ -811,6 +842,18 @@ function extractRepoSummaryEntryFiles(bundle: unknown): ManifestSnippet[] {
 
 type RepoSemanticSnippet = ManifestSnippet & { repoId?: string; truncated?: boolean };
 
+type RepoInventorySnippet = {
+  source: "index-stats" | "manifest" | "tree" | "unavailable";
+  fileCount?: number;
+  lineCount?: number;
+  byteCount?: number;
+  languages?: string[];
+  truncated?: boolean;
+  indexedAt?: string;
+  lastCrawledAt?: string;
+  note?: string;
+};
+
 function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
   if (!Array.isArray(bundle)) {
     return [];
@@ -826,6 +869,98 @@ function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
     }
   }
   return [];
+}
+
+function extractRepoSemanticMeta(
+  bundle: unknown
+): { matchedPathCount?: number; attachmentCap?: number } | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const semantic = (
+      entry as {
+        data?: {
+          repoSemanticSearch?: { matchedPathCount?: number; attachmentCap?: number; files?: unknown[] };
+        };
+      }
+    ).data?.repoSemanticSearch;
+    if (semantic?.files?.length) {
+      return {
+        matchedPathCount: semantic.matchedPathCount,
+        attachmentCap: semantic.attachmentCap
+      };
+    }
+  }
+  return undefined;
+}
+
+function extractRepoInventory(bundle: unknown): RepoInventorySnippet | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const inventory = (entry as { data?: { repoInventory?: RepoInventorySnippet } }).data?.repoInventory;
+    if (inventory && typeof inventory === "object" && inventory.source) {
+      return inventory;
+    }
+  }
+  return undefined;
+}
+
+function formatRepoInventoryForLlm(inventory: RepoInventorySnippet): string[] {
+  const lines = ["<repo_inventory>"];
+  lines.push(
+    "Measured repository totals from the indexed workspace. This is the only valid source for file, line, or size totals — never compute them from <repo_semantic_files>, attached files, or earlier turns."
+  );
+  lines.push(`source="${inventory.source}"`);
+  if (typeof inventory.fileCount === "number") {
+    lines.push(`file_count="${inventory.fileCount}"`);
+  }
+  if (typeof inventory.lineCount === "number") {
+    lines.push(`line_count="${inventory.lineCount}"`);
+  }
+  if (typeof inventory.byteCount === "number") {
+    lines.push(`byte_count="${inventory.byteCount}"`);
+  }
+  if (inventory.languages?.length) {
+    lines.push(`languages="${inventory.languages.join(", ")}"`);
+  }
+  if (inventory.truncated) {
+    lines.push('truncated="true"');
+  }
+  if (inventory.indexedAt) {
+    lines.push(`indexed_at="${inventory.indexedAt}"`);
+  }
+  if (inventory.lastCrawledAt) {
+    lines.push(`last_crawled_at="${inventory.lastCrawledAt}"`);
+  }
+  if (inventory.note) {
+    lines.push(inventory.note);
+  } else if (inventory.source === "unavailable") {
+    lines.push(
+      "Inventory is unavailable. Say so clearly — do not estimate totals from semantic search samples or attached file snippets."
+    );
+  } else if (typeof inventory.fileCount === "number") {
+    const caveat = inventory.truncated
+      ? " The host reported a truncated tree; treat this as a lower bound."
+      : "";
+    const linePart =
+      typeof inventory.lineCount === "number"
+        ? ` and ${inventory.lineCount} line(s) of code`
+        : "";
+    lines.push(
+      `The repository contains ${inventory.fileCount} file(s)${linePart} according to the ${inventory.source}.${caveat}`
+    );
+  }
+  lines.push("</repo_inventory>");
+  return lines;
 }
 
 type JiraTicketSnippet = {
@@ -867,7 +1002,10 @@ function extractJiraSearchTickets(bundle: unknown): JiraSearchSnippet | undefine
 function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
   const issues = jira.issues ?? [];
   const match = jira.matchStrategy ?? (issues.length > 0 ? "text" : "none");
-  const lines: string[] = [`<jira_tickets match="${escapeXml(match)}">`];
+  const lines: string[] = [`<jira_tickets match="${escapeXml(match)}" shown="${issues.length}">`];
+  lines.push(
+    "Search sample only — not a complete Jira inventory. Do not treat shown ticket count as the total for the project or org."
+  );
   if (jira.error) {
     lines.push(`<error>${escapeXml(jira.error)}</error>`);
   }
@@ -1000,7 +1138,10 @@ function extractIntegrationSearch<T>(bundle: unknown, key: string): T | undefine
 
 function formatSlackMessagesForLlm(slack: SlackSearchSnippet): string[] {
   const messages = slack.messages ?? [];
-  const lines: string[] = ["<slack_messages>"];
+  const lines: string[] = [`<slack_messages shown="${messages.length}">`];
+  lines.push(
+    "Search sample only — not every Slack message in the workspace. Do not treat shown count as a complete total."
+  );
   if (slack.error) {
     lines.push(`<error>${escapeXml(slack.error)}</error>`);
   }
@@ -1022,7 +1163,10 @@ function formatSlackMessagesForLlm(slack: SlackSearchSnippet): string[] {
 
 function formatTeamsMessagesForLlm(teams: TeamsSearchSnippet): string[] {
   const messages = teams.messages ?? [];
-  const lines: string[] = ["<teams_messages>"];
+  const lines: string[] = [`<teams_messages shown="${messages.length}">`];
+  lines.push(
+    "Search sample only — not every Teams message. Do not treat shown count as a complete total."
+  );
   if (teams.error) {
     lines.push(`<error>${escapeXml(teams.error)}</error>`);
   }
@@ -1065,6 +1209,9 @@ function formatConfluencePagesForLlm(confluence: ConfluenceSearchSnippet): strin
   const pages = confluence.pages ?? [];
   const pageCount = pages.length;
   const lines: string[] = [`<confluence_pages count="${pageCount}">`];
+  lines.push(
+    "Search sample only — not every Confluence page in the space/site. Do not treat shown count as a complete total."
+  );
   if (confluence.error) {
     lines.push(`<error>${escapeXml(confluence.error)}</error>`);
   }
@@ -1091,6 +1238,9 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
   const pages = notion.pages ?? [];
   const pageCount = pages.length;
   const lines: string[] = [`<notion_pages count="${pageCount}">`];
+  lines.push(
+    "Search sample only — not every Notion page in the workspace. Do not treat shown count as a complete total."
+  );
   if (notion.error) {
     lines.push(`<error>${escapeXml(notion.error)}</error>`);
   }
@@ -1116,6 +1266,9 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
   const documents = googleDocs.documents ?? [];
   const docCount = documents.length;
   const lines: string[] = [`<google_docs count="${docCount}">`];
+  lines.push(
+    "Search sample only — not every Google Doc in Drive. Do not treat shown count as a complete total."
+  );
   if (googleDocs.error) {
     lines.push(`<error>${escapeXml(googleDocs.error)}</error>`);
   }
@@ -1140,7 +1293,12 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
 function formatCodeHostActivityForLlm(codeHost: CodeHostSearchSnippet): string[] {
   const pullRequests = codeHost.pullRequests ?? [];
   const issues = codeHost.issues ?? [];
-  const lines: string[] = ["<code_host_activity>"];
+  const lines: string[] = [
+    `<code_host_activity prs_shown="${pullRequests.length}" issues_shown="${issues.length}">`
+  ];
+  lines.push(
+    "Capped recent PR/issue sample from the connected code host — not a complete inventory of all PRs or issues. Do not treat shown counts as totals."
+  );
   if (codeHost.error) {
     lines.push(`<error>${escapeXml(codeHost.error)}</error>`);
   }

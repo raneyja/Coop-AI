@@ -511,7 +511,7 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ## Agent loop (Phase 5)
 
-Plain chat uses single-shot evidence fetch by default. When `coopAI.chat.agentMode` is **on**, context gathering prefetches `search_code` hits via `AgentOrchestrator.executeTool` (graph-grounded, `repoId:path:line` citations). `read_file` is available to the orchestrator but not yet invoked by chat.
+Plain chat uses single-shot evidence fetch by default. When `coopAI.chat.agentMode` is **on**, context gathering prefetches `search_code` hits via `AgentOrchestrator.executeTool` (graph-grounded, `repoId:path:line` citations), then reads the top hit with `read_file`. `read_file` resolves from the local clone when there is one and otherwise fetches the body through `IndexedRepoWorkspace.readFile`, so remote-only repos work the same way.
 
 **Shipped:** `createAgentToolRegistry`, `search_code`, `read_file`, opt-in setting, unit tests.
 

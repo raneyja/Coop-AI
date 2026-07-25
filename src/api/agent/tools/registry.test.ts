@@ -133,6 +133,63 @@ async function run(): Promise<void> {
     }
   });
 
+  await test("read_file falls back to the remote workspace when there is no local clone", async () => {
+    const requested: Array<{ path: string; repoId?: string }> = [];
+    const registry = createAgentToolRegistry({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: filePath, repoId }) => {
+        requested.push({ path: filePath, repoId });
+        return { path: filePath, content: "line1\nline2\nline3\nline4" };
+      }
+    });
+
+    const raw = await registry.read_file!({ path: "src/remote.ts", repoId: "github:acme/demo" });
+    const parsed = JSON.parse(raw) as { files: Array<{ content: string }> };
+    assert.ok(parsed.files[0]?.content.includes("line1"));
+    assert.deepEqual(requested, [{ path: "src/remote.ts", repoId: "github:acme/demo" }]);
+  });
+
+  await test("remote read_file honors the requested line window", async () => {
+    const registry = createAgentToolRegistry({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: filePath }) => ({
+        path: filePath,
+        content: ["line1", "line2", "line3", "line4", "line5"].join("\n")
+      })
+    });
+
+    const raw = await registry.read_file!({ path: "src/remote.ts", startLine: 2, endLine: 3 });
+    const parsed = JSON.parse(raw) as { files: Array<{ content: string }> };
+    assert.equal(parsed.files[0]?.content, "line2\nline3");
+  });
+
+  await test("read_file errors plainly when neither local nor remote can serve the file", async () => {
+    const registry = createAgentToolRegistry({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => undefined
+    });
+    const raw = await registry.read_file!({ path: "src/missing.ts" });
+    const parsed = JSON.parse(raw) as { error: string };
+    assert.match(parsed.error, /Could not read file/i);
+  });
+
+  await test("AgentOrchestrator passes repoId so remote reads can resolve", async () => {
+    const requested: Array<{ path: string; repoId?: string }> = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: filePath, repoId }) => {
+        requested.push({ path: filePath, repoId });
+        return { path: filePath, content: "export function verifyToken() {}" };
+      }
+    });
+
+    await orchestrator.run({ message: "how does verifyToken work?", repoId: "github:acme/demo" });
+    assert.deepEqual(requested, [{ path: "src/auth.ts", repoId: "github:acme/demo" }]);
+  });
+
   await test("AgentOrchestrator.executeTool dispatches to registry", async () => {
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend(),

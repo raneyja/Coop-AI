@@ -132,6 +132,14 @@ export class BitbucketClient implements CodeHostClient {
     return { path: path || "/", branch, entries };
   }
 
+  public async countRepositoryFiles(
+    coords: RepoCoordinates
+  ): Promise<{ fileCount: number; truncated: boolean }> {
+    const { countFilesViaDirectoryWalk } = await import("../../context/countFilesViaDirectoryWalk");
+    const walked = await countFilesViaDirectoryWalk((dirPath) => this.getRepositoryTree(coords, dirPath));
+    return { fileCount: walked.fileCount, truncated: walked.truncated };
+  }
+
   public async getFileContent(coords: RepoCoordinates, filePath: string): Promise<RemoteFileContent> {
     const branch = await this.resolveBranch(coords);
     const path = normalizePath(filePath);

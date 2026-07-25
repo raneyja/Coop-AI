@@ -67,6 +67,13 @@ import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerm
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
+import {
+  RESPONSE_DEADLINE_USER_MESSAGE,
+  abortablePromise,
+  isResponseDeadlineAbort,
+  remainingContextGatherBudgetMs,
+  scheduleResponseDeadline
+} from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
@@ -242,10 +249,15 @@ import {
   readExternalOpenFileForChat,
   pickEditorForContext,
   pickLocalEditorForContext,
+  pickRemoteEditorForContext,
   resolveEditorFile
 } from "../context/editorFileContext";
 import { looksLikeAbsoluteDiskPath, isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
-import { isSameRepoFilePath } from "../context/fileChipIdentity";
+import {
+  isRemoteProvenanceContext,
+  isSameRepoFilePath,
+  preserveRemoteChipSource
+} from "../context/fileChipIdentity";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
 import { pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import {
@@ -272,10 +284,10 @@ import {
   graphHitsToMentionResults,
   localPathsToMentionResults,
   mergeHybridMentionSearchResults,
-  preferMentionFileContent,
+  resolveMentionFileContent,
   rankMentionSearchResults
 } from "./mentionSearchMerge";
-import { canUseRemoteCodeGraph, isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
+import { isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
 import { wantsJiraContext } from "../context/jiraContext";
@@ -283,6 +295,12 @@ import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import {
+  IndexedRepoWorkspace,
+  mergeRepoInventoryContext
+} from "../workspace/IndexedRepoWorkspace";
+import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
+import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -348,6 +366,7 @@ export class CoopChatSession {
   };
   private readonly conflictAudit = new ConflictAuditStore();
   private chatTurnStartedAt = 0;
+  private workspaceFacade?: IndexedRepoWorkspace;
   private readonly jobClient: JobApiClient;
   private lastJobResult?: unknown;
   private lastContextBundle: ContextFetchResult[] = [];
@@ -362,8 +381,8 @@ export class CoopChatSession {
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
   /**
-   * Repo-relative path picked via Coop remote explorer (or restored from a thread with
-   * fileSource:"remote"). Survives local-clone editor opens so the chip stays R.
+   * Repo-relative path from Coop remote explorer (or a thread restored with
+   * fileSource:"remote"). Gates open + attach to codehost/VFS only — never local disk.
    */
   private remoteProvenanceFile?: string;
   private pendingChatMentions?: ChatFileMention[];
@@ -624,8 +643,21 @@ export class CoopChatSession {
     if (editor && !editor.document.isClosed) {
       const resolved = resolveEditorFile(editor);
       if (resolved.file?.trim()) {
+        // Remote session: ignore focus on a local clone of the chipped path.
+        if (
+          this.isWorkingOnRemoteProvenance() &&
+          preferred?.trim() &&
+          resolved.fileSource !== "remote" &&
+          resolved.fileSource !== "external" &&
+          isSameRepoFilePath(resolved.file, preferred)
+        ) {
+          return pickRemoteEditorForContext(preferred);
+        }
         return editor;
       }
+    }
+    if (this.isWorkingOnRemoteProvenance()) {
+      return pickRemoteEditorForContext(preferred);
     }
     const matched =
       pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
@@ -672,8 +704,14 @@ export class CoopChatSession {
       }
       return;
     }
-    const open = pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
+    const open = this.isWorkingOnRemoteProvenance()
+      ? pickRemoteEditorForContext(preferred)
+      : pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
     if (open) {
+      return;
+    }
+    // Remote chip may still be valid with API-backed content and no VFS tab yet.
+    if (this.isWorkingOnRemoteProvenance()) {
       return;
     }
     this.clearFileFieldsFromContext();
@@ -798,6 +836,20 @@ export class CoopChatSession {
     this.pushThreadsList();
   }
 
+  /** Platform 15s ceiling: finish with partial text or an explicit timeout message. */
+  private finishTurnForResponseDeadline(turn: ChatTurn, streamedText = ""): void {
+    this.clearIntentFeedback(turn.threadId);
+    const partial = (streamedText || turn.partialAssistant).trim();
+    const content = partial
+      ? `${partial}\n\n—\n${RESPONSE_DEADLINE_USER_MESSAGE}`
+      : RESPONSE_DEADLINE_USER_MESSAGE;
+    this.finishTurnAssistantMessage(turn, {
+      role: "assistant",
+      content,
+      timestamp: Date.now()
+    });
+  }
+
   private pushThreadsList(): void {
     if (!this.threadStore) {
       return;
@@ -905,7 +957,10 @@ export class CoopChatSession {
       this.remoteProvenanceFile = undefined;
     }
 
-    const alreadyOpen = pickLocalEditorForContext(file) ?? pickEditorForContext(file);
+    const alreadyOpen =
+      this.currentContext.fileSource === "remote"
+        ? pickRemoteEditorForContext(file)
+        : pickLocalEditorForContext(file) ?? pickEditorForContext(file);
     if (alreadyOpen) {
       try {
         await vscode.window.showTextDocument(alreadyOpen.document, {
@@ -934,25 +989,25 @@ export class CoopChatSession {
     this.editorContextSuppressedUntil = Date.now() + 8_000;
     this.intentDebouncer.cancelAll();
 
-    const absolute = resolveLocalAbsolutePath(path);
-    if (absolute) {
-      try {
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.One,
-          preview: false,
-          preserveFocus: false
-        });
-        return true;
-      } catch {
-        // fall through to remote
+    const remoteOnly = isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);
+    if (!remoteOnly) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+          await vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.One,
+            preview: false,
+            preserveFocus: false
+          });
+          return true;
+        } catch {
+          // fall through to remote
+        }
       }
     }
 
     if (!this.currentContext.owner?.trim() || !this.currentContext.repo?.trim()) {
-      return false;
-    }
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
       return false;
     }
 
@@ -962,7 +1017,8 @@ export class CoopChatSession {
       filePath: path,
       provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
       branch: this.currentContext.branch,
-      preserveSidebarFocus: false
+      preserveSidebarFocus: false,
+      allowLocalClone: !remoteOnly
     });
     if (!opened) {
       opened = await this.openRemoteFileFromApi(path, undefined, { preserveFocus: false });
@@ -992,15 +1048,41 @@ export class CoopChatSession {
   }
 
   /**
-   * Keep R on the chip when the open buffer is the local clone of a remote-picked path.
-   * Clears the pin when the user navigates to a different file.
+   * Re-assert remote chip + pin for a remote-picked path.
+   * Does not authorize local-disk attach — remote content must come from VFS/API.
    */
   private withRemoteProvenance(ctx: RepoContext): RepoContext {
+    // Re-pin from an existing remote stamp so attach/send paths that skipped
+    // setRemoteProvenance still survive local-clone editor snaps.
+    if (
+      !this.remoteProvenanceFile?.trim() &&
+      ctx.fileSource === "remote" &&
+      ctx.file?.trim() &&
+      !isOsAbsoluteDiskPath(ctx.file)
+    ) {
+      this.setRemoteProvenance(ctx.file);
+    }
+
     const pin = this.remoteProvenanceFile?.trim();
     if (!pin) {
       return ctx;
     }
-    if (!ctx.file?.trim() || isOsAbsoluteDiskPath(ctx.file)) {
+    if (!ctx.file?.trim()) {
+      // Transient empty editor events must not drop the remote pin.
+      return ctx;
+    }
+    if (isOsAbsoluteDiskPath(ctx.file)) {
+      // Same path reported as a local fsPath (leftover tab) — keep remote intent on the pin.
+      // Attach still refuses local disk when isWorkingOnRemoteProvenance().
+      const pinAbs = resolveLocalAbsolutePath(pin);
+      if (pinAbs && pathsReferToSameFile(pinAbs, ctx.file)) {
+        return {
+          ...ctx,
+          file: pin,
+          fileSource: "remote",
+          scope: "file"
+        };
+      }
       this.remoteProvenanceFile = undefined;
       return ctx;
     }
@@ -1014,6 +1096,19 @@ export class CoopChatSession {
       fileSource: "remote",
       scope: "file"
     };
+  }
+
+  /** Existing chip source for local-buffer attach — pin counts as remote even if stamp was demoted. */
+  private chipSourceBeforeLocalAttach(): RepoContext["fileSource"] {
+    if (this.isWorkingOnRemoteProvenance()) {
+      return "remote";
+    }
+    return this.currentContext.fileSource;
+  }
+
+  /** User chose remote explorer / codehost — never fall through to local disk. */
+  private isWorkingOnRemoteProvenance(): boolean {
+    return isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);
   }
 
   private async switchThread(threadId: string): Promise<void> {
@@ -1812,6 +1907,28 @@ export class CoopChatSession {
       // User switched files in the editor — release the prior quick-action pin.
       this.pinnedContextFile = undefined;
     }
+    // Remote provenance: ignore leftover local-clone snaps for the SAME path.
+    // Explicit local choice (Downloads / different workspace file) clears remote — Rule B.
+    if (this.isWorkingOnRemoteProvenance() && incoming.file?.trim()) {
+      const explicitLocal =
+        incoming.fileSource === "external" || isOsAbsoluteDiskPath(incoming.file);
+      const differentLocalFile =
+        (incoming.fileSource === "workspace" || incoming.fileSource === "git") &&
+        this.currentContext.file?.trim() &&
+        !isSameRepoFilePath(incoming.file, this.currentContext.file);
+      if (explicitLocal || differentLocalFile) {
+        this.remoteProvenanceFile = undefined;
+        // Fall through to merge as local.
+      } else if (
+        incoming.fileSource !== "remote" &&
+        this.currentContext.file?.trim() &&
+        isSameRepoFilePath(incoming.file, this.currentContext.file)
+      ) {
+        this.currentContext = this.withRemoteProvenance(this.currentContext);
+        this.postContext();
+        return this.runIntentFetch(event, { quiet: true });
+      }
+    }
     // Never force scope:"repo" on an empty editor event — that wiped Downloads chips when
     // the sidebar stole focus (normalize stamped scope:repo → isExplicitRepoScope true).
     // Explicit explorer "Use repo" goes through setRepoContext / repoContextForRepoSelect.
@@ -1845,8 +1962,8 @@ export class CoopChatSession {
     // Cancel pending editor snaps so a late FILE_SWITCHED can't overwrite this pick.
     this.intentDebouncer.cancelAll();
     this.pinnedContextFile = undefined;
-    // Hold editor refresh while we open — otherwise local clone URI demotes R→L
-    // or clears a brand-new chip before the tab exists.
+    // Hold editor refresh while we open — remote pick must not be overwritten by a
+    // leftover local clone tab of the same path before VFS/API content is ready.
     this.editorContextSuppressedUntil = Date.now() + 8_000;
 
     // Absolute Downloads / Cmd+O path — always local (L), never stamp remote.
@@ -1880,36 +1997,6 @@ export class CoopChatSession {
       return;
     }
 
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      this.remoteProvenanceFile = undefined;
-      const absolute = resolveLocalAbsolutePath(path);
-      if (absolute) {
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-        const editor = await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.One,
-          preview: false,
-          preserveFocus: false
-        });
-        if (line) {
-          const position = new vscode.Position(Math.max(0, line - 1), 0);
-          editor.selection = new vscode.Selection(position, position);
-          editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-        }
-        this.currentContext = mergeRepoContext(
-          this.currentContext,
-          repoContextForFile(path, this.currentContext.owner, this.currentContext.repo, {
-            fileSource: "workspace"
-          }) as RepoContext
-        );
-        this.postContext();
-        return;
-      }
-      void vscode.window.showWarningMessage(
-        "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
-      );
-      return;
-    }
-
     this.setRemoteProvenance(path);
     this.currentContext = mergeRepoContext(
       this.currentContext,
@@ -1920,7 +2007,7 @@ export class CoopChatSession {
     this.postContext();
 
     if (this.currentContext.owner && this.currentContext.repo) {
-      // May open local clone for viewing — remote provenance pin keeps the chip R.
+      // Remote explorer pick: VFS / API only — never a local clone of the same path.
       let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
@@ -1936,7 +2023,7 @@ export class CoopChatSession {
       if (!opened) {
         const relative = path.replace(/^\/+/, "");
         void vscode.window.showWarningMessage(
-          `CoopAI added ${relative} to context. Install GitHub Repositories or clone the repo locally to open files without reloading VS Code.`
+          `CoopAI added ${relative} to context. Install GitHub Repositories to open remote files in the editor without reloading VS Code.`
         );
       }
     }
@@ -1951,28 +2038,24 @@ export class CoopChatSession {
     await this.runIntentFetch(event, { quiet: true });
   }
 
-  /** Open a repo file for manual review without changing chat context. Prefer local disk. */
+  /** Open a repo file for manual review without changing chat context. */
   private async openRepoFileForReview(path: string, line?: number): Promise<void> {
     this.editorContextSuppressedUntil = Date.now() + 15_000;
     this.intentDebouncer.cancelAll();
 
-    const absolute = resolveLocalAbsolutePath(path);
-    if (absolute) {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
-      const editor = await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.Beside,
-        preview: true,
-        preserveFocus: true
-      });
-      this.revealLineInEditor(editor, line);
-      return;
-    }
-
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      void vscode.window.showWarningMessage(
-        "Free plan opens files from your VS Code workspace folders only. Open a folder or pick a local file."
-      );
-      return;
+    const remoteOnly = this.isWorkingOnRemoteProvenance();
+    if (!remoteOnly) {
+      const absolute = resolveLocalAbsolutePath(path);
+      if (absolute) {
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
+        const editor = await vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: true,
+          preserveFocus: true
+        });
+        this.revealLineInEditor(editor, line);
+        return;
+      }
     }
 
     if (this.currentContext.owner && this.currentContext.repo) {
@@ -1984,7 +2067,8 @@ export class CoopChatSession {
         provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
         branch: this.currentContext.branch,
         preserveSidebarFocus: true,
-        reviewOpen: true
+        reviewOpen: true,
+        allowLocalClone: !remoteOnly
       });
       if (!opened) {
         opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true });
@@ -1992,7 +2076,7 @@ export class CoopChatSession {
       if (!opened) {
         const relative = path.replace(/^\/+/, "");
         void vscode.window.showWarningMessage(
-          `Could not open ${relative} in the editor. Install GitHub Repositories or clone the repo locally.`
+          `Could not open ${relative} in the editor. Install GitHub Repositories to open remote files without reloading VS Code.`
         );
       }
     }
@@ -2167,12 +2251,89 @@ export class CoopChatSession {
     if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
-      result = await this.enrichChatContextWithSemanticSearch(request, result);
+      const queryText = request.intent.context?.queryText;
+      // Repo facts come from the indexed workspace; everything else gets a search sample.
+      if (hasRepoFactNeed(repoFactNeeds(queryText))) {
+        result = await this.enrichChatContextWithRepoInventory(request, result);
+      } else {
+        result = await this.enrichChatContextWithSemanticSearch(request, result);
+      }
     } else {
       result = await this.buildBaseContextResult(request);
     }
 
     return result;
+  }
+
+  /** Single entry point for indexed-repo facts and remote file reads. */
+  private indexedRepoWorkspace(): IndexedRepoWorkspace {
+    if (!this.workspaceFacade) {
+      this.workspaceFacade = new IndexedRepoWorkspace({
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter
+      });
+    }
+    return this.workspaceFacade;
+  }
+
+  private repoTargetForRequest(request: ContextFetchRequest): RepoTarget {
+    return {
+      repoId: request.params.repoId,
+      branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+      owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
+      repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
+      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github"
+    };
+  }
+
+  private async enrichChatContextWithRepoInventory(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    const queryText = request.intent.context?.queryText;
+    const needs = repoFactNeeds(queryText);
+    if (!hasRepoFactNeed(needs)) {
+      return result;
+    }
+
+    const workspace = this.indexedRepoWorkspace();
+    const target = this.repoTargetForRequest(request);
+    const needCount = needs.fileCount || needs.lineCount;
+
+    const load = async (): Promise<ContextFetchResult> => {
+      try {
+        const [inventory, treeOverview] = await Promise.all([
+          needCount ? workspace.getInventory(target, needs) : Promise.resolve(undefined),
+          needs.treeOverview ? workspace.getTreeOverview(target) : Promise.resolve(undefined)
+        ]);
+        return mergeRepoInventoryContext(result, inventory, treeOverview);
+      } catch {
+        return mergeRepoInventoryContext(result, {
+          source: "unavailable",
+          note: "Failed to load repository inventory. Do not estimate repository totals from search samples."
+        });
+      }
+    };
+
+    // Keep inventory inside the gather budget so synthesis can still answer within 15s.
+    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (budgetMs <= 0) {
+      return mergeRepoInventoryContext(result, {
+        source: "unavailable",
+        note: "Timed out loading repository inventory within the response budget."
+      });
+    }
+
+    return await Promise.race([
+      load(),
+      delayMs(budgetMs).then(() =>
+        mergeRepoInventoryContext(result, {
+          source: "unavailable",
+          note: "Timed out loading repository inventory within the response budget."
+        })
+      )
+    ]);
   }
 
   private async enrichChatContextWithSemanticSearch(
@@ -2913,6 +3074,9 @@ export class CoopChatSession {
       quickAction === "understand-repo"
         ? undefined
         : this.loadLocalFilesSyncForChat({ fullFile: options?.composerMode === "edit" });
+    // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
+    this.currentContext = this.withRemoteProvenance(this.currentContext);
+    this.postContext();
 
     if (quickAction && isQuickActionBlocked(quickAction as QuickActionId, actionContext)) {
       this.post({
@@ -2973,7 +3137,10 @@ export class CoopChatSession {
             options?.slashUserArgs,
             mentionRefs
           )
-        : plainChatHistoryContent(message, mentionRefs));
+        : plainChatHistoryContent(message, mentionRefs, {
+            context: actionContext,
+            includeContextChips: !this.chatHistory.some((entry) => entry.role === "user")
+          }));
     if (shouldTrackEditRequest(options, quickAction)) {
       setLastEditUserMessage(historyContent);
       void this.emitUsageEvent("edit.requested");
@@ -3009,7 +3176,10 @@ export class CoopChatSession {
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
+    // Align turn clock with chat timing helper, then reschedule the 15s ceiling.
+    turn.clearResponseDeadline();
     turn.startedAt = this.chatTurnStartedAt;
+    turn.clearResponseDeadline = scheduleResponseDeadline(turn.streamAbort, turn.startedAt);
     this.pushThreadsList();
 
     const prefetchIntentEvent = intentQuickAction
@@ -3021,32 +3191,64 @@ export class CoopChatSession {
     this.postIntentFeedbackForThread(turn.threadId, this.loadingFeedbackFor(prefetchIntentEvent));
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
-      const ranAsync = await this.runAsyncQuickAction(quickAction, modelMessage, turn);
-      if (!this.threadRuns.isStreamActive(turn)) {
-        return;
-      }
-      if (ranAsync) {
-        const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
-        await this.runIntentFetch(intentEvent, { quiet: true, turn });
+      try {
+        const ranAsync = await abortablePromise(
+          this.runAsyncQuickAction(quickAction, modelMessage, turn),
+          turn.streamAbort.signal
+        );
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        this.enrichKnowledgeGapsBundle(quickAction, turn);
-        if (quickAction === "blast-radius") {
-          this.applyBlastRadiusJobResultToBundle(quickAction, turn);
+        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+          this.finishTurnForResponseDeadline(turn);
+          return;
         }
-        await this.postEvidenceCardsFromBundle(quickAction, undefined, turn);
-        await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
-          mentions: options?.mentions,
-          composerMode: options?.composerMode,
-          taskContent: taskMessage,
-          turn
-        });
-        return;
+        if (ranAsync) {
+          const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
+          await abortablePromise(
+            this.runIntentFetch(intentEvent, { quiet: true, turn }),
+            turn.streamAbort.signal
+          );
+          if (!this.threadRuns.isStreamActive(turn)) {
+            return;
+          }
+          if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+            this.finishTurnForResponseDeadline(turn);
+            return;
+          }
+          this.enrichKnowledgeGapsBundle(quickAction, turn);
+          if (quickAction === "blast-radius") {
+            this.applyBlastRadiusJobResultToBundle(quickAction, turn);
+          }
+          await abortablePromise(
+            this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
+            turn.streamAbort.signal
+          );
+          await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
+            mentions: options?.mentions,
+            composerMode: options?.composerMode,
+            taskContent: taskMessage,
+            turn
+          });
+          return;
+        }
+      } catch (error) {
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return;
+        }
+        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+          this.finishTurnForResponseDeadline(turn);
+          return;
+        }
+        throw error;
       }
     }
 
     if (!this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
+    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+      this.finishTurnForResponseDeadline(turn);
       return;
     }
 
@@ -3058,8 +3260,23 @@ export class CoopChatSession {
       : this.intentDetector.fromManualChatSubmit(turn.context, message, { integrationProvider });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
-    await this.runIntentFetch(intentEvent, { turn });
+    try {
+      await abortablePromise(this.runIntentFetch(intentEvent, { turn }), turn.streamAbort.signal);
+    } catch (error) {
+      if (!this.threadRuns.isStreamActive(turn)) {
+        return;
+      }
+      if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+        this.finishTurnForResponseDeadline(turn);
+        return;
+      }
+      throw error;
+    }
     if (!this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
+    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+      this.finishTurnForResponseDeadline(turn);
       return;
     }
     this.enrichKnowledgeGapsBundle(quickAction, turn);
@@ -3067,9 +3284,27 @@ export class CoopChatSession {
       // Don't block synthesis on graph enrichment for the evidence card.
       void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
     } else {
-      await this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
+      try {
+        await abortablePromise(
+          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn),
+          turn.streamAbort.signal
+        );
+      } catch (error) {
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return;
+        }
+        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+          this.finishTurnForResponseDeadline(turn);
+          return;
+        }
+        throw error;
+      }
     }
     if (!this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
+    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
+      this.finishTurnForResponseDeadline(turn);
       return;
     }
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -3088,7 +3323,10 @@ export class CoopChatSession {
     attachments?: ChatImageAttachment[]
   ): Promise<void> {
     const mentionRefs = this.quickActionMentionRefs(mentions);
-    const historyContent = plainChatHistoryContent(message, mentionRefs);
+    const historyContent = plainChatHistoryContent(message, mentionRefs, {
+      context: this.currentContext,
+      includeContextChips: !this.chatHistory.some((entry) => entry.role === "user")
+    });
     const userMessage: ChatMessage = {
       role: "user",
       content: historyContent,
@@ -3739,7 +3977,13 @@ export class CoopChatSession {
         effectiveQuickAction === "understand-repo" ||
         Boolean(integrationProvider) ||
         (!effectiveQuickAction && !integrationProvider && allMentionsOutOfScope);
-      const localPayload = skipLocalAttach ? undefined : await this.resolveChatLocalFiles();
+      const localPayload = skipLocalAttach
+        ? undefined
+        : await abortablePromise(this.resolveChatLocalFiles(), signal);
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
+        return;
+      }
       if (localPayload?.files.length) {
         this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
@@ -3926,7 +4170,13 @@ export class CoopChatSession {
       }
 
       const mentionFiles =
-        mentionsToResolve.length > 0 ? await this.resolveMentionFiles(mentionsToResolve) : [];
+        mentionsToResolve.length > 0
+          ? await abortablePromise(this.resolveMentionFiles(mentionsToResolve), signal)
+          : [];
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
+        return;
+      }
       let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -4048,7 +4298,12 @@ export class CoopChatSession {
         }
       });
 
-      if (await this.blockIfFreeQuotaExhausted()) {
+      const quotaBlocked = await abortablePromise(this.blockIfFreeQuotaExhausted(), signal);
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
+        return;
+      }
+      if (quotaBlocked) {
         return;
       }
 
@@ -4082,9 +4337,17 @@ export class CoopChatSession {
       if (isCancelled()) {
         return;
       }
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
+        return;
+      }
 
       await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
       if (isCancelled()) {
+        return;
+      }
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
 
@@ -4147,6 +4410,10 @@ export class CoopChatSession {
       await this.notifyQuotaExceededIfNeeded();
     } catch (error) {
       if (isCancelled()) {
+        return;
+      }
+      if (isResponseDeadlineAbort(signal)) {
+        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
       this.threadRuns.markError(turn);
@@ -4373,23 +4640,30 @@ export class CoopChatSession {
         turn.threadId
       );
 
-      const resultPayload = await this.jobClient.pollUntilComplete(submit.jobId, (event) => {
-        if (!this.threadRuns.isJobActive(turn)) {
-          throw new Error("Job aborted");
+      const resultPayload = await this.jobClient.pollUntilComplete(
+        submit.jobId,
+        (event) => {
+          if (!this.threadRuns.isJobActive(turn)) {
+            throw new Error("Job aborted");
+          }
+          const terminal = event.status === "completed" || event.status === "partial";
+          this.postQuickActionJobActivity(
+            quickAction,
+            {
+              jobId: event.jobId,
+              status: terminal ? "running" : event.status,
+              message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
+              progress: terminal ? Math.max(event.progress, 90) : event.progress,
+              estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
+            },
+            turn.threadId
+          );
+        },
+        {
+          timeoutMs: remainingContextGatherBudgetMs(turn.startedAt),
+          signal: turn.streamAbort.signal
         }
-        const terminal = event.status === "completed" || event.status === "partial";
-        this.postQuickActionJobActivity(
-          quickAction,
-          {
-            jobId: event.jobId,
-            status: terminal ? "running" : event.status,
-            message: terminal ? preparingAnswerMessageForAction(quickAction) : event.message,
-            progress: terminal ? Math.max(event.progress, 90) : event.progress,
-            estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
-          },
-          turn.threadId
-        );
-      });
+      );
 
       const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
       turn.jobResult = result;
@@ -4671,22 +4945,6 @@ export class CoopChatSession {
   private async handleRepoListRepos(source: "chat" | "settings"): Promise<void> {
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
     const audience = source === "settings" ? "settings" : "chat";
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      this.postRepoExplorer(
-        {
-          type: "repo:tree",
-          payload: {
-            path: "",
-            items: [],
-            provider,
-            scope: "repos",
-            error: "Free plan uses local workspace files only. Open a folder in VS Code to browse files."
-          }
-        },
-        audience
-      );
-      return;
-    }
     this.postRepoExplorer(
       {
         type: "repo:tree",
@@ -5049,22 +5307,6 @@ export class CoopChatSession {
   private async handleRepoList(path: string, source: "chat" | "settings"): Promise<void> {
     const audience = source === "settings" ? "settings" : "chat";
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      this.postRepoExplorer(
-        {
-          type: "repo:tree",
-          payload: {
-            path,
-            items: [],
-            provider,
-            scope: "files",
-            error: "Free plan uses local workspace files only. Open a folder in VS Code to browse files."
-          }
-        },
-        audience
-      );
-      return;
-    }
     if (audience === "chat" && !(await this.isCurrentRepoInWorkspace())) {
       await this.handleRepoListRepos("chat");
       return;
@@ -5116,22 +5358,6 @@ export class CoopChatSession {
   ): Promise<void> {
     const audience = source === "settings" ? "settings" : "chat";
     const provider = payload.provider ?? this.preferences.defaultCodeHost;
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      this.postRepoExplorer(
-        {
-          type: "repo:tree",
-          payload: {
-            path,
-            items: [],
-            error: "Free plan uses local workspace files only.",
-            provider,
-            scope: "files"
-          }
-        },
-        audience
-      );
-      return;
-    }
     const owner = payload.owner?.trim();
     const repo = payload.repo?.trim();
     if (!owner || !repo) {
@@ -5306,11 +5532,12 @@ export class CoopChatSession {
   private snapEditorContextBeforeSend(options?: { allowLocalFileForEdit?: boolean }): void {
     const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    // Always follow the live open/active editor — including under explorer "Use repo"
-    // scope — so the chip and chat attach match the tab the user is looking at.
-    const editor = allowLocalFileForEdit
-      ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
-      : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
+    // Remote provenance: only snap a remote (VFS) tab — never a local clone of the same path.
+    const editor = this.isWorkingOnRemoteProvenance()
+      ? pickRemoteEditorForContext(this.currentContext.file)
+      : allowLocalFileForEdit
+        ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
+        : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
     if (!editor) {
       return;
     }
@@ -5337,6 +5564,17 @@ export class CoopChatSession {
     fullFile?: boolean;
   }): LocalFileContextPayload | undefined {
     const fullFile = options?.fullFile === true || this.pendingCodeEditIntent;
+    const lines =
+      fullFile || !this.currentContext.selectedLines
+        ? undefined
+        : { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] };
+
+    // Remote explorer / codehost provenance: never attach from local disk or clone buffers.
+    // Sync path can only use an open remote URI tab; API fetch happens in resolveChatLocalFiles.
+    if (this.isWorkingOnRemoteProvenance()) {
+      return this.loadRemoteFilesSyncForChat(lines);
+    }
+
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
     // Always prefer the live open editor (including outside-workspace) so chat/edit
     // attach the buffer the user is looking at — even after explorer "Use repo".
@@ -5354,10 +5592,6 @@ export class CoopChatSession {
     }
 
     const ctx = this.currentContext;
-    const lines =
-      fullFile || !ctx.selectedLines
-        ? undefined
-        : { start: ctx.selectedLines[0], end: ctx.selectedLines[1] };
     const editorCtx = fullFile ? { ...ctx, selectedLines: undefined } : ctx;
     const wantedPath = ctx.file?.trim()
       ? looksLikeAbsoluteDiskPath(ctx.file)
@@ -5371,10 +5605,11 @@ export class CoopChatSession {
       fileSource: RepoContext["fileSource"]
     ): LocalFileContextPayload => {
       const sliced = sliceFileContent(visible.document.getText(), lines);
+      const proposedSource = fileSource === "external" ? "external" : fileSource ?? "workspace";
       this.currentContext = {
         ...this.currentContext,
         file: relativePath,
-        fileSource: fileSource === "external" ? "external" : fileSource ?? "workspace",
+        fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), proposedSource),
         scope: "file",
         contextWarning: undefined
       };
@@ -5482,7 +5717,7 @@ export class CoopChatSession {
             contextWarning: undefined
           };
           return {
-            source: "local-workspace",
+            source: "remote-codehost",
             activeFile: ref.relativePath,
             files: [
               {
@@ -5503,7 +5738,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), "workspace"),
           contextWarning: undefined
         };
         return fromTabUri;
@@ -5518,7 +5753,7 @@ export class CoopChatSession {
         this.currentContext = {
           ...this.currentContext,
           file: ref.relativePath,
-          fileSource: "workspace",
+          fileSource: preserveRemoteChipSource(this.chipSourceBeforeLocalAttach(), "workspace"),
           contextWarning: undefined
         };
         return {
@@ -5564,6 +5799,84 @@ export class CoopChatSession {
     return undefined;
   }
 
+  /** Attach content from an open remote URI tab only (no local clone / disk). */
+  private loadRemoteFilesSyncForChat(
+    lines?: { start: number; end: number }
+  ): LocalFileContextPayload | undefined {
+    const wanted = this.currentContext.file?.trim()
+      ? normalizeRelativePath(this.currentContext.file)
+      : undefined;
+    const remoteEditor = pickRemoteEditorForContext(wanted);
+    if (remoteEditor) {
+      const resolved = resolveEditorFile(remoteEditor);
+      const relativePath = resolved.file?.trim()
+        ? normalizeRelativePath(resolved.file)
+        : wanted ?? "remote-file";
+      const sliced = sliceFileContent(remoteEditor.document.getText(), lines);
+      if (sliced.content.trim()) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: relativePath,
+          fileSource: "remote",
+          scope: "file",
+          contextWarning: undefined
+        };
+        return {
+          source: "remote-codehost",
+          activeFile: relativePath,
+          files: [
+            {
+              path: relativePath,
+              content: sliced.content,
+              encoding: "utf8",
+              ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+            }
+          ],
+          fallbackLevel: "partial"
+        };
+      }
+    }
+
+    for (const ref of collectOpenEditorFileRefs()) {
+      if (!isRemoteTabAbsolutePath(ref.absolutePath)) {
+        continue;
+      }
+      if (wanted && !pathsReferToSameFile(ref.relativePath, wanted)) {
+        continue;
+      }
+      const visibleEditor = vscode.window.visibleTextEditors.find(
+        (editor) => editor.document.uri.toString() === ref.absolutePath
+      );
+      if (!visibleEditor?.document.getText().trim()) {
+        continue;
+      }
+      const relativePath = normalizeRelativePath(ref.relativePath);
+      const sliced = sliceFileContent(visibleEditor.document.getText(), lines);
+      this.currentContext = {
+        ...this.currentContext,
+        file: relativePath,
+        fileSource: "remote",
+        scope: "file",
+        contextWarning: undefined
+      };
+      return {
+        source: "remote-codehost",
+        activeFile: relativePath,
+        files: [
+          {
+            path: relativePath,
+            content: sliced.content,
+            encoding: "utf8",
+            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+          }
+        ],
+        fallbackLevel: "partial"
+      };
+    }
+
+    return undefined;
+  }
+
   private pendingChatLocalFilesMatchesContext(): boolean {
     if (!this.pendingChatLocalFiles?.files.length) {
       return false;
@@ -5602,6 +5915,35 @@ export class CoopChatSession {
       return undefined;
     }
 
+    // Remote provenance: remote URI tabs or codehost API only — never local clone/disk.
+    if (this.isWorkingOnRemoteProvenance()) {
+      const lines = this.pendingCodeEditIntent
+        ? undefined
+        : this.currentContext.selectedLines
+          ? { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] }
+          : undefined;
+      const fromRemoteTabs = await readOpenTabFilesForChat({
+        file: this.currentContext.file,
+        selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
+        remoteOnly: true
+      });
+      if (fromRemoteTabs?.files.length) {
+        this.currentContext = {
+          ...this.currentContext,
+          file: fromRemoteTabs.activeFile,
+          fileSource: "remote",
+          scope: "file",
+          contextWarning: undefined
+        };
+        return { ...fromRemoteTabs, source: "remote-codehost" };
+      }
+      const syncRemote = this.loadRemoteFilesSyncForChat(lines);
+      if (syncRemote?.files.length) {
+        return syncRemote;
+      }
+      return this.fetchRemoteFileForChatAttach(lines);
+    }
+
     const fromOpenTabs = await readOpenTabFilesForChat({
       file: this.currentContext.file,
       selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines
@@ -5634,7 +5976,10 @@ export class CoopChatSession {
         repoContextFromEditor(editor, chatPrefs, this.currentContext)
       );
     } else if (this.currentContext.file && resolveLocalAbsolutePath(this.currentContext.file)) {
-      this.currentContext.fileSource = "workspace";
+      this.currentContext.fileSource = preserveRemoteChipSource(
+        this.chipSourceBeforeLocalAttach(),
+        "workspace"
+      );
     }
 
     const ctx = this.currentContext;
@@ -5724,14 +6069,60 @@ export class CoopChatSession {
     });
   }
 
+  /** Fetch active remote file content from the code host — never local disk. */
+  private async fetchRemoteFileForChatAttach(
+    lines?: { start: number; end: number }
+  ): Promise<LocalFileContextPayload | undefined> {
+    const filePath = this.currentContext.file?.trim();
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!filePath || !owner || !repo || isOsAbsoluteDiskPath(filePath)) {
+      return undefined;
+    }
+    try {
+      const remote = await this.options.codeHostRouter.getFileContent(filePath, {
+        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+        owner,
+        repo,
+        branch: this.currentContext.branch
+      });
+      const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
+      if (!text.trim()) {
+        return undefined;
+      }
+      const relativePath = normalizeRelativePath(filePath);
+      const sliced = sliceFileContent(text, lines);
+      this.currentContext = {
+        ...this.currentContext,
+        file: relativePath,
+        fileSource: "remote",
+        scope: "file",
+        contextWarning: undefined
+      };
+      return {
+        source: "remote-codehost",
+        activeFile: relativePath,
+        files: [
+          {
+            path: relativePath,
+            content: sliced.content,
+            encoding: "utf8",
+            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+          }
+        ],
+        fallbackLevel: "partial"
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   private logContextDebug(message: string): void {
     if (!this.contextDebugChannel) {
       this.contextDebugChannel = vscode.window.createOutputChannel("CoopAI Context");
     }
+    // Append only — never reveal the Output panel (that steals focus on every chat turn).
     this.contextDebugChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
-    if (/No file content attached|Attach failed/i.test(message)) {
-      this.contextDebugChannel.show(true);
-    }
   }
 
   private injectLocalFilesIntoBundle(local: LocalFileContextPayload): void {
@@ -6490,24 +6881,6 @@ export class CoopChatSession {
         owner && repo ? buildRepoId(this.preferences, this.currentContext) : undefined;
       const mentionMergeOptions = preferRepoId ? { preferRepoId } : undefined;
 
-      if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-        const repoId = buildRepoId(this.preferences, this.currentContext);
-        const paths = await searchLocalWorkspaceFiles(query, MENTION_SEARCH_LIMIT);
-        const items: MentionSearchResult[] = paths.map((path) => ({ repoId, path, source: "local" as const }));
-        this.post({
-          type: "mention:results",
-          payload: {
-            pattern: query,
-            items: rankMentionSearchResults(dedupeHybridMentionResults(items), query).slice(
-              0,
-              MENTION_SEARCH_LIMIT
-            ),
-            hint: items.length === 0 ? "No files matched. Connect a code host, Deep-Index repos in admin, or open a local folder." : undefined
-          }
-        });
-        return;
-      }
-
       const searchRepoIds = await this.resolveMentionSearchRepoIds();
       const repoScope = resolveMentionRepoScope(query, searchRepoIds);
       const defaultRepoId = buildRepoId(this.preferences, this.currentContext);
@@ -6651,9 +7024,6 @@ export class CoopChatSession {
   }
 
   private async resolveMentionSearchRepoIds(): Promise<string[]> {
-    if (!canUseRemoteCodeGraph(this.preferences.plan)) {
-      return [buildRepoId(this.preferences, this.currentContext)];
-    }
     const scope = resolveSearchScope(this.preferences);
     if (scope.mode === "collection" && scope.collectionId) {
       const collections = await this.options.api.listCollections(this.preferences.apiBaseUrl);
@@ -6728,29 +7098,37 @@ export class CoopChatSession {
       let content = mention.snippet?.trim() ?? "";
       if (!content || !mention.lines) {
         const lineRange = mention.lines ? { start: mention.lines[0], end: mention.lines[1] } : undefined;
-        if (!canUseRemoteCodeGraph(this.preferences.plan)) {
+        const preferLocal =
+          mention.source === "local" || mention.repoId === WORKSPACE_LOCAL_REPO_ID;
+        if (preferLocal) {
+          // Explicit local @mention: disk only — never pretend remote is local.
           const local = readWorkspaceFileFromDisk(mention.path, lineRange);
-          content = local?.files[0]?.content ?? "";
+          content = resolveMentionFileContent({
+            prefer: "local",
+            localContent: local?.files[0]?.content,
+            existingSnippet: mention.snippet
+          });
         } else {
-          const local = readWorkspaceFileFromDisk(mention.path, lineRange);
-          const localContent = local?.files[0]?.content;
+          // Indexed / remote @mention: codehost fetch only — never a local clone of the same path.
           let remoteContent: string | undefined;
-          if (!localContent?.trim() && mention.repoId !== WORKSPACE_LOCAL_REPO_ID) {
-            try {
-              const file = await this.options.api
-                .getBackendClient()
-                .fetchRepoFile(
-                  this.preferences.apiBaseUrl,
-                  mention.repoId,
-                  mention.path,
-                  this.currentContext.branch ?? this.preferences.branch
-                );
-              remoteContent = file.content ?? "";
-            } catch {
-              remoteContent = undefined;
-            }
+          try {
+            const file = await this.options.api
+              .getBackendClient()
+              .fetchRepoFile(
+                this.preferences.apiBaseUrl,
+                mention.repoId,
+                mention.path,
+                this.currentContext.branch ?? this.preferences.branch
+              );
+            remoteContent = file.content ?? "";
+          } catch {
+            remoteContent = undefined;
           }
-          content = preferMentionFileContent(localContent, remoteContent, mention.snippet);
+          content = resolveMentionFileContent({
+            prefer: "remote",
+            remoteContent,
+            existingSnippet: mention.snippet
+          });
           if (!content.trim()) {
             continue;
           }
@@ -7089,4 +7467,8 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
     return "teams";
   }
   return normalized as IntegrationProvider;
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

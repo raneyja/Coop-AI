@@ -488,7 +488,16 @@
   }
 
   .coop-prompt-editor-modal {
-    @apply gap-3 p-4;
+    @apply gap-4 p-4;
+  }
+
+  /* Modal padding already insets the header; drop the shared list-modal padding. */
+  .coop-prompt-modal.coop-prompt-editor-modal > .coop-panel-header {
+    @apply mb-1 p-0;
+  }
+
+  .coop-prompt-editor-modal > .coop-prompt-modal-actions {
+    @apply mt-1;
   }
 
   .coop-prompt-editor-field {
