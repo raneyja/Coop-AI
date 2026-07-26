@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { resolveLocalAbsolutePath } from "../context/localFileResolver";
 import type { PatchCardState, PatchDiffLine, PatchPreviewFile, PatchPreviewHunk } from "../chat/types";
+import { findOpenDocumentForPatchPath } from "./patchApplier";
 import { findSearchMatch } from "./patchContent";
 import { countHunks, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
@@ -37,9 +38,17 @@ function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
-function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<string, string>>): string {
+function readWorkspaceFile(
+  relativePath: string,
+  overrides?: Readonly<Record<string, string>>,
+  targetUri?: string
+): string {
   if (overrides && relativePath in overrides) {
     return overrides[relativePath] ?? "";
+  }
+  const openDocument = findOpenDocumentForPatchPath(relativePath, targetUri);
+  if (openDocument) {
+    return openDocument.getText();
   }
   const absolutePath = resolveLocalAbsolutePath(relativePath);
   if (!absolutePath) {
@@ -122,13 +131,18 @@ export function buildPatchCardState(
     variantIndex?: number;
     variantCount?: number;
     summary?: string;
+    targetUri?: string;
   }
 ): PatchCardState {
   const files: PatchPreviewFile[] = [];
   let hunkCounter = 0;
 
   for (const filePatch of patches.files) {
-    const content = readWorkspaceFile(filePatch.relativePath, options.fileContents);
+    const content = readWorkspaceFile(
+      filePatch.relativePath,
+      options.fileContents,
+      options.targetUri
+    );
     const hunks: PatchPreviewHunk[] = [];
 
     for (const hunk of filePatch.hunks) {

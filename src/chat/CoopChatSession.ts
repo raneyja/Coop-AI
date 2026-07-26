@@ -2,10 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
-import {
-  detectEditOptionRequest,
-  formatMultiOptionEditReminder
-} from "../edit/editOptionsIntent";
+import { buildEditOptionsReminderForTurn, resolveEffectiveComposerMode } from "../edit/editModeSticky";
+import { parsePatchVariants } from "../edit/patchParser";
 import {
   applyPendingPatch,
   rejectPendingPatchWithState,
@@ -2031,6 +2029,29 @@ export class CoopChatSession {
     await this.runIntentFetch(event, { quiet: true });
   }
 
+  /**
+   * Exact editor URI for an /edit turn. Prefer the live editor for the chipped
+   * file (remote vs local), never a same-path clone of the other provenance.
+   */
+  private captureEditTargetUri(context: RepoContext): string | undefined {
+    const file = context.file?.trim();
+    if (!file) {
+      return undefined;
+    }
+    const editor =
+      context.fileSource === "remote"
+        ? pickRemoteEditorForContext(file)
+        : pickLocalEditorForContext(file) ?? pickEditorForContext(file);
+    if (editor) {
+      return editor.document.uri.toString();
+    }
+    return findOpenDocumentForPatchPath(
+      file,
+      undefined,
+      context.fileSource === "remote" ? "remote" : "local"
+    )?.uri.toString();
+  }
+
   /** Open a repo file for manual review without changing chat context. */
   private async openRepoFileForReview(path: string, line?: number): Promise<void> {
     this.editorContextSuppressedUntil = Date.now() + 15_000;
@@ -2038,12 +2059,22 @@ export class CoopChatSession {
 
     const remoteOnly = this.isWorkingOnRemoteProvenance();
     if (!remoteOnly) {
+      const existing = pickLocalEditorForContext(path) ?? pickEditorForContext(path);
+      if (existing) {
+        const editor = await vscode.window.showTextDocument(existing.document, {
+          viewColumn: existing.viewColumn ?? vscode.ViewColumn.Active,
+          preview: false,
+          preserveFocus: true
+        });
+        this.revealLineInEditor(editor, line);
+        return;
+      }
       const absolute = resolveLocalAbsolutePath(path);
       if (absolute) {
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolute));
         const editor = await vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: true,
+          viewColumn: vscode.ViewColumn.Active,
+          preview: false,
           preserveFocus: true
         });
         this.revealLineInEditor(editor, line);
@@ -3053,8 +3084,16 @@ export class CoopChatSession {
       }
     }
 
+    // Follow-ups after /edit (or while patch cards are open) must stay in edit
+    // mode — users refine in plain English and still expect Apply cards.
+    const composerMode =
+      quickAction || options?.sourceHint || options?.integrationProvider
+        ? options?.composerMode
+        : resolveEffectiveComposerMode(options?.composerMode, this.chatHistory);
+    const sendOptions = { ...options, composerMode };
+
     this.snapEditorContextBeforeSend({
-      allowLocalFileForEdit: options?.composerMode === "edit"
+      allowLocalFileForEdit: composerMode === "edit"
     });
     if (options?.mentions?.length) {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
@@ -3089,7 +3128,7 @@ export class CoopChatSession {
     this.pendingChatLocalFiles =
       quickAction === "understand-repo"
         ? undefined
-        : this.loadLocalFilesSyncForChat({ fullFile: options?.composerMode === "edit" });
+        : this.loadLocalFilesSyncForChat({ fullFile: composerMode === "edit" });
     // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.postContext();
@@ -3157,7 +3196,7 @@ export class CoopChatSession {
             context: actionContext,
             includeContextChips: !this.chatHistory.some((entry) => entry.role === "user")
           }));
-    if (shouldTrackEditRequest(options, quickAction)) {
+    if (shouldTrackEditRequest(sendOptions, quickAction)) {
       setLastEditUserMessage(historyContent);
       void this.emitUsageEvent("edit.requested");
     }
@@ -3190,10 +3229,10 @@ export class CoopChatSession {
       modelMessage,
       quickAction,
       pendingMentions: options?.mentions,
-      codeEditIntent: options?.composerMode === "edit",
+      codeEditIntent: composerMode === "edit",
       editTargetUri:
-        options?.composerMode === "edit" && actionContext.file
-          ? findOpenDocumentForPatchPath(actionContext.file)?.uri.toString()
+        composerMode === "edit"
+          ? this.captureEditTargetUri(actionContext)
           : undefined
     });
     // Align the turn clock with chat timing and context-gathering budgets.
@@ -3239,7 +3278,7 @@ export class CoopChatSession {
           );
           await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
             mentions: options?.mentions,
-            composerMode: options?.composerMode,
+            composerMode,
             taskContent: taskMessage,
             turn
           });
@@ -3264,7 +3303,7 @@ export class CoopChatSession {
       ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
       : this.intentDetector.fromManualChatSubmit(turn.context, message, { integrationProvider });
     this.pendingChatMentions = options?.mentions;
-    this.pendingCodeEditIntent = options?.composerMode === "edit";
+    this.pendingCodeEditIntent = composerMode === "edit";
     try {
       await abortablePromise(this.runIntentFetch(intentEvent, { turn }), turn.streamAbort.signal);
     } catch (error) {
@@ -3303,7 +3342,7 @@ export class CoopChatSession {
       sourceHint: options?.sourceHint,
       integrationProvider,
       mentions: options?.mentions,
-      composerMode: options?.composerMode,
+      composerMode,
       taskContent: taskMessage,
       turn
     });
@@ -3882,12 +3921,19 @@ export class CoopChatSession {
         modelMessage: content,
         quickAction,
         pendingMentions: options?.mentions,
-        codeEditIntent: options?.composerMode === "edit",
-        editTargetUri:
-          options?.composerMode === "edit" && this.currentContext.file
-            ? findOpenDocumentForPatchPath(this.currentContext.file)?.uri.toString()
-            : undefined
+        codeEditIntent: false,
+        editTargetUri: undefined
       });
+    const composerMode =
+      resolveEffectiveComposerMode(
+        options?.composerMode ?? (turn.codeEditIntent ? "edit" : undefined),
+        turn.history
+      ) ?? (turn.codeEditIntent ? "edit" : undefined);
+    if (composerMode === "edit") {
+      turn.codeEditIntent = true;
+      turn.editTargetUri =
+        turn.editTargetUri ?? this.captureEditTargetUri(turn.context);
+    }
     const turnContext = turn.context;
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
@@ -3898,7 +3944,7 @@ export class CoopChatSession {
     const chatUseCase = resolveChatUseCase(
       effectiveQuickAction,
       integrationProvider,
-      options?.composerMode
+      composerMode
     );
     const runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
       devMode: this.preferences.devMode,
@@ -4210,10 +4256,10 @@ export class CoopChatSession {
                 repo: turnContext.repo,
                 branch: turnContext.branch
               });
-      if (options?.composerMode === "edit") {
-        const optionRequest = detectEditOptionRequest(llmMessage);
-        if (optionRequest) {
-          apiMessage = `${apiMessage}\n\n${formatMultiOptionEditReminder(optionRequest.count)}`;
+      if (composerMode === "edit") {
+        const optionReminder = buildEditOptionsReminderForTurn(llmMessage, turn.history);
+        if (optionReminder) {
+          apiMessage = `${apiMessage}\n\n${optionReminder}`;
         }
       }
       const projectInstructionsBlock = this.buildProjectInstructionsBlock();
@@ -4386,12 +4432,16 @@ export class CoopChatSession {
         this.pendingEvidenceArtifactId = undefined;
       }
       this.clearIntentFeedback(turn.threadId);
-      if (options?.composerMode === "edit" && this.isViewingThread(turn.threadId)) {
-        void handlePatchComplete(finalMessage.content, {
-          messageTimestamp: finalMessage.timestamp,
-          publish: (state) => this.postPatchUpdate(state),
-          targetUri: turn.editTargetUri
-        });
+      if (this.isViewingThread(turn.threadId)) {
+        const shouldParsePatches =
+          composerMode === "edit" || parsePatchVariants(finalMessage.content).ok;
+        if (shouldParsePatches) {
+          void handlePatchComplete(finalMessage.content, {
+            messageTimestamp: finalMessage.timestamp,
+            publish: (state) => this.postPatchUpdate(state),
+            targetUri: turn.editTargetUri
+          });
+        }
       }
       if (result.usage) {
         turn.sessionCostUsd += result.usage.estimatedCostUsd;

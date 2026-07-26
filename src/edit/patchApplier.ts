@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { resolveLocalAbsolutePath } from "../context/localFileResolver";
 import { normalizeRelativePath } from "../context/localFileContext";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
-import { isRemoteTabAbsolutePath } from "../context/githubVfsUri";
+import { parseGithubVfsUri } from "../context/githubVfsUri";
 import type { ParsedPatchSet } from "./patchParser";
 import { applyHunksToContent } from "./patchContent";
 
@@ -12,9 +12,11 @@ export { applyHunkToContent, applyHunksToContent } from "./patchContent";
 export type { ApplyHunkResult } from "./patchContent";
 
 export type FileUndoSnapshot = {
-  absolutePath: string;
+  /** Exact workspace resource edited (file://, vscode-vfs://, or github://). */
+  uri: string;
   relativePath: string;
   originalContent: string;
+  appliedContent: string;
 };
 
 export type ApplyPatchesResult =
@@ -29,9 +31,10 @@ function readFileUtf8(absolutePath: string): string | undefined {
   }
 }
 
-function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
-  const lastLine = Math.max(0, document.lineCount - 1);
-  const lastCharacter = document.lineAt(lastLine).text.length;
+function fullContentRange(content: string): vscode.Range {
+  const lines = content.split(/\r?\n/);
+  const lastLine = Math.max(0, lines.length - 1);
+  const lastCharacter = lines[lastLine]?.length ?? 0;
   return new vscode.Range(0, 0, lastLine, lastCharacter);
 }
 
@@ -41,48 +44,162 @@ function pathsMatchRelative(candidate: string, target: string): boolean {
   return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
 }
 
+function isEditablePatchDocument(document: vscode.TextDocument): boolean {
+  return (
+    !document.isUntitled &&
+    (document.uri.scheme === "file" ||
+      document.uri.scheme === "vscode-vfs" ||
+      document.uri.scheme === "github")
+  );
+}
+
+function matchesSourceFilter(
+  document: vscode.TextDocument,
+  source?: "local" | "remote"
+): boolean {
+  if (source === "remote") {
+    return document.uri.scheme === "vscode-vfs" || document.uri.scheme === "github";
+  }
+  if (source === "local") {
+    return document.uri.scheme === "file";
+  }
+  return true;
+}
+
 /**
- * Prefer an already-open editor tab for this path so Apply edits that buffer
- * instead of opening a second tab with a different URI for the same file.
+ * Match by workspace-relative path only. Do NOT suffix-match across clones
+ * (Desktop/Coop AI vs ~/Coop-AI) — that opened the wrong tab.
+ */
+function documentMatchesPatchPath(document: vscode.TextDocument, target: string): boolean {
+  if (document.uri.scheme === "vscode-vfs" || document.uri.scheme === "github") {
+    const remote = parseGithubVfsUri(document.uri.toString());
+    return Boolean(remote?.file && pathsMatchRelative(remote.file, target));
+  }
+
+  if (document.uri.scheme !== "file") {
+    return false;
+  }
+
+  // Prefer an in-workspace relative path. Outside-workspace clones of the same
+  // relative path must not steal Apply from the open workspace tab.
+  if (!vscode.workspace.getWorkspaceFolder(document.uri)) {
+    return false;
+  }
+
+  const asRelative = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, "/");
+  if (asRelative.startsWith("..") || path.isAbsolute(asRelative)) {
+    return false;
+  }
+  return pathsMatchRelative(asRelative, target);
+}
+
+function collectEditableDocuments(source?: "local" | "remote"): vscode.TextDocument[] {
+  const byUri = new Map<string, vscode.TextDocument>();
+
+  for (const document of vscode.workspace.textDocuments) {
+    if (!isEditablePatchDocument(document) || !matchesSourceFilter(document, source)) {
+      continue;
+    }
+    byUri.set(document.uri.toString(), document);
+  }
+
+  // tabGroups sees every open tab, including ones not currently visible.
+  for (const group of vscode.window.tabGroups?.all ?? []) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (!(input instanceof vscode.TabInputText)) {
+        continue;
+      }
+      const uriKey = input.uri.toString();
+      if (byUri.has(uriKey)) {
+        continue;
+      }
+      const document = vscode.workspace.textDocuments.find(
+        (candidate) => candidate.uri.toString() === uriKey
+      );
+      if (
+        document &&
+        isEditablePatchDocument(document) &&
+        matchesSourceFilter(document, source)
+      ) {
+        byUri.set(uriKey, document);
+      }
+    }
+  }
+
+  return [...byUri.values()];
+}
+
+function findDocumentByExactUri(preferredUri: string): vscode.TextDocument | undefined {
+  const fromDocuments = vscode.workspace.textDocuments.find(
+    (document) => document.uri.toString() === preferredUri && isEditablePatchDocument(document)
+  );
+  if (fromDocuments) {
+    return fromDocuments;
+  }
+
+  for (const group of vscode.window.tabGroups?.all ?? []) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (!(input instanceof vscode.TabInputText)) {
+        continue;
+      }
+      if (input.uri.toString() !== preferredUri) {
+        continue;
+      }
+      return vscode.workspace.textDocuments.find(
+        (document) => document.uri.toString() === preferredUri && isEditablePatchDocument(document)
+      );
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolve the exact open resource for a patch path. Remote GitHub tabs are
+ * writable virtual documents; never replace them with a same-path local clone.
  */
 export function findOpenDocumentForPatchPath(
   relativePath: string,
-  preferredUri?: string
+  preferredUri?: string,
+  source?: "local" | "remote"
 ): vscode.TextDocument | undefined {
   const target = relativePath.trim();
   if (!target) {
     return undefined;
   }
 
-  const documents = vscode.workspace.textDocuments.filter(
-    (doc) => doc.uri.scheme === "file" && !doc.isUntitled
-  );
-  const preferredDocument = preferredUri
-    ? documents.find((doc) => doc.uri.toString() === preferredUri)
-    : undefined;
+  // Absolute URI short-circuit — the tab captured at /edit send wins, always.
+  if (preferredUri) {
+    const exact = findDocumentByExactUri(preferredUri);
+    if (exact) {
+      return exact;
+    }
+  }
 
-  // First use the exact editor captured when the /edit request was submitted.
-  // The sidebar owns focus by Apply time, so activeTextEditor is not reliable then.
+  const documents = collectEditableDocuments(source);
+  const eligibleUris = new Set(documents.map((document) => document.uri.toString()));
+
+  // With sidebar focus, activeTextEditor is often undefined — still prefer
+  // visible editors that pass the local/remote filter.
   const preferred = [
-    preferredDocument,
     vscode.window.activeTextEditor?.document,
     ...vscode.window.visibleTextEditors.map((editor) => editor.document)
-  ].filter((doc): doc is vscode.TextDocument => Boolean(doc));
+  ].filter(
+    (doc): doc is vscode.TextDocument =>
+      Boolean(doc && eligibleUris.has(doc.uri.toString()))
+  );
 
+  const seen = new Set<string>();
   for (const doc of [...preferred, ...documents]) {
-    if (doc.uri.scheme !== "file" || doc.isUntitled) {
+    const key = doc.uri.toString();
+    if (seen.has(key)) {
       continue;
     }
-    const asRelative = vscode.workspace.asRelativePath(doc.uri).replace(/\\/g, "/");
-    if (!asRelative.startsWith("..") && pathsMatchRelative(asRelative, target)) {
+    seen.add(key);
+    if (documentMatchesPatchPath(doc, target)) {
       return doc;
-    }
-    const fsPath = doc.uri.fsPath.replace(/\\/g, "/");
-    if (pathsMatchRelative(path.basename(fsPath), path.basename(target))) {
-      // Basename-only is too weak alone; require the relative suffix to match.
-      if (fsPath.toLowerCase().endsWith(`/${toRepositoryRelativePath(target).toLowerCase()}`)) {
-        return doc;
-      }
     }
   }
 
@@ -92,18 +209,38 @@ export function findOpenDocumentForPatchPath(
 type PlannedEdit = {
   uri: vscode.Uri;
   relativePath: string;
-  absolutePath: string;
   originalContent: string;
   nextContent: string;
-  existingDocument?: vscode.TextDocument;
 };
+
+function sourceFromPreferredUri(preferredUri?: string): "local" | "remote" | undefined {
+  if (!preferredUri) {
+    return undefined;
+  }
+  try {
+    const scheme = vscode.Uri.parse(preferredUri).scheme;
+    if (scheme === "vscode-vfs" || scheme === "github") {
+      return "remote";
+    }
+    if (scheme === "file") {
+      return "local";
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
 
 function planFileEdit(
   relativePath: string,
   hunks: ParsedPatchSet["files"][number]["hunks"],
   preferredUri?: string
 ): PlannedEdit | { error: string } {
-  const openDoc = findOpenDocumentForPatchPath(relativePath, preferredUri);
+  const openDoc = findOpenDocumentForPatchPath(
+    relativePath,
+    preferredUri,
+    sourceFromPreferredUri(preferredUri)
+  );
   if (openDoc) {
     const originalContent = openDoc.getText();
     const applied = applyHunksToContent(originalContent, hunks);
@@ -116,10 +253,21 @@ function planFileEdit(
     return {
       uri: openDoc.uri,
       relativePath,
-      absolutePath: openDoc.uri.fsPath,
       originalContent,
-      nextContent: applied.content,
-      existingDocument: openDoc
+      nextContent: applied.content
+    };
+  }
+
+  if (preferredUri) {
+    const preferred = vscode.Uri.parse(preferredUri);
+    if (preferred.scheme === "vscode-vfs" || preferred.scheme === "github") {
+      return {
+        error: `The original remote tab is no longer open: ${relativePath}. Reopen it and run /edit again.`
+      };
+    }
+    // Local capture existed but the tab closed — refuse silent cross-clone open.
+    return {
+      error: `The original editor tab is no longer open: ${relativePath}. Reopen it and run /edit again.`
     };
   }
 
@@ -127,10 +275,6 @@ function planFileEdit(
   if (!absolutePath) {
     return { error: `Could not resolve file: ${relativePath}` };
   }
-  if (isRemoteTabAbsolutePath(absolutePath)) {
-    return { error: `Could not apply to remote-only tab: ${relativePath}` };
-  }
-
   const originalContent = readFileUtf8(absolutePath);
   if (originalContent === undefined) {
     return { error: `Could not read file: ${relativePath}` };
@@ -147,7 +291,6 @@ function planFileEdit(
   return {
     uri: vscode.Uri.file(absolutePath),
     relativePath,
-    absolutePath,
     originalContent,
     nextContent: applied.content
   };
@@ -176,9 +319,7 @@ export async function applyPatchesToWorkspace(
 
   const edits = new vscode.WorkspaceEdit();
   for (const item of planned) {
-    // Reuse the open document when present so VS Code does not open a second tab.
-    const document = item.existingDocument ?? (await vscode.workspace.openTextDocument(item.uri));
-    edits.replace(document.uri, fullDocumentRange(document), item.nextContent);
+    edits.replace(item.uri, fullContentRange(item.originalContent), item.nextContent);
   }
 
   const success = await vscode.workspace.applyEdit(edits);
@@ -190,9 +331,10 @@ export async function applyPatchesToWorkspace(
     ok: true,
     filesChanged: planned.length,
     undo: planned.map((item) => ({
-      absolutePath: item.absolutePath,
+      uri: item.uri.toString(),
       relativePath: item.relativePath,
-      originalContent: item.originalContent
+      originalContent: item.originalContent,
+      appliedContent: item.nextContent
     }))
   };
 }
@@ -206,10 +348,8 @@ export async function undoPatchApplication(
 
   const edits = new vscode.WorkspaceEdit();
   for (const snapshot of undo) {
-    const openDoc = findOpenDocumentForPatchPath(snapshot.relativePath);
-    const uri = openDoc?.uri ?? vscode.Uri.file(snapshot.absolutePath);
-    const document = openDoc ?? (await vscode.workspace.openTextDocument(uri));
-    edits.replace(document.uri, fullDocumentRange(document), snapshot.originalContent);
+    const uri = vscode.Uri.parse(snapshot.uri);
+    edits.replace(uri, fullContentRange(snapshot.appliedContent), snapshot.originalContent);
   }
 
   const success = await vscode.workspace.applyEdit(edits);

@@ -111,7 +111,8 @@ export async function handlePatchComplete(
         variantLabel: variantCount > 1 ? variant.label : undefined,
         variantIndex: variant.index,
         variantCount,
-        summary: variant.summary
+        summary: variant.summary,
+        targetUri: options.targetUri
       });
       return {
         id: variant.id,

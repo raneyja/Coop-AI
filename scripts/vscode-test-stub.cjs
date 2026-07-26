@@ -2,9 +2,52 @@
 
 const Module = require("node:module");
 
+class Range {
+  constructor(...args) {
+    this.args = args;
+  }
+}
+
+class WorkspaceEdit {
+  constructor() {
+    this.replacements = [];
+  }
+
+  replace(uri, range, text) {
+    this.replacements.push({ uri, range, text });
+  }
+}
+
+class TabInputText {
+  constructor(uri) {
+    this.uri = uri;
+  }
+}
+
 const stub = {
   workspace: {
     workspaceFolders: [],
+    textDocuments: [],
+    asRelativePath(uri) {
+      return uri.fsPath || uri.toString();
+    },
+    getWorkspaceFolder(uri) {
+      if (!uri || uri.scheme !== "file") {
+        return undefined;
+      }
+      const folders = stub.workspace.workspaceFolders ?? [];
+      for (const folder of folders) {
+        const root = folder.uri.fsPath.replace(/\\/g, "/");
+        const candidate = (uri.fsPath || "").replace(/\\/g, "/");
+        if (candidate === root || candidate.startsWith(`${root}/`)) {
+          return folder;
+        }
+      }
+      return undefined;
+    },
+    applyEdit() {
+      return Promise.resolve(true);
+    },
     getConfiguration(section) {
       return {
         get(_key, defaultValue) {
@@ -28,6 +71,8 @@ const stub = {
     }
   },
   window: {
+    visibleTextEditors: [],
+    tabGroups: { all: [] },
     showOpenDialog() {
       return Promise.resolve(undefined);
     },
@@ -47,10 +92,17 @@ const stub = {
   },
   Uri: {
     file(filePath) {
-      return { fsPath: filePath, toString: () => filePath };
+      return { scheme: "file", fsPath: filePath, toString: () => `file://${filePath}` };
+    },
+    parse(value) {
+      const scheme = value.split(":", 1)[0] || "";
+      return { scheme, fsPath: "", toString: () => value };
     }
   },
-  ViewColumn: { One: 1, Beside: 2 },
+  Range,
+  WorkspaceEdit,
+  TabInputText,
+  ViewColumn: { One: 1, Beside: 2, Active: -1 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 }
 };
 

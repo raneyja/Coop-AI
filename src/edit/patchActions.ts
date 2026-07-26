@@ -135,6 +135,7 @@ export async function applyPendingPatch(
   const preview = buildPatchCardState(variant.patches, {
     status: "pending",
     messageTimestamp: timestamp,
+    targetUri: resolved.record.targetUri,
     ...variantMeta(variant)
   });
 

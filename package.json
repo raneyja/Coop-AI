@@ -814,7 +814,7 @@
     "watch:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --watch",
     "watch:webview:js": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --watch",
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json",
-    "test:patch": "npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts",
+    "test:patch": "npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/edit/patchTarget.test.ts && npx tsx src/edit/editOptionsIntent.test.ts && npx tsx src/edit/editModeSticky.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts",
     "test:agent-routing": "npx tsx src/chat/agentRouting.test.ts && npx tsx src/chat/editSendRouting.test.ts",
     "test:auth": "npx tsx src/server/auth/passwordCrypto.test.ts && npx tsx src/server/freeSignupApi.test.ts",
     "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",

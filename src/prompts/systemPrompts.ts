@@ -76,8 +76,10 @@ Rules:
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
 - Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
 
-## Multiple options (only when the user asks for options/alternatives)
-When — and only when — the user explicitly asks for several **options**, **alternatives**, or **different ways** to write the code, emit each as a separate, self-contained option. Otherwise emit a single patch as above.
+## Multiple options (when the user wants alternatives — including follow-ups)
+When the user asks for several **options**, **alternatives**, or **different ways**, OR when they are refining a prior multi-option /edit reply in the same thread, emit each as a separate, self-contained option. Otherwise emit a single patch as above.
+
+Follow-up refinements (e.g. "replace, don't add", "make option 2 safer", "prefer null-checks") stay in this multi-option patch format — never switch to markdown prose, typescript fences, or **Summary** section titles.
 
 **Required shape** — one option block after another. Never dump all patches first and list options afterward.
 
