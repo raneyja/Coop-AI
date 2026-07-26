@@ -40,6 +40,8 @@ export function showPatchReadyNotification(patches: ParsedPatchSet): void {
 export type HandlePatchCompleteOptions = {
   messageTimestamp?: number;
   publish?: PatchSnapshotPublisher;
+  /** Exact local editor selected when the /edit request was submitted. */
+  targetUri?: string;
 };
 
 export async function handlePatchComplete(
@@ -66,15 +68,19 @@ export async function handlePatchComplete(
     if (options.messageTimestamp !== undefined) {
       // Record a zero-file failed card so the webview can show the error instead of
       // silently swallowing a bad multi-option mash-up.
-      upsertPatchVariants(options.messageTimestamp, [
-        {
-          id: "v0",
-          label: "",
-          index: 0,
-          patches: { files: [] },
-          card: failedWithSuppress
-        }
-      ]);
+      upsertPatchVariants(
+        options.messageTimestamp,
+        [
+          {
+            id: "v0",
+            label: "",
+            index: 0,
+            patches: { files: [] },
+            card: failedWithSuppress
+          }
+        ],
+        options.targetUri
+      );
     }
     if (options.publish) {
       options.publish({
@@ -120,7 +126,7 @@ export async function handlePatchComplete(
   const firstCard = records[0]!.card;
 
   if (options.messageTimestamp !== undefined) {
-    upsertPatchVariants(options.messageTimestamp, records);
+    upsertPatchVariants(options.messageTimestamp, records, options.targetUri);
   }
 
   if (options.publish) {

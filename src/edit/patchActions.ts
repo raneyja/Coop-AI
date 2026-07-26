@@ -138,7 +138,7 @@ export async function applyPendingPatch(
     ...variantMeta(variant)
   });
 
-  const result = await applyPatchesToWorkspace(variant.patches);
+  const result = await applyPatchesToWorkspace(variant.patches, resolved.record.targetUri);
   if (!result.ok) {
     setLastPatchApplyError(result.error);
     emitPatchEvent("edit.patch_failed", { phase: "apply", error: result.error, file: result.file });

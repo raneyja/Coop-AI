@@ -60,6 +60,22 @@ function testAppendIgnoredAfterAbort(): void {
   assert.equal(turn.partialAssistant, "");
 }
 
+function testEditTargetUriIsCapturedOnTurn(): void {
+  const manager = new ThreadRunManager();
+  const turn = manager.begin({
+    threadId: "thread-edit",
+    context: { file: "src/example.ts" },
+    history: [],
+    artifacts: [],
+    sessionCostUsd: 0,
+    modelMessage: "rename this",
+    codeEditIntent: true,
+    editTargetUri: "file:///workspace/src/example.ts"
+  });
+
+  assert.equal(turn.editTargetUri, "file:///workspace/src/example.ts");
+}
+
 async function testTurnIsNotAbortedByResponseTarget(): Promise<void> {
   const manager = new ThreadRunManager();
   const turn = beginTurn(manager, "thread-deadline");
@@ -75,6 +91,7 @@ testResendAbortsPriorTurnOnSameThread();
 testPartialBufferSurvivesForResume();
 testCompleteRemovesRun();
 testAppendIgnoredAfterAbort();
+testEditTargetUriIsCapturedOnTurn();
 void testTurnIsNotAbortedByResponseTarget()
   .then(() => {
     console.log("chatTurn.test.ts: ok");

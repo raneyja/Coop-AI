@@ -35,6 +35,8 @@ export type ChatTurn = {
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent: boolean;
+  /** Exact local editor URI selected when an /edit turn was submitted. */
+  editTargetUri?: string;
 };
 
 export type BeginChatTurnInput = {
@@ -47,6 +49,7 @@ export type BeginChatTurnInput = {
   quickAction?: string;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent?: boolean;
+  editTargetUri?: string;
 };
 
 function createTurnId(): string {
@@ -84,7 +87,8 @@ export class ThreadRunManager {
       streamGeneration,
       partialAssistant: "",
       pendingMentions: input.pendingMentions,
-      codeEditIntent: Boolean(input.codeEditIntent)
+      codeEditIntent: Boolean(input.codeEditIntent),
+      editTargetUri: input.editTargetUri
     };
     this.runs.set(input.threadId, turn);
     return turn;

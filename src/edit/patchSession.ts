@@ -19,6 +19,8 @@ export type PatchVariantRecord = {
 export type PatchRecord = {
   messageTimestamp: number;
   variants: PatchVariantRecord[];
+  /** Exact local editor selected when the /edit request was submitted. */
+  targetUri?: string;
 };
 
 /** Fully-resolved target for an apply/reject/undo action. */
@@ -84,7 +86,8 @@ export function getSuppressedMessageTimestamps(): number[] {
  */
 export function upsertPatchVariants(
   timestamp: number,
-  variants: ReadonlyArray<Omit<PatchVariantRecord, "undo">>
+  variants: ReadonlyArray<Omit<PatchVariantRecord, "undo">>,
+  targetUri?: string
 ): void {
   const existing = patchRecordsByMessage.get(timestamp);
   const priorUndoById = new Map<string, FileUndoSnapshot[] | undefined>(
@@ -92,6 +95,7 @@ export function upsertPatchVariants(
   );
   patchRecordsByMessage.set(timestamp, {
     messageTimestamp: timestamp,
+    targetUri: targetUri ?? existing?.targetUri,
     variants: variants.map((variant) => ({
       ...variant,
       card: { ...variant.card, messageTimestamp: timestamp, suppressMarkdown: true },

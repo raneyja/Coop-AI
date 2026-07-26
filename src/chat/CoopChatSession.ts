@@ -12,6 +12,7 @@ import {
   resolvePatchCardsSnapshot,
   undoLastPatchWithState
 } from "../edit/patchActions";
+import { findOpenDocumentForPatchPath } from "../edit/patchApplier";
 import { setLastEditUserMessage } from "../edit/patchSession";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
@@ -3189,7 +3190,11 @@ export class CoopChatSession {
       modelMessage,
       quickAction,
       pendingMentions: options?.mentions,
-      codeEditIntent: options?.composerMode === "edit"
+      codeEditIntent: options?.composerMode === "edit",
+      editTargetUri:
+        options?.composerMode === "edit" && actionContext.file
+          ? findOpenDocumentForPatchPath(actionContext.file)?.uri.toString()
+          : undefined
     });
     // Align the turn clock with chat timing and context-gathering budgets.
     turn.startedAt = this.chatTurnStartedAt;
@@ -3877,7 +3882,11 @@ export class CoopChatSession {
         modelMessage: content,
         quickAction,
         pendingMentions: options?.mentions,
-        codeEditIntent: options?.composerMode === "edit"
+        codeEditIntent: options?.composerMode === "edit",
+        editTargetUri:
+          options?.composerMode === "edit" && this.currentContext.file
+            ? findOpenDocumentForPatchPath(this.currentContext.file)?.uri.toString()
+            : undefined
       });
     const turnContext = turn.context;
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
@@ -4380,7 +4389,8 @@ export class CoopChatSession {
       if (options?.composerMode === "edit" && this.isViewingThread(turn.threadId)) {
         void handlePatchComplete(finalMessage.content, {
           messageTimestamp: finalMessage.timestamp,
-          publish: (state) => this.postPatchUpdate(state)
+          publish: (state) => this.postPatchUpdate(state),
+          targetUri: turn.editTargetUri
         });
       }
       if (result.usage) {

@@ -45,7 +45,10 @@ function pathsMatchRelative(candidate: string, target: string): boolean {
  * Prefer an already-open editor tab for this path so Apply edits that buffer
  * instead of opening a second tab with a different URI for the same file.
  */
-export function findOpenDocumentForPatchPath(relativePath: string): vscode.TextDocument | undefined {
+export function findOpenDocumentForPatchPath(
+  relativePath: string,
+  preferredUri?: string
+): vscode.TextDocument | undefined {
   const target = relativePath.trim();
   if (!target) {
     return undefined;
@@ -54,9 +57,14 @@ export function findOpenDocumentForPatchPath(relativePath: string): vscode.TextD
   const documents = vscode.workspace.textDocuments.filter(
     (doc) => doc.uri.scheme === "file" && !doc.isUntitled
   );
+  const preferredDocument = preferredUri
+    ? documents.find((doc) => doc.uri.toString() === preferredUri)
+    : undefined;
 
-  // Prefer the active / visible editor when it matches — that's the file the user is looking at.
+  // First use the exact editor captured when the /edit request was submitted.
+  // The sidebar owns focus by Apply time, so activeTextEditor is not reliable then.
   const preferred = [
+    preferredDocument,
     vscode.window.activeTextEditor?.document,
     ...vscode.window.visibleTextEditors.map((editor) => editor.document)
   ].filter((doc): doc is vscode.TextDocument => Boolean(doc));
@@ -90,8 +98,12 @@ type PlannedEdit = {
   existingDocument?: vscode.TextDocument;
 };
 
-function planFileEdit(relativePath: string, hunks: ParsedPatchSet["files"][number]["hunks"]): PlannedEdit | { error: string } {
-  const openDoc = findOpenDocumentForPatchPath(relativePath);
+function planFileEdit(
+  relativePath: string,
+  hunks: ParsedPatchSet["files"][number]["hunks"],
+  preferredUri?: string
+): PlannedEdit | { error: string } {
+  const openDoc = findOpenDocumentForPatchPath(relativePath, preferredUri);
   if (openDoc) {
     const originalContent = openDoc.getText();
     const applied = applyHunksToContent(originalContent, hunks);
@@ -141,32 +153,14 @@ function planFileEdit(relativePath: string, hunks: ParsedPatchSet["files"][numbe
   };
 }
 
-async function revealExistingDocument(document: vscode.TextDocument): Promise<void> {
-  const visible = vscode.window.visibleTextEditors.find(
-    (editor) => editor.document.uri.toString() === document.uri.toString()
-  );
-  if (visible) {
-    await vscode.window.showTextDocument(document, {
-      viewColumn: visible.viewColumn,
-      preview: false,
-      preserveFocus: false
-    });
-    return;
-  }
-  await vscode.window.showTextDocument(document, {
-    viewColumn: vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.Active,
-    preview: false,
-    preserveFocus: false
-  });
-}
-
 export async function applyPatchesToWorkspace(
-  patches: ParsedPatchSet
+  patches: ParsedPatchSet,
+  preferredUri?: string
 ): Promise<ApplyPatchesResult> {
   const planned: PlannedEdit[] = [];
 
   for (const filePatch of patches.files) {
-    const plannedEdit = planFileEdit(filePatch.relativePath, filePatch.hunks);
+    const plannedEdit = planFileEdit(filePatch.relativePath, filePatch.hunks, preferredUri);
     if ("error" in plannedEdit) {
       if (plannedEdit.error === "NO_CHANGE") {
         continue;
@@ -190,16 +184,6 @@ export async function applyPatchesToWorkspace(
   const success = await vscode.workspace.applyEdit(edits);
   if (!success) {
     return { ok: false, error: "VS Code rejected the edit" };
-  }
-
-  // Focus the buffer we actually edited (same tab), never a freshly resolved duplicate URI.
-  for (const item of planned) {
-    const document =
-      item.existingDocument ??
-      vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === item.uri.toString());
-    if (document) {
-      await revealExistingDocument(document);
-    }
   }
 
   return {
