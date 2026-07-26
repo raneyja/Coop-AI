@@ -3,6 +3,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
 import {
+  detectEditOptionRequest,
+  formatMultiOptionEditReminder
+} from "../edit/editOptionsIntent";
+import {
   applyPendingPatch,
   rejectPendingPatchWithState,
   resolvePatchCardsSnapshot,
@@ -68,11 +72,10 @@ import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExe
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import {
-  RESPONSE_DEADLINE_USER_MESSAGE,
+  MAX_USER_FACING_RESPONSE_MS,
   abortablePromise,
-  isResponseDeadlineAbort,
   remainingContextGatherBudgetMs,
-  scheduleResponseDeadline
+  waitForOptionalContext
 } from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
@@ -834,20 +837,6 @@ export class CoopChatSession {
     }
     this.threadRuns.complete(turn);
     this.pushThreadsList();
-  }
-
-  /** Platform 15s ceiling: finish with partial text or an explicit timeout message. */
-  private finishTurnForResponseDeadline(turn: ChatTurn, streamedText = ""): void {
-    this.clearIntentFeedback(turn.threadId);
-    const partial = (streamedText || turn.partialAssistant).trim();
-    const content = partial
-      ? `${partial}\n\n—\n${RESPONSE_DEADLINE_USER_MESSAGE}`
-      : RESPONSE_DEADLINE_USER_MESSAGE;
-    this.finishTurnAssistantMessage(turn, {
-      role: "assistant",
-      content,
-      timestamp: Date.now()
-    });
   }
 
   private pushThreadsList(): void {
@@ -1786,20 +1775,23 @@ export class CoopChatSession {
       case "patch:apply":
         await applyPendingPatch(
           (payload) => this.postPatchUpdate(payload),
-          message.payload?.messageTimestamp
+          message.payload?.messageTimestamp,
+          message.payload?.variantId
         );
         return;
       case "patch:reject":
         rejectPendingPatchWithState(
           (payload) => this.postPatchUpdate(payload),
           "explicit",
-          message.payload?.messageTimestamp
+          message.payload?.messageTimestamp,
+          message.payload?.variantId
         );
         return;
       case "patch:undo":
         await undoLastPatchWithState(
           (payload) => this.postPatchUpdate(payload),
-          message.payload?.messageTimestamp
+          message.payload?.messageTimestamp,
+          message.payload?.variantId
         );
         return;
       case "patch:open-file":
@@ -2161,16 +2153,39 @@ export class CoopChatSession {
 
     const requests = buildContextRequests(event, requestTypes);
     try {
-      const baseResults = await Promise.all(
-        requests.map((request) =>
-          this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
-        )
-      );
-      const results = await enrichIntentFetchResultsOnce({
-        requests,
-        results: baseResults,
-        enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
-      });
+      const fetchResults = async (): Promise<ContextFetchResult[]> => {
+        const baseResults = await Promise.all(
+          requests.map((request) =>
+            this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
+          )
+        );
+        return enrichIntentFetchResultsOnce({
+          requests,
+          results: baseResults,
+          enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
+        });
+      };
+      const budgetMs = turn ? remainingContextGatherBudgetMs(turn.startedAt) : undefined;
+      const results =
+        budgetMs === undefined
+          ? await fetchResults()
+          : await waitForOptionalContext(fetchResults(), budgetMs);
+      if (!results) {
+        this.emitUsageEvent("chat.context_budget_exhausted", {
+          elapsedMs: turn ? Date.now() - turn.startedAt : undefined,
+          quickAction: turn?.quickAction
+        });
+        if (!options.quiet && feedbackThreadId) {
+          this.postIntentFeedbackForThread(feedbackThreadId, {
+            status: "complete",
+            intent: event.intent,
+            actionId: event.context.buttonClicked,
+            title: "Answering with available context",
+            message: "Some optional context did not load within the response target."
+          });
+        }
+        return turn?.contextBundle ?? this.lastContextBundle;
+      }
       this.processConflicts(event, results);
 
       if (!options.quiet) {
@@ -3176,10 +3191,8 @@ export class CoopChatSession {
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
-    // Align turn clock with chat timing helper, then reschedule the 15s ceiling.
-    turn.clearResponseDeadline();
+    // Align the turn clock with chat timing and context-gathering budgets.
     turn.startedAt = this.chatTurnStartedAt;
-    turn.clearResponseDeadline = scheduleResponseDeadline(turn.streamAbort, turn.startedAt);
     this.pushThreadsList();
 
     const prefetchIntentEvent = intentQuickAction
@@ -3199,10 +3212,6 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         if (ranAsync) {
           const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
           await abortablePromise(
@@ -3212,16 +3221,15 @@ export class CoopChatSession {
           if (!this.threadRuns.isStreamActive(turn)) {
             return;
           }
-          if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-            this.finishTurnForResponseDeadline(turn);
-            return;
-          }
           this.enrichKnowledgeGapsBundle(quickAction, turn);
           if (quickAction === "blast-radius") {
             this.applyBlastRadiusJobResultToBundle(quickAction, turn);
           }
           await abortablePromise(
-            this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
+            waitForOptionalContext(
+              this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
+              remainingContextGatherBudgetMs(turn.startedAt)
+            ),
             turn.streamAbort.signal
           );
           await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -3236,19 +3244,11 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         throw error;
       }
     }
 
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
 
@@ -3266,17 +3266,9 @@ export class CoopChatSession {
       if (!this.threadRuns.isStreamActive(turn)) {
         return;
       }
-      if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-        this.finishTurnForResponseDeadline(turn);
-        return;
-      }
       throw error;
     }
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
     this.enrichKnowledgeGapsBundle(quickAction, turn);
@@ -3286,25 +3278,20 @@ export class CoopChatSession {
     } else {
       try {
         await abortablePromise(
-          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn),
+          waitForOptionalContext(
+            this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn),
+            remainingContextGatherBudgetMs(turn.startedAt)
+          ),
           turn.streamAbort.signal
         );
       } catch (error) {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         throw error;
       }
     }
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -3979,11 +3966,13 @@ export class CoopChatSession {
         (!effectiveQuickAction && !integrationProvider && allMentionsOutOfScope);
       const localPayload = skipLocalAttach
         ? undefined
-        : await abortablePromise(this.resolveChatLocalFiles(), signal);
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
+        : await abortablePromise(
+            waitForOptionalContext(
+              this.resolveChatLocalFiles(),
+              remainingContextGatherBudgetMs(turn.startedAt)
+            ),
+            signal
+          );
       if (localPayload?.files.length) {
         this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
@@ -4171,12 +4160,14 @@ export class CoopChatSession {
 
       const mentionFiles =
         mentionsToResolve.length > 0
-          ? await abortablePromise(this.resolveMentionFiles(mentionsToResolve), signal)
+          ? ((await abortablePromise(
+              waitForOptionalContext(
+                this.resolveMentionFiles(mentionsToResolve),
+                remainingContextGatherBudgetMs(turn.startedAt)
+              ),
+              signal
+            )) ?? [])
           : [];
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
       let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -4210,6 +4201,12 @@ export class CoopChatSession {
                 repo: turnContext.repo,
                 branch: turnContext.branch
               });
+      if (options?.composerMode === "edit") {
+        const optionRequest = detectEditOptionRequest(llmMessage);
+        if (optionRequest) {
+          apiMessage = `${apiMessage}\n\n${formatMultiOptionEditReminder(optionRequest.count)}`;
+        }
+      }
       const projectInstructionsBlock = this.buildProjectInstructionsBlock();
       if (projectInstructionsBlock) {
         apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
@@ -4287,6 +4284,14 @@ export class CoopChatSession {
         onChunk: (chunk) => {
           if (!clearedIntentForOutput) {
             clearedIntentForOutput = true;
+            const latencyMs = Date.now() - turn.startedAt;
+            this.emitUsageEvent("chat.first_output", {
+              latencyMs,
+              targetMs: MAX_USER_FACING_RESPONSE_MS,
+              missedTarget: latencyMs > MAX_USER_FACING_RESPONSE_MS,
+              quickAction: effectiveQuickAction,
+              integrationProvider
+            });
             this.clearIntentFeedback(turn.threadId);
           }
           full += chunk;
@@ -4298,11 +4303,14 @@ export class CoopChatSession {
         }
       });
 
-      const quotaBlocked = await abortablePromise(this.blockIfFreeQuotaExhausted(), signal);
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
+      const quotaBlocked =
+        (await abortablePromise(
+          waitForOptionalContext(
+            this.blockIfFreeQuotaExhausted(),
+            remainingContextGatherBudgetMs(turn.startedAt)
+          ),
+          signal
+        )) ?? false;
       if (quotaBlocked) {
         return;
       }
@@ -4337,17 +4345,9 @@ export class CoopChatSession {
       if (isCancelled()) {
         return;
       }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
 
       await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
       if (isCancelled()) {
-        return;
-      }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
 
@@ -4410,10 +4410,6 @@ export class CoopChatSession {
       await this.notifyQuotaExceededIfNeeded();
     } catch (error) {
       if (isCancelled()) {
-        return;
-      }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
       this.threadRuns.markError(turn);

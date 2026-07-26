@@ -70,13 +70,46 @@ export function shouldHidePatchBlock(block: ChatProseBlock): boolean {
       return true;
     }
   }
-  if (block.type === "paragraph") {
-    const text = block.content.map(inlineNodeToPlainText).join("").trim();
+  if (block.type === "paragraph" || block.type === "section-heading") {
+    const text =
+      block.type === "section-heading"
+        ? block.text.trim()
+        : block.content.map(inlineNodeToPlainText).join("").trim();
     if (/^File:\s/.test(text)) {
+      return true;
+    }
+    // Multi-option cards own these — don't leave duplicate Option / Summary prose under the cards.
+    if (/^(?:Option|Alternative)\s*(?:[0-9]+|[A-Za-z])?\s*[:.\-–—)]/i.test(text)) {
+      return true;
+    }
+    if (/^(?:Summary|TL;?DR|Why|Rationale)(?:\s*\([^)]*\))?\s*[:.\-–—)]/i.test(text)) {
+      return true;
+    }
+    // Model often separates options with ---; hide those once we're in patch mode.
+    if (/^-{3,}$/.test(text) || /^\*{3,}$/.test(text)) {
       return true;
     }
   }
   return false;
+}
+
+/** True when assistant content is an /edit-style SEARCH/REPLACE reply (stream or final). */
+export function contentLooksLikeEditPatch(content: string): boolean {
+  const text = content.trim();
+  if (!text) {
+    return false;
+  }
+  if (text.includes("<<<<<<< SEARCH") || text.includes(">>>>>>> REPLACE")) {
+    return true;
+  }
+  if (/```\s*patch\b/i.test(text)) {
+    return true;
+  }
+  // Multiple labeled options typically mean an edit alternatives reply even mid-stream.
+  const optionHeaders = text.match(
+    /^(?:Option|Alternative)\s*(?:[0-9]+|[A-Za-z])?\s*[:.\-–—)]/gim
+  );
+  return (optionHeaders?.length ?? 0) >= 2;
 }
 
 function inlineNodeToPlainText(node: ChatInlineNode): string {

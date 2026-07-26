@@ -1,10 +1,7 @@
-/** Hard ceiling for any user-facing chat / quick-action answer. */
+/** Target for first meaningful user-facing output from chat and quick actions. */
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;
 
-/** AbortController reason when the turn hits the platform ceiling. */
-export const RESPONSE_DEADLINE_REASON = "coop-response-deadline";
-
-/** Reserve this much of the budget for LLM synthesis after context/job work. */
+/** Reserve this much of the target for LLM startup after context/job work. */
 export const RESERVED_SYNTHESIS_MS = 6_000;
 
 export function remainingResponseBudgetMs(
@@ -25,21 +22,40 @@ export function remainingContextGatherBudgetMs(
   return Math.max(0, remainingResponseBudgetMs(startedAt, now, maxMs) - reserveSynthesisMs);
 }
 
-export function isResponseDeadlineAbort(signal: AbortSignal | undefined): boolean {
-  if (!signal?.aborted) {
-    return false;
+/**
+ * Stop waiting for optional context when its budget expires without cancelling
+ * the user-facing turn. The underlying work may finish and populate caches.
+ */
+export async function waitForOptionalContext<T>(
+  work: Promise<T>,
+  budgetMs: number
+): Promise<T | undefined> {
+  if (budgetMs <= 0) {
+    void work.catch(() => undefined);
+    return undefined;
   }
-  const reason = (signal as AbortSignal & { reason?: unknown }).reason;
-  return reason === RESPONSE_DEADLINE_REASON;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), budgetMs);
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export function abortablePromise<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
-    return Promise.reject(createDeadlineAbortError());
+    return Promise.reject(createAbortError());
   }
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => {
-      reject(createDeadlineAbortError());
+      reject(createAbortError());
     };
     signal.addEventListener("abort", onAbort, { once: true });
     promise.then(
@@ -55,35 +71,8 @@ export function abortablePromise<T>(promise: Promise<T>, signal: AbortSignal): P
   });
 }
 
-function createDeadlineAbortError(): Error {
-  const error = new Error(RESPONSE_DEADLINE_USER_MESSAGE);
+function createAbortError(): Error {
+  const error = new Error("Request cancelled.");
   error.name = "AbortError";
   return error;
 }
-
-/**
- * Abort `controller` when the turn budget elapses.
- * Returns a disposer that clears the timer (call on complete / manual abort).
- */
-export function scheduleResponseDeadline(
-  controller: AbortController,
-  startedAt: number,
-  maxMs = MAX_USER_FACING_RESPONSE_MS
-): () => void {
-  const remaining = remainingResponseBudgetMs(startedAt, Date.now(), maxMs);
-  if (remaining <= 0) {
-    if (!controller.signal.aborted) {
-      controller.abort(RESPONSE_DEADLINE_REASON);
-    }
-    return () => undefined;
-  }
-  const timer = setTimeout(() => {
-    if (!controller.signal.aborted) {
-      controller.abort(RESPONSE_DEADLINE_REASON);
-    }
-  }, remaining);
-  return () => clearTimeout(timer);
-}
-
-export const RESPONSE_DEADLINE_USER_MESSAGE =
-  "This took too long (over 15 seconds). Try a narrower question, or run the action again.";

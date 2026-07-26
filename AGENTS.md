@@ -14,9 +14,9 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 
-## Response latency (15s hard ceiling)
+## Response latency (15s first-output target)
 
-Chat and quick actions must answer within **15 seconds**. Use `MAX_USER_FACING_RESPONSE_MS` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. Do not add per-call timeouts of 30–120s+ on the interactive hot path.
+Chat and quick actions should begin meaningful output within **15 seconds**. Use `MAX_USER_FACING_RESPONSE_MS` in `src/config/responseDeadline.ts` to budget optional gathering, then degrade to available context and synthesize. Never abort or annotate a valid answer solely because the target elapsed. See `.cursor/rules/response-latency.mdc`.
 
 ## Indexed repo = remote workspace layer
 

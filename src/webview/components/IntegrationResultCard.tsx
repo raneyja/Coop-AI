@@ -9,6 +9,10 @@ import { useEvidenceConnectionExpand } from "../evidenceConnectionExpandContext"
 
 type IntegrationResultCardProps = {
   title: string;
+  /** Small kind / grouping label above the title (e.g. "Edit", "Option 1 of 3"). */
+  eyebrow?: string;
+  /** Optional marker rendered left of the title block (e.g. an option numeral). */
+  leading?: React.ReactNode;
   meta?: React.ReactNode;
   status?: string;
   statusTone?: "default" | "partial" | "minimal" | "warning";
@@ -25,6 +29,8 @@ export function IntegrationResultStack({ children }: { children: React.ReactNode
 
 export function IntegrationResultCard({
   title,
+  eyebrow,
+  leading,
   meta,
   status,
   statusTone = "default",
@@ -37,7 +43,9 @@ export function IntegrationResultCard({
   return (
     <section className={`coop-result-card${className ? ` ${className}` : ""}`} aria-label={ariaLabel}>
       <header className="coop-result-header">
+        {leading ? <div className="coop-result-leading">{leading}</div> : null}
         <div className="min-w-0 flex-1">
+          {eyebrow ? <p className="coop-result-eyebrow">{eyebrow}</p> : null}
           <div className="flex flex-wrap items-center gap-2">
             <p className="coop-result-title">{title}</p>
             {status ? (

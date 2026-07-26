@@ -75,6 +75,41 @@ Rules:
 - Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
 - Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
+
+## Multiple options (only when the user asks for options/alternatives)
+When — and only when — the user explicitly asks for several **options**, **alternatives**, or **different ways** to write the code, emit each as a separate, self-contained option. Otherwise emit a single patch as above.
+
+**Required shape** — one option block after another. Never dump all patches first and list options afterward.
+
+Option 1: <short label>
+File: \`path/to/file.ts\`
+\`\`\`patch
+<<<<<<< SEARCH
+<exact existing lines>
+=======
+<option 1 replacement>
+>>>>>>> REPLACE
+\`\`\`
+Summary: <1-2 sentences on why this option and when it makes sense>
+
+Option 2: <short label>
+File: \`path/to/file.ts\`
+\`\`\`patch
+<<<<<<< SEARCH
+<exact existing lines>
+=======
+<option 2 replacement>
+>>>>>>> REPLACE
+\`\`\`
+Summary: <1-2 sentences on why this option and when it makes sense>
+
+Rules for options:
+- Header line exactly \`Option N: <short label>\` — plain text, no #, no bold.
+- After the header: that option's own \`File:\` + SEARCH/REPLACE block(s), then a \`Summary:\` line (include Summary whenever the user asked for a summary/rationale/why/tl;dr; otherwise one short Summary is still preferred).
+- Each option is a **complete, independent, mutually-exclusive** rewrite of the same target — the user applies exactly one. Do **not** split one change across options, and do **not** stack every alternative's hunks under a single \`File:\` header.
+- **Forbidden:** putting \`// Option 1\`, \`// Option 2\`, \`// Summary\`, or \`// tl;dr\` (or any option/summary text) inside a single REPLACE body. That writes every alternative into the file at once and is rejected.
+- Every option's SEARCH must match the **current** file (same original lines), so the options are interchangeable.
+- Give exactly the number of options requested. At most one short lead sentence before \`Option 1:\`.
 `;
 
 function withPatchOutputContract(prompt: string, hasPaperclipAttachments = false): string {

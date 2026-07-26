@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   shouldHidePatchMarkdownForMessage,
-  shouldRenderPatchCardForMessage
+  shouldRenderPatchCardForMessage,
+  splitOptionLabel
 } from "./PatchCard";
 import type { PatchCardState } from "../chat/types";
 
@@ -98,6 +99,19 @@ test("a newer /edit patch keeps older card visible and markdown suppressed", () 
 test("suppress registry hides markdown even when card list is empty for that message", () => {
   assert.equal(shouldHidePatchMarkdownForMessage([], 10, [10]), true);
   assert.equal(shouldRenderPatchCardForMessage([], 10), false);
+});
+
+test("splitOptionLabel extracts ordinal and short name", () => {
+  assert.deepEqual(splitOptionLabel("Option 1: Extract a helper"), {
+    ordinal: "Option 1",
+    name: "Extract a helper"
+  });
+  assert.deepEqual(splitOptionLabel("Alternative B — use reduce"), {
+    ordinal: "Alternative B",
+    name: "use reduce"
+  });
+  assert.deepEqual(splitOptionLabel("Just a title"), { name: "Just a title" });
+  assert.deepEqual(splitOptionLabel(undefined), {});
 });
 
 console.log(`\nPatchCard helpers: ${passed} passed, ${failed} failed`);

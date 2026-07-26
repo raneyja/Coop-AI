@@ -2,10 +2,30 @@ import type { FileUndoSnapshot } from "./patchApplier";
 import type { ParsedPatchSet } from "./patchParser";
 import type { PatchCardState } from "../chat/types";
 
-export type PatchRecord = {
+/** One selectable rewrite option for an assistant message. */
+export type PatchVariantRecord = {
+  id: string;
+  label: string;
+  index: number;
   patches: ParsedPatchSet;
   card: PatchCardState;
   undo?: FileUndoSnapshot[];
+};
+
+/**
+ * All patch options produced by a single assistant message. Single-patch
+ * replies hold exactly one variant; multi-option `/edit` replies hold several.
+ */
+export type PatchRecord = {
+  messageTimestamp: number;
+  variants: PatchVariantRecord[];
+};
+
+/** Fully-resolved target for an apply/reject/undo action. */
+export type ResolvedVariant = {
+  messageTimestamp: number;
+  record: PatchRecord;
+  variant: PatchVariantRecord;
 };
 
 let patchRecordsByMessage = new Map<number, PatchRecord>();
@@ -58,148 +78,156 @@ export function getSuppressedMessageTimestamps(): number[] {
   return suppressedMessageTimestamps;
 }
 
-export function upsertPatchRecord(timestamp: number, patches: ParsedPatchSet, card: PatchCardState): void {
+/**
+ * Replaces every variant for a message. Preserves any existing undo snapshots
+ * for variants that keep the same id (so Undo survives a card refresh).
+ */
+export function upsertPatchVariants(
+  timestamp: number,
+  variants: ReadonlyArray<Omit<PatchVariantRecord, "undo">>
+): void {
   const existing = patchRecordsByMessage.get(timestamp);
+  const priorUndoById = new Map<string, FileUndoSnapshot[] | undefined>(
+    existing?.variants.map((variant) => [variant.id, variant.undo]) ?? []
+  );
   patchRecordsByMessage.set(timestamp, {
-    patches,
-    card: { ...card, messageTimestamp: timestamp, suppressMarkdown: true },
-    undo: existing?.undo
+    messageTimestamp: timestamp,
+    variants: variants.map((variant) => ({
+      ...variant,
+      card: { ...variant.card, messageTimestamp: timestamp, suppressMarkdown: true },
+      undo: priorUndoById.get(variant.id)
+    }))
   });
   markMessageMarkdownSuppressed(timestamp);
   lastPatchMessageTimestamp = timestamp;
 }
 
-export function updatePatchRecordCard(timestamp: number, card: PatchCardState): void {
-  const existing = patchRecordsByMessage.get(timestamp);
-  if (!existing) {
+export function updateVariantCard(timestamp: number, variantId: string, card: PatchCardState): void {
+  const record = patchRecordsByMessage.get(timestamp);
+  if (!record) {
     return;
   }
-  patchRecordsByMessage.set(timestamp, {
-    ...existing,
-    card: { ...card, messageTimestamp: timestamp, suppressMarkdown: true }
-  });
+  record.variants = record.variants.map((variant) =>
+    variant.id === variantId
+      ? { ...variant, card: { ...card, messageTimestamp: timestamp, suppressMarkdown: true } }
+      : variant
+  );
   markMessageMarkdownSuppressed(timestamp);
 }
 
-export function setPatchRecordUndo(timestamp: number, undo: FileUndoSnapshot[] | undefined): void {
-  const existing = patchRecordsByMessage.get(timestamp);
-  if (!existing) {
+export function setVariantUndo(
+  timestamp: number,
+  variantId: string,
+  undo: FileUndoSnapshot[] | undefined
+): void {
+  const record = patchRecordsByMessage.get(timestamp);
+  if (!record) {
     return;
   }
-  patchRecordsByMessage.set(timestamp, { ...existing, undo });
+  record.variants = record.variants.map((variant) =>
+    variant.id === variantId ? { ...variant, undo } : variant
+  );
 }
 
-export function getPatchRecord(timestamp: number | undefined): PatchRecord | undefined {
+export function getRecord(timestamp: number | undefined): PatchRecord | undefined {
   if (timestamp === undefined) {
     return undefined;
   }
   return patchRecordsByMessage.get(timestamp);
 }
 
-export function listPatchCards(): PatchCardState[] {
-  return [...patchRecordsByMessage.values()]
-    .map((record) => record.card)
-    .filter((card) => card.files.length > 0)
-    .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0));
-}
-
-/** Active pending patches: prefer latest pending record, else last message timestamp. */
-export function getPendingPatches(): ParsedPatchSet | undefined {
-  const pendingRecords = [...patchRecordsByMessage.values()].filter(
-    (record) => record.card.status === "pending"
-  );
-  if (pendingRecords.length === 0) {
+/**
+ * Resolves an action target. `variantId` pins a specific option; without it we
+ * fall back to the sole variant, else the latest pending option (command
+ * palette path where the user cannot pick an option).
+ */
+export function resolveVariant(
+  preferredTimestamp?: number,
+  variantId?: string
+): ResolvedVariant | undefined {
+  const timestamp = resolveActivePatchTimestamp(preferredTimestamp);
+  const record = getRecord(timestamp);
+  if (!record || timestamp === undefined || record.variants.length === 0) {
     return undefined;
   }
-  pendingRecords.sort(
-    (a, b) => (b.card.messageTimestamp ?? 0) - (a.card.messageTimestamp ?? 0)
-  );
-  return pendingRecords[0]?.patches;
+
+  let variant: PatchVariantRecord | undefined;
+  if (variantId !== undefined) {
+    variant = record.variants.find((entry) => entry.id === variantId);
+  } else if (record.variants.length === 1) {
+    variant = record.variants[0];
+  } else {
+    const pending = record.variants
+      .filter((entry) => entry.card.status === "pending" || entry.card.status === "failed")
+      .sort((a, b) => b.index - a.index);
+    variant = pending[0] ?? record.variants[record.variants.length - 1];
+  }
+
+  return variant ? { messageTimestamp: timestamp, record, variant } : undefined;
+}
+
+/** Sibling variants sharing a message (excludes the given variant id). */
+export function siblingVariants(timestamp: number, variantId: string): PatchVariantRecord[] {
+  const record = patchRecordsByMessage.get(timestamp);
+  if (!record) {
+    return [];
+  }
+  return record.variants.filter((variant) => variant.id !== variantId);
+}
+
+export function listPatchCards(): PatchCardState[] {
+  const cards: PatchCardState[] = [];
+  for (const record of patchRecordsByMessage.values()) {
+    for (const variant of record.variants) {
+      const hasPreview = variant.card.files.length > 0;
+      const isVisibleFailure = variant.card.status === "failed" && Boolean(variant.card.error);
+      if (hasPreview || isVisibleFailure) {
+        cards.push(variant.card);
+      }
+    }
+  }
+  return cards.sort((a, b) => {
+    const byMessage = (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0);
+    return byMessage !== 0 ? byMessage : (a.variantIndex ?? 0) - (b.variantIndex ?? 0);
+  });
 }
 
 export function resolveActivePatchTimestamp(preferred?: number): number | undefined {
   if (preferred !== undefined && patchRecordsByMessage.has(preferred)) {
     return preferred;
   }
+  const hasStatus = (record: PatchRecord, status: PatchCardState["status"]): boolean =>
+    record.variants.some((variant) => variant.card.status === status);
+
   const pending = [...patchRecordsByMessage.entries()]
-    .filter(([, record]) => record.card.status === "pending")
+    .filter(([, record]) => hasStatus(record, "pending"))
     .sort((a, b) => b[0] - a[0]);
   if (pending[0]) {
     return pending[0][0];
   }
-  const appliedOrRejected = [...patchRecordsByMessage.entries()]
-    .filter(([, record]) => record.card.status === "applied" || record.card.status === "rejected")
+  const settled = [...patchRecordsByMessage.entries()]
+    .filter(([, record]) => hasStatus(record, "applied") || hasStatus(record, "rejected"))
     .sort((a, b) => b[0] - a[0]);
-  if (appliedOrRejected[0]) {
-    return appliedOrRejected[0][0];
+  if (settled[0]) {
+    return settled[0][0];
   }
   return lastPatchMessageTimestamp;
 }
 
-// --- Compatibility shims used by older call sites during transition ---
-
-export function setPendingPatches(patches: ParsedPatchSet): void {
-  const timestamp = lastPatchMessageTimestamp;
-  if (timestamp === undefined) {
-    return;
+/** Active pending patches for the command-palette Apply path. */
+export function getPendingPatches(): ParsedPatchSet | undefined {
+  const resolved = resolveVariant();
+  if (!resolved) {
+    return undefined;
   }
-  const existing = patchRecordsByMessage.get(timestamp);
-  if (!existing) {
-    return;
-  }
-  patchRecordsByMessage.set(timestamp, {
-    ...existing,
-    patches,
-    card: { ...existing.card, status: "pending", canUndo: false, appliedFileCount: undefined }
-  });
+  return resolved.variant.card.status === "pending" ? resolved.variant.patches : undefined;
 }
 
-export function clearPendingPatches(): void {
-  // No-op for global clear — pending is derived from record status.
-}
-
-export function setLastAppliedPatches(_patches: ParsedPatchSet | undefined): void {
-  // Stored on the message record instead.
-}
-
-export function getLastAppliedPatches(): ParsedPatchSet | undefined {
-  const timestamp = resolveActivePatchTimestamp();
-  return timestamp === undefined ? undefined : patchRecordsByMessage.get(timestamp)?.patches;
-}
-
-export function clearLastAppliedPatches(): void {
-  // No-op — patches stay on the record for Undo → pending.
-}
-
-export function setLastUndoStack(undo: FileUndoSnapshot[]): void {
-  const timestamp = resolveActivePatchTimestamp();
-  if (timestamp === undefined) {
-    return;
-  }
-  setPatchRecordUndo(timestamp, undo);
-}
-
-export function getLastUndoStack(): FileUndoSnapshot[] | undefined {
-  const timestamp = resolveActivePatchTimestamp();
-  return timestamp === undefined ? undefined : patchRecordsByMessage.get(timestamp)?.undo;
-}
-
-export function clearLastUndoStack(): void {
-  const timestamp = resolveActivePatchTimestamp();
-  if (timestamp === undefined) {
-    return;
-  }
-  setPatchRecordUndo(timestamp, undefined);
-}
-
-export function setLastAppliedPatchPreview(state: PatchCardState | undefined): void {
-  if (!state?.messageTimestamp) {
-    return;
-  }
-  updatePatchRecordCard(state.messageTimestamp, state);
-}
-
-export function getLastAppliedPatchPreview(): PatchCardState | undefined {
-  const timestamp = resolveActivePatchTimestamp();
-  return timestamp === undefined ? undefined : patchRecordsByMessage.get(timestamp)?.card;
+export function resetPatchSessionForTests(): void {
+  patchRecordsByMessage = new Map();
+  lastEditUserMessage = undefined;
+  lastAssistantPatchContent = undefined;
+  lastPatchApplyError = undefined;
+  lastPatchMessageTimestamp = undefined;
+  suppressedMessageTimestamps = [];
 }

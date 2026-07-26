@@ -109,6 +109,12 @@ if (!user) {
 
 Multi-file edits include multiple `File:` sections. Each file can have multiple hunks.
 
+## Multiple options
+
+When you ask for several ways to write the same code — for example `/edit give me 3 different options to rewrite this` — Coop renders **one review card per option** instead of merging everything into a single card. Each card is labeled (**Option 1**, **Option 2**, …), shows its own red/green diff, and keeps any **Summary** you asked for inside that same card (not stacked under the group as leftover chat prose). Each card has independent **Apply this option**, **Reject**, and **Undo** controls.
+
+Options are mutually exclusive: applying one **supersedes** the others (they stop offering Apply and show a **Superseded** badge). **Undo** on the applied option restores your files and brings the other options back to review.
+
 ## Apply and undo
 
 ### Apply

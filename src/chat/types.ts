@@ -121,7 +121,14 @@ export type PatchPreviewFile = {
   hunks: PatchPreviewHunk[];
 };
 
-export type PatchCardStatus = "idle" | "pending" | "applied" | "failed" | "undone" | "rejected";
+export type PatchCardStatus =
+  | "idle"
+  | "pending"
+  | "applied"
+  | "failed"
+  | "undone"
+  | "rejected"
+  | "superseded";
 
 export type PatchCardState = {
   status: PatchCardStatus;
@@ -132,6 +139,19 @@ export type PatchCardState = {
   error?: string;
   appliedFileCount?: number;
   canUndo?: boolean;
+  /**
+   * Identifies one option when a single /edit reply proposes several
+   * alternative rewrites. Unique within an assistant message.
+   */
+  variantId?: string;
+  /** Human label for the option, e.g. "Option 1: Extract helper". */
+  variantLabel?: string;
+  /** 0-based order the option was emitted in. */
+  variantIndex?: number;
+  /** Total number of options proposed for this message (>1 when multi-option). */
+  variantCount?: number;
+  /** Short rationale for this option (Summary), shown inside the card. */
+  summary?: string;
   /**
    * Once a patch card has been shown for this assistant message, keep hiding the raw
    * SEARCH/REPLACE fence for that message.
@@ -498,9 +518,9 @@ export type WebviewInbound =
   | { type: "agents:open" }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
-  | { type: "patch:apply"; payload?: { messageTimestamp?: number } }
-  | { type: "patch:reject"; payload?: { messageTimestamp?: number } }
-  | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
+  | { type: "patch:apply"; payload?: { messageTimestamp?: number; variantId?: string } }
+  | { type: "patch:reject"; payload?: { messageTimestamp?: number; variantId?: string } }
+  | { type: "patch:undo"; payload?: { messageTimestamp?: number; variantId?: string } }
   | { type: "patch:open-file"; payload: { path: string } }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }

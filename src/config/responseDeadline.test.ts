@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import {
   MAX_USER_FACING_RESPONSE_MS,
-  RESPONSE_DEADLINE_REASON,
   RESERVED_SYNTHESIS_MS,
   abortablePromise,
-  isResponseDeadlineAbort,
   remainingContextGatherBudgetMs,
   remainingResponseBudgetMs,
-  scheduleResponseDeadline
+  waitForOptionalContext
 } from "./responseDeadline";
 
 let passed = 0;
@@ -37,23 +35,10 @@ async function main(): Promise<void> {
     assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);
   });
 
-  await test("scheduleResponseDeadline aborts with platform reason", async () => {
-    const controller = new AbortController();
-    const clear = scheduleResponseDeadline(controller, Date.now(), 20);
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    clear();
-    assert.equal(controller.signal.aborted, true);
-    assert.equal(isResponseDeadlineAbort(controller.signal), true);
-    assert.equal(
-      (controller.signal as AbortSignal & { reason?: unknown }).reason,
-      RESPONSE_DEADLINE_REASON
-    );
-  });
-
   await test("abortablePromise rejects when signal aborts", async () => {
     const controller = new AbortController();
     const pending = abortablePromise(new Promise<string>(() => undefined), controller.signal);
-    controller.abort(RESPONSE_DEADLINE_REASON);
+    controller.abort();
     await assert.rejects(pending, (err: unknown) => err instanceof Error && err.name === "AbortError");
   });
 
@@ -62,6 +47,20 @@ async function main(): Promise<void> {
     const value = await abortablePromise(Promise.resolve("ok"), controller.signal);
     assert.equal(value, "ok");
     assert.equal(controller.signal.aborted, false);
+  });
+
+  await test("optional context stops blocking without cancelling its work", async () => {
+    let finished = false;
+    const work = new Promise<string>((resolve) => {
+      setTimeout(() => {
+        finished = true;
+        resolve("late context");
+      }, 30);
+    });
+    const value = await waitForOptionalContext(work, 5);
+    assert.equal(value, undefined);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(finished, true);
   });
 
   console.log(`\nresponseDeadline: ${passed} passed, ${failed} failed`);

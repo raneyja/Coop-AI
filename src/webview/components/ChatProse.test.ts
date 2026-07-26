@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { parseChatProse } from "../lib/chatProseParser";
-import { shouldHidePatchBlock } from "./ChatProse";
+import { contentLooksLikeEditPatch, shouldHidePatchBlock } from "./ChatProse";
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +66,33 @@ test("does not hide ordinary paragraphs mentioning a file", () => {
   const doc = parseChatProse(content);
   const hidden = doc.blocks.map(shouldHidePatchBlock);
   assert.deepEqual(hidden, [false]);
+});
+
+test("hides Option headers and TL;DR lines once patch cards own them", () => {
+  const content = [
+    "Option 1 — Guard against multiple initializations",
+    "",
+    "TL;DR (Option 1): Add an initialized flag so session.initialize() only runs once.",
+    "",
+    "Option 2 — Clear view on dispose",
+    "",
+    "TL;DR: Drop the stale view reference when the webview is disposed."
+  ].join("\n");
+  const doc = parseChatProse(content);
+  const hidden = doc.blocks.map(shouldHidePatchBlock);
+  assert.ok(hidden.every(Boolean), "option titles and TL;DRs should be hidden under patch cards");
+});
+
+test("contentLooksLikeEditPatch detects streaming SEARCH/REPLACE", () => {
+  assert.equal(contentLooksLikeEditPatch("just chatting"), false);
+  assert.equal(
+    contentLooksLikeEditPatch(["```patch", "<<<<<<< SEARCH", "a", "=======", "b", ">>>>>>> REPLACE", "```"].join("\n")),
+    true
+  );
+  assert.equal(
+    contentLooksLikeEditPatch("Option 1: Foo\n\nOption 2: Bar\n\nstill streaming"),
+    true
+  );
 });
 
 console.log(`\nChatProse: ${passed} passed, ${failed} failed`);

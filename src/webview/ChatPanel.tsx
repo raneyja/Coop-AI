@@ -14,7 +14,8 @@ import { EmptyState } from "./components/EmptyState";
 import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
-import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
+import { PatchCard, PatchOptionGroup, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
+import { contentLooksLikeEditPatch } from "./components/ChatProse";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
 import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
@@ -464,44 +465,73 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const renderBody = useCallback(
     (content: string, relatedArtifactId?: string, messageTimestamp?: number) => {
-      const card =
+      const messageCards =
         messageTimestamp !== undefined
-          ? patchCards.find((entry) => entry.messageTimestamp === messageTimestamp)
-          : undefined;
+          ? patchCards
+              .filter((entry) => entry.messageTimestamp === messageTimestamp)
+              .sort((a, b) => (a.variantIndex ?? 0) - (b.variantIndex ?? 0))
+          : [];
       const showPatchCard =
         messageTimestamp !== undefined &&
         shouldRenderPatchCardForMessage(patchCards, messageTimestamp);
+      const looksLikeEdit = contentLooksLikeEditPatch(content);
       const hidePatchFences =
-        messageTimestamp !== undefined &&
-        shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps);
+        looksLikeEdit ||
+        (messageTimestamp !== undefined &&
+          shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps));
 
       const elements: React.ReactElement[] = [];
-      if (showPatchCard && card) {
+      if (showPatchCard && messageCards.length > 0) {
+        const cardElements = messageCards.map((card) => {
+          const variantId = card.variantId;
+          return (
+            <PatchCard
+              key={`patch-${messageTimestamp}-${variantId ?? "default"}`}
+              state={card}
+              onApply={() =>
+                post({ type: "patch:apply", payload: { messageTimestamp, variantId } })
+              }
+              onReject={() =>
+                post({ type: "patch:reject", payload: { messageTimestamp, variantId } })
+              }
+              onUndo={() =>
+                post({ type: "patch:undo", payload: { messageTimestamp, variantId } })
+              }
+              onOpenFile={(path) => post({ type: "patch:open-file", payload: { path } })}
+            />
+          );
+        });
+
+        if (messageCards.length > 1) {
+          elements.push(
+            <PatchOptionGroup key={`patch-group-${messageTimestamp}`} optionCount={messageCards.length}>
+              {cardElements}
+            </PatchOptionGroup>
+          );
+        } else {
+          elements.push(...cardElements);
+        }
+      } else if (looksLikeEdit && !showPatchCard) {
+        // While the model streams (or before cards parse), don't dump raw SEARCH/REPLACE
+        // markdown into the thread — show a calm placeholder until Apply cards appear.
         elements.push(
-          <PatchCard
-            key={`patch-${messageTimestamp}`}
-            state={card}
-            onApply={() =>
-              post({ type: "patch:apply", payload: { messageTimestamp } })
-            }
-            onReject={() =>
-              post({ type: "patch:reject", payload: { messageTimestamp } })
-            }
-            onUndo={() =>
-              post({ type: "patch:undo", payload: { messageTimestamp } })
-            }
-            onOpenFile={(path) => post({ type: "patch:open-file", payload: { path } })}
+          <p key="patch-preparing" className="coop-patch-preparing" role="status">
+            Preparing edit options…
+          </p>
+        );
+      }
+      // During the edit stream, skip ChatProse entirely (placeholder owns the UI).
+      // Once cards exist, render ChatProse with fences hidden so a short lead line can remain.
+      if (!(looksLikeEdit && !showPatchCard)) {
+        elements.push(
+          <ChatProse
+            key="chat-prose"
+            content={content}
+            relatedArtifactId={relatedArtifactId}
+            hidePatchFences={hidePatchFences}
           />
         );
       }
-      elements.push(
-        <ChatProse
-          key="chat-prose"
-          content={content}
-          relatedArtifactId={relatedArtifactId}
-          hidePatchFences={hidePatchFences}
-        />
-      );
       return elements;
     },
     [patchCards, post, suppressedPatchTimestamps]

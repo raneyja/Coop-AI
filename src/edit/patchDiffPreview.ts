@@ -117,6 +117,11 @@ export function buildPatchCardState(
     appliedFileCount?: number;
     canUndo?: boolean;
     fileContents?: Readonly<Record<string, string>>;
+    variantId?: string;
+    variantLabel?: string;
+    variantIndex?: number;
+    variantCount?: number;
+    summary?: string;
   }
 ): PatchCardState {
   const files: PatchPreviewFile[] = [];
@@ -151,6 +156,11 @@ export function buildPatchCardState(
     files,
     error: options.error,
     appliedFileCount: options.appliedFileCount,
-    canUndo: options.canUndo
+    canUndo: options.canUndo,
+    variantId: options.variantId,
+    variantLabel: options.variantLabel,
+    variantIndex: options.variantIndex,
+    variantCount: options.variantCount,
+    summary: options.summary
   };
 }

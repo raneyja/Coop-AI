@@ -34,7 +34,7 @@ export abstract class BaseProviderClient {
     let response: Response;
     try {
       response = await runResilientRequest({
-        // Interactive chat/QA: one attempt inside the platform 15s ceiling — never stack retries.
+        // Bound provider startup and avoid stacked retries; an established stream is not timed out here.
         timeoutMs: MAX_USER_FACING_RESPONSE_MS,
         policy: { maxRetries: 0 },
         run: async (signal) =>
