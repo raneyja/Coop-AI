@@ -26,6 +26,28 @@ async function run(): Promise<void> {
     assert.equal(merged.selectedLines, undefined);
   });
 
+  await test("mergeRepoContext keeps selection when same-file snap reports empty caret", () => {
+    const merged = mergeRepoContext(
+      { file: "src/CoopChatPanel.ts", selectedLines: [17, 45], fileSource: "workspace" },
+      {
+        file: "src/CoopChatPanel.ts",
+        fileSource: "workspace",
+        languageId: "typescript",
+        selectedLines: undefined
+      }
+    );
+    assert.equal(merged.file, "src/CoopChatPanel.ts");
+    assert.deepEqual(merged.selectedLines, [17, 45]);
+  });
+
+  await test("mergeRepoContext replaces selection when user picks a new range", () => {
+    const merged = mergeRepoContext(
+      { file: "src/a.ts", selectedLines: [1, 5], fileSource: "workspace" },
+      { file: "src/a.ts", fileSource: "workspace", selectedLines: [40, 50] }
+    );
+    assert.deepEqual(merged.selectedLines, [40, 50]);
+  });
+
   await test("mergeRepoContext preserves selectedLines for partial incoming context", () => {
     const merged = mergeRepoContext(
       { file: "src/old.ts", selectedLines: [10, 20] },

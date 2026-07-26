@@ -322,6 +322,11 @@
     min-width: 0;
   }
 
+  /*
+   * Overlay mirror + transparent textarea must share identical metrics.
+   * Textareas do not inherit font-family reliably; bolding /edit in the mirror
+   * alone also shifts wrap/caret (looks like an indent on the next line).
+   */
   .coop-composer-input-mirror,
   .coop-composer-input {
     grid-area: 1 / 1;
@@ -330,11 +335,19 @@
     margin: 0;
     border: 0;
     padding: 0.625rem 0.75rem 0.25rem;
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    font-variant: normal;
+    font-feature-settings: normal;
+    font-kerning: none;
+    letter-spacing: normal;
     line-height: 1.625;
     max-height: 140px;
     overflow-wrap: break-word;
     word-break: break-word;
+    tab-size: 4;
   }
 
   .coop-composer-input-mirror {
@@ -342,6 +355,11 @@
     white-space: pre-wrap;
     overflow: hidden;
     color: var(--coop-composer-text);
+  }
+
+  /* Color only — any weight/size change desyncs caret from visible glyphs. */
+  .coop-composer-input-mirror .coop-slash-hint-command {
+    font-weight: inherit;
   }
 
   .coop-composer-input {

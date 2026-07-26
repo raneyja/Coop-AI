@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
-import { buildEditOptionsReminderForTurn, resolveEffectiveComposerMode } from "../edit/editModeSticky";
+import { buildEditRequestReminderForTurn, looksLikeAskIntent, resolveEffectiveComposerMode } from "../edit/editModeSticky";
+import { formatEditSelectionReminder } from "../edit/editSelectionFocus";
 import { parsePatchVariants } from "../edit/patchParser";
 import {
   applyPendingPatch,
@@ -312,7 +313,7 @@ import { shouldFetchSlackContext } from "../context/slackContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { readAgentModeSetting } from "../config/agentModeConfig";
 import { shouldUseAgentMode } from "./agentRouting";
-import { shouldTrackEditRequest } from "./editSendRouting";
+import { shouldTrackEditRequest, shouldParseSlashCommandOnSend } from "./editSendRouting";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -390,6 +391,12 @@ export class CoopChatSession {
   private pendingChatMentions?: ChatFileMention[];
   /** Set during /edit sends so semantic retrieval uses the edit gate. */
   private pendingCodeEditIntent = false;
+  /** Highlight captured at /edit send — line range + text for the model prompt. */
+  private pendingEditSelection?: {
+    lines: [number, number];
+    text?: string;
+    file?: string;
+  };
   private readonly threadStore?: ChatThreadStore;
 
   public constructor(
@@ -3075,8 +3082,10 @@ export class CoopChatSession {
     }
   ): Promise<void> {
     // Slash-command routing applies only to manually typed messages — never to
-    // button-driven quick actions or already-routed integration prompts.
-    if (!quickAction && !options?.sourceHint) {
+    // button-driven quick actions, already-routed composer/integration sends, or
+    // source-hint prompts. Re-parsing a message that still starts with `/edit`
+    // would recurse until "Maximum call stack size exceeded".
+    if (shouldParseSlashCommandOnSend(quickAction, options)) {
       const parsed = parseSlashCommand(message);
       if (parsed) {
         await this.routeSlashCommand(parsed, attachments, options?.mentions);
@@ -3084,17 +3093,27 @@ export class CoopChatSession {
       }
     }
 
-    // Follow-ups after /edit (or while patch cards are open) must stay in edit
-    // mode — users refine in plain English and still expect Apply cards.
+    // Sticky /edit only for patch refinements while cards are open — never for
+    // ask/explain questions (those must stay normal chat even after /edit tests).
     const composerMode =
       quickAction || options?.sourceHint || options?.integrationProvider
         ? options?.composerMode
-        : resolveEffectiveComposerMode(options?.composerMode, this.chatHistory);
+        : resolveEffectiveComposerMode(options?.composerMode, this.chatHistory, {
+            currentMessage: message
+          });
     const sendOptions = { ...options, composerMode };
 
     this.snapEditorContextBeforeSend({
       allowLocalFileForEdit: composerMode === "edit"
     });
+    this.pendingEditSelection =
+      composerMode === "edit" ? this.captureEditSelectionFocus() : undefined;
+    if (this.pendingEditSelection && !this.currentContext.selectedLines) {
+      this.currentContext = {
+        ...this.currentContext,
+        selectedLines: this.pendingEditSelection.lines
+      };
+    }
     if (options?.mentions?.length) {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
@@ -3447,8 +3466,11 @@ export class CoopChatSession {
 
     if (def.target.kind === "composer-mode") {
       const historyContent = slashCommandHistoryContent(def, args);
+      // Send the same text the user typed (including /edit …). Do not replace
+      // their sentence with a generic patch prompt.
       const userText =
-        args.trim() || "Generate search-replace patches for the requested changes.";
+        historyContent.trim() ||
+        "Generate search-replace patches for the requested changes.";
       await this.handleChatSend(userText, undefined, attachments, {
         historyContent,
         mentions,
@@ -3863,12 +3885,76 @@ export class CoopChatSession {
     return { start: context.selectedLines[0], end: context.selectedLines[1] };
   }
 
-  private selectedCodeSnippet(maxLength = 4000): string | undefined {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.selection.isEmpty) {
+  /**
+   * Highlighted editor text for /edit. Prefer the live selection; if the chat
+   * webview stole focus and emptied the caret, slice the preserved line range.
+   */
+  private selectedCodeSnippet(
+    maxLength = 8000,
+    context: RepoContext = this.currentContext
+  ): string | undefined {
+    const preferred = context.file;
+    const editor =
+      pickLocalEditorForContext(preferred) ??
+      pickEditorForContext(preferred) ??
+      vscode.window.activeTextEditor;
+    if (!editor) {
       return undefined;
     }
-    return editor.document.getText(editor.selection).slice(0, maxLength);
+    if (!editor.selection.isEmpty) {
+      const live = editor.document.getText(editor.selection).trim();
+      if (live) {
+        return live.slice(0, maxLength);
+      }
+    }
+    const lines = context.selectedLines;
+    if (!lines || lines.length !== 2) {
+      return undefined;
+    }
+    const startLine = Math.max(0, lines[0] - 1);
+    const endLine = Math.min(editor.document.lineCount - 1, Math.max(0, lines[1] - 1));
+    if (endLine < startLine) {
+      return undefined;
+    }
+    const range = new vscode.Range(
+      startLine,
+      0,
+      endLine,
+      editor.document.lineAt(endLine).text.length
+    );
+    const sliced = editor.document.getText(range).trim();
+    return sliced ? sliced.slice(0, maxLength) : undefined;
+  }
+
+  /** Snapshot the user's highlight at /edit send for the model prompt. */
+  private captureEditSelectionFocus():
+    | { lines: [number, number]; text?: string; file?: string }
+    | undefined {
+    const lines = this.currentContext.selectedLines;
+    if (!lines || lines.length !== 2) {
+      // Last chance: live editor selection even if context chip lost the range.
+      const preferred = this.currentContext.file;
+      const editor =
+        pickLocalEditorForContext(preferred) ??
+        pickEditorForContext(preferred) ??
+        vscode.window.activeTextEditor;
+      if (!editor || editor.selection.isEmpty) {
+        return undefined;
+      }
+      const start = editor.selection.start.line + 1;
+      const end = editor.selection.end.line + 1;
+      const text = editor.document.getText(editor.selection).trim().slice(0, 8000);
+      return {
+        lines: [start, end],
+        text: text || undefined,
+        file: this.currentContext.file
+      };
+    }
+    return {
+      lines: [lines[0], lines[1]],
+      text: this.selectedCodeSnippet(8000) || undefined,
+      file: this.currentContext.file
+    };
   }
 
   private decisionTimelineFromBundle(): DecisionTimeline | undefined {
@@ -3925,10 +4011,14 @@ export class CoopChatSession {
         editTargetUri: undefined
       });
     const composerMode =
-      resolveEffectiveComposerMode(
-        options?.composerMode ?? (turn.codeEditIntent ? "edit" : undefined),
-        turn.history
-      ) ?? (turn.codeEditIntent ? "edit" : undefined);
+      options?.composerMode === "edit"
+        ? "edit"
+        : options?.composerMode === "ask"
+          ? undefined
+          : resolveEffectiveComposerMode(undefined, turn.history, {
+              currentMessage: content
+            }) ??
+            (turn.codeEditIntent && !looksLikeAskIntent(content) ? "edit" : undefined);
     if (composerMode === "edit") {
       turn.codeEditIntent = true;
       turn.editTargetUri =
@@ -4257,9 +4347,18 @@ export class CoopChatSession {
                 branch: turnContext.branch
               });
       if (composerMode === "edit") {
-        const optionReminder = buildEditOptionsReminderForTurn(llmMessage, turn.history);
-        if (optionReminder) {
-          apiMessage = `${apiMessage}\n\n${optionReminder}`;
+        // Always quote the user's exact bubble — the model follows that sentence.
+        const lastUserBubble =
+          [...turn.history].reverse().find((entry) => entry.role === "user")?.content ?? llmMessage;
+        apiMessage = `${apiMessage}\n\n${buildEditRequestReminderForTurn(lastUserBubble, turn.history)}`;
+        const focus = this.pendingEditSelection;
+        const selection = focus?.lines ?? turnContext.selectedLines;
+        if (selection && selection.length === 2) {
+          apiMessage = `${apiMessage}\n\n${formatEditSelectionReminder(
+            [selection[0], selection[1]],
+            focus?.file ?? turnContext.file,
+            focus?.text ?? this.selectedCodeSnippet(8000, turnContext)
+          )}`;
         }
       }
       const projectInstructionsBlock = this.buildProjectInstructionsBlock();
@@ -4495,6 +4594,7 @@ export class CoopChatSession {
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;
+        this.pendingEditSelection = undefined;
       }
     }
   }

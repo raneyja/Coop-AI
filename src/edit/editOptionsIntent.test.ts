@@ -27,8 +27,27 @@ test("detectEditOptionRequest finds '3 different options'", () => {
   assert.deepEqual(result, { count: 3 });
 });
 
+test("detectEditOptionRequest finds 'recommend 2 changes'", () => {
+  assert.deepEqual(
+    detectEditOptionRequest(
+      "/edit can you recommend 2 changes to this block that i can make?"
+    ),
+    { count: 2 }
+  );
+  assert.deepEqual(
+    detectEditOptionRequest("can you recommend 2 changes to this block that i can make?"),
+    { count: 2 }
+  );
+});
+
+test("detectEditOptionRequest finds bare '2 edits' / '2 suggestions'", () => {
+  assert.deepEqual(detectEditOptionRequest("/edit give me 2 edits"), { count: 2 });
+  assert.deepEqual(detectEditOptionRequest("suggest 4 improvements here"), { count: 4 });
+});
+
 test("detectEditOptionRequest ignores single-edit asks", () => {
   assert.equal(detectEditOptionRequest("/edit add a null check"), undefined);
+  assert.equal(detectEditOptionRequest("/edit change this comment"), undefined);
 });
 
 test("countEmbeddedOptionMarkers finds comment options in one REPLACE", () => {

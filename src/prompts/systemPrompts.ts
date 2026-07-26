@@ -74,14 +74,24 @@ Rules:
 - If you introduce a helper, symbol, or extracted function, also emit the call-site / wire-up hunks so the new code is used (unless the user asked only to define it).
 - Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
-- Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
 
-## Multiple options (when the user wants alternatives — including follow-ups)
-When the user asks for several **options**, **alternatives**, or **different ways**, OR when they are refining a prior multi-option /edit reply in the same thread, emit each as a separate, self-contained option. Otherwise emit a single patch as above.
+## Selection focus (required when a highlight is present)
+When the attached context includes selected lines (\`lines="start-end"\` on \`<file>\`, or an \`<edit_selection_focus>\` block):
+- That highlight is the **only** edit target. SEARCH/REPLACE must cover those lines (or a contiguous subset).
+- If \`<edit_selection_focus>\` includes a code fence, copy SEARCH from that fence — it is authoritative.
+- Do **not** rewrite, reformat, or "improve" other methods/regions in the attached file.
+- Expand outside the selection **only** when the user explicitly names another region or asks for a file-wide change / required call-site outside the highlight.
+- Vague asks ("2 replacements", "improve this", "options") with a highlight mean: replace/improve **the highlight**, not some other block in the file.
 
-Follow-up refinements (e.g. "replace, don't add", "make option 2 safer", "prefer null-checks") stay in this multi-option patch format — never switch to markdown prose, typescript fences, or **Summary** section titles.
+## Multiple options (follow the user request)
+Read the user's request and honor it. Do not invent a fixed default like "3 ways".
 
-**Required shape** — one option block after another. Never dump all patches first and list options afterward.
+- One change / one edit → one File: + SEARCH/REPLACE patch.
+- They asked for multiple alternatives in **any wording** (options, changes, edits, ways, suggestions, recommendations, …) → emit that many separate Option blocks.
+- An \`<edit_user_request>\` or \`<edit_options_reminder>\` block restates their words — obey it.
+- Follow-up refinements of a multi-option reply stay in the multi-option format when an \`<edit_options_follow_up>\` block is present.
+
+**Required shape** when multiple alternatives were requested — one option block after another. Never dump all patches first and list options afterward.
 
 Option 1: <short label>
 File: \`path/to/file.ts\`

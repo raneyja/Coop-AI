@@ -24,9 +24,27 @@ function isFocusLossDiskLinkWarning(warning: string | undefined): boolean {
   return Boolean(warning?.includes(DISK_LINK_WARNING));
 }
 
-function applyIncomingFileMeta(merged: RepoContext, incoming: RepoContext): void {
+function applyIncomingFileMeta(
+  merged: RepoContext,
+  incoming: RepoContext,
+  existing: RepoContext
+): void {
   if ("selectedLines" in incoming) {
-    merged.selectedLines = incoming.selectedLines;
+    const sameFile =
+      Boolean(existing.file?.trim()) &&
+      Boolean((incoming.file ?? merged.file)?.trim()) &&
+      normalizePathKey(existing.file) === normalizePathKey(incoming.file ?? merged.file);
+    // Chat webview steals focus and often reports an empty caret for the same
+    // tab — keep the last highlight so ask/edit still see what the user selected.
+    if (
+      incoming.selectedLines === undefined &&
+      existing.selectedLines &&
+      sameFile
+    ) {
+      merged.selectedLines = existing.selectedLines;
+    } else {
+      merged.selectedLines = incoming.selectedLines;
+    }
   }
   if ("selectedSymbol" in incoming) {
     merged.selectedSymbol = incoming.selectedSymbol;
@@ -34,6 +52,10 @@ function applyIncomingFileMeta(merged: RepoContext, incoming: RepoContext): void
   if ("languageId" in incoming) {
     merged.languageId = incoming.languageId;
   }
+}
+
+function normalizePathKey(file: string | undefined): string {
+  return (file ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
 }
 
 /**
@@ -105,7 +127,7 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
   if (incoming.file?.trim()) {
     merged.file = incoming.file.trim();
     merged.scope = "file";
-    applyIncomingFileMeta(merged, incoming);
+    applyIncomingFileMeta(merged, incoming, existing);
 
     if (isOsAbsoluteDiskPath(incoming.file) || incoming.fileSource === "external") {
       // Downloads / Cmd+O — always L; never inherit a prior "remote" stamp.

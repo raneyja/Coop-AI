@@ -45,6 +45,11 @@ export function getLastEditUserMessage(): string | undefined {
   return lastEditUserMessage;
 }
 
+/** Clears sticky edit context when the user leaves /edit for normal chat. */
+export function clearLastEditUserMessage(): void {
+  lastEditUserMessage = undefined;
+}
+
 export function setLastAssistantPatchContent(content: string): void {
   lastAssistantPatchContent = content;
 }

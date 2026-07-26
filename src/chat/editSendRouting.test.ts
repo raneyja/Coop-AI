@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   resolveEditTrackingMessage,
+  shouldParseSlashCommandOnSend,
   shouldTrackEditRequest
 } from "./editSendRouting";
 
@@ -27,6 +28,26 @@ test("shouldTrackEditRequest is false for ask composer or quick actions", () => 
   assert.equal(shouldTrackEditRequest({ composerMode: "ask" }, undefined), false);
   assert.equal(shouldTrackEditRequest({ composerMode: "edit" }, "explain"), false);
   assert.equal(shouldTrackEditRequest(undefined, undefined), false);
+});
+
+test("shouldParseSlashCommandOnSend is true for a fresh typed message", () => {
+  assert.equal(shouldParseSlashCommandOnSend(undefined, undefined), true);
+});
+
+test("shouldParseSlashCommandOnSend is false after /edit already routed", () => {
+  assert.equal(
+    shouldParseSlashCommandOnSend(undefined, { composerMode: "edit" }),
+    false
+  );
+});
+
+test("shouldParseSlashCommandOnSend is false for quick actions and integrations", () => {
+  assert.equal(shouldParseSlashCommandOnSend("understand-repo", undefined), false);
+  assert.equal(
+    shouldParseSlashCommandOnSend(undefined, { integrationProvider: "slack" }),
+    false
+  );
+  assert.equal(shouldParseSlashCommandOnSend(undefined, { sourceHint: "chip" }), false);
 });
 
 test("resolveEditTrackingMessage prefers historyContent over raw message", () => {
