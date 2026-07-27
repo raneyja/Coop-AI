@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { loadJobQueueConfig } from "../config/jobQueueConfig";
 import { loadWebhookConfig } from "../config/webhookConfig";
 import { createGraphCache } from "../cache/graphCachePostgres";
@@ -19,6 +20,23 @@ import { createGitLabConnector } from "../server/codeHostConnectors/gitlabConnec
 import { loadBitbucketAppConfig } from "../server/bitbucketAppConfig";
 import { createBitbucketConnector } from "../server/codeHostConnectors/bitbucketConnector";
 import { registerConnector } from "../server/codeHostConnectors/registry";
+
+/** Railway/Docker healthchecks expect HTTP /health — workers are not the API. */
+function startWorkerHealthServer(port: number): ReturnType<typeof createServer> {
+  const server = createServer((request, response) => {
+    if (request.url === "/health" || request.url?.startsWith("/health?")) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, role: "worker" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  server.listen(port, () => {
+    console.log(`[workers] health listening on port ${port}`);
+  });
+  return server;
+}
 
 async function main(): Promise<void> {
   const webhookConfig = loadWebhookConfig();
@@ -126,10 +144,16 @@ async function main(): Promise<void> {
     }
   }
 
+  const healthPort = Number(process.env.PORT ?? 8787);
+  const healthServer = startWorkerHealthServer(
+    Number.isFinite(healthPort) && healthPort > 0 ? healthPort : 8787
+  );
+
   console.log("[workers] CoopAI job workers started");
 
   const shutdown = async () => {
     stopJobRuntime(runtime);
+    await new Promise<void>((resolve) => healthServer.close(() => resolve()));
     await closeDbPool();
     process.exit(0);
   };

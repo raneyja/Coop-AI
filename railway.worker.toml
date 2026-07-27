@@ -1,0 +1,13 @@
+# coop-worker — indexes repos (SCIP / Zoekt / embeddings). Not the public API.
+# Point the Railway coop-worker service at this file (Settings → Config-as-code path:
+# railway.worker.toml). Docs: docs/deploy-railway-phase2-lightning.md
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node dist/workerEntry.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"

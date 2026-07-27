@@ -29,11 +29,19 @@ function poolConfig(connectionString) {
     : { connectionString };
 }
 
-/** Table that must exist before we backfill a migration into schema_migrations. */
-const LEDGER_TABLE_PROBES = {
-  "018_org_integration_policies.sql": "org_integration_policies",
-  "019_chat_threads.sql": "chat_threads",
-  "024_repo_stats.sql": "repo_stats"
+/**
+ * Objects that must exist before we treat a migration as applied via docker-init
+ * ledger backfill / false-ledger repair. Prefer tables; use columns when the
+ * migration only ALTERs an existing table (e.g. 025).
+ *
+ * IMPORTANT: never backfill ledger rows without a probe — that marks SQL as
+ * applied without running it (broke prod auth when 025 was skipped).
+ */
+const LEDGER_PROBES = {
+  "018_org_integration_policies.sql": { table: "org_integration_policies" },
+  "019_chat_threads.sql": { table: "chat_threads" },
+  "024_repo_stats.sql": { table: "repo_stats" },
+  "025_org_repos_browse_status.sql": { table: "org_repos", column: "browse_status" }
 };
 
 async function tableExists(client, tableName) {
@@ -49,20 +57,46 @@ async function tableExists(client, tableName) {
   return Boolean(result.rows[0]?.ok);
 }
 
+async function columnExists(client, tableName, columnName) {
+  const result = await client.query(
+    `
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+      ) AS ok
+    `,
+    [tableName, columnName]
+  );
+  return Boolean(result.rows[0]?.ok);
+}
+
+async function probeSatisfied(client, probe) {
+  if (!(await tableExists(client, probe.table))) {
+    return false;
+  }
+  if (probe.column) {
+    return columnExists(client, probe.table, probe.column);
+  }
+  return true;
+}
+
 /** Remove ledger rows that were backfilled without the migration actually running. */
 async function repairFalseLedgerEntries(client) {
-  for (const [filename, tableName] of Object.entries(LEDGER_TABLE_PROBES)) {
+  for (const [filename, probe] of Object.entries(LEDGER_PROBES)) {
     const recorded = await client.query("SELECT 1 FROM schema_migrations WHERE filename = $1", [
       filename
     ]);
     if (recorded.rowCount === 0) {
       continue;
     }
-    if (await tableExists(client, tableName)) {
+    if (await probeSatisfied(client, probe)) {
       continue;
     }
     await client.query("DELETE FROM schema_migrations WHERE filename = $1", [filename]);
-    console.log(`repair ${filename} (ledger entry present but ${tableName} missing)`);
+    const missing = probe.column
+      ? `${probe.table}.${probe.column}`
+      : probe.table;
+    console.log(`repair ${filename} (ledger entry present but ${missing} missing)`);
   }
 }
 
@@ -91,8 +125,9 @@ async function syncDockerInitLedger(client, filenames) {
       continue;
     }
 
-    const requiredTable = LEDGER_TABLE_PROBES[filename];
-    if (requiredTable && !(await tableExists(client, requiredTable))) {
+    // Only invent ledger rows we can verify. Unprobed migrations must run via apply.
+    const ledgerProbe = LEDGER_PROBES[filename];
+    if (!ledgerProbe || !(await probeSatisfied(client, ledgerProbe))) {
       continue;
     }
 
