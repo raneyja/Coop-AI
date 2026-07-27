@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { pickEntryPaths, resolveRepoSummaryCoords, summarizeManifest } from "./buildRepoSummaryContext";
+import { hasRepoSummaryEvidence, pickEntryPaths, resolveRepoSummaryCoords, summarizeManifest } from "./buildRepoSummaryContext";
 import type { ManifestFileEntry } from "../manifest/types";
 
 async function run(): Promise<void> {
@@ -27,6 +27,17 @@ async function run(): Promise<void> {
     assert.equal(coords?.owner, "raneyja");
     assert.equal(coords?.repo, "Coop-AI");
     assert.equal(coords?.branch, "main");
+    assert.equal(coords?.repoId, "github:raneyja/Coop-AI");
+  });
+
+  test("hasRepoSummaryEvidence detects entry files and manifest", () => {
+    assert.equal(hasRepoSummaryEvidence(undefined), false);
+    assert.equal(hasRepoSummaryEvidence({ repoId: "github:acme/app" }), false);
+    assert.equal(
+      hasRepoSummaryEvidence({ entryFiles: [{ path: "README.md", content: "# App" }] }),
+      true
+    );
+    assert.equal(hasRepoSummaryEvidence({ manifest: { fileCount: 42 } }), true);
   });
 
   test("pickEntryPaths prefers canonical entry points", () => {

@@ -215,6 +215,7 @@ export function buildContextRequests(event: IntentEvent, types: ContextRequestTy
     params: {
       file,
       repoId: event.context.repoId,
+      provider: event.context.provider,
       owner: event.context.owner,
       repo: event.context.repo,
       branch: event.context.branch,

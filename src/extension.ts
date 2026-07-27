@@ -38,9 +38,13 @@ import { IndexedRepoWorkspace } from "./workspace/IndexedRepoWorkspace";
 import { resolveLocalAbsolutePath } from "./context/localFileResolver";
 import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
 import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
-import { buildLiveRepoSummary, resolveRepoSummaryCoords } from "./context/buildRepoSummaryContext";
+import {
+  buildRepoSummaryEvidence,
+  resolveRepoSummaryCoords
+} from "./context/buildRepoSummaryContext";
+import { registerIndexedRepoFileReader } from "./context/indexedRepoFileRegistry";
+import { readRepoFileForContext } from "./context/indexedRepoContextEnrichment";
 import { registerRepoSummaryLoader } from "./context/repoSummaryRegistry";
-import type { ManifestFileEntry } from "./manifest/types";
 import { HealthMonitor, type IntegrationProvider } from "./integrations/healthMonitor";
 import { getIndexManager } from "./indexing/indexManager";
 import { createIndexBackend } from "./indexing/createIndexBackend";
@@ -349,28 +353,51 @@ export function activate(context: vscode.ExtensionContext): void {
       integrationSecrets
     })
   );
+  registerIndexedRepoFileReader(async (request) =>
+    readRepoFileForContext(
+      { api, apiBaseUrl: getApiBaseUrl(), codeHostRouter },
+      request
+    )
+  );
   registerRepoSummaryLoader(async (context) => {
-    const coords = resolveRepoSummaryCoords(context.request.params);
+    const params = context.request.params;
+    const coords = resolveRepoSummaryCoords({
+      owner: params.owner,
+      repo: params.repo,
+      repoId: params.repoId,
+      branch: params.branch,
+      provider: typeof params.provider === "string" ? params.provider : undefined
+    });
     if (!coords) {
       return undefined;
     }
-    return buildLiveRepoSummary({
+
+    return buildRepoSummaryEvidence({
+      api,
+      apiBaseUrl: readConfiguration().apiBaseUrl,
       codeHostRouter,
       owner: coords.owner,
       repo: coords.repo,
       branch: coords.branch,
       repoId: coords.repoId,
-      activeFile: context.request.params.file,
-      loadManifest: async (repoId): Promise<ManifestFileEntry[]> => {
+      activeFile: params.file,
+      provider:
+        typeof params.provider === "string" &&
+        (params.provider === "gitlab" || params.provider === "bitbucket" || params.provider === "github")
+          ? params.provider
+          : undefined,
+      resolveWorkspaceBranch: async (repoId) => {
+        if (!(await api.hasToken())) {
+          return undefined;
+        }
         try {
-          const baseUrl = readConfiguration().apiBaseUrl;
-          const response = await api.fetchRepoManifest(baseUrl, repoId);
-          return (response.files ?? []).map((file) => ({
-            filePath: file.path,
-            symbols: (file.symbols ?? []) as ManifestFileEntry["symbols"]
-          }));
+          const workspace = await api.getWorkspaceRepos(readConfiguration().apiBaseUrl);
+          const entry = workspace.repos.find(
+            (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+          );
+          return entry?.defaultBranch?.trim() || undefined;
         } catch {
-          return [];
+          return undefined;
         }
       }
     });

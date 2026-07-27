@@ -38,10 +38,12 @@ export async function traceDecision(context: FeatureExecutionContext) {
         true
       );
     }
-    return unavailableResult(
-      context,
-      `${codeHostLabel(codeHost?.provider)} is offline and no cached decision history is available.`
-    );
+    if (context.status.level === "unavailable") {
+      return unavailableResult(
+        context,
+        `${codeHostLabel(codeHost?.provider)} is offline and no cached decision history is available.`
+      );
+    }
   }
 
   const engine = getDecisionArchaeologyEngine();
@@ -227,24 +229,43 @@ async function readTraceFileSnippet(
   file: string
 ): Promise<string | undefined> {
   const params = context.request.params;
-  if (!hasLocalDiskContext(params)) {
-    return undefined;
-  }
-  try {
-    const local = await readLocalWorkspaceFiles({
-      file,
-      fileSource: params.fileSource,
-      openEditors: context.request.intent.context.openEditors,
-      lines: params.lines,
-      resolveAbsolutePath: resolveLocalAbsolutePath
-    });
-    const content = local?.files[0]?.content;
-    if (!content) {
-      return undefined;
+  if (hasLocalDiskContext(params)) {
+    try {
+      const local = await readLocalWorkspaceFiles({
+        file,
+        fileSource: params.fileSource,
+        openEditors: context.request.intent.context.openEditors,
+        lines: params.lines,
+        resolveAbsolutePath: resolveLocalAbsolutePath
+      });
+      const content = local?.files[0]?.content;
+      if (content?.trim()) {
+        const sliced = sliceFileContent(content, params.lines);
+        return sliced.content.slice(0, 4000);
+      }
+    } catch {
+      /* fall through to indexed remote read */
     }
-    const sliced = sliceFileContent(content, params.lines);
-    return sliced.content.slice(0, 4000);
-  } catch {
+  }
+
+  const repoId = params.repoId?.trim();
+  if (!repoId || params.fileSource !== "remote") {
     return undefined;
   }
+
+  const { getIndexedRepoFileReader } = await import("../../context/indexedRepoFileRegistry");
+  const readIndexed = getIndexedRepoFileReader();
+  if (!readIndexed) {
+    return undefined;
+  }
+
+  return readIndexed({
+    repoId,
+    owner: params.owner,
+    repo: params.repo,
+    branch: params.branch,
+    provider: params.provider as import("../../chat/types").CodeHostProviderPreference | undefined,
+    path: file,
+    lines: params.lines
+  });
 }

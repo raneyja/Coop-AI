@@ -10,8 +10,9 @@ function read(relativePath: string): string {
 }
 
 /**
- * Guardrail: Deep-Index writer and branch readers stay on the same repo_stats record.
- * Consumer wiring (chat/summary enrichment) is covered in a follow-up PR.
+ * Guardrail: index (writer) and chat/summary (readers) must stay on the same
+ * repo record. Fails CI when a parallel path bypasses the shared resolver or
+ * reintroduces branch guessing.
  */
 void (async () => {
   await test("INDEX_REPOSITORY persists branch on repo_stats", () => {
@@ -39,10 +40,41 @@ void (async () => {
     assert.ok(indexedPos >= 0 && workspacePos > indexedPos && targetPos > workspacePos);
   });
 
-  await test("resolveActiveRepoTarget is the shared consumer entry point", () => {
-    const source = read("workspace/repoTargetResolver.ts");
-    assert.match(source, /export async function resolveActiveRepoTarget/);
-    assert.match(source, /fetchIndexedBranch/);
-    assert.match(source, /resolveRepoBranchForTarget/);
+  await test("indexed-repo consumers use resolveActiveRepoTarget", () => {
+    for (const file of [
+      "context/indexedRepoContextEnrichment.ts",
+      "context/buildRepoSummaryContext.ts"
+    ]) {
+      assert.match(
+        read(file),
+        /resolveActiveRepoTarget/,
+        `${file} must use the shared repo target resolver`
+      );
+    }
+  });
+
+  await test("understand-repo loads indexed evidence before live summary crawl", () => {
+    const session = read("chat/CoopChatSession.ts");
+    const block = session.match(
+      /isUnderstandRepo[\s\S]{0,1200}?mergeUnderstandRepoContextResults/
+    )?.[0];
+    assert.ok(block, "expected understand-repo fetch block");
+    assert.match(block, /enrichWithIndexedWorkspace/);
+    assert.match(block, /buildBaseContextResult/);
+    assert.ok(
+      block.indexOf("enrichWithIndexedWorkspace") < block.indexOf("buildBaseContextResult"),
+      "indexed enrichment must run before live summary"
+    );
+  });
+
+  await test("repo summary builders do not hardcode main as branch fallback", () => {
+    const source = read("context/buildRepoSummaryContext.ts");
+    assert.doesNotMatch(source, /\?\?\s*"main"/);
+  });
+
+  await test("repoSummaryFromBundle treats inventory and tree as evidence", () => {
+    const source = read("context/contextBundleEvidence.ts");
+    assert.match(source, /data\.repoInventory/);
+    assert.match(source, /hasTreeLayout/);
   });
 })();

@@ -326,6 +326,22 @@ async function resolveSemanticFileContent(
     return localContent;
   }
 
+  const { getIndexedRepoFileReader } = await import("./indexedRepoFileRegistry");
+  const readIndexed = getIndexedRepoFileReader();
+  if (readIndexed) {
+    const fromIndex = await readIndexed({
+      repoId,
+      owner: options.request.params.owner,
+      repo: options.request.params.repo,
+      branch: options.branch,
+      provider: options.request.params.provider as import("../chat/types").CodeHostProviderPreference | undefined,
+      path: filePath
+    });
+    if (fromIndex?.trim()) {
+      return fromIndex;
+    }
+  }
+
   try {
     const remote = await options.api
       .getBackendClient()
