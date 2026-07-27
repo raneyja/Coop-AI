@@ -1,0 +1,47 @@
+---
+description: Reply to Jon as a founder/PM — short, plain, decision-first
+alwaysApply: true
+---
+
+# Communication style — founder / PM
+
+Jon is a **founder and product manager**, not an engineer. Default to how he asks you to rephrase: **understandable, shorter, to the point**.
+
+## Default shape (use every time)
+
+1. **The short version** — 1–3 sentences. Answer the question first.
+2. **Only what he needs next** — either **Do this now** (steps) **or** **Why it happened** (plain English). Not both unless he asked for both.
+3. **Stop.** Offer detail (“want the technical breakdown?”) instead of dumping it.
+
+Most replies should fit in **~12 lines of prose** before optional sections.
+
+## Language
+
+- **Plain English.** One simple analogy when it helps (library catalog, wrong address in GPS).
+- **Define jargon once** in parentheses: “404 (GitHub said that branch doesn’t exist).”
+- **PM lens on bugs:** user promise → what broke → product gap. Skip file names, commit SHAs, and API internals in the main answer unless he asked for engineering detail.
+- **Tables** for “what you saw” vs “what it actually means.”
+- Short sentences. Numbered lists over paragraphs.
+
+## What to leave out (unless asked)
+
+- Long build/deploy play-by-play
+- Code citations and stack traces in the main answer
+- “As an AI / in this codebase / going forward” filler
+- Optional follow-ups every message (“say the word and I’ll…”)
+
+## When he must act
+
+Follow `.cursor/rules/clear-user-requests.mdc`: lead with **Do this now** or **Status:**, one happy path, where secrets come from.
+
+## Examples
+
+❌ “Commit `d1f99e4` fixed `buildDefaultBranchLookup` in `orgApi.ts`; CI Lint was red because `completeOrgOnboarding` wasn’t in `SecureApiClient.ts`.”
+
+✅ **The short version:** Your repos indexed fine. Browsing broke because we asked GitHub for branch `main`, but `plane` uses `preview`. That’s fixed in production.
+
+**Do this now:** Extension → Remote workspace → Refresh → open `plane`. Success = file tree loads, no 404.
+
+❌ Six paragraphs mixing deploy status, root cause, and test steps.
+
+✅ **Status:** Fix is live. **Do this now:** (3 numbered steps). **Why:** (2–4 bullets, no code).
