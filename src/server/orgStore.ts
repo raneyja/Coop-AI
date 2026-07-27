@@ -381,8 +381,8 @@ export class OrgStore {
       indexStatus: patch.indexStatus ?? existing?.indexStatus ?? "idle",
       embeddingStatus:
         "embeddingStatus" in patch ? patch.embeddingStatus : existing?.embeddingStatus,
-      lastIndexedAt: patch.lastIndexedAt ?? existing?.lastIndexedAt,
-      lastJobId: patch.lastJobId ?? existing?.lastJobId,
+      lastIndexedAt: "lastIndexedAt" in patch ? patch.lastIndexedAt : existing?.lastIndexedAt,
+      lastJobId: "lastJobId" in patch ? patch.lastJobId : existing?.lastJobId,
       error: "error" in patch ? patch.error : existing?.error,
       embeddingError: "embeddingError" in patch ? patch.embeddingError : existing?.embeddingError,
       updatedAt: new Date()

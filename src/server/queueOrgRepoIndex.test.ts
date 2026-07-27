@@ -81,6 +81,46 @@ async function testSkipsDuplicateActiveJob() {
 
   const record = records.get(`${orgId}:${repoId}`);
   assert.equal(record?.embeddingStatus, undefined);
+  assert.equal(record?.lightningEnabled, true);
+}
+
+async function testReenablesLightningWhenActiveJobAlreadyTracked() {
+  const orgId = "org-3";
+  const repoId = "github:raneyja/Coop-AI";
+  const queue = new JobQueue(
+    { ...loadJobQueueConfig(), backend: "memory" },
+    new MemoryQueueBackend()
+  );
+  const created = await queue.createJob({
+    type: JobType.INDEX_REPOSITORY,
+    userId: `org:${orgId}`,
+    params: { orgId, repoId }
+  });
+  const records = new Map<string, OrgRepoRecord>([
+    [
+      `${orgId}:${repoId}`,
+      {
+        orgId,
+        repoId,
+        // Turned off while the index job is still queued/running.
+        lightningEnabled: false,
+        indexStatus: "disabled",
+        lastJobId: created.jobId,
+        updatedAt: new Date()
+      }
+    ]
+  ]);
+  const orgStore = createOrgStoreStub(records);
+
+  const result = await queueOrgRepoIndex(orgId, repoId, { orgStore, jobQueue: queue });
+  assert.equal(result.outcome, "skipped");
+  assert.equal(result.reason, "already_active");
+  assert.equal(result.jobId, created.jobId);
+
+  const record = records.get(`${orgId}:${repoId}`);
+  assert.equal(record?.lightningEnabled, true);
+  assert.equal(record?.indexStatus, "queued");
+  assert.equal(record?.lastJobId, created.jobId);
 }
 
 async function testQueuesFreshJobAndClearsEmbeddings() {
@@ -117,7 +157,8 @@ async function testQueuesFreshJobAndClearsEmbeddings() {
 async function run() {
   await testSkipsDuplicateActiveJob();
   await testQueuesFreshJobAndClearsEmbeddings();
-  console.log("queueOrgRepoIndex: 2/2 tests passed");
+  await testReenablesLightningWhenActiveJobAlreadyTracked();
+  console.log("queueOrgRepoIndex: 3/3 tests passed");
 }
 
 void run();
