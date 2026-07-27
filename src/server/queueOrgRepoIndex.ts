@@ -7,6 +7,9 @@ export type QueueOrgRepoIndexResult =
   | { outcome: "skipped"; reason: "already_active" | "skip_policy"; jobId?: string }
   | { outcome: "failed"; message: string };
 
+/** Jobs older than this are treated as stuck zombies (5 minutes matches JOBS_MAX_DURATION default). */
+const STALE_INDEX_JOB_MS = 5 * 60 * 1000;
+
 export async function findActiveIndexJob(
   jobQueue: JobQueue,
   orgId: string,
@@ -36,13 +39,36 @@ export async function findActiveIndexJob(
   return undefined;
 }
 
+function isStaleIndexJob(job: {
+  status: string;
+  createdAt: Date;
+  startedAt?: Date;
+  progress: number;
+}): boolean {
+  const anchor = job.startedAt ?? job.createdAt;
+  if (Date.now() - anchor.getTime() > STALE_INDEX_JOB_MS) {
+    return true;
+  }
+  // Embedding phase reports 75–79%. Sitting there without finishing is a common zombie.
+  if (job.status === "running" && job.progress >= 75 && job.progress <= 79) {
+    const started = job.startedAt ?? job.createdAt;
+    if (Date.now() - started.getTime() > 60_000) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function cancelActiveIndexJob(jobQueue: JobQueue, jobId: string): Promise<void> {
+  await jobQueue.cancelJob(jobId, { includeRunning: true });
+}
+
 /**
  * Queue a single org repo for indexing. Skips duplicate queued/running jobs and
  * clears stale embedding status until the worker records a fresh outcome.
  *
- * Always re-asserts lightningEnabled=true when an active job already exists.
- * Otherwise Turn off → Deep-Index again can return success while leaving the
- * repo disabled (lastJobId still points at the active job).
+ * Pass `force: true` for admin Deep-Index / Reindex clicks so we never reattach
+ * to a zombie job that is stuck mid-progress (for example 79% embeddings).
  */
 export async function queueOrgRepoIndex(
   orgId: string,
@@ -52,35 +78,50 @@ export async function queueOrgRepoIndex(
     jobQueue: JobQueue;
     userId?: string;
     bypassRateLimit?: boolean;
+    force?: boolean;
   }
 ): Promise<QueueOrgRepoIndexResult> {
   const existing = await deps.orgStore.getOrgRepo(orgId, repoId);
+  const wasDisabled = existing?.lightningEnabled === false || existing?.indexStatus === "disabled";
 
   const active = await findActiveIndexJob(deps.jobQueue, orgId, repoId);
   if (active) {
-    await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-      lightningEnabled: true,
-      indexStatus: active.status === "running" ? "indexing" : "queued",
-      lastJobId: active.jobId,
-      error: undefined,
-      embeddingStatus: undefined,
-      embeddingError: undefined
-    });
-    return { outcome: "skipped", reason: "already_active", jobId: active.jobId };
-  }
+    const activeJob = await deps.jobQueue.getJob(active.jobId);
+    const shouldSupersede =
+      deps.force === true ||
+      wasDisabled ||
+      (activeJob ? isStaleIndexJob(activeJob) : false);
 
-  if (existing?.lastJobId) {
-    const lastJob = await deps.jobQueue.getJob(existing.lastJobId);
-    if (lastJob && (lastJob.status === "queued" || lastJob.status === "running")) {
+    if (!shouldSupersede) {
       await deps.orgStore.upsertOrgRepo(orgId, repoId, {
         lightningEnabled: true,
-        indexStatus: lastJob.status === "running" ? "indexing" : "queued",
-        lastJobId: lastJob.id,
+        indexStatus: active.status === "running" ? "indexing" : "queued",
+        lastJobId: active.jobId,
         error: undefined,
         embeddingStatus: undefined,
         embeddingError: undefined
       });
-      return { outcome: "skipped", reason: "already_active", jobId: lastJob.id };
+      return { outcome: "skipped", reason: "already_active", jobId: active.jobId };
+    }
+
+    await cancelActiveIndexJob(deps.jobQueue, active.jobId);
+  }
+
+  if (!deps.force && existing?.lastJobId) {
+    const lastJob = await deps.jobQueue.getJob(existing.lastJobId);
+    if (lastJob && (lastJob.status === "queued" || lastJob.status === "running")) {
+      if (!wasDisabled && !isStaleIndexJob(lastJob)) {
+        await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+          lightningEnabled: true,
+          indexStatus: lastJob.status === "running" ? "indexing" : "queued",
+          lastJobId: lastJob.id,
+          error: undefined,
+          embeddingStatus: undefined,
+          embeddingError: undefined
+        });
+        return { outcome: "skipped", reason: "already_active", jobId: lastJob.id };
+      }
+      await cancelActiveIndexJob(deps.jobQueue, lastJob.id);
     }
   }
 
@@ -136,7 +177,8 @@ export async function reindexEmbeddingFailures(
       orgStore: deps.orgStore,
       jobQueue: deps.jobQueue,
       userId: `org:${orgId}`,
-      bypassRateLimit: true
+      bypassRateLimit: true,
+      force: true
     });
     if (result.outcome === "queued") {
       queued += 1;

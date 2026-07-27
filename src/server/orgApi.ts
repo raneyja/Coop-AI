@@ -1079,7 +1079,10 @@ async function handleEnableLightning(
     orgStore: deps.orgStore!,
     jobQueue: deps.jobQueue,
     userId: `org:${auth.orgId}`,
-    bypassRateLimit: shouldBypassIndexRateLimit(existing, { orgAdmin: canOrgAdmin(auth) })
+    bypassRateLimit: shouldBypassIndexRateLimit(existing, { orgAdmin: canOrgAdmin(auth) }),
+    // Admin Deep-Index / Reindex must start a fresh job — never reattach to a
+    // zombie "running" row stuck mid-progress (commonly 79% embeddings).
+    force: true
   });
 
   if (queueResult.outcome === "skipped" && queueResult.reason === "already_active") {
