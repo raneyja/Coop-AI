@@ -59,6 +59,10 @@ When giving setup, env, or test steps (not code review), follow:
 - **`.cursor/rules/user-instructions.mdc`** — which surface (file, terminal, extension UI, browser); add vs change config; similar env vars
 - **`.cursor/rules/clear-user-requests.mdc`** — lead with required vs optional; one happy path; where secrets come from; don't bury the ask
 
+## Agent git / CI gate
+
+Jon asks the agent to commit and push. Before commit or push, the agent must run **`npm run lint`** (same as GitHub Actions Lint) and ship **complete** diffs (call sites + matching types/clients). See **`.cursor/rules/agent-git-workflow.mdc`**.
+
 ## Boris bar
 
 **Boris bar** is Coop’s quality bar: **Claude Code / Anthropic-grade craft**, not vibe-coded output. When the user says *“make sure this meets the Boris bar”*, treat it as a **ship gate** — would this pass review on a serious agentic coding product, or does it feel like a demo that only works in the happy path?

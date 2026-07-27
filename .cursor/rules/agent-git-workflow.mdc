@@ -1,0 +1,37 @@
+---
+description: Agent must lint and ship complete diffs before commit/push (CI gate)
+alwaysApply: true
+---
+
+# Agent git workflow — match CI before push
+
+Jon asks the agent to commit and push. **You** own the CI gate. Do not rely on him to run lint.
+
+GitHub Actions Lint is `npm run lint` (`tsc --noEmit` on extension, webview, and backend tsconfigs). Most historical red CI was incomplete commits: call sites without matching types/methods.
+
+## Before every commit the user requested
+
+1. Run `git status` and `git diff` (staged + unstaged). Stage **all files required** for the change to typecheck — not only the file you edited last.
+2. Related surfaces that often get left behind: `src/chat/types.ts`, `SecureApiClient.ts`, `CoopBackendClient.ts`, webview message handlers, admin mirrors of the same API.
+3. Run **`npm run lint`** from the repo root. Fix failures (or include missing files) before `git commit`.
+4. Do **not** commit if lint fails. Do **not** push a known-red commit “to fix later” unless the user explicitly overrides.
+
+## Before every push the user requested
+
+1. If you have not run `npm run lint` since the last commit on this branch, run it again.
+2. Only then `git push`.
+3. If CI was already red on `main` for a type error you are fixing, the push must include the full fix (types + call sites + client methods).
+
+## Anti-patterns
+
+| Reject | Prefer |
+|--------|--------|
+| Commit handler that calls `api.foo()` while `foo` only exists in unstaged `SecureApiClient.ts` | One commit with handler + client + message type |
+| Push without lint because “tests pass locally” / “build works” | `npm run lint` — same check as CI |
+| Ask Jon to run lint before your push | You run it |
+
+## Scope
+
+- Applies when the user asks to commit, push, open a PR, or “ship this.”
+- Does not require the full CI test matrix locally unless the user asks or the change is in those test areas.
+- Secrets, amend, force-push, and hook-skip rules in the user commit protocol still apply.
