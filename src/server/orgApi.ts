@@ -1178,6 +1178,79 @@ async function ensureWorkspaceReposInOrgCatalog(
   }
 }
 
+/** Resolve default branch from catalog discovery or Deep-Index stats — never guess "main". */
+async function buildDefaultBranchLookup(
+  orgId: string,
+  repoIds: string[],
+  deps: OrgApiDeps
+): Promise<Map<string, string>> {
+  const lookup = new Map<string, string>();
+  if (repoIds.length === 0) {
+    return lookup;
+  }
+
+  try {
+    const catalog = await discoverOrgCatalogEntries(orgId, deps);
+    for (const entry of catalog) {
+      const branch = entry.defaultBranch?.trim();
+      if (branch) {
+        lookup.set(entry.repoId, branch);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[workspace-repos] catalog branch lookup failed org=${orgId}: ${message}`);
+  }
+
+  const pool = await getDbPool();
+  if (pool) {
+    const statsStore = new RepoStatsStore(pool);
+    await Promise.all(
+      repoIds.map(async (repoId) => {
+        if (lookup.has(repoId)) {
+          return;
+        }
+        const stats = await statsStore.loadStats(orgId, repoId);
+        const branch = stats?.branch?.trim();
+        if (branch) {
+          lookup.set(repoId, branch);
+        }
+      })
+    );
+  }
+
+  return lookup;
+}
+
+function workspaceRepoPayload(
+  repoId: string,
+  index: number,
+  orgRepoById: Map<string, import("./orgStore").OrgRepoRecord>,
+  defaultBranchLookup: Map<string, string>
+): {
+  repoId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  indexStatus?: string;
+  lightningEnabled?: boolean;
+  isPrimary: boolean;
+  sortOrder: number;
+} {
+  const orgRepo = orgRepoById.get(repoId);
+  const parsed = parseRepoId(repoId);
+  return {
+    repoId,
+    owner: parsed.owner,
+    name: parsed.repo,
+    defaultBranch: defaultBranchLookup.get(repoId) ?? "",
+    indexStatus: orgRepo?.indexStatus,
+    lightningEnabled: orgRepo?.lightningEnabled,
+    isPrimary: index === 0,
+    sortOrder: index
+  };
+}
+
 async function handleGetWorkspaceRepos(
   response: ServerResponse,
   deps: OrgApiDeps,
@@ -1196,20 +1269,10 @@ async function handleGetWorkspaceRepos(
       orgStore: deps.orgStore!,
       grantStore
     });
-    const repos = resolution.repoIds.map((repoId, index) => {
-      const orgRepo = orgRepoById.get(repoId);
-      const parsed = parseRepoId(repoId);
-      return {
-        repoId,
-        owner: parsed.owner,
-        name: parsed.repo,
-        defaultBranch: "main",
-        indexStatus: orgRepo?.indexStatus,
-        lightningEnabled: orgRepo?.lightningEnabled,
-        isPrimary: index === 0,
-        sortOrder: index
-      };
-    });
+    const defaultBranchLookup = await buildDefaultBranchLookup(orgId, resolution.repoIds, deps);
+    const repos = resolution.repoIds.map((repoId, index) =>
+      workspaceRepoPayload(repoId, index, orgRepoById, defaultBranchLookup)
+    );
     writeJson(response, 200, {
       repos,
       selectedCount: repos.length,
@@ -1224,20 +1287,11 @@ async function handleGetWorkspaceRepos(
 
   const selections = await workspaceStore.listUserWorkspaceRepos(orgId, userId);
   const quota = await workspaceStore.getUserWorkspaceQuota(orgId, userId, plan);
-  const repos = selections.map((selection, index) => {
-    const orgRepo = orgRepoById.get(selection.repoId);
-    const parsed = parseRepoId(selection.repoId);
-    return {
-      repoId: selection.repoId,
-      owner: parsed.owner,
-      name: parsed.repo,
-      defaultBranch: "main",
-      indexStatus: orgRepo?.indexStatus,
-      lightningEnabled: orgRepo?.lightningEnabled,
-      isPrimary: index === 0,
-      sortOrder: selection.sortOrder
-    };
-  });
+  const selectionRepoIds = selections.map((selection) => selection.repoId);
+  const defaultBranchLookup = await buildDefaultBranchLookup(orgId, selectionRepoIds, deps);
+  const repos = selections.map((selection, index) =>
+    workspaceRepoPayload(selection.repoId, index, orgRepoById, defaultBranchLookup)
+  );
   writeJson(response, 200, {
     repos,
     selectedCount: quota.selectedCount,

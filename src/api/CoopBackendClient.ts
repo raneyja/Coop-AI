@@ -278,6 +278,22 @@ export class CoopBackendClient {
     return response.data;
   }
 
+  public async completeOrgOnboarding(baseUrl: string): Promise<void> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<{ ok?: boolean } & CoopApiErrorBody>(
+      "/v1/admin/onboarding/complete",
+      {},
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+  }
+
   public async fetchMeIntegrations(baseUrl: string): Promise<MeIntegrationsResponse> {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<MeIntegrationsResponse>("/v1/me/integrations", {
@@ -844,7 +860,7 @@ export class CoopBackendClient {
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encodedRepo}/tree`, {
           baseURL: baseUrl.replace(/\/$/, ""),
-          params: { path, branch },
+          params: branch?.trim() ? { path, branch: branch.trim() } : { path },
           headers: await this.authHeaders()
         })
     });

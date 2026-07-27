@@ -1560,6 +1560,9 @@ export class CoopChatSession {
       case "settings:test-connection":
         await this.handleTestConnection(source);
         return;
+      case "settings:complete-onboarding":
+        await this.handleCompleteOnboarding();
+        return;
       case "settings:install-github-app":
         await this.handleInstallGithubApp();
         return;
@@ -2824,6 +2827,17 @@ export class CoopChatSession {
       this.publishTestResult(result, source);
     } catch (error) {
       this.publishTestResult({ ok: false, message: this.testFailureMessage(error) }, source);
+    }
+  }
+
+  private async handleCompleteOnboarding(): Promise<void> {
+    try {
+      await this.options.api.completeOrgOnboarding(this.preferences.apiBaseUrl);
+      await this.refreshAllSessionsPreferences();
+    } catch (error) {
+      // Banner already hid permanently in the webview; surface a soft warning only.
+      const message = error instanceof Error ? error.message : "Could not mark org setup complete.";
+      void vscode.window.showWarningMessage(message);
     }
   }
 
@@ -4974,7 +4988,7 @@ export class CoopChatSession {
               provider: repoProvider,
               owner: entry.owner,
               repo: entry.name,
-              branch: entry.defaultBranch
+              branch: entry.defaultBranch?.trim() || undefined
             };
           });
         }
@@ -4986,7 +5000,7 @@ export class CoopChatSession {
               provider: "github" as const,
               owner: entry.owner,
               repo: entry.name,
-              branch: entry.defaultBranch
+              branch: entry.defaultBranch?.trim() || undefined
             }));
           }
         } catch {
@@ -5187,16 +5201,17 @@ export class CoopChatSession {
           : "github";
         const provider =
           providerToken === "gitlab" || providerToken === "bitbucket" ? providerToken : "github";
+        const primaryBranch = primary.defaultBranch?.trim();
         this.setRepoContext({
           provider,
           owner: primary.owner,
           repo: primary.name,
-          branch: primary.defaultBranch || "main"
+          branch: primaryBranch || undefined
         });
         await updateConfiguration({
           owner: primary.owner,
           repo: primary.name,
-          branch: primary.defaultBranch || "main"
+          ...(primaryBranch ? { branch: primaryBranch } : {})
         });
       }
       await this.refreshAllSessionsPreferences();
@@ -5224,6 +5239,7 @@ export class CoopChatSession {
     branch?: string;
   }): Promise<void> {
     const repoId = `${payload.provider ?? this.preferences.defaultCodeHost}:${payload.owner}/${payload.repo}`;
+    let branch = payload.branch?.trim() || undefined;
     if (await this.options.api.hasToken()) {
       try {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
@@ -5231,11 +5247,15 @@ export class CoopChatSession {
           await this.handleRepoListRepos("chat");
           return;
         }
+        if (!branch) {
+          const entry = workspace.repos.find((item) => item.repoId === repoId);
+          branch = entry?.defaultBranch?.trim() || undefined;
+        }
       } catch {
         // Continue — file tree may still work if workspace endpoint is temporarily unavailable.
       }
     }
-    this.setRepoContext(payload);
+    this.setRepoContext({ ...payload, branch });
   }
 
   private async handleRepoSearch(query: string, source: "chat" | "settings"): Promise<void> {

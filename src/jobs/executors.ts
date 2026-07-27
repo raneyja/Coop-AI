@@ -284,7 +284,7 @@ async function indexRepository(
       const pool = await getDbPool();
       if (pool) {
         await new RepoStatsStore(pool).upsertStats(orgId, repoId, {
-          branch: target.branch,
+          branch: clone.branch ?? target.branch,
           fileCount: repoStats.fileCount,
           lineCount: repoStats.lineCount,
           byteCount: repoStats.byteCount,

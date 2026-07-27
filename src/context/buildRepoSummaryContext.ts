@@ -48,19 +48,24 @@ export async function buildLiveRepoSummary(
   const repoId =
     options.repoId ?? repoIdFromCoordinates(coords) ?? `${options.owner}/${options.repo}`;
 
-  const [repository, rootTree, recentCommits, manifest] = await Promise.all([
-    options.codeHostRouter.getRepository(coords).catch(() => undefined),
-    options.codeHostRouter.getRepositoryTree("", coords).catch(() => undefined),
+  const repository = await options.codeHostRouter.getRepository(coords).catch(() => undefined);
+  const resolvedCoords: RepoCoordinates = {
+    ...coords,
+    branch: options.branch?.trim() || repository?.defaultBranch || undefined
+  };
+
+  const [rootTree, recentCommits, manifest] = await Promise.all([
+    options.codeHostRouter.getRepositoryTree("", resolvedCoords).catch(() => undefined),
     options.codeHostRouter
-      .getCommitHistory({ ...coords, limit: MAX_RECENT_COMMITS })
+      .getCommitHistory({ ...resolvedCoords, limit: MAX_RECENT_COMMITS })
       .catch((): CommitInfo[] => []),
     loadManifestSafe(options.loadManifest, repoId)
   ]);
 
-  const branch = repository?.defaultBranch ?? rootTree?.branch ?? options.branch ?? "main";
+  const branch = repository?.defaultBranch ?? rootTree?.branch ?? resolvedCoords.branch ?? "main";
   const treeOverview = summarizeTree(rootTree?.entries ?? []);
   const srcTree = treeOverview.topLevelDirs.includes("src")
-    ? await options.codeHostRouter.getRepositoryTree("src", coords).catch(() => undefined)
+    ? await options.codeHostRouter.getRepositoryTree("src", resolvedCoords).catch(() => undefined)
     : undefined;
   const srcOverview = srcTree ? summarizeTree(srcTree.entries, "src/") : undefined;
 
@@ -71,7 +76,7 @@ export async function buildLiveRepoSummary(
     srcOverview,
     activeFile: options.activeFile
   });
-  const entryFiles = await fetchEntryFiles(options.codeHostRouter, coords, entryPaths);
+  const entryFiles = await fetchEntryFiles(options.codeHostRouter, resolvedCoords, entryPaths);
 
   return {
     repoId,

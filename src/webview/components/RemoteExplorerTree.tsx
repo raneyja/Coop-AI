@@ -51,7 +51,7 @@ export function repoOptionFromPath(path: string, metadata?: GithubRepoOption[]):
       repoId,
       owner: parsed.owner,
       name: parsed.repo,
-      defaultBranch: "main"
+      defaultBranch: ""
     }
   );
 }

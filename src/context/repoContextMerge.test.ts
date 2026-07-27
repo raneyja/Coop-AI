@@ -137,6 +137,14 @@ async function run(): Promise<void> {
     assert.equal(merged.languageId, "markdown");
   });
 
+  await test("mergeRepoContext does not keep prior branch when switching repos", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "coop-ai", branch: "main", scope: "repo" },
+      { owner: "CoopAI-Corp", repo: "plane", scope: "repo" }
+    );
+    assert.equal(merged.branch, undefined);
+  });
+
   await test("mergeRepoContext Use-repo clears Downloads / Cmd+O chip", () => {
     const merged = mergeRepoContext(
       {

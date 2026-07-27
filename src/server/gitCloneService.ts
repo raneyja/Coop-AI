@@ -16,6 +16,8 @@ export type CloneTarget = {
 
 export type CloneResult = {
   localPath: string;
+  /** Checked-out branch (repo default when clone omits `-b`). */
+  branch?: string;
   headCommit?: string;
   files: Array<{ path: string; size: number }>;
 };
@@ -40,10 +42,13 @@ export async function cloneRepository(
     maxBuffer: 4 * 1024 * 1024
   });
 
-  const headCommit = await readHeadCommit(localPath);
+  const [headCommit, branch] = await Promise.all([
+    readHeadCommit(localPath),
+    readHeadBranch(localPath)
+  ]);
   const files = walkRepoFiles(localPath);
 
-  return { localPath, headCommit, files };
+  return { localPath, branch, headCommit, files };
 }
 
 export function removeRepositoryClone(localPath: string): void {
@@ -78,6 +83,20 @@ async function readHeadCommit(localPath: string): Promise<string | undefined> {
       timeout: 10_000
     });
     return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readHeadBranch(localPath: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", localPath, "rev-parse", "--abbrev-ref", "HEAD"],
+      { timeout: 10_000 }
+    );
+    const branch = stdout.trim();
+    return branch && branch !== "HEAD" ? branch : undefined;
   } catch {
     return undefined;
   }

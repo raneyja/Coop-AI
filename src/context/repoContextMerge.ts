@@ -61,9 +61,10 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     if (!incoming.repo?.trim() && existing.repo?.trim()) {
       cleared.repo = existing.repo;
     }
-    if (!incoming.branch?.trim() && existing.branch?.trim()) {
-      cleared.branch = existing.branch;
-    }
+    const sameRepo =
+      cleared.owner?.trim() === existing.owner?.trim() &&
+      cleared.repo?.trim() === existing.repo?.trim();
+    cleared.branch = incoming.branch?.trim() || (sameRepo ? existing.branch?.trim() : undefined);
     if (!incoming.provider && existing.provider) {
       cleared.provider = existing.provider;
     }
