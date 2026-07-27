@@ -1,7 +1,13 @@
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import { coordinatesFromRepoId, repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import type { CommitInfo, RemoteTreeEntry } from "../api/codeHosts/types";
+import type { SecureApiClient } from "../chat/SecureApiClient";
+import type { CodeHostProviderPreference } from "../chat/types";
 import type { ManifestFileEntry } from "../manifest/types";
+import { IndexedRepoWorkspace } from "../workspace/IndexedRepoWorkspace";
+import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
+import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
+import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_FILE_CHARS = 12_000;
@@ -26,6 +32,7 @@ export type BuildRepoSummaryOptions = {
   repo: string;
   branch?: string;
   repoId?: string;
+  provider?: CodeHostProviderPreference;
   activeFile?: string;
   loadManifest?: (repoId: string) => Promise<ManifestFileEntry[]>;
 };
@@ -40,7 +47,8 @@ export async function buildLiveRepoSummary(
   options: BuildRepoSummaryOptions
 ): Promise<Record<string, unknown>> {
   const coords: RepoCoordinates = {
-    provider: "github",
+    provider:
+      options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github",
     owner: options.owner,
     repo: options.repo,
     branch: options.branch
@@ -48,10 +56,16 @@ export async function buildLiveRepoSummary(
   const repoId =
     options.repoId ?? repoIdFromCoordinates(coords) ?? `${options.owner}/${options.repo}`;
 
-  const repository = await options.codeHostRouter.getRepository(coords).catch(() => undefined);
+  const repository = await options.codeHostRouter
+    .getRepository({
+      provider: coords.provider,
+      owner: coords.owner,
+      repo: coords.repo
+    })
+    .catch(() => undefined);
   const resolvedCoords: RepoCoordinates = {
     ...coords,
-    branch: options.branch?.trim() || repository?.defaultBranch || undefined
+    branch: options.branch?.trim() || repository?.defaultBranch?.trim() || undefined
   };
 
   const [rootTree, recentCommits, manifest] = await Promise.all([
@@ -62,7 +76,7 @@ export async function buildLiveRepoSummary(
     loadManifestSafe(options.loadManifest, repoId)
   ]);
 
-  const branch = repository?.defaultBranch ?? rootTree?.branch ?? resolvedCoords.branch ?? "main";
+  const branch = rootTree?.branch ?? resolvedCoords.branch;
   const treeOverview = summarizeTree(rootTree?.entries ?? []);
   const srcTree = treeOverview.topLevelDirs.includes("src")
     ? await options.codeHostRouter.getRepositoryTree("src", resolvedCoords).catch(() => undefined)
@@ -270,7 +284,14 @@ export function resolveRepoSummaryCoords(params: {
     }
     const slash = params.repoId.split("/");
     if (slash.length === 2) {
-      return { owner: slash[0], repo: slash[1], branch: params.branch, repoId: params.repoId };
+      const provider =
+        params.provider === "gitlab" || params.provider === "bitbucket" ? params.provider : "github";
+      return {
+        owner: slash[0],
+        repo: slash[1],
+        branch: params.branch,
+        repoId: `${provider}:${slash[0]}/${slash[1]}`
+      };
     }
   }
   if (params.owner && params.repo) {
@@ -288,4 +309,255 @@ export function resolveRepoSummaryCoords(params: {
     };
   }
   return undefined;
+}
+
+export function hasRepoSummaryEvidence(data: Record<string, unknown> | undefined): boolean {
+  if (!data) {
+    return false;
+  }
+  const entryFiles = Array.isArray(data.entryFiles) ? data.entryFiles : [];
+  if (entryFiles.length > 0) {
+    return true;
+  }
+  const manifest = data.manifest;
+  if (typeof manifest === "object" && manifest !== null) {
+    const fileCount = (manifest as { fileCount?: number }).fileCount;
+    if (typeof fileCount === "number" && fileCount > 0) {
+      return true;
+    }
+  }
+  const tree = data.treeOverview as { topLevelDirs?: string[]; topLevelFiles?: string[] } | undefined;
+  if (
+    tree &&
+    ((tree.topLevelDirs?.length ?? 0) > 0 || (tree.topLevelFiles?.length ?? 0) > 0)
+  ) {
+    return true;
+  }
+  const inventory = data.repoInventory as { fileCount?: number } | undefined;
+  if (typeof inventory?.fileCount === "number" && inventory.fileCount > 0) {
+    return true;
+  }
+  return Boolean(data.repository);
+}
+
+export async function loadManifestEntries(
+  api: SecureApiClient,
+  apiBaseUrl: string,
+  candidateRepoIds: string[]
+): Promise<ManifestFileEntry[]> {
+  for (const candidate of candidateRepoIds) {
+    try {
+      const response = await api.fetchRepoManifest(apiBaseUrl, candidate);
+      const files = response.files ?? [];
+      if (files.length === 0 && !response.lastCrawledAt) {
+        continue;
+      }
+      return files.map((file) => ({
+        filePath: file.path,
+        symbols: (file.symbols ?? []) as ManifestFileEntry["symbols"]
+      }));
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+export type BuildIndexedRepoSummaryOptions = {
+  api: SecureApiClient;
+  apiBaseUrl: string;
+  codeHostRouter: CodeHostRouter;
+  owner: string;
+  repo: string;
+  branch?: string;
+  repoId: string;
+  provider?: CodeHostProviderPreference;
+  activeFile?: string;
+  resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
+};
+
+/** Indexed-repo fallback when live code-host summary returns no attachable evidence. */
+export async function buildIndexedRepoSummary(
+  options: BuildIndexedRepoSummaryOptions
+): Promise<Record<string, unknown> | undefined> {
+  const target = await resolveActiveRepoTarget(
+    {
+      repoId: options.repoId,
+      owner: options.owner,
+      repo: options.repo,
+      branch: options.branch,
+      provider: options.provider
+    },
+    {
+      api: options.api,
+      apiBaseUrl: options.apiBaseUrl,
+      codeHostRouter: options.codeHostRouter,
+      resolveWorkspaceBranch: options.resolveWorkspaceBranch
+    }
+  );
+  const branch = target.branch ?? options.branch;
+
+  const workspace = new IndexedRepoWorkspace({
+    api: options.api,
+    apiBaseUrl: options.apiBaseUrl,
+    codeHostRouter: options.codeHostRouter
+  });
+  const provider =
+    options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github";
+  const resolvedTarget: RepoTarget = { ...target, provider };
+  const resolved = resolveInventoryRepoIds(options.repoId, resolvedTarget);
+
+  const [manifest, treeOverview, inventory] = await Promise.all([
+    loadManifestEntries(options.api, options.apiBaseUrl, resolved.candidates),
+    workspace.getTreeOverview(resolvedTarget),
+    workspace.getInventory(resolvedTarget, { fileCount: true, treeOverview: false, lineCount: false })
+  ]);
+
+  const manifestStats = manifest.length > 0 ? summarizeManifest(manifest) : undefined;
+  const treeForPick = {
+    topLevelDirs: treeOverview?.topLevelDirs ?? [],
+    topLevelFiles: treeOverview?.topLevelFiles ?? []
+  };
+  const entryPaths = pickEntryPaths({
+    manifest,
+    treeOverview: treeForPick,
+    activeFile: options.activeFile
+  });
+
+  const entryFiles: RepoSummaryEntryFile[] = [];
+  for (const path of entryPaths) {
+    const file = await workspace.readFile(resolvedTarget, path);
+    if (!file?.content?.trim()) {
+      continue;
+    }
+    const truncated = file.content.length > MAX_FILE_CHARS;
+    entryFiles.push({
+      path: file.path,
+      content: truncated ? `${file.content.slice(0, MAX_FILE_CHARS)}\n… [truncated]` : file.content,
+      truncated
+    });
+  }
+
+  if (!manifestStats && entryFiles.length === 0 && !treeOverview) {
+    return undefined;
+  }
+
+  return {
+    repoId: resolved.preferred,
+    branch: treeOverview?.branch ?? branch ?? inventory?.branch,
+    activeFile: options.activeFile,
+    treeOverview: treeOverview
+      ? {
+          topLevelDirs: treeOverview.topLevelDirs,
+          topLevelFiles: treeOverview.topLevelFiles
+        }
+      : undefined,
+    manifest: manifestStats
+      ? {
+          fileCount: manifestStats.fileCount,
+          entryPoints: manifestStats.entryPoints,
+          extensionBreakdown: manifestStats.extensionBreakdown
+        }
+      : inventory && typeof inventory.fileCount === "number"
+        ? { fileCount: inventory.fileCount }
+        : undefined,
+    entryFiles,
+    source: manifestStats ? "indexed-manifest" : entryFiles.length > 0 ? "indexed-files" : "indexed-tree"
+  };
+}
+
+export type BuildRepoSummaryEvidenceOptions = {
+  api: SecureApiClient;
+  apiBaseUrl: string;
+  codeHostRouter: CodeHostRouter;
+  owner: string;
+  repo: string;
+  branch?: string;
+  repoId: string;
+  provider?: CodeHostProviderPreference;
+  activeFile?: string;
+  resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
+};
+
+/** Live code-host summary with indexed-workspace fallback — shared by Understand Repo and /understand. */
+export async function buildRepoSummaryEvidence(
+  options: BuildRepoSummaryEvidenceOptions
+): Promise<Record<string, unknown> | undefined> {
+  const target = await resolveActiveRepoTarget(
+    {
+      repoId: options.repoId,
+      owner: options.owner,
+      repo: options.repo,
+      branch: options.branch,
+      provider: options.provider
+    },
+    {
+      api: options.api,
+      apiBaseUrl: options.apiBaseUrl,
+      codeHostRouter: options.codeHostRouter,
+      resolveWorkspaceBranch: options.resolveWorkspaceBranch
+    }
+  );
+  const branch = target.branch ?? options.branch;
+
+  const manifestCandidates = resolveInventoryRepoIds(options.repoId, {
+    owner: options.owner,
+    repo: options.repo,
+    branch,
+    provider:
+      options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github"
+  }).candidates;
+
+  const indexed = await buildIndexedRepoSummary({
+    api: options.api,
+    apiBaseUrl: options.apiBaseUrl,
+    codeHostRouter: options.codeHostRouter,
+    owner: options.owner,
+    repo: options.repo,
+    branch,
+    repoId: options.repoId,
+    activeFile: options.activeFile,
+    provider: options.provider,
+    resolveWorkspaceBranch: options.resolveWorkspaceBranch
+  });
+
+  if (hasRepoSummaryEvidence(indexed)) {
+    return indexed;
+  }
+
+  const summaryBase: BuildRepoSummaryOptions = {
+    codeHostRouter: options.codeHostRouter,
+    owner: options.owner,
+    repo: options.repo,
+    branch,
+    repoId: options.repoId,
+    provider: options.provider,
+    activeFile: options.activeFile,
+    loadManifest: async (repoId: string): Promise<ManifestFileEntry[]> =>
+      loadManifestEntries(options.api, options.apiBaseUrl, manifestCandidates.length ? manifestCandidates : [repoId])
+  };
+
+  let live: Record<string, unknown> | undefined;
+  try {
+    live = await buildLiveRepoSummary(summaryBase);
+  } catch {
+    live = undefined;
+  }
+
+  if (hasRepoSummaryEvidence(live)) {
+    return live;
+  }
+
+  if (indexed) {
+    return {
+      ...(live ?? {}),
+      ...indexed,
+      entryFiles: indexed.entryFiles ?? live?.entryFiles,
+      manifest: indexed.manifest ?? live?.manifest,
+      treeOverview: indexed.treeOverview ?? live?.treeOverview,
+      source: live?.source ? `${String(live.source)}+${String(indexed.source)}` : indexed.source
+    };
+  }
+
+  return live;
 }

@@ -299,6 +299,9 @@ import {
   IndexedRepoWorkspace,
   mergeRepoInventoryContext
 } from "../workspace/IndexedRepoWorkspace";
+import { enrichContextWithIndexedRepo } from "../context/indexedRepoContextEnrichment";
+import { hasRepoSummaryEvidence } from "../context/buildRepoSummaryContext";
+import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
@@ -2250,8 +2253,19 @@ export class CoopChatSession {
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
     let result: ContextFetchResult;
+    const isUnderstandRepo =
+      request.params.quickAction === "understand-repo" && request.type === "file_metadata";
 
-    if (request.type === "chat_context") {
+    if (isUnderstandRepo) {
+      // Indexed manifest + entry files first — live code-host crawl is slower and often wrong-branch.
+      result = {
+        requestId: request.id,
+        type: request.type,
+        data: this.localContextDataFor(request),
+        fetchedAt: new Date()
+      };
+      result = await this.enrichWithIndexedWorkspace(request, result);
+    } else if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
       const queryText = request.intent.context?.queryText;
@@ -2265,7 +2279,46 @@ export class CoopChatSession {
       result = await this.buildBaseContextResult(request);
     }
 
+    if (isUnderstandRepo) {
+      const fallback = await this.buildBaseContextResult(request);
+      result = this.mergeUnderstandRepoContextResults(result, fallback);
+    } else {
+      result = await this.enrichWithIndexedWorkspace(request, result);
+    }
+
     return result;
+  }
+
+  private mergeUnderstandRepoContextResults(
+    indexedFirst: ContextFetchResult,
+    featureResult: ContextFetchResult
+  ): ContextFetchResult {
+    const indexedData =
+      typeof indexedFirst.data === "object" && indexedFirst.data !== null
+        ? (indexedFirst.data as Record<string, unknown>)
+        : {};
+    const featureData =
+      typeof featureResult.data === "object" && featureResult.data !== null
+        ? (featureResult.data as Record<string, unknown>)
+        : {};
+
+    const mergedData = {
+      ...featureData,
+      ...indexedData,
+      entryFiles: indexedData.entryFiles ?? featureData.entryFiles,
+      manifest: featureData.manifest ?? indexedData.manifest,
+      treeOverview: indexedData.treeOverview ?? featureData.treeOverview,
+      repoInventory: indexedData.repoInventory ?? featureData.repoInventory,
+      repository: featureData.repository ?? indexedData.repository
+    };
+
+    return {
+      ...featureResult,
+      ...indexedFirst,
+      data: mergedData,
+      error: hasRepoSummaryEvidence(mergedData) ? undefined : featureResult.error ?? indexedFirst.error,
+      message: featureResult.message ?? indexedFirst.message
+    };
   }
 
   /** Single entry point for indexed-repo facts and remote file reads. */
@@ -2281,13 +2334,120 @@ export class CoopChatSession {
   }
 
   private repoTargetForRequest(request: ContextFetchRequest): RepoTarget {
+    const owner = request.params.owner ?? this.currentContext.owner ?? this.preferences.owner;
+    const repo = request.params.repo ?? this.currentContext.repo ?? this.preferences.repo;
+    const provider =
+      (request.params.provider as RepoContext["provider"] | undefined) ??
+      this.currentContext.provider ??
+      this.preferences.defaultCodeHost ??
+      "github";
+    const repoId =
+      request.params.repoId?.trim() ||
+      (owner && repo ? buildRepoId(this.preferences, { owner, repo, provider }) : undefined);
     return {
-      repoId: request.params.repoId,
+      repoId,
       branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
-      owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
-      repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
-      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github"
+      owner,
+      repo,
+      provider
     };
+  }
+
+  private async enrichWithIndexedWorkspace(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    if (!(await this.shouldAttachIndexedWorkspace(request))) {
+      return result;
+    }
+    let target = this.repoTargetForRequest(request);
+    if (!target.repoId?.trim()) {
+      return result;
+    }
+    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    const enriched = await enrichContextWithIndexedRepo({
+      deps: {
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter
+      },
+      target,
+      request,
+      result,
+      budgetMs,
+      resolveWorkspaceBranch: async (repoId) => this.resolveWorkspaceDefaultBranch(repoId)
+    });
+
+    const resolvedBranch = (enriched.data as { resolvedBranch?: string } | undefined)?.resolvedBranch;
+    if (resolvedBranch?.trim() && resolvedBranch !== this.currentContext.branch) {
+      this.currentContext = { ...this.currentContext, branch: resolvedBranch.trim() };
+    }
+
+    return enriched;
+  }
+
+  private async resolveWorkspaceDefaultBranch(repoId: string): Promise<string | undefined> {
+    if (!(await this.options.api.hasToken())) {
+      return undefined;
+    }
+    try {
+      const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+      const entry = workspace.repos.find(
+        (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+      );
+      return entry?.defaultBranch?.trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async resolveIndexedBranchForTarget(
+    repoId: string,
+    target: RepoTarget
+  ): Promise<string | undefined> {
+    if (!(await this.options.api.hasToken())) {
+      return undefined;
+    }
+    return fetchIndexedBranch(this.options.api, this.preferences.apiBaseUrl, repoId, target);
+  }
+
+  private async shouldAttachIndexedWorkspace(request: ContextFetchRequest): Promise<boolean> {
+    if (await this.isRepoInWorkspaceForRequest(request)) {
+      return true;
+    }
+    const target = this.repoTargetForRequest(request);
+    if (
+      isExplicitRepoScope(this.currentContext) &&
+      target.owner &&
+      target.repo &&
+      target.owner === this.currentContext.owner &&
+      target.repo === this.currentContext.repo
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private async isRepoInWorkspaceForRequest(request: ContextFetchRequest): Promise<boolean> {
+    const target = this.repoTargetForRequest(request);
+    const repoId = target.repoId?.trim();
+    if (!repoId) {
+      return false;
+    }
+    if (this.preferences.workspaceRepoIds?.includes(repoId)) {
+      return true;
+    }
+    if (!(await this.options.api.hasToken())) {
+      return false;
+    }
+    try {
+      const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+      return workspace.repos.some(
+        (entry) => entry.repoId === repoId || entry.repoId.toLowerCase() === repoId.toLowerCase()
+      );
+    } catch {
+      return this.preferences.workspaceRepoIds?.includes(repoId) ?? false;
+    }
   }
 
   private async enrichChatContextWithRepoInventory(
@@ -5249,9 +5409,17 @@ export class CoopChatSession {
         }
         if (!branch) {
           const entry = workspace.repos.find(
-          (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
-        );
+            (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+          );
           branch = entry?.defaultBranch?.trim() || undefined;
+        }
+        if (!branch) {
+          branch = await this.resolveIndexedBranchForTarget(repoId, {
+            repoId,
+            owner: payload.owner,
+            repo: payload.repo,
+            provider: payload.provider
+          });
         }
       } catch {
         // Continue — file tree may still work if workspace endpoint is temporarily unavailable.

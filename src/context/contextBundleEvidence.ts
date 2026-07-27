@@ -180,6 +180,13 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     if (data.manifest) merged.manifest = data.manifest as RepoSummaryEvidence["manifest"];
     if (Array.isArray(data.entryFiles)) merged.entryFiles = data.entryFiles as RepoSummaryEvidence["entryFiles"];
     if (data.treeOverview) merged.treeOverview = data.treeOverview;
+    if (data.repoInventory) {
+      const inventory = data.repoInventory as { fileCount?: number; source?: string };
+      (merged as { repoInventory?: { fileCount?: number; source?: string } }).repoInventory = inventory;
+      if (typeof inventory.fileCount === "number" && !merged.manifest?.fileCount) {
+        merged.manifest = { ...(merged.manifest ?? {}), fileCount: inventory.fileCount };
+      }
+    }
     if (data.source) merged.source = String(data.source);
     if (Array.isArray(data.warnings)) merged.warnings = data.warnings as string[];
     if (data.confluenceSearch) {
@@ -263,9 +270,21 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
       delete merged.warnings;
     }
   }
+  const tree = merged.treeOverview as { topLevelDirs?: string[]; topLevelFiles?: string[] } | undefined;
+  const hasTreeLayout = Boolean(
+    tree &&
+      ((tree.topLevelDirs?.length ?? 0) > 0 ||
+        (tree.topLevelFiles?.length ?? 0) > 0)
+  );
+  const inventory = merged as { repoInventory?: { fileCount?: number } };
+  const hasInventory =
+    typeof inventory.repoInventory?.fileCount === "number" && inventory.repoInventory.fileCount > 0;
+
   return merged.entryFiles?.length ||
     merged.manifest ||
     merged.repository ||
+    hasTreeLayout ||
+    hasInventory ||
     merged.confluence ||
     merged.jira ||
     merged.slack ||
