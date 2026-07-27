@@ -23,26 +23,26 @@ type DisplayPhase = "hidden" | "active" | "complete";
 
 function statusLine(stats: IndexingProgressStats, phase: DisplayPhase): string {
   if (phase === "complete") {
-    if (stats.error > 0) {
-      return `Indexing finished — ${stats.ready} ready, ${stats.error} failed`;
+    if (stats.browseFailed > 0 || stats.error > 0) {
+      return `${stats.usable} of ${stats.total} usable · ${stats.browseFailed + stats.error} need attention`;
     }
     if (stats.readyWithEmbeddingWarning > 0) {
-      return `Indexing complete — ${stats.ready} ready (${stats.readyWithEmbeddingWarning} embedding warning${stats.readyWithEmbeddingWarning === 1 ? "" : "s"})`;
+      return `${stats.usable} of ${stats.total} usable (${stats.readyWithEmbeddingWarning} embedding warning${stats.readyWithEmbeddingWarning === 1 ? "" : "s"})`;
     }
-    return `Indexing complete — ${stats.ready} repo${stats.ready === 1 ? "" : "s"} ready`;
+    return `${stats.usable} of ${stats.total} usable — safe to assign to developers`;
   }
-  const parts = [`${stats.ready}/${stats.total} ready`];
+  const parts = [`${stats.usable}/${stats.total} usable`];
   if (stats.indexing > 0) {
     parts.push(`${stats.indexing} running`);
   }
   if (stats.queued > 0) {
     parts.push(`${stats.queued} queued`);
   }
+  if (stats.browseFailed > 0) {
+    parts.push(`${stats.browseFailed} browse failed`);
+  }
   if (stats.error > 0) {
     parts.push(`${stats.error} failed`);
-  }
-  if (stats.readyWithEmbeddingWarning > 0) {
-    parts.push(`${stats.readyWithEmbeddingWarning} embedding warning${stats.readyWithEmbeddingWarning === 1 ? "" : "s"}`);
   }
   return parts.join(" · ");
 }
@@ -218,7 +218,9 @@ export function IndexingProgressBar(): React.ReactElement | null {
   const title = phase === "complete" ? "Indexing complete" : "Deep index in progress";
   const barClass =
     phase === "complete"
-      ? "border-emerald-500/40 bg-emerald-950/40"
+      ? stats.browseFailed > 0 || stats.error > 0
+        ? "border-amber-500/40 bg-amber-950/40"
+        : "border-emerald-500/40 bg-emerald-950/40"
       : "border-coop-index/30 bg-coop-dark/95";
 
   if (!expanded) {
@@ -236,6 +238,9 @@ export function IndexingProgressBar(): React.ReactElement | null {
               <div className="mt-2">
                 <ProgressTrack stats={stats} phase={phase} />
               </div>
+              <p className="mt-1 font-mono text-[10px] text-coop-muted">
+                {stats.usable} of {stats.total} usable
+              </p>
             </button>
             <button
               type="button"

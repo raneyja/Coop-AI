@@ -2,6 +2,7 @@ import type { OrgPlan, OrgRepoRecord, OrgStore } from "./orgStore";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
 import type { UserRepoGrantStore } from "./userRepoGrantStore";
+import { isUsableForDeveloperAccess } from "../indexing/verifyRepoBrowse";
 
 export type AccessibleRepoResolution = {
   repoIds: string[];
@@ -9,8 +10,9 @@ export type AccessibleRepoResolution = {
   adminControlled: boolean;
 };
 
+/** Deep-Index on, not disabled, ready, and browse not explicitly failed. */
 export function isIndexedForAccess(repo: OrgRepoRecord): boolean {
-  return Boolean(repo.lightningEnabled && repo.indexStatus !== "disabled");
+  return isUsableForDeveloperAccess(repo);
 }
 
 export function indexedOrgRepoIds(repos: OrgRepoRecord[]): string[] {

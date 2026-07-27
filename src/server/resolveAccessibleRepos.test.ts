@@ -69,9 +69,16 @@ async function testPerUserMode() {
 
 async function testIndexedHelper() {
   assert.equal(isIndexedForAccess(repo("github:a/b", true, "ready")), true);
-  assert.equal(isIndexedForAccess(repo("github:a/b", true, "indexing")), true);
+  assert.equal(isIndexedForAccess(repo("github:a/b", true, "indexing")), false);
   assert.equal(isIndexedForAccess(repo("github:a/b", false, "idle")), false);
   assert.equal(isIndexedForAccess(repo("github:a/b", true, "disabled")), false);
+  assert.equal(
+    isIndexedForAccess({
+      ...repo("github:a/b", true, "ready"),
+      browseStatus: "failed"
+    }),
+    false
+  );
 }
 
 async function testActiveUserRepoGrantIds() {

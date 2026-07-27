@@ -5,12 +5,15 @@ import { codeHostLabel } from "@/lib/coopApi";
 export type IndexingProgressStats = {
   total: number;
   ready: number;
+  usable: number;
+  browseFailed: number;
   readyWithEmbeddingWarning: number;
   queued: number;
   indexing: number;
   error: number;
   idle: number;
   inFlight: number;
+  /** Share of Deep-Indexed repos that are developer-usable (verified browse). */
   progressPercent: number;
 };
 
@@ -21,9 +24,32 @@ export function hasEmbeddingWarning(repo: OrgRepoRecord): boolean {
   return repo.indexStatus === "ready" && repo.embeddingStatus === "failed";
 }
 
+export function hasBrowseFailure(repo: OrgRepoRecord): boolean {
+  return Boolean(repo.lightningEnabled && repo.browseStatus === "failed");
+}
+
+export function isFullyUsable(repo: OrgRepoRecord): boolean {
+  return Boolean(
+    repo.lightningEnabled && repo.indexStatus === "ready" && repo.browseStatus === "verified"
+  );
+}
+
+/** Legacy ready without browseStatus still counts toward estate completion until re-verified. */
+export function isEstateComplete(repo: OrgRepoRecord): boolean {
+  if (!repo.lightningEnabled || repo.indexStatus !== "ready") {
+    return false;
+  }
+  if (repo.browseStatus === "failed") {
+    return false;
+  }
+  return true;
+}
+
 export function computeIndexingStats(repos: OrgRepoRecord[]): IndexingProgressStats {
   let total = 0;
   let ready = 0;
+  let usable = 0;
+  let browseFailed = 0;
   let readyWithEmbeddingWarning = 0;
   let queued = 0;
   let indexing = 0;
@@ -38,6 +64,12 @@ export function computeIndexingStats(repos: OrgRepoRecord[]): IndexingProgressSt
     const status = repo.indexStatus ?? "idle";
     if (status === "ready") {
       ready += 1;
+      if (isFullyUsable(repo)) {
+        usable += 1;
+      }
+      if (hasBrowseFailure(repo)) {
+        browseFailed += 1;
+      }
       if (hasEmbeddingWarning(repo)) {
         readyWithEmbeddingWarning += 1;
       }
@@ -53,21 +85,20 @@ export function computeIndexingStats(repos: OrgRepoRecord[]): IndexingProgressSt
   }
 
   const inFlight = queued + indexing;
-  const fullyReady = Math.max(0, ready - readyWithEmbeddingWarning);
-  const progressPercent =
-    total > 0
-      ? Math.min(
-          100,
-          Math.round(
-            ((fullyReady + readyWithEmbeddingWarning * 0.9 + indexing * 0.5 + queued * 0.1) / total) *
-              100
-          )
-        )
-      : 0;
+  // Honest estate bar: share of repos that developers can use (verified or legacy ready).
+  let complete = 0;
+  for (const repo of repos) {
+    if (repo.lightningEnabled && isEstateComplete(repo)) {
+      complete += 1;
+    }
+  }
+  const progressPercent = total > 0 ? Math.min(100, Math.round((complete / total) * 100)) : 0;
 
   return {
     total,
     ready,
+    usable,
+    browseFailed,
     readyWithEmbeddingWarning,
     queued,
     indexing,
@@ -224,11 +255,20 @@ export function filterReposForIndexingView(
 }
 
 export function formatIndexingDisplayStatus(repo: OrgRepoRecord): string {
+  if (repo.indexStatus === "ready" && repo.browseStatus === "failed") {
+    return "Browse failed";
+  }
+  if (repo.indexStatus === "ready" && repo.browseStatus === "verified") {
+    if (hasEmbeddingWarning(repo)) {
+      return "Usable · embeddings pending";
+    }
+    return "Usable";
+  }
   if (repo.indexStatus === "ready" && repo.embeddingStatus === "failed") {
-    return "Embeddings pending";
+    return "Indexed · embeddings pending";
   }
   if (repo.indexStatus === "indexing") {
-    return "Indexing";
+    return repo.indexStage ? `Indexing · ${repo.indexStage}` : "Indexing";
   }
   if (repo.indexStatus === "cloning") {
     return "Cloning";
@@ -240,7 +280,7 @@ export function formatIndexingDisplayStatus(repo: OrgRepoRecord): string {
     return "Failed";
   }
   if (repo.indexStatus === "ready") {
-    return "Ready";
+    return "Indexed";
   }
   return repo.indexStatus ?? "Idle";
 }
@@ -282,8 +322,14 @@ export function buildIndexingQueue(repos: OrgRepoRecord[]): IndexingQueueSection
     if (status === "queued" || status === "indexing" || status === "cloning") {
       item.bucket = "in_flight";
       inFlight.push(item);
-    } else if (status === "error" || hasEmbeddingWarning(repo)) {
+    } else if (status === "error" || hasEmbeddingWarning(repo) || hasBrowseFailure(repo)) {
       item.bucket = "attention";
+      item.errorNote =
+        status === "error"
+          ? repo.error
+          : hasBrowseFailure(repo)
+            ? repo.browseError
+            : repo.embeddingError;
       attention.push(item);
     } else if (status === "ready") {
       item.bucket = "ready";

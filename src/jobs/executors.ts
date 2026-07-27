@@ -17,6 +17,7 @@ import { runScipIndexer } from "./runScipIndexer";
 import { runZoektIndexer } from "./runZoektIndexer";
 import { collectRepoStats } from "../workspace/collectRepoStats";
 import { RepoStatsStore } from "../workspace/repoStatsStore";
+import { verifyRepoBrowse } from "../indexing/verifyRepoBrowse";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -181,11 +182,14 @@ async function indexRepository(
       indexStatus: "indexing",
       error: undefined,
       embeddingStatus: "pending",
-      embeddingError: undefined
+      embeddingError: undefined,
+      browseStatus: "pending",
+      browseError: undefined,
+      browseVerifiedAt: undefined
     });
   }
 
-  await report(20, "Preparing repository clone");
+  await report(15, "Preparing repository clone");
   let graph = ctx.cache.getGraph(repoId);
   if (!graph) {
     const target = parseRepoId(repoId);
@@ -215,7 +219,7 @@ async function indexRepository(
           "(same values as Coop-AI on Railway), then Reindex."
       );
     }
-    await report(45, "Cloning repository");
+    await report(30, "Cloning repository");
     const target = parseRepoId(repoId);
     const clone = await cloneRepository(target, token);
     cloneLocalPath = clone.localPath;
@@ -228,10 +232,10 @@ async function indexRepository(
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
-        await report(55, "Running SCIP symbol indexing");
+        await report(42, "Running SCIP symbol indexing");
         scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool);
 
-        await report(65, "Building Zoekt full-text index");
+        await report(55, "Building Zoekt full-text index");
         zoektResult = await runZoektIndexer(repoId, orgId, clone.localPath);
 
         let shouldEmbed = false;
@@ -240,12 +244,13 @@ async function indexRepository(
           shouldEmbed = Boolean(org && canUseLightningPlan(org.plan));
         }
         if (shouldEmbed) {
-          await report(75, "Embedding files without symbol coverage");
+          await report(65, "Embedding files without symbol coverage");
           try {
             embedResult = await chunkAndEmbed(repoId, orgId, clone.localPath, pool, {
               signal,
               onProgress: async (fraction) => {
-                await report(75 + Math.round(fraction * 4), "Embedding files without symbol coverage");
+                // Wide band (65–85) so large repos don't look stuck at 77–79.
+                await report(65 + Math.round(fraction * 20), "Embedding files without symbol coverage");
               }
             });
             embeddingStatus = "complete";
@@ -255,13 +260,13 @@ async function indexRepository(
             }
             embeddingStatus = "failed";
             embeddingError = error instanceof Error ? error.message : String(error);
-            await report(78, "Embeddings failed — symbols and full-text search remain available");
+            await report(82, "Embeddings failed — symbols and full-text search remain available");
           }
         }
       }
     }
 
-    await report(80, "Building file index");
+    await report(86, "Building file index");
 
     const now = new Date();
     graph.fileTree = clone.files.map((file) => ({
@@ -276,9 +281,26 @@ async function indexRepository(
     graph.lastUpdated = now;
     ctx.cache.setGraph(graph);
 
+    if (orgId) {
+      const pool = await getDbPool();
+      if (pool) {
+        const store = new RepoSymbolIndexStore(pool);
+        const symbolCount = await store.countSymbols(orgId, repoId);
+        if (symbolCount > 0 && symbolCount <= SYMBOL_EDGE_BUILD_LIMIT) {
+          await report(87, "Building symbol dependency graph");
+          const filePaths = new Set(graph.fileTree.map((file) => file.path));
+          const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
+          ctx.cache.setDependencies(
+            repoId,
+            dedupeEdges(symbolEdges.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to)))
+          );
+        }
+      }
+    }
+
     // Measure the repo while the clone still exists — chat answers counts from
     // this record instead of estimating from a retrieval sample.
-    await report(84, "Recording repository inventory");
+    await report(88, "Recording repository inventory");
     const repoStats = collectRepoStats(clone.localPath, clone.files);
     if (orgId) {
       const pool = await getDbPool();
@@ -295,21 +317,25 @@ async function indexRepository(
       }
     }
 
-    if (orgId) {
-      const pool = await getDbPool();
-      if (pool) {
-        const store = new RepoSymbolIndexStore(pool);
-        const symbolCount = await store.countSymbols(orgId, repoId);
-        if (symbolCount > 0 && symbolCount <= SYMBOL_EDGE_BUILD_LIMIT) {
-          await report(82, "Building symbol dependency graph");
-          const filePaths = new Set(graph.fileTree.map((file) => file.path));
-          const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
-          ctx.cache.setDependencies(
-            repoId,
-            dedupeEdges(symbolEdges.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to)))
-          );
-        }
-      }
+    let browseStatus: "pending" | "verified" | "failed" = "pending";
+    let browseError: string | undefined;
+    let browseVerifiedAt: Date | undefined;
+    let defaultBranch = clone.branch ?? target.branch;
+    if (orgId && ctx.orgStore && token) {
+      await report(92, "Verifying developers can browse the repo");
+      const browse = await verifyRepoBrowse({
+        repoId,
+        token,
+        preferredBranch: defaultBranch
+      });
+      browseStatus = browse.browseStatus;
+      browseError = browse.browseError;
+      browseVerifiedAt = browse.browseVerifiedAt;
+      defaultBranch = browse.defaultBranch ?? defaultBranch;
+    } else if (orgId && ctx.orgStore && !token) {
+      browseStatus = "failed";
+      browseError = "No code-host token available to verify browse access.";
+      browseVerifiedAt = new Date();
     }
 
     if (orgId && ctx.orgStore) {
@@ -320,7 +346,11 @@ async function indexRepository(
         lastIndexedAt: now,
         lastJobId: job.id,
         error: undefined,
-        embeddingError
+        embeddingError,
+        browseStatus,
+        browseError,
+        browseVerifiedAt,
+        defaultBranch
       });
     }
 
@@ -343,7 +373,9 @@ async function indexRepository(
       embeddingCount: embedResult?.chunkCount ?? 0,
       embeddedFiles: embedResult?.embeddedFiles ?? 0,
       embeddingStatus,
-      embeddingError
+      embeddingError,
+      browseStatus,
+      defaultBranch
     };
   } catch (error) {
     let message = normalizeJobError(error);
@@ -359,7 +391,10 @@ async function indexRepository(
       await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
         indexStatus: "error",
         lastJobId: job.id,
-        error: message
+        error: message,
+        browseStatus: "failed",
+        browseError: message,
+        browseVerifiedAt: new Date()
       });
     }
     throw error instanceof Error ? new Error(message) : error;

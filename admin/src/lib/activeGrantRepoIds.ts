@@ -1,11 +1,12 @@
 import type { OrgRepoRecord } from "./coopApi";
+import { isUsableForDeveloperAccess } from "./usableRepos";
 
-function isDeepIndexedRepo(repo: OrgRepoRecord): boolean {
-  return Boolean(repo.lightningEnabled && repo.indexStatus !== "disabled");
+function isGrantableRepo(repo: OrgRepoRecord): boolean {
+  return isUsableForDeveloperAccess(repo);
 }
 
-/** Keep only grants that still match a Deep-Indexed org repo (drop orphans). */
+/** Keep only grants that still match a usable Deep-Indexed org repo. */
 export function activeGrantRepoIds(grantIds: string[], repos: OrgRepoRecord[]): string[] {
-  const indexed = new Set(repos.filter(isDeepIndexedRepo).map((repo) => repo.repoId));
+  const indexed = new Set(repos.filter(isGrantableRepo).map((repo) => repo.repoId));
   return grantIds.filter((repoId) => indexed.has(repoId));
 }

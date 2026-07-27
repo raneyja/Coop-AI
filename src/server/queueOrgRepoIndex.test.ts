@@ -140,7 +140,7 @@ async function testForceSupersedesStuckEmbeddingJob() {
   assert.ok(stuck);
   stuck.status = "running";
   stuck.progress = 79;
-  stuck.startedAt = new Date(Date.now() - 2 * 60 * 1000);
+  stuck.startedAt = new Date(Date.now() - 11 * 60 * 1000);
   await backend.update(stuck);
 
   const records = new Map<string, OrgRepoRecord>([

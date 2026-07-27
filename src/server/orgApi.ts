@@ -9,6 +9,7 @@ import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId, countRepoBlobsViaCodeHost } from "../jobs/buildStructureManifest";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { RepoStatsStore } from "../workspace/repoStatsStore";
+import { indexStageFromProgress, verifyRepoBrowse } from "../indexing/verifyRepoBrowse";
 import { requireDbPool, getDbPool } from "./db";
 import { JobType } from "../jobs/types";
 import {
@@ -97,14 +98,18 @@ export function shouldBypassIndexRateLimit(
   return !shouldRateLimitIndexRepository(existing);
 }
 
-export type OrgRepoApiRecord = OrgRepoRecord & { indexProgress?: number };
+export type OrgRepoApiRecord = OrgRepoRecord & {
+  indexProgress?: number;
+  indexStage?: string;
+  indexStageDetail?: string;
+};
 
 export async function enrichReposWithIndexProgress(
   repos: OrgRepoRecord[]
 ): Promise<OrgRepoApiRecord[]> {
   const pool = await getDbPool();
   if (!pool) {
-    return repos;
+    return repos.map((repo) => enrichRepoStage(repo));
   }
 
   const jobIds: string[] = [];
@@ -117,7 +122,7 @@ export async function enrichReposWithIndexProgress(
     }
   }
   if (jobIds.length === 0) {
-    return repos;
+    return repos.map((repo) => enrichRepoStage(repo));
   }
 
   const result = await pool.query(`SELECT id, progress FROM jobs WHERE id = ANY($1::uuid[])`, [jobIds]);
@@ -127,17 +132,35 @@ export async function enrichReposWithIndexProgress(
 
   return repos.map((repo) => {
     if (!repo.lastJobId) {
-      return repo;
+      return enrichRepoStage(repo);
     }
     const progress = progressByJobId.get(repo.lastJobId);
     if (progress === undefined) {
-      return repo;
+      return enrichRepoStage(repo);
     }
     if (repo.indexStatus !== "queued" && repo.indexStatus !== "indexing" && repo.indexStatus !== "cloning") {
-      return repo;
+      return enrichRepoStage(repo);
     }
-    return { ...repo, indexProgress: progress };
+    return enrichRepoStage({ ...repo, indexProgress: progress } as OrgRepoApiRecord, progress);
   });
+}
+
+function enrichRepoStage(repo: OrgRepoRecord | OrgRepoApiRecord, progress?: number): OrgRepoApiRecord {
+  const inFlight =
+    repo.indexStatus === "queued" ||
+    repo.indexStatus === "indexing" ||
+    repo.indexStatus === "cloning";
+  if (!inFlight) {
+    return { ...repo };
+  }
+  const value = progress ?? (repo as OrgRepoApiRecord).indexProgress;
+  const stage = indexStageFromProgress(value);
+  return {
+    ...repo,
+    ...(typeof value === "number" ? { indexProgress: value } : {}),
+    indexStage: stage.stage,
+    indexStageDetail: stage.detail
+  };
 }
 
 type ParsedRequest = {
@@ -427,7 +450,10 @@ export async function handleOrgApiRequest(
       lightningEnabled: false,
       indexStatus: "disabled",
       lastJobId: undefined,
-      error: undefined
+      error: undefined,
+      browseStatus: undefined,
+      browseError: undefined,
+      browseVerifiedAt: undefined
     });
     const pool = await getDbPool();
     let grantsDeleted = 0;
@@ -443,6 +469,18 @@ export async function handleOrgApiRequest(
     }
     await audit(deps, auth!, "repo.lightning.disable", { repoId, grantsDeleted });
     writeJson(response, 200, { repo: record, grantsDeleted });
+    return true;
+  }
+
+  const verifyBrowseMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/browse\/verify$/);
+  if (parsed.method === "POST" && verifyBrowseMatch) {
+    if (!requireOrgAdmin(auth!, response)) {
+      return true;
+    }
+    if (!(await requireOrgPlan(deps.orgStore, auth!, response, ...ORG_INDEXING_PLANS))) {
+      return true;
+    }
+    await handleVerifyRepoBrowse(decodeURIComponent(verifyBrowseMatch[1]), response, deps, auth!);
     return true;
   }
 
@@ -1137,6 +1175,44 @@ async function handleEnableLightning(
   });
 }
 
+async function handleVerifyRepoBrowse(
+  repoId: string,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  const target = parseRepoId(repoId);
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
+    orgStore: deps.orgStore!,
+    connector: getConnector(target.provider),
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: `${target.provider} is not connected for this organization.`
+    });
+    return;
+  }
+
+  const existing = await deps.orgStore!.getOrgRepo(auth.orgId, repoId);
+  const browse = await verifyRepoBrowse({
+    repoId,
+    token,
+    preferredBranch: existing?.defaultBranch
+  });
+  const record = await deps.orgStore!.upsertOrgRepo(auth.orgId, repoId, {
+    browseStatus: browse.browseStatus,
+    browseError: browse.browseError,
+    browseVerifiedAt: browse.browseVerifiedAt,
+    defaultBranch: browse.defaultBranch ?? existing?.defaultBranch
+  });
+  await audit(deps, auth, "repo.browse.verify", {
+    repoId,
+    browseStatus: browse.browseStatus
+  });
+  writeJson(response, 200, { repo: record });
+}
+
 async function ensureWorkspaceReposInOrgCatalog(
   orgId: string,
   repoIds: string[],
@@ -1276,7 +1352,7 @@ function workspaceRepoPayload(
     repoId,
     owner: parsed.owner,
     name: parsed.repo,
-    defaultBranch: getDefaultBranchLookup(defaultBranchLookup, repoId) ?? "",
+    defaultBranch: getDefaultBranchLookup(defaultBranchLookup, repoId) || orgRepo?.defaultBranch || "",
     indexStatus: orgRepo?.indexStatus,
     lightningEnabled: orgRepo?.lightningEnabled,
     isPrimary: index === 0,

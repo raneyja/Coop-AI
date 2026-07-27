@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { fetchOrgRepos, fetchUserRepoGrants, saveUserRepoGrants, type OrgRepoRecord } from "@/lib/coopApi";
 import { activeGrantRepoIds } from "@/lib/activeGrantRepoIds";
 import { shortRepoName } from "@/lib/indexingProgress";
+import { isUsableForDeveloperAccess } from "@/lib/usableRepos";
 
 type UserRepoGrantsModalProps = {
   open: boolean;
@@ -14,8 +15,8 @@ type UserRepoGrantsModalProps = {
   onSaved: () => void;
 };
 
-function isDeepIndexedRepo(repo: OrgRepoRecord): boolean {
-  return Boolean(repo.lightningEnabled && repo.indexStatus !== "disabled");
+function isListedRepo(repo: OrgRepoRecord): boolean {
+  return Boolean(repo.lightningEnabled && repo.indexStatus === "ready");
 }
 
 export function UserRepoGrantsModal({
@@ -33,7 +34,7 @@ export function UserRepoGrantsModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
 
-  const indexedRepos = useMemo(() => repos.filter(isDeepIndexedRepo), [repos]);
+  const indexedRepos = useMemo(() => repos.filter(isListedRepo), [repos]);
 
   const filteredRepos = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -158,20 +159,38 @@ export function UserRepoGrantsModal({
             <p className="text-sm text-coop-muted">No repositories match your search.</p>
           ) : (
             <ul className="space-y-2">
-              {filteredRepos.map((repo) => (
-                <li key={repo.repoId}>
-                  <label className="flex cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2.5 hover:border-coop-border/40 hover:bg-white/[0.04]">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 shrink-0 accent-coop-index"
-                      checked={selected.has(repo.repoId)}
-                      disabled={saving}
-                      onChange={() => toggleRepo(repo.repoId)}
-                    />
-                    <span className="font-mono text-sm text-white">{shortRepoName(repo.repoId)}</span>
-                  </label>
-                </li>
-              ))}
+              {filteredRepos.map((repo) => {
+                const grantable = isUsableForDeveloperAccess(repo);
+                return (
+                  <li key={repo.repoId}>
+                    <label
+                      className={`flex items-center gap-3 rounded-md border border-transparent px-3 py-2.5 ${
+                        grantable
+                          ? "cursor-pointer hover:border-coop-border/40 hover:bg-white/[0.04]"
+                          : "cursor-not-allowed opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 accent-coop-index"
+                        checked={selected.has(repo.repoId)}
+                        disabled={saving || !grantable}
+                        onChange={() => toggleRepo(repo.repoId)}
+                      />
+                      <span className="font-mono text-sm text-white">{shortRepoName(repo.repoId)}</span>
+                      {!grantable ? (
+                        <span className="ml-auto text-[11px] text-amber-200">
+                          Fix browse on Indexing first
+                        </span>
+                      ) : repo.browseStatus === "verified" ? (
+                        <span className="ml-auto text-[11px] uppercase tracking-wide text-emerald-300/90">
+                          Usable
+                        </span>
+                      ) : null}
+                    </label>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

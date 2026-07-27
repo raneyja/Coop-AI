@@ -31,7 +31,22 @@ void (async () => {
   assert.equal(stats.readyWithEmbeddingWarning, 1);
   assert.equal(stats.error, 1);
   assert.equal(stats.indexing, 1);
-  assert.equal(stats.progressPercent, 60);
+  // Estate bar = share of developer-usable / complete repos (legacy ready without browse failure).
+  assert.equal(stats.progressPercent, 50);
+
+  const withUsable: OrgRepoRecord[] = [
+    ...repos,
+    {
+      repoId: "e",
+      lightningEnabled: true,
+      indexStatus: "ready",
+      browseStatus: "verified",
+      embeddingStatus: "complete"
+    }
+  ];
+  const usableStats = computeIndexingStats(withUsable);
+  assert.equal(usableStats.usable, 1);
+  assert.equal(usableStats.browseFailed, 0);
 
   assert.equal(hasEmbeddingWarning(repos[1]), true);
   assert.equal(hasEmbeddingWarning(repos[0]), false);

@@ -46,12 +46,18 @@ export type ApiKeyListItem = {
 
 export type EmbeddingStatus = "complete" | "failed" | "skipped" | "pending";
 
+export type BrowseStatus = "pending" | "verified" | "failed";
+
 export type OrgRepoRecord = {
   orgId: string;
   repoId: string;
   lightningEnabled: boolean;
   indexStatus: IndexStatus;
   embeddingStatus?: EmbeddingStatus;
+  browseStatus?: BrowseStatus;
+  browseError?: string;
+  browseVerifiedAt?: Date;
+  defaultBranch?: string;
   lastIndexedAt?: Date;
   lastJobId?: string;
   error?: string;
@@ -366,6 +372,10 @@ export class OrgStore {
         | "lightningEnabled"
         | "indexStatus"
         | "embeddingStatus"
+        | "browseStatus"
+        | "browseError"
+        | "browseVerifiedAt"
+        | "defaultBranch"
         | "lastIndexedAt"
         | "lastJobId"
         | "error"
@@ -381,6 +391,11 @@ export class OrgStore {
       indexStatus: patch.indexStatus ?? existing?.indexStatus ?? "idle",
       embeddingStatus:
         "embeddingStatus" in patch ? patch.embeddingStatus : existing?.embeddingStatus,
+      browseStatus: "browseStatus" in patch ? patch.browseStatus : existing?.browseStatus,
+      browseError: "browseError" in patch ? patch.browseError : existing?.browseError,
+      browseVerifiedAt:
+        "browseVerifiedAt" in patch ? patch.browseVerifiedAt : existing?.browseVerifiedAt,
+      defaultBranch: "defaultBranch" in patch ? patch.defaultBranch : existing?.defaultBranch,
       lastIndexedAt: "lastIndexedAt" in patch ? patch.lastIndexedAt : existing?.lastIndexedAt,
       lastJobId: "lastJobId" in patch ? patch.lastJobId : existing?.lastJobId,
       error: "error" in patch ? patch.error : existing?.error,
@@ -390,13 +405,18 @@ export class OrgStore {
     await this.pool.query(
       `INSERT INTO org_repos (
          org_id, repo_id, lightning_enabled, index_status, embedding_status,
+         browse_status, browse_error, browse_verified_at, default_branch,
          last_indexed_at, last_job_id, error, embedding_error, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
        ON CONFLICT (org_id, repo_id) DO UPDATE SET
          lightning_enabled = EXCLUDED.lightning_enabled,
          index_status = EXCLUDED.index_status,
          embedding_status = EXCLUDED.embedding_status,
+         browse_status = EXCLUDED.browse_status,
+         browse_error = EXCLUDED.browse_error,
+         browse_verified_at = EXCLUDED.browse_verified_at,
+         default_branch = EXCLUDED.default_branch,
          last_indexed_at = EXCLUDED.last_indexed_at,
          last_job_id = EXCLUDED.last_job_id,
          error = EXCLUDED.error,
@@ -408,6 +428,10 @@ export class OrgStore {
         record.lightningEnabled,
         record.indexStatus,
         record.embeddingStatus ?? null,
+        record.browseStatus ?? null,
+        record.browseError ?? null,
+        record.browseVerifiedAt ?? null,
+        record.defaultBranch ?? null,
         record.lastIndexedAt ?? null,
         record.lastJobId ?? null,
         record.error ?? null,
@@ -420,6 +444,7 @@ export class OrgStore {
   public async getOrgRepo(orgId: string, repoId: string): Promise<OrgRepoRecord | undefined> {
     const result = await this.pool.query(
       `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
+              browse_status, browse_error, browse_verified_at, default_branch,
               last_indexed_at, last_job_id, error, embedding_error, updated_at
        FROM org_repos WHERE org_id = $1 AND repo_id = $2`,
       [orgId, repoId]
@@ -431,6 +456,7 @@ export class OrgStore {
   public async listOrgRepos(orgId: string): Promise<OrgRepoRecord[]> {
     const result = await this.pool.query(
       `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
+              browse_status, browse_error, browse_verified_at, default_branch,
               last_indexed_at, last_job_id, error, embedding_error, updated_at
        FROM org_repos WHERE org_id = $1 ORDER BY updated_at DESC`,
       [orgId]
@@ -766,6 +792,14 @@ function rowToOrgRepo(row: Record<string, unknown>): OrgRepoRecord {
     embeddingStatus: row.embedding_status
       ? (String(row.embedding_status) as OrgRepoRecord["embeddingStatus"])
       : undefined,
+    browseStatus: row.browse_status
+      ? (String(row.browse_status) as OrgRepoRecord["browseStatus"])
+      : undefined,
+    browseError: row.browse_error ? String(row.browse_error) : undefined,
+    browseVerifiedAt: row.browse_verified_at
+      ? new Date(String(row.browse_verified_at))
+      : undefined,
+    defaultBranch: row.default_branch ? String(row.default_branch) : undefined,
     lastIndexedAt: row.last_indexed_at ? new Date(String(row.last_indexed_at)) : undefined,
     lastJobId: row.last_job_id ? String(row.last_job_id) : undefined,
     error: row.error ? String(row.error) : undefined,

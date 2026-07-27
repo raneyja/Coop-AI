@@ -317,8 +317,9 @@ export function OnboardingWizard({
                       <Link href="/indexing" className="admin-link">
                         Indexing
                       </Link>{" "}
-                      and configure a code host to choose repos to Deep-Index. Free plan allows up to 3
-                      repos. Upgrade to{" "}
+                      and configure a code host to choose repos to Deep-Index. Wait until at least one
+                      repo shows <span className="text-white">Usable</span> (browse verified) before
+                      inviting your team. Free plan allows up to 3 repos. Upgrade to{" "}
                       <Link href="/billing" className="admin-link">
                         Pro
                       </Link>{" "}
@@ -330,10 +331,17 @@ export function OnboardingWizard({
                       <Link href="/indexing" className="admin-link">
                         Indexing
                       </Link>{" "}
-                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index.
+                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index. Continue
+                      once at least one repo is <span className="text-white">Usable</span> — that means
+                      developers can browse it in the extension.
                     </>
                   )}
                 </p>
+                <ul className="mt-3 space-y-1.5 text-sm text-coop-muted">
+                  <li>☐ Deep-Index at least one repo</li>
+                  <li>☐ Wait for status <span className="text-white">Usable</span> (not only Indexed)</li>
+                  <li>☐ Then continue to invite your team</li>
+                </ul>
               </div>
             </div>
           )}

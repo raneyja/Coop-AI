@@ -12,11 +12,13 @@ import {
   fetchOrgRepos,
   reindexEmbeddingFailures,
   syncCatalog,
+  verifyRepoBrowse,
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { IndexingRepoPickerModal } from "@/components/IndexingRepoPickerModal";
 import { IndexingRepoSections } from "@/components/IndexingRepoSections";
+import { IndexingProgressHelpModal } from "@/components/IndexingProgressHelpModal";
 import { computeIndexingStats, shortRepoName } from "@/lib/indexingProgress";
 
 type PickerState = {
@@ -35,6 +37,7 @@ export default function IndexingPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [picker, setPicker] = useState<PickerState>({ open: false, provider: "github" });
+  const [helpRepo, setHelpRepo] = useState<OrgRepoRecord | null>(null);
 
   const stats = useMemo(() => computeIndexingStats(repos), [repos]);
   const inFlightCount = stats.inFlight;
@@ -238,6 +241,25 @@ export default function IndexingPage() {
     await load({ silent: true });
   }
 
+  async function handleVerifyBrowse(repoId: string) {
+    setActionId(`verify:${repoId}`);
+    setError(null);
+    setActionMessage(null);
+    const result = await verifyRepoBrowse(repoId);
+    setActionId(null);
+    if (!result.ok) {
+      setError(result.error ?? "Browse re-verify failed.");
+      return;
+    }
+    const status = result.data?.repo?.browseStatus;
+    setActionMessage(
+      status === "verified"
+        ? `${shortRepoName(repoId)} is usable — developers can browse files.`
+        : `${shortRepoName(repoId)} still needs attention — ${result.data?.repo?.browseError ?? "browse check failed"}.`
+    );
+    await load({ silent: true });
+  }
+
   async function handleRetryEmbeddingFailures() {
     setActionId("retry-embeddings");
     setError(null);
@@ -338,6 +360,8 @@ export default function IndexingPage() {
           actionId={actionId}
           onReindex={(id) => void handleReindex(id)}
           onDisable={(id) => void handleDisable(id)}
+          onVerifyBrowse={(id) => void handleVerifyBrowse(id)}
+          onExplainProgress={(repo) => setHelpRepo(repo)}
           indexedRepoLimit={indexedRepoLimit}
           indexedRepoCount={indexedCount}
         />
@@ -351,6 +375,13 @@ export default function IndexingPage() {
         alreadyIndexed={indexedCount}
         onClose={() => setPicker((current) => ({ ...current, open: false }))}
         onConfirm={handlePickerConfirm}
+      />
+
+      <IndexingProgressHelpModal
+        open={Boolean(helpRepo)}
+        repo={helpRepo}
+        onClose={() => setHelpRepo(null)}
+        onReindex={(id) => void handleReindex(id)}
       />
     </div>
   );

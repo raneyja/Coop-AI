@@ -13,7 +13,9 @@ import {
   formatEmbeddingBadgeLabel,
   formatIndexingDisplayStatus,
   formatRelativeTime,
+  hasBrowseFailure,
   hasEmbeddingWarning,
+  isFullyUsable,
   isRepoInFlight,
   parseCodeHostFromRepoId,
   reposMatchingQueue,
@@ -27,6 +29,8 @@ type IndexingRepoSectionsProps = {
   actionId: string | null;
   onReindex: (repoId: string) => void;
   onDisable?: (repoId: string) => void;
+  onVerifyBrowse?: (repoId: string) => void;
+  onExplainProgress?: (repo: OrgRepoRecord) => void;
   indexedRepoLimit?: number | null;
   indexedRepoCount?: number;
 };
@@ -54,19 +58,25 @@ function statusDotClass(repo: OrgRepoRecord): string {
   if (status === "queued") {
     return "bg-amber-300/90";
   }
-  if (status === "error") {
+  if (status === "error" || hasBrowseFailure(repo)) {
     return "bg-red-400";
   }
   if (hasEmbeddingWarning(repo)) {
     return "bg-amber-300";
   }
-  if (status === "ready") {
+  if (isFullyUsable(repo)) {
     return "bg-emerald-400";
+  }
+  if (status === "ready") {
+    return "bg-emerald-400/70";
   }
   return "bg-white/30";
 }
 
 function statusTextClass(repo: OrgRepoRecord): string {
+  if (hasBrowseFailure(repo)) {
+    return "text-red-300";
+  }
   if (hasEmbeddingWarning(repo)) {
     return "text-amber-300";
   }
@@ -76,6 +86,9 @@ function statusTextClass(repo: OrgRepoRecord): string {
   if (repo.indexStatus === "indexing" || repo.indexStatus === "queued" || repo.indexStatus === "cloning") {
     return "text-sky-300";
   }
+  if (isFullyUsable(repo)) {
+    return "text-emerald-300";
+  }
   return "";
 }
 
@@ -83,8 +96,17 @@ function detailNote(repo: OrgRepoRecord): string {
   if (repo.indexStatus === "error") {
     return repo.error ?? "—";
   }
+  if (hasBrowseFailure(repo)) {
+    return repo.browseError ?? "Browse verification failed.";
+  }
   if (repo.embeddingError) {
     return repo.embeddingError;
+  }
+  if (isRepoInFlight(repo) && repo.indexStageDetail) {
+    return repo.indexStageDetail;
+  }
+  if (repo.defaultBranch) {
+    return `Branch ${repo.defaultBranch}`;
   }
   return "—";
 }
@@ -106,26 +128,54 @@ function EmbeddingBadge({ repo }: { repo: OrgRepoRecord }): React.ReactElement {
   );
 }
 
-function IndexStatusCell({ repo }: { repo: OrgRepoRecord }): React.ReactElement {
+function IndexStatusCell({
+  repo,
+  onExplainProgress
+}: {
+  repo: OrgRepoRecord;
+  onExplainProgress?: (repo: OrgRepoRecord) => void;
+}): React.ReactElement {
   const inFlight = isRepoInFlight(repo);
   const progress =
     typeof repo.indexProgress === "number" ? Math.max(0, Math.min(100, repo.indexProgress)) : undefined;
+  const showPrecisePercent = inFlight && progress !== undefined && progress < 65;
 
   return (
-    <div className="min-w-[6.5rem]">
+    <div className="min-w-[8rem]">
       <span className={statusTextClass(repo)}>{formatIndexingDisplayStatus(repo)}</span>
       {inFlight ? (
         <div className="mt-1.5">
           <div className="h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-white/10">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                repo.indexStatus === "queued" ? "bg-amber-300/90" : "bg-sky-400"
+                repo.indexStatus === "queued"
+                  ? "bg-amber-300/90"
+                  : progress !== undefined && progress >= 65 && progress <= 85
+                    ? "bg-sky-400 animate-pulse"
+                    : "bg-sky-400"
               }`}
-              style={{ width: `${progress ?? (repo.indexStatus === "queued" ? 8 : 20)}%` }}
+              style={{
+                width: `${
+                  progress ?? (repo.indexStatus === "queued" ? 8 : 20)
+                }%`
+              }}
             />
           </div>
-          {progress !== undefined ? (
+          {showPrecisePercent ? (
             <p className="mt-0.5 font-mono text-[10px] text-coop-muted">{progress}%</p>
+          ) : repo.indexStageDetail ? (
+            <p className="mt-0.5 max-w-[12rem] text-[10px] leading-snug text-coop-muted">
+              {repo.indexStageDetail}
+            </p>
+          ) : null}
+          {onExplainProgress && inFlight ? (
+            <button
+              type="button"
+              className="mt-1 text-[10px] text-coop-index hover:underline"
+              onClick={() => onExplainProgress(repo)}
+            >
+              What’s happening?
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -163,15 +213,20 @@ function RepoRow({
   actionId,
   onReindex,
   onDisable,
+  onVerifyBrowse,
+  onExplainProgress,
   showJobIds
 }: {
   repo: OrgRepoRecord;
   actionId: string | null;
   onReindex: (repoId: string) => void;
   onDisable?: (repoId: string) => void;
+  onVerifyBrowse?: (repoId: string) => void;
+  onExplainProgress?: (repo: OrgRepoRecord) => void;
   showJobIds: boolean;
 }): React.ReactElement {
   const disableId = `off:${repo.repoId}`;
+  const verifyId = `verify:${repo.repoId}`;
   return (
     <tr className="border-b border-coop-border/40">
       <td className="px-4 py-2">
@@ -187,7 +242,7 @@ function RepoRow({
       </td>
       <td className="px-4 py-2">{repo.lightningEnabled ? "On" : "Off"}</td>
       <td className="px-4 py-2">
-        <IndexStatusCell repo={repo} />
+        <IndexStatusCell repo={repo} onExplainProgress={onExplainProgress} />
       </td>
       <td className="px-4 py-2">
         <EmbeddingBadge repo={repo} />
@@ -213,6 +268,18 @@ function RepoRow({
               onClick={() => onReindex(repo.repoId)}
             >
               Reindex
+            </button>
+          ) : null}
+          {repo.lightningEnabled && onVerifyBrowse && (hasBrowseFailure(repo) || repo.indexStatus === "ready") ? (
+            <button
+              type="button"
+              className={`admin-btn-secondary min-w-[4.75rem] !px-2 !py-1 text-xs ${
+                actionId === verifyId ? "pointer-events-none opacity-60" : ""
+              }`}
+              aria-busy={actionId === verifyId}
+              onClick={() => onVerifyBrowse(repo.repoId)}
+            >
+              Re-verify
             </button>
           ) : null}
           {repo.lightningEnabled && onDisable ? (
@@ -266,6 +333,8 @@ function RepoSection({
   actionId,
   onReindex,
   onDisable,
+  onVerifyBrowse,
+  onExplainProgress,
   showJobIds,
   colSpan
 }: {
@@ -277,6 +346,8 @@ function RepoSection({
   actionId: string | null;
   onReindex: (repoId: string) => void;
   onDisable?: (repoId: string) => void;
+  onVerifyBrowse?: (repoId: string) => void;
+  onExplainProgress?: (repo: OrgRepoRecord) => void;
   showJobIds: boolean;
   colSpan: number;
 }): React.ReactElement | null {
@@ -294,6 +365,8 @@ function RepoSection({
           actionId={actionId}
           onReindex={onReindex}
           onDisable={onDisable}
+          onVerifyBrowse={onVerifyBrowse}
+          onExplainProgress={onExplainProgress}
           showJobIds={showJobIds}
         />
       ))}
@@ -305,7 +378,9 @@ export function IndexingRepoSections({
   repos,
   actionId,
   onReindex,
-  onDisable
+  onDisable,
+  onVerifyBrowse,
+  onExplainProgress
 }: IndexingRepoSectionsProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const [hostFilter, setHostFilter] = useState<CodeHostProvider | "all">("all");
@@ -414,6 +489,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               onDisable={onDisable}
+              onVerifyBrowse={onVerifyBrowse}
+              onExplainProgress={onExplainProgress}
               showJobIds={showJobIds}
               colSpan={colSpan}
             />
@@ -425,11 +502,13 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               onDisable={onDisable}
+              onVerifyBrowse={onVerifyBrowse}
+              onExplainProgress={onExplainProgress}
               showJobIds={showJobIds}
               colSpan={colSpan}
             />
             <RepoSection
-              title="Indexed repos"
+              title="Usable repos"
               items={queue.ready}
               repos={filteredRepos}
               count={indexedTotal}
@@ -437,6 +516,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               onDisable={onDisable}
+              onVerifyBrowse={onVerifyBrowse}
+              onExplainProgress={onExplainProgress}
               showJobIds={showJobIds}
               colSpan={colSpan}
             />
@@ -448,6 +529,8 @@ export function IndexingRepoSections({
               actionId={actionId}
               onReindex={onReindex}
               onDisable={onDisable}
+              onVerifyBrowse={onVerifyBrowse}
+              onExplainProgress={onExplainProgress}
               showJobIds={showJobIds}
               colSpan={colSpan}
             />

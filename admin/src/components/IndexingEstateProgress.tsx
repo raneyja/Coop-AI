@@ -19,8 +19,8 @@ export function IndexingEstateProgress({
   const label = loading
     ? "Loading estate index…"
     : stats.inFlight > 0
-      ? `${stats.ready} of ${stats.total} ready · ${inFlightParts.join(" · ")}`
-      : `${stats.ready} of ${stats.total} ready`;
+      ? `${stats.usable} of ${stats.total} usable · ${inFlightParts.join(" · ")}`
+      : `${stats.usable} of ${stats.total} usable`;
 
   const barClass = stats.inFlight > 0 && !loading ? "bg-coop-index animate-pulse" : "bg-coop-index";
 

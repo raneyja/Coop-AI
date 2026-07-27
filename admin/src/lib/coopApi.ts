@@ -1493,9 +1493,15 @@ export type OrgRepoRecord = {
   lightningEnabled?: boolean;
   indexStatus?: string;
   embeddingStatus?: "complete" | "failed" | "skipped" | "pending";
+  browseStatus?: "pending" | "verified" | "failed";
+  browseError?: string;
+  browseVerifiedAt?: string;
+  defaultBranch?: string;
   lastIndexedAt?: string;
   lastJobId?: string;
   indexProgress?: number;
+  indexStage?: string;
+  indexStageDetail?: string;
   error?: string;
   embeddingError?: string;
 };
@@ -1601,6 +1607,17 @@ export async function enableLightningRepo(
 export async function disableLightningRepo(repoId: string): Promise<ApiResult<{ repo?: OrgRepoRecord }>> {
   const result = await coopFetch<{ repo?: OrgRepoRecord }>(
     `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/disable`,
+    { method: "POST", body: "{}" }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return { ok: true, status: result.status, data: result.data };
+}
+
+export async function verifyRepoBrowse(repoId: string): Promise<ApiResult<{ repo?: OrgRepoRecord }>> {
+  const result = await coopFetch<{ repo?: OrgRepoRecord }>(
+    `/v1/orgs/repos/${encodeURIComponent(repoId)}/browse/verify`,
     { method: "POST", body: "{}" }
   );
   if (!result.ok) {

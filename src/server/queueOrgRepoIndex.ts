@@ -49,10 +49,11 @@ function isStaleIndexJob(job: {
   if (Date.now() - anchor.getTime() > STALE_INDEX_JOB_MS) {
     return true;
   }
-  // Embedding phase reports 75–79%. Sitting there without finishing is a common zombie.
-  if (job.status === "running" && job.progress >= 75 && job.progress <= 79) {
+  // Embedding phase reports 65–85%. Sitting there without finishing is a common zombie
+  // on large repos — allow 10 minutes before treating as stuck (was 60s at 75–79).
+  if (job.status === "running" && job.progress >= 65 && job.progress <= 85) {
     const started = job.startedAt ?? job.createdAt;
-    if (Date.now() - started.getTime() > 60_000) {
+    if (Date.now() - started.getTime() > 10 * 60_000) {
       return true;
     }
   }
