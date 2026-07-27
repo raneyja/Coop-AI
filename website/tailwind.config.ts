@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import typography from "@tailwindcss/typography";
-import { siteDarkUiText, siteGray } from "./src/lib/siteColors";
+import { darkenHex, siteDarkUiText, siteGray } from "./src/lib/siteColors";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
@@ -16,7 +16,7 @@ const config: Config = {
           warn: "#D29922",
           dark: "#ffffff",
           surface: "#f9fafb",
-          border: "#e5e7eb",
+          border: darkenHex("#e5e7eb", 0.15),
           muted: siteGray[500],
           editor: "#ffffff",
           foreground: siteGray[800],
