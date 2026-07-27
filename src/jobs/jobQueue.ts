@@ -118,14 +118,19 @@ export class JobQueue extends EventEmitter {
     return this.backend.get(id);
   }
 
-  public async cancelJob(id: string): Promise<Job | undefined> {
+  public async cancelJob(id: string, options?: { includeRunning?: boolean }): Promise<Job | undefined> {
     const job = await this.backend.get(id);
-    if (!job || job.status !== "queued") {
+    if (!job) {
+      return undefined;
+    }
+    const cancellable =
+      job.status === "queued" || (options?.includeRunning === true && job.status === "running");
+    if (!cancellable) {
       return undefined;
     }
     job.status = "cancelled";
     job.completedAt = new Date();
-    job.error = "Cancelled by user";
+    job.error = options?.includeRunning ? "Superseded by a new Deep-Index request" : "Cancelled by user";
     await this.backend.update(job);
     this.emitProgress(job, "Job cancelled");
     return job;

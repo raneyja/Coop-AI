@@ -112,15 +112,61 @@ async function testReenablesLightningWhenActiveJobAlreadyTracked() {
   ]);
   const orgStore = createOrgStoreStub(records);
 
+  // Disabled + active job must supersede (not reattach) so Deep-Index starts clean.
   const result = await queueOrgRepoIndex(orgId, repoId, { orgStore, jobQueue: queue });
-  assert.equal(result.outcome, "skipped");
-  assert.equal(result.reason, "already_active");
-  assert.equal(result.jobId, created.jobId);
+  assert.equal(result.outcome, "queued");
+  assert.notEqual(result.jobId, created.jobId);
+
+  const cancelled = await queue.getJob(created.jobId);
+  assert.equal(cancelled?.status, "cancelled");
 
   const record = records.get(`${orgId}:${repoId}`);
   assert.equal(record?.lightningEnabled, true);
   assert.equal(record?.indexStatus, "queued");
-  assert.equal(record?.lastJobId, created.jobId);
+  assert.equal(record?.lastJobId, result.jobId);
+}
+
+async function testForceSupersedesStuckEmbeddingJob() {
+  const orgId = "org-4";
+  const repoId = "github:raneyja/Coop-AI";
+  const backend = new MemoryQueueBackend();
+  const queue = new JobQueue({ ...loadJobQueueConfig(), backend: "memory" }, backend);
+  const created = await queue.createJob({
+    type: JobType.INDEX_REPOSITORY,
+    userId: `org:${orgId}`,
+    params: { orgId, repoId }
+  });
+  const stuck = await queue.getJob(created.jobId);
+  assert.ok(stuck);
+  stuck.status = "running";
+  stuck.progress = 79;
+  stuck.startedAt = new Date(Date.now() - 2 * 60 * 1000);
+  await backend.update(stuck);
+
+  const records = new Map<string, OrgRepoRecord>([
+    [
+      `${orgId}:${repoId}`,
+      {
+        orgId,
+        repoId,
+        lightningEnabled: true,
+        indexStatus: "indexing",
+        lastJobId: created.jobId,
+        updatedAt: new Date()
+      }
+    ]
+  ]);
+  const orgStore = createOrgStoreStub(records);
+
+  const result = await queueOrgRepoIndex(orgId, repoId, {
+    orgStore,
+    jobQueue: queue,
+    force: true
+  });
+  assert.equal(result.outcome, "queued");
+  assert.notEqual(result.jobId, created.jobId);
+  assert.equal((await queue.getJob(created.jobId))?.status, "cancelled");
+  assert.equal(records.get(`${orgId}:${repoId}`)?.lastJobId, result.jobId);
 }
 
 async function testQueuesFreshJobAndClearsEmbeddings() {
@@ -158,7 +204,8 @@ async function run() {
   await testSkipsDuplicateActiveJob();
   await testQueuesFreshJobAndClearsEmbeddings();
   await testReenablesLightningWhenActiveJobAlreadyTracked();
-  console.log("queueOrgRepoIndex: 3/3 tests passed");
+  await testForceSupersedesStuckEmbeddingJob();
+  console.log("queueOrgRepoIndex: 4/4 tests passed");
 }
 
 void run();
