@@ -93,6 +93,9 @@ function statusTextClass(repo: OrgRepoRecord): string {
 }
 
 function detailNote(repo: OrgRepoRecord): string {
+  if (isRepoInFlight(repo) && repo.indexStageDetail) {
+    return repo.indexStageDetail;
+  }
   if (repo.indexStatus === "error") {
     return repo.error ?? "—";
   }
@@ -101,12 +104,6 @@ function detailNote(repo: OrgRepoRecord): string {
   }
   if (repo.embeddingError) {
     return repo.embeddingError;
-  }
-  if (isRepoInFlight(repo) && repo.indexStageDetail) {
-    return repo.indexStageDetail;
-  }
-  if (repo.defaultBranch) {
-    return `Branch ${repo.defaultBranch}`;
   }
   return "—";
 }
@@ -128,24 +125,17 @@ function EmbeddingBadge({ repo }: { repo: OrgRepoRecord }): React.ReactElement {
   );
 }
 
-function IndexStatusCell({
-  repo,
-  onExplainProgress
-}: {
-  repo: OrgRepoRecord;
-  onExplainProgress?: (repo: OrgRepoRecord) => void;
-}): React.ReactElement {
+function IndexStatusCell({ repo }: { repo: OrgRepoRecord }): React.ReactElement {
   const inFlight = isRepoInFlight(repo);
   const progress =
     typeof repo.indexProgress === "number" ? Math.max(0, Math.min(100, repo.indexProgress)) : undefined;
-  const showPrecisePercent = inFlight && progress !== undefined && progress < 65;
 
   return (
-    <div className="min-w-[8rem]">
+    <div className="min-w-[7rem]">
       <span className={statusTextClass(repo)}>{formatIndexingDisplayStatus(repo)}</span>
       {inFlight ? (
         <div className="mt-1.5">
-          <div className="h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-white/10">
+          <div className="h-1.5 w-full max-w-[7rem] overflow-hidden rounded-full bg-white/10">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 repo.indexStatus === "queued"
@@ -161,23 +151,36 @@ function IndexStatusCell({
               }}
             />
           </div>
-          {showPrecisePercent ? (
+          {progress !== undefined ? (
             <p className="mt-0.5 font-mono text-[10px] text-coop-muted">{progress}%</p>
-          ) : repo.indexStageDetail ? (
-            <p className="mt-0.5 max-w-[12rem] text-[10px] leading-snug text-coop-muted">
-              {repo.indexStageDetail}
-            </p>
-          ) : null}
-          {onExplainProgress && inFlight ? (
-            <button
-              type="button"
-              className="mt-1 text-[10px] text-coop-index hover:underline"
-              onClick={() => onExplainProgress(repo)}
-            >
-              What’s happening?
-            </button>
           ) : null}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function IndexDetailsCell({
+  repo,
+  onExplainProgress
+}: {
+  repo: OrgRepoRecord;
+  onExplainProgress?: (repo: OrgRepoRecord) => void;
+}): React.ReactElement {
+  const inFlight = isRepoInFlight(repo);
+  const note = detailNote(repo);
+
+  return (
+    <div className="max-w-[16rem]">
+      <p className="text-xs leading-snug text-coop-muted">{note}</p>
+      {onExplainProgress && inFlight ? (
+        <button
+          type="button"
+          className="mt-1 text-[10px] text-coop-index hover:underline"
+          onClick={() => onExplainProgress(repo)}
+        >
+          What’s happening?
+        </button>
       ) : null}
     </div>
   );
@@ -242,7 +245,10 @@ function RepoRow({
       </td>
       <td className="px-4 py-2">{repo.lightningEnabled ? "On" : "Off"}</td>
       <td className="px-4 py-2">
-        <IndexStatusCell repo={repo} onExplainProgress={onExplainProgress} />
+        <IndexStatusCell repo={repo} />
+      </td>
+      <td className="px-4 py-2">
+        <IndexDetailsCell repo={repo} onExplainProgress={onExplainProgress} />
       </td>
       <td className="px-4 py-2">
         <EmbeddingBadge repo={repo} />
@@ -250,7 +256,6 @@ function RepoRow({
       <td className="px-4 py-2 text-coop-muted" title={repo.lastIndexedAt ?? undefined}>
         {formatRelativeTime(repo.lastIndexedAt)}
       </td>
-      <td className="px-4 py-2 text-xs text-coop-muted">{detailNote(repo)}</td>
       {showJobIds ? (
         <td className="px-4 py-2 font-mono text-[11px] text-coop-muted" title={repo.lastJobId ?? undefined}>
           {shortJobId(repo.lastJobId)}
@@ -473,9 +478,9 @@ export function IndexingRepoSections({
               <th>Host</th>
               <th>Deep index</th>
               <th>Status</th>
+              <th>Details</th>
               <th>Embeddings</th>
               <th>Last indexed</th>
-              <th>Details</th>
               {showJobIds ? <th>Job ID</th> : null}
               <th>Actions</th>
             </tr>
