@@ -336,6 +336,22 @@ export async function handleOrgApiRequest(
     }
     const plan = (await deps.orgStore!.getOrganization(auth!.orgId))?.plan ?? auth!.plan ?? "free";
     const quotaReconciled = await reconcileIndexedRepoQuota(deps.orgStore!, auth!.orgId, plan);
+    if (quotaReconciled.disabledRepoIds.length > 0) {
+      const pool = await getDbPool();
+      if (pool) {
+        const grantStore = new UserRepoGrantStore(pool);
+        for (const repoId of quotaReconciled.disabledRepoIds) {
+          try {
+            await grantStore.deleteGrantsForRepo(auth!.orgId, repoId);
+          } catch (error) {
+            console.error(
+              `[org-api] grant cleanup after quota trim failed for ${repoId}:`,
+              error instanceof Error ? error.message : error
+            );
+          }
+        }
+      }
+    }
     const repos = await enrichReposWithIndexProgress(await deps.orgStore!.listOrgRepos(auth!.orgId));
     writeJson(response, 200, {
       repos,
@@ -413,8 +429,20 @@ export async function handleOrgApiRequest(
       lastJobId: undefined,
       error: undefined
     });
-    await audit(deps, auth!, "repo.lightning.disable", { repoId });
-    writeJson(response, 200, { repo: record });
+    const pool = await getDbPool();
+    let grantsDeleted = 0;
+    if (pool) {
+      try {
+        grantsDeleted = await new UserRepoGrantStore(pool).deleteGrantsForRepo(auth!.orgId, repoId);
+      } catch (error) {
+        console.error(
+          `[org-api] grant cleanup after disable failed for ${repoId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+    await audit(deps, auth!, "repo.lightning.disable", { repoId, grantsDeleted });
+    writeJson(response, 200, { repo: record, grantsDeleted });
     return true;
   }
 

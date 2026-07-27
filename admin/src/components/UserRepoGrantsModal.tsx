@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { fetchOrgRepos, fetchUserRepoGrants, saveUserRepoGrants, type OrgRepoRecord } from "@/lib/coopApi";
+import { activeGrantRepoIds } from "@/lib/activeGrantRepoIds";
 import { shortRepoName } from "@/lib/indexingProgress";
 
 type UserRepoGrantsModalProps = {
@@ -12,6 +13,10 @@ type UserRepoGrantsModalProps = {
   onClose: () => void;
   onSaved: () => void;
 };
+
+function isDeepIndexedRepo(repo: OrgRepoRecord): boolean {
+  return Boolean(repo.lightningEnabled && repo.indexStatus !== "disabled");
+}
 
 export function UserRepoGrantsModal({
   open,
@@ -28,10 +33,7 @@ export function UserRepoGrantsModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
 
-  const indexedRepos = useMemo(
-    () => repos.filter((repo) => repo.lightningEnabled && repo.indexStatus !== "disabled"),
-    [repos]
-  );
+  const indexedRepos = useMemo(() => repos.filter(isDeepIndexedRepo), [repos]);
 
   const filteredRepos = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -67,13 +69,14 @@ export function UserRepoGrantsModal({
       setError(reposResult.error ?? "Failed to load repositories.");
       return;
     }
-    setRepos(reposResult.data?.repos ?? []);
+    const loadedRepos = reposResult.data?.repos ?? [];
+    setRepos(loadedRepos);
     if (!grantsResult.ok) {
       setError(grantsResult.error ?? "Failed to load repo access.");
       setSelected(new Set());
       return;
     }
-    setSelected(new Set(grantsResult.data?.repoIds ?? []));
+    setSelected(new Set(activeGrantRepoIds(grantsResult.data?.repoIds ?? [], loadedRepos)));
   }
 
   function toggleRepo(repoId: string) {
@@ -91,7 +94,9 @@ export function UserRepoGrantsModal({
   async function handleSave() {
     setSaving(true);
     setError(null);
-    const result = await saveUserRepoGrants(userId, Array.from(selected));
+    // Only persist grants for currently Deep-Indexed repos (never re-save orphans).
+    const repoIds = activeGrantRepoIds(Array.from(selected), repos);
+    const result = await saveUserRepoGrants(userId, repoIds);
     setSaving(false);
     if (!result.ok) {
       setError(result.error ?? "Could not save repo access.");

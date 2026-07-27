@@ -17,6 +17,12 @@ export function indexedOrgRepoIds(repos: OrgRepoRecord[]): string[] {
   return repos.filter(isIndexedForAccess).map((repo) => repo.repoId);
 }
 
+/** Grants that still match a Deep-Indexed org repo (ignore orphans for disabled indexes). */
+export function activeUserRepoGrantIds(grantIds: string[], indexedIds: string[]): string[] {
+  const indexed = new Set(indexedIds);
+  return grantIds.filter((repoId) => indexed.has(repoId));
+}
+
 export async function resolveAccessibleRepoIds(
   orgId: string,
   userId: string,

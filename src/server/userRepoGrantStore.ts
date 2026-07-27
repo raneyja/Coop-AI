@@ -31,6 +31,32 @@ export class UserRepoGrantStore {
     return result.rows.map(rowToRecord);
   }
 
+  /** Remove grants for a repo across all users (e.g. when Deep-Index is disabled). */
+  public async deleteGrantsForRepo(orgId: string, repoId: string): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM user_repo_grants WHERE org_id = $1 AND repo_id = $2`,
+      [orgId, repoId]
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * Drop grants whose repo is no longer Deep-Indexed.
+   * Keeps admin UI and DB aligned after repos are disabled without a grant cleanup.
+   */
+  public async deleteOrphanGrants(orgId: string, validRepoIds: string[]): Promise<number> {
+    if (validRepoIds.length === 0) {
+      const result = await this.pool.query(`DELETE FROM user_repo_grants WHERE org_id = $1`, [orgId]);
+      return result.rowCount ?? 0;
+    }
+    const result = await this.pool.query(
+      `DELETE FROM user_repo_grants
+       WHERE org_id = $1 AND NOT (repo_id = ANY($2::text[]))`,
+      [orgId, validRepoIds]
+    );
+    return result.rowCount ?? 0;
+  }
+
   public async setUserRepoGrants(
     orgId: string,
     userId: string,
