@@ -29,7 +29,7 @@ export function Hero() {
 
         <HeroDemoArtifact />
 
-        <div className="mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
+        <div className="mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Button href="/demo">Book a demo</Button>
           <InstallExtensionButton />
         </div>
