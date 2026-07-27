@@ -25,10 +25,17 @@ All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`**:
 
 | Need | Method |
 |---|---|
+| Repo id + branch for any consumer | `resolveActiveRepoTarget` in `repoTargetResolver.ts` |
 | What repo/branch am I on | `getIdentity` |
 | File count, lines of code, size | `getInventory` |
 | Top-level structure | `getTreeOverview` |
 | Read any file (local clone or remote) | `readFile` |
+
+**Writer:** `INDEX_REPOSITORY` in `executors.ts` stores branch on `repo_stats`.  
+**Readers:** chat, quick actions, repo summary, and agent tools must call
+`resolveActiveRepoTarget` — never invent branch coordinates locally.
+
+`indexedRepoPipelineContract.test.ts` fails CI when index and chat paths drift apart.
 
 Intent detection lives in `src/workspace/repoFactIntent.ts` (`repoFactNeeds`, `hasRepoFactNeed`).
 
@@ -48,6 +55,7 @@ same question must produce the same number.
 
 | Do not | Instead |
 |---|---|
+| Add a parallel repo/branch resolver in chat or summary code | `resolveActiveRepoTarget` |
 | Add a new repo-fact regex fork inside `CoopChatSession` | Extend `repoFactIntent.ts` |
 | Call inventory/search adapters directly from new code | Call `IndexedRepoWorkspace` |
 | Add another `fetchRepoFile` wrapper | Use `IndexedRepoWorkspace.readFile` |

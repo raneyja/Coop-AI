@@ -74,17 +74,18 @@ export function isUsableManifestInventory(manifest: {
 /** Durable stats recorded by INDEX_REPOSITORY — the only source with line counts. */
 export async function fetchIndexStatsInventory(
   deps: RepoInventoryDeps,
-  candidateRepoIds: string[],
-  branch?: string
+  candidateRepoIds: string[]
 ): Promise<RepoInventoryEvidence | undefined> {
   for (const candidate of candidateRepoIds) {
     try {
-      const stats = await deps.api.fetchRepoInventoryViaCloud(deps.apiBaseUrl, candidate, branch);
+      // Do not filter by a stale UI branch — inventory is keyed by repoId; branch comes back from index.
+      const stats = await deps.api.fetchRepoInventoryViaCloud(deps.apiBaseUrl, candidate);
       if (!stats || typeof stats.fileCount !== "number") {
         continue;
       }
       return {
         source: "index-stats",
+        branch: stats.branch,
         fileCount: stats.fileCount,
         lineCount: typeof stats.lineCount === "number" ? stats.lineCount : undefined,
         byteCount: typeof stats.byteCount === "number" ? stats.byteCount : undefined,

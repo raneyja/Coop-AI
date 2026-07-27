@@ -447,6 +447,7 @@ export class SecureApiClient {
     branch?: string
   ): Promise<
     | {
+        branch?: string;
         fileCount: number;
         lineCount?: number;
         byteCount?: number;
@@ -460,6 +461,7 @@ export class SecureApiClient {
       return undefined;
     }
     return {
+      branch: result.branch?.trim() || undefined,
       fileCount: result.fileCount,
       lineCount: result.lineCount,
       byteCount: result.byteCount,
