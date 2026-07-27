@@ -819,7 +819,7 @@
     "test:auth": "npx tsx src/server/auth/passwordCrypto.test.ts && npx tsx src/server/freeSignupApi.test.ts",
     "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",
     "test:slash-commands": "npx tsx src/context/slashCommands.test.ts",
-    "test:indexed-repo-workspace": "npx tsx src/workspace/repoFactIntent.test.ts && npx tsx src/workspace/collectRepoStats.test.ts && npx tsx src/workspace/IndexedRepoWorkspace.test.ts",
+    "test:indexed-repo-workspace": "npx tsx src/workspace/repoFactIntent.test.ts && npx tsx src/workspace/collectRepoStats.test.ts && npx tsx src/workspace/IndexedRepoWorkspace.test.ts && npx tsx src/workspace/indexedRepoPipelineContract.test.ts",
     "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",

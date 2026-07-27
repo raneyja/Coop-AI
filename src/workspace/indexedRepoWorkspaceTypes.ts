@@ -15,6 +15,8 @@ export type RepoInventorySource = "index-stats" | "manifest" | "tree" | "unavail
 
 export type RepoInventoryEvidence = {
   source: RepoInventorySource;
+  /** Branch recorded when Deep-Index last completed — authoritative for indexed repos. */
+  branch?: string;
   fileCount?: number;
   /** Total lines across indexed text files. Only `index-stats` can supply this. */
   lineCount?: number;

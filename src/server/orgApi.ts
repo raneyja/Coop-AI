@@ -1280,6 +1280,15 @@ async function buildDefaultBranchLookup(
 
   await Promise.all(
     repoIds.map(async (repoId) => {
+      const pool = await getDbPool();
+      if (pool) {
+        const stats = await new RepoStatsStore(pool).loadStats(orgId, repoId);
+        if (stats?.branch?.trim()) {
+          setDefaultBranchLookup(lookup, repoId, stats.branch);
+          return;
+        }
+      }
+
       const target = parseRepoId(repoId);
       if (target.provider === "github") {
         try {
@@ -1302,15 +1311,6 @@ async function buildDefaultBranchLookup(
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.error(`[workspace-repos] live branch lookup failed repo=${repoId}: ${message}`);
-        }
-      }
-
-      const pool = await getDbPool();
-      if (pool) {
-        const stats = await new RepoStatsStore(pool).loadStats(orgId, repoId);
-        if (stats?.branch?.trim()) {
-          setDefaultBranchLookup(lookup, repoId, stats.branch);
-          return;
         }
       }
 

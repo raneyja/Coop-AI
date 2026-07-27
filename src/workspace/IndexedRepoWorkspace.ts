@@ -57,7 +57,7 @@ export class IndexedRepoWorkspace {
 
     const resolved = resolveInventoryRepoIds(repoId, target);
 
-    const fromStats = await fetchIndexStatsInventory(this.deps, resolved.candidates, target.branch);
+    const fromStats = await fetchIndexStatsInventory(this.deps, resolved.candidates);
     if (fromStats) {
       return withInventoryNote(fromStats, needs);
     }
