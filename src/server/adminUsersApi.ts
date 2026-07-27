@@ -179,6 +179,10 @@ async function handleGetUserRepoGrants(
     return true;
   }
   const grantStore = new UserRepoGrantStore(pool);
+  const orgRepos = await deps.orgStore.listOrgRepos(auth.orgId);
+  const indexedIds = indexedOrgRepoIds(orgRepos);
+  // Self-heal: grants for disabled/removed indexes inflate admin "selected" counts.
+  await grantStore.deleteOrphanGrants(auth.orgId, indexedIds);
   const repoIds = await grantStore.listUserRepoGrantIds(auth.orgId, userId);
   writeJson(response, 200, { userId, repoIds });
   return true;
