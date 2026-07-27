@@ -32,6 +32,7 @@ export type IntentEventContext = {
   contextWarning?: string;
   lines?: IntentLineRange;
   repoId?: string;
+  provider?: RepoContext["provider"];
   owner?: string;
   repo?: string;
   branch?: string;
@@ -197,6 +198,9 @@ export function repoContextFromEditor(
 }
 
 export function repoContextToIntentContext(context: RepoContext): IntentEventContext {
+  const owner = context.owner;
+  const repo = context.repo;
+  const provider = context.provider ?? "github";
   return normalizeContext({
     file: context.file,
     fileSource: context.fileSource,
@@ -207,10 +211,11 @@ export function repoContextToIntentContext(context: RepoContext): IntentEventCon
           end: context.selectedLines[1]
         }
       : undefined,
-    owner: context.owner,
-    repo: context.repo,
+    owner,
+    repo,
     branch: context.branch,
-    repoId: repoIdFromContext(context),
+    provider: context.provider,
+    repoId: owner && repo ? `${provider}:${owner}/${repo}` : undefined,
     languageId: context.languageId,
     openEditors: context.openEditors,
     selectedSymbol: context.selectedSymbol
@@ -317,6 +322,14 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
     : undefined;
   const owner = emptyToUndefined(context.owner);
   const repo = emptyToUndefined(context.repo);
+  const provider =
+    context.provider === "gitlab" || context.provider === "bitbucket" ? context.provider : "github";
+  const repoId =
+    context.repoId?.includes(":")
+      ? context.repoId
+      : owner && repo
+        ? `${provider}:${owner}/${repo}`
+        : emptyToUndefined(context.repoId);
   // Keep absolute disk paths intact so the composer chip can show the real file name.
   const normalizedFile =
     !file
@@ -331,7 +344,8 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
     repo,
     branch: emptyToUndefined(context.branch),
     languageId: emptyToUndefined(context.languageId),
-    repoId: context.repoId || (owner && repo ? `${owner}/${repo}` : undefined),
+    provider: context.provider,
+    repoId,
     openEditors: context.openEditors?.map((path) =>
       looksLikeAbsoluteDiskPath(path) ? path.replace(/\\/g, "/") : toRepositoryRelativePath(path)
     ),

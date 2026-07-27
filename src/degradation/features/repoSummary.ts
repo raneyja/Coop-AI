@@ -24,10 +24,13 @@ export async function repoSummary(context: FeatureExecutionContext) {
         true
       );
     }
-    return unavailableResult(
-      context,
-      `${codeHostLabel(provider)} is offline and no cached repository summary is available.`
-    );
+    if (context.status.level === "unavailable") {
+      return unavailableResult(
+        context,
+        `${codeHostLabel(provider)} is offline and no cached repository summary is available.`
+      );
+    }
+    // Cached tier with no snapshot — cloud code-host proxy may still serve a live summary.
   }
 
   const loader = getRepoSummaryLoader();

@@ -29,10 +29,12 @@ export async function ownershipMap(context: FeatureExecutionContext) {
         true
       );
     }
-    return unavailableResult(
-      context,
-      `${codeHostLabel(codeHost?.provider)} is offline and no cached ownership data is available.`
-    );
+    if (context.status.level === "unavailable") {
+      return unavailableResult(
+        context,
+        `${codeHostLabel(codeHost?.provider)} is offline and no cached ownership data is available.`
+      );
+    }
   }
 
   const engine = getOwnershipGraphEngine();
