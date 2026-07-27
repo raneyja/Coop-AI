@@ -142,7 +142,7 @@ export class GitHubAppService {
           repoId: `github:${repo.full_name}`,
           owner: repo.full_name.slice(0, slash),
           name: repo.full_name.slice(slash + 1),
-          defaultBranch: repo.default_branch?.trim() || "main",
+          defaultBranch: repo.default_branch?.trim() || "",
           isPrivate: Boolean(repo.private),
           htmlUrl: repo.html_url
         });

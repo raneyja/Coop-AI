@@ -5248,7 +5248,9 @@ export class CoopChatSession {
           return;
         }
         if (!branch) {
-          const entry = workspace.repos.find((item) => item.repoId === repoId);
+          const entry = workspace.repos.find(
+          (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+        );
           branch = entry?.defaultBranch?.trim() || undefined;
         }
       } catch {
@@ -5324,6 +5326,37 @@ export class CoopChatSession {
     }
   }
 
+  private async resolveBranchForCurrentRepo(): Promise<string | undefined> {
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!owner || !repo) {
+      return undefined;
+    }
+    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    const repoId = `${provider}:${owner}/${repo}`;
+
+    if (await this.options.api.hasToken()) {
+      try {
+        const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
+        const entry = workspace.repos.find(
+          (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+        );
+        const workspaceBranch = entry?.defaultBranch?.trim();
+        if (workspaceBranch) {
+          return workspaceBranch;
+        }
+      } catch {
+        // Fall through to settings-scoped branch.
+      }
+    }
+
+    const sameAsSettings = owner === this.preferences.owner && repo === this.preferences.repo;
+    if (sameAsSettings) {
+      return this.currentContext.branch?.trim() || this.preferences.branch?.trim() || undefined;
+    }
+    return undefined;
+  }
+
   private async handleRepoList(path: string, source: "chat" | "settings"): Promise<void> {
     const audience = source === "settings" ? "settings" : "chat";
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
@@ -5339,12 +5372,26 @@ export class CoopChatSession {
       audience
     );
     try {
+      const branch = await this.resolveBranchForCurrentRepo();
       const tree = await this.options.codeHostRouter.getRepositoryTree(path, {
         provider,
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
-        branch: this.currentContext.branch
+        branch
       });
+      if (
+        tree.branch?.trim() &&
+        tree.branch !== this.currentContext.branch &&
+        this.currentContext.owner &&
+        this.currentContext.repo
+      ) {
+        this.setRepoContext({
+          provider,
+          owner: this.currentContext.owner,
+          repo: this.currentContext.repo,
+          branch: tree.branch
+        });
+      }
       const items = tree.entries.map((entry) => ({
         path: entry.path,
         name: entry.name,

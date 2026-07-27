@@ -201,11 +201,17 @@ export class CodeHostRouter {
     if (!owner || !repo) {
       throw new CodeHostError("Repository owner and name are required.", "unsupported");
     }
+    const settingsOwner = configured?.owner ?? prefs.owner;
+    const settingsRepo = configured?.repo ?? prefs.repo;
+    const sameAsSettings = owner === settingsOwner && repo === settingsRepo;
+    const branch =
+      overrides?.branch ??
+      (sameAsSettings ? configured?.branch ?? (prefs.branch || undefined) : undefined);
     return {
       provider,
       owner,
       repo,
-      branch: overrides?.branch ?? configured?.branch ?? (prefs.branch || undefined),
+      branch,
       baseUrl: overrides?.baseUrl ?? hostConfig.gitlabBaseUrl
     };
   }

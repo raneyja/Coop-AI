@@ -1178,7 +1178,20 @@ async function ensureWorkspaceReposInOrgCatalog(
   }
 }
 
-/** Resolve default branch from catalog discovery or Deep-Index stats — never guess "main". */
+function setDefaultBranchLookup(lookup: Map<string, string>, repoId: string, branch: string): void {
+  const trimmed = branch.trim();
+  if (!trimmed) {
+    return;
+  }
+  lookup.set(repoId, trimmed);
+  lookup.set(repoId.toLowerCase(), trimmed);
+}
+
+function getDefaultBranchLookup(lookup: Map<string, string>, repoId: string): string | undefined {
+  return lookup.get(repoId) ?? lookup.get(repoId.toLowerCase());
+}
+
+/** Resolve default branch from live code host, index stats, or catalog — never guess "main". */
 async function buildDefaultBranchLookup(
   orgId: string,
   repoIds: string[],
@@ -1189,35 +1202,55 @@ async function buildDefaultBranchLookup(
     return lookup;
   }
 
-  try {
-    const catalog = await discoverOrgCatalogEntries(orgId, deps);
-    for (const entry of catalog) {
-      const branch = entry.defaultBranch?.trim();
-      if (branch) {
-        lookup.set(entry.repoId, branch);
+  await Promise.all(
+    repoIds.map(async (repoId) => {
+      const target = parseRepoId(repoId);
+      if (target.provider === "github") {
+        try {
+          const token = await resolveCodeHostTokenForOrg(orgId, "github", {
+            orgStore: deps.orgStore!,
+            connector: getConnector("github"),
+            allowPatFallback: deps.serverConfig.devMode
+          });
+          if (token) {
+            const repository = await new GitHubClient({ token }).getRepository({
+              provider: "github",
+              owner: target.owner,
+              repo: target.repo
+            });
+            if (repository.defaultBranch?.trim()) {
+              setDefaultBranchLookup(lookup, repoId, repository.defaultBranch);
+              return;
+            }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`[workspace-repos] live branch lookup failed repo=${repoId}: ${message}`);
+        }
       }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[workspace-repos] catalog branch lookup failed org=${orgId}: ${message}`);
-  }
 
-  const pool = await getDbPool();
-  if (pool) {
-    const statsStore = new RepoStatsStore(pool);
-    await Promise.all(
-      repoIds.map(async (repoId) => {
-        if (lookup.has(repoId)) {
+      const pool = await getDbPool();
+      if (pool) {
+        const stats = await new RepoStatsStore(pool).loadStats(orgId, repoId);
+        if (stats?.branch?.trim()) {
+          setDefaultBranchLookup(lookup, repoId, stats.branch);
           return;
         }
-        const stats = await statsStore.loadStats(orgId, repoId);
-        const branch = stats?.branch?.trim();
-        if (branch) {
-          lookup.set(repoId, branch);
+      }
+
+      try {
+        const catalog = await discoverOrgCatalogEntries(orgId, deps);
+        const entry = catalog.find(
+          (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+        );
+        if (entry?.defaultBranch?.trim()) {
+          setDefaultBranchLookup(lookup, repoId, entry.defaultBranch);
         }
-      })
-    );
-  }
+      } catch {
+        // Optional fallback only.
+      }
+    })
+  );
 
   return lookup;
 }
@@ -1243,7 +1276,7 @@ function workspaceRepoPayload(
     repoId,
     owner: parsed.owner,
     name: parsed.repo,
-    defaultBranch: defaultBranchLookup.get(repoId) ?? "",
+    defaultBranch: getDefaultBranchLookup(defaultBranchLookup, repoId) ?? "",
     indexStatus: orgRepo?.indexStatus,
     lightningEnabled: orgRepo?.lightningEnabled,
     isPrimary: index === 0,
@@ -1597,7 +1630,16 @@ async function handleGetRepoTree(
   const branch = parsed.query?.get("branch")?.trim() || undefined;
   const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
   try {
-    const tree = await fetchRepoTree(coords, dirPath, token);
+    let tree: Awaited<ReturnType<typeof fetchRepoTree>>;
+    try {
+      tree = await fetchRepoTree(coords, dirPath, token);
+    } catch (error) {
+      if (branch && error instanceof CodeHostError && error.status === 404) {
+        tree = await fetchRepoTree({ ...coords, branch: undefined }, dirPath, token);
+      } else {
+        throw error;
+      }
+    }
     writeJson(response, 200, {
       repoId,
       path: tree.path,
