@@ -278,6 +278,10 @@ export class SecureApiClient {
     return this.backend.fetchMe(baseUrl);
   }
 
+  public async completeOrgOnboarding(baseUrl: string): Promise<void> {
+    await this.backend.completeOrgOnboarding(baseUrl);
+  }
+
   public async fetchMeIntegrations(baseUrl: string) {
     return this.backend.fetchMeIntegrations(baseUrl);
   }

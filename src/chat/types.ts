@@ -438,6 +438,7 @@ export type WebviewInbound =
   | { type: "settings:sign-in-sso"; payload?: { org?: string } }
   | { type: "settings:sign-out" }
   | { type: "settings:test-connection" }
+  | { type: "settings:complete-onboarding" }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
   | { type: "settings:install-github-app" }

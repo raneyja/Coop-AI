@@ -7,34 +7,21 @@ import {
   toolsHubSubtitle,
   workspaceHubSubtitle
 } from "./subtitles";
-
-const DISMISS_UNTIL_KEY = "coop.adminOnboarding.dismissedUntil";
-const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
+import {
+  isOnboardingBannerDismissedTemporarily,
+  isOnboardingBannerPermanentlyDismissed,
+  recordOnboardingBannerDismiss
+} from "./onboardingDismiss";
 
 type AdminOnboardingBannerProps = {
   prefs: Preferences;
+  onCompleteOnboarding?: () => void;
 };
 
-function isDismissed(): boolean {
-  if (typeof localStorage === "undefined") {
-    return false;
-  }
-  const raw = localStorage.getItem(DISMISS_UNTIL_KEY);
-  const until = raw ? Number.parseInt(raw, 10) : 0;
-  if (!Number.isFinite(until)) {
-    return false;
-  }
-  return Date.now() < until;
-}
-
-function dismissForOneDay(): void {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
-  localStorage.setItem(DISMISS_UNTIL_KEY, String(Date.now() + DISMISS_DURATION_MS));
-}
-
-export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): React.ReactElement | null {
+export function AdminOnboardingBanner({
+  prefs,
+  onCompleteOnboarding
+}: AdminOnboardingBannerProps): React.ReactElement | null {
   const [dismissed, setDismissed] = useState(false);
 
   const visible = useMemo(() => {
@@ -44,10 +31,10 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
     if (prefs.devMode || prefs.canInstallIntegrations !== true) {
       return false;
     }
-    if (prefs.onboardingCompleted) {
+    if (prefs.onboardingCompleted || isOnboardingBannerPermanentlyDismissed()) {
       return false;
     }
-    return !isDismissed();
+    return !isOnboardingBannerDismissedTemporarily();
   }, [dismissed, prefs.canInstallIntegrations, prefs.devMode, prefs.onboardingCompleted]);
 
   if (!visible) {
@@ -87,8 +74,11 @@ export function AdminOnboardingBanner({ prefs }: AdminOnboardingBannerProps): Re
           type="button"
           className="coop-text-btn"
           onClick={() => {
-            dismissForOneDay();
+            const result = recordOnboardingBannerDismiss();
             setDismissed(true);
+            if (result.permanent) {
+              onCompleteOnboarding?.();
+            }
           }}
         >
           Dismiss

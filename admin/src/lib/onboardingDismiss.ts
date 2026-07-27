@@ -1,27 +1,10 @@
 const STORAGE_PREFIX = "coop.setupDismiss";
+const PERMANENT_AFTER_DISMISSES = 3;
 
 type SetupKind = "admin" | "member";
 
 function storageKey(kind: SetupKind, suffix: string): string {
   return `${STORAGE_PREFIX}.${kind}.${suffix}`;
-}
-
-function todayKey(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function dateKeyFromOffset(offsetDays: number): string {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + offsetDays);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function startOfTomorrowMs(): number {
@@ -31,25 +14,34 @@ function startOfTomorrowMs(): number {
   return tomorrow.getTime();
 }
 
-function readDismissDates(kind: SetupKind): string[] {
+function readDismissCount(kind: SetupKind): number {
   try {
-    const raw = localStorage.getItem(storageKey(kind, "dates"));
-    if (!raw) {
-      return [];
+    const rawCount = localStorage.getItem(storageKey(kind, "count"));
+    if (rawCount) {
+      const parsed = Number(rawCount);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
     }
-    const parsed = JSON.parse(raw) as unknown;
+    // Migrate legacy consecutive-day date list → count.
+    const rawDates = localStorage.getItem(storageKey(kind, "dates"));
+    if (!rawDates) {
+      return 0;
+    }
+    const parsed = JSON.parse(rawDates) as unknown;
     if (!Array.isArray(parsed)) {
-      return [];
+      return 0;
     }
-    return parsed.filter((entry): entry is string => typeof entry === "string");
+    return parsed.filter((entry): entry is string => typeof entry === "string").length;
   } catch {
-    return [];
+    return 0;
   }
 }
 
-function writeDismissDates(kind: SetupKind, dates: string[]): void {
+function writeDismissCount(kind: SetupKind, count: number): void {
   try {
-    localStorage.setItem(storageKey(kind, "dates"), JSON.stringify(dates));
+    localStorage.setItem(storageKey(kind, "count"), String(count));
+    localStorage.removeItem(storageKey(kind, "dates"));
   } catch {
     // ignore
   }
@@ -73,23 +65,6 @@ function writeDismissedUntil(kind: SetupKind, untilMs: number): void {
   }
 }
 
-function countConsecutiveDismissDaysEndingToday(dates: string[]): number {
-  const today = todayKey();
-  if (!dates.includes(today)) {
-    return 0;
-  }
-  let streak = 1;
-  for (let offset = -1; offset >= -6; offset -= 1) {
-    const key = dateKeyFromOffset(offset);
-    if (dates.includes(key)) {
-      streak += 1;
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
 export function isSetupDismissedToday(kind: SetupKind): boolean {
   const until = readDismissedUntil(kind);
   return until > Date.now();
@@ -99,6 +74,7 @@ export function clearSetupDismiss(kind: SetupKind): void {
   try {
     localStorage.removeItem(storageKey(kind, "until"));
     localStorage.removeItem(storageKey(kind, "dates"));
+    localStorage.removeItem(storageKey(kind, "count"));
   } catch {
     // ignore
   }
@@ -106,19 +82,13 @@ export function clearSetupDismiss(kind: SetupKind): void {
 
 /**
  * Record an explicit dismiss (X or backdrop). Hides setup until the next calendar day.
- * After 3 consecutive dismiss days, returns permanent=true so the caller can mark setup complete.
+ * After 3 dismisses total, returns permanent=true so the caller can mark setup complete.
  */
 export function recordSetupDismiss(kind: SetupKind): { permanent: boolean } {
-  const today = todayKey();
-  const dates = readDismissDates(kind);
-  if (!dates.includes(today)) {
-    dates.push(today);
-    dates.sort();
-    writeDismissDates(kind, dates);
-  }
+  const count = readDismissCount(kind) + 1;
+  writeDismissCount(kind, count);
 
-  const streak = countConsecutiveDismissDaysEndingToday(dates);
-  if (streak >= 3) {
+  if (count >= PERMANENT_AFTER_DISMISSES) {
     clearSetupDismiss(kind);
     return { permanent: true };
   }

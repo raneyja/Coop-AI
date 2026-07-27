@@ -35,23 +35,28 @@
   }
 
   [data-theme="light"] {
-    --coop-border: #e0e0e0;
+    /* Borders ~10% darker than prior greys for light-mode contrast */
+    --coop-border: #cacaca;
     --coop-panel-canvas: #f3f3f3;
     --coop-panel-foreground: #1e1e1e;
     --coop-panel-muted: #6b7280;
     --coop-composer-surface: #ffffff;
-    --coop-composer-border: #e0e0e0;
-    --coop-composer-border-focus: #c8c8c8;
+    --coop-composer-border: #cacaca;
+    --coop-composer-border-focus: #b4b4b4;
     --coop-composer-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
     --coop-composer-placeholder: #9e9e9e;
     --coop-composer-text: #000000;
     --chat-user-bg: #ffffff;
-    --chat-user-border: #d4d4d4;
+    --chat-user-border: #bfbfbf;
     --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     --coop-pill-text: color-mix(in srgb, #000000 90%, #6b7280 10%);
     --coop-slash-command: #7c3aed;
     --coop-pill-surface-hover: color-mix(in srgb, var(--coop-pill-surface) 88%, black 12%);
-    --coop-pill-border-hover: color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%);
+    --coop-pill-border-hover: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--coop-pill-surface-hover) 92%, var(--coop-panel-foreground) 8%) 90%,
+      black 10%
+    );
   }
 
   [data-theme="dark"] {
@@ -161,10 +166,27 @@
   }
 
   [data-theme="light"] {
-    --coop-pill-border: color-mix(in srgb, var(--coop-pill-surface) 94%, var(--coop-panel-foreground) 6%);
-    --coop-settings-field-border: color-mix(in srgb, var(--coop-settings-field) 92%, var(--coop-panel-foreground) 8%);
-    --coop-settings-field-border-focus: color-mix(in srgb, var(--coop-settings-field) 82%, var(--coop-panel-foreground) 18%);
-    --coop-settings-divider: color-mix(in srgb, var(--coop-panel-canvas) 55%, var(--coop-panel-foreground) 8%);
+    /* Mix prior light borders with 10% black so chips/inputs/dividers match hex darkening */
+    --coop-pill-border: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--coop-pill-surface) 94%, var(--coop-panel-foreground) 6%) 90%,
+      black 10%
+    );
+    --coop-settings-field-border: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--coop-settings-field) 92%, var(--coop-panel-foreground) 8%) 90%,
+      black 10%
+    );
+    --coop-settings-field-border-focus: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--coop-settings-field) 82%, var(--coop-panel-foreground) 18%) 90%,
+      black 10%
+    );
+    --coop-settings-divider: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--coop-panel-canvas) 55%, var(--coop-panel-foreground) 8%) 90%,
+      black 10%
+    );
     --chat-user-outline: color-mix(in srgb, var(--chat-user-border) 55%, var(--coop-panel-canvas) 45%);
   }
 

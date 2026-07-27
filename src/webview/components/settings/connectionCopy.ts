@@ -95,21 +95,33 @@ export function integrationListSubtitle(prefs: Preferences, provider: Integratio
 }
 
 export function toolsHubSubtitle(prefs: Preferences): string {
-  const codeHosts = [codeHostReady(prefs, "github"), codeHostReady(prefs, "gitlab"), codeHostReady(prefs, "bitbucket")];
-  const collaborationTools = [
+  const codeHostsReady = [
+    codeHostReady(prefs, "github"),
+    codeHostReady(prefs, "gitlab"),
+    codeHostReady(prefs, "bitbucket")
+  ].filter(Boolean).length;
+  const collaborationReady = [
     integrationReady(prefs, "slack"),
     integrationReady(prefs, "jira"),
     integrationReady(prefs, "teams"),
     integrationReady(prefs, "confluence"),
     integrationReady(prefs, "notion"),
     integrationReady(prefs, "google-docs")
-  ];
-  const ready = [...codeHosts, ...collaborationTools].filter(Boolean).length;
-  const total = codeHosts.length + collaborationTools.length;
-  if (ready === 0) {
-    return "No tools ready yet";
+  ].filter(Boolean).length;
+  const ready = codeHostsReady + collaborationReady;
+  const total = 9;
+
+  // One code host is enough for setup — do not imply 9/9 is required.
+  if (codeHostsReady === 0) {
+    if (ready === 0) {
+      return "No tools ready yet";
+    }
+    return `${ready} ready · connect a code host`;
   }
-  return `${ready} of ${total} ready`;
+  if (ready === total) {
+    return "All tools ready";
+  }
+  return `Ready · ${ready} of ${total} connected`;
 }
 
 export function formatQuotaRetryLabel(resetsAtIso: string): string {

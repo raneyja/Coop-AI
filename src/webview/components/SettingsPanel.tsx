@@ -125,6 +125,7 @@ type SettingsPanelProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
+  onCompleteOnboarding?: () => void;
 };
 
 export function SettingsPanel({
@@ -135,6 +136,7 @@ export function SettingsPanel({
   promptLibrary,
   onTestIntegration,
   lightningState,
+  onCompleteOnboarding,
   ...detailProps
 }: SettingsPanelProps): React.ReactElement {
   const handleBack = () => {
@@ -161,6 +163,7 @@ export function SettingsPanel({
             pinnedCount={promptLibrary.pinnedIds.length}
             lightningState={lightningState}
             onNavigate={(next) => onNavigate(next)}
+            onCompleteOnboarding={onCompleteOnboarding}
           />
         ) : (
           <SettingsDetailView screen={screen} {...detailCommon} />

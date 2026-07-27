@@ -724,7 +724,7 @@ function ToolsListDetail({
 
       <p className="coop-prompt-modal-section-title px-0.5">Source code</p>
       <p className="coop-settings-card-desc px-0.5">
-        Every connected code host is active. Connect one or more below to use their repos in chat.
+        One code host is enough for setup. Connect others only if your team uses them.
       </p>
       <CoopNavList>
         <CoopNavRow

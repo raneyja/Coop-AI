@@ -75,7 +75,7 @@ test("integrationConfigured stays installed while integrationReady waits for sco
   assert.equal(integrationReady(prefs, "slack"), false);
 });
 
-test("toolsHubSubtitle counts ready tools instead of merely connected", () => {
+test("toolsHubSubtitle treats one ready code host as enough", () => {
   const prefs = {
     ...basePrefs,
     orgIntegrationStatuses: [
@@ -87,7 +87,19 @@ test("toolsHubSubtitle counts ready tools instead of merely connected", () => {
     hasSlackInstalled: true,
     hasTeamsInstalled: false
   };
-  assert.equal(toolsHubSubtitle(prefs), "1 of 9 ready");
+  assert.equal(toolsHubSubtitle(prefs), "Ready · 1 of 9 connected");
+});
+
+test("toolsHubSubtitle asks for a code host when only collab tools are ready", () => {
+  const prefs = {
+    ...basePrefs,
+    orgIntegrationStatuses: [
+      { provider: "slack" as const, installed: true, scopeStatus: "active" as const }
+    ],
+    hasSlackInstalled: true,
+    slackTeamName: "Acme"
+  };
+  assert.equal(toolsHubSubtitle(prefs), "1 ready · connect a code host");
 });
 
 console.log(`\nintegrationStatus: ${passed} passed, ${failed} failed`);

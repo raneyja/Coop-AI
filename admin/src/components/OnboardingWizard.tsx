@@ -235,13 +235,13 @@ export function OnboardingWizard({
               <ul className="space-y-2 text-sm text-coop-muted">
                 {isFreePlan ? (
                   <>
-                    <li>1. Connect a code host (GitHub, GitLab, or Bitbucket)</li>
+                    <li>1. Connect at least one code host (GitHub, GitLab, or Bitbucket)</li>
                     <li>2. Deep-Index up to 3 of your repos</li>
                     <li>3. Install the VS Code extension and sign in</li>
                   </>
                 ) : (
                   <>
-                    <li>1. Connect code hosts and collaboration tools</li>
+                    <li>1. Connect at least one code host (collaboration tools optional)</li>
                     <li>2. Choose repos to Deep-Index</li>
                     <li>3. Set collaboration access scope</li>
                     <li>4. Invite your team</li>
@@ -257,8 +257,8 @@ export function OnboardingWizard({
                 <h3 className="text-lg font-semibold text-white">Connect tools</h3>
                 <p className="mt-2 text-sm text-coop-muted">
                   {isFreePlan
-                    ? "Connect your code hosts to your entire stack."
-                    : "Connect code hosts and collaboration tools for your team."}
+                    ? "Connect at least one code host. Additional hosts are optional."
+                    : "Connect at least one code host. Collaboration tools are optional."}
                 </p>
               </div>
               <IntegrationsStep

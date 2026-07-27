@@ -26,6 +26,7 @@ type SettingsHubProps = {
   pinnedCount: number;
   lightningState?: SettingsLightningSummary | null;
   onNavigate: (screen: SettingsDetailScreen) => void;
+  onCompleteOnboarding?: () => void;
 };
 
 const HUB_ROWS: Array<{
@@ -59,10 +60,16 @@ const HUB_ROWS: Array<{
   }
 ];
 
-export function SettingsHub({ prefs, pinnedCount, lightningState, onNavigate }: SettingsHubProps): React.ReactElement {
+export function SettingsHub({
+  prefs,
+  pinnedCount,
+  lightningState,
+  onNavigate,
+  onCompleteOnboarding
+}: SettingsHubProps): React.ReactElement {
   return (
     <>
-      <AdminOnboardingBanner prefs={prefs} />
+      <AdminOnboardingBanner prefs={prefs} onCompleteOnboarding={onCompleteOnboarding} />
       <CoopNavList>
         {HUB_ROWS.map((row) => (
           <CoopNavRow
