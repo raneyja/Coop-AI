@@ -116,7 +116,7 @@ export function IndexingRepoPickerModal({
 
   const selectionLabel = unlimited
     ? `${selected.size} selected`
-    : `${selected.size} of ${remainingSlots} selected`;
+    : `${selected.size} of ${remainingSlots} slot${remainingSlots === 1 ? "" : "s"} left`;
 
   return createPortal(
     <div

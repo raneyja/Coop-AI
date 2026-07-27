@@ -39,6 +39,10 @@ export async function findActiveIndexJob(
 /**
  * Queue a single org repo for indexing. Skips duplicate queued/running jobs and
  * clears stale embedding status until the worker records a fresh outcome.
+ *
+ * Always re-asserts lightningEnabled=true when an active job already exists.
+ * Otherwise Turn off → Deep-Index again can return success while leaving the
+ * repo disabled (lastJobId still points at the active job).
  */
 export async function queueOrgRepoIndex(
   orgId: string,
@@ -54,22 +58,28 @@ export async function queueOrgRepoIndex(
 
   const active = await findActiveIndexJob(deps.jobQueue, orgId, repoId);
   if (active) {
-    if (existing?.lastJobId !== active.jobId) {
-      await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-        lightningEnabled: true,
-        indexStatus: active.status === "running" ? "indexing" : "queued",
-        lastJobId: active.jobId,
-        error: undefined,
-        embeddingStatus: undefined,
-        embeddingError: undefined
-      });
-    }
+    await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+      lightningEnabled: true,
+      indexStatus: active.status === "running" ? "indexing" : "queued",
+      lastJobId: active.jobId,
+      error: undefined,
+      embeddingStatus: undefined,
+      embeddingError: undefined
+    });
     return { outcome: "skipped", reason: "already_active", jobId: active.jobId };
   }
 
   if (existing?.lastJobId) {
     const lastJob = await deps.jobQueue.getJob(existing.lastJobId);
     if (lastJob && (lastJob.status === "queued" || lastJob.status === "running")) {
+      await deps.orgStore.upsertOrgRepo(orgId, repoId, {
+        lightningEnabled: true,
+        indexStatus: lastJob.status === "running" ? "indexing" : "queued",
+        lastJobId: lastJob.id,
+        error: undefined,
+        embeddingStatus: undefined,
+        embeddingError: undefined
+      });
       return { outcome: "skipped", reason: "already_active", jobId: lastJob.id };
     }
   }

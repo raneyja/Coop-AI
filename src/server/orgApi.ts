@@ -409,7 +409,9 @@ export async function handleOrgApiRequest(
     const repoId = decodeURIComponent(disableMatch[1]);
     const record = await deps.orgStore.upsertOrgRepo(auth!.orgId, repoId, {
       lightningEnabled: false,
-      indexStatus: "disabled"
+      indexStatus: "disabled",
+      lastJobId: undefined,
+      error: undefined
     });
     await audit(deps, auth!, "repo.lightning.disable", { repoId });
     writeJson(response, 200, { repo: record });

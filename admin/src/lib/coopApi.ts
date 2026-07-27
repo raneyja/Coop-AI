@@ -1568,13 +1568,32 @@ export async function syncEstate(): Promise<
   };
 }
 
-export async function enableLightningRepo(repoId: string): Promise<ApiResult<{ jobId?: string; status?: string }>> {
-  const result = await coopFetch<{ jobId?: string; status?: string }>(
-    `/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/enable`,
-    { method: "POST", body: "{}" }
-  );
+export async function enableLightningRepo(
+  repoId: string
+): Promise<ApiResult<{ jobId?: string; status?: string; alreadyQueued?: boolean; repoId?: string }>> {
+  const result = await coopFetch<{
+    jobId?: string;
+    status?: string;
+    alreadyQueued?: boolean;
+    repoId?: string;
+    error?: string;
+    message?: string;
+  }>(`/v1/orgs/repos/${encodeURIComponent(repoId)}/lightning/enable`, {
+    method: "POST",
+    body: "{}"
+  });
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  if (!result.data?.jobId) {
+    return {
+      ok: false,
+      status: result.status,
+      error:
+        result.data?.message ??
+        result.data?.error ??
+        "Deep-Index enable returned no job id. The request may not have reached the indexing API."
+    };
   }
   return { ok: true, status: result.status, data: result.data };
 }

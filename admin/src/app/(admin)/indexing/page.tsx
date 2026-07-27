@@ -143,8 +143,7 @@ export default function IndexingPage() {
     const currentIndexed = (latestRepos.data?.repos ?? []).filter((repo) => repo.lightningEnabled).length;
     const label = codeHostLabel(provider);
     const discovered = result.data?.discovered ?? 0;
-    const remaining = (indexedRepoLimit ?? 999) - currentIndexed;
-    if (indexedRepoLimit != null && remaining <= 0) {
+    if (indexedRepoLimit != null && currentIndexed >= indexedRepoLimit) {
       setSyncMessage(
         `${label} — ${discovered} repos available. At the ${indexedRepoLimit}-repo limit — turn off a repo to swap.`
       );
@@ -155,6 +154,7 @@ export default function IndexingPage() {
   }
 
   async function handlePickerConfirm(repoIds: string[]) {
+    const queuedNames: string[] = [];
     for (const repoId of repoIds) {
       setActionId(repoId);
       const result = await enableLightningRepo(repoId);
@@ -162,9 +162,52 @@ export default function IndexingPage() {
       if (!result.ok) {
         throw new Error(result.error ?? `Failed to Deep-Index ${shortRepoName(repoId)}.`);
       }
+      if (!result.data?.jobId) {
+        throw new Error(
+          `Deep-Index for ${shortRepoName(repoId)} returned success without a job id. Check the Network tab for /lightning/enable.`
+        );
+      }
+      queuedNames.push(shortRepoName(repoId));
+      setRepos((current) =>
+        current.map((repo) =>
+          repo.repoId === repoId
+            ? {
+                ...repo,
+                lightningEnabled: true,
+                indexStatus: "queued",
+                lastJobId: result.data?.jobId,
+                error: undefined
+              }
+            : repo
+        )
+      );
     }
-    setActionMessage(`Queued ${repoIds.length} repo(s) for Deep-Index.`);
+    setError(null);
+    setActionMessage(
+      `Queued ${queuedNames.join(", ")} — look under In progress (not Indexed repos).`
+    );
     await load({ silent: true });
+
+    const latest = await fetchOrgRepos();
+    if (!latest.ok || !latest.data?.repos) {
+      setError(
+        latest.error ??
+          "Queued Deep-Index, but could not refresh the repo list. Reload the page and search for the repo."
+      );
+      return;
+    }
+    setRepos(latest.data.repos);
+    const missing = repoIds.filter((repoId) => {
+      const row = latest.data!.repos.find((repo) => repo.repoId === repoId);
+      return !row?.lightningEnabled;
+    });
+    if (missing.length > 0) {
+      setActionMessage(null);
+      setError(
+        `API accepted Deep-Index for ${missing.map(shortRepoName).join(", ")}, but it did not stay enabled after refresh. ` +
+          "Usually plan quota trim or a failed enable. Check Network → /lightning/enable and Railway coop-worker logs."
+      );
+    }
   }
 
   async function handleReindex(repoId: string) {
@@ -304,7 +347,7 @@ export default function IndexingPage() {
         open={picker.open}
         provider={picker.provider}
         repos={repos}
-        maxSelect={indexedRepoLimit ?? 999}
+        maxSelect={indexedRepoLimit}
         alreadyIndexed={indexedCount}
         onClose={() => setPicker((current) => ({ ...current, open: false }))}
         onConfirm={handlePickerConfirm}
