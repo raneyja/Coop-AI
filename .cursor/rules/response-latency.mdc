@@ -26,9 +26,10 @@ Does **not** apply to:
 1. Use `MAX_USER_FACING_RESPONSE_MS` from `src/config/responseDeadline.ts` — do not invent other ceilings.
 2. Every user-facing turn must schedule a deadline abort from turn start; clear it on complete/abort.
 3. Cap interactive HTTP / LLM / job-poll waits to the **remaining** turn budget (reserve time for synthesis when gathering context first).
-4. On deadline: return a partial answer if tokens already streamed, otherwise a clear timeout message — never hang.
-5. Do not stack sequential calls that can each take 15s+; parallelize or fail open early.
-6. Never add artificial delays that push a turn past the ceiling.
+4. On deadline **before** an answer has started: return a clear timeout message — never hang.
+5. Once synthesis/streaming has started (model handoff or first token): **clear the deadline** — never cut an in-flight answer short.
+6. Do not stack sequential calls that can each take 15s+; parallelize or fail open early.
+7. Never add artificial delays that push a turn past the ceiling.
 
 ## Anti-patterns
 
@@ -36,8 +37,9 @@ Does **not** apply to:
 |--------|--------|
 | Per-call timeouts of 30–120s on the chat hot path | Remaining-budget timeouts from turn start |
 | Polling jobs for minutes before answering | Poll within remaining budget, then answer with partial/cached context |
+| Aborting mid-stream because wall clock hit 15s | Clear deadline when synthesis starts; finish the answer |
 | Silent hang after abort | Finish with partial text or explicit timeout error |
 
 ## Self-check
 
-Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer”? If yes, cut work or degrade earlier.
+Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer”? If yes, cut gather work or degrade earlier — but do not kill a response that already started.

@@ -64,6 +64,14 @@ async function main(): Promise<void> {
     assert.equal(controller.signal.aborted, false);
   });
 
+  await test("clearing the deadline disposer prevents abort", async () => {
+    const controller = new AbortController();
+    const clear = scheduleResponseDeadline(controller, Date.now(), 30);
+    clear();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(controller.signal.aborted, false);
+  });
+
   console.log(`\nresponseDeadline: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

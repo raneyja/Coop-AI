@@ -63,7 +63,8 @@ function createDeadlineAbortError(): Error {
 
 /**
  * Abort `controller` when the turn budget elapses.
- * Returns a disposer that clears the timer (call on complete / manual abort).
+ * Returns a disposer that clears the timer (call on complete / manual abort /
+ * when synthesis/streaming has started — never cut an in-flight answer short).
  */
 export function scheduleResponseDeadline(
   controller: AbortController,
@@ -83,6 +84,14 @@ export function scheduleResponseDeadline(
     }
   }, remaining);
   return () => clearTimeout(timer);
+}
+
+/**
+ * True once the turn has started delivering an answer (first token or synthesis handoff).
+ * After that, the 15s timer must not abort — users should never see a mid-answer cut.
+ */
+export function clearResponseDeadlineForSynthesis(clear: (() => void) | undefined): void {
+  clear?.();
 }
 
 export const RESPONSE_DEADLINE_USER_MESSAGE =

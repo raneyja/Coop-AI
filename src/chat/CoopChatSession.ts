@@ -70,6 +70,7 @@ import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTu
 import {
   RESPONSE_DEADLINE_USER_MESSAGE,
   abortablePromise,
+  clearResponseDeadlineForSynthesis,
   isResponseDeadlineAbort,
   remainingContextGatherBudgetMs,
   scheduleResponseDeadline
@@ -2288,7 +2289,8 @@ export class CoopChatSession {
 
   /**
    * Understand Repo evidence — one call through buildRepoSummaryEvidence (indexed then live),
-   * after the turn already pinned the canonical branch.
+   * after the turn already pinned the canonical branch. Capped to the gather budget so
+   * synthesis can still start inside the 15s first-response window.
    */
   private async fetchUnderstandRepoEvidence(request: ContextFetchRequest): Promise<ContextFetchResult> {
     const target = this.repoTargetForRequest(request);
@@ -2313,12 +2315,22 @@ export class CoopChatSession {
       };
     }
 
+    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (budgetMs <= 0) {
+      return {
+        ...base,
+        error: "gather-budget-exhausted",
+        message: `${coopBuildBanner()}: context gather budget exhausted before repository evidence loaded.`
+      };
+    }
+
+    const provider =
+      target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
+        ? target.provider
+        : this.preferences.defaultCodeHost;
+
     try {
-      const provider =
-        target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
-          ? target.provider
-          : this.preferences.defaultCodeHost;
-      const evidence = await buildRepoSummaryEvidence({
+      const evidencePromise = buildRepoSummaryEvidence({
         api: this.options.api,
         apiBaseUrl: this.preferences.apiBaseUrl,
         codeHostRouter: this.options.codeHostRouter,
@@ -2330,6 +2342,12 @@ export class CoopChatSession {
         activeFile: undefined,
         resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
       });
+      const evidence = await Promise.race([
+        evidencePromise,
+        new Promise<undefined>((resolve) => {
+          setTimeout(() => resolve(undefined), budgetMs);
+        })
+      ]);
 
       const baseData =
         typeof base.data === "object" && base.data !== null
@@ -4730,8 +4748,11 @@ export class CoopChatSession {
         minVisibleMs: minResponseVisibleMs,
         isCancelled,
         onChunk: (chunk) => {
+          // First token = answer started — never cut the stream for the 15s prepare budget.
           if (!clearedIntentForOutput) {
             clearedIntentForOutput = true;
+            clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
+            turn.clearResponseDeadline = () => undefined;
             this.clearIntentFeedback(turn.threadId);
           }
           full += chunk;
@@ -4751,6 +4772,11 @@ export class CoopChatSession {
       if (quotaBlocked) {
         return;
       }
+
+      // Synthesis handoff: first-response budget is satisfied once we start the model.
+      // Do not abort mid-answer if TTFT or the full write runs past 15s from turn start.
+      clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
+      turn.clearResponseDeadline = () => undefined;
 
       const result = await this.options.api.streamChat(
         {
