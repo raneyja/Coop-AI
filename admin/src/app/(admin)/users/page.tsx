@@ -181,6 +181,32 @@ export default function UsersPage() {
         </div>
       ) : null}
 
+      {!teamInvitesBlocked && !unavailable && !loading ? (
+        <div className="admin-panel-inset flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="admin-section-label">Repository access</p>
+            {perUserAccess ? (
+              <>
+                <p className="mt-1 text-sm text-white">Per-user grants</p>
+                <p className="mt-0.5 text-xs text-coop-muted">
+                  Assign repos when inviting, or with Manage repos on each user row.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-white">All indexed repos</p>
+                <p className="mt-0.5 text-xs text-coop-muted">
+                  Every team member automatically sees all Deep-Indexed repos in the extension.
+                </p>
+              </>
+            )}
+          </div>
+          <Link href="/settings/repository-access" className="admin-btn-secondary shrink-0 text-xs">
+            Change access policy
+          </Link>
+        </div>
+      ) : null}
+
       {unavailable && <UnavailableBanner />}
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
@@ -257,16 +283,6 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
-
-      {!teamInvitesBlocked ? (
-        <p className="text-xs text-coop-muted">
-          Repository access policy is configured in{" "}
-          <Link href="/settings" className="admin-link">
-            Settings
-          </Link>
-          .
-        </p>
-      ) : null}
 
       <InviteUserModal
         open={inviteOpen}
