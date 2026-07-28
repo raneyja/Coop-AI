@@ -188,27 +188,32 @@ export function pickEntryPaths(options: {
     ...(options.srcOverview?.topLevelFiles.map((file) => `src/${file}`) ?? []),
     ...manifestPaths
   ]);
+  // When tree/manifest are empty (timeout / auth blip), still try well-known entry
+  // paths — the file fetch will no-op on misses. Gating only on `available` left
+  // Understand Repo with zero evidence even for fully indexed repos.
+  const allowBlindCandidates = available.size === 0;
 
   const picked: string[] = [];
-  const push = (path: string | undefined): void => {
+  const push = (path: string | undefined, force = false): void => {
     if (!path || picked.includes(path)) {
       return;
     }
-    if (!available.has(path) && !manifestPaths.has(path)) {
+    if (!force && !available.has(path) && !manifestPaths.has(path)) {
       return;
     }
     picked.push(path);
   };
 
+  // Active file first — the open tab is the strongest evidence for chat / Understand Repo.
+  if (options.activeFile) {
+    push(options.activeFile, true);
+  }
+
   for (const candidate of ENTRY_POINT_CANDIDATES) {
-    push(candidate);
+    push(candidate, allowBlindCandidates);
     if (picked.length >= MAX_ENTRY_FILES) {
       return picked;
     }
-  }
-
-  if (options.activeFile) {
-    push(options.activeFile);
   }
 
   for (const path of manifestPaths) {

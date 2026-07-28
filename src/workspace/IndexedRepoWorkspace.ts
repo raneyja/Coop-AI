@@ -46,7 +46,11 @@ export class IndexedRepoWorkspace {
    * Repository totals in a fixed source order so the same question always gets
    * the same number. Returns `unavailable` rather than a guess.
    */
-  public async getInventory(target: RepoTarget, needs: RepoFactNeeds): Promise<RepoInventoryEvidence> {
+  public async getInventory(
+    target: RepoTarget,
+    needs: RepoFactNeeds,
+    options?: { allowExpensiveTreeWalk?: boolean }
+  ): Promise<RepoInventoryEvidence> {
     const repoId = target.repoId?.trim();
     if (!repoId) {
       return {
@@ -67,9 +71,12 @@ export class IndexedRepoWorkspace {
       return withInventoryNote(fromManifest, needs);
     }
 
-    const fromTree = await fetchTreeInventory(this.deps, resolved.coords);
-    if (fromTree) {
-      return withInventoryNote(fromTree, needs);
+    // Recursive live tree count can take minutes on large repos — never on the chat hot path.
+    if (options?.allowExpensiveTreeWalk !== false) {
+      const fromTree = await fetchTreeInventory(this.deps, resolved.coords);
+      if (fromTree) {
+        return withInventoryNote(fromTree, needs);
+      }
     }
 
     return {
@@ -89,8 +96,11 @@ export class IndexedRepoWorkspace {
   }
 
   /**
-   * Read any file in the indexed repo: local clone when the user has one,
+   * Read any file in the indexed repo: matching local clone when present,
    * otherwise fetched from the code host. Indexed does not mean mirrored.
+   *
+   * Never prefer an unrelated workspace file (e.g. Coop-AI's package.json while
+   * the active remote repo is documenso) — that silently fed the wrong evidence.
    */
   public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {
     const cleanPath = path.trim().replace(/^\/+/, "");
@@ -98,21 +108,24 @@ export class IndexedRepoWorkspace {
       return undefined;
     }
     const repoId = target.repoId?.trim();
+    const identity = this.getIdentity(target);
 
-    try {
-      const { readWorkspaceFileFromDisk } = await import("../context/localFileResolver");
-      const local = readWorkspaceFileFromDisk(cleanPath);
-      const localContent = local?.files[0]?.content;
-      if (localContent?.trim()) {
-        return {
-          path: cleanPath,
-          repoId: repoId ?? "",
-          content: localContent,
-          origin: "local"
-        };
+    if (await localDiskMatchesTargetRepo(identity)) {
+      try {
+        const { readWorkspaceFileFromDisk } = await import("../context/localFileResolver");
+        const local = readWorkspaceFileFromDisk(cleanPath);
+        const localContent = local?.files[0]?.content;
+        if (localContent?.trim()) {
+          return {
+            path: cleanPath,
+            repoId: repoId ?? "",
+            content: localContent,
+            origin: "local"
+          };
+        }
+      } catch {
+        /* fall through to remote */
       }
-    } catch {
-      /* fall through to remote */
     }
 
     if (!repoId) {
@@ -136,6 +149,23 @@ export class IndexedRepoWorkspace {
     } catch {
       return undefined;
     }
+  }
+}
+
+/** True when an open workspace folder is actually this repo (local clone or VFS). */
+async function localDiskMatchesTargetRepo(
+  identity: { owner?: string; repo?: string; provider?: string } | undefined
+): Promise<boolean> {
+  if (!identity?.owner?.trim() || !identity?.repo?.trim()) {
+    return false;
+  }
+  try {
+    const { isRepoOpenInEditorWorkspace } = await import("./repoEditorOpener");
+    const provider =
+      identity.provider === "gitlab" || identity.provider === "bitbucket" ? identity.provider : "github";
+    return isRepoOpenInEditorWorkspace(identity.owner, identity.repo, provider);
+  } catch {
+    return false;
   }
 }
 

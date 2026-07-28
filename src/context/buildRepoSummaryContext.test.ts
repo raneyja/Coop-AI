@@ -56,6 +56,17 @@ async function run(): Promise<void> {
     assert.ok(paths.includes("src/server/githubAppApi.ts"));
   });
 
+  test("pickEntryPaths tries blind entry candidates when tree and manifest are empty", () => {
+    const paths = pickEntryPaths({
+      manifest: [],
+      treeOverview: { topLevelDirs: [], topLevelFiles: [] },
+      activeFile: "lingui.config.ts"
+    });
+    assert.ok(paths.includes("package.json"));
+    assert.ok(paths.includes("README.md"));
+    assert.ok(paths.includes("lingui.config.ts"));
+  });
+
   test("summarizeManifest counts extensions and symbols", () => {
     const stats = summarizeManifest([
       { filePath: "src/a.ts", symbols: [{ name: "foo", kind: "function" }] },

@@ -109,6 +109,19 @@ void (async () => {
     assert.deepEqual(calls, ["index-stats", "manifest", "tree"]);
   });
 
+  await test("chat hot path skips expensive live tree walk", async () => {
+    const { deps, calls } = stubDeps({ treeCount: { fileCount: 1233 } });
+    const workspace = new IndexedRepoWorkspace(deps);
+    const inventory = await workspace.getInventory(
+      LOC_TARGET,
+      repoFactNeeds("how many files in this repo?"),
+      { allowExpensiveTreeWalk: false }
+    );
+
+    assert.equal(inventory.source, "unavailable");
+    assert.deepEqual(calls, ["index-stats", "manifest"]);
+  });
+
   await test("file-count-only sources refuse to supply a line count", async () => {
     const { deps } = stubDeps({ treeCount: { fileCount: 1233 } });
     const workspace = new IndexedRepoWorkspace(deps);

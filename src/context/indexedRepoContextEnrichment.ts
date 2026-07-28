@@ -111,7 +111,12 @@ export async function enrichContextWithIndexedRepo(options: {
       const [treeOverview, inventory, manifestFiles, remoteContent] = await Promise.all([
         needsTree ? workspace.getTreeOverview(normalizedTarget) : Promise.resolve(undefined),
         needsInventory
-          ? workspace.getInventory(normalizedTarget, { fileCount: true, treeOverview: false, lineCount: false })
+          ? workspace.getInventory(
+              normalizedTarget,
+              { fileCount: true, treeOverview: false, lineCount: false },
+              // Never recursive-walk the live tree on the 15s chat path.
+              { allowExpensiveTreeWalk: false }
+            )
           : Promise.resolve(undefined),
         needsManifest || needsEntryFiles
           ? loadManifestEntries(

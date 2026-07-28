@@ -2467,7 +2467,9 @@ export class CoopChatSession {
     const load = async (): Promise<ContextFetchResult> => {
       try {
         const [inventory, treeOverview] = await Promise.all([
-          needCount ? workspace.getInventory(target, needs) : Promise.resolve(undefined),
+          needCount
+            ? workspace.getInventory(target, needs, { allowExpensiveTreeWalk: false })
+            : Promise.resolve(undefined),
           needs.treeOverview ? workspace.getTreeOverview(target) : Promise.resolve(undefined)
         ]);
         return mergeRepoInventoryContext(result, inventory, treeOverview);
@@ -6082,31 +6084,30 @@ export class CoopChatSession {
       const visibleEditor = vscode.window.visibleTextEditors.find(
         (editor) => editor.document.uri.toString() === ref.absolutePath
       );
-      if (!visibleEditor?.document.getText().trim()) {
-        continue;
+      if (visibleEditor?.document.getText().trim()) {
+        const relativePath = normalizeRelativePath(ref.relativePath);
+        const sliced = sliceFileContent(visibleEditor.document.getText(), lines);
+        this.currentContext = {
+          ...this.currentContext,
+          file: relativePath,
+          fileSource: "remote",
+          scope: "file",
+          contextWarning: undefined
+        };
+        return {
+          source: "remote-codehost",
+          activeFile: relativePath,
+          files: [
+            {
+              path: relativePath,
+              content: sliced.content,
+              encoding: "utf8",
+              ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+            }
+          ],
+          fallbackLevel: "partial"
+        };
       }
-      const relativePath = normalizeRelativePath(ref.relativePath);
-      const sliced = sliceFileContent(visibleEditor.document.getText(), lines);
-      this.currentContext = {
-        ...this.currentContext,
-        file: relativePath,
-        fileSource: "remote",
-        scope: "file",
-        contextWarning: undefined
-      };
-      return {
-        source: "remote-codehost",
-        activeFile: relativePath,
-        files: [
-          {
-            path: relativePath,
-            content: sliced.content,
-            encoding: "utf8",
-            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
-          }
-        ],
-        fallbackLevel: "partial"
-      };
     }
 
     return undefined;
@@ -6314,42 +6315,64 @@ export class CoopChatSession {
     if (!filePath || !owner || !repo || isOsAbsoluteDiskPath(filePath)) {
       return undefined;
     }
+    const relativePath = normalizeRelativePath(filePath);
+    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    const branch = this.currentContext.branch;
+    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+
+    let text: string | undefined;
     try {
-      const remote = await this.options.codeHostRouter.getFileContent(filePath, {
-        provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+      const remote = await this.options.codeHostRouter.getFileContent(relativePath, {
+        provider,
         owner,
         repo,
-        branch: this.currentContext.branch
+        branch
       });
-      const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
-      if (!text.trim()) {
-        return undefined;
-      }
-      const relativePath = normalizeRelativePath(filePath);
-      const sliced = sliceFileContent(text, lines);
-      this.currentContext = {
-        ...this.currentContext,
-        file: relativePath,
-        fileSource: "remote",
-        scope: "file",
-        contextWarning: undefined
-      };
-      return {
-        source: "remote-codehost",
-        activeFile: relativePath,
-        files: [
-          {
-            path: relativePath,
-            content: sliced.content,
-            encoding: "utf8",
-            ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
-          }
-        ],
-        fallbackLevel: "partial"
-      };
+      text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
     } catch {
+      text = undefined;
+    }
+
+    // Cloud org proxy — same path IndexedRepoWorkspace uses. Needed when the
+    // local GitHub token path fails in Extension Development Host / cloud mode.
+    if (!text?.trim() && repoId && (await this.options.api.hasToken())) {
+      try {
+        const cloud = await this.options.api.fetchRepoFileViaCloud(
+          this.preferences.apiBaseUrl,
+          repoId,
+          relativePath,
+          branch
+        );
+        text = cloud.content;
+      } catch {
+        text = undefined;
+      }
+    }
+
+    if (!text?.trim()) {
       return undefined;
     }
+    const sliced = sliceFileContent(text, lines);
+    this.currentContext = {
+      ...this.currentContext,
+      file: relativePath,
+      fileSource: "remote",
+      scope: "file",
+      contextWarning: undefined
+    };
+    return {
+      source: "remote-codehost",
+      activeFile: relativePath,
+      files: [
+        {
+          path: relativePath,
+          content: sliced.content,
+          encoding: "utf8",
+          ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+        }
+      ],
+      fallbackLevel: "partial"
+    };
   }
 
   private logContextDebug(message: string): void {
