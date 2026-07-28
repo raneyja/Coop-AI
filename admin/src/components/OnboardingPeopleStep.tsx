@@ -13,7 +13,7 @@ import {
   type OrgRepoAccessMode
 } from "@/lib/coopApi";
 import { getStoredMe } from "@/lib/auth";
-import { isFullyUsable } from "@/lib/indexingProgress";
+import { isUsableForDeveloperAccess } from "@/lib/usableRepos";
 
 type OnboardingPeopleStepProps = {
   memberCount: number | null;
@@ -53,14 +53,17 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
       setRepoAccessMode(orgResult.data.repoAccessMode);
     }
 
-    const usable = (reposResult.ok ? reposResult.data?.repos ?? [] : []).filter(isFullyUsable);
+    const usable = (reposResult.ok ? reposResult.data?.repos ?? [] : []).filter(
+      isUsableForDeveloperAccess
+    );
     const usableIds = usable.map((repo) => repo.repoId);
     setUsableRepoIds(usableIds);
 
     let userId = meResult.ok ? meResult.data?.userId ?? null : null;
-    if (!userId && me?.email && usersResult.ok && usersResult.data?.users) {
+    const email = (meResult.ok ? meResult.data?.email : undefined) ?? me?.email;
+    if (!userId && email && usersResult.ok && usersResult.data?.users) {
       const match = usersResult.data.users.find(
-        (user) => user.email.toLowerCase() === me.email!.toLowerCase()
+        (user) => user.email.toLowerCase() === email.toLowerCase()
       );
       userId = match?.id ?? null;
     }
@@ -96,7 +99,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
     if (!selfUserId || usableRepoIds.length === 0) {
       setError(
         usableRepoIds.length === 0
-          ? "Index at least one Usable repo first, then grant yourself access."
+          ? "Index at least one ready repo first, then grant yourself access."
           : "Could not find your user account to grant access."
       );
       return;
@@ -117,7 +120,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
     }
     setSelfGranted(true);
     setMessage(
-      `Assigned ${usableRepoIds.length} Usable repo${usableRepoIds.length === 1 ? "" : "s"} to you. Open the extension and Refresh.`
+      `Assigned ${usableRepoIds.length} ready repo${usableRepoIds.length === 1 ? "" : "s"} to you. Open the extension and Refresh.`
     );
   }
 
@@ -128,7 +131,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
       <div>
         <h3 className="text-lg font-semibold text-white">People &amp; access</h3>
         <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-          Usable means a repo is ready to open — not that people can see it yet. Choose who gets access,
+          Deep-Indexed repos are ready to open only after people have access. Choose who gets them,
           invite teammates, and assign repos when you use per-user grants.
           {memberCount !== null
             ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
@@ -149,7 +152,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
           <span>
             <span className="block text-sm font-medium text-white">Everyone gets Usable repos</span>
             <span className="mt-1 block text-sm text-coop-muted">
-              Best default. Anyone in the org can open Usable repos in the extension.
+              Best default. Anyone in the org can open Deep-Indexed repos in the extension.
             </span>
           </span>
         </label>
@@ -177,14 +180,14 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
           <p className="text-sm text-coop-muted">
             {usableRepoIds.length > 0 ? (
               <>
-                <span className="text-white">{usableRepoIds.length} Usable</span> repo
-                {usableRepoIds.length === 1 ? "" : "s"} ready.{" "}
+                <span className="text-white">{usableRepoIds.length} ready</span> repo
+                {usableRepoIds.length === 1 ? "" : "s"} (Deep-Indexed).{" "}
                 {selfGranted
                   ? "You already have access — invite others or manage grants on Users."
                   : "Grant yourself access so you can open them in the extension, then invite your team."}
               </>
             ) : (
-              <>No Usable repos yet — finish Indexing first, then come back to assign people.</>
+              <>No Deep-Indexed repos yet — finish Indexing first, then come back to assign people.</>
             )}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -195,7 +198,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
                 disabled={grantingSelf || usableRepoIds.length === 0 || !selfUserId}
                 onClick={() => void handleGrantSelf()}
               >
-                {grantingSelf ? "Assigning…" : "Grant myself Usable repos"}
+                {grantingSelf ? "Assigning…" : "Grant myself indexed repos"}
               </button>
             ) : null}
             <Link href="/users" className="admin-btn-secondary">

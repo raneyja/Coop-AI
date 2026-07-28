@@ -229,6 +229,9 @@ async function handleLogin(
 
   writeJson(response, 200, {
     ...session,
+    userId: user.id,
+    role: user.role,
+    canInstallIntegrations: user.role === "admin" || user.role === "owner",
     orgId: user.orgId,
     orgName: org?.name ?? "",
     email: user.email,

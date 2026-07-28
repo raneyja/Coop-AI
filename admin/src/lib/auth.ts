@@ -10,6 +10,7 @@ export type StoredMe = {
   orgName: string;
   plan: "free" | "pro" | "enterprise";
   role?: string;
+  userId?: string;
   firstName?: string;
   lastName?: string;
   timezone?: string;
@@ -107,6 +108,7 @@ export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
       orgName: data.orgName,
       plan: data.plan,
       role: data.role,
+      userId: typeof data.userId === "string" ? data.userId : undefined,
       firstName: data.firstName,
       lastName: data.lastName,
       timezone: data.timezone,
@@ -214,6 +216,7 @@ export function meFromAuthPayload(data: Record<string, unknown>): StoredMe {
     orgName: String(data.orgName ?? ""),
     plan: (data.plan as StoredMe["plan"]) ?? "free",
     role: typeof data.role === "string" ? data.role : undefined,
+    userId: typeof data.userId === "string" ? data.userId : undefined,
     firstName: typeof data.firstName === "string" ? data.firstName : undefined,
     lastName: typeof data.lastName === "string" ? data.lastName : undefined,
     timezone: typeof data.timezone === "string" ? data.timezone : undefined,

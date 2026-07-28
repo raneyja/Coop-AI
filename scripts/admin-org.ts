@@ -217,6 +217,7 @@ async function main(): Promise<void> {
           await store.upsertOrgRepo(org.id, repoId, {
             lightningEnabled: true,
             indexStatus: "ready",
+            browseStatus: "verified",
             lastIndexedAt: new Date()
           });
         }
