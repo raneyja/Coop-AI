@@ -23,12 +23,16 @@ import {
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
 Cite file paths in narrative sections; reserve \`[Sources: …]\` labels for the **Sources** footer (at most 1-2 inline in **Summary**).
 Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
+
+CRITICAL: Your first line of output MUST be exactly: Coop build ${COOP_EXTENSION_BUILD_ID}
+If <repo_entry_files> is missing or empty, do not invent architecture — say evidence is missing.
 
 ${EVIDENCE_CITATION_RULES}`;
 
@@ -45,6 +49,13 @@ export type RepoSummarySynthesisInput = {
 
 export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisInput): string {
   const lines: string[] = [];
+  lines.push(`## Coop build`);
+  lines.push(COOP_EXTENSION_BUILD_ID);
+  lines.push("");
+  lines.push(
+    `Begin your reply with exactly this line (copy verbatim): Coop build ${COOP_EXTENSION_BUILD_ID}`
+  );
+  lines.push("");
   const activeFile = input.activeFile?.trim();
   lines.push("## Task");
   lines.push(
