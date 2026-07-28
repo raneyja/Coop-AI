@@ -197,6 +197,40 @@ void (async () => {
     assert.equal(data.context?.repo, "Coop-AI");
   });
 
+  await test("readFile falls back to codeHostRouter when cloud fetch fails", async () => {
+    const deps = {
+      apiBaseUrl: "https://api.coop-ai.dev",
+      api: {
+        getBackendClient: () => ({
+          fetchRepoFile: async () => {
+            throw new Error("cloud unavailable");
+          }
+        })
+      },
+      codeHostRouter: {
+        getFileContent: async (path: string) => ({
+          path,
+          content: "# from browse path\n",
+          encoding: "utf-8" as const,
+          lines: [{ number: 1, text: "# from browse path" }]
+        })
+      }
+    } as unknown as RepoInventoryDeps;
+    const workspace = new IndexedRepoWorkspace(deps);
+    const file = await workspace.readFile(
+      {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "preview",
+        provider: "github"
+      },
+      "README.md"
+    );
+    assert.equal(file?.content?.includes("from browse path"), true);
+    assert.equal(file?.origin, "remote");
+  });
+
   console.log(`\nIndexedRepoWorkspace: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

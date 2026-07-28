@@ -55,13 +55,29 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-function contextHasRepoSummaryEvidence(data: Record<string, unknown>): boolean {
-  return hasRepoSummaryEvidence(data);
+function withResolvedMeta(
+  merged: ContextFetchResult,
+  repoId: string,
+  resolvedBranch: string | undefined
+): ContextFetchResult {
+  const data = asRecord(merged.data);
+  return {
+    ...merged,
+    data: {
+      ...data,
+      indexedWorkspaceAttached: true,
+      indexedRepoId: repoId,
+      ...(resolvedBranch?.trim() ? { resolvedBranch: resolvedBranch.trim() } : {})
+    }
+  };
 }
 
 /**
  * Baseline indexed-repo evidence for every chat turn, quick action, and slash command
  * when the active repository is in the remote workspace.
+ *
+ * On budget timeout, returns the best partial evidence already fetched — never discards
+ * a successful inventory/tree to an empty shell.
  */
 export async function enrichContextWithIndexedRepo(options: {
   deps: IndexedRepoContextDeps;
@@ -89,7 +105,7 @@ export async function enrichContextWithIndexedRepo(options: {
   }
 
   const baseData = asRecord(result.data);
-  const summaryReady = contextHasRepoSummaryEvidence(baseData);
+  const summaryReady = hasRepoSummaryEvidence(baseData);
   const needsTree = !baseData.treeOverview;
   const needsInventory = !baseData.repoInventory;
   const needsManifest = !summaryReady && !baseData.manifest;
@@ -101,30 +117,37 @@ export async function enrichContextWithIndexedRepo(options: {
   const needsRemoteFile = Boolean(file && isRemoteFile && localFilesFromContextData(baseData).length === 0);
 
   if (!needsTree && !needsInventory && !needsManifest && !needsRemoteFile && !needsEntryFiles) {
-    return result;
+    return withResolvedMeta(result, repoId, resolvedBranch);
   }
 
   const workspace = new IndexedRepoWorkspace(deps);
+  // Mutated as stages complete so a budget timeout keeps partial evidence.
+  let latest = withResolvedMeta(result, repoId, resolvedBranch);
+  let timedOut = false;
 
   const load = async (): Promise<ContextFetchResult> => {
     try {
-      const [treeOverview, inventory, manifestFiles, remoteContent] = await Promise.all([
-        needsTree ? workspace.getTreeOverview(normalizedTarget) : Promise.resolve(undefined),
-        needsInventory
-          ? workspace.getInventory(
-              normalizedTarget,
-              { fileCount: true, treeOverview: false, lineCount: false },
-              // Never recursive-walk the live tree on the 15s chat path.
-              { allowExpensiveTreeWalk: false }
-            )
-          : Promise.resolve(undefined),
+      // Start all fetches, but commit inventory/tree as soon as each resolves so a
+      // budget timeout keeps partial evidence instead of an empty shell.
+      const inventoryPromise = needsInventory
+        ? workspace.getInventory(
+            normalizedTarget,
+            { fileCount: true, treeOverview: false, lineCount: false },
+            { allowExpensiveTreeWalk: false }
+          )
+        : Promise.resolve(undefined);
+      const treePromise = needsTree
+        ? workspace.getTreeOverview(normalizedTarget)
+        : Promise.resolve(undefined);
+      const manifestPromise =
         needsManifest || needsEntryFiles
           ? loadManifestEntries(
               deps.api,
               deps.apiBaseUrl,
               resolveInventoryRepoIds(repoId, normalizedTarget).candidates
             )
-          : Promise.resolve([]),
+          : Promise.resolve([]);
+      const remotePromise =
         needsRemoteFile && file
           ? readRepoFileForContext(deps, {
               repoId,
@@ -135,29 +158,49 @@ export async function enrichContextWithIndexedRepo(options: {
               path: file,
               lines: request.params.lines
             })
-          : Promise.resolve(undefined)
-      ]);
+          : Promise.resolve(undefined);
 
-      let merged = mergeRepoInventoryContext(result, inventory, treeOverview);
-
-      if ((needsManifest || needsEntryFiles) && manifestFiles.length > 0) {
-        const manifestStats = summarizeManifest(manifestFiles);
-        const mergedData = asRecord(merged.data);
-        merged = {
-          ...merged,
-          data: {
-            ...mergedData,
-            manifest: {
-              fileCount: manifestStats.fileCount,
-              entryPoints: manifestStats.entryPoints,
-              extensionBreakdown: manifestStats.extensionBreakdown
-            },
-            indexedManifestSource: "indexed-manifest"
-          }
-        };
+      const inventory = await inventoryPromise;
+      if (!timedOut) {
+        latest = withResolvedMeta(
+          mergeRepoInventoryContext(latest, inventory, undefined),
+          repoId,
+          resolvedBranch
+        );
       }
 
-      if (needsEntryFiles) {
+      const treeOverview = await treePromise;
+      if (!timedOut) {
+        latest = withResolvedMeta(
+          mergeRepoInventoryContext(latest, undefined, treeOverview),
+          repoId,
+          resolvedBranch
+        );
+      }
+
+      const manifestFiles = await manifestPromise;
+      if (!timedOut && (needsManifest || needsEntryFiles) && manifestFiles.length > 0) {
+        const manifestStats = summarizeManifest(manifestFiles);
+        const mergedData = asRecord(latest.data);
+        latest = withResolvedMeta(
+          {
+            ...latest,
+            data: {
+              ...mergedData,
+              manifest: {
+                fileCount: manifestStats.fileCount,
+                entryPoints: manifestStats.entryPoints,
+                extensionBreakdown: manifestStats.extensionBreakdown
+              },
+              indexedManifestSource: "indexed-manifest"
+            }
+          },
+          repoId,
+          resolvedBranch
+        );
+      }
+
+      if (needsEntryFiles && !timedOut) {
         const treeForPick = {
           topLevelDirs: treeOverview?.topLevelDirs ?? [],
           topLevelFiles: treeOverview?.topLevelFiles ?? []
@@ -167,43 +210,54 @@ export async function enrichContextWithIndexedRepo(options: {
           treeOverview: treeForPick,
           activeFile: file
         });
-        const entryFiles: Array<{ path: string; content: string; truncated?: boolean }> = [];
-        for (const path of entryPaths) {
-          const content = await readRepoFileForContext(deps, {
-            repoId,
-            owner: normalizedTarget.owner,
-            repo: normalizedTarget.repo,
-            branch: normalizedTarget.branch,
-            provider: normalizedTarget.provider as CodeHostProviderPreference | undefined,
-            path
-          });
-          if (!content?.trim()) {
-            continue;
-          }
-          const truncated = content.length > MAX_ENTRY_FILE_CHARS;
-          entryFiles.push({
-            path,
-            content: truncated ? `${content.slice(0, MAX_ENTRY_FILE_CHARS)}\n… [truncated]` : content,
-            truncated
-          });
-          if (entryFiles.length >= MAX_ENTRY_FILES) {
-            break;
-          }
-        }
-        if (entryFiles.length > 0) {
-          const mergedData = asRecord(merged.data);
-          merged = {
-            ...merged,
-            data: {
-              ...mergedData,
-              entryFiles,
-              source: mergedData.source ?? "indexed-entry-files"
+        // Parallel reads within budget — sequential waits burned the 15s gather window
+        // before a single README landed in Sources.
+        const settled = await Promise.all(
+          entryPaths.map(async (path) => {
+            if (timedOut) {
+              return undefined;
             }
-          };
+            const content = await readRepoFileForContext(deps, {
+              repoId,
+              owner: normalizedTarget.owner,
+              repo: normalizedTarget.repo,
+              branch: normalizedTarget.branch,
+              provider: normalizedTarget.provider as CodeHostProviderPreference | undefined,
+              path
+            });
+            if (!content?.trim()) {
+              return undefined;
+            }
+            const truncated = content.length > MAX_ENTRY_FILE_CHARS;
+            return {
+              path,
+              content: truncated ? `${content.slice(0, MAX_ENTRY_FILE_CHARS)}\n… [truncated]` : content,
+              truncated
+            };
+          })
+        );
+        const entryFiles = settled
+          .filter((entry): entry is { path: string; content: string; truncated: boolean } => Boolean(entry))
+          .slice(0, MAX_ENTRY_FILES);
+        if (entryFiles.length > 0) {
+          const mergedData = asRecord(latest.data);
+          latest = withResolvedMeta(
+            {
+              ...latest,
+              data: {
+                ...mergedData,
+                entryFiles,
+                source: mergedData.source ?? "indexed-entry-files"
+              }
+            },
+            repoId,
+            resolvedBranch
+          );
         }
       }
 
-      if (remoteContent && file) {
+      const remoteContent = await remotePromise;
+      if (remoteContent && file && !timedOut) {
         const payload: LocalFileContextPayload = {
           source: "remote-codehost",
           activeFile: normalizeRelativePath(file),
@@ -218,38 +272,102 @@ export async function enrichContextWithIndexedRepo(options: {
           ],
           fallbackLevel: "partial"
         };
-        merged = {
-          ...merged,
-          data: attachLocalFilesToData(asRecord(merged.data), payload)
-        };
+        latest = withResolvedMeta(
+          {
+            ...latest,
+            data: attachLocalFilesToData(asRecord(latest.data), payload)
+          },
+          repoId,
+          resolvedBranch
+        );
       }
 
-      const finalData = asRecord(merged.data);
-      const withMeta = {
-        ...finalData,
-        indexedWorkspaceAttached: true,
-        indexedRepoId: repoId,
-        ...(resolvedBranch?.trim() ? { resolvedBranch: resolvedBranch.trim() } : {})
-      };
-      if (!finalData.indexedWorkspaceAttached || resolvedBranch?.trim()) {
-        merged = {
-          ...merged,
-          data: withMeta
-        };
-      }
-
-      return merged;
+      return latest;
     } catch {
-      return result;
+      return latest;
     }
   };
 
-  return await Promise.race([
-    load(),
-    delayMs(budgetMs).then(() => result)
-  ]);
+  const loadPromise = load();
+  const timeoutPromise = delayMs(budgetMs).then(() => {
+    timedOut = true;
+    return latest;
+  });
+
+  return await Promise.race([loadPromise, timeoutPromise]);
 }
 
 function delayMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Honest user-facing copy when Understand Repo has no attachable evidence. */
+export function understandRepoEmptyEvidenceMessage(options: {
+  owner?: string;
+  repo?: string;
+  branch?: string;
+}): string {
+  const label =
+    options.owner && options.repo ? `${options.owner}/${options.repo}` : "this repository";
+  const branch = options.branch?.trim();
+  return [
+    `Coop could not attach repository evidence for ${label}` +
+      (branch ? ` (branch \`${branch}\`)` : "") +
+      ".",
+    "",
+    "Deep-Index may be ready, but this turn did not receive file bodies, inventory, or a tree overview — so Coop will not invent an architecture summary.",
+    "",
+    "Try again in a moment, confirm the Remote workspace repo is selected, or Reindex the repo in the admin portal if browse still works but chat does not."
+  ].join("\n");
+}
+
+/** True when at least one entry file body is attached (required for architecture synthesis). */
+export function hasUnderstandRepoEntryBodies(data: Record<string, unknown> | undefined): boolean {
+  if (!data) {
+    return false;
+  }
+  const entryFiles = Array.isArray(data.entryFiles) ? data.entryFiles : [];
+  return entryFiles.some((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+    const content = (entry as { content?: unknown }).content;
+    return typeof content === "string" && content.trim().length > 0;
+  });
+}
+
+/**
+ * Inventory/tree without file bodies — enough to prove the index is reachable,
+ * not enough to write an architecture essay.
+ */
+export function understandRepoMissingEntryBodiesMessage(options: {
+  owner?: string;
+  repo?: string;
+  branch?: string;
+  hasInventory?: boolean;
+  hasTree?: boolean;
+}): string {
+  const label =
+    options.owner && options.repo ? `${options.owner}/${options.repo}` : "this repository";
+  const branch = options.branch?.trim();
+  const attached: string[] = [];
+  if (options.hasInventory) {
+    attached.push("inventory");
+  }
+  if (options.hasTree) {
+    attached.push("tree overview");
+  }
+  const attachedLine =
+    attached.length > 0
+      ? `Attached so far: ${attached.join(" + ")}. Missing: real file bodies (README / package.json / entry points).`
+      : "No entry file bodies were attached.";
+  return [
+    `Coop reached ${label}` +
+      (branch ? ` on branch \`${branch}\`` : "") +
+      " but could not load anchor file contents.",
+    "",
+    attachedLine,
+    "",
+    "Coop will not invent an architecture summary from repo identity alone. Retry Understand Repo, or confirm Remote browse can open the same files on this branch."
+  ].join("\n");
 }

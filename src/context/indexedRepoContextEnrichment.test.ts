@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { enrichContextWithIndexedRepo } from "./indexedRepoContextEnrichment";
+import {
+  enrichContextWithIndexedRepo,
+  understandRepoEmptyEvidenceMessage,
+  understandRepoMissingEntryBodiesMessage,
+  hasUnderstandRepoEntryBodies
+} from "./indexedRepoContextEnrichment";
 import type { ContextFetchRequest } from "./requestBatcher";
 
 async function run(): Promise<void> {
@@ -60,7 +65,8 @@ async function run(): Promise<void> {
           fetchRepoInventoryViaCloud: async () => ({
             fileCount: 2,
             lineCount: 100,
-            indexedAt: "2026-01-01T00:00:00.000Z"
+            indexedAt: "2026-01-01T00:00:00.000Z",
+            branch: "main"
           }),
           getBackendClient: () => ({
             fetchRepoFile: async () => ({
@@ -106,6 +112,221 @@ async function run(): Promise<void> {
     assert.ok(data.repoInventory);
     const localFiles = data.localFiles as { files?: Array<{ path: string }> };
     assert.equal(localFiles?.files?.[0]?.path, "README.md");
+  });
+
+  await test("budget timeout keeps inventory instead of discarding to empty shell", async () => {
+    const request: ContextFetchRequest = {
+      id: "test:understand:0",
+      type: "file_metadata",
+      params: {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "main",
+        quickAction: "understand-repo"
+      },
+      intent: {
+        id: "evt-2",
+        intent: "quick_action_clicked" as const,
+        timestamp: new Date(),
+        costEstimate: "expensive" as const,
+        context: {
+          repoId: "github:CoopAI-Corp/plane",
+          owner: "CoopAI-Corp",
+          repo: "plane",
+          branch: "main",
+          buttonClicked: "understand-repo"
+        }
+      },
+      cost: "expensive",
+      createdAt: new Date()
+    };
+
+    const result = await enrichContextWithIndexedRepo({
+      deps: {
+        api: {
+          fetchRepoManifest: async () => {
+            await new Promise((r) => setTimeout(r, 50));
+            return { repoId: "github:CoopAI-Corp/plane", files: [], fileCount: 0 };
+          },
+          fetchRepoInventoryViaCloud: async () => ({
+            fileCount: 4616,
+            lineCount: 550_957,
+            indexedAt: "2026-01-01T00:00:00.000Z",
+            branch: "preview"
+          }),
+          getBackendClient: () => ({
+            fetchRepoFile: async () => {
+              await new Promise((r) => setTimeout(r, 5_000));
+              return { path: "README.md", content: "# slow", encoding: "utf-8" };
+            }
+          })
+        } as never,
+        apiBaseUrl: "https://api.coop-ai.dev",
+        codeHostRouter: {
+          getRepositoryTree: async () => {
+            await new Promise((r) => setTimeout(r, 50));
+            return {
+              path: "",
+              branch: "preview",
+              entries: [
+                { name: "README.md", path: "README.md", type: "file" as const },
+                { name: "apps", path: "apps", type: "dir" as const }
+              ]
+            };
+          }
+        } as never
+      },
+      target: {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "main",
+        provider: "github"
+      },
+      request,
+      result: {
+        requestId: request.id,
+        type: request.type,
+        data: {},
+        fetchedAt: new Date()
+      },
+      budgetMs: 80
+    });
+
+    const data = result.data as Record<string, unknown>;
+    assert.equal(data.resolvedBranch, "preview");
+    assert.ok(data.repoInventory, "timeout must keep inventory");
+    assert.equal((data.repoInventory as { fileCount?: number }).fileCount, 4616);
+  });
+
+  await test("understand-repo attaches inventory + tree + entry file bodies", async () => {
+    const request: ContextFetchRequest = {
+      id: "test:understand:full",
+      type: "file_metadata",
+      params: {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "main",
+        quickAction: "understand-repo"
+      },
+      intent: {
+        id: "evt-3",
+        intent: "quick_action_clicked" as const,
+        timestamp: new Date(),
+        costEstimate: "expensive" as const,
+        context: {
+          repoId: "github:CoopAI-Corp/plane",
+          owner: "CoopAI-Corp",
+          repo: "plane",
+          branch: "main",
+          buttonClicked: "understand-repo"
+        }
+      },
+      cost: "expensive",
+      createdAt: new Date()
+    };
+
+    const result = await enrichContextWithIndexedRepo({
+      deps: {
+        api: {
+          fetchRepoManifest: async () => ({
+            repoId: "github:CoopAI-Corp/plane",
+            files: [
+              { path: "README.md", symbols: [] },
+              { path: "package.json", symbols: [] }
+            ],
+            fileCount: 2,
+            lastCrawledAt: "2026-01-01T00:00:00.000Z"
+          }),
+          fetchRepoInventoryViaCloud: async () => ({
+            fileCount: 4616,
+            lineCount: 550_957,
+            indexedAt: "2026-01-01T00:00:00.000Z",
+            branch: "preview"
+          }),
+          getBackendClient: () => ({
+            fetchRepoFile: async (_base: string, _repoId: string, path: string) => ({
+              path,
+              content: path === "README.md" ? "# Plane\n" : '{"name":"plane"}\n',
+              encoding: "utf-8"
+            })
+          })
+        } as never,
+        apiBaseUrl: "https://api.coop-ai.dev",
+        codeHostRouter: {
+          getRepositoryTree: async () => ({
+            path: "",
+            branch: "preview",
+            entries: [
+              { name: "README.md", path: "README.md", type: "file" as const },
+              { name: "apps", path: "apps", type: "dir" as const },
+              { name: "package.json", path: "package.json", type: "file" as const }
+            ]
+          }),
+          getFileContent: async (path: string) => ({
+            path,
+            content: path.endsWith("README.md") ? "# Plane\n" : '{"name":"plane"}\n',
+            encoding: "utf-8" as const,
+            lines: []
+          })
+        } as never
+      },
+      target: {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "main",
+        provider: "github"
+      },
+      request,
+      result: {
+        requestId: request.id,
+        type: request.type,
+        data: {},
+        fetchedAt: new Date()
+      },
+      budgetMs: 5_000
+    });
+
+    const data = result.data as Record<string, unknown>;
+    assert.equal(data.resolvedBranch, "preview");
+    assert.equal((data.repoInventory as { fileCount?: number }).fileCount, 4616);
+    const tree = data.treeOverview as { topLevelFiles?: string[]; topLevelDirs?: string[] };
+    assert.ok((tree.topLevelFiles?.length ?? 0) + (tree.topLevelDirs?.length ?? 0) > 0);
+    const entryFiles = data.entryFiles as Array<{ path: string; content?: string }>;
+    assert.ok(entryFiles.length >= 1);
+    assert.ok(entryFiles.some((file) => (file.content ?? "").trim().length > 0));
+  });
+
+  await test("understandRepoEmptyEvidenceMessage refuses architecture invention", async () => {
+    const message = understandRepoEmptyEvidenceMessage({
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      branch: "preview"
+    });
+    assert.match(message, /could not attach repository evidence/i);
+    assert.match(message, /will not invent/i);
+    assert.match(message, /preview/);
+  });
+
+  await test("understandRepoMissingEntryBodiesMessage refuses identity-only architecture", async () => {
+    assert.equal(hasUnderstandRepoEntryBodies({ entryFiles: [{ path: "README.md" }] }), false);
+    assert.equal(
+      hasUnderstandRepoEntryBodies({ entryFiles: [{ path: "README.md", content: "# Hi" }] }),
+      true
+    );
+    const message = understandRepoMissingEntryBodiesMessage({
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      branch: "preview",
+      hasInventory: true,
+      hasTree: true
+    });
+    assert.match(message, /will not invent/i);
+    assert.match(message, /inventory/i);
+    assert.match(message, /tree overview/i);
   });
 
   const total = passed + failed;

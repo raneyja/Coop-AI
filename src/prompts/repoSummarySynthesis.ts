@@ -152,6 +152,18 @@ export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record
     }
   }
 
+  const inventory = summary.repoInventory as
+    | { fileCount?: number; lineCount?: number; source?: string; branch?: string }
+    | undefined;
+  if (inventory && typeof inventory.fileCount === "number") {
+    sections.push(
+      `### Repository inventory\n- Files: ${inventory.fileCount}` +
+        (typeof inventory.lineCount === "number" ? `\n- Lines: ${inventory.lineCount}` : "") +
+        (inventory.branch ? `\n- Indexed branch: ${inventory.branch}` : "") +
+        (inventory.source ? `\n- Source: ${inventory.source}` : "")
+    );
+  }
+
   const manifest = summary.manifest as Record<string, unknown> | undefined;
   if (manifest) {
     const fileCount = manifest.fileCount ?? "unknown";

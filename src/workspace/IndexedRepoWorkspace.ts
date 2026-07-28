@@ -136,19 +136,48 @@ export class IndexedRepoWorkspace {
       const remote = await this.deps.api
         .getBackendClient()
         .fetchRepoFile(this.deps.apiBaseUrl, repoId, cleanPath, target.branch);
-      if (!remote.content?.trim()) {
+      if (remote.content?.trim()) {
+        return {
+          path: remote.path || cleanPath,
+          repoId,
+          content: remote.content,
+          origin: "remote",
+          truncated: remote.truncated
+        };
+      }
+    } catch {
+      /* fall through to code-host router (same path Remote browse uses) */
+    }
+
+    // Same reader as Remote explorer — cloud proxy or direct token via CodeHostRouter.
+    if (identity?.owner && identity?.repo) {
+      try {
+        const provider =
+          identity.provider === "gitlab" || identity.provider === "bitbucket"
+            ? identity.provider
+            : "github";
+        const remote = await this.deps.codeHostRouter.getFileContent(cleanPath, {
+          provider,
+          owner: identity.owner,
+          repo: identity.repo,
+          branch: target.branch
+        });
+        const content = remote.content ?? remote.lines?.map((line) => line.text).join("\n");
+        if (content?.trim()) {
+          return {
+            path: remote.path || cleanPath,
+            repoId,
+            content,
+            origin: "remote",
+            truncated: remote.truncated
+          };
+        }
+      } catch {
         return undefined;
       }
-      return {
-        path: remote.path || cleanPath,
-        repoId,
-        content: remote.content,
-        origin: "remote",
-        truncated: remote.truncated
-      };
-    } catch {
-      return undefined;
     }
+
+    return undefined;
   }
 }
 

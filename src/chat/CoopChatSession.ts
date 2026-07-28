@@ -299,9 +299,16 @@ import {
   IndexedRepoWorkspace,
   mergeRepoInventoryContext
 } from "../workspace/IndexedRepoWorkspace";
-import { enrichContextWithIndexedRepo } from "../context/indexedRepoContextEnrichment";
+import {
+  enrichContextWithIndexedRepo,
+  hasUnderstandRepoEntryBodies,
+  readRepoFileForContext,
+  understandRepoEmptyEvidenceMessage,
+  understandRepoMissingEntryBodiesMessage
+} from "../context/indexedRepoContextEnrichment";
 import { hasRepoSummaryEvidence } from "../context/buildRepoSummaryContext";
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
+import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
@@ -2386,6 +2393,49 @@ export class CoopChatSession {
     return enriched;
   }
 
+  /** Prefer Deep-Index / workspace branch over stale Settings defaultBranch before the turn freezes. */
+  private async pinCanonicalRepoBranchForTurn(): Promise<void> {
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!owner || !repo) {
+      return;
+    }
+    if (!(await this.options.api.hasToken())) {
+      return;
+    }
+    const provider =
+      this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
+    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+    if (!repoId) {
+      return;
+    }
+    try {
+      const resolved = await resolveActiveRepoTarget(
+        {
+          repoId,
+          owner,
+          repo,
+          branch: this.currentContext.branch,
+          provider
+        },
+        {
+          api: this.options.api,
+          apiBaseUrl: this.preferences.apiBaseUrl,
+          codeHostRouter: this.options.codeHostRouter,
+          resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
+        }
+      );
+      const branch = resolved.branch?.trim();
+      if (!branch || branch === this.currentContext.branch) {
+        return;
+      }
+      this.currentContext = { ...this.currentContext, branch };
+      this.postContext();
+    } catch {
+      /* keep session branch */
+    }
+  }
+
   private async resolveWorkspaceDefaultBranch(repoId: string): Promise<string | undefined> {
     if (!(await this.options.api.hasToken())) {
       return undefined;
@@ -3221,6 +3271,8 @@ export class CoopChatSession {
       this.postContext();
     }
 
+    await this.pinCanonicalRepoBranchForTurn();
+
     const integrationProviderForGuard =
       quickAction || options?.sourceHint
         ? options?.integrationProvider
@@ -3447,6 +3499,13 @@ export class CoopChatSession {
         return;
       }
       throw error;
+    }
+    // Enrichment may resolve indexed branch after the turn snapshot — keep Scope in sync.
+    if (
+      this.currentContext.branch?.trim() &&
+      turn.context.branch !== this.currentContext.branch
+    ) {
+      turn.context = { ...turn.context, branch: this.currentContext.branch };
     }
     if (!this.threadRuns.isStreamActive(turn)) {
       return;
@@ -4200,6 +4259,71 @@ export class CoopChatSession {
       const integrationEvidence = integrationProvider
         ? integrationSearchFromBundle(contextBundle, integrationProvider)
         : undefined;
+
+      if (effectiveQuickAction === "understand-repo") {
+        const summaryRecord = repoSummary as Record<string, unknown> | undefined;
+        if (!hasRepoSummaryEvidence(summaryRecord)) {
+          const responseContent = understandRepoEmptyEvidenceMessage({
+            owner: turnContext.owner,
+            repo: turnContext.repo,
+            branch: turnContext.branch
+          });
+          await delayUntilMinResponseVisible(turn.startedAt);
+          if (isCancelled()) {
+            return;
+          }
+          this.clearIntentFeedback(turn.threadId);
+          const warning =
+            "Coop could not attach repository evidence for this turn — no architecture summary was generated.";
+          turn.context = { ...turn.context, contextWarning: warning };
+          if (this.isViewingThread(turn.threadId)) {
+            this.currentContext = { ...this.currentContext, contextWarning: warning };
+            this.postContext();
+          }
+          const finalMessage: ChatMessage = {
+            role: "assistant",
+            content: responseContent,
+            timestamp: Date.now()
+          };
+          this.finishTurnAssistantMessage(turn, finalMessage);
+          return;
+        }
+        if (!hasUnderstandRepoEntryBodies(summaryRecord)) {
+          const tree = summaryRecord?.treeOverview as
+            | { topLevelDirs?: string[]; topLevelFiles?: string[] }
+            | undefined;
+          const inventory = summaryRecord?.repoInventory as { fileCount?: number } | undefined;
+          const responseContent = understandRepoMissingEntryBodiesMessage({
+            owner: turnContext.owner,
+            repo: turnContext.repo,
+            branch: turnContext.branch,
+            hasInventory: typeof inventory?.fileCount === "number" && inventory.fileCount > 0,
+            hasTree: Boolean(
+              tree &&
+                ((tree.topLevelDirs?.length ?? 0) > 0 || (tree.topLevelFiles?.length ?? 0) > 0)
+            )
+          });
+          await delayUntilMinResponseVisible(turn.startedAt);
+          if (isCancelled()) {
+            return;
+          }
+          this.clearIntentFeedback(turn.threadId);
+          const warning =
+            "Coop attached inventory/tree but no file bodies — no architecture summary was generated.";
+          turn.context = { ...turn.context, contextWarning: warning };
+          if (this.isViewingThread(turn.threadId)) {
+            this.currentContext = { ...this.currentContext, contextWarning: warning };
+            this.postContext();
+          }
+          const finalMessage: ChatMessage = {
+            role: "assistant",
+            content: responseContent,
+            timestamp: Date.now()
+          };
+          this.finishTurnAssistantMessage(turn, finalMessage);
+          return;
+        }
+      }
 
       if (
         !effectiveQuickAction &&
@@ -6309,7 +6433,7 @@ export class CoopChatSession {
     });
   }
 
-  /** Fetch active remote file content from the code host — never local disk. */
+  /** Fetch active remote file content — same stack as Understand Repo / Remote browse. */
   private async fetchRemoteFileForChatAttach(
     lines?: { start: number; end: number }
   ): Promise<LocalFileContextPayload | undefined> {
@@ -6323,35 +6447,26 @@ export class CoopChatSession {
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
     const branch = this.currentContext.branch;
     const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+    if (!repoId) {
+      return undefined;
+    }
 
-    let text: string | undefined;
-    try {
-      const remote = await this.options.codeHostRouter.getFileContent(relativePath, {
-        provider,
+    const text = await readRepoFileForContext(
+      {
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter
+      },
+      {
+        repoId,
         owner,
         repo,
-        branch
-      });
-      text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
-    } catch {
-      text = undefined;
-    }
-
-    // Cloud org proxy — same path IndexedRepoWorkspace uses. Needed when the
-    // local GitHub token path fails in Extension Development Host / cloud mode.
-    if (!text?.trim() && repoId && (await this.options.api.hasToken())) {
-      try {
-        const cloud = await this.options.api.fetchRepoFileViaCloud(
-          this.preferences.apiBaseUrl,
-          repoId,
-          relativePath,
-          branch
-        );
-        text = cloud.content;
-      } catch {
-        text = undefined;
+        branch,
+        provider,
+        path: relativePath,
+        lines
       }
-    }
+    );
 
     if (!text?.trim()) {
       return undefined;

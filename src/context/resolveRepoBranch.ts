@@ -67,6 +67,9 @@ export async function resolveRepoBranchForTarget(
     branch = target.branch?.trim() || undefined;
   }
 
+  // Probe validates the branch is readable. Never replace an indexed/workspace
+  // branch with whatever the tree response echoes (often the request branch or host default).
+  const lockedBranch = Boolean(branch);
   try {
     const tree = await options.codeHostRouter.getRepositoryTree("", {
       provider,
@@ -74,7 +77,9 @@ export async function resolveRepoBranchForTarget(
       repo,
       branch
     });
-    branch = tree.branch?.trim() || branch;
+    if (!lockedBranch) {
+      branch = tree.branch?.trim() || branch;
+    }
   } catch {
     /* keep best-known branch */
   }

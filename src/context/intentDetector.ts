@@ -3,6 +3,7 @@ import {
   activeEditorIdentityToRepoContext,
   resolveActiveEditorIdentity
 } from "./activeEditorIdentity";
+import { branchForEditorContext } from "./branchForEditorContext";
 import { enrichRepoContextWithEditorState } from "./editorManifestContext";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { toRepositoryRelativePath } from "./repoFilePath";
@@ -192,7 +193,7 @@ export function repoContextFromEditor(
   const identity = resolveActiveEditorIdentity(editor, preferences, previous);
   const next: RepoContext = {
     ...activeEditorIdentityToRepoContext(identity),
-    branch: preferences.branch || previous.branch || undefined
+    branch: branchForEditorContext(previous, preferences)
   };
   return enrichRepoContextWithEditorState(next, editor);
 }

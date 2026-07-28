@@ -9,6 +9,7 @@ export type RepoSummaryEvidence = {
   entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
   recentCommits?: Array<{ sha: string; author: string; message: string }>;
   treeOverview?: unknown;
+  repoInventory?: { fileCount?: number; lineCount?: number; source?: string; branch?: string };
   confluence?: ConfluenceSearchEvidence;
   jira?: JiraSearchEvidence;
   slack?: SlackSearchEvidence;
@@ -181,8 +182,13 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     if (Array.isArray(data.entryFiles)) merged.entryFiles = data.entryFiles as RepoSummaryEvidence["entryFiles"];
     if (data.treeOverview) merged.treeOverview = data.treeOverview;
     if (data.repoInventory) {
-      const inventory = data.repoInventory as { fileCount?: number; source?: string };
-      (merged as { repoInventory?: { fileCount?: number; source?: string } }).repoInventory = inventory;
+      const inventory = data.repoInventory as {
+        fileCount?: number;
+        lineCount?: number;
+        source?: string;
+        branch?: string;
+      };
+      merged.repoInventory = inventory;
       if (typeof inventory.fileCount === "number" && !merged.manifest?.fileCount) {
         merged.manifest = { ...(merged.manifest ?? {}), fileCount: inventory.fileCount };
       }
@@ -276,9 +282,9 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
       ((tree.topLevelDirs?.length ?? 0) > 0 ||
         (tree.topLevelFiles?.length ?? 0) > 0)
   );
-  const inventory = merged as { repoInventory?: { fileCount?: number } };
+  const inventory = merged.repoInventory;
   const hasInventory =
-    typeof inventory.repoInventory?.fileCount === "number" && inventory.repoInventory.fileCount > 0;
+    typeof inventory?.fileCount === "number" && inventory.fileCount > 0;
 
   return merged.entryFiles?.length ||
     merged.manifest ||

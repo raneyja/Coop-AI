@@ -18,6 +18,14 @@ export function repoSummarySourceLabelManifest(): string {
   return "[Sources: Repository manifest]";
 }
 
+export function repoSummarySourceLabelInventory(): string {
+  return "[Sources: Repository inventory]";
+}
+
+export function repoSummarySourceLabelTree(): string {
+  return "[Sources: Repository tree]";
+}
+
 export function repoSummarySourceLabelEntryFiles(): string {
   return "[Sources: Anchor files]";
 }
@@ -58,6 +66,17 @@ export function listRepoSummarySourceLabels(summary: RepoSummaryEvidence): strin
   const labels: string[] = [];
   if (summary.manifest || summary.repository) {
     labels.push(repoSummarySourceLabelManifest());
+  }
+  const inventory = summary.repoInventory;
+  if (typeof inventory?.fileCount === "number" && inventory.fileCount > 0) {
+    labels.push(repoSummarySourceLabelInventory());
+  }
+  const tree = summary.treeOverview as { topLevelDirs?: string[]; topLevelFiles?: string[] } | undefined;
+  if (
+    tree &&
+    ((tree.topLevelDirs?.length ?? 0) > 0 || (tree.topLevelFiles?.length ?? 0) > 0)
+  ) {
+    labels.push(repoSummarySourceLabelTree());
   }
   if (summary.entryFiles?.length) {
     labels.push(repoSummarySourceLabelEntryFiles());

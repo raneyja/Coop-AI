@@ -26,6 +26,7 @@ jobs:
         run: |
           npm run test:chat-prose
           npm run test:slash-commands
+          npm run test:indexed-repo-workspace
           npm run test:system-prompts
           npm run test:quick-action-prompts
           npm run test:knowledge-gaps-enrichment
