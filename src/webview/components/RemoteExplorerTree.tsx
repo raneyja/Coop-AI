@@ -13,7 +13,7 @@ export type ExplorerTreeState = {
   loading?: boolean;
   provider?: CodeHostProviderPreference;
   /** When set, empty repo list shows workspace picker guidance instead of connect GitHub copy. */
-  emptyHint?: "workspace" | "workspace_admin";
+  emptyHint?: "workspace" | "workspace_admin" | "workspace_admin_self";
   /** Adjusts breadcrumb when listing workspace-selected repos only. */
   listLabel?: "workspace";
 };
@@ -618,7 +618,23 @@ export function RemoteExplorerTreePanel({
             ) : filteredNodes.length === 0 && !treeState.loading ? (
               <li className="coop-explorer-empty">
                 {isRepoList ? (
-                  treeState.emptyHint === "workspace_admin" ? (
+                  treeState.emptyHint === "workspace_admin_self" ? (
+                    <span>
+                      Indexed repos aren&apos;t assigned to you yet. Open the{" "}
+                      {onOpenAdminPortal ? (
+                        <button
+                          type="button"
+                          className="coop-explorer-inline-link"
+                          onClick={onOpenAdminPortal}
+                        >
+                          admin portal
+                        </button>
+                      ) : (
+                        "admin portal"
+                      )}{" "}
+                      → Users, grant yourself access, then click Refresh.
+                    </span>
+                  ) : treeState.emptyHint === "workspace_admin" ? (
                     <span>
                       No indexed repos are assigned to your account yet. Ask your org admin to grant
                       repository access in the{" "}

@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { completeOnboarding, fetchUsers } from "@/lib/coopApi";
+import { completeOnboarding, fetchOrg, fetchOrgRepos, fetchUsers } from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
 import type { IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { isFullyUsable } from "@/lib/indexingProgress";
 import { IntegrationsStep } from "./IntegrationsStep";
+import { OnboardingPeopleStep } from "./OnboardingPeopleStep";
 import { OnboardingScopeStep } from "./OnboardingScopeStep";
 import { planCapabilities } from "@/lib/planCapabilities";
 
@@ -39,7 +41,7 @@ const ONBOARDING_STEP_DEFS: StepDef[] = [
   },
   {
     id: "team",
-    label: "Invite",
+    label: "People",
     include: (plan) => planCapabilities(plan).showOnboardingTeamStep
   },
   {
@@ -85,6 +87,9 @@ export function OnboardingWizard({
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [memberCount, setMemberCount] = useState<number | null>(null);
+  const [hasUsableRepo, setHasUsableRepo] = useState(false);
+  const [usableRepoCount, setUsableRepoCount] = useState(0);
+  const [repoAccessMode, setRepoAccessMode] = useState<"all_indexed" | "per_user">("all_indexed");
 
   const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
   const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
@@ -109,6 +114,30 @@ export function OnboardingWizard({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    if (currentStepId !== "indexing" && currentStepId !== "done" && currentStepId !== "team") {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const [reposResult, orgResult] = await Promise.all([fetchOrgRepos(), fetchOrg()]);
+      if (cancelled) {
+        return;
+      }
+      if (reposResult.ok && reposResult.data?.repos) {
+        const usable = reposResult.data.repos.filter(isFullyUsable);
+        setUsableRepoCount(usable.length);
+        setHasUsableRepo(usable.length > 0);
+      }
+      if (orgResult.ok && orgResult.data?.repoAccessMode) {
+        setRepoAccessMode(orgResult.data.repoAccessMode);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStepId]);
 
   async function loadMembers() {
     const result = await fetchUsers();
@@ -244,7 +273,7 @@ export function OnboardingWizard({
                     <li>1. Connect at least one code host (collaboration tools optional)</li>
                     <li>2. Choose repos to Deep-Index</li>
                     <li>3. Set collaboration access scope</li>
-                    <li>4. Invite your team</li>
+                    <li>4. Choose who can open repos, then invite your team</li>
                   </>
                 )}
               </ul>
@@ -292,19 +321,7 @@ export function OnboardingWizard({
             </div>
           )}
 
-          {currentStepId === "team" && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Invite your team</h3>
-                <p className="mt-2 text-sm text-coop-muted">
-                  Invite teammates — they receive an email with install instructions.
-                  {memberCount !== null
-                    ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
-                    : ""}
-                </p>
-              </div>
-            </div>
-          )}
+          {currentStepId === "team" && <OnboardingPeopleStep memberCount={memberCount} />}
 
           {currentStepId === "indexing" && (
             <div className="space-y-4">
@@ -318,8 +335,8 @@ export function OnboardingWizard({
                         Indexing
                       </Link>{" "}
                       and configure a code host to choose repos to Deep-Index. Wait until at least one
-                      repo shows <span className="text-white">Usable</span> (browse verified) before
-                      inviting your team. Free plan allows up to 3 repos. Upgrade to{" "}
+                      repo shows <span className="text-white">Usable</span> (browse verified). Free plan
+                      allows up to 3 repos. Upgrade to{" "}
                       <Link href="/billing" className="admin-link">
                         Pro
                       </Link>{" "}
@@ -331,16 +348,22 @@ export function OnboardingWizard({
                       <Link href="/indexing" className="admin-link">
                         Indexing
                       </Link>{" "}
-                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index. Continue
-                      once at least one repo is <span className="text-white">Usable</span> — that means
-                      developers can browse it in the extension.
+                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index.{" "}
+                      <span className="text-white">Usable</span> means the repo is ready to open — next
+                      you&apos;ll choose who gets access.
                     </>
                   )}
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-coop-muted">
-                  <li>☐ Deep-Index at least one repo</li>
-                  <li>☐ Wait for status <span className="text-white">Usable</span> (not only Indexed)</li>
-                  <li>☐ Then continue to invite your team</li>
+                  <li>
+                    {hasUsableRepo ? "☑" : "☐"} Deep-Index at least one repo
+                    {hasUsableRepo ? ` (${usableRepoCount} Usable)` : ""}
+                  </li>
+                  <li>
+                    {hasUsableRepo ? "☑" : "☐"} Wait for status{" "}
+                    <span className="text-white">Usable</span> (not only Indexed)
+                  </li>
+                  <li>☐ Then continue to People &amp; access</li>
                 </ul>
               </div>
             </div>
@@ -374,10 +397,15 @@ export function OnboardingWizard({
                     <>
                       Install the CoopAI extension and begin connecting your tools.
                     </>
+                  ) : repoAccessMode === "per_user" ? (
+                    <>
+                      Your team installs the CoopAI extension and signs in. Org tools connect
+                      automatically — repos show up only after you assign them on Users.
+                    </>
                   ) : (
                     <>
-                      Your team installs the CoopAI extension and signs in — org tools and repos are ready
-                      automatically.
+                      Your team installs the CoopAI extension and signs in — org tools and Usable repos
+                      are ready automatically.
                     </>
                   )}
                 </p>
@@ -409,38 +437,43 @@ export function OnboardingWizard({
                 </button>
               ) : null}
               {currentStepId === "indexing" ? (
-                <>
-                  <button
-                    type="button"
-                    className="admin-btn-secondary"
-                    onClick={() => goToStep(step + 1)}
-                  >
-                    {anyCodeHostConnected ? "I'll Configure Later" : "Continue"}
-                  </button>
-                  <Link href="/indexing" className="admin-btn-primary">
-                    Open Indexing
-                  </Link>
-                </>
+                hasUsableRepo ? (
+                  <>
+                    <Link href="/indexing" className="admin-btn-secondary">
+                      Open Indexing
+                    </Link>
+                    <button
+                      type="button"
+                      className="admin-btn-primary"
+                      onClick={() => goToStep(step + 1)}
+                    >
+                      Next
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="admin-btn-secondary"
+                      onClick={() => goToStep(step + 1)}
+                    >
+                      {anyCodeHostConnected ? "I'll Configure Later" : "Continue"}
+                    </button>
+                    <Link href="/indexing" className="admin-btn-primary">
+                      Open Indexing
+                    </Link>
+                  </>
+                )
               ) : null}
               {currentStepId === "scope" ? (
-                <>
-                  <button type="button" className="admin-btn-secondary" onClick={() => goToStep(step + 1)}>
-                    Skip
-                  </button>
-                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
-                    Continue
-                  </button>
-                </>
+                <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                  Continue
+                </button>
               ) : null}
               {currentStepId === "team" ? (
-                <>
-                  <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
-                    Continue
-                  </button>
-                  <Link href="/users" className="admin-btn-secondary">
-                    Invite users
-                  </Link>
-                </>
+                <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>
+                  Continue
+                </button>
               ) : null}
               {currentStepId === "extension" ? (
                 <button type="button" className="admin-btn-primary" onClick={() => goToStep(step + 1)}>

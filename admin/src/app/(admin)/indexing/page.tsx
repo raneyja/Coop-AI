@@ -13,9 +13,11 @@ import {
   reindexEmbeddingFailures,
   syncCatalog,
   verifyRepoBrowse,
+  type OrgRepoAccessMode,
   type OrgRepoRecord
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
+import { IndexingAssignCallout } from "@/components/IndexingAssignCallout";
 import { IndexingRepoPickerModal } from "@/components/IndexingRepoPickerModal";
 import { IndexingRepoSections } from "@/components/IndexingRepoSections";
 import { IndexingProgressHelpModal } from "@/components/IndexingProgressHelpModal";
@@ -30,6 +32,7 @@ export default function IndexingPage() {
   const [repos, setRepos] = useState<OrgRepoRecord[]>([]);
   const [connectedHosts, setConnectedHosts] = useState<CodeHostProvider[]>([]);
   const [orgPlan, setOrgPlan] = useState<string>("free");
+  const [repoAccessMode, setRepoAccessMode] = useState<OrgRepoAccessMode>("all_indexed");
   const [initialLoading, setInitialLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,8 +102,13 @@ export default function IndexingPage() {
         )
       );
     }
-    if (orgResult.ok && orgResult.data?.plan) {
-      setOrgPlan(orgResult.data.plan);
+    if (orgResult.ok && orgResult.data) {
+      if (orgResult.data.plan) {
+        setOrgPlan(orgResult.data.plan);
+      }
+      if (orgResult.data.repoAccessMode) {
+        setRepoAccessMode(orgResult.data.repoAccessMode);
+      }
     }
   }, []);
 
@@ -254,7 +262,7 @@ export default function IndexingPage() {
     const status = result.data?.repo?.browseStatus;
     setActionMessage(
       status === "verified"
-        ? `${shortRepoName(repoId)} is usable — developers can browse files.`
+        ? `${shortRepoName(repoId)} is Usable — assign who can open it if per-user access is on.`
         : `${shortRepoName(repoId)} still needs attention — ${result.data?.repo?.browseError ?? "browse check failed"}.`
     );
     await load({ silent: true });
@@ -336,6 +344,11 @@ export default function IndexingPage() {
       </div>
 
       {unavailable ? <UnavailableBanner /> : null}
+
+      {!initialLoading ? (
+        <IndexingAssignCallout repos={repos} repoAccessMode={repoAccessMode} />
+      ) : null}
+
       {!initialLoading && syncableHosts.length === 0 ? (
         <p className="text-sm text-coop-muted">
           Connect a code host under Integrations, then return here to choose repos to Deep-Index.

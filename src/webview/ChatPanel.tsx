@@ -99,7 +99,7 @@ type InboundMessage =
         stale?: boolean;
         provider?: "github" | "gitlab" | "bitbucket";
         loading?: boolean;
-        emptyHint?: "workspace" | "workspace_admin";
+        emptyHint?: "workspace" | "workspace_admin" | "workspace_admin_self";
         listLabel?: "workspace";
       };
     }

@@ -14,7 +14,7 @@ const FULL_STEP_LABELS = [
   "Connect tools",
   "Index repos",
   "Manage access",
-  "Invite team",
+  "People & access",
   "Done"
 ] as const;
 

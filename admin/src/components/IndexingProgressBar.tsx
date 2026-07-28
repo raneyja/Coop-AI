@@ -29,7 +29,7 @@ function statusLine(stats: IndexingProgressStats, phase: DisplayPhase): string {
     if (stats.readyWithEmbeddingWarning > 0) {
       return `${stats.usable} of ${stats.total} usable (${stats.readyWithEmbeddingWarning} embedding warning${stats.readyWithEmbeddingWarning === 1 ? "" : "s"})`;
     }
-    return `${stats.usable} of ${stats.total} usable — safe to assign to developers`;
+    return `${stats.usable} of ${stats.total} usable — next: assign access if per-user mode is on`;
   }
   const parts = [`${stats.usable}/${stats.total} usable`];
   if (stats.indexing > 0) {

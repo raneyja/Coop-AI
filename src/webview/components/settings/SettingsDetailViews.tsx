@@ -1946,8 +1946,17 @@ function WorkspaceDetail({
               </div>
             ) : prefs.adminControlledRepos ? (
               <p className="coop-settings-card-desc">
-                No indexed repos assigned to your account yet. Ask your org admin to grant access in
-                the admin portal.
+                {prefs.canInstallIntegrations === true ? (
+                  <>
+                    No indexed repos assigned to you yet. Open the admin portal → Users, grant yourself
+                    access, then refresh.
+                  </>
+                ) : (
+                  <>
+                    No indexed repos assigned to your account yet. Ask your org admin to grant access in
+                    the admin portal.
+                  </>
+                )}
               </p>
             ) : (
               <p className="coop-settings-card-desc">No workspace repos selected</p>

@@ -5130,16 +5130,20 @@ export class CoopChatSession {
     );
     try {
       let entries: Array<{ provider: typeof provider; owner: string; repo: string; branch?: string }> = [];
-      let emptyHint: "workspace" | "workspace_admin" | undefined;
+      let emptyHint: "workspace" | "workspace_admin" | "workspace_admin_self" | undefined;
       let listLabel: "workspace" | undefined;
 
       if (source === "chat" && (await this.options.api.hasToken())) {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
         if (workspace.repos.length === 0) {
-          emptyHint =
-            workspace.adminControlled === true || this.preferences.adminControlledRepos
-              ? "workspace_admin"
-              : "workspace";
+          if (workspace.adminControlled === true || this.preferences.adminControlledRepos) {
+            emptyHint =
+              this.preferences.canInstallIntegrations === true
+                ? "workspace_admin_self"
+                : "workspace_admin";
+          } else {
+            emptyHint = "workspace";
+          }
         } else {
           listLabel = "workspace";
           entries = workspace.repos.map((entry) => {
