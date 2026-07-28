@@ -312,6 +312,26 @@ test("weak trace dedupes timeline warning into limitations", () => {
   assert.equal(summary.limitations.filter((line) => /pull request/i.test(line)).length, 1);
 });
 
+test("repo summary marks inventory + tree + anchors as medium without integrations", () => {
+  const summary = summarizeRepoSummary(
+    {
+      repoInventory: { fileCount: 4616, branch: "preview" },
+      treeOverview: { topLevelDirs: ["apps"], topLevelFiles: ["README.md"] },
+      entryFiles: [
+        { path: "package.json", content: "{}" },
+        { path: "README.md", content: "# Plane" },
+        { path: "AGENTS.md", content: "guide" },
+        { path: "docker-compose.yml", content: "services:" }
+      ],
+      manifest: { fileCount: 4616 }
+    },
+    "CoopAI-Corp",
+    "plane"
+  );
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason ?? "", /inventory|anchor/i);
+});
+
 test("repo summary reaches strong without manifest when anchors and Notion hits exist", () => {
   const summary = summarizeRepoSummary(
     {

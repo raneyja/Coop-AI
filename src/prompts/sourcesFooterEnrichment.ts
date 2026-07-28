@@ -95,13 +95,14 @@ function parseSourcesSection(content: string): {
     const bulletMatch = line.match(LIST_BULLET_RE);
     if (bulletMatch) {
       const body = bulletMatch[2] ?? "";
-      const label = extractLabelFromBulletBody(body);
-      if (label) {
+      const repaired = repairSourceBulletBody(body);
+      if (repaired) {
+        const indent = bulletMatch[1] ?? "";
         bullets.push({
-          raw: line,
-          indent: bulletMatch[1] ?? "",
-          label: normalizeSourceCitationLabel(label),
-          body
+          raw: repaired.body === body.trim() ? line : "",
+          indent,
+          label: repaired.label,
+          body: repaired.body
         });
         consumed += line.length + 1;
         continue;
@@ -132,6 +133,65 @@ function extractLabelFromBulletBody(body: string): string | undefined {
   }
   const codeMatch = body.match(/`(\[Sources:\s*.+?\])`/i);
   return codeMatch?.[1];
+}
+
+/**
+ * Accept labeled bullets, or unlabeled `-  — description` / `- — description` and
+ * infer the citation key so the Sources footer never shows blank titles.
+ */
+function repairSourceBulletBody(body: string): { label: string; body: string } | undefined {
+  const trimmed = body.trim();
+  const existing = extractLabelFromBulletBody(trimmed);
+  if (existing) {
+    return { label: normalizeSourceCitationLabel(existing), body: trimmed };
+  }
+
+  const description = bulletDescription(trimmed);
+  if (!description) {
+    return undefined;
+  }
+  const inferred = inferSourceLabelFromDescription(description);
+  if (!inferred) {
+    return undefined;
+  }
+  return {
+    label: inferred,
+    body: `${inferred} — ${description}`
+  };
+}
+
+function inferSourceLabelFromDescription(description: string): string | undefined {
+  const text = description.toLowerCase();
+  if (
+    /number of files|indexed file|file count|repository manifest|inventory|structure and number/.test(
+      text
+    )
+  ) {
+    return normalizeSourceCitationLabel("Repository inventory");
+  }
+  if (/top-level|directories and files|layout|tree overview|overall architecture/.test(text)) {
+    return normalizeSourceCitationLabel("Repository tree");
+  }
+  if (
+    /anchor|package\.json|readme|agents\.md|docker-compose|configuration and commands|development and deployment/.test(
+      text
+    )
+  ) {
+    return normalizeSourceCitationLabel("Anchor files");
+  }
+  if (/confluence/.test(text)) {
+    return normalizeSourceCitationLabel("Confluence architecture");
+  }
+  if (/jira/.test(text)) {
+    return normalizeSourceCitationLabel("Jira issues");
+  }
+  if (/ownership|codeowners/.test(text)) {
+    return normalizeSourceCitationLabel("Ownership signals");
+  }
+  if (/dependenc/.test(text)) {
+    return normalizeSourceCitationLabel("Dependency graph");
+  }
+  return undefined;
 }
 
 function groupIntegrationDocBullets(bullets: ParsedSourceBullet[]): ParsedSourceBullet[] {

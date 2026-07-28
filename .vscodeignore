@@ -1,0 +1,27 @@
+# Keep the VSIX to extension runtime only (not the monorepo).
+**/*
+!package.json
+!README.md
+!LICENSE
+!CHANGELOG.md
+!media/**
+!dist/extension.js
+!dist/webview.js
+!dist/webview.css
+**/*.map
+src/**
+website/**
+admin/**
+ops/**
+docs/**
+scripts/**
+node_modules/**
+.git/**
+.cursor/**
+**/*.test.ts
+**/*.test.tsx
+tsconfig*.json
+.env*
+docker-compose*
+Dockerfile*
+railway.toml

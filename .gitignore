@@ -46,3 +46,6 @@ coverage/
 .yarn/install-state.gz
 .vercel
 .env*
+
+# Packaged extension installs (rebuild with npm run package)
+*.vsix

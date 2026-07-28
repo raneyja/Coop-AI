@@ -84,6 +84,24 @@ test("enrichSourcesFooter leaves three-or-fewer bullets unchanged when already g
   assert.equal(enrichSourcesFooter(input), input);
 });
 
+test("enrichSourcesFooter repairs blank citation labels before the em dash", () => {
+  const input = [
+    "**Summary**",
+    "Architecture overview.",
+    "",
+    "**Sources**",
+    "-  — provided details about the structure and number of files in the repository.",
+    "-  — outlined the top-level directories and files, important for understanding the overall architecture.",
+    "-  — contributed specific insights into the configuration and commands used for development and deployment."
+  ].join("\n");
+
+  const enriched = enrichSourcesFooter(input);
+  assert.match(enriched, /\[Sources: Repository inventory\]/);
+  assert.match(enriched, /\[Sources: Repository tree\]/);
+  assert.match(enriched, /\[Sources: Anchor files\]/);
+  assert.ok(!/^-\s+—/m.test(enriched.split("**Sources**")[1] ?? ""));
+});
+
 if (failed > 0) {
   console.error(`\nsourcesFooterEnrichment: ${failed} failed, ${passed} passed`);
   process.exit(1);

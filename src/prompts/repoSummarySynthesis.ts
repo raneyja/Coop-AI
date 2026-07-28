@@ -23,7 +23,6 @@ import {
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
-import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
@@ -31,7 +30,6 @@ Cite file paths in narrative sections; reserve \`[Sources: …]\` labels for the
 Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
-CRITICAL: Your first line of output MUST be exactly: Coop build ${COOP_EXTENSION_BUILD_ID}
 If <repo_entry_files> is missing or empty, do not invent architecture — say evidence is missing.
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -49,13 +47,6 @@ export type RepoSummarySynthesisInput = {
 
 export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisInput): string {
   const lines: string[] = [];
-  lines.push(`## Coop build`);
-  lines.push(COOP_EXTENSION_BUILD_ID);
-  lines.push("");
-  lines.push(
-    `Begin your reply with exactly this line (copy verbatim): Coop build ${COOP_EXTENSION_BUILD_ID}`
-  );
-  lines.push("");
   const activeFile = input.activeFile?.trim();
   lines.push("## Task");
   lines.push(
@@ -109,6 +100,9 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   ]);
   appendEvidenceQualityInstructions(lines);
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
+  lines.push(
+    "Every **Sources** bullet MUST start with an exact citation key from the checklist (example: `[Sources: Repository inventory] — …`). Never leave the label blank before the em dash."
+  );
   lines.push(
     "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
   );

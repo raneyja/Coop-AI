@@ -4673,7 +4673,8 @@ export class CoopChatSession {
                 repo: turnContext.repo,
                 branch: turnContext.branch
               });
-      const projectInstructionsBlock = this.buildProjectInstructionsBlock();
+      const projectInstructionsBlock =
+        effectiveQuickAction === "understand-repo" ? undefined : this.buildProjectInstructionsBlock();
       if (projectInstructionsBlock) {
         apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
       }

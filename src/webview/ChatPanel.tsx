@@ -1345,7 +1345,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onSeeAll={openPromptLibrary}
         />
         <AgentsMdStatusChip
-          state={context.projectInstructions}
+          state={context.fileSource === "remote" ? undefined : context.projectInstructions}
           disabled={isStreaming}
           onCreate={() => post({ type: "agents:start-from-template" })}
           onOpen={() => post({ type: "agents:open" })}

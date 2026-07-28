@@ -307,7 +307,7 @@ async function run(): Promise<void> {
       branch: "preview"
     });
     assert.match(message, /Attach check failed/i);
-    assert.match(message, /attach-v4/i);
+    assert.match(message, /0\.1\.0/);
     assert.match(message, /could not attach repository evidence/i);
     assert.match(message, /will not invent/i);
     assert.match(message, /preview/);

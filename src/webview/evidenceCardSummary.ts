@@ -847,6 +847,14 @@ export function summarizeRepoSummary(
 
   let quality: EvidenceQuality;
   let qualityReason: string;
+  const inventory = evidence.repoInventory;
+  const hasInventory =
+    typeof inventory?.fileCount === "number" && Number.isFinite(inventory.fileCount) && inventory.fileCount > 0;
+  const tree = evidence.treeOverview as { topLevelDirs?: string[]; topLevelFiles?: string[] } | undefined;
+  const hasTree =
+    !!tree && ((tree.topLevelDirs?.length ?? 0) > 0 || (tree.topLevelFiles?.length ?? 0) > 0);
+  const hasSolidGithubGrounding = entryCount > 0 && (hasInventory || hasTree);
+
   if (
     entryCount > 0 &&
     (docHitCount > 0 || hasOwnershipContext) &&
@@ -857,10 +865,12 @@ export function summarizeRepoSummary(
       "Anchor files are grounded with attached documentation, ownership, or cross-tool context.";
   } else if (
     entryCount > 0 &&
-    (docHitCount > 0 || hasOwnershipContext || externalSignalCount > 0)
+    (docHitCount > 0 || hasOwnershipContext || externalSignalCount > 0 || hasSolidGithubGrounding)
   ) {
     quality = "medium";
-    qualityReason = "Anchor files provide structure, but supporting context is partial.";
+    qualityReason = hasSolidGithubGrounding && docHitCount === 0 && !hasOwnershipContext && externalSignalCount === 0
+      ? "Inventory, layout, and anchor files ground this summary; integrations are optional extras."
+      : "Anchor files provide structure, but supporting context is partial.";
   } else if (
     (hasManifestSignal && entryCount > 0) ||
     docHitCount > 0 ||
