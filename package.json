@@ -1,8 +1,8 @@
 {
   "name": "coop-ai",
-  "displayName": "CoopAI",
+  "displayName": "CoopAI attach-v4",
   "description": "Zero-clone code intelligence sidebar for VS Code",
-  "version": "0.0.1",
+  "version": "0.0.1-attach-v4",
   "publisher": "coop-ai",
   "license": "MIT",
   "engines": {

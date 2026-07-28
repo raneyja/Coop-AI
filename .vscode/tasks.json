@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "npm: build",
+      "label": "npm: build:extension-dev",
       "type": "shell",
-      "command": "npm run build",
+      "command": "npm run build:extension && npm run build:webview",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -12,6 +12,21 @@
         "kind": "build",
         "isDefault": true
       },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "npm: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
       "presentation": {
         "reveal": "silent",
         "panel": "shared"
