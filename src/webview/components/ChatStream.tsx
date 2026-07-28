@@ -263,7 +263,7 @@ function MessageBlock({
           </div>
         ) : !isUser ? (
           <div className="chat-message-meta">
-            <span className="chat-message-label">CoopAI</span>
+            <span className="chat-message-label">CoopAI attach-v4</span>
             {isStreaming ? (
               <span className="chat-streaming-indicator" aria-hidden="true">
                 <span className="chat-streaming-dot" />
