@@ -1,7 +1,6 @@
 import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
 import {
   appendCitationKeysSection,
-  appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
   supplementaryKeysOmittedFromChecklist,
@@ -20,6 +19,7 @@ import {
 import {
   listRepoSummarySourceLabels,
   listRepoSummarySourcesChecklist,
+  isGithubOnlyRepoSummaryEvidence,
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
@@ -98,15 +98,41 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     repoSummarySourceLabelDependencies(),
     ...supplementaryKeysOmittedFromChecklist(listRepoSummarySourceLabels(summaryEvidence), sourcesChecklist)
   ]);
-  appendEvidenceQualityInstructions(lines);
+  appendRepoSummaryCraftInstructions(lines, summaryEvidence);
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
-    "Every **Sources** bullet MUST start with an exact citation key from the checklist (example: `[Sources: Repository inventory] — …`). Never leave the label blank before the em dash."
+    "Every **Sources** bullet MUST start with an exact citation key from the checklist and keep the concrete fact after the em dash (or an equally specific fact from that source). Never leave the label blank; never use filler like \"contributed insights\" or \"provided details\"."
   );
   lines.push(
     "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
   );
   return lines.join("\n");
+}
+
+function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummaryEvidence): void {
+  lines.push("## Evidence quality & response craft");
+  lines.push("- Lead **Summary** with what can be responsibly concluded from the attached bundle.");
+  if (isGithubOnlyRepoSummaryEvidence(summary)) {
+    lines.push(
+      '- Evidence is GitHub/code-host only (no Confluence/Jira/Slack/Notion/Teams/Google Docs hits). End **Summary** with one short confidence line, e.g. "Based on inventory + anchors; no Confluence/Jira."'
+    );
+  } else {
+    lines.push(
+      "- Integrations or docs are attached — briefly note what grounds the answer; do not claim gaps for tools that returned hits."
+    );
+  }
+  lines.push("- Distinguish provenance (direct source facts) from rationale (your synthesis).");
+  lines.push("- When evidence is thin, use one line per section — do not pad with generic software trade-offs.");
+  lines.push(
+    "- **Risks & unknowns**: only path-tied or evidence-tied risks (config, deploy, missing docs *in the repo*). Do **not** treat disconnected or empty Coop integrations (Slack, Jira, Confluence, etc.) as repository risks unless the user asked about those tools or code evidence shows they are required."
+  );
+  lines.push(
+    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
+  );
+  lines.push(
+    "- **Sources** bullets: after each `[Sources: …]` label, keep one concrete fact (counts, top-level dirs, named anchors). Forbidden filler: \"contributed insights\", \"provided details\", \"offered information\"."
+  );
+  lines.push("");
 }
 
 function appendMentionScopeSection(lines: string[], input: RepoSummarySynthesisInput): void {

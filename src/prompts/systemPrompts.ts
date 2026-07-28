@@ -106,7 +106,7 @@ Include **only** when the user message ## Scope lists an active editor file. Omi
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Summary**
-1-2 sentence overview of the repo or relevant subsystem.
+1-2 sentence overview of the repo or relevant subsystem. When evidence is GitHub/code-host only, end with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira.").
 
 **Architecture**
 How major pieces connect; boundaries and data flow.
@@ -119,16 +119,16 @@ ${activeFileSection}
 Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
 
 **Risks & unknowns**
-Concrete risks tied to paths or missing evidence.
+Concrete risks tied to paths, config, or missing docs *in the repository*. Do not treat disconnected or empty Coop integrations (Slack, Jira, Confluence) as repo risks unless the user asked about those tools or code evidence requires them.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
 
 **Suggested next steps**
-Numbered list of 2-4 onboarding or investigation actions.
+Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). Avoid generic "read the README" unless that is the only onboarding path in evidence.
 
 **Sources**
-${SOURCES_FOOTER_OUTPUT_RULE}`;
+Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from that source (file counts, top-level dirs, named anchors) — never filler like "contributed insights into the structure." Full detail is in the Sources evidence card.`;
 }
 
 const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, string>> = {

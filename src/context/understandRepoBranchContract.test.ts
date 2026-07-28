@@ -11,7 +11,7 @@ import {
   understandRepoEmptyEvidenceMessage
 } from "./indexedRepoContextEnrichment";
 import { resolveRepoBranchForTarget } from "./resolveRepoBranch";
-import { listRepoSummarySourceLabels } from "../prompts/repoSummarySourceLabels";
+import { listRepoSummarySourceLabels, listRepoSummarySourcesChecklist } from "../prompts/repoSummarySourceLabels";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { RepoSummaryEvidence } from "./contextBundleEvidence";
 
@@ -105,6 +105,20 @@ async function run(): Promise<void> {
     assert.ok(labels.some((label) => /tree/i.test(label)));
     assert.ok(labels.some((label) => /anchor files/i.test(label)));
     assert.equal(hasUnderstandRepoEntryBodies(summary as Record<string, unknown>), true);
+  });
+
+  await test("Sources checklist uses concrete facts instead of filler", () => {
+    const summary: RepoSummaryEvidence = {
+      repoInventory: { fileCount: 4616, branch: "preview" },
+      treeOverview: { topLevelDirs: ["apps", "packages"], topLevelFiles: ["README.md"] },
+      entryFiles: [{ path: "package.json", content: "{}" }, { path: "README.md", content: "# Plane" }],
+      manifest: { fileCount: 4616 }
+    };
+    const checklist = listRepoSummarySourcesChecklist(summary);
+    assert.ok(checklist.some((line) => /4,616 indexed files/.test(line)));
+    assert.ok(checklist.some((line) => /top-level apps, packages/.test(line)));
+    assert.ok(checklist.some((line) => /loaded package\.json, README\.md/.test(line)));
+    assert.ok(!checklist.some((line) => /summarize what this source contributed/i.test(line)));
   });
 
   const total = passed + failed;

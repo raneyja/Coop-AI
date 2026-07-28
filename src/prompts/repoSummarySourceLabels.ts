@@ -109,5 +109,106 @@ export function listRepoSummarySourceLabels(summary: RepoSummaryEvidence): strin
 }
 
 export function listRepoSummarySourcesChecklist(summary: RepoSummaryEvidence): string[] {
-  return buildSourcesChecklistFromKeys(listRepoSummarySourceLabels(summary));
+  const labels = listRepoSummarySourceLabels(summary);
+  const extras = labels.map((label) => `${label} — ${repoSummarySourceFact(label, summary)}`);
+  return buildSourcesChecklistFromKeys(labels, extras);
+}
+
+/** One concrete fact for a Sources footer bullet — never generic "contributed insights" filler. */
+export function repoSummarySourceFact(label: string, summary: RepoSummaryEvidence): string {
+  const tree = summary.treeOverview as { topLevelDirs?: string[]; topLevelFiles?: string[] } | undefined;
+  const inventory = summary.repoInventory;
+  const manifest = summary.manifest;
+
+  if (label === repoSummarySourceLabelInventory()) {
+    if (typeof inventory?.fileCount === "number") {
+      const lines =
+        typeof inventory.lineCount === "number" ? ` · ${inventory.lineCount.toLocaleString()} lines` : "";
+      return `${inventory.fileCount.toLocaleString()} indexed files${lines}`;
+    }
+    return "indexed file inventory";
+  }
+
+  if (label === repoSummarySourceLabelTree()) {
+    const dirs = (tree?.topLevelDirs ?? [])
+      .map((dir) => dir.replace(/\/$/, ""))
+      .filter(Boolean)
+      .slice(0, 5);
+    if (dirs.length) {
+      return `top-level ${dirs.join(", ")}`;
+    }
+    const files = (tree?.topLevelFiles ?? []).slice(0, 4);
+    if (files.length) {
+      return `root files ${files.join(", ")}`;
+    }
+    return "top-level repository layout";
+  }
+
+  if (label === repoSummarySourceLabelEntryFiles()) {
+    const paths = (summary.entryFiles ?? []).map((file) => file.path).filter(Boolean).slice(0, 4);
+    if (paths.length) {
+      return `loaded ${paths.join(", ")}`;
+    }
+    return "anchor file contents";
+  }
+
+  if (label === repoSummarySourceLabelManifest()) {
+    if (typeof manifest?.fileCount === "number") {
+      return `manifest reports ${manifest.fileCount.toLocaleString()} files`;
+    }
+    if (typeof inventory?.fileCount === "number") {
+      return `manifest/metadata for ${inventory.fileCount.toLocaleString()} files`;
+    }
+    return "repository metadata";
+  }
+
+  if (label === repoSummarySourceLabelConfluence()) {
+    const count = summary.confluence?.pages?.length ?? 0;
+    return count > 0 ? `${count} architecture page(s)` : "Confluence architecture pages";
+  }
+  if (label === repoSummarySourceLabelJira()) {
+    const count = summary.jira?.issues?.length ?? 0;
+    return count > 0 ? `${count} issue(s)` : "Jira issues";
+  }
+  if (label === repoSummarySourceLabelSlack()) {
+    const count = summary.slack?.messages?.length ?? 0;
+    return count > 0 ? `${count} message(s)` : "Slack discussions";
+  }
+  if (label === repoSummarySourceLabelTeams()) {
+    const count = summary.teams?.messages?.length ?? 0;
+    return count > 0 ? `${count} message(s)` : "Teams discussions";
+  }
+  if (label === repoSummarySourceLabelNotion()) {
+    const count = summary.notion?.pages?.length ?? 0;
+    return count > 0 ? `${count} page(s)` : "Notion pages";
+  }
+  if (label === repoSummarySourceLabelGoogleDocs()) {
+    const count = summary.googleDocs?.documents?.length ?? 0;
+    return count > 0 ? `${count} document(s)` : "Google Docs";
+  }
+  if (label === repoSummarySourceLabelOwnership()) {
+    const primary = summary.ownershipReport?.scores?.find((score) => score.tier === "primary");
+    if (primary?.owner) {
+      return `primary owner ${primary.owner}`;
+    }
+    return "ownership scores";
+  }
+  if (label === repoSummarySourceLabelDependencies()) {
+    const count = summary.dependencyGraph?.directDependents?.length ?? 0;
+    return count > 0 ? `${count} direct dependent(s)` : "dependency graph";
+  }
+
+  return "summarize one concrete fact from this source";
+}
+
+/** True when the checklist is code-host grounded with no integration/doc hits. */
+export function isGithubOnlyRepoSummaryEvidence(summary: RepoSummaryEvidence): boolean {
+  return !(
+    shouldIncludeIntegrationInSourcesChecklist(summary.confluence) ||
+    shouldIncludeIntegrationInSourcesChecklist(summary.jira) ||
+    shouldIncludeIntegrationInSourcesChecklist(summary.slack) ||
+    shouldIncludeIntegrationInSourcesChecklist(summary.teams) ||
+    shouldIncludeIntegrationInSourcesChecklist(summary.notion) ||
+    shouldIncludeIntegrationInSourcesChecklist(summary.googleDocs)
+  );
 }

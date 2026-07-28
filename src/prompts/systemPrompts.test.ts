@@ -65,6 +65,10 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("**Architecture**"));
   assert.ok(prompt.includes("**How the open file fits**"));
   assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
+  assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));
+  assert.ok(prompt.includes("Do not treat disconnected or empty Coop integrations"));
+  assert.ok(prompt.includes('Avoid generic "read the README"'));
+  assert.ok(prompt.includes("one concrete fact"));
 });
 
 test("comprehension use case requires active file section when activeFile is set", () => {

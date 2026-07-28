@@ -141,6 +141,31 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("**Blast Radius**"));
   });
 
+  test("buildRepoSummarySynthesisUserPrompt steers concrete Sources, honest risks, and GitHub-only confidence", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      summary: {
+        repoInventory: { fileCount: 4616, branch: "preview" },
+        treeOverview: { topLevelDirs: ["apps", "packages", "deployments"], topLevelFiles: ["README.md"] },
+        entryFiles: [
+          { path: "package.json", content: "{}" },
+          { path: "README.md", content: "# Plane" },
+          { path: "docker-compose.yml", content: "services:" }
+        ],
+        manifest: { fileCount: 4616 }
+      }
+    });
+    assert.ok(prompt.includes("4,616 indexed files"));
+    assert.ok(prompt.includes("top-level apps, packages, deployments"));
+    assert.ok(prompt.includes("loaded package.json, README.md, docker-compose.yml"));
+    assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));
+    assert.ok(prompt.includes("Do **not** treat disconnected or empty Coop integrations"));
+    assert.ok(prompt.includes("Avoid generic \"read the README\""));
+    assert.ok(prompt.includes("Forbidden filler"));
+    assert.ok(!prompt.includes("summarize what this source contributed"));
+  });
+
   test("buildRepoSummarySynthesisUserPrompt requires attached doc titles and guards supplementary citations", () => {
     const prompt = buildRepoSummarySynthesisUserPrompt({
       owner: "raneyja",
