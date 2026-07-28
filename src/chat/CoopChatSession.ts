@@ -4837,14 +4837,9 @@ export class CoopChatSession {
         fallbackTimeline: turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,
         isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
       });
-      const stampedContent =
-        effectiveQuickAction === "understand-repo" &&
-        !enrichedContent.includes(COOP_EXTENSION_BUILD_ID)
-          ? `Coop build ${COOP_EXTENSION_BUILD_ID}\n\n${enrichedContent}`
-          : enrichedContent;
       const finalMessage: ChatMessage = {
         ...result.message,
-        content: stampedContent,
+        content: enrichedContent,
         ...(turn.pendingEvidenceArtifactId
           ? { relatedArtifactId: turn.pendingEvidenceArtifactId }
           : {})

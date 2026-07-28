@@ -15,6 +15,10 @@ function inlineNodesToCopyText(nodes: ChatInlineNode[]): string {
           return `\`${node.code}\``;
         case "file-link":
           return `\`${node.label}\``;
+        case "source-citation":
+          return node.label;
+        case "evidence-link":
+          return node.label;
         case "external-link":
           return `[${node.label}](${node.url})`;
         default:

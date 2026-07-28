@@ -39,6 +39,20 @@ test("formatChatMessageForCopy preserves markdown links and file paths", () => {
   assert.ok(copy.includes("[Integrations](https://example/wiki/integrations)"));
 });
 
+test("formatChatMessageForCopy keeps Sources citation labels", () => {
+  const copy = formatChatMessageForCopy(
+    [
+      "**Sources**",
+      "- [Sources: Repository inventory] — file counts.",
+      "- [Sources: Anchor files] — package.json and README."
+    ].join("\n")
+  );
+
+  assert.match(copy, /\[Sources: Repository inventory\]/);
+  assert.match(copy, /\[Sources: Anchor files\]/);
+  assert.ok(!/^-\s+—/m.test(copy));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
