@@ -79,7 +79,7 @@ async function run(): Promise<void> {
         repo: "plane",
         branch: "preview"
       }),
-      /will not invent/i
+      /Attach check failed/i
     );
   });
 

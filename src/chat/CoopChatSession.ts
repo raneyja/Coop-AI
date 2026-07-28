@@ -2388,19 +2388,17 @@ export class CoopChatSession {
     const resolvedBranch = (enriched.data as { resolvedBranch?: string } | undefined)?.resolvedBranch;
     if (resolvedBranch?.trim() && resolvedBranch !== this.currentContext.branch) {
       this.currentContext = { ...this.currentContext, branch: resolvedBranch.trim() };
+      this.postContext();
     }
 
     return enriched;
   }
 
-  /** Prefer Deep-Index / workspace branch over stale Settings defaultBranch before the turn freezes. */
+  /** Prefer Deep-Index / GitHub default / workspace over stale Settings `main`. */
   private async pinCanonicalRepoBranchForTurn(): Promise<void> {
     const owner = this.currentContext.owner?.trim();
     const repo = this.currentContext.repo?.trim();
     if (!owner || !repo) {
-      return;
-    }
-    if (!(await this.options.api.hasToken())) {
       return;
     }
     const provider =
@@ -2409,30 +2407,85 @@ export class CoopChatSession {
     if (!repoId) {
       return;
     }
-    try {
-      const resolved = await resolveActiveRepoTarget(
-        {
+
+    let branch: string | undefined;
+    const hasApiToken = await this.options.api.hasToken();
+
+    // 1) Indexed branch (Deep-Index) — strongest signal for non-main defaults like preview.
+    if (hasApiToken) {
+      try {
+        branch = await this.resolveIndexedBranchForTarget(repoId, {
           repoId,
           owner,
           repo,
-          branch: this.currentContext.branch,
-          provider
-        },
-        {
-          api: this.options.api,
-          apiBaseUrl: this.preferences.apiBaseUrl,
-          codeHostRouter: this.options.codeHostRouter,
-          resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
-        }
-      );
-      const branch = resolved.branch?.trim();
-      if (!branch || branch === this.currentContext.branch) {
-        return;
+          provider,
+          branch: this.currentContext.branch
+        });
+      } catch {
+        branch = undefined;
       }
-      this.currentContext = { ...this.currentContext, branch };
-      this.postContext();
-    } catch {
-      /* keep session branch */
+    }
+
+    // 2) Full resolver (workspace catalog + tree probe) when index is missing.
+    if (!branch) {
+      try {
+        const resolved = await resolveActiveRepoTarget(
+          {
+            repoId,
+            owner,
+            repo,
+            branch: this.currentContext.branch,
+            provider
+          },
+          {
+            api: this.options.api,
+            apiBaseUrl: this.preferences.apiBaseUrl,
+            codeHostRouter: this.options.codeHostRouter,
+            resolveWorkspaceBranch: hasApiToken
+              ? async (id) => this.resolveWorkspaceDefaultBranch(id)
+              : undefined
+          }
+        );
+        branch = resolved.branch?.trim() || undefined;
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 3) Live code-host default branch (works even without Coop API token).
+    if (!branch) {
+      try {
+        const remote = await this.options.codeHostRouter.getRepository({
+          provider,
+          owner,
+          repo
+        });
+        branch = remote.defaultBranch?.trim() || undefined;
+      } catch {
+        /* keep session branch */
+      }
+    }
+
+    if (!branch) {
+      this.logContextDebug(
+        `Branch pin: no canonical branch for ${owner}/${repo} (session=${this.currentContext.branch ?? "none"})`
+      );
+      return;
+    }
+
+    if (branch === this.currentContext.branch) {
+      return;
+    }
+
+    this.logContextDebug(
+      `Branch pin: ${this.currentContext.branch ?? "none"} → ${branch} for ${owner}/${repo}`
+    );
+    this.currentContext = { ...this.currentContext, branch };
+    this.postContext();
+    // Stop Settings defaultBranch from re-poisoning the next snap with stale main.
+    if (branch !== this.preferences.branch) {
+      this.preferences = { ...this.preferences, branch };
+      void updateConfiguration({ branch });
     }
   }
 
@@ -5537,12 +5590,7 @@ export class CoopChatSession {
           await this.handleRepoListRepos("chat");
           return;
         }
-        if (!branch) {
-          const entry = workspace.repos.find(
-            (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
-          );
-          branch = entry?.defaultBranch?.trim() || undefined;
-        }
+        // Indexed branch beats catalog/settings main (e.g. plane → preview).
         if (!branch) {
           branch = await this.resolveIndexedBranchForTarget(repoId, {
             repoId,
@@ -5551,11 +5599,33 @@ export class CoopChatSession {
             provider: payload.provider
           });
         }
+        if (!branch) {
+          const entry = workspace.repos.find(
+            (item) => item.repoId === repoId || item.repoId.toLowerCase() === repoId.toLowerCase()
+          );
+          branch = entry?.defaultBranch?.trim() || undefined;
+        }
       } catch {
         // Continue — file tree may still work if workspace endpoint is temporarily unavailable.
       }
     }
+    if (!branch) {
+      try {
+        const remote = await this.options.codeHostRouter.getRepository({
+          provider: payload.provider ?? this.preferences.defaultCodeHost,
+          owner: payload.owner,
+          repo: payload.repo
+        });
+        branch = remote.defaultBranch?.trim() || undefined;
+      } catch {
+        /* leave undefined */
+      }
+    }
     this.setRepoContext({ ...payload, branch });
+    if (branch && branch !== this.preferences.branch) {
+      this.preferences = { ...this.preferences, branch };
+      void updateConfiguration({ branch });
+    }
   }
 
   private async handleRepoSearch(query: string, source: "chat" | "settings"): Promise<void> {
@@ -5633,7 +5703,22 @@ export class CoopChatSession {
     const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
     const repoId = `${provider}:${owner}/${repo}`;
 
+    // Indexed branch first — never trust Settings/workspace main for non-main defaults.
     if (await this.options.api.hasToken()) {
+      try {
+        const indexed = await this.resolveIndexedBranchForTarget(repoId, {
+          repoId,
+          owner,
+          repo,
+          provider,
+          branch: this.currentContext.branch
+        });
+        if (indexed) {
+          return indexed;
+        }
+      } catch {
+        /* fall through */
+      }
       try {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
         const entry = workspace.repos.find(
@@ -5648,11 +5733,24 @@ export class CoopChatSession {
       }
     }
 
+    try {
+      const remote = await this.options.codeHostRouter.getRepository({
+        provider,
+        owner,
+        repo
+      });
+      if (remote.defaultBranch?.trim()) {
+        return remote.defaultBranch.trim();
+      }
+    } catch {
+      /* fall through */
+    }
+
     const sameAsSettings = owner === this.preferences.owner && repo === this.preferences.repo;
     if (sameAsSettings) {
       return this.currentContext.branch?.trim() || this.preferences.branch?.trim() || undefined;
     }
-    return undefined;
+    return this.currentContext.branch?.trim() || undefined;
   }
 
   private async handleRepoList(path: string, source: "chat" | "settings"): Promise<void> {

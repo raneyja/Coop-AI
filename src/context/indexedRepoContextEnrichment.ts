@@ -311,7 +311,7 @@ export function understandRepoEmptyEvidenceMessage(options: {
     options.owner && options.repo ? `${options.owner}/${options.repo}` : "this repository";
   const branch = options.branch?.trim();
   return [
-    `Coop could not attach repository evidence for ${label}` +
+    `Attach check failed: Coop could not attach repository evidence for ${label}` +
       (branch ? ` (branch \`${branch}\`)` : "") +
       ".",
     "",
@@ -362,7 +362,7 @@ export function understandRepoMissingEntryBodiesMessage(options: {
       ? `Attached so far: ${attached.join(" + ")}. Missing: real file bodies (README / package.json / entry points).`
       : "No entry file bodies were attached.";
   return [
-    `Coop reached ${label}` +
+    `Attach check failed: Coop reached ${label}` +
       (branch ? ` on branch \`${branch}\`` : "") +
       " but could not load anchor file contents.",
     "",

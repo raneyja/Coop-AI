@@ -102,15 +102,23 @@ export function ContextScopeLabel({
   }
 
   const repoLabel = displayRepoLabel(context.owner, context.repo);
-  const repoTitle = `${context.owner}/${context.repo}`;
+  const branch = context.branch?.trim();
+  const repoTitle = branch
+    ? `${context.owner}/${context.repo} · ${branch}`
+    : `${context.owner}/${context.repo}`;
   const className =
-    "coop-source-chip ml-auto min-w-0 max-w-[min(100%,14rem)] !gap-1 !px-2 !py-0.5 leading-none font-normal";
+    "coop-source-chip ml-auto min-w-0 max-w-[min(100%,16rem)] !gap-1 !px-2 !py-0.5 leading-none font-normal";
 
   if (!onOpenExplorer) {
     return (
       <span className={className} title={repoTitle}>
         <RepoIcon />
         <span className="truncate">{repoLabel}</span>
+        {branch ? (
+          <span className="shrink-0 max-w-[72px] truncate text-[10px] text-[var(--coop-panel-muted)]">
+            {branch}
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -127,6 +135,11 @@ export function ContextScopeLabel({
       <span className="truncate underline decoration-transparent underline-offset-2 hover:decoration-current">
         {repoLabel}
       </span>
+      {branch ? (
+        <span className="shrink-0 max-w-[72px] truncate text-[10px] text-[var(--coop-panel-muted)]">
+          {branch}
+        </span>
+      ) : null}
     </button>
   );
 }

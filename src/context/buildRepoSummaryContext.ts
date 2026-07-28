@@ -321,7 +321,16 @@ export function hasRepoSummaryEvidence(data: Record<string, unknown> | undefined
     return false;
   }
   const entryFiles = Array.isArray(data.entryFiles) ? data.entryFiles : [];
-  if (entryFiles.length > 0) {
+  // Path-only stubs are not evidence — require at least one file body.
+  if (
+    entryFiles.some((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+      const content = (entry as { content?: unknown }).content;
+      return typeof content === "string" && content.trim().length > 0;
+    })
+  ) {
     return true;
   }
   const manifest = data.manifest;
@@ -342,7 +351,8 @@ export function hasRepoSummaryEvidence(data: Record<string, unknown> | undefined
   if (typeof inventory?.fileCount === "number" && inventory.fileCount > 0) {
     return true;
   }
-  return Boolean(data.repository);
+  // Bare code-host `repository` metadata is identity only — not enough to synthesize.
+  return false;
 }
 
 export async function loadManifestEntries(

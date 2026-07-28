@@ -33,6 +33,8 @@ async function run(): Promise<void> {
   test("hasRepoSummaryEvidence detects entry files and manifest", () => {
     assert.equal(hasRepoSummaryEvidence(undefined), false);
     assert.equal(hasRepoSummaryEvidence({ repoId: "github:acme/app" }), false);
+    assert.equal(hasRepoSummaryEvidence({ repository: { description: "x" } }), false);
+    assert.equal(hasRepoSummaryEvidence({ entryFiles: [{ path: "README.md" }] }), false);
     assert.equal(
       hasRepoSummaryEvidence({ entryFiles: [{ path: "README.md", content: "# App" }] }),
       true
