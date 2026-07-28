@@ -28,6 +28,7 @@ import { linesFromText } from "./api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "./api/codeHosts/types";
 import { coordinatesFromRepoId } from "./api/codeHosts/types";
 import { isCoopDevMode, readLightningBackend } from "./config/lightningConfig";
+import { coopBuildBanner } from "./config/coopBuildId";
 import { IntegrationSecrets } from "./api/integrations/integrationSecrets";
 import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
@@ -72,6 +73,9 @@ function resolveClearChatSession(
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  // If this toast does not appear after F5, the Extension Host is not loading this dist.
+  void vscode.window.showInformationMessage(coopBuildBanner());
+
   const api = new SecureApiClient(context.secrets);
   const codeHostSecrets = new CodeHostSecrets(context.secrets);
   const codeHostCache = new CacheManager({ storageUri: context.globalStorageUri });

@@ -79,7 +79,7 @@ async function run(): Promise<void> {
         repo: "plane",
         branch: "preview"
       }),
-      /Attach check failed/i
+      /attach-v4/i
     );
   });
 

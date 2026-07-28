@@ -53,18 +53,12 @@ void (async () => {
     }
   });
 
-  await test("understand-repo loads indexed evidence before live summary crawl", () => {
+  await test("understand-repo uses buildRepoSummaryEvidence as the single evidence path", () => {
     const session = read("chat/CoopChatSession.ts");
-    const block = session.match(
-      /isUnderstandRepo[\s\S]{0,1200}?mergeUnderstandRepoContextResults/
-    )?.[0];
-    assert.ok(block, "expected understand-repo fetch block");
-    assert.match(block, /enrichWithIndexedWorkspace/);
-    assert.match(block, /buildBaseContextResult/);
-    assert.ok(
-      block.indexOf("enrichWithIndexedWorkspace") < block.indexOf("buildBaseContextResult"),
-      "indexed enrichment must run before live summary"
-    );
+    assert.match(session, /fetchUnderstandRepoEvidence/);
+    assert.match(session, /buildRepoSummaryEvidence\(/);
+    assert.match(session, /COOP_EXTENSION_BUILD_ID/);
+    assert.match(session, /isUnderstandRepo[\s\S]{0,400}?fetchUnderstandRepoEvidence/);
   });
 
   await test("repo summary builders do not hardcode main as branch fallback", () => {

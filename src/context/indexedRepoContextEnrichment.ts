@@ -15,6 +15,7 @@ import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import type { IndexedRepoFileReadRequest } from "./indexedRepoFileRegistry";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_ENTRY_FILE_CHARS = 12_000;
@@ -311,7 +312,7 @@ export function understandRepoEmptyEvidenceMessage(options: {
     options.owner && options.repo ? `${options.owner}/${options.repo}` : "this repository";
   const branch = options.branch?.trim();
   return [
-    `Attach check failed: Coop could not attach repository evidence for ${label}` +
+    `Attach check failed [${COOP_EXTENSION_BUILD_ID}]: Coop could not attach repository evidence for ${label}` +
       (branch ? ` (branch \`${branch}\`)` : "") +
       ".",
     "",
@@ -362,7 +363,7 @@ export function understandRepoMissingEntryBodiesMessage(options: {
       ? `Attached so far: ${attached.join(" + ")}. Missing: real file bodies (README / package.json / entry points).`
       : "No entry file bodies were attached.";
   return [
-    `Attach check failed: Coop reached ${label}` +
+    `Attach check failed [${COOP_EXTENSION_BUILD_ID}]: Coop reached ${label}` +
       (branch ? ` on branch \`${branch}\`` : "") +
       " but could not load anchor file contents.",
     "",

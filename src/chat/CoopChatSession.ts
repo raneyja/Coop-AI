@@ -306,7 +306,8 @@ import {
   understandRepoEmptyEvidenceMessage,
   understandRepoMissingEntryBodiesMessage
 } from "../context/indexedRepoContextEnrichment";
-import { hasRepoSummaryEvidence } from "../context/buildRepoSummaryContext";
+import { hasRepoSummaryEvidence, buildRepoSummaryEvidence } from "../context/buildRepoSummaryContext";
+import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
@@ -2264,14 +2265,8 @@ export class CoopChatSession {
       request.params.quickAction === "understand-repo" && request.type === "file_metadata";
 
     if (isUnderstandRepo) {
-      // Indexed manifest + entry files first — live code-host crawl is slower and often wrong-branch.
-      result = {
-        requestId: request.id,
-        type: request.type,
-        data: this.localContextDataFor(request),
-        fetchedAt: new Date()
-      };
-      result = await this.enrichWithIndexedWorkspace(request, result);
+      // Single path: same loader Remote browse / /understand use. No dual enrich race.
+      result = await this.fetchUnderstandRepoEvidence(request);
     } else if (request.type === "chat_context") {
       const localPayload = await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
@@ -2282,18 +2277,99 @@ export class CoopChatSession {
       } else {
         result = await this.enrichChatContextWithSemanticSearch(request, result);
       }
+      result = await this.enrichWithIndexedWorkspace(request, result);
     } else {
       result = await this.buildBaseContextResult(request);
-    }
-
-    if (isUnderstandRepo) {
-      const fallback = await this.buildBaseContextResult(request);
-      result = this.mergeUnderstandRepoContextResults(result, fallback);
-    } else {
       result = await this.enrichWithIndexedWorkspace(request, result);
     }
 
     return result;
+  }
+
+  /**
+   * Understand Repo evidence — one call through buildRepoSummaryEvidence (indexed then live),
+   * after the turn already pinned the canonical branch.
+   */
+  private async fetchUnderstandRepoEvidence(request: ContextFetchRequest): Promise<ContextFetchResult> {
+    const target = this.repoTargetForRequest(request);
+    const owner = target.owner?.trim();
+    const repo = target.repo?.trim();
+    const repoId = target.repoId?.trim();
+    const base: ContextFetchResult = {
+      requestId: request.id,
+      type: request.type,
+      data: {
+        ...this.localContextDataFor(request),
+        coopBuildId: COOP_EXTENSION_BUILD_ID
+      },
+      fetchedAt: new Date()
+    };
+
+    if (!owner || !repo || !repoId) {
+      return {
+        ...base,
+        error: "missing-repo",
+        message: `${coopBuildBanner()}: no repository selected for Understand Repo.`
+      };
+    }
+
+    try {
+      const provider =
+        target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
+          ? target.provider
+          : this.preferences.defaultCodeHost;
+      const evidence = await buildRepoSummaryEvidence({
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter,
+        owner,
+        repo,
+        branch: target.branch ?? this.currentContext.branch,
+        repoId,
+        provider,
+        activeFile: undefined,
+        resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
+      });
+
+      const baseData =
+        typeof base.data === "object" && base.data !== null
+          ? (base.data as Record<string, unknown>)
+          : {};
+      const evidenceData =
+        evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>) : {};
+      const resolvedFromEvidence =
+        typeof evidenceData.branch === "string" ? evidenceData.branch.trim() : undefined;
+      const data: Record<string, unknown> = {
+        ...evidenceData,
+        ...baseData,
+        indexedWorkspaceAttached: true,
+        coopBuildId: COOP_EXTENSION_BUILD_ID,
+        resolvedBranch: resolvedFromEvidence || target.branch || this.currentContext.branch
+      };
+
+      const resolvedBranch =
+        typeof data.resolvedBranch === "string" ? data.resolvedBranch.trim() : undefined;
+      if (resolvedBranch && resolvedBranch !== this.currentContext.branch) {
+        this.currentContext = { ...this.currentContext, branch: resolvedBranch };
+        this.postContext();
+      }
+
+      return {
+        ...base,
+        data,
+        error: hasRepoSummaryEvidence(data) ? undefined : "empty-evidence",
+        message: hasRepoSummaryEvidence(data)
+          ? `${coopBuildBanner()}: repository evidence attached.`
+          : `${coopBuildBanner()}: no attachable repository evidence.`
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ...base,
+        error: "understand-repo-fetch-failed",
+        message: `${coopBuildBanner()}: ${message}`
+      };
+    }
   }
 
   private mergeUnderstandRepoContextResults(
@@ -3325,6 +3401,22 @@ export class CoopChatSession {
     }
 
     await this.pinCanonicalRepoBranchForTurn();
+
+    // Understand Repo is repo-wide only — drop leftover file chips (e.g. local AGENTS.md
+    // from the EDH Coop-AI folder) so Use-repo coordinates stay authoritative.
+    if (quickAction === "understand-repo") {
+      this.currentContext = {
+        ...this.currentContext,
+        file: undefined,
+        fileSource: undefined,
+        selectedLines: undefined,
+        selectedSymbol: undefined,
+        languageId: undefined,
+        scope: "repo",
+        contextWarning: undefined
+      };
+      this.postContext();
+    }
 
     const integrationProviderForGuard =
       quickAction || options?.sourceHint
