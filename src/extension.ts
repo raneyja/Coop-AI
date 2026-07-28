@@ -73,8 +73,8 @@ function resolveClearChatSession(
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  // If this toast does not appear after F5, the Extension Host is not loading this dist.
-  void vscode.window.showInformationMessage(coopBuildBanner());
+  // Modal — if this does not appear after F5, the Extension Host is not loading this dist.
+  void vscode.window.showInformationMessage(coopBuildBanner(), { modal: true });
 
   const api = new SecureApiClient(context.secrets);
   const codeHostSecrets = new CodeHostSecrets(context.secrets);
