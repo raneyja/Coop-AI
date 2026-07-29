@@ -3,7 +3,7 @@ title: Model assignments
 description: How CoopAI routes chat, quick actions, edit mode, and autocomplete to assigned models.
 section: extension
 order: 2
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-07-29"
 ---
 
 CoopAI assigns an LLM per feature in production. You do not pick provider or model on Developer or Pro — Coop routes each use case to the model below. **Custom model selection is an Enterprise capability (coming soon).**
@@ -16,7 +16,7 @@ CoopAI assigns an LLM per feature in production. You do not pick provider or mod
 
 | Feature | Provider | Model | Routes via |
 | --- | --- | --- | --- |
-| **Chat** (free-form composer) | OpenAI | GPT-4o mini | Chat session → `resolveAssignedModelForUseCase()` |
+| **Chat** (free-form composer) | OpenAI | GPT-5 mini | Chat session → `resolveAssignedModelForUseCase()` |
 | **Quick actions** (Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps; integration chat) | Anthropic | Claude Sonnet 4.6 | Same |
 | **/edit patches** (`/edit`, `/patch`, `/fix`) | OpenAI | GPT-5.1 | Same (`code_edit` use case) |
 | **Autocomplete** (inline ghost text) | Mistral | Codestral | `completionRouter.ts` → FIM when available |

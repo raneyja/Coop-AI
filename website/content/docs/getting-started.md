@@ -67,7 +67,7 @@ Open the Coop icon in the activity bar. Type in the composer or click a quick ac
 2. **Extension UI** — Type a question in the chat composer (plain chat works with a file chip).
 3. Try: `Explain this file. What are the main entry points nearby?`
 
-Coop streams an answer grounded in your workspace files and any connected integrations. Plain chat uses **GPT-4o mini** — see [Model assignments](/docs/model-assignments).
+Coop streams an answer grounded in your workspace files and any connected integrations. Plain chat uses **GPT-5 mini** — see [Model assignments](/docs/model-assignments).
 
 ## Step 5 — Try a quick action
 
@@ -129,7 +129,7 @@ After sign-in, confirm the hot path:
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
 | **Quick action (file)** | `/trace` on a selection → structured answer with sources |
 | **Understand Repo** | **Use repo** on the repository → **Understand Repo** or `/understand` → repo-wide overview |
-| **Plain chat** | Composer question → grounded reply (GPT-4o mini) |
+| **Plain chat** | Composer question → grounded reply (GPT-5 mini) |
 
 More fixes: [Troubleshooting](/docs/troubleshooting).
 

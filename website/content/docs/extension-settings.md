@@ -130,7 +130,7 @@ The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
 
 | Row | Assignment |
 | --- | --- |
-| Chat | OpenAI · GPT-4o mini |
+| Chat | OpenAI · GPT-5 mini |
 | Quick actions | Anthropic · Claude Sonnet 4.6 |
 | /edit patches | OpenAI · GPT-5.1 |
 | Autocomplete | Mistral · Codestral |

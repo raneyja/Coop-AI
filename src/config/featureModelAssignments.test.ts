@@ -22,7 +22,7 @@ assert.equal(resolveFeatureFromUseCase("inline_completion"), "autocomplete");
 
 const chatModel = resolveAssignedModelForUseCase("chat");
 assert.equal(chatModel.provider, "openai");
-assert.equal(chatModel.model, "gpt-4o-mini");
+assert.equal(chatModel.model, "gpt-5-mini");
 
 const editModel = resolveAssignedModelForUseCase("code_edit");
 assert.equal(editModel.provider, "openai");
@@ -41,7 +41,7 @@ const routedChat = resolveRuntimeModelForUseCase("chat", {
   model: "gemini-2.0-flash"
 });
 assert.equal(routedChat.provider, "openai");
-assert.equal(routedChat.model, "gpt-4o-mini");
+assert.equal(routedChat.model, "gpt-5-mini");
 
 const devChat = resolveRuntimeModelForUseCase("chat", {
   devMode: true,

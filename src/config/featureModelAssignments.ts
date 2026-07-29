@@ -25,7 +25,7 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
     feature: "chat",
     label: "Chat",
     provider: "openai",
-    model: "gpt-4o-mini"
+    model: "gpt-5-mini"
   },
   {
     feature: "quickActions",

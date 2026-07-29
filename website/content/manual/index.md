@@ -268,7 +268,7 @@ If a past thread was working on a specific file, **switching back to that thread
 
 ### Chat composer
 
-Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-4o mini** — assigned by Coop, not user-selected.
+Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-5 mini** — assigned by Coop, not user-selected.
 
 - Press **Enter** to send (Shift+Enter for a new line).
 - Responses stream in real time with markdown formatting.
@@ -356,7 +356,7 @@ Coop assigns a model per feature — you do **not** pick provider or model on Pr
 
 | Feature | Assigned model |
 | --- | --- |
-| **Chat** | OpenAI GPT-4o mini |
+| **Chat** | OpenAI GPT-5 mini |
 | **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
 | **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5.1 |
 | **Autocomplete** | Mistral Codestral |
