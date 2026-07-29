@@ -16,10 +16,6 @@ type UserRepoGrantsModalProps = {
   onSaved: () => void;
 };
 
-function isListedRepo(repo: OrgRepoRecord): boolean {
-  return Boolean(repo.lightningEnabled && repo.indexStatus === "ready");
-}
-
 export function UserRepoGrantsModal({
   open,
   userId,
@@ -35,19 +31,20 @@ export function UserRepoGrantsModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
 
-  const indexedRepos = useMemo(() => repos.filter(isListedRepo), [repos]);
+  /** Only repos developers can actually open — no status chips needed. */
+  const grantableRepos = useMemo(() => repos.filter(isUsableForDeveloperAccess), [repos]);
 
   const filteredRepos = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
-      return indexedRepos;
+      return grantableRepos;
     }
-    return indexedRepos.filter((repo) => {
+    return grantableRepos.filter((repo) => {
       const name = shortRepoName(repo.repoId).toLowerCase();
       const host = codeHostBadgeLabel(repo.repoId).toLowerCase();
       return name.includes(needle) || host.includes(needle);
     });
-  }, [indexedRepos, query]);
+  }, [grantableRepos, query]);
 
   useEffect(() => {
     setMounted(true);
@@ -156,49 +153,32 @@ export function UserRepoGrantsModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <p className="text-sm text-coop-muted">Loading repositories…</p>
-          ) : indexedRepos.length === 0 ? (
+          ) : grantableRepos.length === 0 ? (
             <p className="text-sm text-coop-muted">
-              No Deep-Indexed repos yet. Choose repos on the Indexing page first.
+              No usable Deep-Indexed repos yet. Finish indexing and browse verification on the
+              Indexing page first.
             </p>
           ) : filteredRepos.length === 0 ? (
             <p className="text-sm text-coop-muted">No repositories match your search.</p>
           ) : (
             <ul className="space-y-2">
-              {filteredRepos.map((repo) => {
-                const grantable = isUsableForDeveloperAccess(repo);
-                return (
-                  <li key={repo.repoId}>
-                    <label
-                      className={`flex items-center gap-3 rounded-md border border-transparent px-3 py-2.5 ${
-                        grantable
-                          ? "cursor-pointer hover:border-coop-border/40 hover:bg-white/[0.04]"
-                          : "cursor-not-allowed opacity-60"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0 accent-coop-index"
-                        checked={selected.has(repo.repoId)}
-                        disabled={saving || !grantable}
-                        onChange={() => toggleRepo(repo.repoId)}
-                      />
-                      <span className="min-w-0 flex-1 font-mono text-sm text-white">
-                        {shortRepoName(repo.repoId)}
-                      </span>
-                      <CodeHostBadge repoId={repo.repoId} />
-                      {!grantable ? (
-                        <span className="shrink-0 text-[11px] text-amber-200">
-                          Fix browse on Indexing first
-                        </span>
-                      ) : repo.browseStatus === "verified" ? (
-                        <span className="shrink-0 text-[11px] uppercase tracking-wide text-emerald-300/90">
-                          Usable
-                        </span>
-                      ) : null}
-                    </label>
-                  </li>
-                );
-              })}
+              {filteredRepos.map((repo) => (
+                <li key={repo.repoId}>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2.5 hover:border-coop-border/40 hover:bg-white/[0.04]">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-coop-index"
+                      checked={selected.has(repo.repoId)}
+                      disabled={saving}
+                      onChange={() => toggleRepo(repo.repoId)}
+                    />
+                    <span className="min-w-0 flex-1 font-mono text-sm text-white">
+                      {shortRepoName(repo.repoId)}
+                    </span>
+                    <CodeHostBadge repoId={repo.repoId} />
+                  </label>
+                </li>
+              ))}
             </ul>
           )}
         </div>

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { CodeHostBadge } from "@/components/CodeHostBadge";
 import type { OrgRepoRecord } from "@/lib/coopApi";
 import { codeHostBadgeLabel, shortRepoName } from "@/lib/indexingProgress";
+import { isUsableForDeveloperAccess } from "@/lib/usableRepos";
 
 const INVITE_ROLES = ["member", "admin"] as const;
 type InviteRole = (typeof INVITE_ROLES)[number];
@@ -33,17 +34,22 @@ export function InviteUserModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const grantableRepos = useMemo(
+    () => indexedRepos.filter(isUsableForDeveloperAccess),
+    [indexedRepos]
+  );
+
   const filteredRepos = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
-      return indexedRepos;
+      return grantableRepos;
     }
-    return indexedRepos.filter((repo) => {
+    return grantableRepos.filter((repo) => {
       const name = shortRepoName(repo.repoId).toLowerCase();
       const host = codeHostBadgeLabel(repo.repoId).toLowerCase();
       return name.includes(needle) || host.includes(needle);
     });
-  }, [indexedRepos, query]);
+  }, [grantableRepos, query]);
 
   useEffect(() => {
     setMounted(true);
@@ -216,7 +222,7 @@ export function InviteUserModal({
             </div>
           ) : (
             <div className="space-y-3">
-              {indexedRepos.length > 6 ? (
+              {grantableRepos.length > 6 ? (
                 <input
                   type="search"
                   className="admin-input w-full"
@@ -226,9 +232,10 @@ export function InviteUserModal({
                   disabled={submitting}
                 />
               ) : null}
-              {indexedRepos.length === 0 ? (
+              {grantableRepos.length === 0 ? (
                 <p className="text-sm text-coop-muted">
-                  No Deep-Indexed repositories yet. Choose repos on the Indexing page first.
+                  No usable Deep-Indexed repositories yet. Finish indexing on the Indexing page
+                  first.
                 </p>
               ) : filteredRepos.length === 0 ? (
                 <p className="text-sm text-coop-muted">No repositories match your search.</p>
