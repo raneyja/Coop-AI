@@ -125,6 +125,19 @@ export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
   }
 }
 
+/**
+ * Prefer the in-tab token; if missing (new tab, race after navigation), hydrate
+ * from the httpOnly cookie before treating the user as signed out.
+ */
+export async function ensureAccessToken(): Promise<string | null> {
+  const existing = getToken();
+  if (existing) return existing;
+  if (typeof window === "undefined") return null;
+  const restored = await restoreSessionFromCookie();
+  if (!restored) return null;
+  return getToken();
+}
+
 export async function establishSessionCookie(accessToken: string, refreshToken?: string): Promise<boolean> {
   try {
     const response = await fetch("/api/auth/session", {

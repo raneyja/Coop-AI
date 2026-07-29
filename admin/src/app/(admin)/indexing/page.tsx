@@ -77,10 +77,19 @@ export default function IndexingPage() {
 
     setUnavailable(false);
     if (!reposResult.ok) {
+      // Keep already-loaded repos visible. Only surface hard failures on a
+      // full load — silent polls must not flash a false "signed out" alarm.
       if (!silent) {
         setError(reposResult.error ?? "Failed to load repositories.");
       }
       return;
+    }
+
+    // Drop stale session blips once a refresh succeeds.
+    if (silent) {
+      setError((current) =>
+        current && /not signed in|session expired/i.test(current) ? null : current
+      );
     }
 
     setRepos(reposResult.data?.repos ?? []);
@@ -107,8 +116,13 @@ export default function IndexingPage() {
     }
   }, []);
 
+  // Initial load once — do not re-run when in-flight count changes (that was
+  // flashing auth errors over an already-good list).
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
     const intervalMs = inFlightCount > 0 ? 3_000 : 10_000;
     const timer = window.setInterval(() => void load({ silent: true }), intervalMs);
     return () => window.clearInterval(timer);

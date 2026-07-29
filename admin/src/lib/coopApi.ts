@@ -9,7 +9,7 @@ import type {
   SlackScopePolicy
 } from "./integrations";
 import type { StoredMe } from "./auth";
-import { restoreSessionFromCookie } from "./auth";
+import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
 import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
 
 export type ApiError = {
@@ -179,10 +179,13 @@ function getToken(): string | null {
   return sessionStorage.getItem("coop_admin_api_token");
 }
 
+/** User-facing copy when the portal truly has no usable session. */
+export const SESSION_EXPIRED_MESSAGE = "Session expired. Sign in again.";
+
 function formatError(status: number, body: ApiError | undefined, fallback: string): string {
   if (status === 401) {
     if (body?.error === "unauthorized" || body?.message === "Not signed in.") {
-      return "Session expired. Sign in again to connect integrations.";
+      return SESSION_EXPIRED_MESSAGE;
     }
     return body?.message ?? body?.error ?? "Sign-in failed. Check your credentials and try again.";
   }
@@ -195,9 +198,9 @@ export async function coopFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiResult<T>> {
-  let token = getToken();
+  let token = await ensureAccessToken();
   if (!token) {
-    return { ok: false, status: 401, error: "Not signed in." };
+    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
   }
 
   const run = async (activeToken: string) => {
@@ -255,7 +258,7 @@ export async function coopFetch<T>(
 export async function validateSession(token: string): Promise<ApiResult<MeResponse>> {
   const normalized = normalizeApiKeyInput(token);
   if (!normalized) {
-    return { ok: false, status: 401, error: "Not signed in." };
+    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
   }
   try {
     const response = await fetch("/api/validate-key", {
@@ -487,7 +490,7 @@ async function fetchWithSessionRetry(
   input: string,
   init: RequestInit
 ): Promise<{ response: Response; body: Record<string, unknown> }> {
-  const token = getToken();
+  let token = await ensureAccessToken();
   if (!token) {
     return {
       response: new Response(null, { status: 401 }),
@@ -510,7 +513,8 @@ async function fetchWithSessionRetry(
     const restored = await restoreSessionFromCookie();
     const refreshed = getToken();
     if (restored && refreshed && refreshed !== token) {
-      result = await run(refreshed);
+      token = refreshed;
+      result = await run(token);
     }
   }
   return result;
@@ -519,9 +523,9 @@ async function fetchWithSessionRetry(
 export async function fetchIntegrations(options?: {
   refresh?: boolean;
 }): Promise<ApiResult<IntegrationStatus[]>> {
-  const token = getToken();
+  const token = await ensureAccessToken();
   if (!token) {
-    return { ok: false, status: 401, error: "Not signed in." };
+    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
   }
 
   const refreshSuffix = options?.refresh ? "?refresh=true" : "";
@@ -576,9 +580,9 @@ export async function fetchInstallUrl(
     githubAppAvailable?: boolean;
   }>
 > {
-  const token = getToken();
+  const token = await ensureAccessToken();
   if (!token) {
-    return { ok: false, status: 401, error: "Not signed in." };
+    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
   }
 
   const query = options?.mode ? `?mode=${encodeURIComponent(options.mode)}` : "";
@@ -1191,14 +1195,24 @@ export async function updateSsoPolicy(
 }
 
 export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
-  let token = getToken();
+  let token = await ensureAccessToken();
   if (!token) {
-    return { ok: false, status: 401, error: "Not signed in." };
+    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
   }
   try {
-    const response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
+    let response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
       headers: { Authorization: `Bearer ${token}` }
     });
+    if (response.status === 401 && typeof window !== "undefined") {
+      const restored = await restoreSessionFromCookie();
+      const refreshed = getToken();
+      if (restored && refreshed && refreshed !== token) {
+        token = refreshed;
+        response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    }
     if (!response.ok) {
       const text = await response.text();
       let message = `Request failed (${response.status}).`;
@@ -1207,6 +1221,9 @@ export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
         message = body.message ?? body.error ?? message;
       } catch {
         // keep default
+      }
+      if (response.status === 401) {
+        message = SESSION_EXPIRED_MESSAGE;
       }
       return { ok: false, status: response.status, error: message };
     }
@@ -1697,17 +1714,31 @@ export async function removeRepoFromCollection(
 }
 
 export async function exportAnalyticsCsv(from: string, to: string): Promise<{ ok: boolean; error?: string }> {
-  const token = getToken();
+  let token = await ensureAccessToken();
   if (!token) {
-    return { ok: false, error: "Not signed in." };
+    return { ok: false, error: SESSION_EXPIRED_MESSAGE };
   }
 
   try {
-    const response = await fetch(
+    let response = await fetch(
       `${getApiBase()}/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
+    if (response.status === 401 && typeof window !== "undefined") {
+      const restored = await restoreSessionFromCookie();
+      const refreshed = getToken();
+      if (restored && refreshed && refreshed !== token) {
+        token = refreshed;
+        response = await fetch(
+          `${getApiBase()}/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    }
     if (!response.ok) {
+      if (response.status === 401) {
+        return { ok: false, error: SESSION_EXPIRED_MESSAGE };
+      }
       const text = await response.text().catch(() => "");
       let message = `Export failed (${response.status}).`;
       try {
