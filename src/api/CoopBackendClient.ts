@@ -25,6 +25,7 @@ export type StreamChatBody = {
   useCase: UseCase;
   temperature: number;
   maxTokens: number;
+  enableThinking?: boolean;
 };
 
 export type StreamChatResult = {
@@ -1502,7 +1503,8 @@ export class CoopBackendClient {
     baseUrl: string,
     body: StreamChatBody,
     onChunk: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onThinkingChunk?: (chunk: string) => void
   ): Promise<StreamChatResult> {
     assertCoopEndpoint(baseUrl);
     const token = await this.options.getToken();
@@ -1528,6 +1530,7 @@ export class CoopBackendClient {
         useCase: body.useCase,
         temperature: body.temperature,
         maxTokens: body.maxTokens,
+        enableThinking: body.enableThinking === true,
         stream: true
       }),
       signal
@@ -1566,7 +1569,9 @@ export class CoopBackendClient {
         if (!event) {
           continue;
         }
-        if (event.type === "delta" && typeof event.text === "string") {
+        if (event.type === "thinking" && typeof event.text === "string") {
+          onThinkingChunk?.(event.text);
+        } else if (event.type === "delta" && typeof event.text === "string") {
           full += event.text;
           onChunk(event.text);
         } else if (event.type === "done") {

@@ -14,9 +14,9 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 `www.coop-ai.dev` redirects to the apex domain (see `website/vercel.json`).
 
-## Response latency (15s hard ceiling)
+## Response latency (soft 15s start-answering guideline)
 
-Chat and quick actions must answer within **15 seconds**. Use `MAX_USER_FACING_RESPONSE_MS` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. Do not add per-call timeouts of 30–120s+ on the interactive hot path.
+Aim to **start** answers within **15 seconds** (stop gathering, synthesize with what you have). This applies to **all** chat answers: plain chat, quick actions, quick-action slash commands, integration slash commands (`/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`), and `/edit`. Use `MAX_USER_FACING_RESPONSE_MS` / `remainingContextGatherBudgetMs` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. **Never** abort the turn or replace an answer with a timeout message solely because 15s elapsed — AbortSignal is for user Stop only. Do not add per-call gather timeouts of 30–120s+ on the interactive hot path.
 
 ## Indexed repo = remote workspace layer
 

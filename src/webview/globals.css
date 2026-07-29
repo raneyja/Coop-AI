@@ -1143,6 +1143,156 @@
     animation: chat-activity-whisper-fade 0.35s ease;
   }
 
+  .chat-message--narrative {
+    @apply w-full min-w-0;
+  }
+
+  .chat-message-inner--narrative {
+    @apply py-0.5 pl-0.5;
+  }
+
+  .chat-narrative-list {
+    @apply m-0 flex list-none flex-col p-0;
+  }
+
+  .chat-narrative-step {
+    @apply relative flex items-start gap-2.5 py-[3px] text-[13px] leading-[1.45];
+  }
+
+  .chat-narrative-rail {
+    @apply relative z-[1] flex w-4 shrink-0 justify-center pt-[2px];
+  }
+
+  .chat-narrative-step:not(:last-child) .chat-narrative-rail::after {
+    content: "";
+    position: absolute;
+    top: 16px;
+    bottom: -7px;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, var(--coop-panel-muted) 38%, transparent);
+  }
+
+  .chat-narrative-glyph {
+    @apply inline-flex h-3.5 w-3.5 items-center justify-center;
+    color: color-mix(in srgb, var(--coop-panel-muted) 78%, var(--coop-panel-foreground) 22%);
+  }
+
+  .chat-narrative-glyph--done {
+    color: color-mix(in srgb, var(--coop-panel-muted) 72%, var(--coop-panel-foreground) 28%);
+  }
+
+  .chat-narrative-glyph--active {
+    color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
+  }
+
+  .chat-narrative-loading-dot {
+    @apply block h-[6px] w-[6px] rounded-full;
+    background: color-mix(in srgb, var(--coop-panel-muted) 70%, var(--coop-panel-foreground) 30%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--coop-panel-muted) 16%, transparent);
+    animation: chat-narrative-pulse 1.15s ease-in-out infinite;
+  }
+
+  .chat-narrative-label {
+    @apply min-w-0;
+    color: color-mix(in srgb, var(--coop-panel-muted) 70%, var(--coop-panel-foreground) 30%);
+  }
+
+  .chat-narrative-step--active .chat-narrative-label {
+    color: color-mix(in srgb, var(--coop-panel-muted) 42%, var(--coop-panel-foreground) 58%);
+  }
+
+  .chat-narrative-step--done .chat-narrative-label {
+    color: color-mix(in srgb, var(--coop-panel-muted) 78%, var(--coop-panel-foreground) 22%);
+  }
+
+  .chat-narrative-code {
+    @apply mx-0.5 inline rounded px-1 py-px font-mono text-[12px] leading-none;
+    background: color-mix(in srgb, var(--vscode-textCodeBlock-background, #f3f3f3) 88%, transparent);
+    color: color-mix(in srgb, var(--coop-panel-foreground) 82%, var(--vscode-errorForeground, #c72e0f) 18%);
+    border: 1px solid color-mix(in srgb, var(--coop-composer-border) 55%, transparent);
+  }
+
+  @keyframes chat-narrative-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .chat-working-stack {
+    @apply flex flex-col gap-2.5;
+  }
+
+  .chat-message--model-thinking {
+    @apply w-full min-w-0;
+  }
+
+  .chat-message-inner--model-thinking {
+    @apply flex flex-col gap-1.5 border-l py-0.5 pl-3;
+    border-color: color-mix(in srgb, var(--coop-panel-muted) 42%, transparent);
+  }
+
+  .chat-model-thinking-toggle {
+    @apply flex items-center gap-1 border-0 bg-transparent p-0 text-left text-[12px];
+    color: color-mix(in srgb, var(--coop-panel-muted) 68%, var(--coop-panel-foreground) 32%);
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .chat-model-thinking-toggle:hover {
+    color: color-mix(in srgb, var(--coop-panel-muted) 35%, var(--coop-panel-foreground) 65%);
+  }
+
+  .chat-model-thinking-chevron {
+    @apply shrink-0 opacity-70 transition-transform duration-150;
+    transform: rotate(0deg);
+  }
+
+  .chat-model-thinking-chevron--open {
+    transform: rotate(90deg);
+  }
+
+  .chat-model-thinking-title {
+    @apply inline-flex items-center gap-1;
+  }
+
+  .chat-model-thinking-ellipsis {
+    display: inline-block;
+    min-width: 1em;
+    animation: chat-model-thinking-dots 1.2s ease-in-out infinite;
+  }
+
+  .chat-model-thinking-ellipsis::after {
+    content: "…";
+  }
+
+  @keyframes chat-model-thinking-dots {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .chat-model-thinking-body {
+    @apply whitespace-pre-wrap text-[12.5px] leading-[1.55];
+    color: color-mix(in srgb, var(--coop-panel-muted) 72%, var(--coop-panel-foreground) 28%);
+    max-height: 14rem;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+
+  .chat-model-thinking-body--streaming {
+    color: color-mix(in srgb, var(--coop-panel-muted) 62%, var(--coop-panel-foreground) 38%);
+  }
+
   @keyframes chat-streaming-pulse {
     0%,
     80%,

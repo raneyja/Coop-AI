@@ -30,7 +30,7 @@ export type ChatTurn = {
   jobId?: string;
   jobGeneration: number;
   streamAbort: AbortController;
-  /** Clears the platform 15s response deadline timer. */
+  /** Clears any leftover response-deadline disposer (schedule is a no-op; Stop uses streamAbort). */
   clearResponseDeadline: () => void;
   streamGeneration: number;
   partialAssistant: string;

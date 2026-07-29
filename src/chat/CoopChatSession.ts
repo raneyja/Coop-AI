@@ -68,12 +68,9 @@ import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExe
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import {
-  RESPONSE_DEADLINE_USER_MESSAGE,
   abortablePromise,
   clearResponseDeadlineForSynthesis,
-  isResponseDeadlineAbort,
-  remainingContextGatherBudgetMs,
-  scheduleResponseDeadline
+  remainingContextGatherBudgetMs
 } from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
@@ -846,20 +843,6 @@ export class CoopChatSession {
     }
     this.threadRuns.complete(turn);
     this.pushThreadsList();
-  }
-
-  /** Platform 15s ceiling: finish with partial text or an explicit timeout message. */
-  private finishTurnForResponseDeadline(turn: ChatTurn, streamedText = ""): void {
-    this.clearIntentFeedback(turn.threadId);
-    const partial = (streamedText || turn.partialAssistant).trim();
-    const content = partial
-      ? `${partial}\n\n—\n${RESPONSE_DEADLINE_USER_MESSAGE}`
-      : RESPONSE_DEADLINE_USER_MESSAGE;
-    this.finishTurnAssistantMessage(turn, {
-      role: "assistant",
-      content,
-      timestamp: Date.now()
-    });
   }
 
   private pushThreadsList(): void {
@@ -3567,10 +3550,8 @@ export class CoopChatSession {
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
-    // Align turn clock with chat timing helper, then reschedule the 15s ceiling.
-    turn.clearResponseDeadline();
+    // Align turn clock with chat timing helper (soft gather budgets use startedAt).
     turn.startedAt = this.chatTurnStartedAt;
-    turn.clearResponseDeadline = scheduleResponseDeadline(turn.streamAbort, turn.startedAt);
     this.pushThreadsList();
 
     const prefetchIntentEvent = intentQuickAction
@@ -3590,10 +3571,6 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         if (ranAsync) {
           const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
           await abortablePromise(
@@ -3601,10 +3578,6 @@ export class CoopChatSession {
             turn.streamAbort.signal
           );
           if (!this.threadRuns.isStreamActive(turn)) {
-            return;
-          }
-          if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-            this.finishTurnForResponseDeadline(turn);
             return;
           }
           this.enrichKnowledgeGapsBundle(quickAction, turn);
@@ -3627,19 +3600,11 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         throw error;
       }
     }
 
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
 
@@ -3657,10 +3622,6 @@ export class CoopChatSession {
       if (!this.threadRuns.isStreamActive(turn)) {
         return;
       }
-      if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-        this.finishTurnForResponseDeadline(turn);
-        return;
-      }
       throw error;
     }
     // Enrichment may resolve indexed branch after the turn snapshot — keep Scope in sync.
@@ -3671,10 +3632,6 @@ export class CoopChatSession {
       turn.context = { ...turn.context, branch: this.currentContext.branch };
     }
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
     this.enrichKnowledgeGapsBundle(quickAction, turn);
@@ -3691,18 +3648,10 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return;
         }
-        if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-          this.finishTurnForResponseDeadline(turn);
-          return;
-        }
         throw error;
       }
     }
     if (!this.threadRuns.isStreamActive(turn)) {
-      return;
-    }
-    if (isResponseDeadlineAbort(turn.streamAbort.signal)) {
-      this.finishTurnForResponseDeadline(turn);
       return;
     }
     await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -4378,10 +4327,6 @@ export class CoopChatSession {
       const localPayload = skipLocalAttach
         ? undefined
         : await abortablePromise(this.resolveChatLocalFiles(), signal);
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
       if (localPayload?.files.length) {
         this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
@@ -4636,10 +4581,6 @@ export class CoopChatSession {
         mentionsToResolve.length > 0
           ? await abortablePromise(this.resolveMentionFiles(mentionsToResolve), signal)
           : [];
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
       let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -4749,7 +4690,7 @@ export class CoopChatSession {
         minVisibleMs: minResponseVisibleMs,
         isCancelled,
         onChunk: (chunk) => {
-          // First token = answer started — never cut the stream for the 15s prepare budget.
+          // First token = answer started — clear any leftover disposer and loading state.
           if (!clearedIntentForOutput) {
             clearedIntentForOutput = true;
             clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
@@ -4766,16 +4707,11 @@ export class CoopChatSession {
       });
 
       const quotaBlocked = await abortablePromise(this.blockIfFreeQuotaExhausted(), signal);
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
       if (quotaBlocked) {
         return;
       }
 
-      // Synthesis handoff: first-response budget is satisfied once we start the model.
-      // Do not abort mid-answer if TTFT or the full write runs past 15s from turn start.
+      // Synthesis handoff: soft gather guideline is done — start the model and finish the answer.
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
@@ -4795,13 +4731,21 @@ export class CoopChatSession {
           provider: runtimeModel.provider,
           useCase: chatUseCase,
           temperature: this.preferences.temperature,
-          maxTokens: this.preferences.maxTokens
+          maxTokens: this.preferences.maxTokens,
+          enableThinking: true
         },
         (chunk) => {
           outputGate.push(chunk);
         },
         this.preferences.apiBaseUrl,
-        signal
+        signal,
+        (thinkingChunk) => {
+          // Thinking is live display only — do not fold into answer text or history.
+          this.postForThread(turn.threadId, {
+            type: "chat:thinking-delta",
+            payload: { chunk: thinkingChunk, threadId: turn.threadId }
+          });
+        }
       );
 
       await outputGate.waitUntilOpen();
@@ -4809,17 +4753,9 @@ export class CoopChatSession {
       if (isCancelled()) {
         return;
       }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
-        return;
-      }
 
       await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
       if (isCancelled()) {
-        return;
-      }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
 
@@ -4882,10 +4818,6 @@ export class CoopChatSession {
       await this.notifyQuotaExceededIfNeeded();
     } catch (error) {
       if (isCancelled()) {
-        return;
-      }
-      if (isResponseDeadlineAbort(signal)) {
-        this.finishTurnForResponseDeadline(turn, full);
         return;
       }
       this.threadRuns.markError(turn);

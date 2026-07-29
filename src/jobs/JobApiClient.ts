@@ -101,7 +101,7 @@ export class JobApiClient {
   private async request(config: { method: string; url: string; data?: unknown }): Promise<{ data: unknown; status: number }> {
     const headers = await this.authHeaders();
     const response = await runResilientRequest({
-      // Job polls sit on the chat/QA hot path — stay inside one 15s attempt.
+      // Soft gather: poll within remaining prepare budget, then synthesize (never abort the turn).
       timeoutMs: MAX_USER_FACING_RESPONSE_MS,
       policy: { maxRetries: 0 },
       shouldRetryError: (error) => isRetryableError(error),

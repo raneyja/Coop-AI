@@ -1,11 +1,20 @@
-/** Hard ceiling for any user-facing chat / quick-action answer. */
+/**
+ * Soft latency guidance for chat / quick actions.
+ *
+ * 15s is a *start answering* guideline — stop gathering context and hand off to
+ * the model with whatever evidence we have. It must never abort the turn,
+ * kill the model, or replace an answer with a timeout message.
+ */
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;
 
-/** AbortController reason when the turn hits the platform ceiling. */
+/** @deprecated Hard abort reason — kept for tests of legacy helpers; never scheduled on turns. */
 export const RESPONSE_DEADLINE_REASON = "coop-response-deadline";
 
-/** Reserve this much of the budget for LLM synthesis after context/job work. */
+/** Reserve this much of the soft budget for LLM synthesis after context/job work. */
 export const RESERVED_SYNTHESIS_MS = 6_000;
+
+/** Connect/TTFB ceiling for provider streams (not the soft gather guideline). */
+export const LLM_STREAM_CONNECT_TIMEOUT_MS = 120_000;
 
 export function remainingResponseBudgetMs(
   startedAt: number,
@@ -15,7 +24,7 @@ export function remainingResponseBudgetMs(
   return Math.max(0, maxMs - (now - startedAt));
 }
 
-/** Budget left for context/job gathering before synthesis should start. */
+/** Soft budget left for context/job gathering before synthesis should start. */
 export function remainingContextGatherBudgetMs(
   startedAt: number,
   now = Date.now(),
@@ -35,11 +44,11 @@ export function isResponseDeadlineAbort(signal: AbortSignal | undefined): boolea
 
 export function abortablePromise<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
-    return Promise.reject(createDeadlineAbortError());
+    return Promise.reject(createAbortError());
   }
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => {
-      reject(createDeadlineAbortError());
+      reject(createAbortError());
     };
     signal.addEventListener("abort", onAbort, { once: true });
     promise.then(
@@ -55,44 +64,30 @@ export function abortablePromise<T>(promise: Promise<T>, signal: AbortSignal): P
   });
 }
 
-function createDeadlineAbortError(): Error {
-  const error = new Error(RESPONSE_DEADLINE_USER_MESSAGE);
+function createAbortError(): Error {
+  const error = new Error("Aborted");
   error.name = "AbortError";
   return error;
 }
 
 /**
- * Abort `controller` when the turn budget elapses.
- * Returns a disposer that clears the timer (call on complete / manual abort /
- * when synthesis/streaming has started — never cut an in-flight answer short).
+ * Historically aborted the turn at 15s. That shut-off is removed — gather budgets
+ * stay soft via remainingContextGatherBudgetMs; AbortSignal is for user Stop only.
+ * Returns a no-op disposer so call sites stay compatible.
  */
 export function scheduleResponseDeadline(
-  controller: AbortController,
-  startedAt: number,
-  maxMs = MAX_USER_FACING_RESPONSE_MS
+  _controller: AbortController,
+  _startedAt: number,
+  _maxMs = MAX_USER_FACING_RESPONSE_MS
 ): () => void {
-  const remaining = remainingResponseBudgetMs(startedAt, Date.now(), maxMs);
-  if (remaining <= 0) {
-    if (!controller.signal.aborted) {
-      controller.abort(RESPONSE_DEADLINE_REASON);
-    }
-    return () => undefined;
-  }
-  const timer = setTimeout(() => {
-    if (!controller.signal.aborted) {
-      controller.abort(RESPONSE_DEADLINE_REASON);
-    }
-  }, remaining);
-  return () => clearTimeout(timer);
+  return () => undefined;
 }
 
-/**
- * True once the turn has started delivering an answer (first token or synthesis handoff).
- * After that, the 15s timer must not abort — users should never see a mid-answer cut.
- */
+/** Clears any leftover timer disposer at synthesis handoff (defensive; schedule is a no-op). */
 export function clearResponseDeadlineForSynthesis(clear: (() => void) | undefined): void {
   clear?.();
 }
 
+/** @deprecated No longer shown — answers must not be replaced by a latency timeout. */
 export const RESPONSE_DEADLINE_USER_MESSAGE =
   "This took too long (over 15 seconds). Try a narrower question, or run the action again.";

@@ -50,6 +50,7 @@ export type StreamChatParams = {
   useCase: UseCase;
   temperature: number;
   maxTokens: number;
+  enableThinking?: boolean;
 };
 
 export class SecureApiClient {
@@ -647,7 +648,8 @@ export class SecureApiClient {
     body: StreamChatParams,
     onChunk: (chunk: string) => void,
     baseUrl: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onThinkingChunk?: (chunk: string) => void
   ): Promise<{ message: ChatMessage; usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd: number; provider: string; model: string } }> {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
@@ -688,10 +690,12 @@ export class SecureApiClient {
         provider: body.provider as LlmProvider,
         useCase: body.useCase,
         temperature: body.temperature,
-        maxTokens: body.maxTokens
+        maxTokens: body.maxTokens,
+        enableThinking: body.enableThinking === true
       },
       onChunk,
-      signal
+      signal,
+      onThinkingChunk
     );
 
     const usage =

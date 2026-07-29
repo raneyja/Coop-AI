@@ -43,10 +43,19 @@ export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk
   }
   const choice = choices[0] as Record<string, unknown>;
   const delta = choice.delta as Record<string, unknown> | undefined;
-  const text = typeof delta?.content === "string" ? delta.content : "";
   if (typeof choice.finish_reason === "string" && choice.finish_reason) {
     state.finishReason = choice.finish_reason === "length" ? "length" : "stop";
   }
+  const reasoning =
+    typeof delta?.reasoning_content === "string"
+      ? delta.reasoning_content
+      : typeof delta?.reasoning === "string"
+        ? delta.reasoning
+        : "";
+  if (reasoning) {
+    return { type: "thinking", text: reasoning };
+  }
+  const text = typeof delta?.content === "string" ? delta.content : "";
   if (!text) {
     return undefined;
   }

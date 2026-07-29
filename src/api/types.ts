@@ -76,6 +76,8 @@ export type CompletionRequest = {
   useCase: UseCase;
   modelConfig: ModelRuntimeConfig;
   allowUnapprovedProvider?: boolean;
+  /** Enable provider thinking when the model/provider supports it. */
+  enableThinking?: boolean;
 };
 
 export type FimStreamOptions = {
@@ -98,6 +100,8 @@ export type CompletionResponse = {
 
 export type StreamChunk =
   | { type: "delta"; text: string }
+  /** Model reasoning / extended thinking — display-only; never replayed as history. */
+  | { type: "thinking"; text: string }
   | { type: "done"; usage: TokenUsage; model: string; provider: LlmProvider; finishReason: FinishReason }
   | { type: "error"; message: string; code?: string };
 
@@ -113,6 +117,13 @@ export type V1ChatRequestBody = {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  /** Client asks the API to enable provider thinking when supported. */
+  enableThinking?: boolean;
+};
+
+export type ProviderThinkingOptions = {
+  /** Anthropic extended thinking budget (must be < effective max_tokens). */
+  budgetTokens: number;
 };
 
 export type ProviderStreamOptions = {
@@ -122,6 +133,8 @@ export type ProviderStreamOptions = {
   maxTokens: number;
   signal?: AbortSignal;
   requestId: string;
+  /** When set, Anthropic requests include a thinking block and may emit thinking chunks. */
+  thinking?: ProviderThinkingOptions;
 };
 
 export type LlmAuditEvent = {

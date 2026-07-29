@@ -37,23 +37,19 @@ async function main(): Promise<void> {
     assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);
   });
 
-  await test("scheduleResponseDeadline aborts with platform reason", async () => {
+  await test("scheduleResponseDeadline never aborts the turn signal", async () => {
     const controller = new AbortController();
     const clear = scheduleResponseDeadline(controller, Date.now(), 20);
     await new Promise((resolve) => setTimeout(resolve, 40));
     clear();
-    assert.equal(controller.signal.aborted, true);
-    assert.equal(isResponseDeadlineAbort(controller.signal), true);
-    assert.equal(
-      (controller.signal as AbortSignal & { reason?: unknown }).reason,
-      RESPONSE_DEADLINE_REASON
-    );
+    assert.equal(controller.signal.aborted, false);
+    assert.equal(isResponseDeadlineAbort(controller.signal), false);
   });
 
-  await test("abortablePromise rejects when signal aborts", async () => {
+  await test("abortablePromise rejects when signal aborts (user Stop)", async () => {
     const controller = new AbortController();
     const pending = abortablePromise(new Promise<string>(() => undefined), controller.signal);
-    controller.abort(RESPONSE_DEADLINE_REASON);
+    controller.abort();
     await assert.rejects(pending, (err: unknown) => err instanceof Error && err.name === "AbortError");
   });
 
@@ -64,12 +60,10 @@ async function main(): Promise<void> {
     assert.equal(controller.signal.aborted, false);
   });
 
-  await test("clearing the deadline disposer prevents abort", async () => {
+  await test("isResponseDeadlineAbort detects legacy reason only", () => {
     const controller = new AbortController();
-    const clear = scheduleResponseDeadline(controller, Date.now(), 30);
-    clear();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.equal(controller.signal.aborted, false);
+    controller.abort(RESPONSE_DEADLINE_REASON);
+    assert.equal(isResponseDeadlineAbort(controller.signal), true);
   });
 
   console.log(`\nresponseDeadline: ${passed} passed, ${failed} failed`);

@@ -1,18 +1,22 @@
 ---
-description: Hard 15s ceiling for all user-facing Coop responses (chat + quick actions)
+description: Soft 15s start-answering guideline for chat + quick actions (never hard shut-off)
 alwaysApply: true
 ---
 
-# Response latency — 15 second hard ceiling
+# Response latency — soft 15s start-answering guideline
 
-**Product rule:** Coop must never make a user wait more than **15 seconds** for a chat or quick-action answer. Longer waits are not valuable.
+**Product rule:** Aim to **start answering** within **15 seconds**. That means stop gathering context and hand off to the model with whatever evidence you have. Longer waits staring at “Preparing answer” are not valuable.
+
+**Hard rule:** Never abort a turn, kill the model, or replace an answer with a timeout message solely because 15 seconds elapsed. AbortSignal is for **user Stop** (and same-thread re-send) only.
 
 ## Scope
 
-Applies to:
+Applies to **every** user-facing answer path (one shared funnel: `handleChatSend` → gather → model stream):
 
 - Plain chat
 - Quick actions (Trace Decision, Understand Repo, Blast Radius, Knowledge Gaps, Find Owner, etc.)
+- Quick-action slash aliases (`/understand`, `/trace`, `/owner`, `/blast`, `/gaps`)
+- Integration slash commands (`/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`)
 - `/edit` synthesis
 - Context gathering that blocks the answer (search, file fetch, integrations, agent tools, job polling)
 
@@ -20,26 +24,29 @@ Does **not** apply to:
 
 - Background indexing / structure crawls that do not block the first answer
 - Autocomplete (separate latency budgets)
+- Cutting off an answer that already started (or is about to start) because wall clock hit 15s
+- Settings “test connection” timeouts (those are connection checks, not chat answers)
 
 ## Implementation requirements
 
-1. Use `MAX_USER_FACING_RESPONSE_MS` from `src/config/responseDeadline.ts` — do not invent other ceilings.
-2. Every user-facing turn must schedule a deadline abort from turn start; clear it on complete/abort.
-3. Cap interactive HTTP / LLM / job-poll waits to the **remaining** turn budget (reserve time for synthesis when gathering context first).
-4. On deadline **before** an answer has started: return a clear timeout message — never hang.
-5. Once synthesis/streaming has started (model handoff or first token): **clear the deadline** — never cut an in-flight answer short.
-6. Do not stack sequential calls that can each take 15s+; parallelize or fail open early.
-7. Never add artificial delays that push a turn past the ceiling.
+1. Use `MAX_USER_FACING_RESPONSE_MS` / `remainingContextGatherBudgetMs` from `src/config/responseDeadline.ts` as **soft gather** caps — do not invent other ceilings for “when to stop fetching.”
+2. Do **not** schedule a turn abort at 15s (`scheduleResponseDeadline` is a no-op). Never call a path that posts the legacy “over 15 seconds” timeout bubble.
+3. Cap interactive gather / job-poll waits to the **remaining soft gather budget**, then synthesize with partial/cached context.
+4. If gather hits the soft budget before synthesis: **still call the model** — never hang, never substitute a timeout error for an answer.
+5. Once synthesis/streaming has started (model handoff or first token): finish the answer — latency guideline does not apply mid-stream.
+6. Do not stack sequential calls that can each take 15s+; parallelize or fail open early into synthesis.
+7. Never add artificial delays that delay the first useful answer past the soft guideline when gather could degrade earlier.
 
 ## Anti-patterns
 
 | Reject | Prefer |
 |--------|--------|
-| Per-call timeouts of 30–120s on the chat hot path | Remaining-budget timeouts from turn start |
-| Polling jobs for minutes before answering | Poll within remaining budget, then answer with partial/cached context |
-| Aborting mid-stream because wall clock hit 15s | Clear deadline when synthesis starts; finish the answer |
-| Silent hang after abort | Finish with partial text or explicit timeout error |
+| Aborting the turn at 15s with “This took too long…” | Soft gather timeout → synthesize with partial evidence |
+| Per-call timeouts of 30–120s on **gather** hot path | Remaining soft gather budget from turn start |
+| Polling jobs for minutes before answering | Poll within soft gather budget, then answer with partial/cached context |
+| Aborting mid-stream because wall clock hit 15s | User Stop only; finish in-flight answers |
+| Silent hang after Stop | Cancel cleanly; do not show a latency timeout message |
 
 ## Self-check
 
-Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer”? If yes, cut gather work or degrade earlier — but do not kill a response that already started.
+Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer” with no degradation? If yes, cut gather work earlier — but **always** still deliver a model answer (unless the user stopped or quota blocked).

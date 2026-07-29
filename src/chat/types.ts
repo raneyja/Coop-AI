@@ -541,6 +541,7 @@ export type WebviewOutbound =
   | { type: "threads:list"; payload: ChatThreadsListPayload }
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }

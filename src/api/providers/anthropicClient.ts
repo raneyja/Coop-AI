@@ -3,7 +3,7 @@ import { BaseProviderClient, parseSseDataLine, resolveUsage, type ParseState } f
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
-import { MAX_USER_FACING_RESPONSE_MS } from "../../config/responseDeadline";
+import { LLM_STREAM_CONNECT_TIMEOUT_MS } from "../../config/responseDeadline";
 
 export class AnthropicProviderClient extends BaseProviderClient {
   public async *streamCompletion(options: ProviderStreamOptions): AsyncGenerator<StreamChunk> {
@@ -28,18 +28,28 @@ export class AnthropicProviderClient extends BaseProviderClient {
       headers[key.toLowerCase()] = String(value);
     }
 
-    const body = {
+    const thinkingBudget = options.thinking?.budgetTokens;
+    const useThinking = typeof thinkingBudget === "number" && thinkingBudget > 0;
+    // Anthropic: max_tokens must exceed budget_tokens; temperature must be 1 with thinking.
+    const maxTokens = useThinking
+      ? Math.max(options.maxTokens, thinkingBudget + 512)
+      : options.maxTokens;
+    const body: Record<string, unknown> = {
       ...formatted.body,
       model: options.model,
-      max_tokens: options.maxTokens,
+      max_tokens: maxTokens,
       stream: true
     };
+    if (useThinking) {
+      body.temperature = 1;
+      body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    }
 
     const state: ParseState = { text: "" };
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+        timeoutMs: options.signal ? undefined : LLM_STREAM_CONNECT_TIMEOUT_MS,
         policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
@@ -81,6 +91,8 @@ export class AnthropicProviderClient extends BaseProviderClient {
           if (chunk?.type === "delta") {
             state.text += chunk.text;
             yield chunk;
+          } else if (chunk?.type === "thinking") {
+            yield chunk;
           }
         }
       }
@@ -98,7 +110,8 @@ export class AnthropicProviderClient extends BaseProviderClient {
   }
 }
 
-function parseAnthropicLine(line: string, state: ParseState): StreamChunk | undefined {
+/** Exported for unit tests — parses one Anthropic SSE data line. */
+export function parseAnthropicLine(line: string, state: ParseState): StreamChunk | undefined {
   const data = parseSseDataLine(line) as Record<string, unknown> | undefined;
   if (!data || typeof data.type !== "string") {
     return undefined;
@@ -113,8 +126,18 @@ function parseAnthropicLine(line: string, state: ParseState): StreamChunk | unde
   }
   if (data.type === "content_block_delta") {
     const delta = data.delta as Record<string, unknown> | undefined;
-    const text = typeof delta?.text === "string" ? delta.text : "";
-    return text ? { type: "delta", text } : undefined;
+    if (!delta || typeof delta.type !== "string") {
+      return undefined;
+    }
+    if (delta.type === "thinking_delta") {
+      const thinking = typeof delta.thinking === "string" ? delta.thinking : "";
+      return thinking ? { type: "thinking", text: thinking } : undefined;
+    }
+    if (delta.type === "text_delta" || typeof delta.text === "string") {
+      const text = typeof delta.text === "string" ? delta.text : "";
+      return text ? { type: "delta", text } : undefined;
+    }
+    return undefined;
   }
   if (data.type === "message_stop") {
     const usage = data.usage as Record<string, unknown> | undefined;

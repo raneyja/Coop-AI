@@ -3,7 +3,7 @@ import { getZeroRetentionConfig } from "../zeroRetentionConfig";
 import { BaseProviderClient, resolveUsage, type ParseState } from "./baseClient";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
-import { MAX_USER_FACING_RESPONSE_MS } from "../../config/responseDeadline";
+import { LLM_STREAM_CONNECT_TIMEOUT_MS } from "../../config/responseDeadline";
 
 export class GeminiProviderClient extends BaseProviderClient {
   public async *streamCompletion(options: ProviderStreamOptions): AsyncGenerator<StreamChunk> {
@@ -30,7 +30,7 @@ export class GeminiProviderClient extends BaseProviderClient {
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+        timeoutMs: options.signal ? undefined : LLM_STREAM_CONNECT_TIMEOUT_MS,
         policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {

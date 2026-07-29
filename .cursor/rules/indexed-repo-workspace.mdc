@@ -65,6 +65,6 @@ same question must produce the same number.
 
 ## Latency
 
-Repo-fact lookups run inside the gather budget (`remainingContextGatherBudgetMs`). Ordered sources are
+Repo-fact lookups run inside the soft gather budget (`remainingContextGatherBudgetMs`). Ordered sources are
 sequential by design; the fast path (`repo_stats`) is a single indexed DB read. See
-`.cursor/rules/response-latency.mdc`.
+`.cursor/rules/response-latency.mdc`. Soft gather caps must never abort the turn or deny a model answer.

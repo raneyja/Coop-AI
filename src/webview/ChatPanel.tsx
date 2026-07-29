@@ -22,10 +22,17 @@ import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
   buildThinkingMessageSequence,
+  hasVisibleAssistantResponse,
   pickRotatingThinkingMessage,
   shouldShowThinkingIndicator,
   THINKING_ROTATION_STEP_MS
 } from "./thinkingMessageRotation";
+import {
+  buildNarrativeStepsFromFeedback,
+  shouldUseNarrativeTimeline
+} from "./agentNarrative";
+import { AgentNarrativeTimeline } from "./components/AgentNarrativeTimeline";
+import { ModelThinkingBlock } from "./components/ModelThinkingBlock";
 import { QuickActionId } from "./types";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import { PromptDetailOverlay } from "./components/PromptDetailOverlay";
@@ -76,6 +83,7 @@ type InboundMessage =
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
@@ -305,6 +313,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [error, setError] = useState("");
   const [quotaNotice, setQuotaNotice] = useState<QuotaExceededNoticeState | undefined>();
   const [streamingBuffer, setStreamingBuffer] = useState("");
+  const [thinkingBuffer, setThinkingBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const explorerRepoRef = useRef<{
@@ -358,6 +367,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
+    setThinkingBuffer("");
     setIsStreaming(false);
     setError("");
     setQuotaNotice(undefined);
@@ -419,13 +429,33 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [thinkingSequence, thinkingRotationStep]
   );
 
+  const narrativeSteps = useMemo(
+    () => buildNarrativeStepsFromFeedback(intentFeedback, jobProgress, inlineThinkingOptions, thinkingRotationStep),
+    [intentFeedback, jobProgress, inlineThinkingOptions, thinkingRotationStep]
+  );
+
+  const visibleNarrativeSteps = useMemo(() => {
+    if (!shouldUseNarrativeTimeline(narrativeSteps)) {
+      return undefined;
+    }
+    if (hasVisibleAssistantResponse(messages, streamMessage)) {
+      return undefined;
+    }
+    return narrativeSteps;
+  }, [narrativeSteps, messages, streamMessage]);
+
   const visibleThinkingMessage = useMemo(
     () =>
-      shouldShowThinkingIndicator(thinkingMessage, messages, streamMessage)
-        ? thinkingMessage
-        : undefined,
-    [thinkingMessage, messages, streamMessage]
+      visibleNarrativeSteps?.length
+        ? undefined
+        : shouldShowThinkingIndicator(thinkingMessage, messages, streamMessage)
+          ? thinkingMessage
+          : undefined,
+    [visibleNarrativeSteps, thinkingMessage, messages, streamMessage]
   );
+
+  const modelThinkingStreaming = isStreaming && !streamMessage && Boolean(thinkingBuffer.trim());
+  const visibleModelThinking = thinkingBuffer.trim() || undefined;
 
   useEffect(() => {
     if (thinkingSequence.length <= 1 || !visibleThinkingMessage) {
@@ -534,6 +564,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setError("");
       setIsStreaming(true);
       setStreamingBuffer("");
+      setThinkingBuffer("");
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -562,6 +593,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setError("");
       setIsStreaming(true);
       setStreamingBuffer("");
+      setThinkingBuffer("");
       post({
         type: "chat:send",
         payload: {
@@ -700,6 +732,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setPendingPromptActionId(undefined);
           setIsStreaming(false);
           setStreamingBuffer("");
+          setThinkingBuffer("");
           setIntentFeedback(undefined);
           setJobProgress(undefined);
           setError("");
@@ -714,8 +747,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           setIntentFeedback(undefined);
+          setThinkingBuffer("");
           setIsStreaming(true);
           setStreamingBuffer(message.payload.partialText);
+          break;
+        }
+        case "chat:thinking-delta": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
+          setIsStreaming(true);
+          setThinkingBuffer((prev) => prev + message.payload.chunk);
           break;
         }
         case "chat:delta": {
@@ -739,6 +782,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             current?.deliverable === "standalone" ? current : undefined
           );
           setStreamingBuffer("");
+          setThinkingBuffer("");
           setIsStreaming(false);
           break;
         }
@@ -754,6 +798,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setError(message.payload.message);
           setIsStreaming(false);
           setStreamingBuffer("");
+          setThinkingBuffer("");
           break;
         }
         case "chat:quota-exceeded":
@@ -769,6 +814,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           });
           setIsStreaming(false);
           setStreamingBuffer("");
+          setThinkingBuffer("");
           break;
         case "chat:quota-cleared":
           setQuotaNotice(undefined);
@@ -853,6 +899,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "command:confirm":
           setIsStreaming(false);
           setStreamingBuffer("");
+          setThinkingBuffer("");
           setCommandConfirm(message.payload);
           break;
         case "decision:timeline":
@@ -992,6 +1039,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setAttachmentError("");
       setIsStreaming(true);
       setStreamingBuffer("");
+      setThinkingBuffer("");
       post({
         type: "chat:send",
         payload: {
@@ -1107,6 +1155,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setError("");
       setIsStreaming(true);
       setStreamingBuffer("");
+      setThinkingBuffer("");
       post({ type: "chat:send", payload: pending.run });
       return undefined;
     });
@@ -1116,6 +1165,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     post({ type: "chat:stream-cancel" });
     setIsStreaming(false);
     setStreamingBuffer("");
+    setThinkingBuffer("");
   }, [post]);
 
   const syncExplorerRepoFromContext = useCallback(() => {
@@ -1422,6 +1472,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             artifacts={inlineArtifacts}
             streamingMessage={streamMessage}
             thinkingMessage={visibleThinkingMessage}
+            narrativeSteps={visibleNarrativeSteps}
+            modelThinkingText={visibleModelThinking}
+            modelThinkingStreaming={modelThinkingStreaming}
             endRef={messageEndRef}
             renderBody={renderBody}
             actionContext={evidenceActionContext}
@@ -1500,9 +1553,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               ))}
             </div>
           ) : null}
-          {visibleThinkingMessage && !isActiveChat ? (
+          {visibleNarrativeSteps?.length && !isActiveChat ? (
+            <div className="mx-3 mb-2">
+              <AgentNarrativeTimeline steps={visibleNarrativeSteps} />
+            </div>
+          ) : visibleThinkingMessage && !isActiveChat ? (
             <div className="mx-3 mb-2">
               <ChatThinkingIndicator message={visibleThinkingMessage} />
+            </div>
+          ) : null}
+          {visibleModelThinking && !isActiveChat ? (
+            <div className="mx-3 mb-2">
+              <ModelThinkingBlock
+                text={visibleModelThinking}
+                streaming={modelThinkingStreaming || isStreaming}
+              />
             </div>
           ) : null}
           <IntentFeedback
@@ -1550,7 +1615,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               onViewJobResults={viewJobResults}
               intentFeedback={intentFeedback}
               onDismissIntent={() => setIntentFeedback(undefined)}
-              hideInlineActivity={Boolean(visibleThinkingMessage)}
+              hideInlineActivity={Boolean(visibleThinkingMessage || visibleNarrativeSteps?.length)}
               inlineThinkingOptions={inlineThinkingOptions}
             />
             <div className="px-3">{composerStack}</div>

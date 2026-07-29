@@ -212,6 +212,7 @@ export async function handleChatApiRequest(
         attachments: attachments.length ? attachments : undefined,
         useCase,
         allowUnapprovedProvider: config.allowUnapprovedProvider,
+        enableThinking: body.enableThinking === true,
         modelConfig: {
           provider,
           model,

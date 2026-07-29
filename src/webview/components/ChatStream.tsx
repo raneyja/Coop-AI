@@ -25,6 +25,9 @@ import type {
 } from "../../context/contextBundleEvidence";
 import { ChatMessageActions } from "./ChatMessageActions";
 import { ChatThinkingIndicator } from "./ChatThinkingIndicator";
+import { AgentNarrativeTimeline } from "./AgentNarrativeTimeline";
+import { ModelThinkingBlock } from "./ModelThinkingBlock";
+import type { NarrativeStep } from "../agentNarrative";
 import { EvidenceArtifactAnchor } from "./EvidenceArtifactAnchor";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import {
@@ -99,6 +102,11 @@ type ChatStreamProps = {
   streamingMessage: ChatMessage | null;
   /** Context-gathering status shown inline after the latest user turn. */
   thinkingMessage?: string;
+  /** Progressive agent activity steps (preferred over single thinkingMessage when present). */
+  narrativeSteps?: NarrativeStep[];
+  /** Live-only model thinking text (not persisted). */
+  modelThinkingText?: string;
+  modelThinkingStreaming?: boolean;
   endRef: React.RefObject<HTMLDivElement | null>;
   renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
   actionContext: EvidenceActionContext;
@@ -501,6 +509,9 @@ export function ChatStream({
   artifacts,
   streamingMessage,
   thinkingMessage,
+  narrativeSteps,
+  modelThinkingText,
+  modelThinkingStreaming,
   endRef,
   renderBody,
   actionContext,
@@ -545,11 +556,15 @@ export function ChatStream({
 
     if (pinnedToBottomRef.current) {
       endRef.current?.scrollIntoView({
-        behavior: streamingMessage ? "auto" : "smooth",
+        behavior: streamingMessage || modelThinkingStreaming ? "auto" : "smooth",
         block: "end"
       });
     }
-  }, [messages, artifacts, streamingMessage, thinkingMessage, endRef]);
+  }, [messages, artifacts, streamingMessage, thinkingMessage, narrativeSteps, modelThinkingText, modelThinkingStreaming, endRef]);
+
+  const showNarrative = Boolean(narrativeSteps?.length);
+  const showThinkingFallback = !showNarrative && Boolean(thinkingMessage);
+  const showWorkingStack = showNarrative || showThinkingFallback || Boolean(modelThinkingText);
 
   return (
     <div ref={scrollContainerRef} className="chat-thread no-scrollbar" role="log" aria-live="polite">
@@ -572,8 +587,16 @@ export function ChatStream({
           )
         )}
 
-        {thinkingMessage ? (
-          <ChatThinkingIndicator message={thinkingMessage} />
+        {showWorkingStack ? (
+          <div className="chat-working-stack">
+            {showNarrative && narrativeSteps ? <AgentNarrativeTimeline steps={narrativeSteps} /> : null}
+            {showThinkingFallback && thinkingMessage ? (
+              <ChatThinkingIndicator message={thinkingMessage} />
+            ) : null}
+            {modelThinkingText ? (
+              <ModelThinkingBlock text={modelThinkingText} streaming={modelThinkingStreaming} />
+            ) : null}
+          </div>
         ) : null}
 
         {streamingMessage ? (
