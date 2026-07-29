@@ -64,27 +64,27 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
-    // CHANGE-2770 (Apr 2026): unscoped GET /2.0/repositories?role=member returns 410.
-    // List member workspaces, then repos per workspace.
-    const workspaces = await paginatedCodeHostFetch<BitbucketWorkspace>({
-      firstUrl: `${BITBUCKET_API}/workspaces?role=member&pagelen=100`,
+    // CHANGE-2770 / CHANGE-3022: unscoped GET /2.0/repositories and GET /2.0/workspaces
+    // return 410. Discover workspaces via /user/workspaces, then list repos per workspace.
+    const workspaces = await paginatedCodeHostFetch<BitbucketWorkspaceListItem>({
+      firstUrl: `${BITBUCKET_API}/user/workspaces?pagelen=100`,
       headers: this.headers,
       provider: this.provider,
       rateLimitTracker: this.options.rateLimitTracker,
       maxPages: 20,
       mapPage: (payload) => {
-        const page = payload as BitbucketPaginated<BitbucketWorkspace>;
+        const page = payload as BitbucketPaginated<BitbucketWorkspaceListItem>;
         return page.values ?? [];
       },
       nextUrl: (payload) => {
-        const page = payload as BitbucketPaginated<BitbucketWorkspace>;
+        const page = payload as BitbucketPaginated<BitbucketWorkspaceListItem>;
         return page.next;
       }
     });
 
     const repos: BitbucketRepo[] = [];
-    for (const workspace of workspaces) {
-      const slug = workspace.slug?.trim();
+    for (const entry of workspaces) {
+      const slug = bitbucketWorkspaceSlug(entry);
       if (!slug) {
         continue;
       }
@@ -509,6 +509,8 @@ export class BitbucketClient implements CodeHostClient {
 
 type BitbucketPaginated<T> = { values?: T[]; next?: string };
 type BitbucketWorkspace = { slug?: string; name?: string; uuid?: string };
+/** /user/workspaces may return the workspace object flat or nested under `workspace`. */
+type BitbucketWorkspaceListItem = BitbucketWorkspace & { workspace?: BitbucketWorkspace };
 type BitbucketRepo = {
   name: string;
   full_name?: string;
@@ -569,6 +571,11 @@ type BitbucketIssue = {
   reporter?: { display_name?: string };
   links?: { html?: { href?: string } };
 };
+
+function bitbucketWorkspaceSlug(entry: BitbucketWorkspaceListItem): string | undefined {
+  const slug = entry.slug?.trim() || entry.workspace?.slug?.trim();
+  return slug || undefined;
+}
 
 function mapBitbucketCommit(commit: BitbucketCommit): CommitInfo {
   return {

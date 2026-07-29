@@ -1565,7 +1565,7 @@ async function handleEstateSync(
     if (error instanceof CodeHostError) {
       const message =
         error.status === 410
-          ? `${codeHostDisplayName(provider)} blocked catalog sync (API ${error.status}). Reconnect ${codeHostDisplayName(provider)} or try again after Coop updates the Bitbucket listing API.`
+          ? `${codeHostDisplayName(provider)} catalog sync failed because Bitbucket removed a listing API (HTTP 410). Coop needs a deploy with the updated Bitbucket workspace listing.`
           : error.message;
       writeJson(response, error.status === 410 ? 502 : error.status ?? 502, {
         error: "catalog_sync_failed",
