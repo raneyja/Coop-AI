@@ -132,7 +132,7 @@ export class WebhookMonitor {
   }
 
   public getAllHealth(): WebhookHealth[] {
-    return (["github", "gitlab", "slack"] as const).map((provider) => this.getHealth(provider));
+    return (["github", "gitlab", "bitbucket", "slack"] as const).map((provider) => this.getHealth(provider));
   }
 
   public recentDeliveries(limit = 100): WebhookDeliveryRecord[] {

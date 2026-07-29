@@ -11,6 +11,7 @@ import { GraphConsistencyManager } from "../cache/graphConsistency";
 import { loadWebhookConfig, WebhookConfig } from "../config/webhookConfig";
 import { GitHubWebhookHandler } from "./handlers/githubWebhookHandler";
 import { GitLabWebhookHandler } from "./handlers/gitlabWebhookHandler";
+import { BitbucketWebhookHandler } from "./handlers/bitbucketWebhookHandler";
 import { SlackWebhookHandler } from "./handlers/slackWebhookHandler";
 import type { NormalizedWebhookEvent } from "./types";
 import { PlaceholderWebhookClient, WebhookRegistry } from "./webhookRegistry";
@@ -346,6 +347,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const registry = new WebhookRegistry({
     github: new PlaceholderWebhookClient(),
     gitlab: new PlaceholderWebhookClient(),
+    bitbucket: new PlaceholderWebhookClient(),
     monitor
   });
 
@@ -379,6 +381,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   });
   const gitlab = new GitLabWebhookHandler({
     token: config.webhooks.gitlab.secret,
+    monitor,
+    queue
+  });
+  const bitbucket = new BitbucketWebhookHandler({
+    secret: config.webhooks.bitbucket.secret,
     monitor,
     queue
   });
@@ -761,6 +768,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      if (parsed.method === "POST" && parsed.pathname === "/webhooks/bitbucket") {
+        const result = await bitbucket.handle(parsed);
+        writeJson(response, result.statusCode, result);
+        return;
+      }
+
       if (parsed.method === "POST" && parsed.pathname === "/webhooks/slack") {
         const challenge = slackChallenge(parsed.body);
         const result = await slack.handle(parsed);
@@ -871,8 +884,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         }
         writeJson(response, 200, {
           states: rateLimits.getAll(),
-          predictions: ["github", "gitlab", "slack"].map((provider) =>
-            rateLimits.prediction(provider as "github" | "gitlab" | "slack")
+          predictions: ["github", "gitlab", "bitbucket", "slack"].map((provider) =>
+            rateLimits.prediction(provider as "github" | "gitlab" | "bitbucket" | "slack")
           )
         });
         return;

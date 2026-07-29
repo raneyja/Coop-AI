@@ -543,27 +543,12 @@ export class DecisionArchaeologyEngine {
   }
 
   private async findPrForCommit(coords: RepoCoordinates, sha: string): Promise<number | undefined> {
-    if (coords.provider === "github") {
-      return this.findGithubPrForCommit(coords, sha);
-    }
-    return undefined;
+    const pulls = await this.options.codeHostRouter.getPullRequestsForCommit(sha, coords).catch(() => []);
+    return pulls[0]?.number;
   }
 
   private async findGithubPrForCommit(coords: RepoCoordinates, sha: string): Promise<number | undefined> {
-    const pulls = await this.options.codeHostRouter.getPullRequestsForCommit(sha, coords).catch(() => []);
-    if (pulls[0]?.number) {
-      return pulls[0].number;
-    }
-    const creds = await this.options.codeHostSecrets.getCredentials();
-    if (!creds.githubToken) {
-      return undefined;
-    }
-    const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/commits/${sha}/pulls`;
-    const legacyPulls = await codeHostRequestJson<Array<{ number: number }>>(url, {
-      headers: githubHeaders(creds.githubToken),
-      provider: "github"
-    }).catch(() => []);
-    return legacyPulls[0]?.number;
+    return this.findPrForCommit(coords, sha);
   }
 
   private async fetchPullRequest(

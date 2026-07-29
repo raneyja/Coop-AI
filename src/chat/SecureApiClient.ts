@@ -199,8 +199,9 @@ export class SecureApiClient {
     return response.repos ?? [];
   }
 
-  public async listGithubOrgRepos(
+  public async listCodeHostOrgRepos(
     baseUrl: string,
+    provider: "github" | "gitlab" | "bitbucket",
     options?: { query?: string }
   ): Promise<
     Array<{
@@ -217,8 +218,27 @@ export class SecureApiClient {
   > {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
-    const response = await this.backend.listGithubOrgRepos(baseUrl, options);
+    const response = await this.backend.listCodeHostOrgRepos(baseUrl, provider, options);
     return response.repos ?? [];
+  }
+
+  public async listGithubOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<
+    Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate?: boolean;
+      htmlUrl?: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      workspaceSelected?: boolean;
+    }>
+  > {
+    return this.listCodeHostOrgRepos(baseUrl, "github", options);
   }
 
   public async getWorkspaceRepos(baseUrl: string): Promise<{

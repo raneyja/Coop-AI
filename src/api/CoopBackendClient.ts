@@ -1307,8 +1307,9 @@ export class CoopBackendClient {
     return response.data ?? { repos: [] };
   }
 
-  public async listGithubOrgRepos(
+  public async listCodeHostOrgRepos(
     baseUrl: string,
+    provider: "github" | "gitlab" | "bitbucket",
     options?: { query?: string }
   ): Promise<{
     repos: Array<{
@@ -1340,7 +1341,7 @@ export class CoopBackendClient {
               indexStatus?: string;
             }>;
           } & CoopApiErrorBody
-        >("/v1/orgs/github/repos", {
+        >(`/v1/orgs/${provider}/repos`, {
           baseURL: baseUrl.replace(/\/$/, ""),
           headers: await this.authHeaders(),
           params: options?.query ? { q: options.query } : undefined,
@@ -1351,6 +1352,24 @@ export class CoopBackendClient {
       throw new Error(formatCoopApiError(response.status, response.data));
     }
     return response.data ?? { repos: [] };
+  }
+
+  public async listGithubOrgRepos(
+    baseUrl: string,
+    options?: { query?: string }
+  ): Promise<{
+    repos: Array<{
+      repoId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string;
+      isPrivate?: boolean;
+      htmlUrl?: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+    }>;
+  }> {
+    return this.listCodeHostOrgRepos(baseUrl, "github", options);
   }
 
   public async getWorkspaceRepos(baseUrl: string): Promise<{

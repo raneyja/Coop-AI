@@ -96,6 +96,10 @@ export async function handleAdminIntegrationsRequest(
       await deps.orgStore!.deleteCodeHostInstallation(auth.orgId, provider);
       if (provider === "github") {
         await deps.orgStore!.deleteCredential(auth.orgId, "github:refresh");
+      } else if (provider === "gitlab") {
+        await deps.orgStore!.deleteCredential(auth.orgId, "gitlab:refresh");
+      } else if (provider === "bitbucket") {
+        await deps.orgStore!.deleteCredential(auth.orgId, "bitbucket:refresh");
       }
     } else {
       await deps.integrationStore!.delete(auth.orgId, provider);
@@ -138,7 +142,11 @@ export async function handleAdminIntegrationsRequest(
       entry.health !== "not_connected";
 
     const githubOrToolConnected =
-      integrations.some((entry) => entry.provider === "github" && integrationUsable(entry)) ||
+      integrations.some(
+        (entry) =>
+          CODE_HOST_PROVIDERS.includes(entry.provider as (typeof CODE_HOST_PROVIDERS)[number]) &&
+          integrationUsable(entry)
+      ) ||
       integrations.some(
         (entry) =>
           INTEGRATION_PROVIDERS.includes(entry.provider as IntegrationProvider) &&

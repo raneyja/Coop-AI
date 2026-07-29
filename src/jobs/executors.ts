@@ -212,11 +212,11 @@ async function indexRepository(
             allowPatFallback: ctx.allowPatFallback ?? false
           })
         : undefined;
-    if (orgId && ctx.orgStore && !token && provider === "github") {
+    if (orgId && ctx.orgStore && !token) {
       throw new Error(
-        "Cannot clone repository: no GitHub installation token. " +
-          "Ensure coop-worker has CREDENTIALS_ENCRYPTION_KEY and GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY " +
-          "(same values as Coop-AI on Railway), then Reindex."
+        `Cannot clone repository: no ${provider} installation token. ` +
+          `Ensure the org has ${provider} connected and coop-worker has CREDENTIALS_ENCRYPTION_KEY ` +
+          `(same value as Coop-AI), plus the matching ${provider} app credentials, then Reindex.`
       );
     }
     await report(30, "Cloning repository");

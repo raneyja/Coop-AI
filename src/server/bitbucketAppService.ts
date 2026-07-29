@@ -36,6 +36,9 @@ export class BitbucketAppService {
       client_id: this.options.clientId,
       redirect_uri: redirectUri,
       response_type: "code",
+      // Bitbucket Cloud honors consumer permissions; scope is still required so
+      // under-permissioned consumers fail loudly at authorize time.
+      scope: "repository account pullrequest",
       state
     });
     return `${BITBUCKET_OAUTH_BASE}/authorize?${params.toString()}`;

@@ -5386,24 +5386,39 @@ export class CoopChatSession {
             };
           });
         }
-      } else if (provider === "github" && (await this.options.api.hasToken())) {
+      } else if (
+        (provider === "github" || provider === "gitlab" || provider === "bitbucket") &&
+        (await this.options.api.hasToken())
+      ) {
         try {
           const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
           if (workspace.repos.length > 0) {
-            entries = workspace.repos.map((entry) => ({
-              provider: "github" as const,
-              owner: entry.owner,
-              repo: entry.name,
-              branch: entry.defaultBranch?.trim() || undefined
-            }));
+            entries = workspace.repos
+              .map((entry) => {
+                const providerToken = entry.repoId.includes(":") ? entry.repoId.split(":")[0] : provider;
+                const repoProvider =
+                  providerToken === "gitlab" || providerToken === "bitbucket" || providerToken === "github"
+                    ? providerToken
+                    : provider;
+                if (repoProvider !== provider) {
+                  return undefined;
+                }
+                return {
+                  provider: repoProvider,
+                  owner: entry.owner,
+                  repo: entry.name,
+                  branch: entry.defaultBranch?.trim() || undefined
+                };
+              })
+              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
           }
         } catch {
           // Fall through to catalog list for settings flows.
         }
         if (entries.length === 0) {
-          const remote = await this.options.api.listGithubOrgRepos(this.preferences.apiBaseUrl);
+          const remote = await this.options.api.listCodeHostOrgRepos(this.preferences.apiBaseUrl, provider);
           entries = remote.map((entry) => ({
-            provider: "github" as const,
+            provider,
             owner: entry.owner,
             repo: entry.name,
             branch: entry.defaultBranch

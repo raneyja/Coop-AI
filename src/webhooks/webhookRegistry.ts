@@ -24,6 +24,7 @@ export type ProviderWebhookClient = {
 export type WebhookRegistryOptions = {
   github?: ProviderWebhookClient;
   gitlab?: ProviderWebhookClient;
+  bitbucket?: ProviderWebhookClient;
   monitor: WebhookMonitor;
   retryLimit?: number;
 };
@@ -116,7 +117,13 @@ export class WebhookRegistry {
   }
 
   private clientFor(provider: Exclude<WebhookProvider, "slack">): ProviderWebhookClient | undefined {
-    return provider === "github" ? this.options.github : this.options.gitlab;
+    if (provider === "github") {
+      return this.options.github;
+    }
+    if (provider === "gitlab") {
+      return this.options.gitlab;
+    }
+    return this.options.bitbucket;
   }
 
   private recommendation(registration: WebhookRegistration): string | undefined {

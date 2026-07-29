@@ -204,6 +204,38 @@ export interface CodeHostClient {
   getPullRequestComments(coords: RepoCoordinates, prNumber: number): Promise<PullRequestComment[]>;
   getPullRequestReviews(coords: RepoCoordinates, prNumber: number): Promise<PullRequestReview[]>;
   getPullRequestFiles?(coords: RepoCoordinates, prNumber: number): Promise<string[]>;
+  getPullRequestDetail?(
+    coords: RepoCoordinates,
+    prNumber: number
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    labels: string[];
+  }>;
+  getPullRequestsForCommit?(
+    coords: RepoCoordinates,
+    sha: string
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      labels: string[];
+    }>
+  >;
   listIssues(coords: RepoCoordinates, options?: { state?: string; limit?: number }): Promise<IssueSummary[]>;
   searchCode?(coords: RepoCoordinates, query: string, limit?: number): Promise<Array<{ path: string }>>;
   /** Optional full-repo blob count (recursive tree). Used for inventory questions in chat. */

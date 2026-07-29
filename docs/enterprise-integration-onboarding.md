@@ -78,6 +78,8 @@ Copy from [`.env.backend.example`](../.env.backend.example). **Never commit** li
 |-------------|----------|-------------------|
 | GitHub (prod) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` | [GitHub App](https://github.com/settings/apps/new) — see [github-connect.md](./github-connect.md) |
 | GitHub (dev/small team) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App |
+| GitLab | `GITLAB_APP_ID`, `GITLAB_APP_SECRET` (+ optional `GITLAB_BASE_URL`) | [GitLab OAuth App](https://gitlab.com/-/user_settings/applications) — scopes `api` / `read_repository`; callback `/v1/gitlab/app/callback` |
+| Bitbucket | `BITBUCKET_APP_ID`, `BITBUCKET_APP_SECRET` | [Bitbucket OAuth consumer](https://bitbucket.org/account/settings/api/) — Repositories + Pull requests Read; callback `/v1/bitbucket/app/callback` |
 | Slack | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` | [api.slack.com/apps](https://api.slack.com/apps) |
 | Jira + Confluence | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` | [developer.atlassian.com](https://developer.atlassian.com/console/myapps/) |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` | [notion.so/my-integrations](https://www.notion.so/my-integrations) — **OAuth** connection type |

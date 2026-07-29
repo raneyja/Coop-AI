@@ -48,12 +48,7 @@ export default function IndexingPage() {
   const indexedCount = indexedRepos.length;
   const indexedRepoLimit = orgPlan === "free" ? 3 : null;
 
-  const syncableHosts = useMemo(() => {
-    if (orgPlan === "enterprise" || orgPlan === "free") {
-      return connectedHosts;
-    }
-    return connectedHosts.filter((provider) => provider === "github");
-  }, [connectedHosts, orgPlan]);
+  const syncableHosts = useMemo(() => connectedHosts, [connectedHosts]);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;

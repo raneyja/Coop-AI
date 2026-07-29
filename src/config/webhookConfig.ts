@@ -27,6 +27,7 @@ export type WebhookConfig = {
   webhooks: {
     github: ProviderWebhookConfig;
     gitlab: ProviderWebhookConfig;
+    bitbucket: ProviderWebhookConfig;
     slack: ProviderWebhookConfig;
   };
   cache: CacheConfig;
@@ -51,6 +52,12 @@ export function loadWebhookConfig(env: NodeJS.ProcessEnv = process.env): Webhook
         endpoint: `${publicBaseUrl.replace(/\/$/, "")}/webhooks/gitlab`,
         secret: env.GITLAB_WEBHOOK_TOKEN,
         events: readCsv(env.GITLAB_WEBHOOK_EVENTS, ["push", "merge_request", "issue", "wiki"])
+      },
+      bitbucket: {
+        enabled: readBoolean(env.BITBUCKET_WEBHOOK_ENABLED, true),
+        endpoint: `${publicBaseUrl.replace(/\/$/, "")}/webhooks/bitbucket`,
+        secret: env.BITBUCKET_WEBHOOK_SECRET,
+        events: readCsv(env.BITBUCKET_WEBHOOK_EVENTS, ["repo:push", "pullrequest:created", "pullrequest:updated", "pullrequest:fulfilled"])
       },
       slack: {
         enabled: readBoolean(env.SLACK_WEBHOOK_ENABLED, true),
@@ -82,6 +89,9 @@ export function requireWebhookSecret(
   }
   if (provider === "gitlab") {
     return config.webhooks.gitlab.secret;
+  }
+  if (provider === "bitbucket") {
+    return config.webhooks.bitbucket.secret;
   }
   return config.webhooks.slack.signingSecret;
 }

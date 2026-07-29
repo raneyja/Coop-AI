@@ -57,7 +57,9 @@ export type CloudCodeHostSearchFetcher = (options: {
   limit?: number;
 }) => Promise<Array<{ path: string; name: string }>>;
 
-export type CloudCodeHostRepoListFetcher = () => Promise<CodeHostRepositoryConfig[]>;
+export type CloudCodeHostRepoListFetcher = (
+  provider?: CodeHostProvider
+) => Promise<CodeHostRepositoryConfig[]>;
 
 export type CloudCodeHostBlameFetcher = (options: {
   repoId: string;
@@ -386,9 +388,9 @@ export class CodeHostRouter {
     }
 
     const listProvider = context?.provider ?? defaultProvider;
-    if (this.options.useCloudCodeHostProxy?.() && listProvider === "github" && this.options.cloudCodeHostRepoListFetcher) {
+    if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostRepoListFetcher) {
       try {
-        const remote = await this.options.cloudCodeHostRepoListFetcher();
+        const remote = await this.options.cloudCodeHostRepoListFetcher(listProvider);
         for (const repo of remote) {
           push(repo);
         }
@@ -398,14 +400,20 @@ export class CodeHostRouter {
     }
 
     const creds = await this.options.secrets.getCredentials();
-    if (listProvider === "github" && creds.githubToken) {
+    const canListLocally =
+      (listProvider === "github" && Boolean(creds.githubToken)) ||
+      (listProvider === "gitlab" && Boolean(creds.gitlabToken)) ||
+      (listProvider === "bitbucket" &&
+        Boolean(creds.bitbucketUsername) &&
+        Boolean(creds.bitbucketAppPassword));
+    if (canListLocally && !this.options.useCloudCodeHostProxy?.()) {
       try {
-        const client = await this.getClient("github");
+        const client = await this.getClient(listProvider);
         if ("listUserRepositories" in client && typeof client.listUserRepositories === "function") {
           const remote = await client.listUserRepositories(100);
           for (const repo of remote) {
             push({
-              provider: "github",
+              provider: listProvider,
               owner: repo.owner,
               repo: repo.name,
               branch: repo.defaultBranch
@@ -684,46 +692,21 @@ export class CodeHostRouter {
         })
       );
     }
-    const creds = await this.options.secrets.getCredentials();
-    if (resolved.provider === "github" && creds.githubToken) {
-      const url = `https://api.github.com/repos/${encodeURIComponent(resolved.owner)}/${encodeURIComponent(resolved.repo)}/pulls/${prNumber}`;
-      const { codeHostRequestJson } = await import("./codeHostHttp");
-      const pr = await codeHostRequestJson<{
-        number: number;
-        title: string;
-        body?: string;
-        state: string;
-        merged_at?: string | null;
-        user?: { login?: string };
-        created_at: string;
-        updated_at: string;
-        html_url?: string;
-        labels?: Array<{ name: string }>;
-      }>(url, {
-        headers: {
-          Authorization: `Bearer ${creds.githubToken}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "coop-ai-extension"
-        },
-        provider: "github"
-      });
-      return {
-        number: pr.number,
-        title: pr.title,
-        body: pr.body,
-        state: pr.state,
-        merged: Boolean(pr.merged_at),
-        author: pr.user?.login,
-        createdAt: pr.created_at,
-        updatedAt: pr.updated_at,
-        htmlUrl: pr.html_url,
-        labels: (pr.labels ?? []).map((label) => label.name),
-        owner: resolved.owner,
-        repo: resolved.repo
-      };
+    const client = await this.getClient(resolved.provider);
+    if (!client.getPullRequestDetail) {
+      throw new CodeHostError(
+        `Pull request details are not supported for ${resolved.provider}.`,
+        "unsupported",
+        501,
+        resolved.provider
+      );
     }
-    throw new CodeHostError("Pull request details require GitHub authorization.", "auth", 401, resolved.provider);
+    const pr = await client.getPullRequestDetail(resolved, prNumber);
+    return {
+      ...pr,
+      owner: resolved.owner,
+      repo: resolved.repo
+    };
   }
 
   public async getPullRequestsForCommit(
@@ -752,53 +735,16 @@ export class CodeHostRouter {
         this.options.cloudCodeHostCommitPullsFetcher!({ repoId, sha, coords: resolved })
       );
     }
-    const creds = await this.options.secrets.getCredentials();
-    if (resolved.provider === "github" && creds.githubToken) {
-      const url = `https://api.github.com/repos/${encodeURIComponent(resolved.owner)}/${encodeURIComponent(resolved.repo)}/commits/${encodeURIComponent(sha)}/pulls`;
-      const { codeHostRequestJson } = await import("./codeHostHttp");
-      const pulls = await codeHostRequestJson<
-        Array<{
-          number: number;
-          title: string;
-          body?: string;
-          state: string;
-          merged_at?: string | null;
-          user?: { login?: string };
-          created_at: string;
-          updated_at: string;
-          html_url?: string;
-          url?: string;
-          labels?: Array<{ name: string }>;
-          base?: { repo?: { owner?: { login?: string }; name?: string } };
-        }>
-      >(url, {
-        headers: {
-          Authorization: `Bearer ${creds.githubToken}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "coop-ai-extension"
-        },
-        provider: "github"
-      }).catch(() => []);
-      return pulls.map((pull) => {
-        const fromApiUrl = pull.url?.match(/\/repos\/([^/]+)\/([^/]+)\/pulls\//);
-        return {
-          number: pull.number,
-          title: pull.title,
-          body: pull.body,
-          state: pull.state,
-          merged: Boolean(pull.merged_at),
-          author: pull.user?.login,
-          createdAt: pull.created_at,
-          updatedAt: pull.updated_at,
-          htmlUrl: pull.html_url,
-          owner: pull.base?.repo?.owner?.login ?? fromApiUrl?.[1] ?? resolved.owner,
-          repo: pull.base?.repo?.name ?? fromApiUrl?.[2] ?? resolved.repo,
-          labels: (pull.labels ?? []).map((label) => label.name)
-        };
-      });
+    const client = await this.getClient(resolved.provider);
+    if (!client.getPullRequestsForCommit) {
+      return [];
     }
-    return [];
+    const pulls = await client.getPullRequestsForCommit(resolved, sha).catch(() => []);
+    return pulls.map((pull) => ({
+      ...pull,
+      owner: resolved.owner,
+      repo: resolved.repo
+    }));
   }
 
   public async getIssuesForFile(filePath: string, coords?: Partial<RepoCoordinates>): Promise<IssueSummary[]> {

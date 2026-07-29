@@ -28,6 +28,12 @@ type GitLabClientOptions = {
   token: string;
   baseUrl?: string;
   rateLimitTracker?: RateLimitTracker;
+  /**
+   * Auth header style. OAuth access tokens must use Bearer.
+   * PERSONAL access tokens accept Bearer or PRIVATE-TOKEN; default Bearer
+   * so org Connect (OAuth) and extension PATs both work.
+   */
+  authStyle?: "bearer" | "private-token";
 };
 
 export class GitLabClient implements CodeHostClient {
@@ -37,8 +43,11 @@ export class GitLabClient implements CodeHostClient {
 
   public constructor(private readonly options: GitLabClientOptions) {
     this.apiBase = (options.baseUrl ?? DEFAULT_GITLAB_API).replace(/\/$/, "");
+    const authStyle = options.authStyle ?? "bearer";
     this.headers = {
-      "PRIVATE-TOKEN": options.token,
+      ...(authStyle === "private-token"
+        ? { "PRIVATE-TOKEN": options.token }
+        : { Authorization: `Bearer ${options.token}` }),
       "User-Agent": "coop-ai-extension"
     };
   }
@@ -269,8 +278,156 @@ export class GitLabClient implements CodeHostClient {
     }));
   }
 
-  public async getPullRequestReviews(_coords: RepoCoordinates, _prNumber: number): Promise<PullRequestReview[]> {
-    return [];
+  public async getPullRequestReviews(coords: RepoCoordinates, prNumber: number): Promise<PullRequestReview[]> {
+    const projectId = await this.projectId(coords);
+    const approvals = await codeHostRequestJson<GitLabApprovals>(
+      `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/approvals`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => undefined);
+    const notes = await codeHostRequestJson<GitLabNote[]>(
+      `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/notes?per_page=100`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => []);
+
+    const reviews: PullRequestReview[] = [];
+    for (const user of approvals?.approved_by ?? []) {
+      const username = user.user?.username;
+      if (!username) {
+        continue;
+      }
+      reviews.push({
+        id: `approval-${username}`,
+        author: username,
+        state: "APPROVED",
+        submittedAt: approvals?.updated_at ?? new Date().toISOString(),
+        body: undefined
+      });
+    }
+    for (const note of notes) {
+      if (note.system) {
+        continue;
+      }
+      const body = note.body?.trim() ?? "";
+      if (!body) {
+        continue;
+      }
+      reviews.push({
+        id: String(note.id),
+        author: note.author?.username ?? "unknown",
+        state: "COMMENTED",
+        submittedAt: note.created_at,
+        body
+      });
+    }
+    return reviews;
+  }
+
+  public async getPullRequestFiles(coords: RepoCoordinates, prNumber: number): Promise<string[]> {
+    const projectId = await this.projectId(coords);
+    const changes = await codeHostRequestJson<{ changes?: Array<{ new_path?: string; old_path?: string }> }>(
+      `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/changes`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const paths = new Set<string>();
+    for (const change of changes.changes ?? []) {
+      if (change.new_path) {
+        paths.add(change.new_path);
+      }
+      if (change.old_path) {
+        paths.add(change.old_path);
+      }
+    }
+    return [...paths];
+  }
+
+  public async getPullRequestDetail(
+    coords: RepoCoordinates,
+    prNumber: number
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    labels: string[];
+  }> {
+    const projectId = await this.projectId(coords);
+    const mr = await codeHostRequestJson<GitLabMrDetail>(
+      `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return {
+      number: mr.iid,
+      title: mr.title,
+      body: mr.description,
+      state: mr.state,
+      merged: mr.state === "merged" || Boolean(mr.merged_at),
+      author: mr.author?.username,
+      createdAt: mr.created_at,
+      updatedAt: mr.updated_at,
+      htmlUrl: mr.web_url,
+      labels: (mr.labels ?? []).map((label) => (typeof label === "string" ? label : label.name))
+    };
+  }
+
+  public async getPullRequestsForCommit(
+    coords: RepoCoordinates,
+    sha: string
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      labels: string[];
+    }>
+  > {
+    const projectId = await this.projectId(coords);
+    const mrs = await codeHostRequestJson<GitLabMr[]>(
+      `${this.apiBase}/projects/${projectId}/repository/commits/${encodeURIComponent(sha)}/merge_requests`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => []);
+    return mrs.map((mr) => ({
+      number: mr.iid,
+      title: mr.title,
+      body: undefined,
+      state: mr.state,
+      merged: mr.state === "merged",
+      author: mr.author?.username,
+      createdAt: mr.created_at,
+      updatedAt: mr.updated_at,
+      htmlUrl: mr.web_url,
+      labels: []
+    }));
   }
 
   public async listIssues(
@@ -373,6 +530,16 @@ type GitLabNote = {
   author?: { username?: string };
   resolvable?: boolean;
   resolved?: boolean;
+  system?: boolean;
+};
+type GitLabApprovals = {
+  updated_at?: string;
+  approved_by?: Array<{ user?: { username?: string } }>;
+};
+type GitLabMrDetail = GitLabMr & {
+  description?: string;
+  merged_at?: string | null;
+  labels?: Array<string | { name: string }>;
 };
 type GitLabIssue = {
   iid: number;

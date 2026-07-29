@@ -27,7 +27,7 @@ import {
 } from "./authMiddleware";
 import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "./planGates";
 import { AuditLogger, auditActor } from "./audit/auditLogger";
-import { resolveCodeHostTokenForOrg, assessGithubConnection } from "./codeHostCredentialResolver";
+import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
 import { CollectionStore } from "./collectionStore";
 import { normalizeIdentityDirectory } from "../identity/identityDirectory";
@@ -397,7 +397,22 @@ export async function handleOrgApiRequest(
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
       return true;
     }
-    await handleListGithubRepos(parsed, response, deps, auth!);
+    await handleListCodeHostRepos("github", parsed, response, deps, auth!);
+    return true;
+  }
+
+  const codeHostReposMatch = parsed.pathname.match(/^\/v1\/orgs\/(github|gitlab|bitbucket)\/repos$/);
+  if (parsed.method === "GET" && codeHostReposMatch) {
+    if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
+      return true;
+    }
+    await handleListCodeHostRepos(
+      codeHostReposMatch[1] as "github" | "gitlab" | "bitbucket",
+      parsed,
+      response,
+      deps,
+      auth!
+    );
     return true;
   }
 
@@ -924,7 +939,8 @@ type GithubDiscoveredRepo = {
   indexStatus?: string;
 };
 
-async function handleListGithubRepos(
+async function handleListCodeHostRepos(
+  provider: "github" | "gitlab" | "bitbucket",
   parsed: ParsedRequest,
   response: ServerResponse,
   deps: OrgApiDeps,
@@ -937,23 +953,23 @@ async function handleListGithubRepos(
 
   let token: string | undefined;
   try {
-    token = await resolveCodeHostTokenForOrg(auth.orgId, "github", {
+    token = await resolveCodeHostTokenForOrg(auth.orgId, provider, {
       orgStore: deps.orgStore,
-      connector: getConnector("github"),
+      connector: getConnector(provider),
       allowPatFallback: deps.serverConfig.devMode
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "GitHub authorization failed.";
-    writeJson(response, 401, { error: "github_auth_expired", message });
+    const message = error instanceof Error ? error.message : `${provider} authorization failed.`;
+    writeJson(response, 401, { error: `${provider}_auth_expired`, message });
     return;
   }
   if (!token) {
-    const githubStatus = await assessGithubConnection(deps.orgStore, auth.orgId);
+    const installation = await deps.orgStore.getCodeHostInstallation(auth.orgId, provider);
     writeJson(response, 401, {
-      error: githubStatus.installed ? "github_auth_expired" : "github_not_installed",
-      message: githubStatus.installed
-        ? "GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub)."
-        : "GitHub is not connected for your organization. Ask your org admin to connect GitHub in the admin portal."
+      error: installation ? `${provider}_auth_expired` : `${provider}_not_installed`,
+      message: installation
+        ? `${providerLabel(provider)} access expired. Ask your org admin to reconnect ${providerLabel(provider)} in the admin portal.`
+        : `${providerLabel(provider)} is not connected for your organization. Ask your org admin to connect it in the admin portal.`
     });
     return;
   }
@@ -961,11 +977,13 @@ async function handleListGithubRepos(
   const query = parsed.query?.get("q")?.trim().toLowerCase() ?? "";
   const installation = await deps.orgStore.getCodeHostInstallation(auth.orgId, "github");
   const isOAuthInstall =
-    installation != null && installation.installationId === githubOAuthSyntheticInstallationId(auth.orgId);
+    provider === "github" &&
+    installation != null &&
+    installation.installationId === githubOAuthSyntheticInstallationId(auth.orgId);
 
   let discovered: GithubDiscoveredRepo[] = [];
   try {
-    if (!isOAuthInstall && deps.githubApp && installation) {
+    if (provider === "github" && !isOAuthInstall && deps.githubApp && installation) {
       const catalog = await deps.githubApp.listInstallationRepositoryCatalog(installation.installationId);
       discovered = catalog.map((entry) => ({
         repoId: entry.repoId,
@@ -975,9 +993,8 @@ async function handleListGithubRepos(
         isPrivate: entry.isPrivate,
         htmlUrl: entry.htmlUrl
       }));
-    } else {
-      const client = new GitHubClient({ token });
-      const remote = await client.listUserRepositories(300);
+    } else if (provider === "github") {
+      const remote = await new GitHubClient({ token }).listUserRepositories(300);
       discovered = remote.map((entry) => ({
         repoId: repoIdFromCoordinates({
           provider: "github",
@@ -991,10 +1008,40 @@ async function handleListGithubRepos(
         isPrivate: entry.isPrivate,
         htmlUrl: entry.htmlUrl
       }));
+    } else if (provider === "gitlab") {
+      const remote = await new GitLabClient({ token }).listUserRepositories(300);
+      discovered = remote.map((entry) => ({
+        repoId: repoIdFromCoordinates({
+          provider: "gitlab",
+          owner: entry.owner,
+          repo: entry.name,
+          branch: entry.defaultBranch
+        }),
+        owner: entry.owner,
+        name: entry.name,
+        defaultBranch: entry.defaultBranch || "main",
+        isPrivate: entry.isPrivate,
+        htmlUrl: entry.htmlUrl
+      }));
+    } else {
+      const remote = await new BitbucketClient({ token }).listUserRepositories(300);
+      discovered = remote.map((entry) => ({
+        repoId: repoIdFromCoordinates({
+          provider: "bitbucket",
+          owner: entry.owner,
+          repo: entry.name,
+          branch: entry.defaultBranch
+        }),
+        owner: entry.owner,
+        name: entry.name,
+        defaultBranch: entry.defaultBranch || "main",
+        isPrivate: entry.isPrivate,
+        htmlUrl: entry.htmlUrl
+      }));
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to list GitHub repositories.";
-    writeJson(response, 502, { error: "github_list_failed", message });
+    const message = error instanceof Error ? error.message : `Failed to list ${provider} repositories.`;
+    writeJson(response, 502, { error: `${provider}_list_failed`, message });
     return;
   }
 
@@ -1025,6 +1072,17 @@ async function handleListGithubRepos(
   });
 
   writeJson(response, 200, { repos });
+}
+
+function providerLabel(provider: "github" | "gitlab" | "bitbucket"): string {
+  switch (provider) {
+    case "github":
+      return "GitHub";
+    case "gitlab":
+      return "GitLab";
+    case "bitbucket":
+      return "Bitbucket";
+  }
 }
 
 async function handleStoreGithubCredential(
@@ -1290,16 +1348,22 @@ async function buildDefaultBranchLookup(
       }
 
       const target = parseRepoId(repoId);
-      if (target.provider === "github") {
+      if (target.provider === "github" || target.provider === "gitlab" || target.provider === "bitbucket") {
         try {
-          const token = await resolveCodeHostTokenForOrg(orgId, "github", {
+          const token = await resolveCodeHostTokenForOrg(orgId, target.provider, {
             orgStore: deps.orgStore!,
-            connector: getConnector("github"),
+            connector: getConnector(target.provider),
             allowPatFallback: deps.serverConfig.devMode
           });
           if (token) {
-            const repository = await new GitHubClient({ token }).getRepository({
-              provider: "github",
+            const client =
+              target.provider === "github"
+                ? new GitHubClient({ token })
+                : target.provider === "gitlab"
+                  ? new GitLabClient({ token })
+                  : new BitbucketClient({ token });
+            const repository = await client.getRepository({
+              provider: target.provider,
               owner: target.owner,
               repo: target.repo
             });

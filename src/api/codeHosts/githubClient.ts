@@ -362,6 +362,103 @@ export class GitHubClient implements CodeHostClient {
     return files.map((file) => file.filename);
   }
 
+  public async getPullRequestDetail(
+    coords: RepoCoordinates,
+    prNumber: number
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    labels: string[];
+  }> {
+    const pr = await codeHostRequestJson<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged_at?: string | null;
+      user?: { login?: string };
+      created_at: string;
+      updated_at: string;
+      html_url?: string;
+      labels?: Array<{ name: string }>;
+    }>(`${this.repoUrl(coords)}/pulls/${prNumber}`, {
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker
+    });
+    return {
+      number: pr.number,
+      title: pr.title,
+      body: pr.body,
+      state: pr.state,
+      merged: Boolean(pr.merged_at),
+      author: pr.user?.login,
+      createdAt: pr.created_at,
+      updatedAt: pr.updated_at,
+      htmlUrl: pr.html_url,
+      labels: (pr.labels ?? []).map((label) => label.name)
+    };
+  }
+
+  public async getPullRequestsForCommit(
+    coords: RepoCoordinates,
+    sha: string
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      labels: string[];
+    }>
+  > {
+    const pulls = await codeHostRequestJson<
+      Array<{
+        number: number;
+        title: string;
+        body?: string;
+        state: string;
+        merged_at?: string | null;
+        user?: { login?: string };
+        created_at: string;
+        updated_at: string;
+        html_url?: string;
+        labels?: Array<{ name: string }>;
+      }>
+    >(`${this.repoUrl(coords)}/commits/${encodeURIComponent(sha)}/pulls`, {
+      headers: {
+        ...this.headers,
+        Accept: "application/vnd.github+json"
+      },
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker
+    }).catch(() => []);
+    return pulls.map((pull) => ({
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      state: pull.state,
+      merged: Boolean(pull.merged_at),
+      author: pull.user?.login,
+      createdAt: pull.created_at,
+      updatedAt: pull.updated_at,
+      htmlUrl: pull.html_url,
+      labels: (pull.labels ?? []).map((label) => label.name)
+    }));
+  }
+
   public async listIssues(
     coords: RepoCoordinates,
     options?: { state?: string; limit?: number }

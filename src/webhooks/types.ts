@@ -82,7 +82,7 @@ export type SlackDecisionMetadata = {
 
 export type NormalizedWebhookEvent =
   | {
-      provider: "github" | "gitlab";
+      provider: "github" | "gitlab" | "bitbucket";
       deliveryId: string;
       receivedAt: Date;
       eventType: "push";
@@ -92,7 +92,7 @@ export type NormalizedWebhookEvent =
       ref?: string;
     }
   | {
-      provider: "github" | "gitlab";
+      provider: "github" | "gitlab" | "bitbucket";
       deliveryId: string;
       receivedAt: Date;
       eventType: "pull_request" | "merge_request";
@@ -101,7 +101,7 @@ export type NormalizedWebhookEvent =
       changedFiles: ChangedFile[];
     }
   | {
-      provider: "github" | "gitlab";
+      provider: "github" | "gitlab" | "bitbucket";
       deliveryId: string;
       receivedAt: Date;
       eventType: "pull_request_review";
@@ -109,7 +109,7 @@ export type NormalizedWebhookEvent =
       review: ReviewMetadata;
     }
   | {
-      provider: "github" | "gitlab";
+      provider: "github" | "gitlab" | "bitbucket";
       deliveryId: string;
       receivedAt: Date;
       eventType: "issues" | "issue" | "wiki" | "repository";

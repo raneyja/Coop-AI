@@ -169,10 +169,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   };
   const cloudCodeHostRepoListFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostRepoListFetcher =
-    async () => {
-      const repos = await api.listGithubOrgRepos(getApiBaseUrl());
+    async (provider = "github") => {
+      const repos = await api.listCodeHostOrgRepos(getApiBaseUrl(), provider);
       return repos.map((entry) => ({
-        provider: "github" as const,
+        provider,
         owner: entry.owner,
         repo: entry.name,
         branch: entry.defaultBranch

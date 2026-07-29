@@ -276,8 +276,166 @@ export class BitbucketClient implements CodeHostClient {
     }));
   }
 
-  public async getPullRequestReviews(_coords: RepoCoordinates, _prNumber: number): Promise<PullRequestReview[]> {
-    return [];
+  public async getPullRequestReviews(coords: RepoCoordinates, prNumber: number): Promise<PullRequestReview[]> {
+    const detail = await codeHostRequestJson<BitbucketPullDetail>(
+      `${this.repoUrl(coords)}/pullrequests/${prNumber}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => undefined);
+    const participants = detail?.participants ?? [];
+    return participants
+      .filter((participant) => participant.role === "REVIEWER" || Boolean(participant.approved))
+      .map((participant, index) => ({
+        id: `${participant.user?.uuid ?? participant.user?.display_name ?? "reviewer"}-${index}`,
+        author: participant.user?.display_name ?? participant.user?.nickname ?? "unknown",
+        state: participant.approved ? "APPROVED" : "COMMENTED",
+        submittedAt: detail?.updated_on ?? new Date().toISOString(),
+        body: undefined
+      }));
+  }
+
+  public async getPullRequestFiles(coords: RepoCoordinates, prNumber: number): Promise<string[]> {
+    const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketDiffstat>>(
+      `${this.repoUrl(coords)}/pullrequests/${prNumber}/diffstat?pagelen=100`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const paths = new Set<string>();
+    for (const entry of payload.values ?? []) {
+      if (entry.new?.path) {
+        paths.add(entry.new.path);
+      }
+      if (entry.old?.path) {
+        paths.add(entry.old.path);
+      }
+    }
+    return [...paths];
+  }
+
+  public async getPullRequestDetail(
+    coords: RepoCoordinates,
+    prNumber: number
+  ): Promise<{
+    number: number;
+    title: string;
+    body?: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    labels: string[];
+  }> {
+    const pull = await codeHostRequestJson<BitbucketPullDetail>(`${this.repoUrl(coords)}/pullrequests/${prNumber}`, {
+      headers: this.headers,
+      provider: this.provider,
+      rateLimitTracker: this.options.rateLimitTracker
+    });
+    return {
+      number: pull.id,
+      title: pull.title,
+      body: pull.description,
+      state: pull.state,
+      merged: pull.state === "MERGED",
+      author: pull.author?.display_name,
+      createdAt: pull.created_on,
+      updatedAt: pull.updated_on,
+      htmlUrl: pull.links?.html?.href,
+      labels: []
+    };
+  }
+
+  public async getPullRequestsForCommit(
+    coords: RepoCoordinates,
+    sha: string
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      labels: string[];
+    }>
+  > {
+    // Bitbucket has no direct commit→PR endpoint; scan recent PRs for the commit hash.
+    const pulls = await this.listPullRequests(coords, { state: "all", limit: 50 });
+    const matches: Array<{
+      number: number;
+      title: string;
+      body?: string;
+      state: string;
+      merged: boolean;
+      author?: string;
+      createdAt: string;
+      updatedAt: string;
+      htmlUrl?: string;
+      labels: string[];
+    }> = [];
+    for (const pull of pulls) {
+      const detail = await codeHostRequestJson<BitbucketPullDetail>(
+        `${this.repoUrl(coords)}/pullrequests/${pull.number}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      ).catch(() => undefined);
+      const mergeHash = detail?.merge_commit?.hash;
+      const sourceHash = detail?.source?.commit?.hash;
+      if (mergeHash === sha || sourceHash === sha || (mergeHash && sha.startsWith(mergeHash)) || (sourceHash && sha.startsWith(sourceHash))) {
+        matches.push({
+          number: pull.number,
+          title: pull.title,
+          body: detail?.description,
+          state: pull.state,
+          merged: pull.merged,
+          author: pull.author,
+          createdAt: pull.createdAt,
+          updatedAt: pull.updatedAt,
+          htmlUrl: pull.htmlUrl,
+          labels: []
+        });
+      }
+    }
+    return matches;
+  }
+
+  public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {
+    const params = new URLSearchParams({
+      search_query: `repo:${coords.owner}/${coords.repo} ${query}`,
+      fields: "values.file.path,values.content_match_count"
+    });
+    const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketSearchHit>>(
+      `${BITBUCKET_API}/search/code?${params.toString()}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => ({ values: [] as BitbucketSearchHit[] }));
+    const paths: string[] = [];
+    for (const hit of payload.values ?? []) {
+      const path = hit.file?.path;
+      if (path && !paths.includes(path)) {
+        paths.push(path);
+      }
+      if (paths.length >= limit) {
+        break;
+      }
+    }
+    return paths.map((path) => ({ path }));
   }
 
   public async listIssues(
@@ -344,6 +502,24 @@ type BitbucketPull = {
   updated_on: string;
   author?: { display_name?: string };
   links?: { html?: { href?: string } };
+};
+type BitbucketParticipant = {
+  role?: string;
+  approved?: boolean;
+  user?: { uuid?: string; display_name?: string; nickname?: string };
+};
+type BitbucketPullDetail = BitbucketPull & {
+  description?: string;
+  participants?: BitbucketParticipant[];
+  merge_commit?: { hash?: string };
+  source?: { commit?: { hash?: string } };
+};
+type BitbucketDiffstat = {
+  new?: { path?: string };
+  old?: { path?: string };
+};
+type BitbucketSearchHit = {
+  file?: { path?: string };
 };
 type BitbucketComment = {
   id: number;

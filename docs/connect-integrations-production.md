@@ -15,6 +15,7 @@ Production mode: `coopAI.devMode: false`. Tokens live on the **Coop server**, no
 | # | Step | Success |
 |---|------|---------|
 | 1 | **GitHub** → **Connect (GitHub App)** (or **Send link to GitHub admin** if IT owns the org) → install on company org → **Refresh** → **Test** | Connected |
+| 1b | **GitLab** / **Bitbucket** → **Connect** → approve OAuth → **Refresh** (requires operator env) | Connected |
 | 2 | **Slack** → Connect → approve → Test | Connected |
 | 3 | **Jira** → Connect + set Jira site URL → Test | Connected |
 | 4 | **Confluence** → Connect + set site URL → Test | Connected |
@@ -41,6 +42,8 @@ Add to **File** — `.env.backend` on the API host (see [`.env.backend.example`]
 | Core | `CREDENTIALS_ENCRYPTION_KEY`, `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` |
 | GitHub App (all plans) | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET` |
 | GitHub OAuth (fallback) | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
+| GitLab | `GITLAB_APP_ID`, `GITLAB_APP_SECRET` (optional `GITLAB_BASE_URL`) |
+| Bitbucket | `BITBUCKET_APP_ID`, `BITBUCKET_APP_SECRET` |
 | Slack | `SLACK_APP_CLIENT_ID`, `SLACK_APP_CLIENT_SECRET` |
 | Atlassian | `ATLASSIAN_APP_CLIENT_ID`, `ATLASSIAN_APP_CLIENT_SECRET` |
 | Notion | `NOTION_APP_CLIENT_ID`, `NOTION_APP_CLIENT_SECRET` |
@@ -60,6 +63,8 @@ docker compose up -d --build api
 | Tool | Console | Redirect URI |
 |------|---------|--------------|
 | GitHub | [github.com/settings/apps](https://github.com/settings/apps) (App) or OAuth Apps (Free) | `/v1/github/app/callback` |
+| GitLab | [gitlab.com/-/user_settings/applications](https://gitlab.com/-/user_settings/applications) | `/v1/gitlab/app/callback` |
+| Bitbucket | [bitbucket.org/account/settings/api](https://bitbucket.org/account/settings/api/) | `/v1/bitbucket/app/callback` |
 | Slack | [api.slack.com/apps](https://api.slack.com/apps) | `/v1/slack/app/callback` |
 | Atlassian | [developer.atlassian.com/console/myapps](https://developer.atlassian.com/console/myapps/) | `/v1/atlassian/app/callback` |
 | Notion | [notion.so/my-integrations](https://www.notion.so/my-integrations) — type **OAuth** | `/v1/notion/app/callback` |
