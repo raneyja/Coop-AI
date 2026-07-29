@@ -64,21 +64,52 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async listUserRepositories(limit = 100): Promise<RemoteRepository[]> {
-    const repos = await paginatedCodeHostFetch<BitbucketRepo>({
-      firstUrl: `${BITBUCKET_API}/repositories?role=member&pagelen=100&sort=-updated_on`,
+    // CHANGE-2770 (Apr 2026): unscoped GET /2.0/repositories?role=member returns 410.
+    // List member workspaces, then repos per workspace.
+    const workspaces = await paginatedCodeHostFetch<BitbucketWorkspace>({
+      firstUrl: `${BITBUCKET_API}/workspaces?role=member&pagelen=100`,
       headers: this.headers,
       provider: this.provider,
       rateLimitTracker: this.options.rateLimitTracker,
-      maxPages: Math.max(1, Math.ceil(limit / 100)),
+      maxPages: 20,
       mapPage: (payload) => {
-        const page = payload as BitbucketPaginated<BitbucketRepo>;
+        const page = payload as BitbucketPaginated<BitbucketWorkspace>;
         return page.values ?? [];
       },
       nextUrl: (payload) => {
-        const page = payload as BitbucketPaginated<BitbucketRepo>;
+        const page = payload as BitbucketPaginated<BitbucketWorkspace>;
         return page.next;
       }
     });
+
+    const repos: BitbucketRepo[] = [];
+    for (const workspace of workspaces) {
+      const slug = workspace.slug?.trim();
+      if (!slug) {
+        continue;
+      }
+      if (repos.length >= limit) {
+        break;
+      }
+      const remaining = limit - repos.length;
+      const workspaceRepos = await paginatedCodeHostFetch<BitbucketRepo>({
+        firstUrl: `${BITBUCKET_API}/repositories/${encodeURIComponent(slug)}?role=member&pagelen=100&sort=-updated_on`,
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker,
+        maxPages: Math.max(1, Math.ceil(remaining / 100)),
+        mapPage: (payload) => {
+          const page = payload as BitbucketPaginated<BitbucketRepo>;
+          return page.values ?? [];
+        },
+        nextUrl: (payload) => {
+          const page = payload as BitbucketPaginated<BitbucketRepo>;
+          return page.next;
+        }
+      });
+      repos.push(...workspaceRepos);
+    }
+
     return repos.slice(0, limit).map((entry) => {
       const fullName = entry.full_name ?? "";
       const slash = fullName.indexOf("/");
@@ -477,6 +508,7 @@ export class BitbucketClient implements CodeHostClient {
 }
 
 type BitbucketPaginated<T> = { values?: T[]; next?: string };
+type BitbucketWorkspace = { slug?: string; name?: string; uuid?: string };
 type BitbucketRepo = {
   name: string;
   full_name?: string;

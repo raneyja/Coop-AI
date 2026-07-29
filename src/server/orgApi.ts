@@ -53,7 +53,7 @@ import type { GitHubAppService } from "./githubAppService";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
 import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } from "../api/codeHosts/types";
 import { loadGitLabAppConfig, gitlabApiBaseUrl } from "./gitlabAppConfig";
-import { runCatalogSyncForProvider, CatalogSyncError } from "./catalogSyncService";
+import { runCatalogSyncForProvider, CatalogSyncError, codeHostDisplayName } from "./catalogSyncService";
 import { queueOrgRepoIndex, reindexEmbeddingFailures } from "./queueOrgRepoIndex";
 import type { UsageTracker } from "./usageTracker";
 import type { UserStore } from "./users/userStore";
@@ -1560,6 +1560,19 @@ async function handleEstateSync(
             ? 503
             : 400;
       writeJson(response, status, { error: error.code, message: error.message, provider });
+      return;
+    }
+    if (error instanceof CodeHostError) {
+      const message =
+        error.status === 410
+          ? `${codeHostDisplayName(provider)} blocked catalog sync (API ${error.status}). Reconnect ${codeHostDisplayName(provider)} or try again after Coop updates the Bitbucket listing API.`
+          : error.message;
+      writeJson(response, error.status === 410 ? 502 : error.status ?? 502, {
+        error: "catalog_sync_failed",
+        message,
+        provider,
+        code: error.code
+      });
       return;
     }
     const message = error instanceof Error ? error.message : "Catalog sync failed.";

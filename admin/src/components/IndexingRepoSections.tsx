@@ -5,9 +5,9 @@ import type { OrgRepoRecord } from "@/lib/coopApi";
 import { codeHostLabel } from "@/lib/coopApi";
 import type { CodeHostProvider } from "@/lib/integrations";
 import { AdminChip } from "@/components/AdminChip";
+import { CodeHostBadge } from "@/components/CodeHostBadge";
 import {
   buildIndexingQueue,
-  codeHostBadgeLabel,
   embeddingBadgeTone,
   filterReposForIndexingView,
   formatEmbeddingBadgeLabel,
@@ -42,12 +42,6 @@ const EMBEDDING_BADGE_CLASS: Record<EmbeddingBadgeTone, string> = {
   pending: "border-sky-500/30 bg-sky-950/40 text-sky-200",
   legacy: "border-white/10 bg-white/[0.03] text-coop-muted",
   none: "border-white/10 bg-white/[0.02] text-coop-muted"
-};
-
-const CODE_HOST_CHIP_CLASS: Record<CodeHostProvider, string> = {
-  github: "border-white/15 bg-white/[0.06] text-white",
-  gitlab: "border-orange-500/30 bg-orange-950/30 text-orange-200",
-  bitbucket: "border-sky-500/30 bg-sky-950/30 text-sky-200"
 };
 
 function statusDotClass(repo: OrgRepoRecord): string {
@@ -183,21 +177,6 @@ function IndexDetailsCell({
         </button>
       ) : null}
     </div>
-  );
-}
-
-function CodeHostBadge({ repoId }: { repoId: string }): React.ReactElement {
-  const host = parseCodeHostFromRepoId(repoId);
-  const label = codeHostBadgeLabel(repoId);
-  if (!host) {
-    return <span className="text-xs text-coop-muted">{label}</span>;
-  }
-  return (
-    <span
-      className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-medium ${CODE_HOST_CHIP_CLASS[host]}`}
-    >
-      {label}
-    </span>
   );
 }
 

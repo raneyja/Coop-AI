@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { CodeHostBadge } from "@/components/CodeHostBadge";
 import { fetchOrgRepos, fetchUserRepoGrants, saveUserRepoGrants, type OrgRepoRecord } from "@/lib/coopApi";
 import { activeGrantRepoIds } from "@/lib/activeGrantRepoIds";
-import { shortRepoName } from "@/lib/indexingProgress";
+import { codeHostBadgeLabel, shortRepoName } from "@/lib/indexingProgress";
 import { isUsableForDeveloperAccess } from "@/lib/usableRepos";
 
 type UserRepoGrantsModalProps = {
@@ -41,7 +42,11 @@ export function UserRepoGrantsModal({
     if (!needle) {
       return indexedRepos;
     }
-    return indexedRepos.filter((repo) => shortRepoName(repo.repoId).toLowerCase().includes(needle));
+    return indexedRepos.filter((repo) => {
+      const name = shortRepoName(repo.repoId).toLowerCase();
+      const host = codeHostBadgeLabel(repo.repoId).toLowerCase();
+      return name.includes(needle) || host.includes(needle);
+    });
   }, [indexedRepos, query]);
 
   useEffect(() => {
@@ -177,13 +182,16 @@ export function UserRepoGrantsModal({
                         disabled={saving || !grantable}
                         onChange={() => toggleRepo(repo.repoId)}
                       />
-                      <span className="font-mono text-sm text-white">{shortRepoName(repo.repoId)}</span>
+                      <span className="min-w-0 flex-1 font-mono text-sm text-white">
+                        {shortRepoName(repo.repoId)}
+                      </span>
+                      <CodeHostBadge repoId={repo.repoId} />
                       {!grantable ? (
-                        <span className="ml-auto text-[11px] text-amber-200">
+                        <span className="shrink-0 text-[11px] text-amber-200">
                           Fix browse on Indexing first
                         </span>
                       ) : repo.browseStatus === "verified" ? (
-                        <span className="ml-auto text-[11px] uppercase tracking-wide text-emerald-300/90">
+                        <span className="shrink-0 text-[11px] uppercase tracking-wide text-emerald-300/90">
                           Usable
                         </span>
                       ) : null}

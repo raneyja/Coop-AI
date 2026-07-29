@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { CodeHostBadge } from "@/components/CodeHostBadge";
 import type { OrgRepoRecord } from "@/lib/coopApi";
-import { shortRepoName } from "@/lib/indexingProgress";
+import { codeHostBadgeLabel, shortRepoName } from "@/lib/indexingProgress";
 
 const INVITE_ROLES = ["member", "admin"] as const;
 type InviteRole = (typeof INVITE_ROLES)[number];
@@ -37,7 +38,11 @@ export function InviteUserModal({
     if (!needle) {
       return indexedRepos;
     }
-    return indexedRepos.filter((repo) => shortRepoName(repo.repoId).toLowerCase().includes(needle));
+    return indexedRepos.filter((repo) => {
+      const name = shortRepoName(repo.repoId).toLowerCase();
+      const host = codeHostBadgeLabel(repo.repoId).toLowerCase();
+      return name.includes(needle) || host.includes(needle);
+    });
   }, [indexedRepos, query]);
 
   useEffect(() => {
@@ -239,7 +244,10 @@ export function InviteUserModal({
                           disabled={submitting}
                           onChange={() => toggleRepo(repo.repoId)}
                         />
-                        <span className="font-mono text-sm text-white">{shortRepoName(repo.repoId)}</span>
+                        <span className="min-w-0 flex-1 font-mono text-sm text-white">
+                          {shortRepoName(repo.repoId)}
+                        </span>
+                        <CodeHostBadge repoId={repo.repoId} />
                       </label>
                     </li>
                   ))}
