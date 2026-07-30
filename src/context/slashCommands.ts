@@ -1,5 +1,6 @@
 import type { QuickActionId } from "../webview/types";
 import type { ComposerMode, IntegrationChatProvider } from "../chat/types";
+import { combineSlashFocus } from "./userFocusQuery";
 
 export type SlashCommandTarget =
   | { kind: "action"; actionId: QuickActionId }
@@ -22,6 +23,13 @@ export type ParsedSlashCommand = {
   def: SlashCommandDef;
   /** Text following the command token. Empty string when only the command was typed. */
   args: string;
+  /** Text before the command token (trimmed). Empty when the command leads the message. */
+  prefix: string;
+  /**
+   * Combined user focus: meaningful text before + after the command.
+   * Empty when the user typed only the bare command (e.g. `/understand`).
+   */
+  focus: string;
 };
 
 /** Display tokens for the five quick-action slash commands (empty-state hint). */
@@ -56,10 +64,10 @@ export function isQuickActionSlashCommand(def: SlashCommandDef): boolean {
   return def.target.kind === "action";
 }
 
-/** Text shown in chat history for a slash invocation (preserves /token and args). */
-export function slashCommandHistoryContent(def: SlashCommandDef, args: string): string {
+/** Text shown in chat history for a slash invocation (preserves /token and focus). */
+export function slashCommandHistoryContent(def: SlashCommandDef, focusOrArgs: string): string {
   const token = slashCommandDisplayToken(def);
-  const trimmed = args.trim();
+  const trimmed = focusOrArgs.trim();
   return trimmed ? `/${token} ${trimmed}` : `/${token}`;
 }
 
@@ -174,6 +182,7 @@ const COMMAND_TOKEN_PATTERN = /(?:^|\s)\/([a-z][\w-]*)/gi;
 
 /**
  * Parses the first recognized slash command in raw composer text.
+ * Captures text both before and after the command as `focus` (combined).
  * Returns null when no known command is present (so it should be sent as normal chat).
  */
 export function parseSlashCommand(text: string): ParsedSlashCommand | null {
@@ -191,7 +200,9 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
     const afterCommand = slashPos + 1 + match[1].length;
     const rest = text.slice(afterCommand);
     const args = rest.startsWith(" ") ? rest.trimStart() : "";
-    return { def, args };
+    const prefix = text.slice(0, slashPos).trim();
+    const focus = combineSlashFocus(prefix, args);
+    return { def, args, prefix, focus };
   }
   return null;
 }

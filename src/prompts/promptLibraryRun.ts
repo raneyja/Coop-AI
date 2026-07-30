@@ -24,8 +24,8 @@ export function resolvePromptLibraryRun(template: string, actionId?: string): Pr
   if (quickActionId) {
     const parsed = parseSlashCommand(trimmed);
     if (parsed?.def.target.kind === "action" && parsed.def.target.actionId === quickActionId) {
-      const args = parsed.args.trim();
-      return { kind: "quick-action", actionId: quickActionId, slashUserArgs: args || undefined };
+      const focus = parsed.focus.trim();
+      return { kind: "quick-action", actionId: quickActionId, slashUserArgs: focus || undefined };
     }
     return { kind: "quick-action", actionId: quickActionId, slashUserArgs: trimmed || undefined };
   }

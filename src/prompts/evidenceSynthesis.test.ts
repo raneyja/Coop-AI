@@ -62,6 +62,10 @@ test("appendUserFocusInstructions requires Your question section for specific as
   assert.ok(section.includes("how does a work item flow from create → board?"));
   assert.ok(section.includes(`**${USER_FOCUS_SECTION_TITLE}**`));
   assert.ok(section.includes("primary deliverable"));
+  assert.ok(section.includes("## Section quality gates (strict pass / fail)"));
+  assert.ok(section.includes("PASS:"));
+  assert.ok(section.includes("FAIL:"));
+  assert.ok(section.includes("generic SaaS narrative"));
 });
 
 test("appendUserFocusInstructions is a no-op when focus is empty", () => {

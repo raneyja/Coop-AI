@@ -69,6 +69,26 @@ async function run(): Promise<void> {
     assert.ok(paths.includes("lingui.config.ts"));
   });
 
+  test("pickEntryPaths injects focus-ranked manifest paths", () => {
+    const manifest: ManifestFileEntry[] = [
+      { filePath: "package.json", symbols: [] },
+      { filePath: "README.md", symbols: [] },
+      { filePath: "apps/api/issue/views.py", symbols: [{ name: "IssueViewSet", kind: "class" }] },
+      { filePath: "apps/web/components/Board.tsx", symbols: [{ name: "Board", kind: "function" }] },
+      { filePath: "apps/api/serializers/issue.py", symbols: [{ name: "IssueSerializer", kind: "class" }] }
+    ];
+    const paths = pickEntryPaths({
+      manifest,
+      treeOverview: { topLevelDirs: ["apps"], topLevelFiles: ["package.json", "README.md"] },
+      userFocus: "work item create to board flow"
+    });
+    assert.ok(paths.includes("package.json") || paths.includes("README.md"));
+    assert.ok(
+      paths.some((path) => /issue|board/i.test(path)),
+      `expected focus path among ${paths.join(", ")}`
+    );
+  });
+
   test("summarizeManifest counts extensions and symbols", () => {
     const stats = summarizeManifest([
       { filePath: "src/a.ts", symbols: [{ name: "foo", kind: "function" }] },

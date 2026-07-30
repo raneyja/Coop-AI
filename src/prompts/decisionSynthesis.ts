@@ -157,6 +157,9 @@ function appendFollowUpInstructions(lines: string[], userQuestion: string | unde
     lines.push(
       "- After **Summary**, include a dedicated **Your question** section that answers that follow-up ask directly."
     );
+    lines.push(
+      "- **Your question** PASS: cites evidence from the attached timeline for the ask. FAIL: generic restatement with no PR/commit/discussion citation when evidence exists."
+    );
   }
   lines.push("");
 }

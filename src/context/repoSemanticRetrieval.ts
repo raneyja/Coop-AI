@@ -1,8 +1,10 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
+import type { CodeHostProviderPreference } from "../chat/types";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
+import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -221,41 +223,117 @@ export async function searchRepoForChat(
     return undefined;
   }
 
-  const searchResult = await runRepoSearch(options, repoId, query);
-  const rankedPaths = rankSearchPaths(searchResult);
+  return loadSemanticSearchContext({
+    repoId,
+    query,
+    indexBackend: options.indexBackend,
+    api: options.api,
+    apiBaseUrl: options.apiBaseUrl,
+    branch: options.branch,
+    owner: options.request.params.owner,
+    repo: options.request.params.repo,
+    provider: options.request.params.provider as CodeHostProviderPreference | undefined,
+    collectionId: options.collectionId,
+    searchScope: options.searchScope,
+    maxFiles: MAX_SEMANTIC_FILES
+  });
+}
+
+export type SearchRepoForFocusOptions = {
+  repoId: string;
+  query: string;
+  indexBackend: IndexBackend;
+  api: SecureApiClient;
+  apiBaseUrl: string;
+  branch?: string;
+  owner?: string;
+  repo?: string;
+  provider?: CodeHostProviderPreference;
+  /** Cap on attached focus file bodies (default FOCUS_MAX_INJECTED_PATHS). */
+  maxFiles?: number;
+};
+
+/**
+ * Focus-driven index search for quick actions.
+ * Unlike {@link searchRepoForChat}, this is not gated off by `quickAction` —
+ * callers must pass a real user focus query (never a canned prompt).
+ */
+export async function searchRepoForFocusQuery(
+  options: SearchRepoForFocusOptions
+): Promise<RepoSemanticSearchContext | undefined> {
+  const query = focusQueryForRetrieval(options.query);
+  const repoId = options.repoId.trim();
+  if (!query || !repoId) {
+    return undefined;
+  }
+
+  return loadSemanticSearchContext({
+    repoId,
+    query,
+    indexBackend: options.indexBackend,
+    api: options.api,
+    apiBaseUrl: options.apiBaseUrl,
+    branch: options.branch,
+    owner: options.owner,
+    repo: options.repo,
+    provider: options.provider,
+    maxFiles: options.maxFiles ?? FOCUS_MAX_INJECTED_PATHS
+  });
+}
+
+type LoadSemanticSearchOptions = {
+  repoId: string;
+  query: string;
+  indexBackend: IndexBackend;
+  api: SecureApiClient;
+  apiBaseUrl: string;
+  branch?: string;
+  owner?: string;
+  repo?: string;
+  provider?: CodeHostProviderPreference;
+  collectionId?: string;
+  searchScope?: "indexed" | "org";
+  maxFiles: number;
+};
+
+async function loadSemanticSearchContext(
+  options: LoadSemanticSearchOptions
+): Promise<RepoSemanticSearchContext | undefined> {
+  const searchResult = await runRepoSearch(options, options.repoId, options.query);
+  const rankedPaths = rankSearchPaths(searchResult, options.maxFiles * 2);
   if (rankedPaths.length === 0) {
     return undefined;
   }
 
   const resolved: Array<{ path: string; repoId: string; content: string }> = [];
   for (const candidate of rankedPaths) {
-    if (resolved.length >= MAX_SEMANTIC_FILES) {
+    if (resolved.length >= options.maxFiles) {
       break;
     }
-    const content = await resolveSemanticFileContent(candidate.path, repoId, options);
+    const content = await resolveSemanticFileContent(candidate.path, options.repoId, options);
     if (!content?.trim()) {
       continue;
     }
-    resolved.push({ path: candidate.path, repoId, content });
+    resolved.push({ path: candidate.path, repoId: options.repoId, content });
   }
 
-  const files = applySemanticByteBudget(resolved);
+  const files = applySemanticByteBudget(resolved, MAX_SEMANTIC_BYTES, options.maxFiles);
   if (files.length === 0) {
     return undefined;
   }
 
   return {
     source: "repo-semantic-search",
-    query,
+    query: options.query,
     searchSource: searchResult.source,
     files,
     matchedPathCount: rankedPaths.length,
-    attachmentCap: MAX_SEMANTIC_FILES
+    attachmentCap: options.maxFiles
   };
 }
 
 function searchOptionsForSemanticRetrieval(
-  options: SearchRepoForChatOptions
+  options: Pick<LoadSemanticSearchOptions, "collectionId" | "searchScope">
 ): import("../indexing/indexBackend").IndexSearchOptions | undefined {
   const collectionId = options.collectionId?.trim();
   if (collectionId) {
@@ -268,7 +346,7 @@ function searchOptionsForSemanticRetrieval(
 }
 
 async function runRepoSearch(
-  options: SearchRepoForChatOptions,
+  options: Pick<LoadSemanticSearchOptions, "indexBackend" | "api" | "apiBaseUrl" | "collectionId" | "searchScope">,
   repoId: string,
   query: string
 ): Promise<LocalSearchResult> {
@@ -317,7 +395,7 @@ async function runRepoSearch(
 async function resolveSemanticFileContent(
   filePath: string,
   repoId: string,
-  options: SearchRepoForChatOptions
+  options: Pick<LoadSemanticSearchOptions, "api" | "apiBaseUrl" | "branch" | "owner" | "repo" | "provider">
 ): Promise<string | undefined> {
   const { readWorkspaceFileFromDisk } = await import("./localFileResolver");
   const local = readWorkspaceFileFromDisk(filePath);
@@ -331,10 +409,10 @@ async function resolveSemanticFileContent(
   if (readIndexed) {
     const fromIndex = await readIndexed({
       repoId,
-      owner: options.request.params.owner,
-      repo: options.request.params.repo,
+      owner: options.owner,
+      repo: options.repo,
       branch: options.branch,
-      provider: options.request.params.provider as import("../chat/types").CodeHostProviderPreference | undefined,
+      provider: options.provider,
       path: filePath
     });
     if (fromIndex?.trim()) {

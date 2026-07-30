@@ -236,7 +236,7 @@ export const SOURCES_FOOTER_OUTPUT_RULE = `Include **at most 3 bullets** — one
 export const USER_FOCUS_SECTION_TITLE = "Your question";
 
 /**
- * When the user typed focus text after a slash command (or a custom prompt-library
+ * When the user typed focus text before/after a slash command (or a custom prompt-library
  * template), require a dedicated response section for that ask. Shared by every
  * quick-action synthesis builder.
  */
@@ -249,7 +249,7 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
   lines.push(focus);
   lines.push("");
   lines.push(
-    "- The user added a specific ask on top of this action. Treat it as the primary deliverable — not optional color on a generic overview."
+    "- The user added a specific ask on top of this action (text before and/or after the slash command). Treat it as the primary deliverable — not optional color on a generic overview."
   );
   lines.push(
     `- After **Summary** (or **Answer**), include a dedicated **${USER_FOCUS_SECTION_TITLE}** section that answers that ask directly with concrete paths, flows, or evidence from the bundle.`
@@ -259,6 +259,23 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
   );
   lines.push(
     `- Lead **Summary**/**Answer** with a 1-2 sentence reply to the focus; expand detail under **${USER_FOCUS_SECTION_TITLE}**.`
+  );
+  lines.push("");
+  lines.push("## Section quality gates (strict pass / fail)");
+  lines.push(
+    `**${USER_FOCUS_SECTION_TITLE}** — PASS: cites ≥1 concrete repo path or symbol from attached \`<repo_entry_files>\` / focus-search hits and explains the ask using that evidence. FAIL: generic SaaS narrative (form→API→DB) with no path/symbol; invents endpoints, tables, or services not in evidence; omits the section.`
+  );
+  lines.push(
+    "**Summary** — PASS: 1-2 sentences that directly answer the focus, then optional confidence line. FAIL: repo elevator pitch that never addresses the focus."
+  );
+  lines.push(
+    "**Architecture** / **Key subsystems** (when present) — PASS: weight toward subsystems named in focus evidence; name real paths. FAIL: restating docker-compose service names as if they were the focus answer."
+  );
+  lines.push(
+    "**Risks & unknowns** — PASS: only evidence-tied gaps relevant to the focus (missing files, thin docs). FAIL: padding with generic testing/config advice unrelated to the ask."
+  );
+  lines.push(
+    "If focus-search evidence is thin or missing: say so in one line under **Your question** — do not invent the happy-path workflow."
   );
   lines.push("");
 }

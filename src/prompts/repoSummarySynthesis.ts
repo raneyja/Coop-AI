@@ -228,6 +228,26 @@ export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record
     sections.push(`### Anchor files loaded\n${entryFiles.map((f) => `- ${f.path}`).join("\n")}`);
   }
 
+  const focusQuery =
+    typeof (summary as { userFocus?: unknown }).userFocus === "string"
+      ? ((summary as { userFocus: string }).userFocus.trim() || undefined)
+      : typeof (summary as { focusSearchQuery?: unknown }).focusSearchQuery === "string"
+        ? ((summary as { focusSearchQuery: string }).focusSearchQuery.trim() || undefined)
+        : undefined;
+  const focusPaths = Array.isArray((summary as { focusSearchPaths?: unknown }).focusSearchPaths)
+    ? ((summary as { focusSearchPaths: unknown[] }).focusSearchPaths
+        .filter((path): path is string => typeof path === "string" && Boolean(path.trim()))
+        .map((path) => path.trim()))
+    : [];
+  if (focusQuery || focusPaths.length) {
+    const pathLines = focusPaths.length
+      ? focusPaths.map((path) => `- ${path}`).join("\n")
+      : "- (no focus-search path hits — do not invent a workflow; say evidence is thin)";
+    sections.push(
+      `### Focus-search evidence\n- Query: ${focusQuery ?? "(none)"}\n${pathLines}`
+    );
+  }
+
   const commits = summary.recentCommits as Array<{ sha: string; author: string; message: string }> | undefined;
   if (commits?.length) {
     sections.push(

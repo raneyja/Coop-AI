@@ -7,6 +7,10 @@ export type RepoSummaryEvidence = {
   repository?: Record<string, unknown>;
   manifest?: { fileCount?: number; languages?: string[]; entryPoints?: string[] };
   entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
+  /** User focus ask that biased gather (slash text before/after command). */
+  userFocus?: string;
+  focusSearchQuery?: string;
+  focusSearchPaths?: string[];
   recentCommits?: Array<{ sha: string; author: string; message: string }>;
   treeOverview?: unknown;
   repoInventory?: { fileCount?: number; lineCount?: number; source?: string; branch?: string };
@@ -180,6 +184,17 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     if (data.repository) merged.repository = data.repository as Record<string, unknown>;
     if (data.manifest) merged.manifest = data.manifest as RepoSummaryEvidence["manifest"];
     if (Array.isArray(data.entryFiles)) merged.entryFiles = data.entryFiles as RepoSummaryEvidence["entryFiles"];
+    if (typeof data.userFocus === "string" && data.userFocus.trim()) {
+      merged.userFocus = data.userFocus.trim();
+    }
+    if (typeof data.focusSearchQuery === "string" && data.focusSearchQuery.trim()) {
+      merged.focusSearchQuery = data.focusSearchQuery.trim();
+    }
+    if (Array.isArray(data.focusSearchPaths)) {
+      merged.focusSearchPaths = data.focusSearchPaths.filter(
+        (path): path is string => typeof path === "string" && Boolean(path.trim())
+      );
+    }
     if (data.treeOverview) merged.treeOverview = data.treeOverview;
     if (data.repoInventory) {
       const inventory = data.repoInventory as {

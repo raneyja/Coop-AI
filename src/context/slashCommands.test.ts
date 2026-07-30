@@ -40,6 +40,39 @@ test("captures args after the command token", () => {
     assert.equal(parsed!.def.target.actionId, "trace-decision");
   }
   assert.equal(parsed!.args, "why was this retry added");
+  assert.equal(parsed!.prefix, "");
+  assert.equal(parsed!.focus, "why was this retry added");
+});
+
+test("combines text before and after the command into focus", () => {
+  const parsed = parseSlashCommand(
+    "what are the main services /understand how does a work item flow from create → board?"
+  );
+  assert.ok(parsed);
+  if (parsed!.def.target.kind === "action") {
+    assert.equal(parsed!.def.target.actionId, "understand-repo");
+  }
+  assert.equal(parsed!.prefix, "what are the main services");
+  assert.equal(parsed!.args, "how does a work item flow from create → board?");
+  assert.equal(
+    parsed!.focus,
+    "what are the main services how does a work item flow from create → board?"
+  );
+});
+
+test("prefix-only focus when command has no trailing args", () => {
+  const parsed = parseSlashCommand("work item create to board flow /understand");
+  assert.ok(parsed);
+  assert.equal(parsed!.args, "");
+  assert.equal(parsed!.focus, "work item create to board flow");
+});
+
+test("bare command has empty focus", () => {
+  const parsed = parseSlashCommand("/understand");
+  assert.ok(parsed);
+  assert.equal(parsed!.focus, "");
+  assert.equal(parsed!.prefix, "");
+  assert.equal(parsed!.args, "");
 });
 
 // ── parseSlashCommand: aliases ───────────────────────────────────────────────
@@ -155,6 +188,8 @@ test("parses a slash command anywhere in the message", () => {
     assert.equal(parsed!.def.target.provider, "slack");
   }
   assert.equal(parsed!.args, "who decided redis");
+  // "please" filler stripped from prefix; "check" kept + trailing args.
+  assert.equal(parsed!.focus, "check who decided redis");
 });
 
 test("skips unknown slash tokens and uses the first recognized command", () => {

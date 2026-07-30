@@ -65,6 +65,9 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("**Architecture**"));
   assert.ok(prompt.includes("**Your question**"));
   assert.ok(prompt.includes("## User focus (required)"));
+  assert.ok(prompt.includes("PASS:"));
+  assert.ok(prompt.includes("FAIL:"));
+  assert.ok(prompt.includes("generic form→API→DB"));
   assert.ok(prompt.includes("**How the open file fits**"));
   assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
   assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));

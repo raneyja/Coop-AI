@@ -4,10 +4,16 @@ import type { CommitInfo, RemoteTreeEntry } from "../api/codeHosts/types";
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostProviderPreference } from "../chat/types";
 import type { ManifestFileEntry } from "../manifest/types";
+import { topManifestPaths } from "../manifest/scoreManifest";
 import { IndexedRepoWorkspace } from "../workspace/IndexedRepoWorkspace";
 import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
+import {
+  FOCUS_MAX_ENTRY_PATHS,
+  focusQueryForRetrieval,
+  mergeFocusEntryPaths
+} from "./userFocusQuery";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_FILE_CHARS = 12_000;
@@ -34,6 +40,8 @@ export type BuildRepoSummaryOptions = {
   repoId?: string;
   provider?: CodeHostProviderPreference;
   activeFile?: string;
+  /** User focus text — biases entry-file selection toward matching paths. */
+  userFocus?: string;
   loadManifest?: (repoId: string) => Promise<ManifestFileEntry[]>;
 };
 
@@ -88,7 +96,8 @@ export async function buildLiveRepoSummary(
     manifest,
     treeOverview,
     srcOverview,
-    activeFile: options.activeFile
+    activeFile: options.activeFile,
+    userFocus: options.userFocus
   });
   const entryFiles = await fetchEntryFiles(options.codeHostRouter, resolvedCoords, entryPaths);
 
@@ -96,6 +105,7 @@ export async function buildLiveRepoSummary(
     repoId,
     branch,
     activeFile: options.activeFile,
+    userFocus: focusQueryForRetrieval(options.userFocus),
     repository: repository
       ? {
           defaultBranch: repository.defaultBranch,
@@ -180,6 +190,8 @@ export function pickEntryPaths(options: {
   treeOverview: { topLevelDirs: string[]; topLevelFiles: string[] };
   srcOverview?: { topLevelDirs: string[]; topLevelFiles: string[] };
   activeFile?: string;
+  /** When set, rank manifest paths against the user's ask and merge into anchors. */
+  userFocus?: string;
 }): string[] {
   const manifestPaths = new Set(options.manifest.map((entry) => entry.filePath));
   const available = new Set([
@@ -212,7 +224,7 @@ export function pickEntryPaths(options: {
   for (const candidate of ENTRY_POINT_CANDIDATES) {
     push(candidate, allowBlindCandidates);
     if (picked.length >= MAX_ENTRY_FILES) {
-      return picked;
+      break;
     }
   }
 
@@ -225,7 +237,27 @@ export function pickEntryPaths(options: {
     }
   }
 
-  return picked.slice(0, MAX_ENTRY_FILES);
+  const anchors = picked.slice(0, MAX_ENTRY_FILES);
+  const focusQuery = focusQueryForRetrieval(options.userFocus);
+  if (!focusQuery || options.manifest.length === 0) {
+    return anchors;
+  }
+
+  const focusPaths = topManifestPaths(
+    focusQuery,
+    { activeFile: options.activeFile },
+    options.manifest,
+    FOCUS_MAX_ENTRY_PATHS
+  );
+  if (focusPaths.length === 0) {
+    return anchors;
+  }
+
+  return mergeFocusEntryPaths({
+    anchorPaths: anchors,
+    focusPaths,
+    maxPaths: MAX_ENTRY_FILES
+  });
 }
 
 async function fetchEntryFiles(
@@ -388,6 +420,7 @@ export type BuildIndexedRepoSummaryOptions = {
   repoId: string;
   provider?: CodeHostProviderPreference;
   activeFile?: string;
+  userFocus?: string;
   resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
 };
 
@@ -436,7 +469,8 @@ export async function buildIndexedRepoSummary(
   const entryPaths = pickEntryPaths({
     manifest,
     treeOverview: treeForPick,
-    activeFile: options.activeFile
+    activeFile: options.activeFile,
+    userFocus: options.userFocus
   });
 
   const entryFiles: RepoSummaryEntryFile[] = [];
@@ -461,6 +495,7 @@ export async function buildIndexedRepoSummary(
     repoId: resolved.preferred,
     branch: treeOverview?.branch ?? branch ?? inventory?.branch,
     activeFile: options.activeFile,
+    userFocus: focusQueryForRetrieval(options.userFocus),
     treeOverview: treeOverview
       ? {
           topLevelDirs: treeOverview.topLevelDirs,
@@ -491,6 +526,8 @@ export type BuildRepoSummaryEvidenceOptions = {
   repoId: string;
   provider?: CodeHostProviderPreference;
   activeFile?: string;
+  /** Specific user ask — biases entry files via manifest scoring. */
+  userFocus?: string;
   resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
 };
 
@@ -514,6 +551,7 @@ export async function buildRepoSummaryEvidence(
     }
   );
   const branch = target.branch ?? options.branch;
+  const userFocus = focusQueryForRetrieval(options.userFocus);
 
   const manifestCandidates = resolveInventoryRepoIds(options.repoId, {
     owner: options.owner,
@@ -532,6 +570,7 @@ export async function buildRepoSummaryEvidence(
     branch,
     repoId: options.repoId,
     activeFile: options.activeFile,
+    userFocus,
     provider: options.provider,
     resolveWorkspaceBranch: options.resolveWorkspaceBranch
   });
@@ -548,6 +587,7 @@ export async function buildRepoSummaryEvidence(
     repoId: options.repoId,
     provider: options.provider,
     activeFile: options.activeFile,
+    userFocus,
     loadManifest: async (repoId: string): Promise<ManifestFileEntry[]> =>
       loadManifestEntries(options.api, options.apiBaseUrl, manifestCandidates.length ? manifestCandidates : [repoId])
   };

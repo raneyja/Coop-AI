@@ -226,8 +226,13 @@ import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
 import {
   mergeRepoSemanticContext,
-  searchRepoForChat
+  searchRepoForChat,
+  searchRepoForFocusQuery
 } from "../context/repoSemanticRetrieval";
+import {
+  focusQueryForRetrieval,
+  mergeFocusFilesIntoEntryFiles
+} from "../context/userFocusQuery";
 import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LightningStatusBar } from "../extension/lightningStatusBar";
@@ -2312,6 +2317,8 @@ export class CoopChatSession {
         ? target.provider
         : this.preferences.defaultCodeHost;
 
+    const userFocus = focusQueryForRetrieval(request.intent.context.queryText);
+
     try {
       const evidencePromise = buildRepoSummaryEvidence({
         api: this.options.api,
@@ -2323,6 +2330,7 @@ export class CoopChatSession {
         repoId,
         provider,
         activeFile: undefined,
+        userFocus,
         resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
       });
       const evidence = await Promise.race([
@@ -2336,8 +2344,47 @@ export class CoopChatSession {
         typeof base.data === "object" && base.data !== null
           ? (base.data as Record<string, unknown>)
           : {};
-      const evidenceData =
+      let evidenceData =
         evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>) : {};
+
+      // Focus ask → index/Zoekt search; merge hit bodies into entryFiles for synthesis.
+      if (userFocus) {
+        const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+        if (remainingMs > 0) {
+          const focusSearch = await Promise.race([
+            searchRepoForFocusQuery({
+              repoId,
+              query: userFocus,
+              indexBackend: this.options.indexBackend,
+              api: this.options.api,
+              apiBaseUrl: this.preferences.apiBaseUrl,
+              branch: target.branch ?? this.currentContext.branch,
+              owner,
+              repo,
+              provider
+            }),
+            new Promise<undefined>((resolve) => {
+              setTimeout(() => resolve(undefined), remainingMs);
+            })
+          ]);
+          if (focusSearch?.files.length) {
+            const priorEntries = Array.isArray(evidenceData.entryFiles)
+              ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
+              : [];
+            evidenceData = {
+              ...evidenceData,
+              userFocus,
+              entryFiles: mergeFocusFilesIntoEntryFiles(priorEntries, focusSearch.files),
+              repoSemanticSearch: focusSearch,
+              focusSearchQuery: focusSearch.query,
+              focusSearchPaths: focusSearch.files.map((file) => file.path)
+            };
+          } else {
+            evidenceData = { ...evidenceData, userFocus };
+          }
+        }
+      }
+
       const resolvedFromEvidence =
         typeof evidenceData.branch === "string" ? evidenceData.branch.trim() : undefined;
       const data: Record<string, unknown> = {
@@ -3737,9 +3784,10 @@ export class CoopChatSession {
     attachments?: ChatImageAttachment[],
     mentions?: ChatFileMention[]
   ): Promise<void> {
-    const { def, args } = parsed;
+    const { def, focus } = parsed;
     const mentionRefs = this.quickActionMentionRefs(mentions);
-    const slashUserArgs = args.trim() || undefined;
+    // Focus = text before + after the slash token (not args-after only).
+    const slashUserArgs = focus.trim() || undefined;
 
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
@@ -3765,9 +3813,9 @@ export class CoopChatSession {
     }
 
     if (def.target.kind === "composer-mode") {
-      const historyContent = slashCommandHistoryContent(def, args);
+      const historyContent = slashCommandHistoryContent(def, focus);
       const userText =
-        args.trim() || "Generate search-replace patches for the requested changes.";
+        focus.trim() || "Generate search-replace patches for the requested changes.";
       await this.handleChatSend(userText, undefined, attachments, {
         historyContent,
         mentions,
@@ -3781,7 +3829,7 @@ export class CoopChatSession {
       return;
     }
 
-    const historyContent = slashCommandHistoryContent(def, args);
+    const historyContent = slashCommandHistoryContent(def, focus);
 
     const provider = def.target.provider;
     if (!this.isIntegrationConnected(provider)) {
@@ -3803,8 +3851,8 @@ export class CoopChatSession {
         ? `${this.preferences.owner}/${this.preferences.repo}`
         : "this repository";
     const userText =
-      args.length > 0
-        ? args
+      focus.length > 0
+        ? focus
         : provider === "jira"
           ? `Find Jira tickets related to ${repoLabel}.`
           : provider === "confluence"
@@ -3819,7 +3867,8 @@ export class CoopChatSession {
       sourceHint,
       integrationProvider: provider,
       historyContent,
-      mentions
+      mentions,
+      slashUserArgs
     });
   }
 

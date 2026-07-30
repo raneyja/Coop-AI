@@ -52,6 +52,17 @@ test("resolvePromptLibraryRun strips matching slash token when actionId is set",
   }
 });
 
+test("resolvePromptLibraryRun combines text before and after slash into slashUserArgs", () => {
+  const plan = resolvePromptLibraryRun(
+    "main services /understand work item board flow",
+    "understand-repo"
+  );
+  assert.equal(plan.kind, "quick-action");
+  if (plan.kind === "quick-action") {
+    assert.equal(plan.slashUserArgs, "main services work item board flow");
+  }
+});
+
 test("resolvePromptLibraryRun uses default quick action when actionId set and template empty", () => {
   const plan = resolvePromptLibraryRun("", "understand-repo");
   assert.equal(plan.kind, "quick-action");

@@ -186,17 +186,25 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("[Sources: Dependency graph]"));
   });
 
-test("buildRepoSummarySynthesisUserPrompt requires Your question section when userFocus is set", () => {
+  test("buildRepoSummarySynthesisUserPrompt requires Your question section when userFocus is set", () => {
     const prompt = buildRepoSummarySynthesisUserPrompt({
       owner: "CoopAI-Corp",
       repo: "plane",
-      summary: { entryFiles: [{ path: "package.json" }] },
+      summary: {
+        entryFiles: [{ path: "package.json" }, { path: "apps/api/issue/views.py", content: "class Issue:" }],
+        userFocus: "work item board flow",
+        focusSearchQuery: "work item board flow",
+        focusSearchPaths: ["apps/api/issue/views.py"]
+      },
       userFocus: "what are the main services and how does a work item flow from create → board?"
     });
     assert.ok(prompt.includes("## User focus (required)"));
     assert.ok(prompt.includes("what are the main services and how does a work item flow from create → board?"));
     assert.ok(prompt.includes("**Your question**"));
     assert.ok(prompt.includes("Answer the ## User focus ask first"));
+    assert.ok(prompt.includes("## Section quality gates (strict pass / fail)"));
+    assert.ok(prompt.includes("### Focus-search evidence"));
+    assert.ok(prompt.includes("apps/api/issue/views.py"));
   });
 
   test("buildRepoSummarySynthesisUserPrompt omits User focus when no custom ask", () => {

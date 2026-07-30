@@ -111,10 +111,12 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 1-2 sentence overview of the repo or relevant subsystem. When evidence is GitHub/code-host only, end with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira."). When ## User focus is present, open with a direct reply to that ask.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete paths, flows, or evidence — do not omit it or fold it into Architecture.
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence.
+FAIL: generic form→API→DB story; invented endpoints; section omitted or folded into Architecture.
 
 **Architecture**
-How major pieces connect; boundaries and data flow.
+How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture.
 
 **Key subsystems**
 One bullet per subsystem with supporting file paths.
@@ -147,7 +149,8 @@ Use these sections in order (**Title** on its own line; blank line before each):
 Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin. When ## User focus is present, open with a direct reply to that ask.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete evidence — do not omit it.
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+PASS: answers the ask with timeline evidence (commit/PR/discussion). FAIL: generic restatement; omits the section.
 
 **Business context**
 Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
@@ -183,7 +186,8 @@ Use these sections in order (**Title** on its own line; blank line before each):
 Who to contact first and why, in 1-2 sentences. When ## User focus is present, open with a direct reply to that ask.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete ownership evidence — do not omit it.
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+PASS: names owners/paths from the ownership bundle for the ask. FAIL: generic “ask the team”; omits the section.
 
 **True experts**
 Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
@@ -217,7 +221,8 @@ Use these sections in order (**Title** on its own line; blank line before each).
 2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact. When ## User focus is present, also answer that ask in the opening lines.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete impact evidence — do not omit it.
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+PASS: ties the ask to Top risk surfaces / dependents from the bundle. FAIL: speculative impact with no paths; omits the section.
 
 **Direct impact**
 Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
@@ -248,7 +253,8 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case. When ## User focus is present, open with a direct reply to that ask.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete gap evidence — do not omit it.
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+PASS: answers the ask from scan/docs evidence (or states scan unavailable). FAIL: invents gaps; omits the section.
 
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
@@ -311,7 +317,8 @@ Use these sections in order (**Title** on its own line; blank line before each):
 Direct 1-2 sentence answer from the attached integration search results. When ## User focus is present, open with a direct reply to that ask.
 
 **Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Answer**. Answer that specific ask from the search results — do not omit it.
+Include **only** when the user message has ## User focus (required). Place immediately after **Answer**.
+PASS: cites specific search hits for the ask. FAIL: vague summary with no titles/keys; omits the section.
 
 **Key findings**
 Bullets citing specific messages, tickets, or pages by title/key.
