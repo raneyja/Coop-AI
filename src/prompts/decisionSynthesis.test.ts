@@ -102,6 +102,7 @@ test("decision synthesis follow-up steers compact alternatives answer when evide
   assert.ok(prompt.includes("not documented"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
   assert.ok(prompt.includes("What trade-offs were rejected?"));
+  assert.ok(prompt.includes("**Your question**"));
 });
 
 test("decision synthesis requires quote before alternatives when PR is attached", () => {

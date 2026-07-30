@@ -7,6 +7,7 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   EVIDENCE_CITATION_RULES
@@ -52,6 +53,8 @@ export type OwnershipSynthesisInput = {
   file: string;
   slackSearch?: SlackSearchEvidence;
   userQuestion?: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
 };
@@ -72,6 +75,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
         : `Who truly owns ${targetLabel} and who should I contact for questions or changes?`)
   );
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   lines.push("## Target path");
   lines.push(`- Repository: ${report.owner}/${report.repo}`);
   lines.push(`- Path: ${repoWide ? "repository-wide" : report.path}`);

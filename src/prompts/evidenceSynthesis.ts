@@ -232,6 +232,37 @@ Never invent URLs, ticket IDs, PR numbers, people, or quotes not present in the 
 /** Shared **Sources** footer contract for quick-action system prompts. */
 export const SOURCES_FOOTER_OUTPUT_RULE = `Include **at most 3 bullets** — one sentence each on what the highest-priority sources contributed (commits, PRs, Jira, Slack/Teams, then scans/dependencies; group multiple doc pages into one bullet). Use plain \`[Sources: …]\` text labels. Full detail is in the Sources evidence card.`;
 
+/** Section title when the user added a specific ask on top of a quick action / slash command. */
+export const USER_FOCUS_SECTION_TITLE = "Your question";
+
+/**
+ * When the user typed focus text after a slash command (or a custom prompt-library
+ * template), require a dedicated response section for that ask. Shared by every
+ * quick-action synthesis builder.
+ */
+export function appendUserFocusInstructions(lines: string[], userFocus?: string): void {
+  const focus = userFocus?.trim();
+  if (!focus) {
+    return;
+  }
+  lines.push("## User focus (required)");
+  lines.push(focus);
+  lines.push("");
+  lines.push(
+    "- The user added a specific ask on top of this action. Treat it as the primary deliverable — not optional color on a generic overview."
+  );
+  lines.push(
+    `- After **Summary** (or **Answer**), include a dedicated **${USER_FOCUS_SECTION_TITLE}** section that answers that ask directly with concrete paths, flows, or evidence from the bundle.`
+  );
+  lines.push(
+    "- Keep the action's standard sections, but weight them toward the focus. Do not ship a template overview that ignores the ask."
+  );
+  lines.push(
+    `- Lead **Summary**/**Answer** with a 1-2 sentence reply to the focus; expand detail under **${USER_FOCUS_SECTION_TITLE}**.`
+  );
+  lines.push("");
+}
+
 /** Shared truncation marker appended after a `.slice(0, shown)` list so the model knows rows were omitted. */
 export function truncationNote(total: number, shown: number): string {
   return total > shown ? `\n- …and ${total - shown} more (omitted)` : "";

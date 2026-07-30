@@ -36,6 +36,7 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   EVIDENCE_CITATION_RULES
@@ -57,6 +58,8 @@ export type BlastRadiusSynthesisInput = {
   owner?: string;
   repo?: string;
   userQuestion?: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
 };
@@ -71,6 +74,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
       `Analyze the blast radius of changing ${file}. What breaks, what depends on it, and what should be tested?`
   );
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   lines.push("## Primary target");
   lines.push(`- File: ${file}`);
   if (input.owner && input.repo) {

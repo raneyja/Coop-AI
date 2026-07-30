@@ -19,6 +19,7 @@ export const OPERATING_CONTEXT = `
 - Be concise and direct. This is a working tool, not a tutorial.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
+- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview.
 `;
 
 export const CURSOR_STYLE_OUTPUT_CONTRACT = `
@@ -36,6 +37,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 
 ## Response structure (all chat — quick actions included)
 - Lead with **Summary** or **Answer** — a direct 1-2 sentence answer, always first; put a blank line before every main and subsection title.
+- When ## User focus (required) is present (or the user asked something specific in chat), place **Your question** immediately after **Summary**/**Answer** and answer that ask with concrete evidence before continuing the standard sections.
 - Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
@@ -106,7 +108,10 @@ Include **only** when the user message ## Scope lists an active editor file. Omi
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Summary**
-1-2 sentence overview of the repo or relevant subsystem. When evidence is GitHub/code-host only, end with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira.").
+1-2 sentence overview of the repo or relevant subsystem. When evidence is GitHub/code-host only, end with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira."). When ## User focus is present, open with a direct reply to that ask.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete paths, flows, or evidence — do not omit it or fold it into Architecture.
 
 **Architecture**
 How major pieces connect; boundaries and data flow.
@@ -139,7 +144,10 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 Use these sections in order (**Title** on its own line; blank line before each):
 
 **Summary**
-Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin.
+Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin. When ## User focus is present, open with a direct reply to that ask.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete evidence — do not omit it.
 
 **Business context**
 Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
@@ -172,7 +180,10 @@ Follow-up turns: keep this structure but stay compact — often 4-8 sentences to
 Use these sections in order (**Title** on its own line; blank line before each):
 
 **Summary**
-Who to contact first and why, in 1-2 sentences.
+Who to contact first and why, in 1-2 sentences. When ## User focus is present, open with a direct reply to that ask.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete ownership evidence — do not omit it.
 
 **True experts**
 Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
@@ -203,7 +214,10 @@ ${SOURCES_FOOTER_OUTPUT_RULE}`,
 Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer concise — the Sources card already lists files.
 
 **Summary**
-2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact.
+2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact. When ## User focus is present, also answer that ask in the opening lines.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete impact evidence — do not omit it.
 
 **Direct impact**
 Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
@@ -231,7 +245,10 @@ ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sourc
 Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
 
 **Summary**
-1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case.
+1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case. When ## User focus is present, open with a direct reply to that ask.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Summary**. Answer that specific ask with concrete gap evidence — do not omit it.
 
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
@@ -277,7 +294,10 @@ ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when pr
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Answer**
-Direct 1-2 sentence answer first.
+Direct 1-2 sentence answer first. When ## User focus is present (or the user asked something specific), that ask is the answer.
+
+**Your question**
+Include when the user asked something specific beyond a yes/no — expand the ask with concrete evidence. Omit when **Answer** already fully covers a short ask.
 
 Then add focused topic sections as needed. Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list.
 
@@ -288,7 +308,10 @@ For multi-item answers (risks, options, gaps): use a **subsection title** per it
 Use these sections in order (**Title** on its own line; blank line before each):
 
 **Answer**
-Direct 1-2 sentence answer from the attached integration search results.
+Direct 1-2 sentence answer from the attached integration search results. When ## User focus is present, open with a direct reply to that ask.
+
+**Your question**
+Include **only** when the user message has ## User focus (required). Place immediately after **Answer**. Answer that specific ask from the search results — do not omit it.
 
 **Key findings**
 Bullets citing specific messages, tickets, or pages by title/key.

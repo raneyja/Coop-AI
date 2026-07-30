@@ -186,6 +186,29 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("[Sources: Dependency graph]"));
   });
 
+test("buildRepoSummarySynthesisUserPrompt requires Your question section when userFocus is set", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      summary: { entryFiles: [{ path: "package.json" }] },
+      userFocus: "what are the main services and how does a work item flow from create → board?"
+    });
+    assert.ok(prompt.includes("## User focus (required)"));
+    assert.ok(prompt.includes("what are the main services and how does a work item flow from create → board?"));
+    assert.ok(prompt.includes("**Your question**"));
+    assert.ok(prompt.includes("Answer the ## User focus ask first"));
+  });
+
+  test("buildRepoSummarySynthesisUserPrompt omits User focus when no custom ask", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      summary: { entryFiles: [{ path: "package.json" }] }
+    });
+    assert.ok(!prompt.includes("## User focus (required)"));
+    assert.ok(prompt.includes("Synthesize a **repository-wide** overview"));
+  });
+
   const total = passed + failed;
   console.log(`\nrepoSummarySynthesis: ${passed}/${total} tests passed`);
   if (failed > 0) {

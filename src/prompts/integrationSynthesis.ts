@@ -15,6 +15,7 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   EVIDENCE_CITATION_RULES
@@ -34,6 +35,8 @@ export type IntegrationSynthesisInput = {
   repo?: string;
   file?: string;
   userQuestion: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
 };
@@ -43,6 +46,7 @@ export function buildIntegrationSynthesisUserPrompt(input: IntegrationSynthesisI
   lines.push("## Task");
   lines.push(input.userQuestion.trim());
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   if (input.owner && input.repo) {
     lines.push(`## Scope\n- Repository: ${input.owner}/${input.repo}`);
     if (input.file) lines.push(`- Active file: ${input.file}`);

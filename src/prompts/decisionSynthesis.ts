@@ -5,6 +5,7 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   EVIDENCE_CITATION_RULES
@@ -61,6 +62,8 @@ export type DecisionSynthesisInput = {
   lineRange?: { start: number; end: number };
   codeSnippet?: string;
   userQuestion?: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
   /** True when the user sent a normal chat follow-up in an inherited trace-decision thread. */
@@ -79,6 +82,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
       `Explain why the code at ${file}${formatLineRange(lineRange)} exists and what decision led to it.`
   );
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   lines.push("## Primary trace target");
   if (timeline.targetLabel) {
     lines.push(`- Target: ${timeline.targetLabel}`);
@@ -150,6 +154,9 @@ function appendFollowUpInstructions(lines: string[], userQuestion: string | unde
   lines.push("- Omit sections the user did not ask about when they would be empty or speculative.");
   if (userQuestion?.trim()) {
     lines.push(`- Focus on: ${userQuestion.trim()}`);
+    lines.push(
+      "- After **Summary**, include a dedicated **Your question** section that answers that follow-up ask directly."
+    );
   }
   lines.push("");
 }

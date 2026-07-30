@@ -5,6 +5,7 @@ import {
   appendEvidenceQualityInstructions,
   appendNarrativeCitationInstructions,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   buildSourcesChecklistFromKeys,
   EVIDENCE_CITATION_RULES,
   extractCitationKeysFromSourcesSection,
@@ -12,7 +13,8 @@ import {
   NARRATIVE_CITATION_RULES,
   stripDisallowedNarrativeSourceCitations,
   supplementaryKeysOmittedFromChecklist,
-  truncationNote
+  truncationNote,
+  USER_FOCUS_SECTION_TITLE
 } from "./evidenceSynthesis";
 
 let passed = 0;
@@ -50,6 +52,23 @@ test("appendEvidenceQualityInstructions adds Evidence quality section", () => {
   assert.ok(section.includes("strong / medium / weak / limited"));
   assert.ok(section.includes("missing PR, issue, discussion, or documentation"));
   assert.ok(section.includes("provenance"));
+});
+
+test("appendUserFocusInstructions requires Your question section for specific asks", () => {
+  const lines: string[] = [];
+  appendUserFocusInstructions(lines, "how does a work item flow from create → board?");
+  const section = lines.join("\n");
+  assert.ok(section.includes("## User focus (required)"));
+  assert.ok(section.includes("how does a work item flow from create → board?"));
+  assert.ok(section.includes(`**${USER_FOCUS_SECTION_TITLE}**`));
+  assert.ok(section.includes("primary deliverable"));
+});
+
+test("appendUserFocusInstructions is a no-op when focus is empty", () => {
+  const lines: string[] = [];
+  appendUserFocusInstructions(lines, "  ");
+  appendUserFocusInstructions(lines, undefined);
+  assert.equal(lines.length, 0);
 });
 
 test("buildSourcesChecklistFromKeys replaces default line when extra matches citation key", () => {

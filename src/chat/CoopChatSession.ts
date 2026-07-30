@@ -3495,12 +3495,13 @@ export class CoopChatSession {
 
     // For a standard quick-action click, synthesis prompts only need the imperative
     // task sentence — the DIRECTIVE/context/evidence-bundle boilerplate is already
-    // covered by the synthesis system prompt. Slash-arg and plain-chat turns keep the
-    // full message so the user's own words survive.
+    // covered by the synthesis system prompt. Slash-arg focus text is passed separately
+    // as userFocus so the canned action task stays intact.
     const taskMessage =
-      quickAction && options?.slashUserArgs === undefined
+      quickAction
         ? quickActionPromptParts(quickAction as QuickActionId, actionContext, mentionRefs).task
         : modelMessage;
+    const userFocus = options?.slashUserArgs?.trim() || undefined;
 
     const historyContent =
       options?.historyContent ??
@@ -3592,6 +3593,7 @@ export class CoopChatSession {
             mentions: options?.mentions,
             composerMode: options?.composerMode,
             taskContent: taskMessage,
+            userFocus,
             turn
           });
           return;
@@ -3660,6 +3662,7 @@ export class CoopChatSession {
       mentions: options?.mentions,
       composerMode: options?.composerMode,
       taskContent: taskMessage,
+      userFocus,
       turn
     });
   }
@@ -4224,6 +4227,8 @@ export class CoopChatSession {
       turn?: ChatTurn;
       /** Imperative task sentence for synthesis prompts; falls back to full content. */
       taskContent?: string;
+      /** Specific ask after a slash command / custom prompt template. */
+      userFocus?: string;
     }
   ): Promise<void> {
     const turn =
@@ -4468,6 +4473,7 @@ export class CoopChatSession {
     // Synthesis builders receive the compact task sentence; the no-synthesis fallback
     // below keeps the full `content` so DIRECTIVE/context/confidence lines still reach the model.
     const taskContent = options?.taskContent ?? content;
+    const userFocus = options?.userFocus?.trim() || undefined;
     const llmMessage =
         effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
@@ -4478,6 +4484,7 @@ export class CoopChatSession {
               lineRange: decisionTimeline.lineRange,
               codeSnippet: decisionTimeline.codeSnippet,
               userQuestion: taskContent,
+              userFocus,
               userBubble: lastUserBubble,
               mentionedFiles: mentionRefs,
               activeRepoId,
@@ -4489,6 +4496,7 @@ export class CoopChatSession {
                 file: turnContext.file ?? ownershipReport.path,
                 slackSearch: slackEvidence,
                 userQuestion: taskContent,
+                userFocus,
                 mentionedFiles: mentionRefs,
                 activeRepoId
               })
@@ -4500,6 +4508,7 @@ export class CoopChatSession {
                   activeFile: turnContext.file,
                   summary: repoSummary,
                   userQuestion: taskContent,
+                  userFocus,
                   mentionedFiles: mentionRefs,
                   activeRepoId
                 })
@@ -4510,6 +4519,7 @@ export class CoopChatSession {
                     owner: turnContext.owner ?? this.preferences.owner,
                     repo: turnContext.repo ?? this.preferences.repo,
                     userQuestion: taskContent,
+                    userFocus,
                     mentionedFiles: mentionRefs,
                     activeRepoId
                   })
@@ -4526,6 +4536,7 @@ export class CoopChatSession {
                       owner: turnContext.owner ?? this.preferences.owner,
                       repo: turnContext.repo ?? this.preferences.repo,
                       userQuestion: taskContent,
+                      userFocus,
                       mentionedFiles: mentionRefs,
                       activeRepoId
                     })
@@ -4537,6 +4548,7 @@ export class CoopChatSession {
                         repo: turnContext.repo,
                         file: turnContext.file,
                         userQuestion: taskContent,
+                        userFocus,
                         mentionedFiles: mentionRefs,
                         activeRepoId
                       })

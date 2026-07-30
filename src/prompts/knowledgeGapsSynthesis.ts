@@ -12,6 +12,7 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   EVIDENCE_CITATION_RULES
@@ -58,6 +59,8 @@ export type KnowledgeGapsSynthesisInput = {
   owner?: string;
   repo?: string;
   userQuestion?: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
 };
@@ -73,6 +76,7 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
         : `Audit knowledge gaps for ${input.file ?? "this area"}: missing docs, unclear ownership, and open questions.`)
   );
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   if (repoWide) {
     lines.push("## Primary target");
     lines.push(`- Repository: ${input.owner}/${input.repo}`);

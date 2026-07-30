@@ -3,6 +3,7 @@ import {
   appendCitationKeysSection,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
+  appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
@@ -41,6 +42,8 @@ export type RepoSummarySynthesisInput = {
   activeFile?: string;
   summary: RepoSummaryEvidence | Record<string, unknown>;
   userQuestion?: string;
+  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
 };
@@ -54,6 +57,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
       `Explain the overall architecture of ${input.owner}/${input.repo} for a new engineer joining the team.`
   );
   lines.push("");
+  appendUserFocusInstructions(lines, input.userFocus);
   lines.push("## Scope");
   lines.push(`- Repository: ${input.owner}/${input.repo}`);
   if (input.branch) {
@@ -64,9 +68,15 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   }
   lines.push("");
   lines.push("## Instructions");
-  lines.push(
-    "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
-  );
+  if (input.userFocus?.trim()) {
+    lines.push(
+      "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+    );
+  } else {
+    lines.push(
+      "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+    );
+  }
   lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
   lines.push(
     "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
