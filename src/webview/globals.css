@@ -2305,6 +2305,16 @@
     @apply min-w-0 flex-1 truncate font-medium;
   }
 
+  .coop-explorer-row-path {
+    @apply min-w-0 flex-1 truncate font-medium;
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, Consolas, monospace);
+    font-size: 11px;
+  }
+
+  .coop-explorer-row--path-hit {
+    @apply items-start;
+  }
+
   .coop-explorer-row-meta {
     @apply shrink-0 text-[10px];
     color: var(--coop-panel-muted);

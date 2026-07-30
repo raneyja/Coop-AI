@@ -39,6 +39,36 @@ export function parseRepoNodePath(
   };
 }
 
+/** Keep path-typed queries from burying the exact file under same-named basenames. */
+function rankLocalFileSearchHits(nodes: TreeNodeState[], query: string): TreeNodeState[] {
+  const needle = query.trim().toLowerCase().replace(/^\/+/, "");
+  if (!needle || nodes.length <= 1) {
+    return nodes;
+  }
+  const queryHasPathSep = needle.includes("/");
+  const queryBaseName = needle.split("/").pop() ?? needle;
+
+  const score = (path: string): number => {
+    const lower = path.toLowerCase();
+    const fileName = lower.split("/").pop() ?? "";
+    if (lower === needle) {
+      return 100;
+    }
+    if (lower.endsWith(`/${needle}`)) {
+      return 95;
+    }
+    if (queryHasPathSep && lower.includes(needle)) {
+      return 85;
+    }
+    if (fileName === queryBaseName) {
+      return queryHasPathSep ? 40 : 90;
+    }
+    return 0;
+  };
+
+  return [...nodes].sort((a, b) => score(b.path) - score(a.path) || a.path.localeCompare(b.path));
+}
+
 export function repoOptionFromPath(path: string, metadata?: GithubRepoOption[]): GithubRepoOption | undefined {
   const parsed = parseRepoNodePath(path);
   if (!parsed) {
@@ -156,28 +186,40 @@ function RepoIcon(): React.ReactElement {
 function SearchResultRow({
   node,
   selectedPath,
+  query,
   onOpenFile
 }: {
   node: TreeNodeState;
   selectedPath?: string;
+  query: string;
   onOpenFile: (path: string) => void;
 }): React.ReactElement {
   const isSelected = selectedPath === node.path;
+  const pathQuery = query.trim().includes("/");
   const directory = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "";
 
   return (
     <li>
       <button
         type="button"
-        className={`coop-explorer-row${isSelected ? " coop-explorer-row--selected" : ""}`}
+        className={`coop-explorer-row${pathQuery ? " coop-explorer-row--path-hit" : ""}${
+          isSelected ? " coop-explorer-row--selected" : ""
+        }`}
         onClick={() => onOpenFile(node.path)}
+        title={node.path}
       >
         <span className="coop-explorer-row-chevron" />
         <span className="coop-explorer-row-icon">
           <FileIcon />
         </span>
-        <span className="coop-explorer-row-name">{node.name}</span>
-        {directory ? <span className="coop-explorer-row-meta">{directory}</span> : null}
+        {pathQuery ? (
+          <span className="coop-explorer-row-path truncate">{node.path}</span>
+        ) : (
+          <>
+            <span className="coop-explorer-row-name">{node.name}</span>
+            {directory ? <span className="coop-explorer-row-meta">{directory}</span> : null}
+          </>
+        )}
       </button>
     </li>
   );
@@ -427,11 +469,12 @@ export function RemoteExplorerTreePanel({
       return [];
     }
     const needle = trimmedQuery.toLowerCase();
-    return flattenLoadedTree(nodes).filter(
+    const matches = flattenLoadedTree(nodes).filter(
       (node) =>
         node.type !== "repo" &&
         (node.path.toLowerCase().includes(needle) || node.name.toLowerCase().includes(needle))
     );
+    return rankLocalFileSearchHits(matches, trimmedQuery);
   }, [isFileSearch, nodes, trimmedQuery]);
 
   const fileSearchNodes = useMemo(() => {
@@ -439,10 +482,13 @@ export function RemoteExplorerTreePanel({
       return [];
     }
     if (!searchResultsStale && !searchState.loading && searchState.items.length > 0) {
-      return searchState.items.map((item) => toTreeNode(item, false));
+      return rankLocalFileSearchHits(
+        searchState.items.map((item) => toTreeNode(item, false)),
+        trimmedQuery
+      );
     }
     return localSearchMatches;
-  }, [isFileSearch, localSearchMatches, searchResultsStale, searchState.items, searchState.loading]);
+  }, [isFileSearch, localSearchMatches, searchResultsStale, searchState.items, searchState.loading, trimmedQuery]);
 
   const awaitingRemoteSearch =
     isFileSearch && (searchResultsStale || searchState.loading) && fileSearchNodes.length === 0;
@@ -589,6 +635,7 @@ export function RemoteExplorerTreePanel({
                       key={node.path}
                       node={node}
                       selectedPath={context.file}
+                      query={trimmedQuery}
                       onOpenFile={(path) => onOpenFile?.(path)}
                     />
                   )

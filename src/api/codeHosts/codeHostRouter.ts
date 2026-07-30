@@ -31,6 +31,7 @@ import type {
 } from "./types";
 import { isRemoteFileSearchFallbackCandidate } from "./cloudRepoFileSearchFallback";
 import { buildExplorerFileSearchQuery } from "./explorerSearch";
+import { sortExplorerSearchHitsByQuery } from "./explorerFileTreeSearch";
 import { CodeHostError, humanizeRelativeDate, repoIdFromCoordinates, coordinatesFromRepoId } from "./types";
 
 export type CloudCodeHostFileFetcher = (options: {
@@ -315,9 +316,15 @@ export class CodeHostRouter {
     if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostSearchFetcher) {
       try {
         const repoId = repoIdFromCoordinates(resolved);
-        return await this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () =>
-          this.options.cloudCodeHostSearchFetcher!({ repoId, query: trimmed, coords: resolved, limit })
-        );
+        return await this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () => {
+          const hits = await this.options.cloudCodeHostSearchFetcher!({
+            repoId,
+            query: trimmed,
+            coords: resolved,
+            limit
+          });
+          return sortExplorerSearchHitsByQuery(hits, trimmed);
+        });
       } catch (error) {
         if (!isRemoteFileSearchFallbackCandidate(error)) {
           throw error;
@@ -338,10 +345,13 @@ export class CodeHostRouter {
     }
     const searchQuery = buildExplorerFileSearchQuery(trimmed, resolved.provider);
     const hits = await client.searchCode(resolved, searchQuery, limit);
-    return hits.map((hit) => ({
-      path: hit.path,
-      name: hit.path.split("/").pop() ?? hit.path
-    }));
+    return sortExplorerSearchHitsByQuery(
+      hits.map((hit) => ({
+        path: hit.path,
+        name: hit.path.split("/").pop() ?? hit.path
+      })),
+      trimmed
+    );
   }
 
   /** Repositories shown in the remote explorer picker (pinned config, settings, and live host list). */

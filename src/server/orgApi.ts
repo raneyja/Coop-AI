@@ -4,6 +4,7 @@ import { GitHubClient } from "../api/codeHosts/githubClient";
 import { GitLabClient } from "../api/codeHosts/gitlabClient";
 import { BitbucketClient } from "../api/codeHosts/bitbucketClient";
 import { buildExplorerFileSearchQuery } from "../api/codeHosts/explorerSearch";
+import { sortExplorerSearchHitsByQuery } from "../api/codeHosts/explorerFileTreeSearch";
 import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import { CodeHostError, type RepoCoordinates } from "../api/codeHosts/types";
 import { parseRepoId, countRepoBlobsViaCodeHost } from "../jobs/buildStructureManifest";
@@ -1881,13 +1882,14 @@ async function handleGetRepoSearch(
   const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
   try {
     const hits = await searchRepoFiles(coords, query, token, limit);
+    const mapped = hits.map((hit) => ({
+      path: hit.path,
+      name: hit.path.split("/").pop() ?? hit.path
+    }));
     writeJson(response, 200, {
       repoId,
       query,
-      hits: hits.map((hit) => ({
-        path: hit.path,
-        name: hit.path.split("/").pop() ?? hit.path
-      }))
+      hits: sortExplorerSearchHitsByQuery(mapped, query)
     });
   } catch (error) {
     if (error instanceof CodeHostError) {
