@@ -9,13 +9,8 @@ type ChatCodeCitationProps = {
   onOpenFile?: (path: string, line?: number) => void;
 };
 
-function fileNameFromPath(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? path;
-}
-
 function languageFromPath(path: string): string | undefined {
-  const fileName = fileNameFromPath(path);
+  const fileName = path.split("/").filter(Boolean).pop() ?? path;
   const ext = fileName.includes(".") ? fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase() : "";
   if (!ext) {
     return undefined;
@@ -35,6 +30,13 @@ function languageFromPath(path: string): string | undefined {
   return ext;
 }
 
+function citationLabel(path: string, startLine: number, endLine: number): string {
+  if (startLine === endLine) {
+    return `${path}:${startLine}`;
+  }
+  return `${path}:${startLine}-${endLine}`;
+}
+
 export function ChatCodeCitation({
   startLine,
   endLine,
@@ -42,7 +44,8 @@ export function ChatCodeCitation({
   code,
   onOpenFile
 }: ChatCodeCitationProps): React.ReactElement {
-  const label = `${fileNameFromPath(path)}:${startLine}-${endLine}`;
+  const label = citationLabel(path, startLine, endLine);
+  const hasPreview = code.trim().length > 0;
 
   return (
     <section className="coop-chat-citation">
@@ -50,10 +53,18 @@ export function ChatCodeCitation({
         type="button"
         className="coop-chat-citation-header coop-chat-action-link coop-chat-action-link--file"
         onClick={() => onOpenFile?.(path, startLine)}
+        title={`Open ${label}`}
       >
         {label}
       </button>
-      <ChatCodeBlock language={languageFromPath(path)} code={code} className="coop-chat-citation-block" />
+      {hasPreview ? (
+        <ChatCodeBlock
+          language={languageFromPath(path)}
+          code={code}
+          className="coop-chat-citation-block"
+          hideLanguage
+        />
+      ) : null}
     </section>
   );
 }

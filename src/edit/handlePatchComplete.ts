@@ -39,18 +39,26 @@ export function showPatchReadyNotification(patches: ParsedPatchSet): void {
 export type HandlePatchCompleteOptions = {
   messageTimestamp?: number;
   publish?: PatchSnapshotPublisher;
+  /**
+   * Ask-mode opportunistic patches: if the response has no valid File:/SEARCH-REPLACE
+   * blocks, do nothing (no failed card, no markdown suppression). Edit mode must leave
+   * this unset so parse failures still surface.
+   */
+  ignoreParseFailure?: boolean;
 };
 
 export async function handlePatchComplete(
   content: string,
   options: HandlePatchCompleteOptions = {}
-): Promise<PatchCardState> {
-  setLastAssistantPatchContent(content);
-  setLastPatchApplyError(undefined);
-  setLastPatchMessageTimestamp(options.messageTimestamp);
-
+): Promise<PatchCardState | undefined> {
   const parsed = parsePatchResponse(content);
   if (!parsed.ok) {
+    if (options.ignoreParseFailure) {
+      return undefined;
+    }
+    setLastAssistantPatchContent(content);
+    setLastPatchApplyError(undefined);
+    setLastPatchMessageTimestamp(options.messageTimestamp);
     emitPatchEvent("edit.patch_failed", { phase: "parse", error: parsed.error });
     const failed: PatchCardState = {
       status: "failed",
@@ -72,6 +80,10 @@ export async function handlePatchComplete(
     });
     return failed;
   }
+
+  setLastAssistantPatchContent(content);
+  setLastPatchApplyError(undefined);
+  setLastPatchMessageTimestamp(options.messageTimestamp);
 
   const fileCount = parsed.patches.files.length;
   const hunkCount = countHunks(parsed.patches);

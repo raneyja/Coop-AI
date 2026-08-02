@@ -324,7 +324,7 @@ import { shouldFetchSlackContext } from "../context/slackContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { readAgentModeSetting } from "../config/agentModeConfig";
 import { shouldUseAgentMode } from "./agentRouting";
-import { shouldTrackEditRequest } from "./editSendRouting";
+import { isConcreteFileEditAsk, shouldTrackEditRequest } from "./editSendRouting";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -383,6 +383,8 @@ export class CoopChatSession {
   private workspaceFacade?: IndexedRepoWorkspace;
   private readonly jobClient: JobApiClient;
   private lastJobResult?: unknown;
+  /** Accumulates status lines for chat-deliverable jobs so the narrative timeline keeps moving. */
+  private readonly chatDeliverableNarrative = new Map<string, string[]>();
   private lastContextBundle: ContextFetchResult[] = [];
   private lastTraceDecisionTimeline?: DecisionTimeline;
   private pendingEvidenceArtifactId?: string;
@@ -1126,11 +1128,51 @@ export class CoopChatSession {
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
     this.pinnedContextFile = undefined;
     this.remoteProvenanceFile = undefined;
+    // Sidebar clicks steal editor focus — suppress prefs-seeded snaps that would
+    // resurrect the previously selected repository.
+    this.editorContextSuppressedUntil = Date.now() + 8_000;
+    this.intentDebouncer.cancelAll();
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextForRepoSelect(context) as RepoContext
     );
+    this.syncPreferencesFromRepoSelection(context);
     this.postContext();
+  }
+
+  /** Keep Settings owner/repo aligned with explorer Use repo so editor identity can't revert. */
+  private syncPreferencesFromRepoSelection(
+    context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">
+  ): void {
+    const owner = (context.owner ?? "").trim();
+    const repo = (context.repo ?? "").trim();
+    if (!owner || !repo) {
+      return;
+    }
+    const branch = (context.branch ?? "").trim();
+    const sameRepo =
+      owner === (this.preferences.owner ?? "").trim() &&
+      repo === (this.preferences.repo ?? "").trim();
+    // Switching repos without a resolved branch must not keep the prior repo's branch.
+    const nextBranch: string = branch || (sameRepo ? this.preferences.branch : "");
+    if (
+      owner === this.preferences.owner &&
+      repo === this.preferences.repo &&
+      nextBranch === this.preferences.branch
+    ) {
+      return;
+    }
+    this.preferences = {
+      ...this.preferences,
+      owner,
+      repo,
+      branch: nextBranch
+    };
+    void updateConfiguration({
+      owner,
+      repo,
+      branch: nextBranch
+    });
   }
 
   public clearChat(): void {
@@ -2830,11 +2872,29 @@ export class CoopChatSession {
     }
 
     try {
-      const agentResult = await this.options.agentOrchestrator.run({
-        message: query,
-        repoId,
-        maxSteps: 8
-      });
+      const agentResult = await this.options.agentOrchestrator.run(
+        {
+          message: query,
+          repoId,
+          maxSteps: 8
+        },
+        {
+          onStep: (_step, steps) => {
+            this.postForThread(this.activeThreadId(), {
+              type: "agent:activity",
+              payload: {
+                threadId: this.activeThreadId(),
+                steps: steps.map((entry) => ({
+                  index: entry.index,
+                  tool: entry.tool,
+                  summary: entry.summary,
+                  completed: entry.completed
+                }))
+              }
+            });
+          }
+        }
+      );
       if (!agentResult.context) {
         return result;
       }
@@ -3440,9 +3500,33 @@ export class CoopChatSession {
       }
     }
 
+    // Concrete "change this file" asks in plain chat must use the /edit Apply path —
+    // soft prompt guidance alone still yields Copy-only language fences.
+    if (
+      !quickAction &&
+      !options?.composerMode &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      isConcreteFileEditAsk(message)
+    ) {
+      options = { ...options, composerMode: "edit" };
+    }
+
     this.snapEditorContextBeforeSend({
       allowLocalFileForEdit: options?.composerMode === "edit"
     });
+
+    // Re-check after editor snap in case the file chip only appeared from the open tab.
+    if (
+      !quickAction &&
+      options?.composerMode === "edit" &&
+      !this.currentContext.file?.trim() &&
+      !options.mentions?.length
+    ) {
+      // No file in scope — fall back to ask-mode rather than emit unanchored patches.
+      options = { ...options, composerMode: undefined };
+    }
+
     if (options?.mentions?.length) {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
       this.postContext();
@@ -3494,7 +3578,10 @@ export class CoopChatSession {
     this.pendingChatLocalFiles =
       quickAction === "understand-repo"
         ? undefined
-        : this.loadLocalFilesSyncForChat({ fullFile: options?.composerMode === "edit" });
+        : this.loadLocalFilesSyncForChat({
+            // Full active file for /edit and plain chat so SEARCH hunks can match beyond a selection.
+            fullFile: options?.composerMode === "edit" || !quickAction
+          });
     // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.postContext();
@@ -4846,11 +4933,20 @@ export class CoopChatSession {
         this.pendingEvidenceArtifactId = undefined;
       }
       this.clearIntentFeedback(turn.threadId);
-      if (options?.composerMode === "edit" && this.isViewingThread(turn.threadId)) {
-        void handlePatchComplete(finalMessage.content, {
-          messageTimestamp: finalMessage.timestamp,
-          publish: (state) => this.postPatchUpdate(state)
-        });
+      if (this.isViewingThread(turn.threadId)) {
+        if (options?.composerMode === "edit") {
+          void handlePatchComplete(finalMessage.content, {
+            messageTimestamp: finalMessage.timestamp,
+            publish: (state) => this.postPatchUpdate(state)
+          });
+        } else if (chatUseCase === "chat") {
+          // Plain chat may emit File:/SEARCH-REPLACE when recommending inserts — elevate to Apply.
+          void handlePatchComplete(finalMessage.content, {
+            messageTimestamp: finalMessage.timestamp,
+            publish: (state) => this.postPatchUpdate(state),
+            ignoreParseFailure: true
+          });
+        }
       }
       if (result.usage) {
         turn.sessionCostUsd += result.usage.estimatedCostUsd;
@@ -5201,6 +5297,7 @@ export class CoopChatSession {
   ): void {
     const deliverable = deliverableForQuickAction(quickAction);
     const status = patch.status ?? "running";
+    const targetThreadId = threadId ?? this.activeThreadId();
     this.postJobProgress(
       {
         title: jobTitleForAction(quickAction),
@@ -5209,8 +5306,27 @@ export class CoopChatSession {
         ...patch,
         status: deliverable === "chat" ? displayStatusForChatDeliverable(status) : status
       },
-      threadId
+      targetThreadId
     );
+
+    // Blast Radius / Knowledge Gaps can wait on a job for a long time. Keep the
+    // Copilot-style timeline alive with concrete progress lines — not one frozen status.
+    if (deliverable === "chat") {
+      const line = (patch.message || activeJobMessageForAction(quickAction)).trim();
+      if (line) {
+        const key = `${targetThreadId}:${quickAction}`;
+        const prior = this.chatDeliverableNarrative.get(key) ?? seedChatDeliverableNarrative(quickAction);
+        const next = prior.includes(line) ? prior : [...prior, line];
+        this.chatDeliverableNarrative.set(key, next);
+        this.postIntentFeedbackForThread(targetThreadId, {
+          status: "loading",
+          actionId: quickAction,
+          title: jobTitleForAction(quickAction),
+          message: line,
+          activityMessages: next
+        });
+      }
+    }
   }
 
   private applyBlastRadiusJobResultToBundle(
@@ -5709,11 +5825,18 @@ export class CoopChatSession {
     branch?: string;
   }): Promise<void> {
     const repoId = `${payload.provider ?? this.preferences.defaultCodeHost}:${payload.owner}/${payload.repo}`;
+    // Stamp context before any await so a concurrent repo:list (browse) sees the
+    // newly selected repo instead of loading the previous one's tree.
+    this.setRepoContext(payload);
     let branch = payload.branch?.trim() || undefined;
     if (await this.options.api.hasToken()) {
       try {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
-        if (!workspace.repos.some((entry) => entry.repoId === repoId)) {
+        const inWorkspace = workspace.repos.some(
+          (entry) =>
+            entry.repoId === repoId || entry.repoId.toLowerCase() === repoId.toLowerCase()
+        );
+        if (!inWorkspace) {
           await this.handleRepoListRepos("chat");
           return;
         }
@@ -5748,10 +5871,8 @@ export class CoopChatSession {
         /* leave undefined */
       }
     }
-    this.setRepoContext({ ...payload, branch });
-    if (branch && branch !== this.preferences.branch) {
-      this.preferences = { ...this.preferences, branch };
-      void updateConfiguration({ branch });
+    if (branch && branch !== this.currentContext.branch) {
+      this.setRepoContext({ ...payload, branch });
     }
   }
 
@@ -7096,7 +7217,13 @@ export class CoopChatSession {
   }
 
   private clearIntentFeedback(threadId?: string): void {
-    this.postForThread(threadId ?? this.activeThreadId(), {
+    const id = threadId ?? this.activeThreadId();
+    for (const key of [...this.chatDeliverableNarrative.keys()]) {
+      if (key.startsWith(`${id}:`)) {
+        this.chatDeliverableNarrative.delete(key);
+      }
+    }
+    this.postForThread(id, {
       type: "intent:feedback",
       payload: { status: "complete", title: "" }
     });
@@ -7875,6 +8002,22 @@ function integrationLabel(provider: IntegrationChatProvider): string {
       return "Google Docs";
     default:
       return provider;
+  }
+}
+
+function seedChatDeliverableNarrative(actionId: string): string[] {
+  switch (actionId) {
+    case "blast-radius":
+      return [
+        "Analyzing dependencies…",
+        "Mapping change impact…",
+        "Scanning callers and dependents…",
+        "Building dependency graph…"
+      ];
+    case "knowledge-gaps":
+      return ["Scanning repository for knowledge gaps…", "Reviewing docs coverage…"];
+    default:
+      return ["Running background scan…"];
   }
 }
 

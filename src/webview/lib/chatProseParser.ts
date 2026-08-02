@@ -97,6 +97,22 @@ export function parseChatProse(content: string): ChatProseDocument {
   return { blocks };
 }
 
+function tryParseCitationLocator(value: string): { startLine: number; endLine: number; path: string } | null {
+  const match = value.trim().match(CITATION_HEADER_RE);
+  if (!match) {
+    return null;
+  }
+  const path = match[3].trim();
+  if (!path) {
+    return null;
+  }
+  return {
+    startLine: Number(match[1]),
+    endLine: Number(match[2]),
+    path
+  };
+}
+
 function tryParseCodeFence(
   lines: string[],
   startIndex: number
@@ -106,7 +122,7 @@ function tryParseCodeFence(
     return null;
   }
 
-  const language = openingLine.replace(/^```/, "").trim() || undefined;
+  const infoString = openingLine.replace(/^```/, "").trim() || undefined;
   const body: string[] = [];
   let i = startIndex + 1;
   while (i < lines.length && !CODE_FENCE_OPEN_RE.test(lines[i])) {
@@ -115,18 +131,32 @@ function tryParseCodeFence(
   }
 
   const nextIndex = i < lines.length ? i + 1 : i;
-  const [firstBodyLine = "", ...rest] = body;
-  const citationMatch = firstBodyLine.trim().match(CITATION_HEADER_RE);
-  if (citationMatch) {
-    const startLine = Number(citationMatch[1]);
-    const endLine = Number(citationMatch[2]);
-    const path = citationMatch[3].trim();
+
+  // Cursor-style: ```startLine:endLine:path on the fence line.
+  const infoCitation = infoString ? tryParseCitationLocator(infoString) : null;
+  if (infoCitation) {
     return {
       block: {
         type: "code-citation",
-        startLine,
-        endLine,
-        path,
+        startLine: infoCitation.startLine,
+        endLine: infoCitation.endLine,
+        path: infoCitation.path,
+        code: body.join("\n")
+      },
+      nextIndex
+    };
+  }
+
+  // Coop preferred: plain ``` fence; first body line is startLine:endLine:path.
+  const [firstBodyLine = "", ...rest] = body;
+  const bodyCitation = tryParseCitationLocator(firstBodyLine);
+  if (bodyCitation) {
+    return {
+      block: {
+        type: "code-citation",
+        startLine: bodyCitation.startLine,
+        endLine: bodyCitation.endLine,
+        path: bodyCitation.path,
         code: rest.join("\n")
       },
       nextIndex
@@ -136,7 +166,7 @@ function tryParseCodeFence(
   return {
     block: {
       type: "code-fence",
-      language,
+      language: infoString,
       code: body.join("\n")
     },
     nextIndex

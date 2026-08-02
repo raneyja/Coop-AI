@@ -191,6 +191,8 @@ export type UserPreferences = {
   githubNeedsReconnect?: boolean;
   devMode: boolean;
   orgName?: string;
+  /** Signed-in account email from /v1/me (when available). */
+  userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
   userRole?: string;
   authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
@@ -542,6 +544,13 @@ export type WebviewOutbound =
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
   | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
   | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | {
+      type: "agent:activity";
+      payload: {
+        threadId?: string;
+        steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>;
+      };
+    }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }

@@ -52,11 +52,20 @@ test("displayIdentitySubtitle combines org and plan when signed in", () => {
   assert.equal(displayIdentitySubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), undefined);
 });
 
-test("accountHubSubtitle reports sign-in connection status", () => {
-  assert.equal(accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp" }), "Signed in · localhost:8787");
+test("accountHubSubtitle reports sign-in with user email", () => {
   assert.equal(
-    accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp", plan: "free", quotaCredits: { remainingCredits: 3, limitCredits: 10, usedCredits: 7, windowHours: 24, resetsAt: "", retryAfterMs: 0 } }),
-    "Signed in · localhost:8787"
+    accountHubSubtitle({ ...basePrefs, orgName: "Acme Corp", userEmail: "jon@acme.com" }),
+    "Signed in · jon@acme.com"
+  );
+  assert.equal(
+    accountHubSubtitle({
+      ...basePrefs,
+      orgName: "Acme Corp",
+      userEmail: "jon@acme.com",
+      plan: "free",
+      quotaCredits: { remainingCredits: 3, limitCredits: 10, usedCredits: 7, windowHours: 24, resetsAt: "", retryAfterMs: 0 }
+    }),
+    "Signed in · jon@acme.com"
   );
 });
 
@@ -94,8 +103,9 @@ test("indexingHubSubtitle summarizes lightning state", () => {
   );
 });
 
-test("accountHubSubtitle falls back without org name", () => {
-  assert.equal(accountHubSubtitle(basePrefs), "Signed in · localhost:8787");
+test("accountHubSubtitle falls back without email", () => {
+  assert.equal(accountHubSubtitle(basePrefs), "Signed in");
+  assert.equal(accountHubSubtitle({ ...basePrefs, userEmail: "  " }), "Signed in");
   assert.equal(accountHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Not signed in");
 });
 

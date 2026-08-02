@@ -3,10 +3,17 @@ import {
   appendThinkingProcessingTerms,
   buildProcessingTermMessages
 } from "../context/thinkingProcessingTerms";
+import { isThinkingProcessingTermMessage } from "../context/thinkingProcessingTerms";
 import {
+  ACTIVITY_PHASE_MS,
+  ACTIVITY_START_DELAY_MS,
+  buildConcreteActivityMessages,
   buildThinkingMessageSequence,
   hasVisibleAssistantResponse,
+  isSynthesisActivityPhase,
   pickRotatingThinkingMessage,
+  resolvePacedActivityIndex,
+  shouldResetThinkingRotationStep,
   shouldShowThinkingIndicator
 } from "./thinkingMessageRotation";
 import type { IntentFeedbackState, JobProgressState } from "./types";
@@ -39,7 +46,7 @@ test("appendThinkingProcessingTerms preserves tool lines and adds varied verbs",
   assert.ok(enriched.length >= 6);
 });
 
-test("buildThinkingMessageSequence merges integrations, jobs, and processing terms", () => {
+test("buildThinkingMessageSequence merges integrations and processing terms", () => {
   const sequence = buildThinkingMessageSequence(
     {
       status: "loading",
@@ -54,14 +61,16 @@ test("buildThinkingMessageSequence merges integrations, jobs, and processing ter
       jobId: "job-1",
       status: "running",
       title: "Building dependency graph",
-      message: "Graph ready — preparing answer…",
-      progress: 80,
+      message: "Building dependency graph…",
+      progress: 40,
       deliverable: "chat"
     } satisfies JobProgressState
   );
   assert.ok(sequence.includes("Searching GitHub estate index…"));
   assert.ok(sequence.includes("Pulling in Slack messages…"));
-  assert.ok(sequence.includes("Graph ready — preparing answer…"));
+  assert.ok(sequence.includes("Building dependency graph…"));
+  // Terminal "preparing answer" lines are excluded from the checklist sequence.
+  assert.ok(!sequence.some((line) => /preparing answer/i.test(line)));
   assert.ok(sequence.length >= 7);
 });
 
@@ -93,6 +102,114 @@ test("shouldShowThinkingIndicator hides once assistant text is visible", () => {
 
 test("hasVisibleAssistantResponse ignores empty assistant placeholders", () => {
   assert.equal(hasVisibleAssistantResponse([{ role: "assistant", content: "   " }], null), false);
+});
+
+test("shouldResetThinkingRotationStep keeps step across prefix growth", () => {
+  assert.equal(shouldResetThinkingRotationStep(["A", "B"], ["A", "B", "C"]), false);
+  assert.equal(shouldResetThinkingRotationStep(["A", "B"], ["X", "B"]), true);
+  assert.equal(shouldResetThinkingRotationStep([], ["A"]), true);
+});
+
+test("buildConcreteActivityMessages strips spinner filler verbs", () => {
+  const concrete = buildConcreteActivityMessages(
+    {
+      status: "loading",
+      title: "Scanning",
+      activityMessages: [
+        "Searching GitHub estate index…",
+        "Scanning for knowledge gaps…",
+        "Aggregating context…",
+        "Synthesizing integrations…"
+      ]
+    } satisfies IntentFeedbackState,
+    undefined
+  );
+  assert.deepEqual(concrete, [
+    "Searching GitHub estate index…",
+    "Scanning for knowledge gaps…"
+  ]);
+  assert.equal(isThinkingProcessingTermMessage("Aggregating context…"), true);
+  assert.equal(isThinkingProcessingTermMessage("Scanning for knowledge gaps…"), false);
+});
+
+test("resolvePacedActivityIndex waits for start delay then advances one-by-one", () => {
+  assert.equal(resolvePacedActivityIndex({ concreteCount: 3, elapsedMs: 0 }), -1);
+  assert.equal(
+    resolvePacedActivityIndex({ concreteCount: 3, elapsedMs: ACTIVITY_START_DELAY_MS - 1 }),
+    -1
+  );
+  assert.equal(
+    resolvePacedActivityIndex({ concreteCount: 3, elapsedMs: ACTIVITY_START_DELAY_MS }),
+    0
+  );
+  assert.equal(
+    resolvePacedActivityIndex({
+      concreteCount: 3,
+      elapsedMs: ACTIVITY_START_DELAY_MS + ACTIVITY_PHASE_MS
+    }),
+    1
+  );
+  assert.equal(
+    resolvePacedActivityIndex({
+      concreteCount: 3,
+      elapsedMs: ACTIVITY_START_DELAY_MS + ACTIVITY_PHASE_MS * 2
+    }),
+    2
+  );
+  // High job progress must not skip the timed reveal.
+  assert.equal(
+    resolvePacedActivityIndex({
+      concreteCount: 3,
+      progress: 95,
+      elapsedMs: ACTIVITY_START_DELAY_MS
+    }),
+    0
+  );
+});
+
+test("isSynthesisActivityPhase does not start immediately for a single prep step", () => {
+  assert.equal(
+    isSynthesisActivityPhase({
+      awaitingResponse: true,
+      prepCount: 1,
+      elapsedMs: ACTIVITY_START_DELAY_MS
+    }),
+    false
+  );
+  assert.equal(
+    isSynthesisActivityPhase({
+      awaitingResponse: true,
+      prepCount: 1,
+      elapsedMs: ACTIVITY_START_DELAY_MS + ACTIVITY_PHASE_MS
+    }),
+    true
+  );
+});
+
+test("buildConcreteActivityMessages drops terminal preparing lines", () => {
+  const concrete = buildConcreteActivityMessages(
+    {
+      status: "loading",
+      title: "Scanning",
+      activityMessages: [
+        "Pulling in Slack messages…",
+        "Searching Confluence pages…",
+        "Scan complete — preparing answer…"
+      ]
+    } satisfies IntentFeedbackState,
+    {
+      jobId: "j1",
+      status: "running",
+      title: "Scanning",
+      message: "Scan complete — preparing answer…",
+      progress: 80,
+      deliverable: "chat"
+    } satisfies JobProgressState
+  );
+  assert.deepEqual(concrete, [
+    "Pulling in Slack messages…",
+    "Searching Confluence pages…"
+  ]);
 });
 
 console.log(`\n${passed} passed`);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  isConcreteFileEditAsk,
   resolveEditTrackingMessage,
   shouldTrackEditRequest
 } from "./editSendRouting";
@@ -18,6 +19,32 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("isConcreteFileEditAsk detects applyable identifier validation asks", () => {
+  assert.equal(
+    isConcreteFileEditAsk(
+      "On `validate_identifier`, add a clear validation error when the project identifier is empty or whitespace-only. Show the exact change to apply in this file."
+    ),
+    true
+  );
+});
+
+test("isConcreteFileEditAsk rejects advisory where/which questions", () => {
+  assert.equal(
+    isConcreteFileEditAsk(
+      "We’re adding a “blocked by” link type on issues. Where should validation live, and which existing link types in this mapper / IssueRelationViewSet should I mirror?"
+    ),
+    false
+  );
+});
+
+test("isConcreteFileEditAsk rejects ownership / archaeology asks", () => {
+  assert.equal(isConcreteFileEditAsk("Who owns workspace API permissions for this code?"), false);
+  assert.equal(
+    isConcreteFileEditAsk("Why do we model issue states with StateGroup this way?"),
+    false
+  );
+});
 
 test("shouldTrackEditRequest is true for edit composer without quick action", () => {
   assert.equal(shouldTrackEditRequest({ composerMode: "edit" }, undefined), true);

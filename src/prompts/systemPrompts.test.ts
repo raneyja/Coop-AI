@@ -27,9 +27,22 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("Do NOT use: # headings"));
   assert.ok(prompt.includes("*italics* for uncertainty"));
-  assert.ok(prompt.includes("whose FIRST line is `startLine:endLine:path`"));
+  assert.ok(prompt.includes("use a **citation fence**, never a language-tagged fence"));
+  assert.ok(prompt.includes("first body line is `startLine:endLine:path`"));
+  assert.ok(prompt.includes("FAIL: ```typescript / ```javascript"));
   assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("## Required response structure"));
+});
+
+test("chat use case requires answer-style Your question and applyable edit patches", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("Never restate, paraphrase, or truncate the user's question text"));
+  assert.ok(prompt.includes("FAIL: restating, paraphrasing, or truncating the user's question"));
+  assert.ok(prompt.includes("## Concrete file edits (when recommending code to apply)"));
+  assert.ok(prompt.includes("<<<<<<< SEARCH"));
+  assert.ok(prompt.includes("Multiple edits → multiple patch blocks"));
+  assert.ok(prompt.includes("emit `File:` + ```patch SEARCH/REPLACE blocks"));
+  assert.ok(prompt.includes("not ```typescript dumps"));
 });
 
 test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {

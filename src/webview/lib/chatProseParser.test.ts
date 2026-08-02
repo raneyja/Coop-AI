@@ -386,6 +386,27 @@ test("citation fence with startLine:endLine:path yields code-citation", () => {
   }
 });
 
+test("citation fence info-string startLine:endLine:path yields code-citation", () => {
+  const input =
+    "```120:145:packages/lib/server-only/document/complete-document-with-token.ts\nif (envelope.status !== DocumentStatus.PENDING) {\n  throw new Error('must be pending');\n}\n```";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks.length, 1);
+  const block = doc.blocks[0]!;
+  assert.equal(block.type, "code-citation");
+  if (block.type === "code-citation") {
+    assert.equal(block.startLine, 120);
+    assert.equal(block.endLine, 145);
+    assert.equal(block.path, "packages/lib/server-only/document/complete-document-with-token.ts");
+    assert.ok(block.code.includes("DocumentStatus.PENDING"));
+  }
+});
+
+test("language-tagged fence is still a code-fence (not a citation)", () => {
+  const input = "```typescript\nif (true) {\n  return;\n}\n```";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-fence");
+});
+
 // ── Test 16: Mixed content ────────────────────────────────────────────────
 test("mixed: section-heading + paragraph + list + code fence", () => {
   const input = [

@@ -66,6 +66,8 @@ test("appendUserFocusInstructions requires Your question section for specific as
   assert.ok(section.includes("PASS:"));
   assert.ok(section.includes("FAIL:"));
   assert.ok(section.includes("generic SaaS narrative"));
+  assert.ok(section.includes("restates, paraphrases, or truncates the user's question"));
+  assert.ok(section.includes("immediately after **Summary**/**Answer**"));
 });
 
 test("appendUserFocusInstructions is a no-op when focus is empty", () => {

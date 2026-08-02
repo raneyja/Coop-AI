@@ -1,9 +1,8 @@
-import * as fs from "node:fs";
-import { resolveLocalAbsolutePath } from "../context/localFileResolver";
 import type { PatchCardState, PatchDiffLine, PatchPreviewFile, PatchPreviewHunk } from "../chat/types";
 import { findSearchMatch } from "./patchContent";
 import { countHunks, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
+import { resolveEditablePatchTarget } from "./patchTarget";
 
 const CONTEXT_LINES = 2;
 
@@ -41,15 +40,8 @@ function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<str
   if (overrides && relativePath in overrides) {
     return overrides[relativePath] ?? "";
   }
-  const absolutePath = resolveLocalAbsolutePath(relativePath);
-  if (!absolutePath) {
-    return "";
-  }
-  try {
-    return fs.readFileSync(absolutePath, "utf8");
-  } catch {
-    return "";
-  }
+  const target = resolveEditablePatchTarget(relativePath);
+  return target?.readText() ?? "";
 }
 
 function lineIndexAtOffset(content: string, offset: number): number {

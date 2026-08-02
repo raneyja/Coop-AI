@@ -102,11 +102,6 @@ function renderInlineNodes(nodes: ChatInlineNode[]): React.ReactNode[] {
   });
 }
 
-function fileNameFromPath(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? path;
-}
-
 function FeedCodeBlock({
   language,
   code
@@ -139,16 +134,18 @@ function FeedCodeCitation({
   path: string;
   code: string;
 }): React.ReactElement {
-  const label = `${fileNameFromPath(path)}:${startLine}-${endLine}`;
+  const label = startLine === endLine ? `${path}:${startLine}` : `${path}:${startLine}-${endLine}`;
 
   return (
     <section className="coop-chat-citation">
       <div className="coop-chat-citation-header">{label}</div>
-      <div className="coop-chat-citation-block">
-        <pre>
-          <code>{code}</code>
-        </pre>
-      </div>
+      {code.trim() ? (
+        <div className="coop-chat-citation-block">
+          <pre>
+            <code>{code}</code>
+          </pre>
+        </div>
+      ) : null}
     </section>
   );
 }

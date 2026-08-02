@@ -1,29 +1,25 @@
-import * as fs from "node:fs";
 import * as vscode from "vscode";
-import { resolveLocalAbsolutePath } from "../context/localFileResolver";
 import type { ParsedPatchSet } from "./patchParser";
 import { applyHunksToContent } from "./patchContent";
+import {
+  resolveEditablePatchTarget,
+  undoSnapshotPathForUri,
+  uriFromUndoSnapshotPath
+} from "./patchTarget";
 
 export { applyHunkToContent, applyHunksToContent } from "./patchContent";
 export type { ApplyHunkResult } from "./patchContent";
 
 export type FileUndoSnapshot = {
+  /** Local fs path or remote URI string (e.g. vscode-vfs://…). */
   absolutePath: string;
   relativePath: string;
   originalContent: string;
 };
 
 export type ApplyPatchesResult =
-  | { ok: true; undo: FileUndoSnapshot[]; filesChanged: number }
+  | { ok: true; undo: FileUndoSnapshot[]; filesChanged: number; usedRemoteEditor: boolean }
   | { ok: false; error: string; file?: string };
-
-function readFileUtf8(absolutePath: string): string | undefined {
-  try {
-    return fs.readFileSync(absolutePath, "utf8");
-  } catch {
-    return undefined;
-  }
-}
 
 function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
   const lastLine = Math.max(0, document.lineCount - 1);
@@ -36,14 +32,23 @@ export async function applyPatchesToWorkspace(
 ): Promise<ApplyPatchesResult> {
   const planned: Array<{ uri: vscode.Uri; relativePath: string; originalContent: string; nextContent: string }> =
     [];
+  let usedRemoteEditor = false;
 
   for (const filePatch of patches.files) {
-    const absolutePath = resolveLocalAbsolutePath(filePatch.relativePath);
-    if (!absolutePath) {
-      return { ok: false, error: `Could not resolve file: ${filePatch.relativePath}`, file: filePatch.relativePath };
+    const target = resolveEditablePatchTarget(filePatch.relativePath);
+    if (!target) {
+      return {
+        ok: false,
+        error: `Could not resolve file: ${filePatch.relativePath}. Open it in the editor (remote tabs work), then Apply again.`,
+        file: filePatch.relativePath
+      };
     }
 
-    const originalContent = readFileUtf8(absolutePath);
+    if (target.uri.scheme !== "file") {
+      usedRemoteEditor = true;
+    }
+
+    const originalContent = target.readText();
     if (originalContent === undefined) {
       return { ok: false, error: `Could not read file: ${filePatch.relativePath}`, file: filePatch.relativePath };
     }
@@ -58,7 +63,7 @@ export async function applyPatchesToWorkspace(
     }
 
     planned.push({
-      uri: vscode.Uri.file(absolutePath),
+      uri: target.uri,
       relativePath: filePatch.relativePath,
       originalContent,
       nextContent: applied.content
@@ -83,8 +88,9 @@ export async function applyPatchesToWorkspace(
   return {
     ok: true,
     filesChanged: planned.length,
+    usedRemoteEditor,
     undo: planned.map((item) => ({
-      absolutePath: item.uri.fsPath,
+      absolutePath: undoSnapshotPathForUri(item.uri),
       relativePath: item.relativePath,
       originalContent: item.originalContent
     }))
@@ -100,7 +106,7 @@ export async function undoPatchApplication(
 
   const edits = new vscode.WorkspaceEdit();
   for (const snapshot of undo) {
-    const uri = vscode.Uri.file(snapshot.absolutePath);
+    const uri = uriFromUndoSnapshotPath(snapshot.absolutePath);
     const document = await vscode.workspace.openTextDocument(uri);
     edits.replace(uri, fullDocumentRange(document), snapshot.originalContent);
   }

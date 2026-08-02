@@ -6,7 +6,6 @@ import { CoopNotice } from "./components/CoopNotice";
 import { QuotaExceededNotice, type QuotaExceededNoticeState } from "./components/QuotaExceededNotice";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatStream, ChatMessage, type ChatInlineArtifact, renderInlineArtifact } from "./components/ChatStream";
-import { ChatThinkingIndicator } from "./components/ChatThinkingIndicator";
 import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
@@ -21,9 +20,14 @@ import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUp
 import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
+  ACTIVITY_START_DELAY_MS,
+  buildConcreteActivityMessages,
   buildThinkingMessageSequence,
   hasVisibleAssistantResponse,
+  isSynthesisActivityPhase,
   pickRotatingThinkingMessage,
+  pickSynthesisThinkingLine,
+  shouldResetThinkingRotationStep,
   shouldShowThinkingIndicator,
   THINKING_ROTATION_STEP_MS
 } from "./thinkingMessageRotation";
@@ -31,8 +35,13 @@ import {
   buildNarrativeStepsFromFeedback,
   shouldUseNarrativeTimeline
 } from "./agentNarrative";
-import { AgentNarrativeTimeline } from "./components/AgentNarrativeTimeline";
-import { ModelThinkingBlock } from "./components/ModelThinkingBlock";
+import {
+  agentStepsToActivity,
+  buildActivityTodosFromFeedback,
+  extractFileChipsFromLabels,
+  mergeAgentActivity,
+  type AgentActivityState
+} from "./agentActivity";
 import { QuickActionId } from "./types";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import { PromptDetailOverlay } from "./components/PromptDetailOverlay";
@@ -84,6 +93,13 @@ type InboundMessage =
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
   | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | {
+      type: "agent:activity";
+      payload: {
+        threadId?: string;
+        steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>;
+      };
+    }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
@@ -314,6 +330,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [quotaNotice, setQuotaNotice] = useState<QuotaExceededNoticeState | undefined>();
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [thinkingBuffer, setThinkingBuffer] = useState("");
+  const [agentOverlay, setAgentOverlay] = useState<AgentActivityState | undefined>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const explorerRepoRef = useRef<{
@@ -368,6 +385,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const resetEphemeralChatState = useCallback(() => {
     setStreamingBuffer("");
     setThinkingBuffer("");
+    setAgentOverlay(undefined);
     setIsStreaming(false);
     setError("");
     setQuotaNotice(undefined);
@@ -414,15 +432,30 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const [thinkingRotationStep, setThinkingRotationStep] = useState(0);
+  const [activityElapsedMs, setActivityElapsedMs] = useState(0);
+  const [synthesisElapsedMs, setSynthesisElapsedMs] = useState(0);
+  const activityStartedAtRef = useRef<number | null>(null);
+  const synthesisStartedAtRef = useRef<number | null>(null);
+  const prevConcreteActivityKeyRef = useRef("");
+
   const thinkingSequence = useMemo(
     () => buildThinkingMessageSequence(intentFeedback, jobProgress, inlineThinkingOptions),
     [intentFeedback, jobProgress, inlineThinkingOptions]
   );
   const thinkingSequenceKey = thinkingSequence.join("\u0001");
+  const concreteActivityKey = useMemo(
+    () => buildConcreteActivityMessages(intentFeedback, jobProgress).join("\u0001"),
+    [intentFeedback, jobProgress]
+  );
 
+  const prevThinkingSequenceRef = useRef<string[]>([]);
   useEffect(() => {
-    setThinkingRotationStep(0);
-  }, [thinkingSequenceKey]);
+    const previous = prevThinkingSequenceRef.current;
+    if (shouldResetThinkingRotationStep(previous, thinkingSequence)) {
+      setThinkingRotationStep(0);
+    }
+    prevThinkingSequenceRef.current = thinkingSequence;
+  }, [thinkingSequenceKey, thinkingSequence]);
 
   const thinkingMessage = useMemo(
     () => pickRotatingThinkingMessage(thinkingSequence, thinkingRotationStep),
@@ -454,18 +487,149 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [visibleNarrativeSteps, thinkingMessage, messages, streamMessage]
   );
 
-  const modelThinkingStreaming = isStreaming && !streamMessage && Boolean(thinkingBuffer.trim());
-  const visibleModelThinking = thinkingBuffer.trim() || undefined;
+  const prepActivityCount = useMemo(
+    () => buildConcreteActivityMessages(intentFeedback, jobProgress).length,
+    [intentFeedback, jobProgress]
+  );
+
+  const synthesisPhase = useMemo(
+    () =>
+      isSynthesisActivityPhase({
+        intentFeedback,
+        jobProgress,
+        awaitingResponse: inlineThinkingOptions.awaitingResponse,
+        prepCount: Math.min(prepActivityCount, 5),
+        elapsedMs: activityElapsedMs
+      }),
+    [intentFeedback, jobProgress, inlineThinkingOptions.awaitingResponse, prepActivityCount, activityElapsedMs]
+  );
 
   useEffect(() => {
-    if (thinkingSequence.length <= 1 || !visibleThinkingMessage) {
+    if (!synthesisPhase) {
+      synthesisStartedAtRef.current = null;
+      setSynthesisElapsedMs(0);
+      return;
+    }
+    if (synthesisStartedAtRef.current == null) {
+      synthesisStartedAtRef.current = Date.now();
+    }
+    const startedAt = synthesisStartedAtRef.current;
+    const tick = () => setSynthesisElapsedMs(Date.now() - startedAt);
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [synthesisPhase]);
+
+  const activityTodos = useMemo(
+    () =>
+      buildActivityTodosFromFeedback(
+        intentFeedback,
+        jobProgress,
+        inlineThinkingOptions,
+        activityElapsedMs,
+        thinkingRotationStep,
+        synthesisElapsedMs
+      ),
+    [
+      intentFeedback,
+      jobProgress,
+      inlineThinkingOptions,
+      activityElapsedMs,
+      thinkingRotationStep,
+      synthesisElapsedMs
+    ]
+  );
+
+  // Prefer real model CoT; during synthesis keep Thinking alive with rotating copy.
+  // Same start delay as todos so Thinking doesn't pop in the instant you send.
+  const showSynthesisThinking =
+    synthesisPhase &&
+    synthesisElapsedMs >= ACTIVITY_START_DELAY_MS &&
+    !hasVisibleAssistantResponse(messages, streamMessage);
+  const visibleModelThinking =
+    thinkingBuffer.trim() ||
+    (showSynthesisThinking ? pickSynthesisThinkingLine(thinkingRotationStep) : undefined);
+  const modelThinkingStreaming =
+    showSynthesisThinking || Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
+
+  const activityFromFeedback = useMemo<AgentActivityState>(() => {
+    // Do not invent tool rows from status todos — that produced fake "N explored" counts.
+    const files = extractFileChipsFromLabels(activityTodos.map((todo) => todo.content));
+    return { todos: activityTodos, tools: [], files, synthesisPhase };
+  }, [activityTodos, synthesisPhase]);
+
+  const agentActivity = useMemo(
+    () => mergeAgentActivity(activityFromFeedback, agentOverlay),
+    [activityFromFeedback, agentOverlay]
+  );
+
+  const showAgentActivity =
+    !hasVisibleAssistantResponse(messages, streamMessage) &&
+    (agentActivity.todos.length > 0 ||
+      Boolean(visibleModelThinking) ||
+      Boolean(visibleThinkingMessage) ||
+      agentActivity.tools.length > 0 ||
+      synthesisPhase);
+
+  const activityInFlight =
+    showAgentActivity ||
+    Boolean(visibleThinkingMessage) ||
+    Boolean(visibleNarrativeSteps?.length) ||
+    (isStreaming && !streamMessage);
+
+  useEffect(() => {
+    if (!activityInFlight) {
+      activityStartedAtRef.current = null;
+      prevConcreteActivityKeyRef.current = "";
+      setActivityElapsedMs(0);
+      return;
+    }
+
+    const previousKey = prevConcreteActivityKeyRef.current;
+    const nextKey = concreteActivityKey;
+    // Prefix growth (new status line appended) keeps the clock. A fresh/replaced
+    // checklist must restart so steps reveal from the first item — not jump ahead
+    // because streaming had already been running for several seconds.
+    const isPrefixGrowth =
+      previousKey.length > 0 &&
+      nextKey.length >= previousKey.length &&
+      nextKey.startsWith(previousKey);
+    const shouldRestartPace =
+      activityStartedAtRef.current == null ||
+      (nextKey.length > 0 && nextKey !== previousKey && !isPrefixGrowth);
+
+    if (shouldRestartPace) {
+      activityStartedAtRef.current = Date.now();
+      setActivityElapsedMs(0);
+    }
+    prevConcreteActivityKeyRef.current = nextKey;
+
+    const startedAt = activityStartedAtRef.current ?? Date.now();
+    activityStartedAtRef.current = startedAt;
+    const tick = () => setActivityElapsedMs(Date.now() - startedAt);
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [activityInFlight, concreteActivityKey]);
+
+  // Keep todos + Thinking copy moving for the entire model wait — not just gather.
+  const shouldAdvanceThinkingSteps =
+    !hasVisibleAssistantResponse(messages, streamMessage) &&
+    (synthesisPhase ||
+      showAgentActivity ||
+      Boolean(visibleNarrativeSteps?.length) ||
+      Boolean(visibleThinkingMessage) ||
+      (isStreaming && !streamMessage));
+
+  useEffect(() => {
+    if (!shouldAdvanceThinkingSteps) {
       return;
     }
     const timer = window.setInterval(() => {
       setThinkingRotationStep((step) => step + 1);
     }, THINKING_ROTATION_STEP_MS);
     return () => window.clearInterval(timer);
-  }, [thinkingSequence.length, thinkingSequenceKey, visibleThinkingMessage]);
+  }, [shouldAdvanceThinkingSteps, thinkingSequenceKey, synthesisPhase]);
 
   const isActiveChat = messages.length > 0 || Boolean(streamMessage) || isStreaming;
   const handleLaunchIntroComplete = useCallback(() => setLaunchIntroConsumed(true), []);
@@ -565,6 +729,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
+      setAgentOverlay(undefined);
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -594,6 +759,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
+      setAgentOverlay(undefined);
       post({
         type: "chat:send",
         payload: {
@@ -733,6 +899,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           setIntentFeedback(undefined);
           setJobProgress(undefined);
           setError("");
@@ -748,6 +915,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIntentFeedback(undefined);
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           setIsStreaming(true);
           setStreamingBuffer(message.payload.partialText);
           break;
@@ -759,6 +927,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIsStreaming(true);
           setThinkingBuffer((prev) => prev + message.payload.chunk);
+          break;
+        }
+        case "agent:activity": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
+          setIsStreaming(true);
+          setAgentOverlay(agentStepsToActivity(message.payload.steps));
           break;
         }
         case "chat:delta": {
@@ -783,6 +960,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           );
           setStreamingBuffer("");
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           setIsStreaming(false);
           break;
         }
@@ -799,6 +977,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           break;
         }
         case "chat:quota-exceeded":
@@ -815,6 +994,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           break;
         case "chat:quota-cleared":
           setQuotaNotice(undefined);
@@ -900,6 +1080,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
+          setAgentOverlay(undefined);
           setCommandConfirm(message.payload);
           break;
         case "decision:timeline":
@@ -1040,6 +1221,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
+      setAgentOverlay(undefined);
       post({
         type: "chat:send",
         payload: {
@@ -1156,6 +1338,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
+      setAgentOverlay(undefined);
       post({ type: "chat:send", payload: pending.run });
       return undefined;
     });
@@ -1166,6 +1349,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setIsStreaming(false);
     setStreamingBuffer("");
     setThinkingBuffer("");
+    setAgentOverlay(undefined);
   }, [post]);
 
   const syncExplorerRepoFromContext = useCallback(() => {
@@ -1249,9 +1433,25 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         return;
       }
       setSearchState({ query: "", items: [] });
+      const parsed = parseRepoNodePath(repoPath);
+      // Load this repo's tree by coordinates — do not race on stale chat context.
+      if (parsed) {
+        post({
+          type: "repo:list",
+          payload: {
+            path: "",
+            scope: "files",
+            provider: parsed.provider,
+            owner: parsed.owner,
+            repo: parsed.repo,
+            ephemeral: true
+          }
+        });
+        return;
+      }
       requestTree("");
     },
-    [postRepoSelect, rememberExplorerRepo, requestTree]
+    [post, postRepoSelect, rememberExplorerRepo, requestTree]
   );
 
   const handleUseRepo = useCallback(
@@ -1473,8 +1673,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             streamingMessage={streamMessage}
             thinkingMessage={visibleThinkingMessage}
             narrativeSteps={visibleNarrativeSteps}
+            agentActivity={agentActivity}
+            showAgentActivity={showAgentActivity}
             modelThinkingText={visibleModelThinking}
             modelThinkingStreaming={modelThinkingStreaming}
+            onStopStreaming={isStreaming ? handleStopStreaming : undefined}
             endRef={messageEndRef}
             renderBody={renderBody}
             actionContext={evidenceActionContext}
@@ -1553,23 +1756,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               ))}
             </div>
           ) : null}
-          {visibleNarrativeSteps?.length && !isActiveChat ? (
-            <div className="mx-3 mb-2">
-              <AgentNarrativeTimeline steps={visibleNarrativeSteps} />
-            </div>
-          ) : visibleThinkingMessage && !isActiveChat ? (
-            <div className="mx-3 mb-2">
-              <ChatThinkingIndicator message={visibleThinkingMessage} />
-            </div>
-          ) : null}
-          {visibleModelThinking && !isActiveChat ? (
-            <div className="mx-3 mb-2">
-              <ModelThinkingBlock
-                text={visibleModelThinking}
-                streaming={modelThinkingStreaming || isStreaming}
-              />
-            </div>
-          ) : null}
           <IntentFeedback
             state={intentFeedback}
             onDismiss={() => setIntentFeedback(undefined)}
@@ -1615,7 +1801,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               onViewJobResults={viewJobResults}
               intentFeedback={intentFeedback}
               onDismissIntent={() => setIntentFeedback(undefined)}
-              hideInlineActivity={Boolean(visibleThinkingMessage || visibleNarrativeSteps?.length)}
+              hideInlineActivity={Boolean(showAgentActivity || visibleThinkingMessage)}
               inlineThinkingOptions={inlineThinkingOptions}
             />
             <div className="px-3">{composerStack}</div>

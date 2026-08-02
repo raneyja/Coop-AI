@@ -76,20 +76,22 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     ...incoming
   };
 
-  // Sticky Use repo: ignore passive editor workspace files so Understand Repo stays
-  // on the repo chip. Coop remote picks and outside-workspace tabs may still take over.
-  if (isExplicitRepoScope(existing) && incoming.file?.trim()) {
+  // Sticky Use repo: ignore passive editor/Settings snaps so the picker selection stays.
+  // Only another explicit Use-repo (handled above) or a Coop remote / outside-workspace
+  // file pick may leave this scope. Never take incoming owner/repo — those are often
+  // stale Settings prefs from the previously used repository.
+  if (isExplicitRepoScope(existing) && !isExplicitRepoScope(incoming)) {
+    const incomingFile = incoming.file?.trim();
+    if (!incomingFile) {
+      return stripStaleContextWarning(normalizeRepoContext({ ...existing }));
+    }
     const outside =
-      isOsAbsoluteDiskPath(incoming.file) || incoming.fileSource === "external";
+      isOsAbsoluteDiskPath(incomingFile) || incoming.fileSource === "external";
     const coopFilePick = incoming.fileSource === "remote";
     if (!outside && !coopFilePick) {
       return stripStaleContextWarning(
         normalizeRepoContext({
           ...existing,
-          provider: incoming.provider ?? existing.provider,
-          owner: incoming.owner?.trim() ? incoming.owner : existing.owner,
-          repo: incoming.repo?.trim() ? incoming.repo : existing.repo,
-          branch: incoming.branch?.trim() ? incoming.branch : existing.branch,
           scope: "repo",
           file: undefined,
           fileSource: undefined,

@@ -41,6 +41,8 @@ export type Preferences = {
   githubNeedsReconnect?: boolean;
   devMode: boolean;
   orgName?: string;
+  /** Signed-in account email from /v1/me (when available). */
+  userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
   quotaCredits?: {
     usedCredits: number;

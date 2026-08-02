@@ -70,6 +70,36 @@ async function run(): Promise<void> {
     assert.equal(merged.repo, "coop-ai");
   });
 
+  await test("mergeRepoContext Use-repo ignores stale Settings owner/repo on workspace snap", () => {
+    const merged = mergeRepoContext(
+      { owner: "CoopAI-Corp", repo: "plane", branch: "preview", scope: "repo" },
+      {
+        owner: "CoopAI-Corp",
+        repo: "documenso",
+        branch: "main",
+        file: "src/a.ts",
+        fileSource: "workspace",
+        scope: "file"
+      }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.owner, "CoopAI-Corp");
+    assert.equal(merged.repo, "plane");
+    assert.equal(merged.branch, "preview");
+  });
+
+  await test("mergeRepoContext Use-repo ignores prefs-only editor snap with no file", () => {
+    const merged = mergeRepoContext(
+      { owner: "CoopAI-Corp", repo: "plane", branch: "preview", scope: "repo" },
+      { owner: "CoopAI-Corp", repo: "documenso", branch: "main" }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.owner, "CoopAI-Corp");
+    assert.equal(merged.repo, "plane");
+    assert.equal(merged.branch, "preview");
+  });
+
   await test("mergeRepoContext allows Coop remote file pick to leave Use-repo scope", () => {
     const merged = mergeRepoContext(
       { owner: "acme", repo: "coop-ai", scope: "repo" },

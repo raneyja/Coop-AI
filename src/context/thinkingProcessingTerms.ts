@@ -83,6 +83,21 @@ export function buildProcessingTermMessages(seed: string, count = 6): string[] {
   return messages;
 }
 
+/** True for filler "Aggregating context…" lines — not concrete gather/job status. */
+export function isThinkingProcessingTermMessage(message: string): boolean {
+  const trimmed = message.trim().replace(/\.\.\.$/, "…");
+  const verbs = THINKING_PROCESSING_TERMS.map(capitalize).join("|");
+  const objects = THINKING_PROCESSING_OBJECTS.map((object) =>
+    object.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  ).join("|");
+  return new RegExp(`^(?:${verbs}) (?:${objects})…$`, "i").test(trimmed);
+}
+
+/** Drop trailing spinner filler so todos can map to real work only. */
+export function stripThinkingProcessingTerms(messages: string[]): string[] {
+  return messages.filter((message) => !isThinkingProcessingTermMessage(message));
+}
+
 export function appendThinkingProcessingTerms(
   messages: string[],
   seed: string,

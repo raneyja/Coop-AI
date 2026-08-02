@@ -263,7 +263,7 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
   lines.push("");
   lines.push("## Section quality gates (strict pass / fail)");
   lines.push(
-    `**${USER_FOCUS_SECTION_TITLE}** — PASS: cites ≥1 concrete repo path or symbol from attached \`<repo_entry_files>\` / focus-search hits and explains the ask using that evidence. FAIL: generic SaaS narrative (form→API→DB) with no path/symbol; invents endpoints, tables, or services not in evidence; omits the section.`
+    `**${USER_FOCUS_SECTION_TITLE}** — PASS: cites ≥1 concrete repo path or symbol from attached \`<repo_entry_files>\` / focus-search hits and explains the ask using that evidence. FAIL: generic SaaS narrative (form→API→DB) with no path/symbol; invents endpoints, tables, or services not in evidence; omits the section; restates, paraphrases, or truncates the user's question instead of answering it; places the section at the end instead of immediately after **Summary**/**Answer**.`
   );
   lines.push(
     "**Summary** — PASS: 1-2 sentences that directly answer the focus, then optional confidence line. FAIL: repo elevator pitch that never addresses the focus."

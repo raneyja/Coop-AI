@@ -986,6 +986,7 @@ export async function readPreferences(
   let googleDocsDisplayName: string | undefined;
   let teamsDisplayName: string | undefined;
   let orgName: string | undefined;
+  let userEmail: string | undefined;
   let plan: UserPreferences["plan"];
   let userRole: string | undefined;
   let authMethod: UserPreferences["authMethod"];
@@ -1007,6 +1008,7 @@ export async function readPreferences(
     try {
       const me = await api.fetchMe(base.apiBaseUrl);
       orgName = me.orgName;
+      userEmail = typeof me.email === "string" && me.email.trim() ? me.email.trim() : undefined;
       plan = me.plan;
       userRole = me.role;
       authMethod = me.authMethod;
@@ -1141,6 +1143,7 @@ export async function readPreferences(
     githubNeedsReconnect,
     devMode,
     orgName,
+    userEmail,
     plan,
     userRole,
     authMethod,

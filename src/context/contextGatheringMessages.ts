@@ -1,4 +1,3 @@
-import { appendThinkingProcessingTerms } from "./thinkingProcessingTerms";
 import { shouldFetchCodeHostContext } from "./codeHostContext";
 import { shouldFetchConfluenceContext } from "./confluenceContext";
 import { shouldFetchGoogleDocsContext } from "./googleDocsContext";
@@ -57,12 +56,10 @@ function uniqueMessages(messages: string[]): string[] {
   });
 }
 
-function finalizeActivityMessages(event: IntentEvent, messages: string[]): string[] {
-  const unique = uniqueMessages(messages);
-  if (!unique.length) {
-    return unique;
-  }
-  return appendThinkingProcessingTerms(unique, `${event.id}:${event.timestamp.getTime()}`);
+function finalizeActivityMessages(_event: IntentEvent, messages: string[]): string[] {
+  // Keep activityMessages concrete (gather/job work). Soft "Synthesizing…" filler is
+  // rotated on the active todo in the webview while waiting — not burned as checklist steps.
+  return uniqueMessages(messages);
 }
 
 function codeHostEstateMessage(provider: CodeHostProviderPreference): string {
@@ -97,11 +94,16 @@ function traceDecisionMessages(provider: CodeHostProviderPreference, codeHostCon
 }
 
 function blastRadiusMessages(provider: CodeHostProviderPreference, codeHostConnected: boolean): string[] {
-  const messages = ["Analyzing dependencies…", "Mapping change impact…"];
+  const messages = [
+    "Analyzing dependencies…",
+    "Mapping change impact…",
+    "Scanning callers and dependents…",
+    "Checking related symbols…"
+  ];
   if (codeHostConnected) {
     messages.push(codeHostPullRequestMessage(provider));
   }
-  messages.push("Building context before sending your prompt…");
+  messages.push("Building impact context…", "Preparing blast-radius analysis…");
   return messages;
 }
 

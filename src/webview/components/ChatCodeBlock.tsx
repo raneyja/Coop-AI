@@ -5,9 +5,16 @@ type ChatCodeBlockProps = {
   language?: string;
   code: string;
   className?: string;
+  /** Hide the language badge (used for file citations — path header is enough). */
+  hideLanguage?: boolean;
 };
 
-export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps): React.ReactElement {
+export function ChatCodeBlock({
+  language,
+  code,
+  className,
+  hideLanguage = false
+}: ChatCodeBlockProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
   const tokens = useMemo(() => lightHighlight(code, language), [code, language]);
   const languageLabel = language?.trim() ? language.trim() : "text";
@@ -33,8 +40,8 @@ export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps)
 
   return (
     <div className={rootClassName}>
-      <div className="coop-chat-code-header">
-        <span className="coop-chat-code-lang">{languageLabel}</span>
+      <div className={`coop-chat-code-header${hideLanguage ? " coop-chat-code-header--copy-only" : ""}`}>
+        {hideLanguage ? <span /> : <span className="coop-chat-code-lang">{languageLabel}</span>}
         <button type="button" className="coop-text-btn coop-chat-code-copy" onClick={handleCopy}>
           {copied ? "Copied" : "Copy"}
         </button>

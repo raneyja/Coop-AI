@@ -119,11 +119,6 @@ function renderInlineNodes(nodes: ChatInlineNode[]): React.ReactNode[] {
   });
 }
 
-function fileNameFromPath(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? path;
-}
-
 function StoryCodeBlock({
   language,
   code,
@@ -158,16 +153,18 @@ function StoryCodeCitation({
   path: string;
   code: string;
 }): React.ReactElement {
-  const label = `${fileNameFromPath(path)}:${startLine}-${endLine}`;
+  const label = startLine === endLine ? `${path}:${startLine}` : `${path}:${startLine}-${endLine}`;
 
   return (
     <section className="story-chat-citation">
       <div className="story-chat-citation-header">{label}</div>
-      <div className="story-chat-citation-block">
-        <pre>
-          <code>{code}</code>
-        </pre>
-      </div>
+      {code.trim() ? (
+        <div className="story-chat-citation-block">
+          <pre>
+            <code>{code}</code>
+          </pre>
+        </div>
+      ) : null}
     </section>
   );
 }

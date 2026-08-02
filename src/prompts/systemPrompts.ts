@@ -20,6 +20,7 @@ export const OPERATING_CONTEXT = `
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
 - When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview.
+- **Your question** must answer the ask with concrete evidence. Never restate, paraphrase, or truncate the user's question text as the section body.
 `;
 
 export const CURSOR_STYLE_OUTPUT_CONTRACT = `
@@ -30,14 +31,20 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Subsection titles (H2): same **Title** pattern nested under a main section — one short topic phrase per line, never a bullet.
 - Inline emphasis: **bold** for key terms and field labels; *italics* for uncertainty, caveats, inferred vs confirmed claims, and brief asides.
 - Lists: \`-\` bullets or \`1.\` numbered lists only — not nested markdown outlines.
-- Code: inline \`backticks\` for identifiers; for plain multi-line code, open a fenced block with a language tag (\`\`\`lang).
-- Cite repo code with a plain \`\`\` fence (no language tag) whose FIRST line is \`startLine:endLine:path\`, then the code on the following lines — do not put the location on the fence line as an info-string.
-- File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\`.
+- Inline code: \`backticks\` for identifiers and short symbols.
+- Repo code you are explaining or highlighting (not changing): use a **citation fence**, never a language-tagged fence.
+  - Preferred: plain \`\`\` fence (no language tag); first body line is \`startLine:endLine:path\`; then only the relevant lines.
+  - Also accepted: fence info-string \`\`\`startLine:endLine:path\` with the snippet as the body (no duplicate location line).
+  - Keep slices short (about 5–40 lines). Prefer one tight citation over pasting a whole function.
+  - FAIL: \`\`\`typescript / \`\`\`javascript / other \`\`\`lang blocks that dump existing repo code for copy-paste — those look like generic markdown, not IDE citations.
+- Invented or non-repo examples only: ordinary \`\`\`lang fences.
+- Concrete edits the user should apply: emit \`File:\` + \`\`\`patch SEARCH/REPLACE blocks (one contiguous edit per block) — never ordinary language fences for proposed changes.
+- File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\` (clickable); still use citation fences when showing the actual lines.
 - Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
 
 ## Response structure (all chat — quick actions included)
 - Lead with **Summary** or **Answer** — a direct 1-2 sentence answer, always first; put a blank line before every main and subsection title.
-- When ## User focus (required) is present (or the user asked something specific in chat), place **Your question** immediately after **Summary**/**Answer** and answer that ask with concrete evidence before continuing the standard sections.
+- When ## User focus (required) is present (or the user asked something specific in chat), place **Your question** immediately after **Summary**/**Answer**. That section must **answer** the ask with concrete paths, symbols, or evidence — never restate or truncate the user's question text, and never leave it for the end of the response.
 - Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
@@ -113,7 +120,7 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
 PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence.
-FAIL: generic form→API→DB story; invented endpoints; section omitted or folded into Architecture.
+FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints; section omitted, folded into Architecture, or left until the end.
 
 **Architecture**
 How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture.
@@ -150,7 +157,7 @@ Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak 
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: answers the ask with timeline evidence (commit/PR/discussion). FAIL: generic restatement; omits the section.
+PASS: answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence; omits the section or leaves it until the end.
 
 **Business context**
 Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
@@ -300,14 +307,36 @@ ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when pr
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Answer**
-Direct 1-2 sentence answer first. When ## User focus is present (or the user asked something specific), that ask is the answer.
+Direct 1-2 sentence answer first. When the user asked something specific, that ask is the answer — do not open with a generic overview that ignores it.
 
 **Your question**
-Include when the user asked something specific beyond a yes/no — expand the ask with concrete evidence. Omit when **Answer** already fully covers a short ask.
+Include when the user asked something specific beyond a yes/no. Place immediately after **Answer**.
+PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).
+FAIL: restating, paraphrasing, or truncating the user's question; repeating **Answer** with no added evidence; burying the ask under later sections.
+Omit only when **Answer** already fully covers a short yes/no or one-liner ask.
 
 Then add focused topic sections as needed. Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list.
 
-For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.`,
+For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.
+
+## Concrete file edits (when recommending code to apply)
+When you recommend changes the user should put into an open or attached file:
+- Do **not** paste whole rewritten functions as ordinary \`\`\`lang fences meant for copy-paste.
+- After **Your question** (or after **Answer** when **Your question** is omitted), emit applyable patches — one contiguous edit per block:
+
+File: \`path/to/file.ts\`
+
+\`\`\`patch
+<<<<<<< SEARCH
+<exact existing lines from attached file content — whitespace-sensitive>
+=======
+<replacement lines>
+>>>>>>> REPLACE
+\`\`\`
+
+- Multiple edits → multiple patch blocks (same file or different files).
+- Cite unchanged reference code with citation fences (\`startLine:endLine:path\` on the first body line, or as the fence info-string) — not \`\`\`typescript dumps and not full-file rewrites labeled as "existing code" that secretly include new mappings.
+- If you are only explaining where work should live and not proposing an insert, skip patches and cite with citation fences (or path:\`line\` backticks) instead.`,
 
   integration: `
 ## Required response structure

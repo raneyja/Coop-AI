@@ -177,11 +177,11 @@ export function accountHubSubtitle(prefs: Preferences): string {
   if (!preferencesSignedIn(prefs)) {
     return "Not signed in";
   }
-  try {
-    return `Signed in · ${new URL(prefs.apiBaseUrl).host}`;
-  } catch {
-    return "Signed in";
+  const email = prefs.userEmail?.trim();
+  if (email) {
+    return `Signed in · ${email}`;
   }
+  return "Signed in";
 }
 
 export function formatQuotaUsageSummary(quota: {

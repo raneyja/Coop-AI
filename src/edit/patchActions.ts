@@ -122,7 +122,9 @@ export async function applyPendingPatch(
   updatePatchRecordCard(timestamp, applied);
   publishSnapshot(publish, timestamp);
   void vscode.window.showInformationMessage(
-    `CoopAI: Applied patch to ${result.filesChanged} file${result.filesChanged === 1 ? "" : "s"} (local workspace).`
+    result.usedRemoteEditor
+      ? `CoopAI: Applied patch to ${result.filesChanged} open file${result.filesChanged === 1 ? "" : "s"} (save/commit in the editor if needed).`
+      : `CoopAI: Applied patch to ${result.filesChanged} file${result.filesChanged === 1 ? "" : "s"}.`
   );
   return true;
 }

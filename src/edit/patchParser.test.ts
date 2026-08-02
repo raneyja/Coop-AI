@@ -114,6 +114,48 @@ test("parses multiple files", () => {
   assert.equal(result.patches.files[1]!.relativePath, "src/b.ts");
 });
 
+test("parses ask-mode narrative plus applyable patches", () => {
+  const content = [
+    "**Answer**",
+    "Validation belongs in IssueRelationViewSet; mirror blocking ↔ blocked_by in the mapper.",
+    "",
+    "**Your question**",
+    "Put create-time checks in IssueRelationViewSet; add inverse mappings in get_inverse_relation.",
+    "",
+    "File: `apps/api/plane/utils/issue_relation_mapper.py`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    '        "blocked_by": "blocked_by",',
+    "=======",
+    '        "blocked_by": "blocking",',
+    ">>>>>>> REPLACE",
+    "```",
+    "",
+    "File: `apps/api/plane/utils/issue_relation_mapper.py`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    '        "blocking": "blocked_by",',
+    "=======",
+    '        "blocking": "blocked_by",',
+    '        "blocked_by": "blocking",',
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files.length, 2);
+  assert.equal(countHunks(result.patches), 2);
+  assert.equal(
+    result.patches.files[0]!.relativePath,
+    "apps/api/plane/utils/issue_relation_mapper.py"
+  );
+});
+
 test("fails when hunks exist without File header", () => {
   const content = [
     "```patch",

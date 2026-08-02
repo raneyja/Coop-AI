@@ -59,10 +59,17 @@ export class AgentOrchestrator {
     return handler(args);
   }
 
-  public async run(request: AgentSessionRequest): Promise<AgentSessionResult> {
+  public async run(
+    request: AgentSessionRequest,
+    options?: { onStep?: (step: AgentStep, steps: AgentStep[]) => void }
+  ): Promise<AgentSessionResult> {
     const maxSteps = request.maxSteps ?? DEFAULT_MAX_STEPS;
     const steps: AgentStep[] = [];
     const context: AgentSessionContext = {};
+    const emit = (step: AgentStep) => {
+      steps.push(step);
+      options?.onStep?.(step, [...steps]);
+    };
 
     const repoId = request.repoId?.trim();
     const query = request.message.trim();
@@ -74,7 +81,7 @@ export class AgentOrchestrator {
       const listRaw = await this.executeTool("list_directory", { path: "", repoId });
       const listParsed = JSON.parse(listRaw) as Record<string, unknown>;
       context.list_directory = listParsed;
-      steps.push({
+      emit({
         index: steps.length,
         tool: "list_directory",
         summary: "list_directory: /",
@@ -86,7 +93,7 @@ export class AgentOrchestrator {
     const searchRaw = await this.executeTool("search_code", { query, repoId });
     const searchParsed = JSON.parse(searchRaw) as Record<string, unknown>;
     context.search_code = searchParsed;
-    steps.push({
+    emit({
       index: steps.length,
       tool: "search_code",
       summary: `search_code: ${truncateSummary(query)}`,
@@ -112,7 +119,7 @@ export class AgentOrchestrator {
     });
     const readParsed = JSON.parse(readRaw) as Record<string, unknown>;
     context.read_file = readParsed;
-    steps.push({
+    emit({
       index: steps.length,
       tool: "read_file",
       summary: `read_file: ${topHit.fileName}`,

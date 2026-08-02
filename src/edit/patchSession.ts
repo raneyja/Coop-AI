@@ -203,3 +203,13 @@ export function getLastAppliedPatchPreview(): PatchCardState | undefined {
   const timestamp = resolveActivePatchTimestamp();
   return timestamp === undefined ? undefined : patchRecordsByMessage.get(timestamp)?.card;
 }
+
+/** Test-only: clear in-memory patch session state between cases. */
+export function resetPatchSessionForTests(): void {
+  patchRecordsByMessage = new Map();
+  lastEditUserMessage = undefined;
+  lastAssistantPatchContent = undefined;
+  lastPatchApplyError = undefined;
+  lastPatchMessageTimestamp = undefined;
+  suppressedMessageTimestamps = [];
+}

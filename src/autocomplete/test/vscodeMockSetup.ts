@@ -123,7 +123,31 @@ const vscodeMock = {
     TypeParameter: 24
   },
   Uri: {
-    file: (path: string) => ({ fsPath: path, scheme: "file", toString: () => path })
+    file: (fsPath: string) => ({
+      fsPath,
+      scheme: "file",
+      path: fsPath,
+      toString: () => `file://${fsPath}`
+    }),
+    parse: (value: string) => {
+      if (value.startsWith("file://")) {
+        const fsPath = value.replace(/^file:\/\//, "");
+        return { fsPath, scheme: "file", path: fsPath, toString: () => value };
+      }
+      const scheme = value.includes("://") ? value.slice(0, value.indexOf("://")) : "file";
+      let pathPart = value.includes("://") ? value.slice(value.indexOf("://") + 3) : value;
+      if (scheme === "vscode-vfs" && pathPart.startsWith("github/")) {
+        pathPart = `/${pathPart}`;
+      } else if (!pathPart.startsWith("/")) {
+        pathPart = `/${pathPart}`;
+      }
+      return {
+        fsPath: value,
+        scheme,
+        path: pathPart,
+        toString: () => value
+      };
+    }
   },
   Position: class {
     constructor(
@@ -138,6 +162,7 @@ const vscodeMock = {
     ) {}
   },
   workspace: {
+    textDocuments: [] as unknown[],
     getWorkspaceFolder: () => ({ uri: { fsPath: "/workspace" } }),
     getConfiguration: (section?: string) => ({
       get: <T>(key: string, defaultValue: T): T => {
@@ -189,6 +214,8 @@ const vscodeMock = {
   },
   window: {
     visibleTextEditors: [] as Array<{ document: { uri: { fsPath: string } } }>,
+    tabGroups: { all: [] as unknown[] },
+    activeTextEditor: undefined as unknown,
     showInformationMessage: async () => mockInformationMessageChoice
   },
   languages: {
