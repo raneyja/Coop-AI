@@ -3,8 +3,12 @@ import { loadWebhookConfig } from "../config/webhookConfig";
 import { createGraphCache } from "../cache/graphCachePostgres";
 import { GraphConsistencyManager } from "../cache/graphConsistency";
 import { createJobRuntime, startJobRuntime, stopJobRuntime } from "./jobRuntime";
-import { reclaimOrphanedRunningJobs, reclaimStaleRunningJobs } from "./backends/postgresBackend";
-import { resumeEmbeddingFailuresForAllOrgs } from "../server/queueOrgRepoIndex";
+import {
+  cancelStuckIndexJobs,
+  reclaimOrphanedRunningJobs,
+  reclaimStaleRunningJobs
+} from "./backends/postgresBackend";
+import { queueOrgRepoIndex, resumeEmbeddingFailuresForAllOrgs } from "../server/queueOrgRepoIndex";
 import { getDbPool, closeDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { loadServerConfig } from "../server/serverConfig";
@@ -94,7 +98,39 @@ async function main(): Promise<void> {
         : undefined,
     periodicReclaim:
       pool && jobConfig.backend === "postgres"
-        ? () => reclaimStaleRunningJobs(pool, jobConfig.maxJobDurationMs)
+        ? async () => {
+            // Cancel+abort stuck Deep-Index jobs before generic stale requeue (avoids completeJob race).
+            const stuck = await cancelStuckIndexJobs(pool, {
+              maxAgeMs: jobConfig.maxJobDurationMs,
+              embeddingStuckMs: 60_000
+            });
+            for (const job of stuck) {
+              runtime.workers.abortJob(job.id);
+              runtime.monitor.recordReclaim(job.reason);
+              if (job.orgId && job.repoId && orgStore) {
+                const result = await queueOrgRepoIndex(job.orgId, job.repoId, {
+                  orgStore,
+                  jobQueue: runtime.queue,
+                  bypassRateLimit: true,
+                  force: true
+                });
+                if (result.outcome === "queued") {
+                  console.log(
+                    `[jobs] requeued ${job.repoId} after ${job.reason} cancel (${job.id} → ${result.jobId})`
+                  );
+                }
+              }
+            }
+            if (stuck.length > 0) {
+              console.warn(
+                `[jobs] cancelled ${stuck.length} stuck index job(s) ` +
+                  `(embedding=${stuck.filter((j) => j.reason === "embedding_stuck").length}, ` +
+                  `over_budget=${stuck.filter((j) => j.reason === "over_budget").length})`
+              );
+            }
+            const stale = await reclaimStaleRunningJobs(pool, jobConfig.maxJobDurationMs);
+            return stale + stuck.length;
+          }
         : undefined,
     reclaimIntervalMs: 60_000
   });

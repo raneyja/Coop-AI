@@ -7,8 +7,8 @@ export type QueueOrgRepoIndexResult =
   | { outcome: "skipped"; reason: "already_active" | "skip_policy"; jobId?: string }
   | { outcome: "failed"; message: string };
 
-/** Jobs older than this are treated as stuck zombies (5 minutes matches JOBS_MAX_DURATION default). */
-const STALE_INDEX_JOB_MS = 5 * 60 * 1000;
+/** Jobs older than this are treated as stuck zombies (matches JOBS_MAX_DURATION default of 15m). */
+const STALE_INDEX_JOB_MS = 15 * 60 * 1000;
 
 export async function findActiveIndexJob(
   jobQueue: JobQueue,

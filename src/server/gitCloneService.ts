@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { readIndexPhaseTimeouts } from "../config/indexPhaseTimeouts";
 
 const execFileAsync = promisify(execFile);
 
@@ -35,8 +36,9 @@ export async function cloneRepository(
   fs.mkdirSync(path.dirname(localPath), { recursive: true });
 
   const remote = buildCloneUrl(target, token);
+  const timeouts = readIndexPhaseTimeouts();
   await execFileAsync("git", ["clone", "--depth", "1", remote, localPath], {
-    timeout: 600_000,
+    timeout: timeouts.cloneMs,
     maxBuffer: 4 * 1024 * 1024
   });
 

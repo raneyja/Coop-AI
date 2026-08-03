@@ -372,7 +372,7 @@ async function claimNextWithoutLock(pool: PgPool): Promise<Job | undefined> {
 export async function reclaimStaleRunningJobs(pool: PgPool, maxAgeMs: number): Promise<number> {
   const result = await pool.query(
     `UPDATE jobs
-     SET status = 'queued', started_at = NULL, progress = 0
+     SET status = 'queued', started_at = NULL, progress = 0, error = NULL
      WHERE status = 'running'
        AND started_at IS NOT NULL
        AND started_at < NOW() - ($1 * INTERVAL '1 millisecond')
@@ -380,6 +380,71 @@ export async function reclaimStaleRunningJobs(pool: PgPool, maxAgeMs: number): P
     [maxAgeMs]
   );
   return result.rows.length;
+}
+
+export type StuckIndexJobRow = {
+  id: string;
+  orgId?: string;
+  repoId?: string;
+  reason: "embedding_stuck" | "over_budget";
+};
+
+/**
+ * Cancel Deep-Index jobs stuck in the embedding band (75–79%) or past max age.
+ * Caller must abort in-flight workers and enqueue a fresh job (do not flip back to queued
+ * in-place — that races with completeJob on the still-running worker).
+ */
+export async function cancelStuckIndexJobs(
+  pool: PgPool,
+  options: { maxAgeMs: number; embeddingStuckMs?: number }
+): Promise<StuckIndexJobRow[]> {
+  const embeddingStuckMs = options.embeddingStuckMs ?? 60_000;
+  const embedding = await pool.query<{ id: string; params: unknown }>(
+    `UPDATE jobs
+     SET status = 'cancelled', completed_at = NOW(),
+         error = 'Reclaimed: stuck in embedding phase (75-79%)'
+     WHERE status = 'running'
+       AND type = 'index_repository'
+       AND progress >= 75 AND progress < 80
+       AND started_at IS NOT NULL
+       AND started_at < NOW() - ($1 * INTERVAL '1 millisecond')
+     RETURNING id, params`,
+    [embeddingStuckMs]
+  );
+  const stale = await pool.query<{ id: string; params: unknown }>(
+    `UPDATE jobs
+     SET status = 'cancelled', completed_at = NOW(),
+         error = 'Reclaimed: exceeded max job duration'
+     WHERE status = 'running'
+       AND type = 'index_repository'
+       AND started_at IS NOT NULL
+       AND started_at < NOW() - ($1 * INTERVAL '1 millisecond')
+     RETURNING id, params`,
+    [options.maxAgeMs]
+  );
+  const rows: StuckIndexJobRow[] = [];
+  for (const row of embedding.rows) {
+    const params = (row.params ?? {}) as Record<string, unknown>;
+    rows.push({
+      id: row.id,
+      orgId: typeof params.orgId === "string" ? params.orgId : undefined,
+      repoId: typeof params.repoId === "string" ? params.repoId : undefined,
+      reason: "embedding_stuck"
+    });
+  }
+  for (const row of stale.rows) {
+    if (rows.some((existing) => existing.id === row.id)) {
+      continue;
+    }
+    const params = (row.params ?? {}) as Record<string, unknown>;
+    rows.push({
+      id: row.id,
+      orgId: typeof params.orgId === "string" ? params.orgId : undefined,
+      repoId: typeof params.repoId === "string" ? params.repoId : undefined,
+      reason: "over_budget"
+    });
+  }
+  return rows;
 }
 
 /** On worker startup, any `running` row is orphaned — re-queue all of them. */

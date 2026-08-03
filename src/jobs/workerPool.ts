@@ -77,6 +77,16 @@ export class WorkerPool extends EventEmitter {
     return this.activeJobs.has(jobId);
   }
 
+  /** Abort an in-flight job (DB cancel alone does not stop the worker). */
+  public abortJob(jobId: string): boolean {
+    const controller = this.activeJobs.get(jobId);
+    if (!controller) {
+      return false;
+    }
+    controller.abort();
+    return true;
+  }
+
   public get activeCount(): number {
     return this.running;
   }
@@ -87,6 +97,12 @@ export class WorkerPool extends EventEmitter {
     const startedAt = Date.now();
 
     try {
+      // Race: another worker/restart may have cancelled before we start work.
+      const claimed = await this.queue.getJob(job.id);
+      if (!claimed || claimed.status === "cancelled") {
+        return;
+      }
+
       const result = await Promise.race([
         this.executeWithProgress(job, controller.signal),
         timeout(this.poolConfig.maxJobDurationMs, controller)
@@ -126,7 +142,11 @@ export class WorkerPool extends EventEmitter {
     const classification = classifyError(error);
 
     if (classification === "cancelled") {
-      await this.queue.failJob(job.id, message);
+      const fresh = await this.queue.getJob(job.id);
+      if (fresh?.status === "cancelled") {
+        return;
+      }
+      await this.queue.cancelJob(job.id, { includeRunning: true });
       return;
     }
 

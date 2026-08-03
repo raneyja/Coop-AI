@@ -44,7 +44,8 @@ export function loadJobQueueConfig(env: NodeJS.ProcessEnv = process.env): JobQue
   return {
     backend: readBackend(env.JOBS_BACKEND),
     workerConcurrency: readNumber(env.JOBS_WORKER_CONCURRENCY, 2),
-    maxJobDurationMs: readNumber(env.JOBS_MAX_DURATION_MS, 300_000),
+    // Default 15m — large repos exceed the old 5m budget during SCIP/embed.
+    maxJobDurationMs: readNumber(env.JOBS_MAX_DURATION_MS, 900_000),
     resultRetentionDays: readNumber(env.JOBS_RESULT_RETENTION_DAYS, 7),
     scheduledRetentionDays: readNumber(env.JOBS_SCHEDULED_RETENTION_DAYS, 30),
     databaseUrl: env.DATABASE_URL,

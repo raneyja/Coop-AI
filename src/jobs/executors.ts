@@ -17,6 +17,7 @@ import { runScipIndexer } from "./runScipIndexer";
 import { runZoektIndexer } from "./runZoektIndexer";
 import { collectRepoStats } from "../workspace/collectRepoStats";
 import { RepoStatsStore } from "../workspace/repoStatsStore";
+import { verifyIndexArtifacts } from "./indexVerification";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -312,6 +313,17 @@ async function indexRepository(
       }
     }
 
+    const symbolCount = scipResult?.symbolCount ?? 0;
+    const zoektAvailable = zoektResult?.zoektAvailable ?? false;
+    const verification = verifyIndexArtifacts({
+      fileCount: repoStats.fileCount,
+      symbolCount,
+      zoektAvailable
+    });
+    if (!verification.ok) {
+      throw new Error(verification.message);
+    }
+
     if (orgId && ctx.orgStore) {
       await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
         lightningEnabled: true,
@@ -335,11 +347,11 @@ async function indexRepository(
       lastIndexedAt: graph.metadata.lastIndexedAt.toISOString(),
       headCommit: clone.headCommit,
       scipAvailable: scipResult?.scipAvailable ?? false,
-      symbolCount: scipResult?.symbolCount ?? 0,
+      symbolCount,
       indexSource: scipResult?.source ?? "none",
       indexQuality: scipResult?.indexQuality ?? "none",
       language: scipResult?.language,
-      zoektAvailable: zoektResult?.zoektAvailable ?? false,
+      zoektAvailable,
       embeddingCount: embedResult?.chunkCount ?? 0,
       embeddedFiles: embedResult?.embeddedFiles ?? 0,
       embeddingStatus,

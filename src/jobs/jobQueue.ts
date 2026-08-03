@@ -27,6 +27,7 @@ export type JobQueueEvents = {
   "job:update": (event: JobProgressEvent) => void;
   "job:completed": (job: Job) => void;
   "job:failed": (job: Job) => void;
+  "job:cancelled": (job: Job) => void;
 };
 
 export type JobQueueSnapshot = {
@@ -132,6 +133,7 @@ export class JobQueue extends EventEmitter {
     job.completedAt = new Date();
     job.error = options?.includeRunning ? "Superseded by a new Deep-Index request" : "Cancelled by user";
     await this.backend.update(job);
+    this.emit("job:cancelled", job);
     this.emitProgress(job, "Job cancelled");
     return job;
   }
@@ -140,9 +142,14 @@ export class JobQueue extends EventEmitter {
     const job = this.backend.claimNext
       ? await this.backend.claimNext()
       : await this.claimNextInMemory();
-    if (job) {
-      this.emitProgress(job, "Job started");
+    if (!job) {
+      return undefined;
     }
+    // Ignore cancelled claims (race with cancelJob between list and claim).
+    if (job.status === "cancelled") {
+      return undefined;
+    }
+    this.emitProgress(job, "Job started");
     return job;
   }
 
@@ -173,6 +180,9 @@ export class JobQueue extends EventEmitter {
   public async completeJob(jobId: string, result: unknown, status: JobStatus = "completed"): Promise<Job | undefined> {
     const job = await this.backend.get(jobId);
     if (!job) {
+      return undefined;
+    }
+    if (job.status === "cancelled") {
       return undefined;
     }
     job.status = status;

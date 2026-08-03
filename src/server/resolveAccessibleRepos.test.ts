@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  activeUserRepoGrantIds,
   catalogRepoIsAccessible,
   indexedOrgRepoIds,
   isIndexedForAccess,
@@ -73,10 +74,19 @@ async function testIndexedHelper() {
   assert.equal(isIndexedForAccess(repo("github:a/b", true, "disabled")), false);
 }
 
+async function testActiveUserRepoGrantIds() {
+  assert.deepEqual(
+    activeUserRepoGrantIds(["github:old/a", "github:live/b"], ["github:live/b"]),
+    ["github:live/b"]
+  );
+  assert.deepEqual(activeUserRepoGrantIds(["github:old/a"], []), []);
+}
+
 async function run() {
   await testAllIndexedMode();
   await testPerUserMode();
   await testIndexedHelper();
+  await testActiveUserRepoGrantIds();
   console.log("resolveAccessibleRepos.test.ts: ok");
 }
 

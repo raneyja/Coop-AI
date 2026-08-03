@@ -44,6 +44,13 @@ export class RepoStatsStore {
     );
   }
 
+  public async deleteStats(orgId: string, repoId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM repo_stats WHERE org_id = $1 AND repo_id = $2`, [
+      orgId,
+      repoId
+    ]);
+  }
+
   public async loadStats(orgId: string, repoId: string): Promise<StoredRepoStats | undefined> {
     const result = await this.pool.query<{
       branch: string | null;

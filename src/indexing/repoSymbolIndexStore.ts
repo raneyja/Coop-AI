@@ -40,6 +40,13 @@ export class RepoSymbolIndexStore {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  public async deleteForRepo(orgId: string, repoId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM repo_symbol_index WHERE org_id = $1 AND repo_id = $2`, [
+      orgId,
+      repoId
+    ]);
+  }
+
   public async replaceIndex(
     orgId: string,
     repoId: string,

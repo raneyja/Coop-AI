@@ -2,16 +2,17 @@ import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
 import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";
 import { buildSourcesChecklistFromKeys } from "./evidenceSynthesis";
 
-/** Auth / fetch plumbing — not repo architecture; hide from Repo Overview evidence. */
-const REPO_SUMMARY_INFRA_WARNING_RE =
-  /GitHub App|cloud backend|Install (the )?GitHub|Authorize GitLab|Authorize Bitbucket/i;
-
-export function isRepoSummaryInfraWarning(warning: string): boolean {
-  return REPO_SUMMARY_INFRA_WARNING_RE.test(warning);
+/**
+ * Previously hid GitHub App / code-host install errors from Repo Overview.
+ * Those messages are product-honest for remote users — keep them visible.
+ * (Function retained so call sites stay stable; it is now a passthrough.)
+ */
+export function isRepoSummaryInfraWarning(_warning: string): boolean {
+  return false;
 }
 
 export function filterRepoSummaryInfraWarnings(warnings: string[] | undefined): string[] {
-  return (warnings ?? []).filter((warning) => !isRepoSummaryInfraWarning(warning));
+  return warnings ?? [];
 }
 
 export function repoSummarySourceLabelManifest(): string {

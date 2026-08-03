@@ -55,11 +55,18 @@ Environment variables (see `src/config/jobQueueConfig.ts`):
 |----------|---------|-------------|
 | `JOBS_BACKEND` | `memory` | `memory`, `postgres`, or `redis` (redis falls back to memory) |
 | `JOBS_WORKER_CONCURRENCY` | `2` | Concurrent workers |
-| `JOBS_MAX_DURATION_MS` | `300000` | Per-job timeout |
+| `JOBS_MAX_DURATION_MS` | `900000` | Per-job timeout (15m — covers SCIP/embed on larger repos) |
+| `INDEX_CLONE_TIMEOUT_MS` | `600000` | Deep-Index clone phase budget |
+| `INDEX_SCIP_TIMEOUT_MS` | `900000` | Deep-Index SCIP phase budget |
+| `INDEX_ZOEKT_TIMEOUT_MS` | `600000` | Deep-Index Zoekt phase budget |
+| `INDEX_EMBED_TIMEOUT_MS` | `600000` | Deep-Index embeddings phase budget |
 | `JOBS_RESULT_RETENTION_DAYS` | `7` | On-demand result TTL |
 | `JOBS_SCHEDULED_RETENTION_DAYS` | `30` | Scheduled job result TTL |
 | `DATABASE_URL` | — | PostgreSQL when `JOBS_BACKEND=postgres` |
 | `COOP_JOBS_API_TOKEN` | — | Bearer token for `/api/jobs` routes |
+
+Ops: `GET /api/jobs/stats` exposes queue depth, failure rate, and stuck-job reclaim counters.
+Remote Deep-Index smoke (non–Coop-AI fixture): `npm run smoke:deep-index-remote` with `SMOKE_ORG_TOKEN` set.
 
 VS Code setting:
 

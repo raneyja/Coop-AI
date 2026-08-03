@@ -10,7 +10,6 @@ import { parseRepoId, countRepoBlobsViaCodeHost } from "../jobs/buildStructureMa
 import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { RepoStatsStore } from "../workspace/repoStatsStore";
 import { requireDbPool, getDbPool } from "./db";
-import { JobType } from "../jobs/types";
 import {
   authUserId,
   canInstallIntegrations,
@@ -40,6 +39,7 @@ import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
 import { getIndexedRepoQuota, reconcileIndexedRepoQuota, requireCanEnableMoreRepos } from "./indexedRepoQuota";
+import { purgeRepoIndexArtifacts } from "../indexing/purgeRepoIndexArtifacts";
 import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceStore";
 import { UserRepoGrantStore } from "./userRepoGrantStore";
 import {
@@ -336,6 +336,22 @@ export async function handleOrgApiRequest(
     }
     const plan = (await deps.orgStore!.getOrganization(auth!.orgId))?.plan ?? auth!.plan ?? "free";
     const quotaReconciled = await reconcileIndexedRepoQuota(deps.orgStore!, auth!.orgId, plan);
+    if (quotaReconciled.disabledRepoIds.length > 0) {
+      const pool = await getDbPool();
+      if (pool) {
+        const grantStore = new UserRepoGrantStore(pool);
+        for (const repoId of quotaReconciled.disabledRepoIds) {
+          try {
+            await grantStore.deleteGrantsForRepo(auth!.orgId, repoId);
+          } catch (error) {
+            console.error(
+              `[org-api] grant cleanup after quota trim failed for ${repoId}:`,
+              error instanceof Error ? error.message : error
+            );
+          }
+        }
+      }
+    }
     const repos = await enrichReposWithIndexProgress(await deps.orgStore!.listOrgRepos(auth!.orgId));
     writeJson(response, 200, {
       repos,
@@ -413,8 +429,29 @@ export async function handleOrgApiRequest(
       lastJobId: undefined,
       error: undefined
     });
-    await audit(deps, auth!, "repo.lightning.disable", { repoId });
-    writeJson(response, 200, { repo: record });
+    const pool = await getDbPool();
+    let purge: Awaited<ReturnType<typeof purgeRepoIndexArtifacts>> | undefined;
+    let grantsDeleted = 0;
+    if (pool) {
+      try {
+        purge = await purgeRepoIndexArtifacts(pool, auth!.orgId, repoId);
+      } catch (error) {
+        console.error(
+          `[org-api] purge after disable failed for ${repoId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+      try {
+        grantsDeleted = await new UserRepoGrantStore(pool).deleteGrantsForRepo(auth!.orgId, repoId);
+      } catch (error) {
+        console.error(
+          `[org-api] grant cleanup after disable failed for ${repoId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+    await audit(deps, auth!, "repo.lightning.disable", { repoId, purge, grantsDeleted });
+    writeJson(response, 200, { repo: record, purge, grantsDeleted });
     return true;
   }
 
@@ -1127,24 +1164,11 @@ async function ensureWorkspaceReposInOrgCatalog(
     if (existing) {
       continue;
     }
-    let lastJobId: string | undefined;
-    if (deps.jobQueue) {
-      try {
-        const submit = await deps.jobQueue.createJob({
-          type: JobType.INDEX_REPOSITORY,
-          priority: "high",
-          params: { repoId, orgId }
-        });
-        lastJobId = submit.jobId;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[workspace-repos] failed to queue ${repoId}: ${message}`);
-      }
-    }
+    // Workspace selection only registers the catalog entry. Deep-Index On requires
+    // the admin enable path (quota-gated). Auto-enable here skipped the free-cap gate.
     await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-      lightningEnabled: true,
-      indexStatus: lastJobId ? "queued" : "idle",
-      lastJobId,
+      lightningEnabled: false,
+      indexStatus: "idle",
       error: undefined
     });
   }

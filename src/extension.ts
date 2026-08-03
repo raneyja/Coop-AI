@@ -34,7 +34,6 @@ import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeology
 import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
 import { createAgentOrchestrator } from "./api/agent/AgentOrchestrator";
-import { IndexedRepoWorkspace } from "./workspace/IndexedRepoWorkspace";
 import { resolveLocalAbsolutePath } from "./context/localFileResolver";
 import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
 import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
@@ -432,14 +431,8 @@ export function activate(context: vscode.ExtensionContext): void {
         ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
         : undefined;
       const blame = await codeHostRouter.getBlameData(filePath, coords ?? undefined);
-      return { ...blame, path: filePath };
-    },
-    readRemoteFile: async ({ path: filePath, repoId }) =>
-      new IndexedRepoWorkspace({
-        api,
-        apiBaseUrl: getApiBaseUrl(),
-        codeHostRouter
-      }).readFile({ repoId }, filePath)
+      return { path: filePath, ...blame };
+    }
   });
   const services = {
     healthMonitor,
@@ -790,3 +783,4 @@ function createHealthAdapters(
 
 
 
+isn't this the 

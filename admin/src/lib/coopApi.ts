@@ -1496,6 +1496,7 @@ export type OrgRepoRecord = {
   lastIndexedAt?: string;
   lastJobId?: string;
   indexProgress?: number;
+  updatedAt?: string;
   error?: string;
   embeddingError?: string;
 };

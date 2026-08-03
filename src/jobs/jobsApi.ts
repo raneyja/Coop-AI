@@ -210,11 +210,12 @@ async function handleCancelJob(
   response: ServerResponse,
   deps: JobsApiDeps
 ): Promise<void> {
-  const cancelled = await deps.queue.cancelJob(jobId);
+  const cancelled = await deps.queue.cancelJob(jobId, { includeRunning: true });
   if (!cancelled) {
-    writeJson(response, 409, { error: "job cannot be cancelled (already running or finished)" });
+    writeJson(response, 409, { error: "job cannot be cancelled (already finished)" });
     return;
   }
+  deps.workers.abortJob(jobId);
   writeJson(response, 200, serializeJob(cancelled));
 }
 

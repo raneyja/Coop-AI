@@ -1,9 +1,9 @@
 import type { Pool } from "pg";
-import { parseRepoId } from "../server/gitCloneService";
 import { CollectionStore } from "../server/collectionStore";
 import { embedQuery } from "./embeddingsClient";
 import { RepoEmbeddingsStore, type SimilarChunkHit } from "./repoEmbeddingsStore";
 import { mentionPathMinScore, rankMentionPathHits, scoreMentionPath } from "./mentionPathScore";
+import { zoektHostRepoName, zoektRepoNameCandidates } from "./zoektRepoName";
 
 export type SearchHitSource = "scip" | "zoekt" | "embedding" | "fallback";
 
@@ -80,7 +80,7 @@ export async function lightningSearch(
   if (options.mention) {
     const pathHits = await collectMentionPathHits(pool, orgId, repoIds, query, limit * 2);
     const zoektHits = query.includes("/")
-      ? await collectZoektMentionHits(query, repoIds, limit)
+      ? await collectZoektMentionHits(orgId, query, repoIds, limit)
       : [];
     const minScore = mentionPathMinScore(query);
     const hits = rankMentionPathHits(
@@ -111,7 +111,7 @@ export async function lightningSearch(
   // Run all three search strategies in parallel — never wait for one to fail before trying another.
   const [scipOutcome, zoektOutcome, embeddingOutcome] = await Promise.allSettled([
     collectSymbolHits(pool, orgId, repoIds, query, limit * 2),
-    collectZoektHits(query, repoIds, limit * 2),
+    collectZoektHits(orgId, query, repoIds, limit * 2),
     collectEmbeddingHits(pool, orgId, repoIds, query, limit)
   ]);
 
@@ -181,6 +181,7 @@ type ZoektSearchResponse = {
 };
 
 async function collectZoektHits(
+  orgId: string,
   query: string,
   repoIds: string[],
   limit: number
@@ -191,7 +192,7 @@ async function collectZoektHits(
   }
 
   try {
-    const scopedQuery = buildZoektScopedQuery(query, repoIds);
+    const scopedQuery = buildZoektScopedQuery(orgId, query, repoIds);
     const url = new URL("/search", zoektUrl.replace(/\/$/, "") + "/");
     url.searchParams.set("q", scopedQuery);
     url.searchParams.set("format", "json");
@@ -221,7 +222,7 @@ async function collectZoektHits(
         const lineNumber = match.LineNum ?? match.LineNumber ?? 1;
 
         hits.push({
-          repoId: repoIdFromZoektRepo(repoName, repoIds),
+          repoId: repoIdFromZoektRepo(orgId, repoName, repoIds),
           path: file.FileName,
           content: fragmentText || match.Line || file.FileName,
           lineNumber,
@@ -240,18 +241,19 @@ async function collectZoektHits(
   }
 }
 
-function buildZoektRepoFilter(repoIds: string[]): string {
+function buildZoektRepoFilter(orgId: string, repoIds: string[]): string {
   if (repoIds.length === 0) {
     return "";
   }
-  const repoNames = repoIds.map((repoId) => zoektRepoName(repoId));
-  return repoNames.length === 1
-    ? `repo:${quoteZoektToken(repoNames[0])}`
-    : `(${repoNames.map((name) => `repo:${quoteZoektToken(name)}`).join(" or ")})`;
+  const repoNames = repoIds.flatMap((repoId) => zoektRepoNameCandidates(orgId, repoId));
+  const unique = [...new Set(repoNames)];
+  return unique.length === 1
+    ? `repo:${quoteZoektToken(unique[0]!)}`
+    : `(${unique.map((name) => `repo:${quoteZoektToken(name)}`).join(" or ")})`;
 }
 
-function buildZoektScopedQuery(query: string, repoIds: string[]): string {
-  const repoFilter = buildZoektRepoFilter(repoIds);
+function buildZoektScopedQuery(orgId: string, query: string, repoIds: string[]): string {
+  const repoFilter = buildZoektRepoFilter(orgId, repoIds);
   if (!repoFilter) {
     return query;
   }
@@ -259,16 +261,17 @@ function buildZoektScopedQuery(query: string, repoIds: string[]): string {
 }
 
 async function collectZoektMentionHits(
+  orgId: string,
   pathQuery: string,
   repoIds: string[],
   limit: number
 ): Promise<LightningFileHit[]> {
-  const repoFilter = buildZoektRepoFilter(repoIds);
+  const repoFilter = buildZoektRepoFilter(orgId, repoIds);
   if (!repoFilter) {
     return [];
   }
   const fileFilter = `file:${quoteZoektToken(pathQuery.trim())}`;
-  return collectZoektHits(`${repoFilter} ${fileFilter}`.trim(), repoIds, limit);
+  return collectZoektHits(orgId, `${repoFilter} ${fileFilter}`.trim(), repoIds, limit);
 }
 
 async function collectMentionPathHits(
@@ -355,34 +358,30 @@ function isNoisyMentionPath(path: string): boolean {
   );
 }
 
-function zoektRepoName(repoId: string): string {
-  const { provider, owner, repo } = parseRepoId(repoId);
-  if (provider === "gitlab") {
-    return `gitlab.com/${owner}/${repo}`;
-  }
-  if (provider === "bitbucket") {
-    return `bitbucket.org/${owner}/${repo}`;
-  }
-  return `github.com/${owner}/${repo}`;
-}
-
 function quoteZoektToken(value: string): string {
   return value.includes(" ") ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
-function repoIdFromZoektRepo(repository: string | undefined, repoIds: string[]): string {
+function repoIdFromZoektRepo(
+  orgId: string,
+  repository: string | undefined,
+  repoIds: string[]
+): string {
   if (!repository) {
     return repoIds[0] ?? "";
   }
   const normalizedRepo = repository.toLowerCase();
-  const exact = repoIds.find((id) => zoektRepoName(id).toLowerCase() === normalizedRepo);
+  const exact = repoIds.find((id) =>
+    zoektRepoNameCandidates(orgId, id).some((name) => name.toLowerCase() === normalizedRepo)
+  );
   if (exact) {
     return exact;
   }
   const match = repoIds.find((id) => {
-    const zoektName = zoektRepoName(id).toLowerCase();
+    const zoektName = zoektHostRepoName(id).toLowerCase();
     return (
       normalizedRepo === zoektName ||
+      normalizedRepo.endsWith(`/${zoektName}`) ||
       normalizedRepo.endsWith(`/${zoektName.split("/").slice(-2).join("/")}`) ||
       id.toLowerCase().includes(normalizedRepo.replace(/^github\.com\//, ""))
     );

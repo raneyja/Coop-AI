@@ -10,6 +10,9 @@ export type QueueStats = {
   avgDurationMs: number;
   successRate: number;
   alerts: string[];
+  reclaimCount: number;
+  embeddingStuckReclaims: number;
+  overBudgetReclaims: number;
 };
 
 export type JobMonitoringOptions = {
@@ -21,6 +24,9 @@ export class JobMonitor {
   private readonly completedDurations: number[] = [];
   private readonly failures24h: { at: Date; jobId: string; error: string }[] = [];
   private workerCrashes = 0;
+  private reclaimCount = 0;
+  private embeddingStuckReclaims = 0;
+  private overBudgetReclaims = 0;
 
   public constructor(private readonly options: JobMonitoringOptions) {}
 
@@ -46,12 +52,20 @@ export class JobMonitor {
     console.error(`[jobs] worker crash #${this.workerCrashes}: ${message}`);
   }
 
+  public recordReclaim(reason: "embedding_stuck" | "over_budget" | "stale"): void {
+    this.reclaimCount += 1;
+    if (reason === "embedding_stuck") {
+      this.embeddingStuckReclaims += 1;
+    } else if (reason === "over_budget") {
+      this.overBudgetReclaims += 1;
+    }
+  }
+
   public getStats(queue: JobQueue): QueueStats {
     const snapshot = queue.snapshot();
     const failedLast24h = this.failuresInLast24h().length;
     const totalFinished = snapshot.completed + snapshot.failed + failedLast24h;
-    const successRate =
-      totalFinished === 0 ? 1 : (snapshot.completed + failedLast24h > 0 ? snapshot.completed / totalFinished : 1);
+    const successRate = totalFinished === 0 ? 1 : snapshot.completed / totalFinished;
 
     const alerts: string[] = [];
     if (snapshot.queued > this.options.queueDepthAlertThreshold) {
@@ -64,6 +78,12 @@ export class JobMonitor {
     if (this.workerCrashes > 0) {
       alerts.push(`Worker crashes detected: ${this.workerCrashes}`);
     }
+    if (this.embeddingStuckReclaims > 0) {
+      alerts.push(`Embedding-phase stuck reclaims: ${this.embeddingStuckReclaims}`);
+    }
+    if (this.overBudgetReclaims > 0) {
+      alerts.push(`Over-budget index reclaims: ${this.overBudgetReclaims}`);
+    }
 
     return {
       queued: snapshot.queued,
@@ -73,7 +93,10 @@ export class JobMonitor {
       failedLast24h,
       avgDurationMs: average(this.completedDurations),
       successRate: Math.min(1, Math.max(0, successRate)),
-      alerts
+      alerts,
+      reclaimCount: this.reclaimCount,
+      embeddingStuckReclaims: this.embeddingStuckReclaims,
+      overBudgetReclaims: this.overBudgetReclaims
     };
   }
 

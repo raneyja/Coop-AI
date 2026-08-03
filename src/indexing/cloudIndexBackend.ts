@@ -18,7 +18,27 @@ export class CloudIndexBackend implements IndexBackend {
       return false;
     }
     const license = await resolveLicenseStatus(this.secrets, this.getBaseUrl(), () => this.client);
+    if (!canUseLightningMode(license)) {
+      return false;
+    }
     const config = await this.readConfigFromSettings();
+    if (usesOrgManagedDeepIndex(license.plan, config.backend)) {
+      try {
+        const status = await this.getRepoStatus(repoId);
+        if (!status?.enabled || status.status === "disabled" || status.status === "error") {
+          return false;
+        }
+        // Ready is the ship gate; queued/indexing are allowed so UI can show progress.
+        return (
+          status.status === "ready" ||
+          status.status === "indexing" ||
+          status.status === "queued" ||
+          status.status === "cloning"
+        );
+      } catch {
+        return false;
+      }
+    }
     return isLightningEnabledForRepo(repoId, license, config);
   }
 

@@ -80,11 +80,17 @@ function statusTextClass(repo: OrgRepoRecord): string {
 }
 
 function detailNote(repo: OrgRepoRecord): string {
+  if (repo.error && /superseded|reclaimed|stale job/i.test(repo.error)) {
+    return `Stale job superseded: ${repo.error}`;
+  }
   if (repo.indexStatus === "error") {
     return repo.error ?? "—";
   }
   if (repo.embeddingError) {
     return repo.embeddingError;
+  }
+  if (repo.error) {
+    return repo.error;
   }
   return "—";
 }
@@ -126,6 +132,11 @@ function IndexStatusCell({ repo }: { repo: OrgRepoRecord }): React.ReactElement 
           </div>
           {progress !== undefined ? (
             <p className="mt-0.5 font-mono text-[10px] text-coop-muted">{progress}%</p>
+          ) : null}
+          {repo.updatedAt ? (
+            <p className="mt-0.5 text-[10px] text-coop-muted" title={repo.updatedAt}>
+              job age {formatRelativeTime(repo.updatedAt)}
+            </p>
           ) : null}
         </div>
       ) : null}

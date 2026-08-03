@@ -59,6 +59,9 @@ export function createJobRuntime(options: {
     }
   });
   queue.on("job:failed", (job) => monitor.recordFailure(job));
+  queue.on("job:cancelled", (job) => {
+    workers.abortJob(job.id);
+  });
 
   return { config, queue, monitor, workers, scheduler };
 }

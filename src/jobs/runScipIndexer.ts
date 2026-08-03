@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import type { Pool } from "pg";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
+import { readIndexPhaseTimeouts } from "../config/indexPhaseTimeouts";
 import { decodeScipIndexFile } from "./scipIndexDecoder";
 import { extractTreeSitterSymbols } from "./treeSitterSymbolExtractor";
 
@@ -66,7 +67,7 @@ export async function runScipIndexer(
     const indexPath = path.join(localPath, "index.scip");
     try {
       await execFileAsync(indexer.command, indexer.args(localPath, indexPath), {
-        timeout: 900_000,
+        timeout: readIndexPhaseTimeouts().scipMs,
         maxBuffer: 20 * 1024 * 1024,
         cwd: localPath
       });

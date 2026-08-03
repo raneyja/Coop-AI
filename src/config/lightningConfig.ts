@@ -54,7 +54,10 @@ export function isLightningEnabledForRepo(
     return false;
   }
   if (usesOrgManagedDeepIndex(license.plan, config.backend)) {
-    return true;
+    // Org Deep-Index is server-authoritative. Do not treat "has a repoId" as enabled —
+    // that made empty search look like a product failure when the repo was not Ready.
+    // Callers must use CloudIndexBackend.isEnabledForRepo (checks Ready / On).
+    return false;
   }
   if (!config.globalEnabled) {
     return false;

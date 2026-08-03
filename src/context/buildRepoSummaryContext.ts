@@ -20,6 +20,15 @@ const ENTRY_POINT_CANDIDATES = [
   "docs/README.md"
 ];
 
+export type IndexedRepoSummaryFallback = {
+  fileCount?: number;
+  lineCount?: number;
+  languages?: string[];
+  source?: string;
+  topLevelDirs?: string[];
+  topLevelFiles?: string[];
+};
+
 export type BuildRepoSummaryOptions = {
   codeHostRouter: CodeHostRouter;
   owner: string;
@@ -28,6 +37,8 @@ export type BuildRepoSummaryOptions = {
   repoId?: string;
   activeFile?: string;
   loadManifest?: (repoId: string) => Promise<ManifestFileEntry[]>;
+  /** Used when live GitHub tree/entry fetch fails but Deep-Index inventory exists. */
+  loadIndexedFallback?: (repoId: string) => Promise<IndexedRepoSummaryFallback | undefined>;
 };
 
 export type RepoSummaryEntryFile = {
@@ -48,23 +59,52 @@ export async function buildLiveRepoSummary(
   const repoId =
     options.repoId ?? repoIdFromCoordinates(coords) ?? `${options.owner}/${options.repo}`;
 
-  const [repository, rootTree, recentCommits, manifest] = await Promise.all([
+  const [repository, rootTree, recentCommits, manifest, indexedFallback] = await Promise.all([
     options.codeHostRouter.getRepository(coords).catch(() => undefined),
     options.codeHostRouter.getRepositoryTree("", coords).catch(() => undefined),
     options.codeHostRouter
       .getCommitHistory({ ...coords, limit: MAX_RECENT_COMMITS })
       .catch((): CommitInfo[] => []),
-    loadManifestSafe(options.loadManifest, repoId)
+    loadManifestSafe(options.loadManifest, repoId),
+    loadIndexedFallbackSafe(options.loadIndexedFallback, repoId)
   ]);
 
   const branch = repository?.defaultBranch ?? rootTree?.branch ?? options.branch ?? "main";
-  const treeOverview = summarizeTree(rootTree?.entries ?? []);
+  let treeOverview = summarizeTree(rootTree?.entries ?? []);
+  const liveTreeEmpty =
+    treeOverview.topLevelDirs.length === 0 && treeOverview.topLevelFiles.length === 0;
+  const warnings: string[] = [];
+
+  if (liveTreeEmpty && indexedFallback) {
+    treeOverview = {
+      topLevelDirs: indexedFallback.topLevelDirs ?? [],
+      topLevelFiles: indexedFallback.topLevelFiles ?? []
+    };
+    if (liveTreeEmpty) {
+      warnings.push(
+        "Live code-host tree was empty; used Deep-Index inventory/tree. " +
+          "Check GitHub App install if entry file bodies are missing."
+      );
+    }
+  }
+
   const srcTree = treeOverview.topLevelDirs.includes("src")
     ? await options.codeHostRouter.getRepositoryTree("src", coords).catch(() => undefined)
     : undefined;
   const srcOverview = srcTree ? summarizeTree(srcTree.entries, "src/") : undefined;
 
-  const manifestStats = manifest.length > 0 ? summarizeManifest(manifest) : undefined;
+  let manifestStats = manifest.length > 0 ? summarizeManifest(manifest) : undefined;
+  if (!manifestStats && indexedFallback?.fileCount && indexedFallback.fileCount > 0) {
+    manifestStats = {
+      fileCount: indexedFallback.fileCount,
+      extensionBreakdown: {},
+      entryPoints: ENTRY_POINT_CANDIDATES.filter((candidate) =>
+        (indexedFallback.topLevelFiles ?? []).includes(candidate)
+      ),
+      topSymbols: []
+    };
+  }
+
   const entryPaths = pickEntryPaths({
     manifest,
     treeOverview,
@@ -72,7 +112,14 @@ export async function buildLiveRepoSummary(
     activeFile: options.activeFile
   });
   const entryFiles = await fetchEntryFiles(options.codeHostRouter, coords, entryPaths);
+  if (entryFiles.length === 0 && entryPaths.length > 0) {
+    warnings.push(
+      "Could not fetch entry file bodies via the org GitHub App / code-host token. " +
+        "Editor open uses your VS Code GitHub login — that is a different path."
+    );
+  }
 
+  const usedIndexed = Boolean(indexedFallback && (liveTreeEmpty || !manifestStats));
   return {
     repoId,
     branch,
@@ -91,8 +138,35 @@ export async function buildLiveRepoSummary(
     manifest: manifestStats,
     entryFiles,
     recentCommits: recentCommits.map(summarizeCommit),
-    source: manifestStats ? "code-host-and-manifest" : "code-host"
+    warnings: warnings.length > 0 ? warnings : undefined,
+    indexedInventory: indexedFallback
+      ? {
+          fileCount: indexedFallback.fileCount,
+          lineCount: indexedFallback.lineCount,
+          languages: indexedFallback.languages,
+          source: indexedFallback.source
+        }
+      : undefined,
+    source: usedIndexed
+      ? "indexed-fallback"
+      : manifestStats
+        ? "code-host-and-manifest"
+        : "code-host"
   };
+}
+
+async function loadIndexedFallbackSafe(
+  loader: BuildRepoSummaryOptions["loadIndexedFallback"],
+  repoId: string
+): Promise<IndexedRepoSummaryFallback | undefined> {
+  if (!loader) {
+    return undefined;
+  }
+  try {
+    return await loader(repoId);
+  } catch {
+    return undefined;
+  }
 }
 
 function loadManifestSafe(

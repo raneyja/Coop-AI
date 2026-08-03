@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { zoektRepoName } from "../indexing/zoektRepoName";
+import { readIndexPhaseTimeouts } from "../config/indexPhaseTimeouts";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,10 +18,12 @@ export type RunZoektIndexerResult = {
  * Requires:
  *  - ZOEKT_INDEX_PATH env var pointing to the shared volume (e.g. /zoekt-indexes)
  *  - zoekt-git-index binary on PATH (installed in Dockerfile via Go multi-stage build)
+ *
+ * Repo name is org-prefixed so tenants sharing a volume do not collide.
  */
 export async function runZoektIndexer(
   repoId: string,
-  _orgId: string,
+  orgId: string,
   localPath: string
 ): Promise<RunZoektIndexerResult> {
   const indexRoot = process.env.ZOEKT_INDEX_PATH;
@@ -31,19 +35,41 @@ export async function runZoektIndexer(
     return { zoektAvailable: false, error: "zoekt-git-index not found on PATH" };
   }
 
+  const name = zoektRepoName(orgId, repoId);
+  const timeouts = readIndexPhaseTimeouts();
+
   // zoekt-webserver only loads *.zoekt shards that are direct children of -index.
   try {
     await execFileAsync(
       "zoekt-git-index",
-      ["-index", indexRoot, localPath],
-      { timeout: 600_000, maxBuffer: 10 * 1024 * 1024 }
+      ["-index", indexRoot, "-name", name, localPath],
+      { timeout: timeouts.zoektMs, maxBuffer: 10 * 1024 * 1024 }
     );
     return { zoektAvailable: true, indexPath: indexRoot };
   } catch (error) {
-    return {
-      zoektAvailable: false,
-      error: error instanceof Error ? error.message : "Zoekt indexing failed"
-    };
+    // Older zoekt-git-index builds may lack -name; retry without and accept host-only naming.
+    try {
+      await execFileAsync(
+        "zoekt-git-index",
+        ["-index", indexRoot, localPath],
+        { timeout: timeouts.zoektMs, maxBuffer: 10 * 1024 * 1024 }
+      );
+      return {
+        zoektAvailable: true,
+        indexPath: indexRoot,
+        error: `zoekt -name unsupported; indexed as host path (wanted ${name})`
+      };
+    } catch (fallbackError) {
+      return {
+        zoektAvailable: false,
+        error:
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : error instanceof Error
+              ? error.message
+              : "Zoekt indexing failed"
+      };
+    }
   }
 }
 
