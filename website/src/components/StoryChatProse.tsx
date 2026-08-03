@@ -128,12 +128,12 @@ function StoryCodeBlock({
   code: string;
   className?: string;
 }): React.ReactElement {
-  const languageLabel = language?.trim() ? language.trim() : "text";
+  const languageLabel = language?.trim() || undefined;
 
   return (
-    <div className={`story-chat-code-block ${className}`.trim()}>
+    <div className={`story-chat-code-block ${className}`.trim()} data-code-surface="anonymous">
       <div className="story-chat-code-header">
-        <span className="story-chat-code-lang">{languageLabel}</span>
+        {languageLabel ? <span className="story-chat-code-lang">{languageLabel}</span> : null}
       </div>
       <pre>
         <code>{code}</code>
@@ -148,15 +148,20 @@ function StoryCodeCitation({
   path,
   code
 }: {
-  startLine: number;
-  endLine: number;
+  startLine?: number;
+  endLine?: number;
   path: string;
   code: string;
 }): React.ReactElement {
-  const label = startLine === endLine ? `${path}:${startLine}` : `${path}:${startLine}-${endLine}`;
+  const label =
+    startLine == null
+      ? path
+      : endLine == null || endLine === startLine
+        ? `${path}:${startLine}`
+        : `${path}:${startLine}-${endLine}`;
 
   return (
-    <section className="story-chat-citation">
+    <section className="story-chat-citation" data-code-surface="cite">
       <div className="story-chat-citation-header">{label}</div>
       {code.trim() ? (
         <div className="story-chat-citation-block">

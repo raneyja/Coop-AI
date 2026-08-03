@@ -32,13 +32,18 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Inline emphasis: **bold** for key terms and field labels; *italics* for uncertainty, caveats, inferred vs confirmed claims, and brief asides.
 - Lists: \`-\` bullets or \`1.\` numbered lists only — not nested markdown outlines.
 - Inline code: \`backticks\` for identifiers and short symbols.
-- Repo code you are explaining or highlighting (not changing): use a **citation fence**, never a language-tagged fence.
-  - Preferred: plain \`\`\` fence (no language tag); first body line is \`startLine:endLine:path\`; then only the relevant lines.
-  - Also accepted: fence info-string \`\`\`startLine:endLine:path\` with the snippet as the body (no duplicate location line).
+- Repo code you are explaining or highlighting (not changing): use a **citation fence** (cite intent) — never a language-tagged fence.
+  - Preferred: plain \`\`\` fence (no language tag); first body line is REAL integers + path, e.g. \`42:68:apps/api/plane/api/middleware/api_authentication.py\`; then only the relevant lines.
+  - Also accepted: fence info-string \`\`\`42:68:path/to/file.py\` with the snippet as the body (no duplicate location line).
   - Keep slices short (about 5–40 lines). Prefer one tight citation over pasting a whole function.
-  - FAIL: \`\`\`typescript / \`\`\`javascript / other \`\`\`lang blocks that dump existing repo code for copy-paste — those look like generic markdown, not IDE citations.
-- Invented or non-repo examples only: ordinary \`\`\`lang fences.
-- Concrete edits the user should apply: emit \`File:\` + \`\`\`patch SEARCH/REPLACE blocks (one contiguous edit per block) — never ordinary language fences for proposed changes.
+  - Citation body must be copied **verbatim** from attached evidence / open-file content: same characters, indentation width, and call style. Do **not** reindent (2-space ↔ 4-space), rewrite, or invent a cleaner version.
+  - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
+  - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
+  - FAIL: literal placeholders \`startLine:endLine:path\` or \`startLine:endLine:apps/...\` — always substitute concrete line numbers from evidence.
+  - FAIL: \`\`\`typescript / \`\`\`javascript / \`\`\`python / other \`\`\`lang blocks that dump existing repo code — those render as anonymous markdown, not IDE citations.
+  - FAIL: paraphrased or "cleaned up" snippets that no longer match the file (wrong args, different indent, ellipsis stubs).
+- Invented or non-repo examples only (anonymous intent): ordinary \`\`\`lang fences.
+- Concrete edits the user should apply (edit intent): emit \`File:\` + \`\`\`patch SEARCH/REPLACE blocks (one contiguous edit per block) — never ordinary language fences for proposed changes.
 - File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\` (clickable); still use citation fences when showing the actual lines.
 - Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
 
@@ -72,18 +77,24 @@ File: \`path/to/file.ts\`
 \`\`\`
 
 Rules:
-- SEARCH must match the file exactly (including indentation); copy from attached \`<file_content>\` / \`<local_files>\` when present.
+- SEARCH must match the file exactly (including indentation); copy from attached \`<editor_selection>\` / \`<file_content>\` / \`<local_files>\` when present — never from redacted placeholders, never from earlier chat rewrites.
 - One contiguous hunk per block; use multiple blocks for multiple edits in the same file.
 - Multiple files: repeat the File line + patch block per file.
 - If a change cannot be expressed safely, say why in one sentence — do not invent a patch.
 - Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
+
+## Editor selection (required when present)
+- When \`<editor_selection>\` is attached, that is the user's highlighted code. Treat it as the primary edit target.
+- If the user asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
+- Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
+- Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
+- Prefer one tight patch on the selection over "helpful" drive-by cleanups outside it.
 
 ## Completeness (required)
 - Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
 - If you introduce a helper, symbol, or extracted function, also emit the call-site / wire-up hunks so the new code is used (unless the user asked only to define it).
 - Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
-- Selection or focus hints mark where to start looking; they do **not** limit the patch to that window when the request needs other lines in the attached file.
 `;
 
 function withPatchOutputContract(prompt: string, hasPaperclipAttachments = false): string {
@@ -335,7 +346,7 @@ File: \`path/to/file.ts\`
 \`\`\`
 
 - Multiple edits → multiple patch blocks (same file or different files).
-- Cite unchanged reference code with citation fences (\`startLine:endLine:path\` on the first body line, or as the fence info-string) — not \`\`\`typescript dumps and not full-file rewrites labeled as "existing code" that secretly include new mappings.
+- Cite unchanged reference code with citation fences (REAL \`42:68:path\` integers on the first body line, or as the fence info-string) — not \`\`\`typescript dumps, not literal \`startLine:endLine:…\` placeholders, and not full-file rewrites labeled as "existing code" that secretly include new mappings.
 - If you are only explaining where work should live and not proposing an insert, skip patches and cite with citation fences (or path:\`line\` backticks) instead.`,
 
   integration: `
@@ -414,6 +425,9 @@ TASK: Produce minimal, correct patches that fully implement the user's request u
 
 RULES:
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
+- When \`<editor_selection>\` is present, that highlighted block is the edit target. For "rewrite / shorten / replace / make more efficient the highlighted lines", SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
+- Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
 - Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`;
 
@@ -545,12 +559,85 @@ function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
   lines.push("</local_files>");
 }
 
+/** Highlighted editor range — primary /edit target when the user refers to "this" / selection. */
+export function emitEditorSelectionBlock(
+  lines: string[],
+  options: {
+    selectedLines?: [number, number];
+    selectionText?: string;
+    file?: string;
+  }
+): void {
+  if (!options.selectedLines || options.selectedLines.length !== 2) {
+    return;
+  }
+  const [start, end] = options.selectedLines;
+  const pathAttr = options.file?.trim() ? ` path="${options.file.trim()}"` : "";
+  lines.push(`<editor_selection${pathAttr} lines="${start}-${end}">`);
+  const snippet = options.selectionText?.trimEnd();
+  if (snippet) {
+    lines.push(snippet);
+  } else {
+    lines.push(
+      `(User highlighted lines ${start}-${end}. Prefer SEARCH/REPLACE against this range when they ask about "this", "highlighted", or a replacement for the selection.)`
+    );
+  }
+  lines.push("</editor_selection>");
+  if (snippet) {
+    lines.push(
+      "Edit directive: For rewrite/replace/efficiency asks about the highlight, SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). Do not paraphrase from earlier chat."
+    );
+  }
+}
+
+/** Slice line-numbered content for a 1-based inclusive selection range. */
+export function selectionTextFromContent(
+  content: string,
+  selectedLines: [number, number],
+  maxLength = 4000
+): string {
+  const rows = content.split(/\r?\n/);
+  const start = Math.max(1, selectedLines[0]);
+  const end = Math.min(rows.length, selectedLines[1]);
+  if (end < start) {
+    return "";
+  }
+  return rows.slice(start - 1, end).join("\n").slice(0, maxLength);
+}
+
+function resolveSelectionTextForAttach(options: {
+  selectedLines?: [number, number];
+  selectionText?: string;
+  files?: ManifestSnippet[];
+  file?: string;
+}): string | undefined {
+  const provided = options.selectionText?.trimEnd();
+  if (provided) {
+    return provided;
+  }
+  if (!options.selectedLines || options.selectedLines.length !== 2 || !options.files?.length) {
+    return undefined;
+  }
+  const wanted = options.file?.trim();
+  const match =
+    (wanted
+      ? options.files.find((entry) => entry.path === wanted || entry.path.endsWith(`/${wanted}`))
+      : undefined) ?? options.files[0];
+  if (!match?.content) {
+    return undefined;
+  }
+  const sliced = selectionTextFromContent(match.content, options.selectedLines);
+  return sliced || undefined;
+}
+
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
   files: ManifestSnippet[];
   file?: string;
   selectedLines?: [number, number];
+  /** Explicit highlight text; when omitted, sliced from attached file content via selectedLines. */
+  selectionText?: string;
   owner?: string;
   repo?: string;
   branch?: string;
@@ -569,6 +656,11 @@ export function formatChatMessageWithLocalFiles(options: {
         : "";
     lines.push(`<file path="${options.file}"${range} />`);
   }
+  emitEditorSelectionBlock(lines, {
+    selectedLines: options.selectedLines,
+    selectionText: resolveSelectionTextForAttach(options),
+    file: options.file
+  });
   emitLocalFilesBlock(lines, options.files);
   lines.push("</attached_context>", "", options.message.trim());
   return lines.join("\n");
@@ -657,6 +749,7 @@ export function buildUserMessageWithContext(
     branch?: string;
     file?: string;
     selectedLines?: [number, number];
+    selectionText?: string;
     languageId?: string;
     contextBundle?: unknown;
     projectInstructions?: ProjectInstructionSnippet[];
@@ -723,6 +816,16 @@ export function buildUserMessageWithContext(
         : "";
     lines.push(`<file path="${context.file}"${range} />`);
   }
+  emitEditorSelectionBlock(lines, {
+    selectedLines: context?.selectedLines,
+    selectionText: resolveSelectionTextForAttach({
+      selectedLines: context?.selectedLines,
+      selectionText: context?.selectionText,
+      files: localSnippets,
+      file: context?.file
+    }),
+    file: context?.file
+  });
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));
   }

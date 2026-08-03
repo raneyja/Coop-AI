@@ -109,12 +109,12 @@ function FeedCodeBlock({
   language?: string;
   code: string;
 }): React.ReactElement {
-  const languageLabel = language?.trim() ? language.trim() : "text";
+  const languageLabel = language?.trim() || undefined;
 
   return (
-    <div className="coop-chat-code-block">
-      <div className="coop-chat-code-header">
-        <span className="coop-chat-code-lang">{languageLabel}</span>
+    <div className="coop-chat-code-block" data-code-surface="anonymous">
+      <div className={`coop-chat-code-header${languageLabel ? "" : " coop-chat-code-header--copy-only"}`}>
+        {languageLabel ? <span className="coop-chat-code-lang">{languageLabel}</span> : null}
       </div>
       <pre>
         <code>{code}</code>
@@ -129,15 +129,20 @@ function FeedCodeCitation({
   path,
   code
 }: {
-  startLine: number;
-  endLine: number;
+  startLine?: number;
+  endLine?: number;
   path: string;
   code: string;
 }): React.ReactElement {
-  const label = startLine === endLine ? `${path}:${startLine}` : `${path}:${startLine}-${endLine}`;
+  const label =
+    startLine == null
+      ? path
+      : endLine == null || endLine === startLine
+        ? `${path}:${startLine}`
+        : `${path}:${startLine}-${endLine}`;
 
   return (
-    <section className="coop-chat-citation">
+    <section className="coop-chat-citation" data-code-surface="cite">
       <div className="coop-chat-citation-header">{label}</div>
       {code.trim() ? (
         <div className="coop-chat-citation-block">

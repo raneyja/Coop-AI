@@ -48,25 +48,29 @@ const INTERNAL_PATH_VALUE = "[INTERNAL_PATH]";
 const MENTION_VALUE = "[REDACTED_MENTION]";
 const NAME_VALUE = "[REDACTED_NAME]";
 
+/**
+ * Identifier / object-property rules. Only quoted secret *literals* — never
+ * `token: hashedToken` or `token = self.get(...)` which /edit SEARCH must keep exact.
+ */
 const CODE_RULES: ReplacementRule[] = [
   {
     type: "api_key",
-    pattern: /\b(api[_-]?key)\s*[:=]\s*(['"]?)([^'"\s,;]+)/gi,
+    pattern: /\b(api[_-]?key)\s*[:=]\s*(['"])([^'"\n]+)\2/gi,
     replacement: "$1=$2API_KEY_REDACTED$2"
   },
   {
     type: "password",
-    pattern: /\b(password|passwd|pwd)\s*[:=]\s*(['"]?)([^'"\s,;]+)/gi,
+    pattern: /\b(password|passwd|pwd)\s*[:=]\s*(['"])([^'"\n]+)\2/gi,
     replacement: "$1=$2PASSWORD_REDACTED$2"
   },
   {
     type: "token",
-    pattern: /\b(access[_-]?token|auth[_-]?token|refresh[_-]?token|token)\s*[:=]\s*(['"]?)([^'"\s,;]+)/gi,
+    pattern: /\b(access[_-]?token|auth[_-]?token|refresh[_-]?token|api[_-]?token|token)\s*[:=]\s*(['"])([^'"\n]+)\2/gi,
     replacement: "$1=$2TOKEN_REDACTED$2"
   },
   {
     type: "secret",
-    pattern: /\b(secret|client[_-]?secret|signing[_-]?secret)\s*[:=]\s*(['"]?)([^'"\s,;]+)/gi,
+    pattern: /\b(secret|client[_-]?secret|signing[_-]?secret)\s*[:=]\s*(['"])([^'"\n]+)\2/gi,
     replacement: "$1=$2SECRET_REDACTED$2"
   },
   {
@@ -76,6 +80,7 @@ const CODE_RULES: ReplacementRule[] = [
   }
 ];
 
+/** Always-safe redactionsactions: high-entropy provider tokens, PII — OK inside code attachments. */
 const GENERAL_RULES: ReplacementRule[] = [
   {
     type: "api_key",
@@ -122,19 +127,26 @@ const SLACK_TEAMS_RULES: ReplacementRule[] = [
   }
 ];
 
+/**
+ * Authoritative code the model must copy into SEARCH/REPLACE. Only GENERAL_RULES
+ * run inside these blocks so identifier lines like `token: hashedToken` stay exact.
+ */
+const CODE_ATTACHMENT_BLOCK_PATTERN =
+  /<(file_content|editor_selection|local_files|mentioned_files|file)\b[^>]*>[\s\S]*?<\/\1>|<(file)\b[^>]*\/>/gi;
+
 const DECISION_KEYWORDS = [
+  "decision",
+  "decided",
+  "chose",
+  "choice",
+  "tradeoff",
+  "trade-off",
+  "architecture",
+  "rfc",
+  "adr",
+  "proposal",
   "approved",
-  "blocked",
   "rejected",
-  "ship",
-  "rollback",
-  "defer",
-  "owner",
-  "risk",
-  "security",
-  "privacy",
-  "incident",
-  "customer",
   "deadline",
   "migration",
   "release"
@@ -179,7 +191,7 @@ export function sanitizeErrorText(text: string): string {
 
 function sanitizeUnknown(value: unknown, counts: MutableFindingCounts): unknown {
   if (typeof value === "string") {
-    return sanitizeText(value, [...CODE_RULES, ...GENERAL_RULES], counts).value;
+    return sanitizeMessageOrCodeString(value, counts);
   }
   if (Array.isArray(value)) {
     return value.map((entry) => sanitizeUnknown(entry, counts));
@@ -188,6 +200,25 @@ function sanitizeUnknown(value: unknown, counts: MutableFindingCounts): unknown 
     return sanitizeObject(value as Record<string, unknown>, counts);
   }
   return value;
+}
+
+function sanitizeMessageOrCodeString(value: string, counts: MutableFindingCounts): string {
+  if (!CODE_ATTACHMENT_BLOCK_PATTERN.test(value)) {
+    return sanitizeText(value, [...CODE_RULES, ...GENERAL_RULES], counts).value;
+  }
+  // Reset lastIndex after test() on a global regex.
+  CODE_ATTACHMENT_BLOCK_PATTERN.lastIndex = 0;
+
+  const preserved: string[] = [];
+  const withPlaceholders = value.replace(CODE_ATTACHMENT_BLOCK_PATTERN, (block) => {
+    const index = preserved.length;
+    // Inside attachments: only high-entropy secrets / PII — never identifier CODE_RULES.
+    preserved.push(sanitizeText(block, GENERAL_RULES, counts).value);
+    return `\0COOP_CODE_BLOCK_${index}\0`;
+  });
+
+  const sanitizedOutside = sanitizeText(withPlaceholders, [...CODE_RULES, ...GENERAL_RULES], counts).value;
+  return sanitizedOutside.replace(/\0COOP_CODE_BLOCK_(\d+)\0/g, (_, index) => preserved[Number(index)] ?? "");
 }
 
 function sanitizeObject(value: Record<string, unknown>, counts: MutableFindingCounts): Record<string, unknown> {
@@ -203,6 +234,11 @@ function sanitizeObject(value: Record<string, unknown>, counts: MutableFindingCo
   return sanitized;
 }
 
+/**
+ * Apply replacement rules. String templates with `$1` / `$2` must be expanded manually
+ * when using a function replacer — otherwise the model sees literal `$1=$2TOKEN_REDACTED$2`
+ * and SEARCH/REPLACE can never match the live file.
+ */
 function sanitizeText(
   value: string,
   rules: ReplacementRule[],
@@ -210,15 +246,30 @@ function sanitizeText(
 ): { value: string; counts: MutableFindingCounts } {
   let result = value;
   for (const rule of rules) {
-    result = result.replace(rule.pattern, (match: string) => {
+    // Clone so lastIndex from a prior pass cannot skip matches on global patterns.
+    const pattern = new RegExp(rule.pattern.source, rule.pattern.flags);
+    result = result.replace(pattern, (...args: unknown[]) => {
       increment(counts, rule.type);
+      const match = String(args[0] ?? "");
       if (typeof rule.replacement === "function") {
-        return rule.replacement(match);
+        const groups = args.slice(1, -2) as string[];
+        return rule.replacement(match, ...groups);
       }
-      return rule.replacement;
+      return expandDollarReplacement(rule.replacement, match, args.slice(1, -2) as string[]);
     });
   }
   return { value: result, counts };
+}
+
+function expandDollarReplacement(template: string, fullMatch: string, groups: string[]): string {
+  return template
+    .replace(/\$\$/g, "\u0000")
+    .replace(/\$&/g, fullMatch)
+    .replace(/\$(\d+)/g, (_, index) => {
+      const group = groups[Number(index) - 1];
+      return group !== undefined ? group : "";
+    })
+    .replace(/\u0000/g, "$");
 }
 
 function maskSecretToken(match: string): string {

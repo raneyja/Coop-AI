@@ -34,6 +34,7 @@ When adding or changing UI under `src/webview/`, follow the design policy in:
 
 - **Rule:** `.cursor/rules/webview-ui.mdc` (applies when editing webview files)
 - **Tokens & components:** `src/webview/globals.css` (`coop-*` classes)
+- **Chat code surfaces (cite / edit / anonymous):** `.cursor/rules/chat-code-surfaces.mdc` — never ship bland markdown **TEXT** dumps for repo code
 
 Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-action-pill`, etc.). Avoid legacy patterns: full-screen black overlays, nested VS Code `inputValidation-*` boxes, inline `vscode-button-*` styles, and duplicate marketing copy in headers + body.
 

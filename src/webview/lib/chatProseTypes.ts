@@ -22,8 +22,9 @@ export type ChatCodeFenceBlock = {
 
 export type ChatCodeCitationBlock = {
   type: "code-citation";
-  startLine: number;
-  endLine: number;
+  /** Real line range when known; omitted when recovered from a placeholder / path-only locator. */
+  startLine?: number;
+  endLine?: number;
   path: string;
   code: string;
 };

@@ -1,6 +1,6 @@
 import type { PatchCardState, PatchDiffLine, PatchPreviewFile, PatchPreviewHunk } from "../chat/types";
 import { findSearchMatch } from "./patchContent";
-import { countHunks, type ParsedPatchSet, type PatchHunk } from "./patchParser";
+import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
 import { resolveEditablePatchTarget } from "./patchTarget";
 
@@ -57,7 +57,7 @@ function buildUnmatchedHunkPreview(hunk: PatchHunk, hunkId: string): PatchPrevie
   for (const line of splitLines(hunk.replace)) {
     lines.push({ kind: "add", text: line });
   }
-  return { id: hunkId, lines, matchStatus: "not_found" };
+  return { id: hunkId, lines, matchStatus: "not_found", status: "pending" };
 }
 
 function buildMatchedHunkPreview(
@@ -97,7 +97,7 @@ function buildMatchedHunkPreview(
     lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: i + 1 });
   }
 
-  return { id: hunkId, lines, matchStatus };
+  return { id: hunkId, lines, matchStatus, status: "pending" };
 }
 
 export function buildPatchCardState(
@@ -109,8 +109,19 @@ export function buildPatchCardState(
     appliedFileCount?: number;
     canUndo?: boolean;
     fileContents?: Readonly<Record<string, string>>;
+    /** Preserve per-hunk apply/reject when rebuilding previews. */
+    previousFiles?: readonly PatchPreviewFile[];
   }
 ): PatchCardState {
+  const previousStatusById = new Map<string, NonNullable<PatchPreviewHunk["status"]>>();
+  for (const file of options.previousFiles ?? []) {
+    for (const hunk of file.hunks) {
+      if (hunk.status) {
+        previousStatusById.set(hunk.id, hunk.status);
+      }
+    }
+  }
+
   const files: PatchPreviewFile[] = [];
   let hunkCounter = 0;
 
@@ -122,14 +133,20 @@ export function buildPatchCardState(
       const hunkId = `hunk-${hunkCounter}`;
       hunkCounter += 1;
       const match = findSearchMatch(content, hunk.search);
+      let preview: PatchPreviewHunk;
       if (!match.ok) {
-        hunks.push({
+        preview = {
           ...buildUnmatchedHunkPreview(hunk, hunkId),
           matchStatus: match.reason === "ambiguous" ? "ambiguous" : "not_found"
-        });
+        };
       } else {
-        hunks.push(buildMatchedHunkPreview(content, hunk, hunkId, "matched"));
+        preview = buildMatchedHunkPreview(content, hunk, hunkId, "matched");
       }
+      const prior = previousStatusById.get(hunkId);
+      if (prior) {
+        preview = { ...preview, status: prior };
+      }
+      hunks.push(preview);
     }
 
     files.push({ relativePath: filePatch.relativePath, hunks });
@@ -138,11 +155,48 @@ export function buildPatchCardState(
   return {
     status: options.status,
     messageTimestamp: options.messageTimestamp,
-    fileCount: patches.files.length,
+    fileCount: countUniqueFiles(patches),
     hunkCount: countHunks(patches),
     files,
     error: options.error,
     appliedFileCount: options.appliedFileCount,
     canUndo: options.canUndo
   };
+}
+
+export function setHunkStatusOnCard(
+  card: PatchCardState,
+  hunkId: string,
+  status: NonNullable<PatchPreviewHunk["status"]>
+): PatchCardState {
+  return {
+    ...card,
+    files: card.files.map((file) => ({
+      ...file,
+      hunks: file.hunks.map((hunk) => (hunk.id === hunkId ? { ...hunk, status } : hunk))
+    }))
+  };
+}
+
+export function pendingHunkIds(card: PatchCardState): string[] {
+  return card.files.flatMap((file) =>
+    file.hunks.filter((hunk) => (hunk.status ?? "pending") === "pending").map((hunk) => hunk.id)
+  );
+}
+
+export function deriveCardStatusFromHunks(card: PatchCardState): PatchCardState["status"] {
+  const statuses = card.files.flatMap((file) => file.hunks.map((hunk) => hunk.status ?? "pending"));
+  if (statuses.length === 0) {
+    return card.status;
+  }
+  if (statuses.every((status) => status === "applied")) {
+    return "applied";
+  }
+  if (statuses.every((status) => status === "rejected")) {
+    return "rejected";
+  }
+  if (statuses.some((status) => status === "applied") && !statuses.some((status) => status === "pending")) {
+    return "applied";
+  }
+  return "pending";
 }

@@ -5,19 +5,16 @@ type ChatCodeBlockProps = {
   language?: string;
   code: string;
   className?: string;
-  /** Hide the language badge (used for file citations — path header is enough). */
-  hideLanguage?: boolean;
 };
 
-export function ChatCodeBlock({
-  language,
-  code,
-  className,
-  hideLanguage = false
-}: ChatCodeBlockProps): React.ReactElement {
+/**
+ * Anonymous / invented example fences only.
+ * Repo references must use ChatCodeCitation (cite surface) — never this with a missing language → "TEXT".
+ */
+export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
   const tokens = useMemo(() => lightHighlight(code, language), [code, language]);
-  const languageLabel = language?.trim() ? language.trim() : "text";
+  const languageLabel = language?.trim() || undefined;
 
   useEffect(() => {
     if (!copied) {
@@ -39,9 +36,9 @@ export function ChatCodeBlock({
   };
 
   return (
-    <div className={rootClassName}>
-      <div className={`coop-chat-code-header${hideLanguage ? " coop-chat-code-header--copy-only" : ""}`}>
-        {hideLanguage ? <span /> : <span className="coop-chat-code-lang">{languageLabel}</span>}
+    <div className={rootClassName} data-code-surface="anonymous">
+      <div className={`coop-chat-code-header${languageLabel ? "" : " coop-chat-code-header--copy-only"}`}>
+        {languageLabel ? <span className="coop-chat-code-lang">{languageLabel}</span> : <span />}
         <button type="button" className="coop-text-btn coop-chat-code-copy" onClick={handleCopy}>
           {copied ? "Copied" : "Copy"}
         </button>

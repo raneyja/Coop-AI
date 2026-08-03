@@ -47,20 +47,38 @@ function trimLine(text: string): string {
   return text.trim();
 }
 
+/**
+ * Normalize trivial Python/JS self-kwargs (`request=request` → `request`) so a model that
+ * drops keyword form still fuzzy-matches the live buffer.
+ */
+function normalizeLineForFuzzyCompare(text: string): string {
+  return trimLine(text)
+    .replace(/\b([A-Za-z_][\w]*)\s*=\s*\1\b/g, "$1")
+    .replace(/\s+/g, " ");
+}
+
+function linesMatchFuzzy(a: string, b: string): boolean {
+  const left = trimLine(a);
+  const right = trimLine(b);
+  if (left === right) {
+    return true;
+  }
+  return normalizeLineForFuzzyCompare(left) === normalizeLineForFuzzyCompare(right);
+}
+
 function findFuzzyLineBlock(content: string, search: string): SearchMatch {
   const searchLines = parseLines(search);
   if (searchLines.length === 0 || searchLines.every((line) => trimLine(line.text) === "")) {
     return { ok: false, reason: "not_found" };
   }
 
-  const normalizedSearch = searchLines.map((line) => trimLine(line.text));
   const contentLines = parseLines(content);
   const matches: number[] = [];
 
   for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
     let matchesBlock = true;
     for (let j = 0; j < searchLines.length; j++) {
-      if (trimLine(contentLines[i + j]!.text) !== normalizedSearch[j]) {
+      if (!linesMatchFuzzy(contentLines[i + j]!.text, searchLines[j]!.text)) {
         matchesBlock = false;
         break;
       }

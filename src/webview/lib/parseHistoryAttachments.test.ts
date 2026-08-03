@@ -35,7 +35,7 @@ test("splitPlainChatHistoryBody separates message and attached chips", () => {
   assert.equal(split.attachments[0]?.basename, ".dockerignore");
 });
 
-test("splitPlainChatHistoryBody parses first-message context chips", () => {
+test("splitPlainChatHistoryBody parses compact context chips", () => {
   const split = splitPlainChatHistoryBody(
     "Can you summarize this repo?\nfile: AGENTS.md · repo: raneyja/Coop-AI · branch: main"
   );
@@ -50,6 +50,17 @@ test("parseContextLineAttachments extracts attached chips from quick-action cont
   );
   assert.equal(parsed.withoutAttachments, "file: src/a.ts · branch: main");
   assert.equal(parsed.attachments.length, 1);
+});
+
+test("splitPlainChatHistoryBody keeps selection chip visible in context line", () => {
+  const split = splitPlainChatHistoryBody(
+    "/edit rewrite the highlighted lines\nfile: api_authentication.py · selection: L45–52 · repo: CoopAI-Corp/plane"
+  );
+  assert.equal(split.message, "/edit rewrite the highlighted lines");
+  assert.equal(
+    split.contextLine,
+    "file: api_authentication.py · selection: L45–52 · repo: CoopAI-Corp/plane"
+  );
 });
 
 console.log(`\nparseHistoryAttachments: ${passed}/${passed + failed} tests passed`);

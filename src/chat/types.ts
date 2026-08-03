@@ -110,10 +110,14 @@ export type PatchDiffLine = {
   lineNumber?: number;
 };
 
+export type PatchPreviewHunkStatus = "pending" | "applied" | "rejected";
+
 export type PatchPreviewHunk = {
   id: string;
   lines: PatchDiffLine[];
   matchStatus: "matched" | "not_found" | "ambiguous";
+  /** Per-edit review state — defaults to pending when omitted. */
+  status?: PatchPreviewHunkStatus;
 };
 
 export type PatchPreviewFile = {
@@ -503,6 +507,14 @@ export type WebviewInbound =
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | { type: "patch:apply"; payload?: { messageTimestamp?: number } }
   | { type: "patch:reject"; payload?: { messageTimestamp?: number } }
+  | {
+      type: "patch:apply-hunk";
+      payload: { messageTimestamp?: number; hunkId: string };
+    }
+  | {
+      type: "patch:reject-hunk";
+      payload: { messageTimestamp?: number; hunkId: string };
+    }
   | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
   | { type: "patch:open-file"; payload: { path: string } }
   | { type: "ownership:copy-draft"; payload: { text: string } }

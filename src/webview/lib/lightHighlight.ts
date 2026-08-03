@@ -53,6 +53,9 @@ const JS_KEYWORDS = [
 ] as const;
 
 const PYTHON_KEYWORDS = [
+  "False",
+  "None",
+  "True",
   "and",
   "as",
   "assert",
@@ -66,7 +69,6 @@ const PYTHON_KEYWORDS = [
   "elif",
   "else",
   "except",
-  "false",
   "finally",
   "for",
   "from",
@@ -76,14 +78,12 @@ const PYTHON_KEYWORDS = [
   "in",
   "is",
   "lambda",
-  "none",
   "nonlocal",
   "not",
   "or",
   "pass",
   "raise",
   "return",
-  "true",
   "try",
   "while",
   "with",

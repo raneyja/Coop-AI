@@ -14,6 +14,8 @@ type ChatProseProps = {
   content: string;
   relatedArtifactId?: string;
   hidePatchFences?: boolean;
+  /** Open editor path — upgrades mistaken ```lang repo dumps to cite chrome. */
+  activeFilePath?: string;
   onOpenFile?: (path: string, line?: number) => void;
   onOpenLink?: (url: string) => void;
   className?: string;
@@ -28,6 +30,7 @@ export function ChatProse({
   content,
   relatedArtifactId,
   hidePatchFences = false,
+  activeFilePath,
   onOpenFile,
   onOpenLink,
   className
@@ -35,7 +38,10 @@ export function ChatProse({
   const contextLinks = useChatLinks();
   const openFile = onOpenFile ?? contextLinks.onOpenFile;
   const openLink = onOpenLink ?? contextLinks.onOpenLink;
-  const document = useMemo(() => parseChatProse(content), [content]);
+  const document = useMemo(
+    () => parseChatProse(content, { activeFilePath }),
+    [content, activeFilePath]
+  );
 
   const blocks: React.ReactElement[] = [];
   let inSourcesSection = false;
@@ -70,9 +76,25 @@ export function shouldHidePatchBlock(block: ChatProseBlock): boolean {
       return true;
     }
   }
+  // Parser may recover File: + ```patch as a code-citation — still hide when Patch card owns it.
+  if (block.type === "code-citation" && block.code.includes("<<<<<<< SEARCH")) {
+    return true;
+  }
   if (block.type === "paragraph") {
     const text = block.content.map(inlineNodeToPlainText).join("").trim();
     if (/^File:\s/.test(text)) {
+      return true;
+    }
+    // Unfenced SEARCH/REPLACE the model sometimes emits after a File: line.
+    if (text.includes("<<<<<<< SEARCH") && text.includes(">>>>>>> REPLACE")) {
+      return true;
+    }
+  }
+  if (block.type === "list") {
+    const text = block.items
+      .map((item) => item.content.map(inlineNodeToPlainText).join(""))
+      .join("\n");
+    if (text.includes("<<<<<<< SEARCH") && text.includes(">>>>>>> REPLACE")) {
       return true;
     }
   }

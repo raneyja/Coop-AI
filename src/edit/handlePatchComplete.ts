@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
 import { buildPatchCardState, PATCH_CARD_IDLE, withSuppressionRegistry } from "./patchDiffPreview";
 import type { ParsedPatchSet } from "./patchParser";
-import { countHunks, parsePatchResponse } from "./patchParser";
+import { countHunks, countUniqueFiles, parsePatchResponse } from "./patchParser";
 import { emitPatchEvent } from "./patchEvents";
 import { rejectPendingPatchWithState, type PatchSnapshotPublisher } from "./patchActions";
 import {
@@ -14,7 +14,7 @@ import {
 } from "./patchSession";
 
 function patchReadyLabel(patches: ParsedPatchSet): string {
-  const fileCount = patches.files.length;
+  const fileCount = countUniqueFiles(patches);
   const hunkCount = countHunks(patches);
   return fileCount === 1
     ? `1 file (${hunkCount} edit${hunkCount === 1 ? "" : "s"})`
@@ -85,7 +85,7 @@ export async function handlePatchComplete(
   setLastPatchApplyError(undefined);
   setLastPatchMessageTimestamp(options.messageTimestamp);
 
-  const fileCount = parsed.patches.files.length;
+  const fileCount = countUniqueFiles(parsed.patches);
   const hunkCount = countHunks(parsed.patches);
   void vscode.commands.executeCommand("setContext", "coopAI.patchPending", true);
   emitPatchEvent("edit.patch_parsed", { fileCount, hunkCount });

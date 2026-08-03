@@ -17,12 +17,17 @@ import {
   normalizeSourceCitationLabel,
   sourceCitationSlug
 } from "../../prompts/sourceCitationRegistry";
+import {
+  findRepoPathNearFence,
+  isOrdinaryLanguageTag,
+  languageTagMatchesPath,
+  tryParseCitationLocator
+} from "./codeCitationLocator";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+.+/;
 const CODE_FENCE_OPEN_RE = /^```/;
 const LIST_ITEM_RE = /^(\s*)(- |\* |(\d+)\.\s)(.*)$/;
-const CITATION_HEADER_RE = /^(\d+):(\d+):(.+)$/;
 const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
 const COOP_EVIDENCE_LINK_RE = /^\[([^\]]+)\]\(coop-evidence:\)/;
 const INLINE_URL_RE = /^https?:\/\/[^\s)]+/;
@@ -36,7 +41,15 @@ const FILE_LINE_RE = /^(.*):(\d+)$/;
 const JIRA_TICKET_LINK_LINE_RE = /^\[([A-Z][A-Z0-9]+-\d+)\]\((https?:\/\/[^)]+)\)\s*$/;
 const JIRA_FIELD_LINE_RE = /^([A-Za-z][A-Za-z ]*):\s*(.+)$/;
 
-export function parseChatProse(content: string): ChatProseDocument {
+export type ParseChatProseOptions = {
+  /**
+   * When the model dumps a language-tagged fence for the open file instead of a
+   * citation locator, upgrade it to the cite surface so chrome stays IDE-native.
+   */
+  activeFilePath?: string;
+};
+
+export function parseChatProse(content: string, options?: ParseChatProseOptions): ChatProseDocument {
   const normalized = normalizeCoopChatProse(
     normalizeJiraTicketBreaks(content.replace(/\r\n/g, "\n"))
   );
@@ -50,7 +63,7 @@ export function parseChatProse(content: string): ChatProseDocument {
       continue;
     }
 
-    const codeBlock = tryParseCodeFence(lines, i);
+    const codeBlock = tryParseCodeFence(lines, i, options);
     if (codeBlock) {
       blocks.push(codeBlock.block);
       i = codeBlock.nextIndex;
@@ -97,25 +110,23 @@ export function parseChatProse(content: string): ChatProseDocument {
   return { blocks };
 }
 
-function tryParseCitationLocator(value: string): { startLine: number; endLine: number; path: string } | null {
-  const match = value.trim().match(CITATION_HEADER_RE);
-  if (!match) {
-    return null;
-  }
-  const path = match[3].trim();
-  if (!path) {
-    return null;
-  }
+function citationBlockFromLocator(
+  locator: NonNullable<ReturnType<typeof tryParseCitationLocator>>,
+  code: string
+): ChatProseBlock {
   return {
-    startLine: Number(match[1]),
-    endLine: Number(match[2]),
-    path
+    type: "code-citation",
+    startLine: locator.startLine,
+    endLine: locator.endLine,
+    path: locator.path,
+    code
   };
 }
 
 function tryParseCodeFence(
   lines: string[],
-  startIndex: number
+  startIndex: number,
+  options?: ParseChatProseOptions
 ): { block: ChatProseBlock; nextIndex: number } | null {
   const openingLine = lines[startIndex];
   if (!CODE_FENCE_OPEN_RE.test(openingLine)) {
@@ -132,35 +143,41 @@ function tryParseCodeFence(
 
   const nextIndex = i < lines.length ? i + 1 : i;
 
-  // Cursor-style: ```startLine:endLine:path on the fence line.
+  // Cursor-style: ```startLine:endLine:path on the fence line (also recovers placeholders).
   const infoCitation = infoString ? tryParseCitationLocator(infoString) : null;
   if (infoCitation) {
     return {
-      block: {
-        type: "code-citation",
-        startLine: infoCitation.startLine,
-        endLine: infoCitation.endLine,
-        path: infoCitation.path,
-        code: body.join("\n")
-      },
+      block: citationBlockFromLocator(infoCitation, body.join("\n")),
       nextIndex
     };
   }
 
-  // Coop preferred: plain ``` fence; first body line is startLine:endLine:path.
+  // Preferred / recovered: first body line is a locator (numeric, placeholder, or path-only).
   const [firstBodyLine = "", ...rest] = body;
   const bodyCitation = tryParseCitationLocator(firstBodyLine);
   if (bodyCitation) {
     return {
-      block: {
-        type: "code-citation",
-        startLine: bodyCitation.startLine,
-        endLine: bodyCitation.endLine,
-        path: bodyCitation.path,
-        code: rest.join("\n")
-      },
+      block: citationBlockFromLocator(bodyCitation, rest.join("\n")),
       nextIndex
     };
+  }
+
+  // Model dumped ```typescript of repo code — recover cite chrome from nearby path or active file.
+  if (isOrdinaryLanguageTag(infoString) && body.join("\n").trim()) {
+    const nearbyPath = findRepoPathNearFence(lines, startIndex);
+    if (nearbyPath) {
+      return {
+        block: citationBlockFromLocator({ path: nearbyPath }, body.join("\n")),
+        nextIndex
+      };
+    }
+    const activePath = options?.activeFilePath?.trim();
+    if (activePath && languageTagMatchesPath(infoString, activePath)) {
+      return {
+        block: citationBlockFromLocator({ path: activePath }, body.join("\n")),
+        nextIndex
+      };
+    }
   }
 
   return {

@@ -25,7 +25,7 @@ function parseAttachedValue(value: string): HistoryAttachment[] {
     .map(parseAttachmentLabel);
 }
 
-/** True for quick-action / first-chat chip lines: `key: value · key: value`. */
+/** True for quick-action / chat scope chip lines: `key: value · key: value`. */
 export function isCompactContextChipLine(line: string): boolean {
   return /^[\w ]+: .+( · [\w ]+: .+)*$/.test(line.trim());
 }
@@ -60,8 +60,8 @@ export function parseContextLineAttachments(contextLine: string): {
 /**
  * Split plain-chat bubble text from stored context / attached chip lines.
  * Supports:
- * - First-message compact chips: `message\nfile: x · repo: y · branch: z`
- * - Follow-up mentions: `message\nattached: path`
+ * - Compact scope chips on any turn: `message\nfile: x · repo: y · branch: z`
+ * - Mentions only: `message\nattached: path`
  */
 export function splitPlainChatHistoryBody(content: string): {
   message: string;

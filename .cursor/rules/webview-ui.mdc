@@ -55,6 +55,10 @@ Quick-action and multi-source outputs (Find Owner, Trace Decision, Jira/Teams/Sl
 
 Do **not** use `vscode-editorWidget-background`, heavy `border-b` stacks, or uppercase section labels on new integration output UI.
 
+## Chat code surfaces (cite / edit / anonymous)
+
+See **`.cursor/rules/chat-code-surfaces.mdc`**. Repo code in chat uses `coop-chat-citation` (path header + token colors). Apply edits use `coop-patch-*`. Ordinary `coop-chat-code-block` language fences are for invented examples only — never show a **TEXT** badge for unlabeled fences.
+
 ## Reference implementations
 
 - Modal: `src/webview/components/PromptLibraryModal.tsx`
@@ -62,5 +66,7 @@ Do **not** use `vscode-editorWidget-background`, heavy `border-b` stacks, or upp
 - Integration results: `src/webview/OwnershipCard.tsx`, `src/webview/DecisionTimeline.tsx`
 - Explorer overlay: `src/webview/RemoteExplorer.tsx`
 - Context mode: `src/webview/LightningModePanel.tsx`
+- Cite surface: `src/webview/components/ChatCodeCitation.tsx`
+- Edit surface: `src/webview/PatchCard.tsx` / `PatchDiffView.tsx`
 
 Before adding new CSS classes, check if an existing `coop-*` class in `globals.css` already fits.

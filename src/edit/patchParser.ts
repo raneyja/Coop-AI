@@ -31,8 +31,54 @@ function extractHunks(text: string): PatchHunk[] {
   return hunks;
 }
 
+/** Collapse repeated File: headers for the same path into one FilePatch. */
+export function mergeFilePatchesByPath(files: FilePatch[]): FilePatch[] {
+  const byPath = new Map<string, FilePatch>();
+  for (const file of files) {
+    const existing = byPath.get(file.relativePath);
+    if (existing) {
+      existing.hunks.push(...file.hunks);
+    } else {
+      byPath.set(file.relativePath, {
+        relativePath: file.relativePath,
+        hunks: [...file.hunks]
+      });
+    }
+  }
+  return [...byPath.values()];
+}
+
 export function countHunks(patches: ParsedPatchSet): number {
   return patches.files.reduce((sum, file) => sum + file.hunks.length, 0);
+}
+
+export function countUniqueFiles(patches: ParsedPatchSet): number {
+  return new Set(patches.files.map((file) => file.relativePath)).size;
+}
+
+/** Resolve a preview hunk id (`hunk-0`) to its FilePatch + hunk. */
+export function locateHunkById(
+  patches: ParsedPatchSet,
+  hunkId: string
+): { file: FilePatch; hunk: PatchHunk; hunkIndex: number; globalIndex: number } | undefined {
+  const match = /^hunk-(\d+)$/.exec(hunkId.trim());
+  if (!match) {
+    return undefined;
+  }
+  const target = Number(match[1]);
+  if (!Number.isInteger(target) || target < 0) {
+    return undefined;
+  }
+  let globalIndex = 0;
+  for (const file of patches.files) {
+    for (let hunkIndex = 0; hunkIndex < file.hunks.length; hunkIndex++) {
+      if (globalIndex === target) {
+        return { file, hunk: file.hunks[hunkIndex]!, hunkIndex, globalIndex };
+      }
+      globalIndex += 1;
+    }
+  }
+  return undefined;
 }
 
 export function parsePatchResponse(content: string): ParsePatchResult {
@@ -68,5 +114,5 @@ export function parsePatchResponse(content: string): ParsePatchResult {
     files.push({ relativePath, hunks });
   }
 
-  return { ok: true, patches: { files } };
+  return { ok: true, patches: { files: mergeFilePatchesByPath(files) } };
 }

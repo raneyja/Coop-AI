@@ -18,8 +18,8 @@ export type ChatCodeFenceBlock = {
 
 export type ChatCodeCitationBlock = {
   type: "code-citation";
-  startLine: number;
-  endLine: number;
+  startLine?: number;
+  endLine?: number;
   path: string;
   code: string;
 };

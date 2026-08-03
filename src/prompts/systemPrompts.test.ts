@@ -27,9 +27,11 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("Do NOT use: # headings"));
   assert.ok(prompt.includes("*italics* for uncertainty"));
-  assert.ok(prompt.includes("use a **citation fence**, never a language-tagged fence"));
-  assert.ok(prompt.includes("first body line is `startLine:endLine:path`"));
-  assert.ok(prompt.includes("FAIL: ```typescript / ```javascript"));
+  assert.ok(prompt.includes("use a **citation fence** (cite intent)"));
+  assert.ok(prompt.includes("copied **verbatim** from attached evidence"));
+  assert.ok(prompt.includes("Do **not** abbreviate repo code"));
+  assert.ok(prompt.includes("PASS example first line:"));
+  assert.ok(prompt.includes("FAIL: literal placeholders"));
   assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("## Required response structure"));
 });
@@ -42,7 +44,7 @@ test("chat use case requires answer-style Your question and applyable edit patch
   assert.ok(prompt.includes("<<<<<<< SEARCH"));
   assert.ok(prompt.includes("Multiple edits → multiple patch blocks"));
   assert.ok(prompt.includes("emit `File:` + ```patch SEARCH/REPLACE blocks"));
-  assert.ok(prompt.includes("not ```typescript dumps"));
+  assert.ok(prompt.includes("not literal `startLine:endLine:…` placeholders"));
 });
 
 test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {
@@ -134,9 +136,12 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes(">>>>>>> REPLACE"));
   assert.ok(prompt.includes("edit mode"));
   assert.ok(prompt.includes("## Completeness (required)"));
+  assert.ok(prompt.includes("## Editor selection (required when present)"));
   assert.ok(prompt.includes("fully implement"));
+  assert.ok(prompt.includes("exact copy of the entire"));
   assert.equal(prompt.includes("Uniform response template"), false);
   assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
+  assert.equal(prompt.includes("Selection or focus hints mark where to start looking"), false);
 });
 
 test("buildUserMessageWithContext renders jira_tickets from context bundle", () => {
@@ -289,6 +294,54 @@ test("formatChatMessageWithLocalFiles embeds authoritative file_content", () => 
   assert.ok(message.includes("<file_content"));
   assert.ok(message.includes("deps.githubApp"));
   assert.ok(message.includes("Quote the 503 condition."));
+});
+
+test("formatChatMessageWithLocalFiles includes editor_selection for highlighted range", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "/edit shorten this highlighted block",
+    file: "apps/api/middleware/auth.py",
+    selectedLines: [17, 27],
+    files: [
+      {
+        path: "apps/api/middleware/auth.py",
+        content: [
+          "line1",
+          "line2",
+          "line3",
+          "line4",
+          "line5",
+          "line6",
+          "line7",
+          "line8",
+          "line9",
+          "line10",
+          "line11",
+          "line12",
+          "line13",
+          "line14",
+          "line15",
+          "line16",
+          "class APIKeyAuthentication:",
+          "    media_type = 'application/json'",
+          "    def get_api_token(self, request):",
+          "        return request.headers.get('X-Api-Key')",
+          "line21",
+          "line22",
+          "line23",
+          "line24",
+          "line25",
+          "line26",
+          "line27"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.ok(message.includes('<editor_selection path="apps/api/middleware/auth.py" lines="17-27">'));
+  assert.ok(message.includes("class APIKeyAuthentication:"));
+  assert.ok(message.includes("def get_api_token"));
+  assert.ok(message.includes("Edit directive:"));
+  assert.ok(message.includes("character-for-character"));
 });
 
 test("buildUserMessageWithContext renders local_files from context bundle", () => {

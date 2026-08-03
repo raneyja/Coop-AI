@@ -48,7 +48,9 @@ function blockToCopyLines(block: ChatProseBlock): string[] {
     case "code-citation":
       return [
         "",
-        `${block.path}:${block.startLine}-${block.endLine}`,
+        block.startLine != null && block.endLine != null
+          ? `${block.path}:${block.startLine}-${block.endLine}`
+          : block.path,
         "```",
         block.code,
         "```",

@@ -231,19 +231,28 @@ export type PlainChatHistoryContext = {
   owner?: string;
   repo?: string;
   branch?: string;
+  /** 1-based inclusive editor highlight — stamped like file/repo chips. */
+  selectedLines?: [number, number];
 };
 
 export type PlainChatHistoryOptions = {
   /** Active repo/file scope for the turn. */
   context?: PlainChatHistoryContext;
   /**
-   * When true (first user message in a thread), append file/repo/branch chips
-   * in the same compact format as quick actions.
+   * When true, append file/repo/branch/selection chips in the same compact
+   * format as quick actions. Prefer true for every user turn so follow-ups
+   * show the same scope subtitle as the first message.
    */
   includeContextChips?: boolean;
 };
 
-/** Context chips shown under the first plain-chat bubble (mirrors quick-action format). */
+/** Display label for a 1-based inclusive selection (matches composer preview chips). */
+export function formatSelectedLinesChip(selectedLines: [number, number]): string {
+  const [start, end] = selectedLines;
+  return start === end ? `L${start}` : `L${start}–${end}`;
+}
+
+/** Context chips shown under chat bubbles (mirrors quick-action format). */
 export function plainChatContextChips(
   context: PlainChatHistoryContext | undefined,
   mentions: MentionScopeRef[] = []
@@ -252,6 +261,9 @@ export function plainChatContextChips(
   const file = context?.file?.trim();
   if (file) {
     chips.push({ key: "file", value: file });
+  }
+  if (context?.selectedLines && context.selectedLines.length === 2) {
+    chips.push({ key: "selection", value: formatSelectedLinesChip(context.selectedLines) });
   }
   if (context?.owner?.trim() && context?.repo?.trim()) {
     chips.push({ key: "repo", value: `${context.owner.trim()}/${context.repo.trim()}` });
@@ -265,6 +277,67 @@ export function plainChatContextChips(
   return chips;
 }
 
+export function formatContextChipLine(
+  context: PlainChatHistoryContext | undefined,
+  mentions: MentionScopeRef[] = []
+): string | undefined {
+  const chips = plainChatContextChips(context, mentions);
+  if (chips.length === 0) {
+    return undefined;
+  }
+  return chips.map((chip) => `${chip.key}: ${chip.value}`).join(" · ");
+}
+
+/**
+ * Append (or replace) a trailing compact context-chip line so file + selection
+ * stay visible on /edit and highlight turns.
+ */
+export function withContextChipLine(
+  message: string,
+  context: PlainChatHistoryContext | undefined,
+  mentions: MentionScopeRef[] = []
+): string {
+  const trimmed = message.trim();
+  const chipLine = formatContextChipLine(context, mentions);
+  if (!chipLine) {
+    return trimmed;
+  }
+
+  const newline = trimmed.indexOf("\n");
+  if (newline === -1) {
+    return `${trimmed}\n${chipLine}`;
+  }
+
+  const head = trimmed.slice(0, newline).trim();
+  const rest = trimmed.slice(newline + 1).trim();
+  // Replace an existing compact chip footer; keep multi-line user prose intact.
+  if (!rest || isCompactContextChipLine(rest) || /^attached:\s+/i.test(rest)) {
+    return `${head}\n${chipLine}`;
+  }
+  return `${trimmed}\n${chipLine}`;
+}
+
+/** True when history already has a scope subtitle (repo/file/branch/selection). */
+export function historyContentHasScopeChips(content: string): boolean {
+  const trimmed = content.trim();
+  const newline = trimmed.indexOf("\n");
+  if (newline === -1) {
+    return false;
+  }
+  const rest = trimmed.slice(newline + 1).trim();
+  if (!rest) {
+    return false;
+  }
+  if (!isCompactContextChipLine(rest) && !/^attached:\s+/i.test(rest)) {
+    return false;
+  }
+  return /\b(repo|file|branch|selection|lines):\s+/i.test(rest);
+}
+
+function isCompactContextChipLine(line: string): boolean {
+  return /^[\w ]+: .+( · [\w ]+: .+)*$/.test(line.trim());
+}
+
 export function plainChatHistoryContent(
   message: string,
   mentions: MentionScopeRef[] = [],
@@ -272,12 +345,7 @@ export function plainChatHistoryContent(
 ): string {
   const trimmed = message.trim();
   if (options?.includeContextChips) {
-    const chips = plainChatContextChips(options.context, mentions);
-    if (chips.length === 0) {
-      return trimmed;
-    }
-    const chipLine = chips.map((chip) => `${chip.key}: ${chip.value}`).join(" · ");
-    return `${trimmed}\n${chipLine}`;
+    return withContextChipLine(trimmed, options.context, mentions);
   }
   if (!mentions.length) {
     return trimmed;

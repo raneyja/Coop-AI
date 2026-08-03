@@ -148,12 +148,44 @@ test("parses ask-mode narrative plus applyable patches", () => {
   if (!result.ok) {
     return;
   }
-  assert.equal(result.patches.files.length, 2);
+  // Same path File: headers merge into one file with two hunks.
+  assert.equal(result.patches.files.length, 1);
   assert.equal(countHunks(result.patches), 2);
   assert.equal(
     result.patches.files[0]!.relativePath,
     "apps/api/plane/utils/issue_relation_mapper.py"
   );
+});
+
+test("merges repeated File headers for the same path", () => {
+  const content = [
+    "File: `src/same.ts`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "A",
+    ">>>>>>> REPLACE",
+    "```",
+    "",
+    "File: `src/same.ts`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "b",
+    "=======",
+    "B",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files.length, 1);
+  assert.equal(result.patches.files[0]!.hunks.length, 2);
 });
 
 test("fails when hunks exist without File header", () => {

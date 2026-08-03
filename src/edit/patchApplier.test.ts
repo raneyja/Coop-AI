@@ -143,6 +143,25 @@ test("fuzzy match fails when no trimmed line block matches", () => {
   assert.equal(result.reason, "not_found");
 });
 
+test("fuzzy match tolerates self-kwargs like request=request", () => {
+  const source = [
+    "    def authenticate(self, request):",
+    "        token = self.get_api_token(request=request)",
+    "        if not token:",
+    "            return None"
+  ].join("\n");
+  const result = applyHunkToContent(source, {
+    search: ["        token = self.get_api_token(request)", "        if not token:"].join("\n"),
+    replace: ["        token = self.get_api_token(request) or None", "        if token is None:"].join("\n")
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.ok(result.content.includes("or None"));
+  assert.ok(result.content.includes("if token is None:"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

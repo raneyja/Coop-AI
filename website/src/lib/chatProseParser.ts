@@ -5,11 +5,11 @@ import type {
   ChatProseBlock,
   ChatProseDocument
 } from "./chatProseTypes";
+import { tryParseCitationLocator, findRepoPathNearFence, isOrdinaryLanguageTag, languageTagMatchesPath } from "./codeCitationLocator";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const CODE_FENCE_OPEN_RE = /^```/;
 const LIST_ITEM_RE = /^(\s*)(- |\* |(\d+)\.\s)(.*)$/;
-const CITATION_HEADER_RE = /^(\d+):(\d+):(.+)$/;
 const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
 const INLINE_URL_RE = /^https?:\/\/[^\s)]+/;
 const INLINE_CODE_RE = /^`([^`\n]+)`/;
@@ -17,7 +17,11 @@ const INLINE_STRONG_RE = /^\*\*([^*\n]+)\*\*/;
 const FILE_WITH_EXTENSION_RE = /^[^/\s]+\.[A-Za-z0-9._-]+(?::\d+)?$/;
 const FILE_LINE_RE = /^(.*):(\d+)$/;
 
-export function parseChatProse(content: string): ChatProseDocument {
+export type ParseChatProseOptions = {
+  activeFilePath?: string;
+};
+
+export function parseChatProse(content: string, options?: ParseChatProseOptions): ChatProseDocument {
   const normalized = content.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
   const blocks: ChatProseBlock[] = [];
@@ -29,7 +33,7 @@ export function parseChatProse(content: string): ChatProseDocument {
       continue;
     }
 
-    const codeBlock = tryParseCodeFence(lines, i);
+    const codeBlock = tryParseCodeFence(lines, i, options);
     if (codeBlock) {
       blocks.push(codeBlock.block);
       i = codeBlock.nextIndex;
@@ -60,25 +64,10 @@ export function parseChatProse(content: string): ChatProseDocument {
   return { blocks };
 }
 
-function tryParseCitationLocator(value: string): { startLine: number; endLine: number; path: string } | null {
-  const match = value.trim().match(CITATION_HEADER_RE);
-  if (!match) {
-    return null;
-  }
-  const path = match[3].trim();
-  if (!path) {
-    return null;
-  }
-  return {
-    startLine: Number(match[1]),
-    endLine: Number(match[2]),
-    path
-  };
-}
-
 function tryParseCodeFence(
   lines: string[],
-  startIndex: number
+  startIndex: number,
+  options?: ParseChatProseOptions
 ): { block: ChatProseBlock; nextIndex: number } | null {
   const openingLine = lines[startIndex];
   if (!CODE_FENCE_OPEN_RE.test(openingLine)) {
@@ -122,6 +111,31 @@ function tryParseCodeFence(
       },
       nextIndex
     };
+  }
+
+  if (isOrdinaryLanguageTag(infoString) && body.join("\n").trim()) {
+    const nearbyPath = findRepoPathNearFence(lines, startIndex);
+    if (nearbyPath) {
+      return {
+        block: {
+          type: "code-citation",
+          path: nearbyPath,
+          code: body.join("\n")
+        },
+        nextIndex
+      };
+    }
+    const activePath = options?.activeFilePath?.trim();
+    if (activePath && languageTagMatchesPath(infoString, activePath)) {
+      return {
+        block: {
+          type: "code-citation",
+          path: activePath,
+          code: body.join("\n")
+        },
+        nextIndex
+      };
+    }
   }
 
   return {

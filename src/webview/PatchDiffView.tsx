@@ -5,13 +5,26 @@ import { IntegrationResultNested, IntegrationResultText } from "./components/Int
 type PatchDiffViewProps = {
   files: PatchPreviewFile[];
   onOpenFile?: (path: string) => void;
+  onApplyHunk?: (hunkId: string) => void;
+  onRejectHunk?: (hunkId: string) => void;
 };
 
-export function PatchDiffView({ files, onOpenFile }: PatchDiffViewProps): React.ReactElement {
+export function PatchDiffView({
+  files,
+  onOpenFile,
+  onApplyHunk,
+  onRejectHunk
+}: PatchDiffViewProps): React.ReactElement {
   return (
     <div className="coop-patch-diff-stack">
       {files.map((file) => (
-        <PatchFileDiff key={file.relativePath} file={file} onOpenFile={onOpenFile} />
+        <PatchFileDiff
+          key={file.relativePath}
+          file={file}
+          onOpenFile={onOpenFile}
+          onApplyHunk={onApplyHunk}
+          onRejectHunk={onRejectHunk}
+        />
       ))}
     </div>
   );
@@ -19,10 +32,14 @@ export function PatchDiffView({ files, onOpenFile }: PatchDiffViewProps): React.
 
 function PatchFileDiff({
   file,
-  onOpenFile
+  onOpenFile,
+  onApplyHunk,
+  onRejectHunk
 }: {
   file: PatchPreviewFile;
   onOpenFile?: (path: string) => void;
+  onApplyHunk?: (hunkId: string) => void;
+  onRejectHunk?: (hunkId: string) => void;
 }): React.ReactElement {
   return (
     <div className="coop-patch-file">
@@ -36,22 +53,44 @@ function PatchFileDiff({
       </div>
       <IntegrationResultNested className="coop-patch-file-body">
         {file.hunks.map((hunk) => (
-          <PatchHunkDiff key={hunk.id} hunk={hunk} />
+          <PatchHunkDiff
+            key={hunk.id}
+            hunk={hunk}
+            onApplyHunk={onApplyHunk}
+            onRejectHunk={onRejectHunk}
+          />
         ))}
       </IntegrationResultNested>
     </div>
   );
 }
 
-function PatchHunkDiff({ hunk }: { hunk: PatchPreviewHunk }): React.ReactElement {
+function PatchHunkDiff({
+  hunk,
+  onApplyHunk,
+  onRejectHunk
+}: {
+  hunk: PatchPreviewHunk;
+  onApplyHunk?: (hunkId: string) => void;
+  onRejectHunk?: (hunkId: string) => void;
+}): React.ReactElement {
+  const status = hunk.status ?? "pending";
+  const showActions = status === "pending" && (onApplyHunk || onRejectHunk);
+
   return (
-    <div className="coop-patch-hunk">
+    <div className={`coop-patch-hunk${status !== "pending" ? ` coop-patch-hunk--${status}` : ""}`}>
       {hunk.matchStatus !== "matched" ? (
         <IntegrationResultText muted>
           {hunk.matchStatus === "ambiguous"
             ? "SEARCH block matches multiple locations in the file."
             : "SEARCH block not found — review before applying."}
         </IntegrationResultText>
+      ) : null}
+      {status === "applied" ? (
+        <IntegrationResultText muted>Applied</IntegrationResultText>
+      ) : null}
+      {status === "rejected" ? (
+        <IntegrationResultText muted>Rejected</IntegrationResultText>
       ) : null}
       <pre className="coop-patch-diff">
         <code>
@@ -60,6 +99,25 @@ function PatchHunkDiff({ hunk }: { hunk: PatchPreviewHunk }): React.ReactElement
           ))}
         </code>
       </pre>
+      {showActions ? (
+        <div className="coop-patch-hunk-actions">
+          {onApplyHunk ? (
+            <button
+              type="button"
+              className="coop-settings-action-btn"
+              onClick={() => onApplyHunk(hunk.id)}
+              disabled={hunk.matchStatus !== "matched"}
+            >
+              Apply
+            </button>
+          ) : null}
+          {onRejectHunk ? (
+            <button type="button" className="coop-text-btn" onClick={() => onRejectHunk(hunk.id)}>
+              Reject
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

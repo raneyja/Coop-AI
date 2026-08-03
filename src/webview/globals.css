@@ -1576,6 +1576,18 @@
     @apply my-2 space-y-2;
   }
 
+  .coop-patch-diff-scroll {
+    @apply my-2 max-h-[min(75vh,640px)] overflow-y-auto;
+  }
+
+  .coop-patch-card-section {
+    @apply !px-3.5 !py-2.5;
+  }
+
+  .coop-patch-card .coop-result-content {
+    @apply px-0;
+  }
+
   .coop-patch-file {
     @apply overflow-hidden rounded-md border;
     border-color: var(--coop-border);
@@ -1605,6 +1617,15 @@
   .coop-patch-hunk + .coop-patch-hunk {
     @apply border-t;
     border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-hunk--applied,
+  .coop-patch-hunk--rejected {
+    opacity: 0.72;
+  }
+
+  .coop-patch-hunk-actions {
+    @apply flex flex-wrap items-center gap-2 px-2.5 pb-2 pt-1;
   }
 
   .coop-patch-diff {
@@ -1664,6 +1685,53 @@
     );
   }
 
+  .coop-chat-citation-toolbar {
+    @apply flex items-center justify-between gap-2 border-b px-2.5 py-1.5;
+    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--vscode-textCodeBlock-background, var(--vscode-editor-background)) 82%,
+      var(--coop-panel-canvas) 18%
+    );
+  }
+
+  .coop-chat-citation-path {
+    @apply min-w-0 flex-1 cursor-pointer text-left text-[11px] font-medium transition-colors duration-150;
+    color: var(--vscode-textLink-foreground);
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+    word-break: break-all;
+  }
+
+  .coop-chat-citation-path:hover {
+    text-decoration: underline;
+  }
+
+  .coop-chat-citation-body {
+    @apply flex min-w-0 overflow-x-auto;
+    background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+  }
+
+  .coop-chat-citation-gutters {
+    @apply flex shrink-0 select-none flex-col border-r py-2 pl-2 pr-1.5 text-right text-[10px] leading-[1.45];
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+    color: var(--vscode-editorLineNumber-foreground, var(--coop-panel-muted));
+  }
+
+  .coop-chat-citation-gutter {
+    @apply block;
+  }
+
+  .coop-chat-citation-pre {
+    @apply m-0 min-w-0 flex-1 overflow-x-auto px-2.5 py-2 text-xs leading-[1.45];
+  }
+
+  .coop-chat-citation-pre code {
+    @apply block whitespace-pre;
+    color: var(--vscode-editor-foreground);
+  }
+
+  /* Legacy header class kept for admin/website mirrors during transition */
   .coop-chat-citation-header {
     @apply block w-full cursor-pointer border-b px-2.5 py-1.5 text-left text-[11px] font-medium transition-colors duration-150;
     border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
@@ -2540,16 +2608,12 @@
     color: var(--vscode-inputValidation-warningBorder, #d19a66);
   }
 
-  .coop-result-content {
-    @apply space-y-0;
-  }
-
   .coop-result-body {
     @apply max-h-[420px] space-y-0 overflow-y-auto px-3.5 py-2;
   }
 
-  .coop-patch-card .coop-result-body {
-    @apply max-h-[min(70vh,560px)];
+  .coop-result-content {
+    @apply space-y-0;
   }
 
   .coop-result-section {

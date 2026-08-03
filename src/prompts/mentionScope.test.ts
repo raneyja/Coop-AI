@@ -12,7 +12,9 @@ import {
   pathLikelyInTargetRepo,
   plainChatContextChips,
   plainChatHistoryContent,
-  plainChatRefersToAttachedFile
+  plainChatRefersToAttachedFile,
+  historyContentHasScopeChips,
+  withContextChipLine
 } from "./mentionScope";
 
 const fastifyTree: RepoSummaryEvidence = {
@@ -214,7 +216,7 @@ test("plainChatHistoryContent preserves @ attachments in bubble text", () => {
   assert.ok(history.includes("attached: .dockerignore (local workspace)"));
 });
 
-test("plainChatHistoryContent adds file/repo/branch chips on first message", () => {
+test("plainChatHistoryContent adds file/repo/branch chips when includeContextChips is set", () => {
   const history = plainChatHistoryContent(
     "Can you summarize this repo for me in 4 sentences or fewer?",
     [],
@@ -229,12 +231,81 @@ test("plainChatHistoryContent adds file/repo/branch chips on first message", () 
   assert.ok(history.includes("branch: main"));
 });
 
-test("plainChatHistoryContent omits chips on follow-up messages", () => {
+test("plainChatHistoryContent stamps selection lines next to the file", () => {
+  const history = plainChatHistoryContent(
+    "/edit rewrite the highlighted lines to be more efficient",
+    [],
+    {
+      includeContextChips: true,
+      context: {
+        file: "apps/api/plane/api/middleware/api_authentication.py",
+        selectedLines: [45, 52],
+        owner: "CoopAI-Corp",
+        repo: "plane"
+      }
+    }
+  );
+  assert.ok(history.includes("selection: L45–52"));
+  assert.ok(history.includes("file: apps/api/plane/api/middleware/api_authentication.py"));
+  assert.ok(history.includes("repo: CoopAI-Corp/plane"));
+});
+
+test("withContextChipLine upgrades a bare /edit history line with selection", () => {
+  const stamped = withContextChipLine(
+    "/edit rewrite the highlighted lines to be more efficient",
+    {
+      file: "api_authentication.py",
+      selectedLines: [45, 52],
+      owner: "CoopAI-Corp",
+      repo: "plane"
+    }
+  );
+  assert.equal(
+    stamped,
+    "/edit rewrite the highlighted lines to be more efficient\nfile: api_authentication.py · selection: L45–52 · repo: CoopAI-Corp/plane"
+  );
+});
+
+test("plainChatHistoryContent can omit chips when includeContextChips is false", () => {
   const history = plainChatHistoryContent("Tell me more", [], {
     includeContextChips: false,
     context: { owner: "raneyja", repo: "Coop-AI", branch: "main" }
   });
   assert.equal(history, "Tell me more");
+});
+
+test("plainChatHistoryContent stamps repo/branch chips on follow-up messages", () => {
+  const history = plainChatHistoryContent("Tell me more", [], {
+    includeContextChips: true,
+    context: { owner: "CoopAI-Corp", repo: "documenso", branch: "main" }
+  });
+  assert.equal(
+    history,
+    "Tell me more\nrepo: CoopAI-Corp/documenso · branch: main"
+  );
+});
+
+test("withContextChipLine stamps scope onto bare slash history lines", () => {
+  const stamped = withContextChipLine("/slack who decided redis", {
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    branch: "preview"
+  });
+  assert.equal(
+    stamped,
+    "/slack who decided redis\nrepo: CoopAI-Corp/plane · branch: preview"
+  );
+});
+
+test("historyContentHasScopeChips detects repo/file footers and ignores attached-only", () => {
+  assert.equal(
+    historyContentHasScopeChips(
+      "How many files?\nrepo: CoopAI-Corp/plane · branch: preview"
+    ),
+    true
+  );
+  assert.equal(historyContentHasScopeChips("Tell me more\nattached: AGENTS.md"), false);
+  assert.equal(historyContentHasScopeChips("/slack who decided redis"), false);
 });
 
 test("plainChatContextChips skips missing file and keeps repo scope", () => {

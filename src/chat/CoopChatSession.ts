@@ -4,6 +4,8 @@ import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
 import {
   applyPendingPatch,
+  applyPendingPatchHunk,
+  rejectPendingPatchHunk,
   rejectPendingPatchWithState,
   resolvePatchCardsSnapshot,
   undoLastPatchWithState
@@ -145,6 +147,7 @@ import {
   buildUserMessageWithContext,
   formatChatMessageWithLocalFiles,
   formatChatMessageWithMentionFiles,
+  selectionTextFromContent,
   useCaseFromQuickAction,
   resolveChatUseCase
 } from "../prompts/systemPrompts";
@@ -165,6 +168,9 @@ import {
   plainChatRefersToAttachedFile,
   partitionMentionsForQuickAction,
   partitionMentionsForTraceDecision,
+  withContextChipLine,
+  historyContentHasScopeChips,
+  formatSelectedLinesChip,
   type MentionScopeQuickAction
 } from "../prompts/mentionScope";
 import {
@@ -1841,6 +1847,20 @@ export class CoopChatSession {
           message.payload?.messageTimestamp
         );
         return;
+      case "patch:apply-hunk":
+        await applyPendingPatchHunk(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload?.messageTimestamp,
+          message.payload.hunkId
+        );
+        return;
+      case "patch:reject-hunk":
+        rejectPendingPatchHunk(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload?.messageTimestamp,
+          message.payload.hunkId
+        );
+        return;
       case "patch:undo":
         await undoLastPatchWithState(
           (payload) => this.postPatchUpdate(payload),
@@ -3231,9 +3251,33 @@ export class CoopChatSession {
     this.post({ type: "conflict:update", payload: this.currentConflictState });
   }
 
+  private selectionFocusActivityMessage(context: RepoContext = this.currentContext): string | undefined {
+    if (!context.selectedLines || context.selectedLines.length !== 2) {
+      return undefined;
+    }
+    const lines = formatSelectedLinesChip(context.selectedLines);
+    const file = context.file?.trim();
+    if (file) {
+      const base = file.split("/").pop() ?? file;
+      return `Looking at ${lines} in ${base}…`;
+    }
+    return `Looking at highlighted ${lines}…`;
+  }
+
+  private withSelectionFocusActivity(messages: string[], context?: RepoContext): string[] {
+    const focus = this.selectionFocusActivityMessage(context);
+    if (!focus) {
+      return messages;
+    }
+    return [focus, ...messages.filter((message) => message !== focus)];
+  }
+
   private loadingFeedbackFor(event: IntentEvent): IntentFeedbackState {
     const action = event.context.buttonClicked;
-    const activityMessages = contextGatheringMessagesFor(event, this.contextGatheringOptions());
+    const activityMessages = this.withSelectionFocusActivity(
+      contextGatheringMessagesFor(event, this.contextGatheringOptions()),
+      intentContextToRepoContext(event.context)
+    );
     if (action === "blast-radius") {
       return {
         status: "loading",
@@ -3648,15 +3692,24 @@ export class CoopChatSession {
           )
         : plainChatHistoryContent(message, mentionRefs, {
             context: actionContext,
-            includeContextChips: !this.chatHistory.some((entry) => entry.role === "user")
+            // Every user bubble (plain chat, follow-ups, /edit) shows active scope.
+            includeContextChips: true
           }));
+    // Stamp file/repo/branch when missing (follow-ups, bare slash lines). Leave
+    // quick-action chip lines intact; always refresh for /edit + highlights.
+    const historyWithScope =
+      options?.composerMode === "edit" ||
+      Boolean(actionContext.selectedLines) ||
+      !historyContentHasScopeChips(historyContent)
+        ? withContextChipLine(historyContent, actionContext, mentionRefs)
+        : historyContent;
     if (shouldTrackEditRequest(options, quickAction)) {
-      setLastEditUserMessage(historyContent);
+      setLastEditUserMessage(historyWithScope);
       void this.emitUsageEvent("edit.requested");
     }
     const userMessage: ChatMessage = {
       role: "user",
-      content: historyContent,
+      content: historyWithScope,
       timestamp: Date.now(),
       attachments: attachments?.length ? attachments : undefined
     };
@@ -3664,7 +3717,7 @@ export class CoopChatSession {
     if (this.chatHistory.length === 1) {
       this.setThreadTitle(
         summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "File attachment",
+          content: historyWithScope || attachments?.[0]?.name || "File attachment",
           quickAction,
           context: this.currentContext
         })
@@ -3809,7 +3862,7 @@ export class CoopChatSession {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const historyContent = plainChatHistoryContent(message, mentionRefs, {
       context: this.currentContext,
-      includeContextChips: !this.chatHistory.some((entry) => entry.role === "user")
+      includeContextChips: true
     });
     const userMessage: ChatMessage = {
       role: "user",
@@ -4319,11 +4372,26 @@ export class CoopChatSession {
   }
 
   private selectedCodeSnippet(maxLength = 4000): string | undefined {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.selection.isEmpty) {
+    const editor =
+      pickLocalEditorForContext(this.currentContext.file) ??
+      pickEditorForContext(this.currentContext.file) ??
+      vscode.window.activeTextEditor;
+    if (editor && !editor.selection.isEmpty) {
+      return editor.document.getText(editor.selection).slice(0, maxLength);
+    }
+    const lines = this.currentContext.selectedLines;
+    if (!lines || lines.length !== 2) {
       return undefined;
     }
-    return editor.document.getText(editor.selection).slice(0, maxLength);
+    const wanted = this.currentContext.file?.trim();
+    const fromPending = this.pendingChatLocalFiles?.files.find((file) =>
+      wanted ? pathsReferToSameFile(file.path, wanted) : true
+    );
+    if (fromPending?.content) {
+      const sliced = selectionTextFromContent(fromPending.content, lines, maxLength);
+      return sliced || undefined;
+    }
+    return undefined;
   }
 
   private decisionTimelineFromBundle(): DecisionTimeline | undefined {
@@ -4428,10 +4496,13 @@ export class CoopChatSession {
     let full = "";
 
     if (!quickAction) {
-      const synthesisMessages = appendThinkingProcessingTerms(
-        [],
-        `synthesis-${turn.streamGeneration}-${Date.now()}`,
-        8
+      const synthesisMessages = this.withSelectionFocusActivity(
+        appendThinkingProcessingTerms(
+          [],
+          `synthesis-${turn.streamGeneration}-${Date.now()}`,
+          8
+        ),
+        turnContext
       );
       this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
@@ -4441,10 +4512,13 @@ export class CoopChatSession {
         activityMessages: synthesisMessages
       });
     } else {
-      const synthesisMessages = appendThinkingProcessingTerms(
-        [],
-        `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
-        8
+      const synthesisMessages = this.withSelectionFocusActivity(
+        appendThinkingProcessingTerms(
+          [],
+          `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
+          8
+        ),
+        turnContext
       );
       this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
@@ -4738,7 +4812,7 @@ export class CoopChatSession {
               repo: turnContext.repo,
               branch: turnContext.branch
             })
-          : useContextBundle || !localPayload?.files.length
+            : useContextBundle || !localPayload?.files.length
             ? buildUserMessageWithContext(llmMessage, {
                 owner: turnContext.owner,
                 repo: turnContext.repo,
@@ -4750,6 +4824,7 @@ export class CoopChatSession {
                       ? undefined
                       : turnContext.file,
                 selectedLines: turnContext.selectedLines,
+                selectionText: this.selectedCodeSnippet(4000),
                 languageId: turnContext.languageId,
                 contextBundle
               })
@@ -4758,6 +4833,7 @@ export class CoopChatSession {
                 files: localPayload.files,
                 file: turnContext.file,
                 selectedLines: turnContext.selectedLines,
+                selectionText: this.selectedCodeSnippet(4000),
                 owner: turnContext.owner,
                 repo: turnContext.repo,
                 branch: turnContext.branch
@@ -4935,13 +5011,14 @@ export class CoopChatSession {
       this.clearIntentFeedback(turn.threadId);
       if (this.isViewingThread(turn.threadId)) {
         if (options?.composerMode === "edit") {
-          void handlePatchComplete(finalMessage.content, {
+          // Publish the Patch card before chat:complete so the webview never paints raw fences first.
+          await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
             publish: (state) => this.postPatchUpdate(state)
           });
         } else if (chatUseCase === "chat") {
           // Plain chat may emit File:/SEARCH-REPLACE when recommending inserts — elevate to Apply.
-          void handlePatchComplete(finalMessage.content, {
+          await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
             publish: (state) => this.postPatchUpdate(state),
             ignoreParseFailure: true

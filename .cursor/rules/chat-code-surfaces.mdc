@@ -1,0 +1,44 @@
+---
+description: Chat code surfaces — cite vs edit vs anonymous (IDE-native, never bland markdown TEXT dumps)
+globs: src/webview/**/*,src/prompts/**/*,admin/src/**/chatProse*,website/src/**/chatProse*,website/src/components/StoryChat*
+alwaysApply: true
+---
+
+# Chat code surfaces — cite / edit / anonymous
+
+Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Every multi-line code presentation belongs to exactly one intent. Do not invent a fourth chrome.
+
+## Intent triad (required)
+
+| Intent | When | Model emits | UI must show |
+|--------|------|-------------|--------------|
+| **Cite** | Explaining or highlighting **existing** repo code (no change) | Citation fence with **real** `startLine:endLine:path` (integers), or Cursor info-string form | Clickable **path** header (optional `:lines`), VS Code token colors from path extension, jump-to-file. **No** `TEXT` / `TYPESCRIPT` language badge. |
+| **Edit** | User should apply a change | `File:` + ` ```patch ` SEARCH/REPLACE | Patch card / diff chrome + Apply / Reject (shared IDE family with cite, plus diff markers). |
+| **Anonymous** | Invented / non-repo example only | Ordinary ` ```lang ` fence | Language badge + Copy allowed. Rare. |
+
+## Hard fails (never ship / never prompt)
+
+| Reject | Prefer |
+|--------|--------|
+| ` ```typescript ` (or any lang) dumping the user's repo for "see this code" | **Cite** fence |
+| Literal placeholders `startLine:endLine:path` or `startLine:endLine:apps/...` | Real integers, e.g. `42:68:apps/.../file.py` |
+| Falling through to unlabeled fence → UI label **TEXT** + monochrome for repo paths | Parser recovers to **cite**; highlighter uses path extension |
+| Whole rewritten functions as lang fences meant for copy-paste apply | **Edit** patch blocks |
+| One-off citation/diff CSS that drifts from `coop-chat-citation` / `coop-patch-*` | Reuse those surfaces |
+
+## Parser / renderer contract
+
+1. Citation locators are recognized on the fence info-string **or** the first body line.
+2. Placeholder locators (`startLine:endLine:…`) and path-only first lines that look like repo files **must** upgrade to `code-citation`, not `code-fence`.
+3. `ChatCodeBlock` must not show a **TEXT** badge. Missing language → copy-only chrome (or cite surface if recovered).
+4. Cite and patch file headers are the same product family: path-first, monospace, open-in-editor.
+
+## Prompt contract
+
+`CURSOR_STYLE_OUTPUT_CONTRACT` in `src/prompts/systemPrompts.ts` owns model-facing rules. Keep PASS/FAIL examples with **numeric** line ranges. Any change to cite/edit/anonymous behavior updates this rule **and** that contract **and** parser tests together.
+
+## Self-check before merging chat/prose/prompt changes
+
+- [ ] Would Cursor/Cody show this as a file citation or apply diff — or as a website markdown card?
+- [ ] Can a broken model output still render as cite (recovery) instead of **TEXT**?
+- [ ] Are admin/website prose parsers still aligned with extension citation recovery?

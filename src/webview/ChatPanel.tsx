@@ -14,6 +14,7 @@ import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/Proj
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
+import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
 import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
@@ -414,8 +415,22 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return () => window.clearTimeout(timer);
   }, [quotaNotice?.resetsAt]);
 
+  // Last user turn was /edit — keep raw File:/SEARCH fences off-screen until the Patch card lands.
+  const streamingEditTurn = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === "user") {
+        return isEditHistoryContent(messages[i]?.content);
+      }
+    }
+    return false;
+  }, [messages]);
+
   const streamMessage = useMemo<ChatMessage | null>(() => {
     if (!debouncedStream) {
+      return null;
+    }
+    // Never paint unformatted patch markdown mid-stream; PatchCard is the only surface.
+    if (streamingEditTurn || looksLikePatchStreamingContent(debouncedStream)) {
       return null;
     }
     return {
@@ -424,7 +439,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       timestamp: Date.now(),
       links: []
     };
-  }, [debouncedStream]);
+  }, [debouncedStream, streamingEditTurn]);
 
   const inlineThinkingOptions = useMemo(
     () => ({ awaitingResponse: isStreaming && !streamMessage }),
@@ -665,9 +680,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       const showPatchCard =
         messageTimestamp !== undefined &&
         shouldRenderPatchCardForMessage(patchCards, messageTimestamp);
+      // When the Patch card is visible, never also render raw SEARCH/REPLACE fences.
       const hidePatchFences =
-        messageTimestamp !== undefined &&
-        shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps);
+        showPatchCard ||
+        (messageTimestamp !== undefined &&
+          shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps));
 
       const elements: React.ReactElement[] = [];
       if (showPatchCard && card) {
@@ -685,6 +702,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               post({ type: "patch:undo", payload: { messageTimestamp } })
             }
             onOpenFile={(path) => post({ type: "patch:open-file", payload: { path } })}
+            onApplyHunk={(hunkId) =>
+              post({ type: "patch:apply-hunk", payload: { messageTimestamp, hunkId } })
+            }
+            onRejectHunk={(hunkId) =>
+              post({ type: "patch:reject-hunk", payload: { messageTimestamp, hunkId } })
+            }
           />
         );
       }
@@ -694,11 +717,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           content={content}
           relatedArtifactId={relatedArtifactId}
           hidePatchFences={hidePatchFences}
+          activeFilePath={context.file}
         />
       );
       return elements;
     },
-    [patchCards, post, suppressedPatchTimestamps]
+    [context.file, patchCards, post, suppressedPatchTimestamps]
   );
 
   const handleCopyEvidenceText = useCallback(

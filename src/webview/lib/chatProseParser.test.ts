@@ -401,10 +401,87 @@ test("citation fence info-string startLine:endLine:path yields code-citation", (
   }
 });
 
+test("placeholder startLine:endLine:path recovers as citation (no TEXT fence)", () => {
+  const input = [
+    "```",
+    "startLine:endLine:apps/api/plane/api/middleware/api_authentication.py",
+    "def get_header(request):",
+    "    return request.headers.get(\"X-Api-Key\")",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks.length, 1);
+  const block = doc.blocks[0]!;
+  assert.equal(block.type, "code-citation");
+  if (block.type === "code-citation") {
+    assert.equal(block.path, "apps/api/plane/api/middleware/api_authentication.py");
+    assert.equal(block.startLine, undefined);
+    assert.equal(block.endLine, undefined);
+    assert.ok(block.code.includes("get_header"));
+  }
+});
+
+test("path-only first line recovers as citation", () => {
+  const input = "```\napps/api/plane/api/middleware/api_authentication.py\nclass APIKeyAuthentication:\n    pass\n```";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-citation");
+  if (doc.blocks[0]!.type === "code-citation") {
+    assert.equal(doc.blocks[0]!.path, "apps/api/plane/api/middleware/api_authentication.py");
+    assert.ok(doc.blocks[0]!.code.includes("APIKeyAuthentication"));
+  }
+});
+
 test("language-tagged fence is still a code-fence (not a citation)", () => {
   const input = "```typescript\nif (true) {\n  return;\n}\n```";
   const doc = parseChatProse(input);
   assert.equal(doc.blocks[0]!.type, "code-fence");
+});
+
+test("language-tagged fence recovers to citation when active file matches", () => {
+  const input = [
+    "Here's a relevant code snippet:",
+    "```typescript",
+    "export const getApiTokenByToken = async ({ token }: { token: string }) => {",
+    "  // ... conditions to find the token",
+    "};",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input, {
+    activeFilePath: "packages/lib/server-only/public-api/get-api-token-by-token.ts"
+  });
+  assert.equal(doc.blocks[1]!.type, "code-citation");
+  if (doc.blocks[1]!.type === "code-citation") {
+    assert.equal(
+      doc.blocks[1]!.path,
+      "packages/lib/server-only/public-api/get-api-token-by-token.ts"
+    );
+  }
+});
+
+test("language-tagged fence recovers to citation from nearby path prose", () => {
+  const input = [
+    "See `packages/lib/server-only/public-api/get-api-token-by-token.ts`:",
+    "```typescript",
+    "const hashedToken = hashApiToken(token);",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[1]!.type, "code-citation");
+  if (doc.blocks[1]!.type === "code-citation") {
+    assert.equal(
+      doc.blocks[1]!.path,
+      "packages/lib/server-only/public-api/get-api-token-by-token.ts"
+    );
+  }
+});
+
+test("plain language tag typescript is not treated as a path citation", () => {
+  const input = "```typescript\nconst x = 1;\n```";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-fence");
+  if (doc.blocks[0]!.type === "code-fence") {
+    assert.equal(doc.blocks[0]!.language, "typescript");
+  }
 });
 
 // ── Test 16: Mixed content ────────────────────────────────────────────────

@@ -51,9 +51,21 @@ export function ContextScopeLabel({
         ? `${context.owner}/${context.repo}`
         : "Remote"
       : "Local";
-    const title = remote ? `${filePath} · ${sourceDetail}` : `${filePath} · Local`;
+    const selection =
+      context.selectedLines && context.selectedLines.length === 2
+        ? context.selectedLines[0] === context.selectedLines[1]
+          ? `L${context.selectedLines[0]}`
+          : `L${context.selectedLines[0]}–${context.selectedLines[1]}`
+        : undefined;
+    const title = selection
+      ? remote
+        ? `${filePath} · ${selection} · ${sourceDetail}`
+        : `${filePath} · ${selection} · Local`
+      : remote
+        ? `${filePath} · ${sourceDetail}`
+        : `${filePath} · Local`;
     const className =
-      "ml-auto inline-flex min-w-0 max-w-[min(100%,18rem)] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] " +
+      "ml-auto inline-flex min-w-0 max-w-[min(100%,20rem)] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] " +
       (remote
         ? "border-[var(--vscode-focusBorder)]/50 bg-[var(--coop-pill-surface)] text-[var(--coop-panel-foreground)]"
         : "border-[var(--coop-pill-border)] bg-[var(--coop-pill-surface)] text-[var(--coop-panel-foreground)]");
@@ -70,8 +82,13 @@ export function ContextScopeLabel({
         >
           {badge}
         </span>
-        <span className="max-w-[120px] truncate font-medium">{label}</span>
-        <span className="shrink-0 max-w-[100px] truncate text-[10px] text-[var(--coop-panel-muted)]">
+        <span className="max-w-[100px] truncate font-medium">{label}</span>
+        {selection ? (
+          <span className="shrink-0 text-[10px] font-medium text-[var(--coop-panel-foreground)]">
+            {selection}
+          </span>
+        ) : null}
+        <span className="shrink-0 max-w-[90px] truncate text-[10px] text-[var(--coop-panel-muted)]">
           {sourceDetail}
         </span>
       </>
