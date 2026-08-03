@@ -66,6 +66,8 @@ export async function enrichChatContextWithIntegrations(options: {
   codeHostProvider?: CodeHostProvider;
   codeHostConnected?: boolean;
   integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+  /** Extra discovery terms (e.g. Gaps focus phrases) prepended ahead of file/repo terms. */
+  extraSearchTerms?: string[];
   deps?: Partial<IntegrationChatEnrichmentDeps>;
   /**
    * When set, integration search is bounded to this many milliseconds. Whatever
@@ -114,6 +116,7 @@ async function enrichIntegrationStages(
     codeHostProvider?: CodeHostProvider;
     codeHostConnected?: boolean;
     integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+    extraSearchTerms?: string[];
   },
   data: Record<string, unknown>,
   deps: IntegrationChatEnrichmentDeps
@@ -123,12 +126,14 @@ async function enrichIntegrationStages(
     owner: options.owner,
     repo: options.repo,
     queryText: traceSeeds?.queryText ?? options.request.intent.context.queryText,
-    activeFile: options.activeFile ?? options.request.params.file,
+    // Prefer caller-supplied activeFile (may be cleared when Gaps focus demotes an unrelated chip).
+    activeFile: options.activeFile !== undefined ? options.activeFile : options.request.params.file,
     contextText: options.contextText
   };
   const integrationTerms = buildIntegrationSearchTermList({
     ...base,
-    extraTerms: traceSeeds?.searchTerms
+    // Focus / caller terms first so they survive the term cap ahead of file basenames.
+    extraTerms: [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])]
   });
 
   const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);

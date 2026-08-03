@@ -413,6 +413,7 @@ When integration blocks show <empty>, say clearly that the search found nothing 
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
 When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn.
+When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`;
@@ -837,12 +838,18 @@ export function buildUserMessageWithContext(
       lines.push(monorepoNote);
     }
   }
+  const packageBoundaryNote = extractPackageBoundaryNote(context?.contextBundle);
+  if (packageBoundaryNote) {
+    lines.push(`<package_boundary_note>${packageBoundaryNote}</package_boundary_note>`);
+  }
   if (localSnippets.length > 0) {
     emitLocalFilesBlock(lines, localSnippets);
   }
   if (repoSummarySnippets.length > 0) {
     lines.push("<repo_entry_files>");
-    lines.push("Representative repository entry points for architecture overview (not limited to the active editor tab).");
+    lines.push(
+      "In-repo package manifests / entry points for architecture and package boundaries (active Use-repo only — not the local Extension Host workspace)."
+    );
     for (const file of repoSummarySnippets) {
       lines.push(`<file_content path="${file.path}">`);
       lines.push(file.content);
@@ -946,6 +953,22 @@ function extractTreeOverview(bundle: unknown): TreeOverviewSnippet | undefined {
       ((treeOverview.topLevelDirs?.length ?? 0) > 0 || (treeOverview.topLevelFiles?.length ?? 0) > 0)
     ) {
       return treeOverview;
+    }
+  }
+  return undefined;
+}
+
+function extractPackageBoundaryNote(bundle: unknown): string | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const note = (entry as { data?: { packageBoundaryNote?: string } }).data?.packageBoundaryNote;
+    if (typeof note === "string" && note.trim()) {
+      return note.trim();
     }
   }
   return undefined;

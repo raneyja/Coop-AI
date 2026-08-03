@@ -96,11 +96,42 @@ export class IndexedRepoWorkspace {
   }
 
   /**
+   * One-level directory listing for the active Use-repo (code host), used to find
+   * package.json files under apps/packages parents. Never reads a foreign local disk.
+   */
+  public async listDirectory(
+    target: RepoTarget,
+    path = ""
+  ): Promise<Array<{ name: string; type: "dir" | "file" }> | undefined> {
+    const repoId = target.repoId?.trim();
+    const resolved = repoId
+      ? resolveInventoryRepoIds(repoId, target)
+      : target.owner && target.repo
+        ? resolveInventoryRepoIds(`${target.owner}/${target.repo}`, target)
+        : undefined;
+    const coords = resolved?.coords;
+    if (!coords) {
+      return undefined;
+    }
+    try {
+      const tree = await this.deps.codeHostRouter.getRepositoryTree(path.replace(/^\/+|\/+$/g, ""), coords);
+      return (tree.entries ?? []).map((entry) => ({
+        name: entry.name,
+        type: entry.type === "dir" ? ("dir" as const) : ("file" as const)
+      }));
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Read any file in the indexed repo: matching local clone when present,
    * otherwise fetched from the code host. Indexed does not mean mirrored.
    *
    * Never prefer an unrelated workspace file (e.g. Coop-AI's package.json while
    * the active remote repo is documenso) — that silently fed the wrong evidence.
+   * Callers that bypass this facade (semantic attach, Gaps gather) must use the
+   * same local-disk gate via {@link localDiskMatchesTargetRepo}.
    */
   public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {
     const cleanPath = path.trim().replace(/^\/+/, "");
@@ -182,7 +213,7 @@ export class IndexedRepoWorkspace {
 }
 
 /** True when an open workspace folder is actually this repo (local clone or VFS). */
-async function localDiskMatchesTargetRepo(
+export async function localDiskMatchesTargetRepo(
   identity: { owner?: string; repo?: string; provider?: string } | undefined
 ): Promise<boolean> {
   if (!identity?.owner?.trim() || !identity?.repo?.trim()) {
@@ -225,13 +256,26 @@ function unavailableNote(needs: RepoFactNeeds): string {
   );
 }
 
+export type RepoStructureEntryFile = {
+  path: string;
+  content: string;
+  truncated?: boolean;
+  repoId?: string;
+};
+
 /** Attach workspace evidence to the chat context bundle. */
 export function mergeRepoInventoryContext(
   result: ContextFetchResult,
   inventory: RepoInventoryEvidence | undefined,
-  treeOverview?: RepoTreeEvidence
+  treeOverview?: RepoTreeEvidence,
+  options?: {
+    entryFiles?: RepoStructureEntryFile[];
+    packageBoundaryNote?: string;
+  }
 ): ContextFetchResult {
-  if (!inventory && !treeOverview) {
+  const entryFiles = options?.entryFiles?.filter((file) => file.path?.trim() && file.content?.trim());
+  const note = options?.packageBoundaryNote?.trim();
+  if (!inventory && !treeOverview && !entryFiles?.length && !note) {
     return result;
   }
   const baseData =
@@ -243,7 +287,9 @@ export function mergeRepoInventoryContext(
     data: {
       ...baseData,
       ...(inventory ? { repoInventory: inventory } : {}),
-      ...(treeOverview ? { treeOverview } : {})
+      ...(treeOverview ? { treeOverview } : {}),
+      ...(entryFiles?.length ? { entryFiles } : {}),
+      ...(note ? { packageBoundaryNote: note } : {})
     }
   };
 }

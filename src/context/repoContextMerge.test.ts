@@ -110,6 +110,34 @@ async function run(): Promise<void> {
     assert.equal(merged.fileSource, "remote");
   });
 
+  await test("mergeRepoContext drops foreign-repo remote file under sticky Use-repo", () => {
+    const merged = mergeRepoContext(
+      { owner: "CoopAI-Corp", repo: "plane", branch: "preview", scope: "repo" },
+      {
+        owner: "CoopAI-Corp",
+        repo: "documenso",
+        file: "packages/lib/types/is-document-status.ts",
+        fileSource: "remote",
+        scope: "file"
+      }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.owner, "CoopAI-Corp");
+    assert.equal(merged.repo, "plane");
+    assert.equal(merged.branch, "preview");
+  });
+
+  await test("mergeRepoContext drops Coop workspace path while Use-repo is plane", () => {
+    const merged = mergeRepoContext(
+      { owner: "CoopAI-Corp", repo: "plane", branch: "preview", scope: "repo" },
+      { file: "src/chat/types.ts", fileSource: "workspace", scope: "file" }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.repo, "plane");
+  });
+
   await test("mergeRepoContext keeps absolute path for real outside-workspace editor", () => {
     const merged = mergeRepoContext(
       {

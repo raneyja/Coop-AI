@@ -218,6 +218,12 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import {
+  dropForeignActiveFileEvidence,
+  shouldIsolateActiveFileForQuickAction,
+  shouldSkipLocalEditorAttachForRepoScope
+} from "../workspace/repoEvidenceIsolation";
+import { gatherPackageBoundaryEvidence } from "../workspace/repoPackageBoundaryEvidence";
 import { buildRepoId } from "./buildRepoId";
 import {
   buildTraceDecisionSearchSeeds,
@@ -239,6 +245,13 @@ import {
   focusQueryForRetrieval,
   mergeFocusFilesIntoEntryFiles
 } from "../context/userFocusQuery";
+import {
+  knowledgeGapsFocusGatherTerms,
+  knowledgeGapsFocusTopicGapStubs,
+  knowledgeGapsGatherQuery,
+  openFileRelatedToGapsFocus,
+  resolveKnowledgeGapsAuditScope
+} from "../context/knowledgeGapsFocus";
 import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LightningStatusBar } from "../extension/lightningStatusBar";
@@ -306,6 +319,7 @@ import { wantsTeamsContext } from "../context/teamsContext";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
 import {
   IndexedRepoWorkspace,
+  localDiskMatchesTargetRepo,
   mergeRepoInventoryContext
 } from "../workspace/IndexedRepoWorkspace";
 import {
@@ -320,7 +334,7 @@ import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId"
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
-import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
+import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -2281,14 +2295,27 @@ export class CoopChatSession {
         if (!this.threadRuns.isStreamActive(turn)) {
           return turn.contextBundle;
         }
-        turn.contextBundle = mergeContextBundleResults(turn.contextBundle, results);
+        // Fresh Trace must not reuse a prior file's decision_history from the turn/session bundle.
+        const priorBundle =
+          event.context.buttonClicked === "trace-decision"
+            ? turn.contextBundle.filter((entry) => entry.type !== "decision_history")
+            : turn.contextBundle;
+        turn.contextBundle = mergeContextBundleResults(priorBundle, results, event.context.file);
         if (this.isViewingThread(turn.threadId)) {
           this.lastContextBundle = turn.contextBundle;
         }
         return turn.contextBundle;
       }
 
-      this.lastContextBundle = mergeContextBundleResults(this.lastContextBundle, results);
+      const priorSessionBundle =
+        event.context.buttonClicked === "trace-decision"
+          ? this.lastContextBundle.filter((entry) => entry.type !== "decision_history")
+          : this.lastContextBundle;
+      this.lastContextBundle = mergeContextBundleResults(
+        priorSessionBundle,
+        results,
+        event.context.file
+      );
       return this.lastContextBundle;
     } catch (error) {
       if (!options.quiet) {
@@ -2334,7 +2361,78 @@ export class CoopChatSession {
       result = await this.enrichWithIndexedWorkspace(request, result);
     }
 
+    if (request.params.quickAction === "knowledge-gaps" && request.type === "knowledge_gaps") {
+      result = await this.enrichKnowledgeGapsWithFocusSearch(request, result);
+    }
+
     return result;
+  }
+
+  /**
+   * Gaps + slash focus → index search for the focus string (not the leftover open file).
+   * Soft-budget capped; synthesis still runs if search is thin or times out.
+   */
+  private async enrichKnowledgeGapsWithFocusSearch(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    const gatherQuery = knowledgeGapsGatherQuery(request.intent.context.queryText);
+    if (!gatherQuery) {
+      return result;
+    }
+
+    const baseData =
+      typeof result.data === "object" && result.data !== null
+        ? (result.data as Record<string, unknown>)
+        : {};
+    let data: Record<string, unknown> = { ...baseData, userFocus: gatherQuery };
+
+    const target = this.repoTargetForRequest(request);
+    const repoId = target.repoId?.trim();
+    const owner = target.owner?.trim();
+    const repo = target.repo?.trim();
+    const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (!repoId || remainingMs <= 0) {
+      return { ...result, data };
+    }
+
+    const provider =
+      target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
+        ? target.provider
+        : this.preferences.defaultCodeHost;
+
+    try {
+      const focusSearch = await Promise.race([
+        searchRepoForFocusQuery({
+          repoId,
+          query: gatherQuery,
+          indexBackend: this.options.indexBackend,
+          api: this.options.api,
+          apiBaseUrl: this.preferences.apiBaseUrl,
+          branch: target.branch ?? this.currentContext.branch,
+          owner,
+          repo,
+          provider
+        }),
+        new Promise<undefined>((resolve) => {
+          setTimeout(() => resolve(undefined), remainingMs);
+        })
+      ]);
+      if (focusSearch?.files.length) {
+        data = {
+          ...data,
+          focusSearchQuery: focusSearch.query,
+          focusSearchPaths: focusSearch.files.map((file) => file.path),
+          focusFiles: focusSearch.files
+        };
+      } else {
+        data = { ...data, focusSearchQuery: gatherQuery };
+      }
+    } catch {
+      data = { ...data, focusSearchQuery: gatherQuery };
+    }
+
+    return { ...result, data };
   }
 
   /**
@@ -2752,16 +2850,37 @@ export class CoopChatSession {
     const workspace = this.indexedRepoWorkspace();
     const target = this.repoTargetForRequest(request);
     const needCount = needs.fileCount || needs.lineCount;
+    const needStructure = needs.treeOverview || needs.packageManifests;
 
     const load = async (): Promise<ContextFetchResult> => {
       try {
-        const [inventory, treeOverview] = await Promise.all([
+        const [inventory, structure] = await Promise.all([
           needCount
             ? workspace.getInventory(target, needs, { allowExpensiveTreeWalk: false })
             : Promise.resolve(undefined),
-          needs.treeOverview ? workspace.getTreeOverview(target) : Promise.resolve(undefined)
+          needStructure
+            ? needs.packageManifests
+              ? gatherPackageBoundaryEvidence(workspace, target)
+              : workspace.getTreeOverview(target).then((treeOverview) => ({
+                  treeOverview,
+                  entryFiles: [] as Array<{
+                    path: string;
+                    content: string;
+                    truncated?: boolean;
+                    repoId: string;
+                  }>,
+                  note: undefined as string | undefined
+                }))
+            : Promise.resolve(undefined)
         ]);
-        return mergeRepoInventoryContext(result, inventory, treeOverview);
+        const treeOverview = structure?.treeOverview;
+        const entryFiles = structure?.entryFiles;
+        const packageBoundaryNote =
+          structure && "note" in structure ? structure.note : undefined;
+        return mergeRepoInventoryContext(result, inventory, treeOverview, {
+          entryFiles,
+          packageBoundaryNote
+        });
       } catch {
         return mergeRepoInventoryContext(result, {
           source: "unavailable",
@@ -2943,6 +3062,19 @@ export class CoopChatSession {
   ): Promise<ContextFetchResult> {
     const contextText = await this.integrationContextText(result, request);
     const integrationScopes = await this.resolveIntegrationScopes(request);
+    const gapsFocus =
+      request.params.quickAction === "knowledge-gaps"
+        ? knowledgeGapsGatherQuery(request.intent.context.queryText)
+        : undefined;
+    const focusTerms = gapsFocus ? knowledgeGapsFocusGatherTerms(gapsFocus) : [];
+    // When Gaps has focus text and the open file is unrelated, do not let the
+    // leftover helper path dominate Confluence/Notion/Slack discovery terms.
+    const activeFileForIntegrations =
+      gapsFocus &&
+      request.params.file?.trim() &&
+      !openFileRelatedToGapsFocus(request.params.file, gapsFocus)
+        ? undefined
+        : request.params.file;
     return mergeIntegrationChatContext({
       result,
       request,
@@ -2950,17 +3082,21 @@ export class CoopChatSession {
       codeHostRouter: this.options.codeHostRouter,
       owner: request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
       repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
-      activeFile: request.params.file,
+      activeFile: activeFileForIntegrations,
       contextText,
       codeHostProvider: this.preferences.defaultCodeHost,
       codeHostConnected: this.isCodeHostConnected(),
       integrationScopes,
+      // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
+      extraSearchTerms: focusTerms.length ? focusTerms : undefined,
       // Understand Repo pulls from every connected tool but is time-bounded so a
       // single slow integration can't block the overview. Slower tools are dropped.
       budgetMs:
         request.params.quickAction === "understand-repo"
           ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
-          : undefined
+          : request.params.quickAction === "knowledge-gaps"
+            ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
+            : undefined
     });
   }
 
@@ -3592,6 +3728,25 @@ export class CoopChatSession {
         contextWarning: undefined
       };
       this.postContext();
+    } else if (
+      shouldIsolateActiveFileForQuickAction(quickAction) ||
+      // Structure / package-boundary chat must not treat a foreign Coop tab as SoT.
+      (!quickAction && needsRepoTreeOverview(message))
+    ) {
+      // Gaps / Trace / Blast / Owner / structure: never treat a foreign open editor as primary evidence.
+      const localMatches = await localDiskMatchesTargetRepo({
+        owner: this.currentContext.owner,
+        repo: this.currentContext.repo,
+        provider: this.currentContext.provider
+      });
+      const isolated = dropForeignActiveFileEvidence(this.currentContext, {
+        localWorkspaceMatchesUseRepo: localMatches
+      });
+      if (isolated.file !== this.currentContext.file || isolated.scope !== this.currentContext.scope) {
+        this.currentContext = isolated;
+        this.remoteProvenanceFile = undefined;
+        this.postContext();
+      }
     }
 
     const integrationProviderForGuard =
@@ -3619,8 +3774,9 @@ export class CoopChatSession {
     if (quickAction === "understand-repo") {
       this.currentContext = { ...this.currentContext, contextWarning: undefined };
     }
+    const structureIntent = !quickAction && needsRepoTreeOverview(message);
     this.pendingChatLocalFiles =
-      quickAction === "understand-repo"
+      quickAction === "understand-repo" || structureIntent
         ? undefined
         : this.loadLocalFilesSyncForChat({
             // Full active file for /edit and plain chat so SEARCH hunks can match beyond a selection.
@@ -3654,6 +3810,14 @@ export class CoopChatSession {
       actionContext.file?.trim()
     ) {
       this.pinnedContextFile = actionContext.file.trim();
+    }
+
+    if (quickAction === "trace-decision") {
+      const nextFile = actionContext.file?.trim();
+      const priorFile = this.lastTraceDecisionTimeline?.file?.trim();
+      if (nextFile && priorFile && !pathsReferToSameFile(nextFile, priorFile)) {
+        this.lastTraceDecisionTimeline = undefined;
+      }
     }
 
     const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
@@ -3743,7 +3907,11 @@ export class CoopChatSession {
     this.pushThreadsList();
 
     const prefetchIntentEvent = intentQuickAction
-      ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
+      ? this.intentDetector.fromQuickAction(
+          intentQuickAction,
+          actionContext,
+          userFocus ?? modelMessage
+        )
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, {
           integrationProvider:
             options?.integrationProvider ?? this.detectChatIntegrationProvider(message)
@@ -3760,7 +3928,11 @@ export class CoopChatSession {
           return;
         }
         if (ranAsync) {
-          const intentEvent = this.intentDetector.fromQuickAction(quickAction, turn.context, modelMessage);
+          const intentEvent = this.intentDetector.fromQuickAction(
+            quickAction,
+            turn.context,
+            userFocus ?? modelMessage
+          );
           await abortablePromise(
             this.runIntentFetch(intentEvent, { quiet: true, turn }),
             turn.streamAbort.signal
@@ -3801,7 +3973,11 @@ export class CoopChatSession {
       options?.integrationProvider ??
       (quickAction ? undefined : this.detectChatIntegrationProvider(message));
     const intentEvent = intentQuickAction
-      ? this.intentDetector.fromQuickAction(intentQuickAction, actionContext, modelMessage)
+      ? this.intentDetector.fromQuickAction(
+          intentQuickAction,
+          actionContext,
+          userFocus ?? modelMessage
+        )
       : this.intentDetector.fromManualChatSubmit(turn.context, message, { integrationProvider });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
@@ -4404,6 +4580,15 @@ export class CoopChatSession {
     if (!timeline) {
       return undefined;
     }
+    const activeFile = this.currentContext.file?.trim();
+    if (
+      activeFile &&
+      timeline.file?.trim() &&
+      !pathsReferToSameFile(activeFile, timeline.file)
+    ) {
+      // Stale decision_history for a different path must not drive synthesis.
+      return undefined;
+    }
     const lineRange = timeline.lineRange ?? this.lineRangeFromContext(this.currentContext);
     const codeSnippet = timeline.codeSnippet ?? this.selectedCodeSnippet();
     const withContext = {
@@ -4994,7 +5179,10 @@ export class CoopChatSession {
         owner: turnContext.owner ?? this.preferences.owner,
         repo: turnContext.repo ?? this.preferences.repo,
         userQuestion: lastUserBubble,
-        fallbackTimeline: turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,
+        fallbackTimeline: resolveTraceFallbackTimeline(
+          turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,
+          turnContext.file
+        ),
         isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
       });
       const finalMessage: ChatMessage = {
@@ -5503,24 +5691,40 @@ export class CoopChatSession {
       return;
     }
 
-    const gaps: Array<Record<string, unknown>> = [];
-    const target = file ?? evidence.file;
+    const userFocus =
+      knowledgeGapsGatherQuery(evidence.userFocus) ??
+      knowledgeGapsGatherQuery(
+        typeof evidence.focusSearchQuery === "string" ? evidence.focusSearchQuery : undefined
+      );
+    const scope = resolveKnowledgeGapsAuditScope({
+      file,
+      userFocus,
+      focusHitPaths: evidence.focusSearchPaths
+    });
 
-    if (!evidence.ownershipReport?.scores?.length) {
+    const gaps: Array<Record<string, unknown>> = [];
+    // When focus is primary and the open file is unrelated, skip file-only ownership
+    // stubs that would steal the Summary headline.
+    const fileForOwnershipGaps = scope.focusPrimary
+      ? scope.relatedOpenFile
+      : file ?? evidence.file;
+    const target = fileForOwnershipGaps ?? evidence.file;
+
+    if (fileForOwnershipGaps && !evidence.ownershipReport?.scores?.length) {
       gaps.push({
-        file: target,
+        file: fileForOwnershipGaps,
         type: "missing_owner",
         priority: "high",
         message: "No ownership scores attached for this path"
       });
     }
     if (
-      target &&
+      fileForOwnershipGaps &&
       !evidence.dependencyGraph?.directDependents?.length &&
       !evidence.dependencyGraph?.edgeCount
     ) {
       gaps.push({
-        file: target,
+        file: fileForOwnershipGaps,
         type: "impact_unknown",
         priority: "medium",
         message: "No indexed dependency graph for impact context"
@@ -5549,6 +5753,15 @@ export class CoopChatSession {
         priority: "medium",
         message: "No Google Docs matched repo scope"
       });
+    }
+
+    if (scope.focusPrimary) {
+      for (const stub of knowledgeGapsFocusTopicGapStubs({
+        userFocus,
+        focusHitPaths: evidence.focusSearchPaths
+      })) {
+        gaps.push(stub);
+      }
     }
 
     const jobScan: Record<string, unknown> = {
@@ -6357,6 +6570,12 @@ export class CoopChatSession {
         ? undefined
         : { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] };
 
+    // Explicit Use-repo with no in-repo file chip: never invent Gaps/chat evidence from a
+    // leftover Coop-AI (or other) editor tab in the Extension Host.
+    if (!fullFile && shouldSkipLocalEditorAttachForRepoScope(this.currentContext)) {
+      return undefined;
+    }
+
     // Remote explorer / codehost provenance: never attach from local disk or clone buffers.
     // Sync path can only use an open remote URI tab; API fetch happens in resolveChatLocalFiles.
     if (this.isWorkingOnRemoteProvenance()) {
@@ -6364,8 +6583,7 @@ export class CoopChatSession {
     }
 
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    // Always prefer the live open editor (including outside-workspace) so chat/edit
-    // attach the buffer the user is looking at — even after explorer "Use repo".
+    // Prefer the live open editor for chat/edit — but only after sticky Use-repo allowed a file chip.
     const editor = fullFile
       ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
       : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
@@ -6376,6 +6594,11 @@ export class CoopChatSession {
       );
     } else if (isExplicitRepoScope(this.currentContext) && !fullFile) {
       // No editor tab — honor explicit repo-only scope (don't invent a file).
+      return undefined;
+    }
+
+    // Sticky Use-repo may have dropped a foreign workspace file during merge above.
+    if (!fullFile && shouldSkipLocalEditorAttachForRepoScope(this.currentContext)) {
       return undefined;
     }
 
@@ -6676,6 +6899,13 @@ export class CoopChatSession {
   }
 
   private async resolveChatLocalFiles(): Promise<LocalFileContextPayload | undefined> {
+    if (
+      !this.pendingCodeEditIntent &&
+      shouldSkipLocalEditorAttachForRepoScope(this.currentContext)
+    ) {
+      return undefined;
+    }
+
     if (this.pendingChatLocalFilesMatchesContext()) {
       return this.pendingChatLocalFiles;
     }
@@ -8050,11 +8280,43 @@ function sliceFileLines(content: string, startLine: number, endLine: number): st
 /** Preserve evidence types missing from a lighter follow-up fetch (e.g. decision_history). */
 function mergeContextBundleResults(
   previous: ContextFetchResult[],
-  incoming: ContextFetchResult[]
+  incoming: ContextFetchResult[],
+  activeFile?: string
 ): ContextFetchResult[] {
   const incomingTypes = new Set(incoming.map((entry) => entry.type));
-  const preserved = previous.filter((entry) => !incomingTypes.has(entry.type));
+  const preserved = previous.filter((entry) => {
+    if (incomingTypes.has(entry.type)) {
+      return false;
+    }
+    if (entry.type === "decision_history" && activeFile?.trim()) {
+      const timeline = (entry.data as { timeline?: DecisionTimeline } | undefined)?.timeline;
+      if (
+        timeline?.file?.trim() &&
+        !pathsReferToSameFile(timeline.file, activeFile)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
   return [...incoming, ...preserved];
+}
+
+function resolveTraceFallbackTimeline(
+  timeline: DecisionTimeline | undefined,
+  activeFile: string | undefined
+): DecisionTimeline | undefined {
+  if (!timeline) {
+    return undefined;
+  }
+  if (
+    activeFile?.trim() &&
+    timeline.file?.trim() &&
+    !pathsReferToSameFile(timeline.file, activeFile)
+  ) {
+    return undefined;
+  }
+  return timeline;
 }
 
 function parseRepoIdParts(repoId: string): [string, string] {

@@ -821,7 +821,7 @@
     "test:chat-prose": "npx tsx src/webview/lib/chatProseParser.test.ts",
     "test:code-citation-locator": "npx tsx src/webview/lib/codeCitationLocator.test.ts",
     "test:slash-commands": "npx tsx src/context/slashCommands.test.ts",
-    "test:indexed-repo-workspace": "npx tsx src/workspace/repoFactIntent.test.ts && npx tsx src/workspace/collectRepoStats.test.ts && npx tsx src/workspace/IndexedRepoWorkspace.test.ts && npx tsx src/workspace/indexedRepoPipelineContract.test.ts && npx tsx src/context/branchForEditorContext.test.ts && npx tsx src/context/resolveRepoBranch.test.ts && npx tsx src/context/indexedRepoContextEnrichment.test.ts && npx tsx src/context/understandRepoBranchContract.test.ts",
+    "test:indexed-repo-workspace": "npx tsx src/workspace/repoFactIntent.test.ts && npx tsx src/workspace/collectRepoStats.test.ts && npx tsx src/workspace/IndexedRepoWorkspace.test.ts && npx tsx src/workspace/repoEvidenceIsolation.test.ts && npx tsx src/workspace/indexedRepoPipelineContract.test.ts && npx tsx src/context/branchForEditorContext.test.ts && npx tsx src/context/resolveRepoBranch.test.ts && npx tsx src/context/indexedRepoContextEnrichment.test.ts && npx tsx src/context/understandRepoBranchContract.test.ts",
     "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",

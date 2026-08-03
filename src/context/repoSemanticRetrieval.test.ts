@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { ContextFetchRequest } from "./requestBatcher";
 import {
   applySemanticByteBudget,
+  filterSemanticFilesToRepoId,
   gateOptionsFromRequest,
   isPlainChatIntentEvent,
   mergeRepoSemanticContext,
@@ -75,6 +76,18 @@ test("shouldRunRepoSemanticRetrieval skips structure / monorepo questions", () =
   assert.equal(
     shouldRunRepoSemanticRetrieval({
       queryText: "is this a monorepo?",
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
+test("shouldRunRepoSemanticRetrieval skips package-boundary questions", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "Where are the Next.js / API package boundaries?",
       intentIsPlainChat: true,
       inScopeMentionCount: 0,
       enabled: true
@@ -286,6 +299,29 @@ test("applySemanticByteBudget caps file count and total bytes", () => {
   assert.equal(snippets.length, 3);
   const totalBytes = snippets.reduce((sum, file) => sum + Buffer.byteLength(file.content, "utf8"), 0);
   assert.ok(totalBytes <= MAX_SEMANTIC_BYTES, `expected <= ${MAX_SEMANTIC_BYTES}, got ${totalBytes}`);
+});
+
+test("filterSemanticFilesToRepoId rejects documenso and Coop bleed for plane", () => {
+  const filtered = filterSemanticFilesToRepoId(
+    [
+      {
+        path: "apps/api/plane/bgtasks/notification.py",
+        repoId: "github:CoopAI-Corp/plane",
+        content: "ok"
+      },
+      {
+        path: "packages/lib/types/is-document-status.ts",
+        repoId: "github:CoopAI-Corp/documenso",
+        content: "wrong"
+      },
+      { path: "src/chat/types.ts", repoId: "github:raneyja/Coop-AI", content: "wrong" }
+    ],
+    "github:CoopAI-Corp/plane"
+  );
+  assert.deepEqual(
+    filtered.map((file) => file.path),
+    ["apps/api/plane/bgtasks/notification.py"]
+  );
 });
 
 async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {

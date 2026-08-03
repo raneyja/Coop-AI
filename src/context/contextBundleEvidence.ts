@@ -98,6 +98,12 @@ export type KnowledgeGapsEvidence = {
     edgeCount?: number;
     source?: string;
   };
+  /** Slash focus that drove Gaps gather (`/gaps …`). */
+  userFocus?: string;
+  focusSearchQuery?: string;
+  focusSearchPaths?: string[];
+  /** Focus-ranked file bodies from index search (capped). */
+  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string }>;
   warnings?: string[];
 };
 
@@ -520,6 +526,20 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
     const type = record.type;
     if (type === "knowledge_gaps" || data.jobScan || data.documentationCoverage !== undefined || data.fileStructure) {
       if (data.file) merged.file = String(data.file);
+      if (typeof data.userFocus === "string" && data.userFocus.trim()) {
+        merged.userFocus = data.userFocus.trim();
+      }
+      if (typeof data.focusSearchQuery === "string" && data.focusSearchQuery.trim()) {
+        merged.focusSearchQuery = data.focusSearchQuery.trim();
+      }
+      if (Array.isArray(data.focusSearchPaths)) {
+        merged.focusSearchPaths = data.focusSearchPaths.filter(
+          (path): path is string => typeof path === "string" && Boolean(path.trim())
+        );
+      }
+      if (Array.isArray(data.focusFiles)) {
+        merged.focusFiles = data.focusFiles as KnowledgeGapsEvidence["focusFiles"];
+      }
       if (data.jobScan) {
         merged.jobScan = data.jobScan as KnowledgeGapsEvidence["jobScan"];
         const scanWarning = asRecord(data.jobScan).warning;
@@ -566,6 +586,10 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
     merged.fileStructure ||
     merged.ownershipReport ||
     merged.dependencyGraph !== undefined ||
+    merged.userFocus ||
+    merged.focusSearchQuery ||
+    merged.focusSearchPaths?.length ||
+    merged.focusFiles?.length ||
     merged.warnings?.length;
   return hasSignals ? merged : undefined;
 }

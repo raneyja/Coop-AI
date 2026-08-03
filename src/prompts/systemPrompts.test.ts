@@ -414,7 +414,7 @@ test("buildUserMessageWithContext renders repo entry files from context bundle",
   });
 
   assert.ok(message.includes("<repo_entry_files>"));
-  assert.ok(message.includes("Representative repository entry points"));
+  assert.ok(message.includes("In-repo package manifests / entry points"));
   assert.ok(message.includes("package.json"));
   assert.ok(message.includes("activate()"));
 });

@@ -75,6 +75,27 @@ async function run(): Promise<void> {
     assert.equal(focus.sha, recentStrong.sha);
   });
 
+  await test("selectFocusCommit prefers ask-aligned commit over unrelated high-signal recent", () => {
+    const introduction = commit({
+      sha: "aaaaaaa1",
+      message: "Initial commit: Coop AI VS Code extension and tooling."
+    });
+    const unrelated = commit({
+      sha: "mig00001",
+      message: "Add ProjectIssueType migration and deploy board helpers for issues."
+    });
+    const aligned = commit({
+      sha: "state001",
+      message: "Refine StateGroup choices used by the state model workflow."
+    });
+    const focus = selectFocusCommit({
+      introduction,
+      recentCommits: [unrelated, aligned],
+      focusTerms: ["stategroup", "state"]
+    });
+    assert.equal(focus.sha, aligned.sha);
+  });
+
   await test("selectFocusCommit falls back to newest recent when none are high-signal", () => {
     const introduction = commit({
       sha: "aaaaaaa1",

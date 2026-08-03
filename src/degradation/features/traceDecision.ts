@@ -11,6 +11,7 @@ import {
   sliceFileContent
 } from "../../context/localFileContext";
 import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
+import { focusQueryForRetrieval } from "../../context/userFocusQuery";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function traceDecision(context: FeatureExecutionContext) {
@@ -49,6 +50,7 @@ export async function traceDecision(context: FeatureExecutionContext) {
   const engine = getDecisionArchaeologyEngine();
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
   const fileSource = params.fileSource as string | undefined;
+  const userFocus = focusQueryForRetrieval(context.request.intent.context.queryText);
 
   if (
     fileSource === "external" ||
@@ -76,7 +78,8 @@ export async function traceDecision(context: FeatureExecutionContext) {
           ? { start: params.lines.start, end: params.lines.end }
           : undefined,
         branch: params.branch,
-        codeSnippet
+        codeSnippet,
+        userFocus
       });
 
       const data = {

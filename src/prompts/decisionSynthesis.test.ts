@@ -46,6 +46,30 @@ test("decision synthesis includes primary trace target and citation checklist", 
   assert.ok(prompt.includes("## Primary trace target"));
   assert.ok(prompt.includes("fastify.js"));
   assert.ok(prompt.includes("[Sources: GitHub commit dd2bb73]"));
+  assert.ok(prompt.includes("Grounding rule"));
+  assert.ok(prompt.includes("secondary only"));
+});
+
+test("decision synthesis open-file grounding forbids substituting another path", () => {
+  const prompt = buildDecisionSynthesisUserPrompt({
+    timeline: {
+      ...timeline,
+      file: "apps/api/plane/db/models/state.py",
+      targetLabel: "apps/api/plane/db/models/state.py",
+      warnings: [
+        "History for apps/api/plane/db/models/state.py may be truncated by a bulk rename/move (300 files in the introducing commit). Say so honestly for this path — do not substitute another file's migration or feature story."
+      ]
+    },
+    file: "apps/api/plane/db/models/state.py",
+    owner: "makeplane",
+    repo: "plane",
+    userFocus: "Why do we model StateGroup this way?"
+  });
+  assert.ok(prompt.includes("apps/api/plane/db/models/state.py"));
+  assert.ok(prompt.includes("Grounding rule"));
+  assert.ok(prompt.includes("never substitute a different migration"));
+  assert.ok(prompt.includes("Why do we model StateGroup this way?"));
+  assert.ok(!prompt.includes("0074_deploy_board_and_project_issues.py"));
 });
 
 test("decision synthesis requires out-of-scope callout for local workspace @ attachments", () => {
