@@ -115,7 +115,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <AuthFooterLink prompt="New to Coop AI?" href="/signup/free" label="Create a free account" />
+          <AuthFooterLink prompt="New to CoopAI?" href="/signup/free" label="Create a free account" />
         </div>
       </section>
     </>

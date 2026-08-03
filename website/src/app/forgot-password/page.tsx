@@ -4,7 +4,7 @@ import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 export const metadata: Metadata = buildPageMetadata(
   "/forgot-password",
   "Forgot password",
-  "Reset your Coop AI account password.",
+  "Reset your CoopAI account password.",
   { robots: noIndexRobots }
 );
 
