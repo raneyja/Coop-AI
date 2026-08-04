@@ -83,7 +83,7 @@ export function OwnershipCard({
     if (report.scores.some((score) => score.presence)) {
       list.push({ provider: "slack", detail: "Presence" });
     }
-    if (report.orgContext?.source === "codeowners") {
+    if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
       list.push({ provider: "github", detail: "CODEOWNERS" });
     }
     if (report.signals?.issues?.length) {

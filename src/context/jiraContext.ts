@@ -11,6 +11,7 @@ import {
   jiraScopeBlockMessage
 } from "../integrationScope/atlassianQuery";
 import { buildRepoSearchTerms } from "./docSearchQuery";
+import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchRepoWideIntegrations, shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
 export type JiraSearchTicket = {
@@ -78,7 +79,14 @@ export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
   if (request.type !== "chat_context") {
     return false;
   }
-  return wantsJiraContext(request.intent.context.queryText ?? "");
+  const queryText = request.intent.context.queryText ?? "";
+  // Incident / on-call reconstruction (A9) — fetch even when the user did not say "jira".
+  // Keep separate from wantsJiraContext so detectChatIntegrationProvider does not
+  // single-route the turn to Jira-only synthesis.
+  if (shouldFetchIncidentIntegrations(queryText)) {
+    return true;
+  }
+  return wantsJiraContext(queryText);
 }
 
 export function buildRepoJql(owner: string | undefined, repo: string | undefined): string | undefined {

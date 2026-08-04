@@ -44,7 +44,7 @@ export function listOwnershipSourceLabels(
   if (slackSearch?.messages?.length) {
     labels.push(ownershipSourceLabelSlackDiscussions());
   }
-  if (report.orgContext?.source === "codeowners") {
+  if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
     labels.push(ownershipSourceLabelCodeowners());
   }
   return labels;

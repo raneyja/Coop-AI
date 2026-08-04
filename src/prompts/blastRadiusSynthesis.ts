@@ -45,8 +45,8 @@ import { appendIntegrationDocsResponseContract } from "./integrationDocsResponse
 
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
-Code dependents (tests, examples, integration) are the primary blast surface; docs/README/.d.ts hits are secondary references — mention counts, not full lists.
-Be explicit about transitive effects and testing surfaces when dependency data is available.
+Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
+Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -117,7 +117,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
     "Synthesize impact for the primary target file only. Out-of-scope @ paths must not replace the dependency evidence for the open file."
   );
   lines.push(
-    "Keep the narrative short: lead with ## Top risk surfaces in **Summary**, mirror them exactly in **Direct impact** (no extra paths), cite test files in **Testing surfaces**, treat docs references as secondary."
+    "Keep the narrative short: lead with ## Top risk surfaces in **Summary** (production callers first), mirror them exactly in **Direct impact** (no extra paths), cite test/story/e2e files in **Testing surfaces**, treat docs references as secondary."
   );
   lines.push("Follow the required response structure in your system instructions.");
 

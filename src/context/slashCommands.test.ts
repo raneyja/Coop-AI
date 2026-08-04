@@ -166,6 +166,19 @@ test("parses edit alias patch", () => {
   assert.equal(parsed!.def.name, "edit");
 });
 
+test("parses compare command with two repos and topic", () => {
+  const parsed = parseSlashCommand("/compare plane documenso auth tenancy");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.target.kind, "compare");
+  assert.equal(parsed!.args, "plane documenso auth tenancy");
+  assert.equal(parsed!.focus, "plane documenso auth tenancy");
+});
+
+test("compare appears in slash typeahead", () => {
+  const matches = matchSlashCommands("comp");
+  assert.ok(matches.some((def) => def.name === "compare"));
+});
+
 // ── parseSlashCommand: passthrough safety ────────────────────────────────────
 test("returns null for unknown commands (sent as normal chat)", () => {
   assert.equal(parseSlashCommand("/explaineverything"), null);
@@ -222,7 +235,7 @@ test("slashMenuQuery returns null once a space is typed or not slash-prefixed", 
 
 // ── matchSlashCommands ───────────────────────────────────────────────────────
 test("matchSlashCommands returns all commands for an empty query", () => {
-  assert.equal(matchSlashCommands("").length, 12);
+  assert.equal(matchSlashCommands("").length, 13);
 });
 
 test("matchSlashCommands includes integration commands like slack", () => {

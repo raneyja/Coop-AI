@@ -9,6 +9,7 @@ import {
   readLocalWorkspaceFiles
 } from "../../context/localFileContext";
 import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
+import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
@@ -67,15 +68,54 @@ export async function blastRadius(context: FeatureExecutionContext) {
   }
 
   if (engine && codeHost && file) {
+    // Soft gather only (responseDeadline.ts): cap analyzeImpact to remaining budget,
+    // then return partial evidence so synthesis still runs — never hang / never timeout bubble.
+    const gatherStartedAt =
+      typeof params.gatherStartedAt === "number" && Number.isFinite(params.gatherStartedAt)
+        ? params.gatherStartedAt
+        : Date.now();
+    const budgetMs = remainingContextGatherBudgetMs(gatherStartedAt);
+    if (budgetMs <= 0) {
+      return contextResult(
+        context,
+        placeholderBlastRadiusData(
+          params,
+          directOnly,
+          "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
+        ),
+        "Soft gather budget exhausted — synthesizing with partial blast evidence.",
+        true
+      );
+    }
+
     try {
-      const report = await engine.analyzeImpact({
-        provider: codeHost.provider,
-        owner: codeHost.owner,
-        repo: codeHost.repo,
-        file,
-        branch: params.branch,
-        includeTransitive: !directOnly
-      });
+      const report = await Promise.race([
+        engine.analyzeImpact({
+          provider: codeHost.provider,
+          owner: codeHost.owner,
+          repo: codeHost.repo,
+          file,
+          branch: params.branch,
+          includeTransitive: !directOnly,
+          gatherStartedAt
+        }),
+        new Promise<undefined>((resolve) => {
+          setTimeout(() => resolve(undefined), budgetMs);
+        })
+      ]);
+
+      if (!report) {
+        return contextResult(
+          context,
+          placeholderBlastRadiusData(
+            params,
+            directOnly,
+            "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
+          ),
+          "Soft gather budget exhausted — synthesizing with partial blast evidence.",
+          true
+        );
+      }
 
       const data = {
         file,

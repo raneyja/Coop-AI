@@ -182,6 +182,15 @@ import {
   slashCommandHistoryContent,
   type ParsedSlashCommand
 } from "../context/slashCommands";
+import {
+  assembleDualRepoCompareEvidence,
+  dualRepoCompareHistoryContent,
+  dualRepoCompareUserMessage,
+  DUAL_REPO_COMPARE_MAX_FILES_PER_SIDE,
+  DUAL_REPO_COMPARE_USAGE,
+  parseDualRepoCompareArgs,
+  type DualRepoComparePlan
+} from "../context/dualRepoCompare";
 import type { QuickActionId } from "../webview/types";
 import type { IntegrationChatProvider } from "./types";
 import {
@@ -316,6 +325,18 @@ import { wantsJiraContext } from "../context/jiraContext";
 import { wantsNotionContext } from "../context/notionContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
+import { isIncidentShapedQuery, shouldFetchIncidentIntegrations } from "../context/incidentIntent";
+import {
+  isStatusTransitionAsk,
+  buildStatusTransitionSynthesisUserPrompt,
+  extractStatusTransitionEvidence,
+  statusTransitionGatherQuery,
+  type FollowedStatusFile
+} from "../context/statusTransitionGrounding";
+import {
+  buildIncidentReconstructionUserPrompt,
+  incidentIntegrationsFromBundle
+} from "../prompts/incidentReconstruction";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
 import {
   IndexedRepoWorkspace,
@@ -422,6 +443,8 @@ export class CoopChatSession {
    */
   private remoteProvenanceFile?: string;
   private pendingChatMentions?: ChatFileMention[];
+  /** Explicit dual-repo /compare turn — evidence for exactly two indexed repos. */
+  private pendingDualRepoCompare?: DualRepoComparePlan;
   /** Set during /edit sends so semantic retrieval uses the edit gate. */
   private pendingCodeEditIntent = false;
   private readonly threadStore?: ChatThreadStore;
@@ -2238,7 +2261,17 @@ export class CoopChatSession {
       }
     }
 
-    const requests = buildContextRequests(event, requestTypes);
+    const requests = buildContextRequests(event, requestTypes).map((request) => {
+      // Soft gather clock for blast-radius (responseDeadline) — shared across job + sync gather.
+      if (request.params.quickAction !== "blast-radius") {
+        return request;
+      }
+      const gatherStartedAt = this.chatTurnStartedAt || turn?.startedAt || Date.now();
+      return {
+        ...request,
+        params: { ...request.params, gatherStartedAt }
+      };
+    });
     try {
       const baseResults = await Promise.all(
         requests.map((request) =>
@@ -2346,16 +2379,21 @@ export class CoopChatSession {
       // Single path: same loader Remote browse / /understand use. No dual enrich race.
       result = await this.fetchUnderstandRepoEvidence(request);
     } else if (request.type === "chat_context") {
-      const localPayload = await this.tryFetchLocalFileContext(request);
+      const localPayload = this.pendingDualRepoCompare
+        ? undefined
+        : await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
       const queryText = request.intent.context?.queryText;
-      // Repo facts come from the indexed workspace; everything else gets a search sample.
-      if (hasRepoFactNeed(repoFactNeeds(queryText))) {
+      if (this.pendingDualRepoCompare) {
+        result = await this.enrichChatContextWithDualRepoCompare(request, result);
+      } else if (hasRepoFactNeed(repoFactNeeds(queryText))) {
         result = await this.enrichChatContextWithRepoInventory(request, result);
       } else {
         result = await this.enrichChatContextWithSemanticSearch(request, result);
       }
-      result = await this.enrichWithIndexedWorkspace(request, result);
+      if (!this.pendingDualRepoCompare) {
+        result = await this.enrichWithIndexedWorkspace(request, result);
+      }
     } else {
       result = await this.buildBaseContextResult(request);
       result = await this.enrichWithIndexedWorkspace(request, result);
@@ -2936,6 +2974,99 @@ export class CoopChatSession {
     }
   }
 
+  /**
+   * /compare — fetch topic evidence from exactly two indexed repos in parallel.
+   * Soft gather budget only; never invent long timeouts. Partial evidence is OK.
+   */
+  private async enrichChatContextWithDualRepoCompare(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    const plan = this.pendingDualRepoCompare;
+    const baseData =
+      typeof result.data === "object" && result.data !== null
+        ? (result.data as Record<string, unknown>)
+        : {};
+    if (!plan) {
+      return result;
+    }
+
+    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    const stickyRepoId = buildRepoId(this.preferences, this.currentContext);
+    const provider =
+      this.preferences.defaultCodeHost === "gitlab" ||
+      this.preferences.defaultCodeHost === "bitbucket" ||
+      this.preferences.defaultCodeHost === "github"
+        ? this.preferences.defaultCodeHost
+        : "github";
+
+    const fetchSide = async (side: DualRepoComparePlan["left"]) => {
+      if (budgetMs <= 0) {
+        return undefined;
+      }
+      try {
+        return await Promise.race([
+          searchRepoForFocusQuery({
+            repoId: side.repoId,
+            query: plan.topic,
+            indexBackend: this.options.indexBackend,
+            api: this.options.api,
+            apiBaseUrl: this.preferences.apiBaseUrl,
+            branch: this.currentContext.branch ?? this.preferences.branch,
+            owner: side.owner,
+            repo: side.repo,
+            provider: side.provider || provider,
+            maxFiles: DUAL_REPO_COMPARE_MAX_FILES_PER_SIDE
+          }),
+          new Promise<undefined>((resolve) => {
+            setTimeout(() => resolve(undefined), budgetMs);
+          })
+        ]);
+      } catch {
+        return undefined;
+      }
+    };
+
+    try {
+      const [leftSearch, rightSearch] = await Promise.all([
+        fetchSide(plan.left),
+        fetchSide(plan.right)
+      ]);
+      const evidence = assembleDualRepoCompareEvidence({
+        plan,
+        leftFiles: leftSearch?.files ?? [],
+        rightFiles: rightSearch?.files ?? [],
+        stickyRepoId
+      });
+      return {
+        ...result,
+        data: {
+          ...baseData,
+          dualRepoCompare: evidence,
+          // Drop sticky local attach — compare evidence is explicit dual only.
+          localFiles: undefined
+        }
+      };
+    } catch {
+      const evidence = assembleDualRepoCompareEvidence({
+        plan,
+        leftFiles: [],
+        rightFiles: [],
+        stickyRepoId
+      });
+      return {
+        ...result,
+        data: {
+          ...baseData,
+          dualRepoCompare: evidence,
+          localFiles: undefined
+        }
+      };
+    } finally {
+      this.pendingDualRepoCompare = undefined;
+    }
+  }
+
   private countInScopeMentionsForSemanticRetrieval(request: ContextFetchRequest): number {
     const mentions = this.pendingChatMentions;
     if (!mentions?.length) {
@@ -2985,7 +3116,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
-    if (request.type !== "chat_context" || request.params.quickAction) {
+    if (request.type !== "chat_context" || request.params.quickAction || this.pendingDualRepoCompare) {
       return result;
     }
 
@@ -3094,7 +3225,9 @@ export class CoopChatSession {
       budgetMs:
         request.params.quickAction === "understand-repo"
           ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
-          : request.params.quickAction === "knowledge-gaps"
+          : request.params.quickAction === "knowledge-gaps" ||
+              (request.type === "chat_context" &&
+                shouldFetchIncidentIntegrations(request.intent.context.queryText))
             ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
             : undefined
     });
@@ -3776,7 +3909,7 @@ export class CoopChatSession {
     }
     const structureIntent = !quickAction && needsRepoTreeOverview(message);
     this.pendingChatLocalFiles =
-      quickAction === "understand-repo" || structureIntent
+      quickAction === "understand-repo" || structureIntent || Boolean(this.pendingDualRepoCompare)
         ? undefined
         : this.loadLocalFilesSyncForChat({
             // Full active file for /edit and plain chat so SEARCH hunks can match beyond a selection.
@@ -4095,6 +4228,49 @@ export class CoopChatSession {
     return { ...context, file: scoped };
   }
 
+  private async routeCompareSlashCommand(
+    focus: string,
+    attachments?: ChatImageAttachment[],
+    mentions?: ChatFileMention[]
+  ): Promise<void> {
+    let catalogRepoIds: string[] = [];
+    try {
+      catalogRepoIds = await this.resolveMentionSearchRepoIds();
+    } catch {
+      catalogRepoIds = [];
+    }
+    const defaultOwner =
+      this.currentContext.owner?.trim() || this.preferences.owner?.trim() || undefined;
+    const parsed = parseDualRepoCompareArgs(focus, {
+      catalogRepoIds,
+      defaultOwner,
+      defaultProvider: this.preferences.defaultCodeHost
+    });
+    if (!parsed.ok) {
+      this.post({
+        type: "chat:error",
+        payload: { message: parsed.error || DUAL_REPO_COMPARE_USAGE }
+      });
+      return;
+    }
+
+    this.pendingDualRepoCompare = parsed.plan;
+    const historyContent = dualRepoCompareHistoryContent(parsed.plan);
+    const userText = dualRepoCompareUserMessage(parsed.plan);
+    try {
+      await this.handleChatSend(userText, undefined, attachments, {
+        historyContent,
+        mentions,
+        slashUserArgs: parsed.plan.topic
+      });
+    } finally {
+      // Enrich clears on success; clear here if the turn exited before context gather.
+      if (this.pendingDualRepoCompare === parsed.plan) {
+        this.pendingDualRepoCompare = undefined;
+      }
+    }
+  }
+
   private async routeSlashCommand(
     parsed: ParsedSlashCommand,
     attachments?: ChatImageAttachment[],
@@ -4104,6 +4280,11 @@ export class CoopChatSession {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     // Focus = text before + after the slash token (not args-after only).
     const slashUserArgs = focus.trim() || undefined;
+
+    if (def.target.kind === "compare") {
+      await this.routeCompareSlashCommand(focus, attachments, mentions);
+      return;
+    }
 
     if (def.target.kind === "action") {
       const actionId = def.target.actionId;
@@ -4869,8 +5050,26 @@ export class CoopChatSession {
     // below keeps the full `content` so DIRECTIVE/context/confidence lines still reach the model.
     const taskContent = options?.taskContent ?? content;
     const userFocus = options?.userFocus?.trim() || undefined;
+
+    // A8: stuck-status / status-transition asks — shape write-path evidence from the open file
+    // (and follow job triggers within the soft gather budget) before generic/incident prompts.
+    let statusTransitionMessage: string | undefined;
+    if (!effectiveQuickAction && !integrationProvider && isStatusTransitionAsk(taskContent)) {
+      statusTransitionMessage = await this.buildStatusTransitionChatPrompt({
+        ask: taskContent,
+        turn,
+        turnContext,
+        localFiles: localPayload?.files,
+        signal
+      });
+      // Job-follow may have attached seal/handler snippets onto the turn bundle.
+      contextBundle = [...turn.contextBundle];
+    }
+
     const llmMessage =
-        effectiveQuickAction === "trace-decision" && decisionTimeline
+        statusTransitionMessage
+          ? statusTransitionMessage
+          : effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
               file: turnContext.file ?? decisionTimeline.file,
@@ -4947,6 +5146,19 @@ export class CoopChatSession {
                         mentionedFiles: mentionRefs,
                         activeRepoId
                       })
+                    : !effectiveQuickAction &&
+                        !integrationProvider &&
+                        isIncidentShapedQuery(taskContent)
+                      ? buildIncidentReconstructionUserPrompt({
+                          userQuestion: taskContent,
+                          owner: turnContext.owner ?? this.preferences.owner,
+                          repo: turnContext.repo ?? this.preferences.repo,
+                          file: turnContext.file,
+                          integrations: incidentIntegrationsFromBundle(contextBundle, {
+                            jiraConnected: this.isIntegrationConnected("jira"),
+                            slackConnected: this.isIntegrationConnected("slack")
+                          })
+                        })
                     : sourceHint
                       ? `${sourceHint}\n\n${content}`
                       : content;
@@ -5183,7 +5395,14 @@ export class CoopChatSession {
           turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,
           turnContext.file
         ),
-        isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision"
+        isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision",
+        incidentReconstruction:
+          !effectiveQuickAction && !integrationProvider && isIncidentShapedQuery(taskContent)
+            ? {
+                jiraConnected: this.isIntegrationConnected("jira"),
+                slackConnected: this.isIntegrationConnected("slack")
+              }
+            : undefined
       });
       const finalMessage: ChatMessage = {
         ...result.message,
@@ -5657,6 +5876,115 @@ export class CoopChatSession {
         gaps: gaps.slice(0, 50)
       };
       this.mergeKnowledgeGapScanIntoBundle(jobScan);
+    });
+  }
+
+  /**
+   * A8 hot path: extract status-transition evidence from the open file, follow
+   * job triggers within the soft gather budget, and shape the synthesis prompt.
+   */
+  private async buildStatusTransitionChatPrompt(options: {
+    ask: string;
+    turn: ChatTurn;
+    turnContext: RepoContext;
+    localFiles?: Array<{ path: string; content: string }>;
+    signal: AbortSignal;
+  }): Promise<string | undefined> {
+    const openPath =
+      options.turnContext.file?.trim() ||
+      options.localFiles?.[0]?.path?.trim() ||
+      undefined;
+    const fromBundle = options.turn.contextBundle.flatMap((entry) =>
+      localFilesFromContextData(entry.data)
+    );
+    const openContent =
+      (openPath
+        ? options.localFiles?.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      options.localFiles?.[0]?.content ??
+      (openPath
+        ? fromBundle.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      fromBundle[0]?.content;
+    if (!openPath || !openContent?.trim()) {
+      return undefined;
+    }
+
+    let followedFiles: FollowedStatusFile[] = [];
+    const preliminary = extractStatusTransitionEvidence({
+      filePath: openPath,
+      fileContent: openContent,
+      ask: options.ask
+    });
+    const gatherQuery = statusTransitionGatherQuery(preliminary);
+    const budgetMs = remainingContextGatherBudgetMs(options.turn.startedAt || Date.now());
+    const repoId = buildRepoId(this.preferences, options.turnContext);
+
+    if (gatherQuery && budgetMs > 0 && repoId) {
+      try {
+        const provider =
+          options.turnContext.provider === "gitlab" ||
+          options.turnContext.provider === "bitbucket" ||
+          options.turnContext.provider === "github"
+            ? options.turnContext.provider
+            : this.preferences.defaultCodeHost;
+        const focusSearch = await abortablePromise(
+          Promise.race([
+            searchRepoForFocusQuery({
+              repoId,
+              query: gatherQuery,
+              indexBackend: this.options.indexBackend,
+              api: this.options.api,
+              apiBaseUrl: this.preferences.apiBaseUrl,
+              branch: options.turnContext.branch ?? this.preferences.branch,
+              owner: options.turnContext.owner ?? this.preferences.owner,
+              repo: options.turnContext.repo ?? this.preferences.repo,
+              provider,
+              maxFiles: 3
+            }),
+            new Promise<undefined>((resolve) => {
+              setTimeout(() => resolve(undefined), budgetMs);
+            })
+          ]),
+          options.signal
+        );
+        if (focusSearch?.files.length) {
+          followedFiles = focusSearch.files
+            .filter((file) => !pathsReferToSameFile(file.path, openPath))
+            .map((file) => ({ path: file.path, content: file.content }));
+          // Attach followed job/handler bodies so citations can name COMPLETED writers.
+          const prior = options.turn.contextBundle;
+          options.turn.contextBundle = [
+            mergeRepoSemanticContext(
+              {
+                requestId: `status-transition-${Date.now()}`,
+                type: "chat_context",
+                data: {},
+                fetchedAt: new Date()
+              },
+              focusSearch
+            ),
+            ...prior
+          ];
+        }
+      } catch (error) {
+        if (options.signal.aborted) {
+          throw error;
+        }
+        // Soft-fail follow-up search — still synthesize from the open file.
+      }
+    }
+
+    const evidence = extractStatusTransitionEvidence({
+      filePath: openPath,
+      fileContent: openContent,
+      ask: options.ask,
+      followedFiles
+    });
+
+    return buildStatusTransitionSynthesisUserPrompt({
+      ask: options.ask,
+      evidence
     });
   }
 

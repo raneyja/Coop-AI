@@ -595,6 +595,62 @@ test("buildUserMessageWithContext marks semantic files as a retrieval sample", (
   assert.ok(message.includes("Never count these paths as the total number of files"));
 });
 
+test("buildUserMessageWithContext renders dual repo_compare evidence for both sides", () => {
+  const message = buildUserMessageWithContext("Compare auth.", {
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          dualRepoCompare: {
+            source: "dual-repo-compare",
+            topic: "auth tenancy",
+            stickyRepoExcluded: "github:acme/other",
+            left: {
+              repoId: "github:CoopAI-Corp/plane",
+              owner: "CoopAI-Corp",
+              repo: "plane",
+              files: [
+                {
+                  path: "apps/api/plane/authentication.py",
+                  repoId: "github:CoopAI-Corp/plane",
+                  content: "class APIKeyAuthentication"
+                }
+              ]
+            },
+            right: {
+              repoId: "github:CoopAI-Corp/documenso",
+              owner: "CoopAI-Corp",
+              repo: "documenso",
+              files: [
+                {
+                  path: "packages/lib/server-only/api-token/get.ts",
+                  repoId: "github:CoopAI-Corp/documenso",
+                  content: "getApiTokenByToken"
+                }
+              ]
+            }
+          },
+          localFiles: {
+            files: [{ path: "src/chat/CoopChatSession.ts", content: "should not attach" }]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_compare"));
+  assert.ok(message.includes('side="CoopAI-Corp/plane"'));
+  assert.ok(message.includes('side="CoopAI-Corp/documenso"'));
+  assert.ok(message.includes("APIKeyAuthentication"));
+  assert.ok(message.includes("getApiTokenByToken"));
+  assert.ok(message.includes("excluded_sticky_repo"));
+  assert.ok(!message.includes("src/chat/CoopChatSession.ts"));
+  assert.ok(!message.includes("<local_files>"));
+  assert.match(systemPromptForUseCase("chat"), /repo_compare/);
+});
+
 test("buildUserMessageWithContext renders live tree overview", () => {
   const message = buildUserMessageWithContext("list the top-level directories", {
     owner: "acme",

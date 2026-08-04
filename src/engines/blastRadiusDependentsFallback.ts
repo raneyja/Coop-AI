@@ -324,40 +324,82 @@ export type BlastRadiusRiskRankedDependent = BlastRadiusDependentDetail & {
   riskReason: string;
 };
 
-/** Rank code dependents for summary narrative — integration/examples/tests first. */
+export type DependentSurfaceKind = "production" | "integration" | "example" | "build" | "test" | "other";
+
+/** Classify a dependent path for ranking / labeling (stories & e2e count as tests). */
+export function classifyDependentSurface(path: string): DependentSurfaceKind {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  if (isStoryOrDemoPath(lower) || isE2ePath(lower) || looksLikeTestFile(path)) {
+    return "test";
+  }
+  if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
+    return "integration";
+  }
+  if (lower.startsWith("examples/") || /\/examples\//.test(lower)) {
+    return "example";
+  }
+  if (/\/bundler\//.test(lower) || /webpack|esbuild|rollup|vite\.config/.test(lower)) {
+    return "build";
+  }
+  if (isProductionCallerPath(lower)) {
+    return "production";
+  }
+  return "other";
+}
+
+/**
+ * Rank code dependents for summary narrative — production / app callers first.
+ * Stories, e2e, and unit tests rank below and are labeled as test surfaces.
+ */
 export function rankCodeDependentsByRisk(
   details: BlastRadiusDependentDetail[],
   limit = 5
 ): BlastRadiusRiskRankedDependent[] {
-  return details
+  return sortDependentsProductionFirst(details)
     .filter((entry) => !isDocsReferencePath(entry.path))
     .map((entry) => {
       const scored = scoreDependentRisk(entry.path, entry.depth);
       return { ...entry, riskScore: scored.score, riskReason: scored.reason };
     })
-    .sort((left, right) => right.riskScore - left.riskScore || left.path.localeCompare(right.path))
     .slice(0, limit);
 }
 
-function scoreDependentRisk(path: string, depth: number): { score: number; reason: string } {
-  const lower = path.toLowerCase();
-  let score = 40;
+/** Stable production-first order for dependent lists shown in cards / prompts. */
+export function sortDependentsProductionFirst(
+  details: BlastRadiusDependentDetail[]
+): BlastRadiusDependentDetail[] {
+  return [...details].sort((left, right) => {
+    const leftScore = scoreDependentRisk(left.path, left.depth).score;
+    const rightScore = scoreDependentRisk(right.path, right.depth).score;
+    return rightScore - leftScore || left.path.localeCompare(right.path);
+  });
+}
+
+export function scoreDependentRisk(path: string, depth: number): { score: number; reason: string } {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  let score = 55;
   let reason = "Code importer";
 
-  if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
-    score = 90;
+  if (isStoryOrDemoPath(lower)) {
+    score = 22;
+    reason = "Test surface (Storybook / demo)";
+  } else if (isE2ePath(lower)) {
+    score = 20;
+    reason = "Test surface (e2e)";
+  } else if (looksLikeTestFile(path)) {
+    score = 28;
+    reason = "Test surface (unit / regression)";
+  } else if (isProductionCallerPath(lower)) {
+    score = 95;
+    reason = "Production / application caller";
+  } else if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
+    score = 88;
     reason = "Integration / runtime surface";
   } else if (lower.startsWith("examples/") || /\/examples\//.test(lower)) {
-    score = 85;
+    score = 72;
     reason = "Public example / API usage";
-  } else if (/\.(test|spec)\.[cm]?[jt]sx?$/i.test(path) || /\/test\//.test(lower) || /\/__tests__\//.test(lower)) {
-    score = 80;
-    reason = "Test / regression surface";
-  } else if (/^src\//.test(lower) || /^lib\//.test(lower) || /^packages\//.test(lower)) {
-    score = 70;
-    reason = "Application or library code";
-  } else if (/\/bundler\//.test(lower) || /webpack|esbuild/.test(lower)) {
-    score = 55;
+  } else if (/\/bundler\//.test(lower) || /webpack|esbuild|rollup|vite\.config/.test(lower)) {
+    score = 48;
     reason = "Build / bundler tooling";
   }
 
@@ -367,6 +409,32 @@ function scoreDependentRisk(path: string, depth: number): { score: number; reaso
   }
 
   return { score, reason };
+}
+
+function isProductionCallerPath(lower: string): boolean {
+  return (
+    /^(src|lib|app|apps|packages|server|services|core|web|backend|frontend)\//.test(lower) ||
+    /\/(src|lib|app|packages|server|services|core)\//.test(lower)
+  );
+}
+
+function isStoryOrDemoPath(lower: string): boolean {
+  return (
+    /\.stories\.[cm]?[jt]sx?$/.test(lower) ||
+    /\.story\.[cm]?[jt]sx?$/.test(lower) ||
+    /(^|\/)stories\//.test(lower) ||
+    /(^|\/)storybook\//.test(lower) ||
+    /\.storybook\//.test(lower)
+  );
+}
+
+function isE2ePath(lower: string): boolean {
+  return (
+    /(^|\/)e2e\//.test(lower) ||
+    /(^|\/)(cypress|playwright)\//.test(lower) ||
+    /\.e2e\.[cm]?[jt]sx?$/.test(lower) ||
+    /\/__e2e__\//.test(lower)
+  );
 }
 
 export function filterJobDependentsForFile(
@@ -388,11 +456,15 @@ export function filterJobDependentsForFile(
   );
 }
 
-function looksLikeTestFile(path: string): boolean {
+export function looksLikeTestFile(path: string): boolean {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  if (isStoryOrDemoPath(lower) || isE2ePath(lower)) {
+    return true;
+  }
   return (
     /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path) ||
     /\/__(tests|mocks)__\//i.test(path) ||
-    /\/test\//i.test(path)
+    /\/tests?\//i.test(lower)
   );
 }
 

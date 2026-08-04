@@ -4,6 +4,7 @@ import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
 import { repoIdFromCoordinates } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
+import { remainingContextGatherBudgetMs } from "../config/responseDeadline";
 import { buildRepoSearchQuery, fetchSlackSearchContext } from "../context/slackContext";
 import { fetchCodeHostSearchContext, type CodeHostPullRequestSnippet } from "../context/codeHostContext";
 import { getOwnershipGraphEngine } from "./ownershipGraphRegistry";
@@ -18,6 +19,7 @@ import {
   searchDependentsFallback,
   searchPublicExports,
   searchTestFilesReferencingTarget,
+  sortDependentsProductionFirst,
   splitBlastRadiusDependents
 } from "./blastRadiusDependentsFallback";
 
@@ -104,6 +106,12 @@ export type BlastRadiusAnalysisParams = {
   file: string;
   branch?: string;
   includeTransitive?: boolean;
+  /**
+   * Turn clock for soft gather (responseDeadline.ts). When remaining soft budget
+   * hits 0, skip secondary enrichment and return partial evidence for synthesis —
+   * never hang, never schedule a hard 15s abort / timeout bubble.
+   */
+  gatherStartedAt?: number;
 };
 
 export class BlastRadiusAnalysisEngine {
@@ -112,6 +120,22 @@ export class BlastRadiusAnalysisEngine {
   public async analyzeImpact(params: BlastRadiusAnalysisParams): Promise<BlastRadiusReport> {
     const file = toRepositoryRelativePath(params.file);
     const warnings: string[] = [];
+    // Soft gather only — remainingContextGatherBudgetMs from responseDeadline.ts.
+    const gatherStartedAt = params.gatherStartedAt ?? Date.now();
+    const softBudgetLeft = (): number => remainingContextGatherBudgetMs(gatherStartedAt);
+    const softBudgetExhausted = (): boolean => softBudgetLeft() <= 0;
+    const noteSoftBudgetExhausted = (): void => {
+      if (
+        !warnings.some((warning) =>
+          /soft gather budget exhausted/i.test(warning)
+        )
+      ) {
+        warnings.push(
+          "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
+        );
+      }
+    };
+
     const coords: RepoCoordinates = {
       provider: params.provider ?? "github",
       owner: params.owner,
@@ -150,13 +174,20 @@ export class BlastRadiusAnalysisEngine {
             source: result.source as GraphEdgeSource
           }));
 
-          if (includeTransitive && directDependents.length > 0) {
-            const transitive = await this.collectTransitiveDependents(repoId, file, directDependents);
+          if (includeTransitive && directDependents.length > 0 && !softBudgetExhausted()) {
+            const transitive = await this.collectTransitiveDependents(
+              repoId,
+              file,
+              directDependents,
+              gatherStartedAt
+            );
             transitiveDependents = transitive.paths;
             dependentDetails = [...dependentDetails, ...transitive.details];
+          } else if (includeTransitive && directDependents.length > 0 && softBudgetExhausted()) {
+            noteSoftBudgetExhausted();
           }
 
-          if (directDependents.length === 0) {
+          if (directDependents.length === 0 && !softBudgetExhausted()) {
             const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file);
             warnings.push(...fallback.warnings);
             if (fallback.dependents.length > 0) {
@@ -166,14 +197,21 @@ export class BlastRadiusAnalysisEngine {
               warnings.push(
                 `Dependents inferred via ${fallback.source} import-pattern search — verify before relying on impact list.`
               );
-              if (includeTransitive && directDependents.length > 0) {
-                const transitive = await this.collectTransitiveDependents(repoId, file, directDependents);
+              if (includeTransitive && directDependents.length > 0 && !softBudgetExhausted()) {
+                const transitive = await this.collectTransitiveDependents(
+                  repoId,
+                  file,
+                  directDependents,
+                  gatherStartedAt
+                );
                 transitiveDependents = transitive.paths;
                 dependentDetails = [...dependentDetails, ...transitive.details];
               }
             } else {
               warnings.push("No dependents found in index or import-pattern search for this file.");
             }
+          } else if (directDependents.length === 0 && softBudgetExhausted()) {
+            noteSoftBudgetExhausted();
           }
         } else {
           warnings.push("Deep index not enabled — run Lightning Mode to map dependents.");
@@ -186,81 +224,105 @@ export class BlastRadiusAnalysisEngine {
     }
 
     const impactedFiles = uniquePaths([file, ...directDependents, ...transitiveDependents]).slice(0, 30);
-    const ownersByFile = await this.resolveOwners(resolved, impactedFiles, warnings);
 
+    let ownersByFile: BlastRadiusOwnerEntry[] = [];
     let openPullRequests: CodeHostPullRequestSnippet[] = [];
     let recentChanges: BlastRadiusRecentChange[] = [];
-    try {
-      const impactedTerms = [file, ...directDependents.slice(0, 5)].join(" ");
-      const search = await fetchCodeHostSearchContext({
-        router: this.options.codeHostRouter,
-        provider: resolved.provider,
-        owner: resolved.owner,
-        repo: resolved.repo,
-        queryText: `open pull requests ${impactedTerms}`,
-        limit: 30
-      });
-      if (search.error) {
-        warnings.push(search.error);
-      } else {
-        openPullRequests = search.pullRequests.filter((pr) => pr.state === "open" || !pr.merged);
-        recentChanges = filterRecentChangesForImpact(search.pullRequests, file, directDependents);
-      }
-    } catch (error) {
-      warnings.push(`Open PR search failed: ${errorMessage(error)}`);
-    }
-
     let testFiles: BlastRadiusTestFile[] = [];
     let publicExports: BlastRadiusPublicExport[] = [];
     let ciWorkflows: BlastRadiusCiWorkflow[] = [];
     let crossRepoConsumers: BlastRadiusCrossRepoConsumer[] = [];
-
-    if (this.options.indexBackend && lightningEnabled) {
-      testFiles = await searchTestFilesReferencingTarget(this.options.indexBackend, repoId, file);
-      publicExports = await searchPublicExports(this.options.indexBackend, repoId, file);
-      ciWorkflows = await searchCiWorkflowReferences(this.options.indexBackend, repoId, impactedFiles);
-      crossRepoConsumers = await searchCrossRepoConsumers(this.options.indexBackend, repoId, file);
-    }
-
     let slackSearch: BlastRadiusReport["slackSearch"];
-    try {
-      const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
-      const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
-      const query = [repoQuery, fileStem, ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)]
-        .filter(Boolean)
-        .join(" OR ");
-      const slackScope = await this.options.resolveSlackScope?.();
-      const slack = await fetchSlackSearchContext({
-        secrets: this.options.integrationSecrets,
-        owner: resolved.owner,
-        repo: resolved.repo,
-        queryText: query,
-        integrationScope: slackScope
-      });
-      slackSearch = {
-        query: slack.query,
-        messages: slack.messages.slice(0, 15).map((message) => ({
-          channelName: message.channelName,
-          userName: message.userName,
-          text: message.text,
-          permalink: message.permalink
-        })),
-        error: slack.error
-      };
-      if (slack.error) {
-        warnings.push(slack.error);
+
+    // Secondary enrichment — skip when soft gather budget is gone so synthesis can start.
+    if (!softBudgetExhausted()) {
+      ownersByFile = await this.resolveOwners(resolved, impactedFiles, warnings, gatherStartedAt);
+
+      if (!softBudgetExhausted()) {
+        try {
+          const impactedTerms = [file, ...directDependents.slice(0, 5)].join(" ");
+          const search = await fetchCodeHostSearchContext({
+            router: this.options.codeHostRouter,
+            provider: resolved.provider,
+            owner: resolved.owner,
+            repo: resolved.repo,
+            queryText: `open pull requests ${impactedTerms}`,
+            limit: 30
+          });
+          if (search.error) {
+            warnings.push(search.error);
+          } else {
+            openPullRequests = search.pullRequests.filter((pr) => pr.state === "open" || !pr.merged);
+            recentChanges = filterRecentChangesForImpact(search.pullRequests, file, directDependents);
+          }
+        } catch (error) {
+          warnings.push(`Open PR search failed: ${errorMessage(error)}`);
+        }
       }
-    } catch (error) {
-      warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
+
+      if (this.options.indexBackend && lightningEnabled && !softBudgetExhausted()) {
+        testFiles = await searchTestFilesReferencingTarget(this.options.indexBackend, repoId, file);
+        if (!softBudgetExhausted()) {
+          publicExports = await searchPublicExports(this.options.indexBackend, repoId, file);
+        }
+        if (!softBudgetExhausted()) {
+          ciWorkflows = await searchCiWorkflowReferences(this.options.indexBackend, repoId, impactedFiles);
+        }
+        if (!softBudgetExhausted()) {
+          crossRepoConsumers = await searchCrossRepoConsumers(this.options.indexBackend, repoId, file);
+        }
+      }
+
+      if (!softBudgetExhausted()) {
+        try {
+          const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
+          const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
+          const query = [
+            repoQuery,
+            fileStem,
+            ...directDependents.slice(0, 3).map((dep) => dep.split("/").pop() ?? dep)
+          ]
+            .filter(Boolean)
+            .join(" OR ");
+          const slackScope = await this.options.resolveSlackScope?.();
+          const slack = await fetchSlackSearchContext({
+            secrets: this.options.integrationSecrets,
+            owner: resolved.owner,
+            repo: resolved.repo,
+            queryText: query,
+            integrationScope: slackScope
+          });
+          slackSearch = {
+            query: slack.query,
+            messages: slack.messages.slice(0, 15).map((message) => ({
+              channelName: message.channelName,
+              userName: message.userName,
+              text: message.text,
+              permalink: message.permalink
+            })),
+            error: slack.error
+          };
+          if (slack.error) {
+            warnings.push(slack.error);
+          }
+        } catch (error) {
+          warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
+        }
+      } else {
+        noteSoftBudgetExhausted();
+      }
+    } else {
+      noteSoftBudgetExhausted();
     }
 
     const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);
 
     const split = splitBlastRadiusDependents(dependentDetails);
-    const codePaths = codePathsFromDependentDetails(split.codeDependentDetails);
+    const rankedCode = sortDependentsProductionFirst(split.codeDependentDetails);
+    const codePaths = codePathsFromDependentDetails(rankedCode);
     directDependents = codePaths.directDependents;
     transitiveDependents = codePaths.transitiveDependents;
-    dependentDetails = split.codeDependentDetails;
+    dependentDetails = rankedCode;
     const docsReferences = split.docsReferences;
 
     return {
@@ -287,7 +349,8 @@ export class BlastRadiusAnalysisEngine {
   private async collectTransitiveDependents(
     repoId: string,
     rootFile: string,
-    direct: string[]
+    direct: string[],
+    gatherStartedAt?: number
   ): Promise<{ paths: string[]; details: BlastRadiusDependentDetail[] }> {
     const seen = new Set<string>([rootFile, ...direct]);
     const queue = direct.map((path) => ({ path, depth: 1 }));
@@ -295,6 +358,13 @@ export class BlastRadiusAnalysisEngine {
     const details: BlastRadiusDependentDetail[] = [];
 
     while (queue.length > 0 && transitive.length < 50) {
+      // Soft gather (responseDeadline): stop expanding when remaining budget is gone.
+      if (
+        gatherStartedAt !== undefined &&
+        remainingContextGatherBudgetMs(gatherStartedAt) <= 0
+      ) {
+        break;
+      }
       const current = queue.shift()!;
       try {
         const result = await this.options.indexBackend!.dependents(repoId, current.path);
@@ -322,7 +392,8 @@ export class BlastRadiusAnalysisEngine {
   private async resolveOwners(
     coords: RepoCoordinates,
     files: string[],
-    warnings: string[]
+    warnings: string[],
+    gatherStartedAt?: number
   ): Promise<BlastRadiusOwnerEntry[]> {
     const engine = getOwnershipGraphEngine();
     if (!engine) {
@@ -332,6 +403,12 @@ export class BlastRadiusAnalysisEngine {
 
     const owners: BlastRadiusOwnerEntry[] = [];
     for (const path of files.slice(0, 20)) {
+      if (
+        gatherStartedAt !== undefined &&
+        remainingContextGatherBudgetMs(gatherStartedAt) <= 0
+      ) {
+        break;
+      }
       try {
         const report = await engine.mapOwnership({
           provider: coords.provider,

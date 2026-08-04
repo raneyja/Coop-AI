@@ -82,18 +82,20 @@ test("blast-radius synthesis includes top risk surfaces ranking", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
-      directDependents: ["test/a.test.js", "integration/server.js", "examples/https.js"],
+      directDependents: ["test/a.test.js", "integration/server.js", "examples/https.js", "src/plugin.js"],
       dependentDetails: [
         { path: "test/a.test.js", depth: 1, source: "heuristic" },
         { path: "integration/server.js", depth: 1, source: "heuristic" },
-        { path: "examples/https.js", depth: 1, source: "heuristic" }
+        { path: "examples/https.js", depth: 1, source: "heuristic" },
+        { path: "src/plugin.js", depth: 1, source: "scip" }
       ]
     },
     file: "fastify.js"
   });
   assert.ok(prompt.includes("### Top risk surfaces"));
-  assert.ok(prompt.includes("integration/server.js"));
-  assert.ok(/1\. integration\/server\.js/.test(prompt));
+  assert.ok(prompt.includes("src/plugin.js"));
+  assert.ok(/1\. src\/plugin\.js/.test(prompt));
+  assert.ok(/Test surface/i.test(prompt));
 });
 
 test("blast-radius synthesis includes CI rollout guidance when workflows present", () => {

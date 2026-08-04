@@ -20,6 +20,10 @@ import {
 import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
 import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
 import {
+  enrichIncidentReconstructionResponse,
+  incidentIntegrationsFromBundle
+} from "../prompts/incidentReconstruction";
+import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
   type MentionScopeRef
@@ -42,6 +46,11 @@ export function enrichChatResponseForAction(options: {
   userQuestion?: string;
   fallbackTimeline?: DecisionTimeline;
   isTraceFollowUp?: boolean;
+  /** A9: plain-chat incident reconstruction — force code + integrations + gaps sections. */
+  incidentReconstruction?: {
+    jiraConnected?: boolean;
+    slackConnected?: boolean;
+  };
 }): string {
   const { quickAction, integrationProvider, content, contextBundle, activeFile } = options;
   const mentions = options.mentions ?? [];
@@ -76,6 +85,13 @@ export function enrichChatResponseForAction(options: {
   }
 
   enriched = stripDisallowedNarrativeSourceCitations(enriched);
+
+  if (options.incidentReconstruction && !quickAction && !integrationProvider) {
+    enriched = enrichIncidentReconstructionResponse(
+      enriched,
+      incidentIntegrationsFromBundle(contextBundle, options.incidentReconstruction)
+    );
+  }
 
   switch (quickAction) {
     case "trace-decision":

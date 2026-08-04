@@ -12,6 +12,7 @@ import { buildRepoSearchTerms } from "./docSearchQuery";
 import { collectJiraKeysFromText } from "./jiraContext";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { filePathSearchTerms } from "./traceDecisionSearch";
+import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 
 export type SlackSearchMessage = {
@@ -56,7 +57,12 @@ export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
   if (request.type !== "chat_context") {
     return false;
   }
-  return wantsSlackContext(request.intent.context.queryText ?? "");
+  const queryText = request.intent.context.queryText ?? "";
+  // Incident / on-call reconstruction (A9) — fetch even when the user did not say "slack".
+  if (shouldFetchIncidentIntegrations(queryText)) {
+    return true;
+  }
+  return wantsSlackContext(queryText);
 }
 
 export function buildRepoSearchQuery(owner: string | undefined, repo: string | undefined): string | undefined {

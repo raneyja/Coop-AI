@@ -258,7 +258,7 @@ export function quickActionPromptParts(
           ...(mentions.length ? [mentionModelGuidance("find-owner", mentions, ctx)] : []),
           repoWide
             ? "Highlight single points of failure, cross-team boundaries, and who to ask first for unfamiliar areas — not a single-file deep dive."
-            : "Include confidence, escalation path, and fallback contacts when primary experts are unavailable or offline.",
+            : "Include confidence plus an escalation avenue (CODEOWNERS team/path owners/recent reviewers) or an explicit evidence-backed admin gap — never invent people or end with empty backup guidance.",
           repoWide ? FIND_OWNER_REPO_WIDE_CROSS_ACTION_HINT : ""
         ]
           .filter(Boolean)
