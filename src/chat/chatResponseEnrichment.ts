@@ -24,6 +24,10 @@ import {
   incidentIntegrationsFromBundle
 } from "../prompts/incidentReconstruction";
 import {
+  enrichExistingCapabilityResponse,
+  type ExistingCapabilityEvidence
+} from "../context/existingCapabilityGrounding";
+import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
   type MentionScopeRef
@@ -51,6 +55,8 @@ export function enrichChatResponseForAction(options: {
     jiraConnected?: boolean;
     slackConnected?: boolean;
   };
+  /** A10: ticket-style add-feature with open-file capability evidence. */
+  existingCapability?: ExistingCapabilityEvidence;
 }): string {
   const { quickAction, integrationProvider, content, contextBundle, activeFile } = options;
   const mentions = options.mentions ?? [];
@@ -85,6 +91,10 @@ export function enrichChatResponseForAction(options: {
   }
 
   enriched = stripDisallowedNarrativeSourceCitations(enriched);
+
+  if (options.existingCapability && !quickAction && !integrationProvider) {
+    enriched = enrichExistingCapabilityResponse(enriched, options.existingCapability);
+  }
 
   if (options.incidentReconstruction && !quickAction && !integrationProvider) {
     enriched = enrichIncidentReconstructionResponse(

@@ -419,6 +419,7 @@ When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample
 When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
 When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn.
 When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
+When \`<repo_package_structure>\` is attached, list the concrete package/app paths from that block (e.g. apps/remix, packages/signing). Do not answer with only workspace globs like \`apps/*\` / \`packages/*\` when concrete names are present. Workspace globs in that block are informational — expand from the listed paths.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`;
@@ -855,6 +856,12 @@ export function buildUserMessageWithContext(
   if (packageBoundaryNote) {
     lines.push(`<package_boundary_note>${packageBoundaryNote}</package_boundary_note>`);
   }
+  const packageStructure = dualRepoCompare
+    ? undefined
+    : extractPackageStructure(context?.contextBundle);
+  if (packageStructure) {
+    lines.push(...formatPackageStructureForLlm(packageStructure));
+  }
   if (localSnippets.length > 0 && !dualRepoCompare) {
     emitLocalFilesBlock(lines, localSnippets);
   }
@@ -988,6 +995,58 @@ function extractPackageBoundaryNote(bundle: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+type PackageStructureSnippet = {
+  packages?: string[];
+  parents?: string[];
+  workspaceGlobs?: string[];
+};
+
+function extractPackageStructure(bundle: unknown): PackageStructureSnippet | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const structure = (entry as { data?: { packageStructure?: PackageStructureSnippet } }).data
+      ?.packageStructure;
+    if (
+      structure &&
+      ((structure.packages?.length ?? 0) > 0 ||
+        (structure.parents?.length ?? 0) > 0 ||
+        (structure.workspaceGlobs?.length ?? 0) > 0)
+    ) {
+      return structure;
+    }
+  }
+  return undefined;
+}
+
+function formatPackageStructureForLlm(structure: PackageStructureSnippet): string[] {
+  const packages = structure.packages ?? [];
+  const parents = structure.parents ?? [];
+  const globs = structure.workspaceGlobs ?? [];
+  const lines = ["<repo_package_structure>"];
+  lines.push(
+    "Concrete top-level packages/apps from the live repository tree under apps/, packages/, etc. Prefer these names over workspace globs."
+  );
+  if (packages.length) {
+    lines.push(`packages: ${packages.join(", ")}`);
+  } else if (parents.length) {
+    lines.push(
+      `parents listed (${parents.join(", ")}) but child package directories were unavailable — do not invent package names.`
+    );
+  }
+  if (globs.length) {
+    lines.push(
+      `workspace_globs (from package.json — informational only, not expanded): ${globs.join(", ")}`
+    );
+  }
+  lines.push("</repo_package_structure>");
+  return lines;
 }
 
 function formatTreeOverviewForLlm(treeOverview: TreeOverviewSnippet): string[] {

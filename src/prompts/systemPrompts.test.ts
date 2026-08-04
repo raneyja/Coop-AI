@@ -419,6 +419,40 @@ test("buildUserMessageWithContext renders repo entry files from context bundle",
   assert.ok(message.includes("activate()"));
 });
 
+test("buildUserMessageWithContext renders concrete package structure over workspace globs", () => {
+  const message = buildUserMessageWithContext("What's in the top-level package structure?", {
+    owner: "documenso",
+    repo: "documenso",
+    branch: "main",
+    contextBundle: [
+      {
+        type: "file_metadata",
+        data: {
+          treeOverview: { topLevelDirs: ["apps", "packages"], topLevelFiles: ["package.json"] },
+          entryFiles: [
+            {
+              path: "package.json",
+              content: '{"name":"documenso","workspaces":["apps/*","packages/*"]}'
+            }
+          ],
+          packageStructure: {
+            packages: ["apps/remix", "packages/prisma", "packages/signing"],
+            parents: ["apps", "packages"],
+            workspaceGlobs: ["apps/*", "packages/*"]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_package_structure>"));
+  assert.ok(message.includes("apps/remix"));
+  assert.ok(message.includes("packages/signing"));
+  assert.ok(message.includes("packages/prisma"));
+  assert.ok(message.includes("workspace_globs"));
+  assert.ok(message.includes("Prefer these names over workspace globs"));
+});
+
 test("buildUserMessageWithContext renders project instructions and dedupes AGENTS.md entry files", () => {
   const message = buildUserMessageWithContext("How should I work in this repo?", {
     contextBundle: [

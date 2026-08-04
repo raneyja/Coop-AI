@@ -118,7 +118,8 @@ export function isRepoStructureQuery(queryText: string | undefined): boolean {
 }
 
 /**
- * "Where are the Next.js / API package boundaries?", monorepo layout, workspaces.
+ * "Where are the Next.js / API package boundaries?", monorepo layout, workspaces,
+ * "What's in the top-level package structure?".
  * Ground in IndexedRepoWorkspace tree + package manifests — never another repo's paths.
  */
 export function isRepoPackageBoundaryQuery(queryText: string | undefined): boolean {
@@ -130,6 +131,13 @@ export function isRepoPackageBoundaryQuery(queryText: string | undefined): boole
     return true;
   }
   if (/\b(monorepo|package|workspace)\s+layout\b/.test(q)) {
+    return true;
+  }
+  // Onboarding smoke: "What's in the top-level package structure?"
+  if (/\b(top[- ]level\s+)?package\s+structure\b/.test(q)) {
+    return true;
+  }
+  if (/\b(top[- ]level|root)\s+packages?\b/.test(q)) {
     return true;
   }
   if (/\b(pnpm|npm|yarn)[- ]workspaces?\b/.test(q)) {

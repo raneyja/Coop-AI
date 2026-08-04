@@ -334,6 +334,23 @@ import {
   type FollowedStatusFile
 } from "../context/statusTransitionGrounding";
 import {
+  buildEmailTemplateSynthesisUserPrompt,
+  emailTemplateGatherQuery,
+  extractHandlerFollowCandidates,
+  handlerPathsForTriggeredJob,
+  extractTriggeredJobNames,
+  isEmailTemplateTicketAsk,
+  matchEmailTemplatesInTree,
+  resolveEmailTemplateCandidates,
+  type FollowedJobFile
+} from "../context/emailTemplateGrounding";
+import {
+  buildExistingCapabilitySynthesisUserPrompt,
+  extractExistingCapabilityEvidence,
+  isFeatureAddAsk,
+  type ExistingCapabilityEvidence
+} from "../context/existingCapabilityGrounding";
+import {
   buildIncidentReconstructionUserPrompt,
   incidentIntegrationsFromBundle
 } from "../prompts/incidentReconstruction";
@@ -2915,9 +2932,12 @@ export class CoopChatSession {
         const entryFiles = structure?.entryFiles;
         const packageBoundaryNote =
           structure && "note" in structure ? structure.note : undefined;
+        const packageStructure =
+          structure && "packageStructure" in structure ? structure.packageStructure : undefined;
         return mergeRepoInventoryContext(result, inventory, treeOverview, {
           entryFiles,
-          packageBoundaryNote
+          packageBoundaryNote,
+          packageStructure
         });
       } catch {
         return mergeRepoInventoryContext(result, {
@@ -5051,10 +5071,51 @@ export class CoopChatSession {
     const taskContent = options?.taskContent ?? content;
     const userFocus = options?.userFocus?.trim() || undefined;
 
+    // A11: jobs + email templates / reminders — follow job→handler→packages/email paths.
+    // Distinct from A10 existing-capability (add-feature tickets without email/template signals).
+    let emailTemplateMessage: string | undefined;
+    if (!effectiveQuickAction && !integrationProvider && isEmailTemplateTicketAsk(taskContent)) {
+      emailTemplateMessage = await this.buildEmailTemplateChatPrompt({
+        ask: taskContent,
+        turn,
+        turnContext,
+        localFiles: localPayload?.files,
+        signal
+      });
+      contextBundle = [...turn.contextBundle];
+    }
+
+    // A10: ticket-style “add feature X” with starter file open — detect existing symbols first.
+    // Skip when A11 already claimed the turn. Soft gather: open-file only (no extra search).
+    let existingCapabilityMessage: string | undefined;
+    let existingCapabilityEvidence: ExistingCapabilityEvidence | undefined;
+    if (
+      !emailTemplateMessage &&
+      !effectiveQuickAction &&
+      !integrationProvider &&
+      isFeatureAddAsk(taskContent)
+    ) {
+      const capabilityPrompt = this.buildExistingCapabilityChatPrompt({
+        ask: taskContent,
+        turn,
+        turnContext,
+        localFiles: localPayload?.files
+      });
+      existingCapabilityMessage = capabilityPrompt?.message;
+      existingCapabilityEvidence = capabilityPrompt?.evidence;
+    }
+
     // A8: stuck-status / status-transition asks — shape write-path evidence from the open file
     // (and follow job triggers within the soft gather budget) before generic/incident prompts.
+    // Skip when A11/A10 already claimed the turn.
     let statusTransitionMessage: string | undefined;
-    if (!effectiveQuickAction && !integrationProvider && isStatusTransitionAsk(taskContent)) {
+    if (
+      !emailTemplateMessage &&
+      !existingCapabilityMessage &&
+      !effectiveQuickAction &&
+      !integrationProvider &&
+      isStatusTransitionAsk(taskContent)
+    ) {
       statusTransitionMessage = await this.buildStatusTransitionChatPrompt({
         ask: taskContent,
         turn,
@@ -5067,7 +5128,11 @@ export class CoopChatSession {
     }
 
     const llmMessage =
-        statusTransitionMessage
+        emailTemplateMessage
+          ? emailTemplateMessage
+          : existingCapabilityMessage
+          ? existingCapabilityMessage
+          : statusTransitionMessage
           ? statusTransitionMessage
           : effectiveQuickAction === "trace-decision" && decisionTimeline
           ? buildDecisionSynthesisUserPrompt({
@@ -5402,7 +5467,8 @@ export class CoopChatSession {
                 jiraConnected: this.isIntegrationConnected("jira"),
                 slackConnected: this.isIntegrationConnected("slack")
               }
-            : undefined
+            : undefined,
+        existingCapability: existingCapabilityEvidence
       });
       const finalMessage: ChatMessage = {
         ...result.message,
@@ -5877,6 +5943,260 @@ export class CoopChatSession {
       };
       this.mergeKnowledgeGapScanIntoBundle(jobScan);
     });
+  }
+
+  /**
+   * A11 hot path: follow open job definition → handlers → email template paths
+   * within the soft gather budget, then shape the synthesis prompt.
+   */
+  private async buildEmailTemplateChatPrompt(options: {
+    ask: string;
+    turn: ChatTurn;
+    turnContext: RepoContext;
+    localFiles?: Array<{ path: string; content: string }>;
+    signal: AbortSignal;
+  }): Promise<string | undefined> {
+    const openPath =
+      options.turnContext.file?.trim() ||
+      options.localFiles?.[0]?.path?.trim() ||
+      undefined;
+    const fromBundle = options.turn.contextBundle.flatMap((entry) =>
+      localFilesFromContextData(entry.data)
+    );
+    const openContent =
+      (openPath
+        ? options.localFiles?.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      options.localFiles?.[0]?.content ??
+      (openPath
+        ? fromBundle.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      fromBundle[0]?.content;
+    if (!openPath || !openContent?.trim()) {
+      return undefined;
+    }
+
+    const budgetMs = remainingContextGatherBudgetMs(options.turn.startedAt || Date.now());
+    const repoId = buildRepoId(this.preferences, options.turnContext);
+    const workspace = this.indexedRepoWorkspace();
+    const target: RepoTarget = {
+      repoId,
+      owner: options.turnContext.owner ?? this.preferences.owner,
+      repo: options.turnContext.repo ?? this.preferences.repo,
+      branch: options.turnContext.branch ?? this.preferences.branch,
+      provider: options.turnContext.provider ?? this.preferences.defaultCodeHost
+    };
+
+    const followedFiles: FollowedJobFile[] = [];
+    const loadedPaths = new Set<string>([openPath.replace(/\\/g, "/")]);
+    const treePaths: string[] = [];
+
+    const tryReadFollow = async (path: string, reason: string): Promise<void> => {
+      const clean = path.replace(/^\/+/, "").replace(/\\/g, "/");
+      if (!clean || loadedPaths.has(clean) || pathsReferToSameFile(clean, openPath)) {
+        return;
+      }
+      if (remainingContextGatherBudgetMs(options.turn.startedAt || Date.now()) <= 0) {
+        return;
+      }
+      try {
+        const file = await abortablePromise(workspace.readFile(target, clean), options.signal);
+        if (!file?.content?.trim()) {
+          return;
+        }
+        loadedPaths.add(clean);
+        followedFiles.push({ path: file.path || clean, content: file.content, reason });
+      } catch (error) {
+        if (options.signal.aborted) {
+          throw error;
+        }
+      }
+    };
+
+    // 1) Follow relative / convention handler imports from the open job definition.
+    for (const candidate of extractHandlerFollowCandidates(openPath, openContent).slice(0, 4)) {
+      await tryReadFollow(candidate, "handler import from open job definition");
+    }
+
+    // 2) Follow triggered job ids → sibling handler files.
+    const triggered = [
+      ...extractTriggeredJobNames(openContent),
+      ...followedFiles.flatMap((f) => extractTriggeredJobNames(f.content))
+    ];
+    for (const jobName of [...new Set(triggered)].slice(0, 4)) {
+      for (const candidate of handlerPathsForTriggeredJob(openPath, jobName).slice(0, 4)) {
+        await tryReadFollow(candidate, `triggered job \`${jobName}\``);
+      }
+    }
+
+    // 3) List Use-repo email template directories (one-level) within remaining budget.
+    if (remainingContextGatherBudgetMs(options.turn.startedAt || Date.now()) > 0) {
+      for (const dir of ["packages/email/templates", "packages/email/template-components"]) {
+        try {
+          const entries = await abortablePromise(
+            Promise.race([
+              workspace.listDirectory(target, dir),
+              new Promise<undefined>((resolve) => {
+                setTimeout(() => resolve(undefined), Math.min(budgetMs, 2500));
+              })
+            ]),
+            options.signal
+          );
+          for (const entry of entries ?? []) {
+            if (entry.type === "file") {
+              treePaths.push(`${dir}/${entry.name}`);
+            }
+          }
+        } catch (error) {
+          if (options.signal.aborted) {
+            throw error;
+          }
+        }
+      }
+    }
+
+    // 4) Soft index search for reminder/email template files.
+    const gatherQuery = emailTemplateGatherQuery({
+      openFilePath: openPath,
+      openFileContent: openContent,
+      ask: options.ask,
+      followedFiles
+    });
+    const searchBudget = remainingContextGatherBudgetMs(options.turn.startedAt || Date.now());
+    if (gatherQuery && searchBudget > 0 && repoId) {
+      try {
+        const provider =
+          options.turnContext.provider === "gitlab" ||
+          options.turnContext.provider === "bitbucket" ||
+          options.turnContext.provider === "github"
+            ? options.turnContext.provider
+            : this.preferences.defaultCodeHost;
+        const focusSearch = await abortablePromise(
+          Promise.race([
+            searchRepoForFocusQuery({
+              repoId,
+              query: gatherQuery,
+              indexBackend: this.options.indexBackend,
+              api: this.options.api,
+              apiBaseUrl: this.preferences.apiBaseUrl,
+              branch: options.turnContext.branch ?? this.preferences.branch,
+              owner: options.turnContext.owner ?? this.preferences.owner,
+              repo: options.turnContext.repo ?? this.preferences.repo,
+              provider,
+              maxFiles: 4
+            }),
+            new Promise<undefined>((resolve) => {
+              setTimeout(() => resolve(undefined), searchBudget);
+            })
+          ]),
+          options.signal
+        );
+        if (focusSearch?.files.length) {
+          for (const file of focusSearch.files) {
+            treePaths.push(file.path);
+            if (
+              !pathsReferToSameFile(file.path, openPath) &&
+              !loadedPaths.has(file.path.replace(/\\/g, "/")) &&
+              /\.handler\.[cm]?[jt]sx?$/i.test(file.path)
+            ) {
+              loadedPaths.add(file.path.replace(/\\/g, "/"));
+              followedFiles.push({
+                path: file.path,
+                content: file.content,
+                reason: "index search for reminder/email handler"
+              });
+            }
+          }
+          const prior = options.turn.contextBundle;
+          options.turn.contextBundle = [
+            mergeRepoSemanticContext(
+              {
+                requestId: `email-template-${Date.now()}`,
+                type: "chat_context",
+                data: {},
+                fetchedAt: new Date()
+              },
+              focusSearch
+            ),
+            ...prior
+          ];
+        }
+      } catch (error) {
+        if (options.signal.aborted) {
+          throw error;
+        }
+      }
+    }
+
+    // Prefer tree matches so even without handler bodies we name concrete templates.
+    const treeHits = matchEmailTemplatesInTree(treePaths, options.ask);
+    for (const hit of treeHits) {
+      if (!treePaths.includes(hit.path)) {
+        treePaths.push(hit.path);
+      }
+    }
+
+    const resolution = resolveEmailTemplateCandidates({
+      openFilePath: openPath,
+      openFileContent: openContent,
+      followedFiles,
+      treePaths,
+      ask: options.ask
+    });
+
+    return buildEmailTemplateSynthesisUserPrompt({
+      ask: options.ask,
+      resolution
+    });
+  }
+
+  /**
+   * A10 hot path: ticket-style add-feature asks — scan the open starter file for
+   * the asked symbol and shape extend vs add-new synthesis. Soft gather: no
+   * extra search beyond already-attached open-file bytes.
+   */
+  private buildExistingCapabilityChatPrompt(options: {
+    ask: string;
+    turn: ChatTurn;
+    turnContext: RepoContext;
+    localFiles?: Array<{ path: string; content: string }>;
+  }): { message: string; evidence: ExistingCapabilityEvidence } | undefined {
+    const openPath =
+      options.turnContext.file?.trim() ||
+      options.localFiles?.[0]?.path?.trim() ||
+      undefined;
+    const fromBundle = options.turn.contextBundle.flatMap((entry) =>
+      localFilesFromContextData(entry.data)
+    );
+    const openContent =
+      (openPath
+        ? options.localFiles?.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      options.localFiles?.[0]?.content ??
+      (openPath
+        ? fromBundle.find((file) => pathsReferToSameFile(file.path, openPath))?.content
+        : undefined) ??
+      fromBundle[0]?.content;
+    if (!openPath || !openContent?.trim()) {
+      return undefined;
+    }
+
+    const evidence = extractExistingCapabilityEvidence({
+      filePath: openPath,
+      fileContent: openContent,
+      ask: options.ask
+    });
+    if (!evidence) {
+      return undefined;
+    }
+
+    return {
+      evidence,
+      message: buildExistingCapabilitySynthesisUserPrompt({
+        ask: options.ask,
+        evidence
+      })
+    };
   }
 
   /**

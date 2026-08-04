@@ -33,9 +33,24 @@ const PACKAGE_PARENT_DIRS = new Set([
   "client"
 ]);
 
+/**
+ * Concrete top-level apps/packages from the live tree listing.
+ * Prefer these names over workspace globs like `apps/*` / `packages/*`.
+ */
+export type TopLevelPackageStructureEvidence = {
+  /** e.g. apps/remix, packages/signing, packages/prisma — tree dirs only, never invented. */
+  packages: string[];
+  /** Parent dirs that were listed (apps, packages, …). */
+  parents: string[];
+  /** Raw workspace globs from root package.json when present (informational). */
+  workspaceGlobs?: string[];
+};
+
 export type PackageBoundaryEvidence = {
   treeOverview?: RepoTreeEvidence;
   entryFiles: Array<{ path: string; content: string; truncated?: boolean; repoId: string }>;
+  /** Concrete package/app paths from tree child listings under apps/packages/…. */
+  packageStructure?: TopLevelPackageStructureEvidence;
   note?: string;
 };
 
@@ -121,6 +136,69 @@ function truncateManifest(content: string): { content: string; truncated?: boole
 }
 
 /**
+ * Concrete package/app paths from one-level listings under apps/packages/….
+ * Tree dirs only — never invents names from workspace globs or training data.
+ * Exported for tests.
+ */
+export function buildTopLevelPackageStructure(
+  tree: RepoTreeEvidence,
+  childListings: Map<string, Array<{ name: string; type: "dir" | "file" }>>,
+  options?: { workspaceGlobs?: string[] }
+): TopLevelPackageStructureEvidence {
+  const parents = tree.topLevelDirs
+    .map((dir) => dir.replace(/\/$/, ""))
+    .filter(isPackageParentDir);
+  const packages: string[] = [];
+  for (const parent of parents) {
+    const entries = childListings.get(parent);
+    if (!entries?.length) {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.type !== "dir") {
+        continue;
+      }
+      const name = entry.name.replace(/\/$/, "");
+      if (!name || name.startsWith(".")) {
+        continue;
+      }
+      const path = `${parent}/${name}`;
+      if (!isForeignStructureEvidencePath(path) && !packages.includes(path)) {
+        packages.push(path);
+      }
+    }
+  }
+  packages.sort();
+  const globs = options?.workspaceGlobs?.filter((g) => typeof g === "string" && g.trim());
+  return {
+    packages,
+    parents,
+    ...(globs?.length ? { workspaceGlobs: globs } : {})
+  };
+}
+
+/** Parse npm/pnpm/yarn workspaces globs from root package.json content. */
+export function extractWorkspaceGlobs(packageJsonContent: string): string[] | undefined {
+  try {
+    const parsed = JSON.parse(packageJsonContent) as {
+      workspaces?: string[] | { packages?: string[] };
+    };
+    const raw = Array.isArray(parsed.workspaces)
+      ? parsed.workspaces
+      : parsed.workspaces && Array.isArray(parsed.workspaces.packages)
+        ? parsed.workspaces.packages
+        : undefined;
+    if (!raw?.length) {
+      return undefined;
+    }
+    const globs = raw.filter((g): g is string => typeof g === "string" && Boolean(g.trim()));
+    return globs.length ? globs : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Candidate manifest paths from tree + one-level package parent listings.
  * Exported for tests — gatherPackageBoundaryEvidence owns the live reads.
  */
@@ -129,7 +207,10 @@ export function collectPackageManifestCandidatePaths(
   childListings: Map<string, Array<{ name: string; type: "dir" | "file" }>>
 ): string[] {
   const candidatePaths = selectRootManifestPaths(tree);
-  const parentDirs = tree.topLevelDirs.filter(isPackageParentDir).slice(0, 4);
+  const parentDirs = tree.topLevelDirs
+    .map((dir) => dir.replace(/\/$/, ""))
+    .filter(isPackageParentDir)
+    .slice(0, 4);
 
   for (const dir of parentDirs) {
     if (candidatePaths.length >= MAX_PACKAGE_MANIFEST_FILES) {
@@ -161,6 +242,8 @@ export function collectPackageManifestCandidatePaths(
 
 /**
  * Load top-level tree + package manifests for the active Use-repo via IndexedRepoWorkspace.
+ * Also builds concrete apps/ and packages/ child names from directory listings
+ * (not workspace globs alone).
  */
 export async function gatherPackageBoundaryEvidence(
   workspace: IndexedRepoWorkspace,
@@ -176,7 +259,10 @@ export async function gatherPackageBoundaryEvidence(
     };
   }
 
-  const parentDirs = treeOverview.topLevelDirs.filter(isPackageParentDir).slice(0, 4);
+  const parentDirs = treeOverview.topLevelDirs
+    .map((dir) => dir.replace(/\/$/, ""))
+    .filter(isPackageParentDir)
+    .slice(0, 4);
   const childListings = new Map<string, Array<{ name: string; type: "dir" | "file" }>>();
   await Promise.all(
     parentDirs.map(async (dir) => {
@@ -215,15 +301,22 @@ export async function gatherPackageBoundaryEvidence(
     }))
   ).filter((file) => !isForeignStructureEvidencePath(file.path));
 
+  const rootManifest = entryFiles.find((file) => file.path.replace(/^\/+/, "") === "package.json");
+  const workspaceGlobs = rootManifest ? extractWorkspaceGlobs(rootManifest.content) : undefined;
+  const packageStructure = buildTopLevelPackageStructure(treeOverview, childListings, {
+    workspaceGlobs
+  });
+
   if (entryFiles.length === 0 && paths.length > 0) {
     return {
       treeOverview,
       entryFiles: [],
+      packageStructure,
       note:
         "Package manifests under the active Use-repo could not be loaded. " +
-        "Use only the tree overview paths when present; do not invent package boundaries or cite another repository."
+        "Use the tree-listed package paths when present; do not invent package boundaries or cite another repository."
     };
   }
 
-  return { treeOverview, entryFiles };
+  return { treeOverview, entryFiles, packageStructure };
 }

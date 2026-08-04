@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { mergeRepoInventoryContext } from "./IndexedRepoWorkspace";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import {
+  buildTopLevelPackageStructure,
   collectPackageManifestCandidatePaths,
+  extractWorkspaceGlobs,
   filterManifestPathsToActiveRepoEvidence,
   isForeignStructureEvidencePath,
   isPackageParentDir,
@@ -42,6 +44,14 @@ test("plane package-boundary ask is structure intent and skips semantic retrieva
     }),
     false
   );
+});
+
+test("documenso top-level package structure ask is package-boundary intent", () => {
+  const q = "What's in the top-level package structure?";
+  assert.equal(isRepoPackageBoundaryQuery(q), true);
+  assert.equal(needsPackageManifests(q), true);
+  assert.equal(repoFactNeeds(q).treeOverview, true);
+  assert.equal(repoFactNeeds(q).packageManifests, true);
 });
 
 test("selectRootManifestPaths prefers workspace manifests from tree", () => {
@@ -91,6 +101,71 @@ test("collectPackageManifestCandidatePaths for plane-like tree prefers in-repo m
   assert.ok(paths.includes("apps/web/package.json"));
   assert.ok(paths.includes("apps/api/package.json"));
   assert.equal(paths.some((p) => p.includes("src/chat")), false);
+});
+
+test("buildTopLevelPackageStructure lists concrete documenso-shaped names from tree", () => {
+  const tree = {
+    topLevelDirs: ["apps", "packages"],
+    topLevelFiles: ["package.json", "pnpm-workspace.yaml", "README.md"]
+  };
+  const listings = new Map([
+    [
+      "apps",
+      [
+        { name: "remix", type: "dir" as const },
+        { name: "documentation", type: "dir" as const },
+        { name: "README.md", type: "file" as const }
+      ]
+    ],
+    [
+      "packages",
+      [
+        { name: "signing", type: "dir" as const },
+        { name: "prisma", type: "dir" as const },
+        { name: "ui", type: "dir" as const },
+        { name: "tsconfig.json", type: "file" as const }
+      ]
+    ]
+  ]);
+  const structure = buildTopLevelPackageStructure(tree, listings, {
+    workspaceGlobs: ["apps/*", "packages/*"]
+  });
+  assert.deepEqual(structure.parents, ["apps", "packages"]);
+  assert.ok(structure.packages.includes("apps/remix"));
+  assert.ok(structure.packages.includes("packages/signing"));
+  assert.ok(structure.packages.includes("packages/prisma"));
+  assert.ok(structure.packages.includes("packages/ui"));
+  assert.equal(structure.packages.includes("apps/*"), false);
+  assert.equal(structure.packages.includes("packages/*"), false);
+  assert.deepEqual(structure.workspaceGlobs, ["apps/*", "packages/*"]);
+  // Files under parents are not packages
+  assert.equal(structure.packages.some((p) => p.endsWith("README.md")), false);
+  assert.equal(structure.packages.some((p) => p.endsWith("tsconfig.json")), false);
+});
+
+test("buildTopLevelPackageStructure does not invent names when listings missing", () => {
+  const tree = {
+    topLevelDirs: ["apps", "packages"],
+    topLevelFiles: ["package.json"]
+  };
+  const structure = buildTopLevelPackageStructure(tree, new Map(), {
+    workspaceGlobs: ["apps/*", "packages/*"]
+  });
+  assert.deepEqual(structure.packages, []);
+  assert.deepEqual(structure.parents, ["apps", "packages"]);
+  assert.deepEqual(structure.workspaceGlobs, ["apps/*", "packages/*"]);
+});
+
+test("extractWorkspaceGlobs reads npm and pnpm-style workspaces", () => {
+  assert.deepEqual(extractWorkspaceGlobs('{"workspaces":["apps/*","packages/*"]}'), [
+    "apps/*",
+    "packages/*"
+  ]);
+  assert.deepEqual(
+    extractWorkspaceGlobs('{"workspaces":{"packages":["apps/*","packages/*"]}}'),
+    ["apps/*", "packages/*"]
+  );
+  assert.equal(extractWorkspaceGlobs("{not json"), undefined);
 });
 
 test("filterManifestPathsToActiveRepoEvidence drops Coop-AI and wrong-repo bodies", () => {
@@ -169,19 +244,28 @@ test("mergeRepoInventoryContext attaches plane tree + manifests, not inventory e
           content: '{"name":"api"}',
           repoId: "github:CoopAI-Corp/plane"
         }
-      ]
+      ],
+      packageStructure: {
+        packages: ["apps/web", "apps/api", "packages/ui"],
+        parents: ["apps", "packages"],
+        workspaceGlobs: ["apps/*", "packages/*"]
+      }
     }
   );
   const data = merged.data as {
     treeOverview?: { topLevelDirs: string[] };
     entryFiles?: Array<{ path: string; repoId?: string }>;
     repoInventory?: unknown;
+    packageStructure?: { packages: string[]; workspaceGlobs?: string[] };
   };
   assert.deepEqual(data.treeOverview?.topLevelDirs, ["apps", "packages"]);
   assert.equal(data.entryFiles?.length, 2);
   assert.equal(data.entryFiles?.every((f) => f.path.startsWith("apps/")), true);
   assert.equal(data.entryFiles?.some((f) => f.path.includes("src/chat")), false);
   assert.equal(data.repoInventory, undefined);
+  assert.ok(data.packageStructure?.packages.includes("apps/web"));
+  assert.ok(data.packageStructure?.packages.includes("packages/ui"));
+  assert.deepEqual(data.packageStructure?.workspaceGlobs, ["apps/*", "packages/*"]);
 });
 
 test("mergeRepoInventoryContext records unavailable note without inventing layout", () => {
@@ -195,10 +279,16 @@ test("mergeRepoInventoryContext records unavailable note without inventing layou
     packageBoundaryNote:
       "Repository tree overview is unavailable for the active Use-repo. Say package layout / boundaries are unavailable."
   });
-  const data = merged.data as { packageBoundaryNote?: string; entryFiles?: unknown[]; treeOverview?: unknown };
+  const data = merged.data as {
+    packageBoundaryNote?: string;
+    entryFiles?: unknown[];
+    treeOverview?: unknown;
+    packageStructure?: unknown;
+  };
   assert.ok(data.packageBoundaryNote?.includes("unavailable"));
   assert.equal(data.entryFiles, undefined);
   assert.equal(data.treeOverview, undefined);
+  assert.equal(data.packageStructure, undefined);
 });
 
 console.log(`\nrepoPackageBoundaryEvidence: ${passed} passed, ${failed} failed`);

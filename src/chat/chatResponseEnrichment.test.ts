@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
+import { extractExistingCapabilityEvidence } from "../context/existingCapabilityGrounding";
 
 let passed = 0;
 let failed = 0;
@@ -50,6 +51,28 @@ test("incident reconstruction with disconnected tools still has gaps", () => {
   assert.ok(enriched.includes("**Tickets / threads**"));
   assert.ok(enriched.includes("**Gaps**"));
   assert.ok(/not connected/i.test(enriched));
+});
+
+test("existing-capability enricher corrects greenfield blocked_by advice", () => {
+  const mapper = `
+RELATION_TYPE_MAP = {
+    "blocking": "blocked_by",
+    "blocked_by": "blocking",
+}
+`.trim();
+  const evidence = extractExistingCapabilityEvidence({
+    filePath: "apps/api/plane/utils/issue_relation_mapper.py",
+    fileContent: mapper,
+    ask: "We're adding a blocked by link type for issues"
+  });
+  assert.ok(evidence);
+  assert.equal(evidence!.verdict, "already-exists");
+  const enriched = enrichChatResponseForAction({
+    content: "**Answer**\nAdd a new blocked_by link type to the mapper.",
+    existingCapability: evidence
+  });
+  assert.ok(/already exists/i.test(enriched));
+  assert.ok(/\bextend\b/i.test(enriched));
 });
 
 const total = passed + failed;

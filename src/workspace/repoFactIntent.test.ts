@@ -90,6 +90,8 @@ test("isRepoPackageBoundaryQuery covers Next.js / API package boundary smoke ask
   assert.equal(needsPackageManifests("Where are the Next.js / API package boundaries?"), true);
   assert.equal(repoFactNeeds("Where are the Next.js / API package boundaries?").packageManifests, true);
   assert.equal(isRepoPackageBoundaryQuery("what's the monorepo layout?"), true);
+  assert.equal(isRepoPackageBoundaryQuery("What's in the top-level package structure?"), true);
+  assert.equal(isRepoStructureQuery("What's in the top-level package structure?"), true);
   assert.equal(isRepoPackageBoundaryQuery("how does auth middleware work?"), false);
 });
 

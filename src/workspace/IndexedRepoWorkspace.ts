@@ -271,11 +271,23 @@ export function mergeRepoInventoryContext(
   options?: {
     entryFiles?: RepoStructureEntryFile[];
     packageBoundaryNote?: string;
+    packageStructure?: {
+      packages: string[];
+      parents: string[];
+      workspaceGlobs?: string[];
+    };
   }
 ): ContextFetchResult {
   const entryFiles = options?.entryFiles?.filter((file) => file.path?.trim() && file.content?.trim());
   const note = options?.packageBoundaryNote?.trim();
-  if (!inventory && !treeOverview && !entryFiles?.length && !note) {
+  const packageStructure =
+    options?.packageStructure &&
+    (options.packageStructure.packages.length > 0 ||
+      options.packageStructure.parents.length > 0 ||
+      (options.packageStructure.workspaceGlobs?.length ?? 0) > 0)
+      ? options.packageStructure
+      : undefined;
+  if (!inventory && !treeOverview && !entryFiles?.length && !note && !packageStructure) {
     return result;
   }
   const baseData =
@@ -289,7 +301,8 @@ export function mergeRepoInventoryContext(
       ...(inventory ? { repoInventory: inventory } : {}),
       ...(treeOverview ? { treeOverview } : {}),
       ...(entryFiles?.length ? { entryFiles } : {}),
-      ...(note ? { packageBoundaryNote: note } : {})
+      ...(note ? { packageBoundaryNote: note } : {}),
+      ...(packageStructure ? { packageStructure } : {})
     }
   };
 }
