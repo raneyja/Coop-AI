@@ -4,7 +4,7 @@ import { SectionHeading } from "@/components/SectionHeading";
 import { Testimonial } from "@/components/Testimonial";
 import { CTASection } from "@/components/CTASection";
 import { FileContextGraph } from "@/components/FileContextGraph";
-import { QuickActionList } from "@/components/QuickActionList";
+import { QuickActionPromptCarousel } from "@/components/QuickActionPromptCarousel";
 import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 import Link from "next/link";
@@ -33,24 +33,6 @@ const COMMANDS: Record<string, string> = {
   "edit-selection": "coop edit",
   "completion-routing": "coop complete --graph"
 };
-
-const HOMEPAGE_QUICK_ACTIONS = [
-  {
-    id: "understand-repo",
-    title: "Understand any codebase",
-    description: "Architecture, ownership, key files — instantly."
-  },
-  {
-    id: "trace-decision",
-    title: "Trace decisions",
-    description: "Why code exists, based on commits, PRs, team context."
-  },
-  {
-    id: "find-owner",
-    title: "Find owners",
-    description: "Who maintains this. Escalation paths. One graph."
-  }
-] as const;
 
 export default function HomePage() {
   return (
@@ -94,14 +76,13 @@ export default function HomePage() {
 
       <section className="border-t border-coop-border py-20">
         <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading label="quick_actions" title="What you'll ask CoopAI" />
-
-          <QuickActionList
-            className="mt-10"
-            features={HOMEPAGE_QUICK_ACTIONS}
-            includeCodeCreation={false}
-            showChat={false}
+          <SectionHeading
+            label="quick_actions"
+            title="What you'll ask CoopAI"
+            description="Quick actions and slash commands — real questions across your repo graph, Slack, Jira, and the rest of the stack."
           />
+
+          <QuickActionPromptCarousel />
 
           <p className="mt-10">
             <Link href="/product" className="text-sm font-medium text-gray-900 hover:underline">
