@@ -72,6 +72,22 @@ export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
 
 export type ComposerMode = "ask" | "edit";
 
+/** Chip on a clarifying assistant turn (plain-chat → quick-action suggest). */
+export type ChatSuggestChip = {
+  kind: "quick-action" | "plain";
+  /** QuickActionId when kind is quick-action. */
+  actionId?: string;
+  label: string;
+};
+
+export type ChatSuggestPayload = {
+  /** Original user focus text to pass into the chosen pipeline. */
+  focus: string;
+  chips: ChatSuggestChip[];
+  /** True after the user picks a chip or sends a new message. */
+  resolved?: boolean;
+};
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -81,6 +97,8 @@ export type ChatMessage = {
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
   relatedArtifactId?: string;
+  /** Clarifying suggest chips under an assistant message. */
+  suggest?: ChatSuggestPayload;
 };
 
 /** Serializable evidence card stored with chat thread history. */
@@ -422,6 +440,10 @@ export type WebviewInbound =
         /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
         targetFile?: string;
       };
+    }
+  | {
+      type: "chat:suggest-resolve";
+      payload: { choice: "plain" } | { choice: "action"; actionId: string };
     }
   | { type: "mention:search"; payload: { pattern: string } }
   | { type: "collections:list-request" }

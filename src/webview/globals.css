@@ -1047,6 +1047,18 @@
     @apply mt-3;
   }
 
+  .coop-suggest-chip-row {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+
+  .coop-suggest-chip {
+    @apply text-left;
+  }
+
+  .coop-suggest-chip--plain {
+    @apply px-2 py-1;
+  }
+
   .chat-message-attachments {
     @apply mb-2 flex flex-wrap gap-2;
   }

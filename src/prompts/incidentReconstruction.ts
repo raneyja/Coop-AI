@@ -21,6 +21,9 @@ import {
 
 export const INCIDENT_SECTION_SYMPTOMS = "Symptoms";
 export const INCIDENT_SECTION_CODE_PATHS = "Code paths";
+/** Canonical integrations heading (smoke / enterprise). */
+export const INCIDENT_SECTION_INTEGRATIONS = "Integrations";
+/** Legacy alias kept for older prompts/tests. */
 export const INCIDENT_SECTION_TICKETS_THREADS = "Tickets / threads";
 export const INCIDENT_SECTION_GAPS = "Gaps";
 
@@ -185,8 +188,10 @@ export function appendIncidentReconstructionContract(
     "Concrete paths/symbols from attached evidence (active Use-repo only). Cite with citation fences when quoting existing code."
   );
   lines.push("");
-  lines.push(`**${INCIDENT_SECTION_TICKETS_THREADS}**`);
-  lines.push("Required — never omit. Use the integration outcomes below verbatim as bullets (you may add hit titles/keys when present):");
+  lines.push(`**${INCIDENT_SECTION_INTEGRATIONS}**`);
+  lines.push(
+    `(Also acceptable heading: **${INCIDENT_SECTION_TICKETS_THREADS}**.) Required — never omit. Use the integration outcomes below verbatim as bullets (you may add hit titles/keys when present):`
+  );
   for (const bullet of buildIncidentTicketsThreadsBullets(integrations)) {
     lines.push(bullet);
   }
@@ -266,7 +271,7 @@ export function buildIncidentReconstructionUserPrompt(input: IncidentReconstruct
     lines.push("");
   }
 
-  lines.push("## Integration search outcomes (authoritative for Tickets / threads)");
+  lines.push("## Integration search outcomes (authoritative for Integrations / Tickets / threads)");
   const jiraStatus = resolveIncidentIntegrationStatus(
     "jira",
     input.integrations.jira,
@@ -313,8 +318,8 @@ function insertSectionBeforeSources(content: string, heading: string, body: stri
 }
 
 /**
- * Post-process: ensure incident answers always include Code paths, Tickets / threads, and Gaps.
- * Empty integrations still require an explicit gap / tickets section.
+ * Post-process: ensure incident answers always include Code paths, Integrations
+ * (or Tickets / threads), and Gaps. Empty integrations still require an explicit section.
  */
 export function enrichIncidentReconstructionResponse(
   content: string,
@@ -333,10 +338,13 @@ export function enrichIncidentReconstructionResponse(
     );
   }
 
-  if (!hasSection(result, INCIDENT_SECTION_TICKETS_THREADS)) {
+  const hasIntegrations =
+    hasSection(result, INCIDENT_SECTION_INTEGRATIONS) ||
+    hasSection(result, INCIDENT_SECTION_TICKETS_THREADS);
+  if (!hasIntegrations) {
     result = insertSectionBeforeSources(
       result,
-      INCIDENT_SECTION_TICKETS_THREADS,
+      INCIDENT_SECTION_INTEGRATIONS,
       buildIncidentTicketsThreadsBullets(integrations).join("\n")
     );
   }

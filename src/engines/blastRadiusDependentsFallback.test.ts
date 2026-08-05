@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   classifyDependentSurface,
   codePathsFromDependentDetails,
+  extractBlastSearchSymbols,
+  buildImportSearchPatterns,
   groupDependentsByTopLevelFolder,
   isDocsReferencePath,
   rankCodeDependentsByRisk,
@@ -168,6 +170,21 @@ test("scoreDependentRisk labels stories and e2e as test surfaces", () => {
   assert.ok(/test surface/i.test(scoreDependentRisk("Foo.stories.tsx", 1).reason));
   assert.ok(/test surface/i.test(scoreDependentRisk("e2e/flows/login.spec.ts", 1).reason));
   assert.ok(/production/i.test(scoreDependentRisk("lib/core/login.ts", 1).reason));
+});
+
+test("extractBlastSearchSymbols prefers StateGroup from smoke ask", () => {
+  const symbols = extractBlastSearchSymbols(
+    "What breaks if we change or rename the StateGroup values (e.g. started / completed)?",
+    "apps/api/plane/db/models/state.py"
+  );
+  assert.ok(symbols.includes("StateGroup"));
+});
+
+test("buildImportSearchPatterns includes symbol and alias forms", () => {
+  const patterns = buildImportSearchPatterns("apps/api/plane/db/models/state.py", ["StateGroup"]);
+  assert.ok(patterns.some((p) => p.includes("StateGroup")));
+  assert.ok(patterns.some((p) => p.includes("@/")));
+  assert.ok(patterns.some((p) => p.includes("from state import")));
 });
 
 const total = passed + failed;

@@ -303,9 +303,12 @@ export async function gatherPackageBoundaryEvidence(
 
   const rootManifest = entryFiles.find((file) => file.path.replace(/^\/+/, "") === "package.json");
   const workspaceGlobs = rootManifest ? extractWorkspaceGlobs(rootManifest.content) : undefined;
-  const packageStructure = buildTopLevelPackageStructure(treeOverview, childListings, {
-    workspaceGlobs
-  });
+  const packageStructure = mergePackagesFromLoadedManifests(
+    buildTopLevelPackageStructure(treeOverview, childListings, {
+      workspaceGlobs
+    }),
+    entryFiles
+  );
 
   if (entryFiles.length === 0 && paths.length > 0) {
     return {
@@ -319,4 +322,86 @@ export async function gatherPackageBoundaryEvidence(
   }
 
   return { treeOverview, entryFiles, packageStructure };
+}
+
+/**
+ * When directory listings are empty but child package.json files loaded, fold
+ * `apps/web/package.json` → `apps/web` into packageStructure.packages.
+ */
+export function mergePackagesFromLoadedManifests(
+  structure: TopLevelPackageStructureEvidence,
+  entryFiles: Array<{ path: string }>
+): TopLevelPackageStructureEvidence {
+  const packages = [...structure.packages];
+  for (const file of entryFiles) {
+    const path = file.path.replace(/^\/+/, "");
+    const match = path.match(/^(apps|packages|services|libs|modules)\/([^/]+)\/package\.json$/i);
+    // Also accept apps/<name>/package.json already covered; skip root package.json.
+    if (!match) {
+      continue;
+    }
+    const pkg = `${match[1]}/${match[2]}`;
+    if (!isForeignStructureEvidencePath(pkg) && !packages.includes(pkg)) {
+      packages.push(pkg);
+    }
+  }
+  packages.sort();
+  return { ...structure, packages };
+}
+
+/** True when the answer only restates workspace globs with no concrete package names. */
+export function answerLacksConcretePackageNames(
+  content: string,
+  packages: string[]
+): boolean {
+  if (!packages.length) {
+    return false;
+  }
+  const lower = content.toLowerCase();
+  const citesConcrete = packages.some((pkg) => {
+    const bare = pkg.includes("/") ? pkg.split("/")[1] : pkg;
+    return (
+      lower.includes(pkg.toLowerCase()) ||
+      (bare.length > 2 && new RegExp(`\\b${escapeRegExp(bare)}\\b`, "i").test(content))
+    );
+  });
+  if (citesConcrete) {
+    return false;
+  }
+  // Glob-only / vague monorepo advice without naming children.
+  return (
+    /apps\/\*|packages\/\*/i.test(content) ||
+    /\blook for (?:folders|directories|next\.config)/i.test(content) ||
+    (/\bworkspaces?\b/i.test(content) && /\bapps\/?\b/i.test(content) && !/\bapps\/[a-z0-9_-]+\b/i.test(content))
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Inject concrete package paths when the model only restated apps/* / packages/*. */
+export function enrichPackageStructureResponse(
+  content: string,
+  packages: string[],
+  options?: { workspaceGlobs?: string[] }
+): string {
+  if (!packages.length || !answerLacksConcretePackageNames(content, packages)) {
+    return content;
+  }
+  const listed = packages.slice(0, 24).map((pkg) => `- \`${pkg}\``).join("\n");
+  const globs = options?.workspaceGlobs?.length
+    ? `\nWorkspace globs (informational only): ${options.workspaceGlobs.join(", ")}.`
+    : "";
+  const lead = [
+    "**Concrete packages (from repository tree / manifests)**",
+    "",
+    listed,
+    globs,
+    "",
+    "Prefer these names over `apps/*` / `packages/*` workspace globs alone.",
+    ""
+  ].join("\n");
+  const trimmed = content.trim();
+  return trimmed ? `${lead}${trimmed}` : lead.trim();
 }

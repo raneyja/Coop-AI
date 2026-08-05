@@ -13,6 +13,7 @@ import {
   type BlastRadiusDependentDetail,
   type GraphEdgeSource,
   codePathsFromDependentDetails,
+  extractBlastSearchSymbols,
   normalizeGraphRepoId,
   searchCiWorkflowReferences,
   searchCrossRepoConsumers,
@@ -112,6 +113,10 @@ export type BlastRadiusAnalysisParams = {
    * never hang, never schedule a hard 15s abort / timeout bubble.
    */
   gatherStartedAt?: number;
+  /** User ask text — used to extract symbols (StateGroup, DocumentStatus) for fallback search. */
+  askText?: string;
+  /** Explicit symbols to search when graph dependents are empty. */
+  symbols?: string[];
 };
 
 export class BlastRadiusAnalysisEngine {
@@ -176,15 +181,25 @@ export class BlastRadiusAnalysisEngine {
             dependentDetails = [...dependentDetails, ...transitive.details];
           }
 
-          if (directDependents.length === 0 && !softBudgetExhausted()) {
-            const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file);
+          // Always attempt import/symbol fallback when the graph returns 0 —
+          // cap patterns if soft budget is exhausted; never skip entirely.
+          if (directDependents.length === 0) {
+            const symbols = [
+              ...(params.symbols ?? []),
+              ...extractBlastSearchSymbols(params.askText, file)
+            ];
+            const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
+              maxPatterns: softBudgetExhausted() ? 4 : 10,
+              symbols: [...new Set(symbols)]
+            });
             warnings.push(...fallback.warnings);
             if (fallback.dependents.length > 0) {
-              directDependents = fallback.dependents.map((entry) => entry.path);
-              dependentDetails = fallback.dependents;
+              const ranked = sortDependentsProductionFirst(fallback.dependents);
+              directDependents = ranked.map((entry) => entry.path);
+              dependentDetails = ranked;
               graphMeta = { ...graphMeta, source: fallback.source };
               warnings.push(
-                `Dependents inferred via ${fallback.source} import-pattern search — verify before relying on impact list.`
+                `Dependents inferred via ${fallback.source} import/symbol search — verify before relying on impact list.`
               );
               if (includeTransitive && directDependents.length > 0 && !softBudgetExhausted()) {
                 const transitive = await this.collectTransitiveDependents(
@@ -197,7 +212,9 @@ export class BlastRadiusAnalysisEngine {
                 dependentDetails = [...dependentDetails, ...transitive.details];
               }
             } else {
-              warnings.push("No dependents found in index or import-pattern search for this file.");
+              warnings.push(
+                "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
+              );
             }
           }
         } else {

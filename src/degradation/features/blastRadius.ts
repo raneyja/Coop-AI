@@ -102,7 +102,8 @@ export async function blastRadius(context: FeatureExecutionContext) {
           file,
           branch: params.branch,
           includeTransitive: !directOnly,
-          gatherStartedAt
+          gatherStartedAt,
+          askText: context.request.intent?.context?.queryText
         }),
         new Promise<undefined>((resolve) => {
           setTimeout(() => resolve(undefined), budgetMs);

@@ -28,6 +28,17 @@ import {
   type ExistingCapabilityEvidence
 } from "../context/existingCapabilityGrounding";
 import {
+  enrichStatusTransitionResponse,
+  type StatusTransitionEvidence
+} from "../context/statusTransitionGrounding";
+import {
+  enrichPackageStructureResponse,
+  type TopLevelPackageStructureEvidence
+} from "../workspace/repoPackageBoundaryEvidence";
+import { isRepoPackageBoundaryQuery, isRepoStructureQuery } from "../workspace/repoFactIntent";
+import { blastRadiusFromBundle } from "../context/contextBundleEvidence";
+import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
+import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
   type MentionScopeRef
@@ -57,6 +68,8 @@ export function enrichChatResponseForAction(options: {
   };
   /** A10: ticket-style add-feature with open-file capability evidence. */
   existingCapability?: ExistingCapabilityEvidence;
+  /** A8: stuck-status / status-transition write-path evidence. */
+  statusTransition?: StatusTransitionEvidence;
 }): string {
   const { quickAction, integrationProvider, content, contextBundle, activeFile } = options;
   const mentions = options.mentions ?? [];
@@ -96,11 +109,28 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichExistingCapabilityResponse(enriched, options.existingCapability);
   }
 
+  if (options.statusTransition && !quickAction && !integrationProvider) {
+    enriched = enrichStatusTransitionResponse(enriched, options.statusTransition);
+  }
+
   if (options.incidentReconstruction && !quickAction && !integrationProvider) {
     enriched = enrichIncidentReconstructionResponse(
       enriched,
       incidentIntegrationsFromBundle(contextBundle, options.incidentReconstruction)
     );
+  }
+
+  if (
+    !quickAction &&
+    !integrationProvider &&
+    (isRepoPackageBoundaryQuery(options.userQuestion) || isRepoStructureQuery(options.userQuestion))
+  ) {
+    const structure = packageStructureFromBundle(contextBundle);
+    if (structure?.packages?.length) {
+      enriched = enrichPackageStructureResponse(enriched, structure.packages, {
+        workspaceGlobs: structure.workspaceGlobs
+      });
+    }
   }
 
   switch (quickAction) {
@@ -136,6 +166,12 @@ export function enrichChatResponseForAction(options: {
       enriched = enrichCompactIntegrationDocs(enriched, docContext, {
         mode: quickAction === "understand-repo" ? "understand-repo" : "blast-radius"
       });
+      if (quickAction === "blast-radius") {
+        const blast = Array.isArray(contextBundle)
+          ? blastRadiusFromBundle(contextBundle)
+          : undefined;
+        enriched = enrichBlastRadiusResponse(enriched, blast);
+      }
       break;
     }
     default:
@@ -147,6 +183,27 @@ export function enrichChatResponseForAction(options: {
   }
 
   return enriched;
+}
+
+function packageStructureFromBundle(
+  bundle: unknown
+): TopLevelPackageStructureEvidence | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    const data = (entry as { data?: { packageStructure?: TopLevelPackageStructureEvidence } })?.data;
+    const structure = data?.packageStructure;
+    if (
+      structure &&
+      (structure.packages?.length ||
+        structure.parents?.length ||
+        (structure.workspaceGlobs?.length ?? 0) > 0)
+    ) {
+      return structure;
+    }
+  }
+  return undefined;
 }
 
 function shouldEnrichSourcesFooter(

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildStatusTransitionSynthesisUserPrompt,
+  enrichStatusTransitionResponse,
   extractStatusTransitionEvidence,
   formatStatusTransitionEvidenceBlock,
   isStatusTransitionAsk,
@@ -259,6 +260,20 @@ test("followed seal handler can add direct COMPLETED write without inventing it 
   );
   const shaped = formatStatusTransitionEvidenceBlock(evidence);
   assert.ok(shapedEvidenceMentionsWritePath(shaped, "internal.seal-document"));
+});
+
+test("enrichStatusTransitionResponse injects seal job and enum distinction", () => {
+  const evidence = extractStatusTransitionEvidence({
+    filePath: "packages/lib/server-only/document/complete-document-with-token.ts",
+    fileContent: COMPLETE_DOCUMENT_WITH_SEAL,
+    ask: "Customers report documents stuck in PENDING — where does status move to COMPLETED?"
+  });
+  const throwsOnly =
+    "**Answer**\nDocuments stay PENDING when fields are missing or auth fails. See the throw gates above.";
+  const enriched = enrichStatusTransitionResponse(throwsOnly, evidence);
+  assert.ok(enriched.includes("internal.seal-document"));
+  assert.ok(enriched.includes("SigningStatus"));
+  assert.ok(enriched.includes("DocumentStatus"));
 });
 
 console.log(`\nstatusTransitionGrounding: ${passed}/${passed + failed} tests passed`);

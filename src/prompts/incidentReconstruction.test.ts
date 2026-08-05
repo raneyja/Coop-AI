@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   INCIDENT_SECTION_CODE_PATHS,
   INCIDENT_SECTION_GAPS,
+  INCIDENT_SECTION_INTEGRATIONS,
   INCIDENT_SECTION_SYMPTOMS,
   INCIDENT_SECTION_TICKETS_THREADS,
   buildIncidentGapsBullets,
@@ -75,7 +76,10 @@ Found retry helpers in webhook_task.py.
 `;
   const enriched = enrichIncidentReconstructionResponse(codeOnly, integrations);
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_CODE_PATHS}**`));
-  assert.ok(enriched.includes(`**${INCIDENT_SECTION_TICKETS_THREADS}**`));
+  assert.ok(
+    enriched.includes(`**${INCIDENT_SECTION_INTEGRATIONS}**`) ||
+      enriched.includes(`**${INCIDENT_SECTION_TICKETS_THREADS}**`)
+  );
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_GAPS}**`));
   assert.ok(/Searched Jira/i.test(enriched));
   assert.ok(/Searched Slack/i.test(enriched));

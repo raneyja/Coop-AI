@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { mergeRepoInventoryContext } from "./IndexedRepoWorkspace";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import {
+  answerLacksConcretePackageNames,
   buildTopLevelPackageStructure,
   collectPackageManifestCandidatePaths,
+  enrichPackageStructureResponse,
   extractWorkspaceGlobs,
   filterManifestPathsToActiveRepoEvidence,
   isForeignStructureEvidencePath,
   isPackageParentDir,
+  mergePackagesFromLoadedManifests,
   selectChildPackageManifestPaths,
   selectRootManifestPaths
 } from "./repoPackageBoundaryEvidence";
@@ -289,6 +292,34 @@ test("mergeRepoInventoryContext records unavailable note without inventing layou
   assert.equal(data.entryFiles, undefined);
   assert.equal(data.treeOverview, undefined);
   assert.equal(data.packageStructure, undefined);
+});
+
+test("mergePackagesFromLoadedManifests fills packages when listings were empty", () => {
+  const merged = mergePackagesFromLoadedManifests(
+    { packages: [], parents: ["apps", "packages"], workspaceGlobs: ["apps/*", "packages/*"] },
+    [
+      { path: "apps/web/package.json" },
+      { path: "apps/api/package.json" },
+      { path: "packages/ui/package.json" },
+      { path: "package.json" }
+    ]
+  );
+  assert.deepEqual(merged.packages, ["apps/api", "apps/web", "packages/ui"]);
+});
+
+test("enrichPackageStructureResponse injects concrete names over glob-only answers", () => {
+  const vague =
+    "Look at workspaces apps/* and packages/*. If you have access, look for next.config.js.";
+  assert.equal(
+    answerLacksConcretePackageNames(vague, ["apps/web", "apps/api", "packages/ui"]),
+    true
+  );
+  const enriched = enrichPackageStructureResponse(vague, ["apps/web", "apps/api", "packages/ui"], {
+    workspaceGlobs: ["apps/*", "packages/*"]
+  });
+  assert.ok(enriched.includes("apps/web"));
+  assert.ok(enriched.includes("apps/api"));
+  assert.ok(enriched.includes("packages/ui"));
 });
 
 console.log(`\nrepoPackageBoundaryEvidence: ${passed} passed, ${failed} failed`);

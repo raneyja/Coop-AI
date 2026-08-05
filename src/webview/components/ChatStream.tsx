@@ -44,6 +44,7 @@ export type ChatMessage = {
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
   relatedArtifactId?: string;
+  suggest?: import("../../chat/types").ChatSuggestPayload;
 };
 
 export type ChatInlineArtifact =
@@ -97,6 +98,10 @@ export type ChatInlineArtifact =
       evidence: Record<string, unknown>;
     };
 
+type ChatSuggestResolveChoice =
+  | { choice: "plain" }
+  | { choice: "action"; actionId: string };
+
 type ChatStreamProps = {
   messages: ChatMessage[];
   artifacts: ChatInlineArtifact[];
@@ -118,6 +123,8 @@ type ChatStreamProps = {
   conflicts?: ConflictSummary[];
   /** Bumps when thread/history loads so the view jumps to the latest messages. */
   scrollEpoch?: number;
+  /** Resolve a clarifying quick-action suggest chip. */
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 };
 
 const SCROLL_PIN_THRESHOLD_PX = 64;
@@ -251,14 +258,64 @@ function QuickActionBody({
   return <div className="chat-message-body">{renderBody(body)}</div>;
 }
 
+function SuggestChipRow({
+  message,
+  onSuggestResolve
+}: {
+  message: ChatMessage;
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
+}): React.ReactElement | null {
+  const suggest = message.suggest;
+  if (!suggest?.chips.length || suggest.resolved) {
+    return null;
+  }
+
+  return (
+    <div className="coop-suggest-chip-row" role="group" aria-label="Suggested workflows">
+      {suggest.chips.map((chip) => {
+        const key = chip.kind === "plain" ? "plain" : `action-${chip.actionId ?? chip.label}`;
+        const isPrimary = chip.kind === "quick-action";
+        return (
+          <button
+            key={key}
+            type="button"
+            className={
+              isPrimary
+                ? "coop-settings-action-btn coop-suggest-chip coop-suggest-chip--primary"
+                : "coop-text-btn coop-suggest-chip coop-suggest-chip--plain"
+            }
+            disabled={!onSuggestResolve}
+            onClick={() => {
+              if (!onSuggestResolve) {
+                return;
+              }
+              if (chip.kind === "plain") {
+                onSuggestResolve({ choice: "plain" });
+                return;
+              }
+              if (chip.actionId) {
+                onSuggestResolve({ choice: "action", actionId: chip.actionId });
+              }
+            }}
+          >
+            {chip.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBlock({
   message,
   renderBody,
-  isStreaming = false
+  isStreaming = false,
+  onSuggestResolve
 }: {
   message: ChatMessage;
   renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
   isStreaming?: boolean;
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 }): React.ReactElement {
   const isUser = message.role === "user";
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
@@ -326,6 +383,7 @@ function MessageBlock({
           ) : (
             <div className="chat-message-body">
               {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}
+              <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />
             </div>
           )
         ) : null}
@@ -528,7 +586,8 @@ export function ChatStream({
   renderBody,
   actionContext,
   conflicts,
-  scrollEpoch = 0
+  scrollEpoch = 0,
+  onSuggestResolve
 }: ChatStreamProps): React.ReactElement {
   const timelineEntries = buildTimelineEntries(messages, artifacts);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -592,7 +651,12 @@ export function ChatStream({
       <div className="chat-thread-messages">
         {timelineEntries.map((entry) =>
           entry.type === "message" ? (
-            <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
+            <MessageBlock
+              key={entry.id}
+              message={entry.message}
+              renderBody={renderBody}
+              onSuggestResolve={onSuggestResolve}
+            />
           ) : (
             <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
               <EvidenceArtifactAnchor artifactId={entry.artifact.id}>

@@ -829,3 +829,89 @@ export function shapedEvidenceMentionsWritePath(
 export function shapedEvidenceClaimsInFileCompletedWrite(shaped: string): boolean {
   return /direct write\s+`[^`]*COMPLETED`/i.test(shaped) || /assigns?\s+`?COMPLETED`?\s+in-file/i.test(shaped);
 }
+
+function evidenceWritePathLabels(evidence: StatusTransitionEvidence): string[] {
+  const labels: string[] = [];
+  for (const write of evidence.writePaths) {
+    if (write.jobName) {
+      labels.push(write.jobName);
+    }
+    if (write.value) {
+      labels.push(write.value);
+    }
+  }
+  for (const job of evidence.jobTriggers) {
+    labels.push(job.name);
+  }
+  return [...new Set(labels.filter(Boolean))];
+}
+
+export function responseMentionsStatusWritePath(
+  content: string,
+  evidence: StatusTransitionEvidence
+): boolean {
+  const labels = evidenceWritePathLabels(evidence);
+  if (!labels.length) {
+    return true;
+  }
+  return labels.some((label) => content.includes(label));
+}
+
+export function responseMentionsStatusTypeDistinction(
+  content: string,
+  evidence: StatusTransitionEvidence
+): boolean {
+  const envelopes = evidence.statusTypes.filter((t) => t.role === "envelope");
+  const recipients = evidence.statusTypes.filter((t) => t.role === "recipient");
+  if (!envelopes.length || !recipients.length) {
+    return true;
+  }
+  const hasEnvelope = envelopes.some((t) => content.includes(t.name));
+  const hasRecipient = recipients.some((t) => content.includes(t.name));
+  return hasEnvelope && hasRecipient;
+}
+
+/**
+ * Force write-path + enum distinction into the answer when evidence has them
+ * but the model omitted them (throws-only skim).
+ */
+export function enrichStatusTransitionResponse(
+  content: string,
+  evidence: StatusTransitionEvidence
+): string {
+  const trimmed = content.trim();
+  const needsWrite = !responseMentionsStatusWritePath(trimmed, evidence);
+  const needsTypes = !responseMentionsStatusTypeDistinction(trimmed, evidence);
+  if (!needsWrite && !needsTypes) {
+    return content;
+  }
+
+  const blocks: string[] = [];
+  if (needsWrite) {
+    const write = evidence.writePaths.find((w) => w.advancesAskedToStatus) ?? evidence.writePaths[0];
+    const job = write?.jobName || write?.value || evidence.jobTriggers[0]?.name;
+    if (job) {
+      blocks.push(
+        `**Next-status write path**\nThe envelope advances toward COMPLETED via \`${job}\`${
+          write?.line ? ` (see open-file evidence around L${write.line})` : ""
+        }. Do not treat throw gates alone as the COMPLETED writer.`
+      );
+    }
+  }
+  if (needsTypes) {
+    const envelopes = evidence.statusTypes.filter((t) => t.role === "envelope").map((t) => t.name);
+    const recipients = evidence.statusTypes.filter((t) => t.role === "recipient").map((t) => t.name);
+    if (envelopes.length && recipients.length) {
+      blocks.push(
+        `**Status type distinction**\n\`${recipients.join("` / `")}\` is recipient-level; \`${envelopes.join(
+          "` / `"
+        )}\` is envelope-level. A recipient being SIGNED does not imply the envelope is COMPLETED.`
+      );
+    }
+  }
+  if (!blocks.length) {
+    return content;
+  }
+  const lead = blocks.join("\n\n") + "\n\n";
+  return trimmed ? `${lead}${trimmed}` : lead.trim();
+}

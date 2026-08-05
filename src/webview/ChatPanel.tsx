@@ -839,6 +839,30 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [post]
   );
 
+  const handleSuggestResolve = useCallback(
+    (choice: { choice: "plain" } | { choice: "action"; actionId: string }) => {
+      setError("");
+      userStoppedRef.current = false;
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      setThinkingBuffer("");
+      setAgentOverlay(undefined);
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          const entry = next[i];
+          if (entry?.role === "assistant" && entry.suggest && !entry.suggest.resolved) {
+            next[i] = { ...entry, suggest: { ...entry.suggest, resolved: true } };
+            break;
+          }
+        }
+        return next;
+      });
+      post({ type: "chat:suggest-resolve", payload: choice });
+    },
+    [post]
+  );
+
   const evidenceActionContext = useMemo<EvidenceActionContext>(
     () => ({
       onOpenFile: handleOpenFile,
@@ -1820,6 +1844,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             actionContext={evidenceActionContext}
             conflicts={conflictState?.conflicts}
             scrollEpoch={scrollEpoch}
+            onSuggestResolve={handleSuggestResolve}
           />
           <DegradationNotification
             compact

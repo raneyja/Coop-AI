@@ -394,3 +394,75 @@ function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastR
     ...(evidence.transitiveDependents ?? []).map((path) => ({ path, depth: 2, source }))
   ];
 }
+
+const ZERO_IMPACT_CLAIM =
+  /\b(?:0|zero|no)\s+(?:code\s+)?dependents?\b|\b(?:will\s+not|won'?t|does\s+not|doesn'?t)\s+break\b|\bno\s+impact\b|\bnothing\s+depends\b|\bimpact\s+is\s+(?:none|negligible|zero)\b/i;
+
+/** True when the model claimed safe/zero impact despite empty or unverified evidence. */
+export function blastResponseClaimsZeroImpact(content: string): boolean {
+  return ZERO_IMPACT_CLAIM.test(content);
+}
+
+/**
+ * Prevent “0 dependents / no impact” claims when evidence is empty/unverified,
+ * and prepend production-ranked callers when the model omitted them.
+ */
+export function enrichBlastRadiusResponse(
+  content: string,
+  evidence: BlastRadiusEvidence | undefined
+): string {
+  if (!evidence) {
+    return content;
+  }
+  const details = codeDependentDetailsFromEvidence(evidence);
+  const ranked = rankCodeDependentsByRisk(details, 8);
+  const trimmed = content.trim();
+  const claimsZero = blastResponseClaimsZeroImpact(trimmed);
+  const hasDependents = ranked.length > 0;
+  const unverifiedWarning = (evidence.warnings ?? []).some((w) =>
+    /impact unverified|no dependents found/i.test(w)
+  );
+
+  if (hasDependents) {
+    const missingTop = ranked
+      .slice(0, 5)
+      .filter((entry) => !trimmed.includes(entry.path));
+    if (missingTop.length === 0 && !claimsZero) {
+      return content;
+    }
+    const lines = ranked.slice(0, 5).map((entry) => {
+      const surface = entry.riskReason.toLowerCase().includes("test")
+        ? "test surface"
+        : "production / code caller";
+      return `- \`${entry.path}\` (${surface})`;
+    });
+    const lead = [
+      "**Direct impact (index / search)**",
+      "",
+      ...lines,
+      "",
+      claimsZero
+        ? "Do not treat missing SCIP edges as zero impact — callers above were found via dependency or symbol search."
+        : "",
+      ""
+    ]
+      .filter((line) => line !== undefined)
+      .join("\n");
+    return `${lead}${trimmed}`;
+  }
+
+  if (claimsZero || unverifiedWarning) {
+    const lead = [
+      "**Impact status**",
+      "",
+      "Impact is **unverified** — no dependents were confirmed in the index/search for this turn. Do not claim zero impact or that nothing will break.",
+      ""
+    ].join("\n");
+    if (!claimsZero && trimmed.includes("Impact unverified")) {
+      return content;
+    }
+    return `${lead}${trimmed}`;
+  }
+
+  return content;
+}

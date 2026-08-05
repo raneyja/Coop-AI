@@ -146,6 +146,7 @@ import {
   buildMissingIntentClarificationResponse,
   shouldClarifyFirstChatTurn
 } from "./chatMessageIntent";
+import { shouldOfferQuickActionSuggest } from "./quickActionSuggestIntent";
 import { openReferencedLink } from "./openReferencedLink";
 import {
   buildUserMessageWithContext,
@@ -195,7 +196,7 @@ import {
   parseDualRepoCompareArgs,
   type DualRepoComparePlan
 } from "../context/dualRepoCompare";
-import type { QuickActionId } from "../webview/types";
+import { isQuickActionId, type QuickActionId } from "../webview/types";
 import type { IntegrationChatProvider } from "./types";
 import {
   applyPromptTemplate,
@@ -335,7 +336,8 @@ import {
   buildStatusTransitionSynthesisUserPrompt,
   extractStatusTransitionEvidence,
   statusTransitionGatherQuery,
-  type FollowedStatusFile
+  type FollowedStatusFile,
+  type StatusTransitionEvidence
 } from "../context/statusTransitionGrounding";
 import {
   buildEmailTemplateSynthesisUserPrompt,
@@ -455,6 +457,16 @@ export class CoopChatSession {
   private lastContextBundle: ContextFetchResult[] = [];
   private lastTraceDecisionTimeline?: DecisionTimeline;
   private pendingEvidenceArtifactId?: string;
+  /**
+   * Plain-chat suggest interrupt — waiting for Find Owner / Just answer chip.
+   * Cleared on resolve or a new unrelated send.
+   */
+  private pendingQuickActionSuggest?: {
+    focus: string;
+    mentions?: ChatFileMention[];
+    attachments?: ChatImageAttachment[];
+    assistantTimestamp: number;
+  };
   private sessionCostUsd = 0;
   private readonly threadRuns = new ThreadRunManager();
   private workspacePromptWatcher?: vscode.Disposable;
@@ -1605,6 +1617,9 @@ export class CoopChatSession {
             targetFile: message.payload.targetFile
           }
         );
+        return;
+      case "chat:suggest-resolve":
+        await this.handleSuggestResolve(message.payload);
         return;
       case "mention:search":
         await this.handleMentionSearch(message.payload.pattern);
@@ -3989,8 +4004,17 @@ export class CoopChatSession {
       /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
       targetFile?: string;
       composerMode?: ComposerMode;
+      /** Resume plain chat after a suggest chip without offering chips again. */
+      skipQuickActionSuggest?: boolean;
+      /** Continue after suggest without duplicating the user bubble already in history. */
+      skipUserHistoryPush?: boolean;
     }
   ): Promise<void> {
+    // A new send abandons any unanswered suggest chips.
+    if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
+      this.dismissPendingQuickActionSuggest();
+    }
+
     // Slash-command routing applies only to manually typed messages — never to
     // button-driven quick actions or already-routed integration prompts.
     if (!quickAction && !options?.sourceHint) {
@@ -4087,6 +4111,27 @@ export class CoopChatSession {
     ) {
       await this.completeMissingIntentClarification(message, options?.mentions, attachments);
       return;
+    }
+
+    // Plain chat that looks like a quick action → clarifying chips (not silent auto-run).
+    if (
+      !quickAction &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      !options?.composerMode &&
+      !options?.skipQuickActionSuggest &&
+      !this.detectChatIntegrationProvider(message)
+    ) {
+      const offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+      if (offer) {
+        await this.completeQuickActionSuggestClarification(
+          message,
+          offer,
+          options?.mentions,
+          attachments
+        );
+        return;
+      }
     }
 
     const actionContext = quickAction
@@ -4198,18 +4243,20 @@ export class CoopChatSession {
       timestamp: Date.now(),
       attachments: attachments?.length ? attachments : undefined
     };
-    this.chatHistory.push(userMessage);
-    if (this.chatHistory.length === 1) {
-      this.setThreadTitle(
-        summarizeThreadTitle({
-          content: historyWithScope || attachments?.[0]?.name || "File attachment",
-          quickAction,
-          context: this.currentContext
-        })
-      );
+    if (!options?.skipUserHistoryPush) {
+      this.chatHistory.push(userMessage);
+      if (this.chatHistory.length === 1) {
+        this.setThreadTitle(
+          summarizeThreadTitle({
+            content: historyWithScope || attachments?.[0]?.name || "File attachment",
+            quickAction,
+            context: this.currentContext
+          })
+        );
+      }
+      this.postChatHistory();
+      this.persistActiveThread();
     }
-    this.postChatHistory();
-    this.persistActiveThread();
     this.chatTurnStartedAt = Date.now();
 
     const turn = this.threadRuns.begin({
@@ -4397,6 +4444,140 @@ export class CoopChatSession {
     this.post({ type: "chat:complete", payload: { message: finalMessage } });
     this.postChatHistory();
     this.persistActiveThread();
+  }
+
+  private dismissPendingQuickActionSuggest(): void {
+    const pending = this.pendingQuickActionSuggest;
+    if (!pending) {
+      return;
+    }
+    this.pendingQuickActionSuggest = undefined;
+    this.markSuggestResolved(pending.assistantTimestamp);
+    this.postChatHistory();
+    this.persistActiveThread();
+  }
+
+  private markSuggestResolved(assistantTimestamp: number): void {
+    for (let i = this.chatHistory.length - 1; i >= 0; i--) {
+      const entry = this.chatHistory[i];
+      if (entry?.role === "assistant" && entry.timestamp === assistantTimestamp && entry.suggest) {
+        entry.suggest = { ...entry.suggest, resolved: true };
+        return;
+      }
+    }
+  }
+
+  private async completeQuickActionSuggestClarification(
+    message: string,
+    offer: NonNullable<ReturnType<typeof shouldOfferQuickActionSuggest>>,
+    mentions?: ChatFileMention[],
+    attachments?: ChatImageAttachment[]
+  ): Promise<void> {
+    const mentionRefs = this.quickActionMentionRefs(mentions);
+    const historyContent = plainChatHistoryContent(message, mentionRefs, {
+      context: this.currentContext,
+      includeContextChips: true
+    });
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: historyContent,
+      timestamp: Date.now(),
+      attachments: attachments?.length ? attachments : undefined
+    };
+    this.chatHistory.push(userMessage);
+    if (this.chatHistory.length === 1) {
+      this.setThreadTitle(
+        summarizeThreadTitle({
+          content: historyContent || attachments?.[0]?.name || "File attachment",
+          context: this.currentContext
+        })
+      );
+    }
+    this.postChatHistory();
+    this.persistActiveThread();
+    this.chatTurnStartedAt = Date.now();
+    this.clearIntentFeedback();
+
+    const chips = [
+      ...offer.suggestions.map((suggestion) => ({
+        kind: "quick-action" as const,
+        actionId: suggestion.actionId,
+        label: suggestion.label
+      })),
+      { kind: "plain" as const, label: "Just answer" }
+    ];
+
+    await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+    const assistantTimestamp = Date.now();
+    const finalMessage: ChatMessage = {
+      role: "assistant",
+      content: offer.clarifyingPrompt,
+      timestamp: assistantTimestamp,
+      suggest: {
+        focus: message.trim(),
+        chips
+      }
+    };
+    this.chatHistory.push(finalMessage);
+    this.pendingQuickActionSuggest = {
+      focus: message.trim(),
+      mentions,
+      attachments,
+      assistantTimestamp
+    };
+    void this.emitUsageEvent("suggest_chip.shown");
+    this.post({ type: "chat:complete", payload: { message: finalMessage } });
+    this.postChatHistory();
+    this.persistActiveThread();
+  }
+
+  private async handleSuggestResolve(
+    payload: { choice: "plain" } | { choice: "action"; actionId: string }
+  ): Promise<void> {
+    const pending = this.pendingQuickActionSuggest;
+    if (!pending) {
+      return;
+    }
+    this.pendingQuickActionSuggest = undefined;
+    this.markSuggestResolved(pending.assistantTimestamp);
+    this.postChatHistory();
+    this.persistActiveThread();
+
+    if (payload.choice === "plain") {
+      void this.emitUsageEvent("suggest_chip.dismissed");
+      await this.handleChatSend(pending.focus, undefined, pending.attachments, {
+        mentions: pending.mentions,
+        skipQuickActionSuggest: true,
+        skipUserHistoryPush: true
+      });
+      return;
+    }
+
+    if (!isQuickActionId(payload.actionId)) {
+      return;
+    }
+    const actionId = payload.actionId;
+    if (isQuickActionBlocked(actionId, this.currentContext)) {
+      this.post({
+        type: "chat:error",
+        payload: { message: quickActionBlockedMessage(actionId, this.currentContext) }
+      });
+      return;
+    }
+
+    void this.emitUsageEvent("suggest_chip.accepted");
+    const mentionRefs = this.quickActionMentionRefs(pending.mentions);
+    const historyContent = quickActionHistoryContent(
+      actionId,
+      this.currentContext,
+      pending.focus,
+      mentionRefs
+    );
+    await this.handleChatSend("", actionId, pending.attachments, {
+      historyContent,
+      mentions: pending.mentions,
+      slashUserArgs: pending.focus
+    });
   }
 
   private quickActionMentionRefs(mentions?: ChatFileMention[]): QuickActionMentionRef[] {
@@ -5277,6 +5458,7 @@ export class CoopChatSession {
     // (and follow job triggers within the soft gather budget) before generic/incident prompts.
     // Skip when A11/A10 already claimed the turn.
     let statusTransitionMessage: string | undefined;
+    let statusTransitionEvidence: StatusTransitionEvidence | undefined;
     if (
       !emailTemplateMessage &&
       !existingCapabilityMessage &&
@@ -5284,13 +5466,15 @@ export class CoopChatSession {
       !integrationProvider &&
       isStatusTransitionAsk(taskContent)
     ) {
-      statusTransitionMessage = await this.buildStatusTransitionChatPrompt({
+      const statusPrompt = await this.buildStatusTransitionChatPrompt({
         ask: taskContent,
         turn,
         turnContext,
         localFiles: localPayload?.files,
         signal
       });
+      statusTransitionMessage = statusPrompt?.message;
+      statusTransitionEvidence = statusPrompt?.evidence;
       // Job-follow may have attached seal/handler snippets onto the turn bundle.
       contextBundle = [...turn.contextBundle];
     }
@@ -5636,7 +5820,8 @@ export class CoopChatSession {
                 slackConnected: this.isIntegrationConnected("slack")
               }
             : undefined,
-        existingCapability: existingCapabilityEvidence
+        existingCapability: existingCapabilityEvidence,
+        statusTransition: statusTransitionEvidence
       });
       const finalMessage: ChatMessage = {
         ...result.message,
@@ -6383,7 +6568,7 @@ export class CoopChatSession {
     turnContext: RepoContext;
     localFiles?: Array<{ path: string; content: string }>;
     signal: AbortSignal;
-  }): Promise<string | undefined> {
+  }): Promise<{ message: string; evidence: StatusTransitionEvidence } | undefined> {
     const openPath =
       options.turnContext.file?.trim() ||
       options.localFiles?.[0]?.path?.trim() ||
@@ -6476,10 +6661,13 @@ export class CoopChatSession {
       followedFiles
     });
 
-    return buildStatusTransitionSynthesisUserPrompt({
-      ask: options.ask,
+    return {
+      message: buildStatusTransitionSynthesisUserPrompt({
+        ask: options.ask,
+        evidence
+      }),
       evidence
-    });
+    };
   }
 
   private enrichKnowledgeGapsBundle(quickAction: string | undefined, turn?: ChatTurn): void {

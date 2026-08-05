@@ -26,7 +26,7 @@ export function normalizeGraphRepoId(repoId: string, provider = "github"): strin
 }
 
 /** Build Zoekt/import search patterns that find files referencing the target. */
-export function buildImportSearchPatterns(file: string): string[] {
+export function buildImportSearchPatterns(file: string, symbols: string[] = []): string[] {
   const basename = file.split("/").pop() ?? file;
   const stem = basename.replace(/\.[^.]+$/, "");
   const patterns = new Set<string>();
@@ -36,6 +36,8 @@ export function buildImportSearchPatterns(file: string): string[] {
     patterns.add(`require(${quote}./${basename}${quote})`);
     patterns.add(`from ${quote}${basename}${quote}`);
     patterns.add(`from ${quote}./${basename}${quote}`);
+    patterns.add(`from ${quote}@/${stem}${quote}`);
+    patterns.add(`from ${quote}@/${basename}${quote}`);
     if (stem !== basename) {
       patterns.add(`require(${quote}${stem}${quote})`);
       patterns.add(`require(${quote}./${stem}${quote})`);
@@ -48,7 +50,132 @@ export function buildImportSearchPatterns(file: string): string[] {
     }
   }
 
+  // Python-style imports of the module stem.
+  if (/\.py$/i.test(file)) {
+    patterns.add(`from ${stem} import`);
+    patterns.add(`import ${stem}`);
+  }
+
+  for (const symbol of symbols) {
+    const trimmed = symbol.trim();
+    if (trimmed.length < 3) {
+      continue;
+    }
+    patterns.add(trimmed);
+    patterns.add(`${trimmed}.`);
+    patterns.add(`${trimmed}(`);
+    patterns.add(`import ${trimmed}`);
+    patterns.add(`from ${quoteSafe(stem)} import ${trimmed}`);
+  }
+
   return [...patterns];
+}
+
+function quoteSafe(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_.]/g, "_");
+}
+
+/** PascalCase / CamelCase symbols from the blast ask (e.g. StateGroup, DocumentStatus). */
+export function extractBlastSearchSymbols(ask: string | undefined, file?: string): string[] {
+  const symbols = new Set<string>();
+  const stop = new Set([
+    "What",
+    "When",
+    "Where",
+    "Which",
+    "This",
+    "That",
+    "With",
+    "From",
+    "Change",
+    "Rename",
+    "Values",
+    "Break",
+    "Breaks",
+    "Draft",
+    "Pending",
+    "Completed",
+    "Rejected"
+  ]);
+  const text = ask?.trim() ?? "";
+  for (const match of text.matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g)) {
+    const token = match[1];
+    if (!stop.has(token)) {
+      symbols.add(token);
+    }
+  }
+  // Prefer class-like names ending in Group/Status/Type/Enum.
+  const ranked = [...symbols].sort((a, b) => {
+    const score = (s: string) =>
+      /(Group|Status|Type|Enum|Kind|Mode)$/.test(s) ? 0 : 1;
+    return score(a) - score(b) || b.length - a.length;
+  });
+  if (file?.endsWith(".py") && ranked.length === 0) {
+    // Fall back to TitleCase stem for Python models (state → State is weak; skip).
+  }
+  return ranked.slice(0, 6);
+}
+
+export type SearchDependentsFallbackOptions = {
+  /** Cap patterns when soft gather budget is thin. */
+  maxPatterns?: number;
+  /** Extra symbols from the user ask (StateGroup, DocumentStatus, …). */
+  symbols?: string[];
+};
+
+/** Search index for files that import/reference the target when SCIP dependents are empty. */
+export async function searchDependentsFallback(
+  indexBackend: IndexBackend,
+  repoId: string,
+  file: string,
+  options: SearchDependentsFallbackOptions = {}
+): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
+  const warnings: string[] = [];
+  const normalizedRepoId = normalizeGraphRepoId(repoId);
+  const enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
+
+  if (!enabled) {
+    return { dependents: [], source: "remote", warnings };
+  }
+
+  const symbols = options.symbols ?? [];
+  const patterns = buildImportSearchPatterns(file, symbols);
+  // Prefer symbol patterns first — they find enum/class usages when imports miss.
+  const ordered = [
+    ...patterns.filter((pattern) => symbols.some((symbol) => pattern.includes(symbol))),
+    ...patterns.filter((pattern) => !symbols.some((symbol) => pattern.includes(symbol)))
+  ];
+  const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
+  const seen = new Set<string>([file]);
+  const dependents: BlastRadiusDependentDetail[] = [];
+  let bestSource: GraphEdgeSource = "heuristic";
+
+  for (const pattern of ordered.slice(0, maxPatterns)) {
+    try {
+      const result = await indexBackend.search(normalizedRepoId, pattern);
+      const source = mapSearchSourceToGraphSource(result.source);
+      if (source === "zoekt" || source === "scip") {
+        bestSource = source;
+      }
+      for (const hit of result.hits) {
+        const depPath = normalizeHitPath(hit.fileName);
+        if (!depPath || seen.has(depPath)) {
+          continue;
+        }
+        seen.add(depPath);
+        dependents.push({ path: depPath, depth: 1, source });
+      }
+    } catch (error) {
+      warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
+    }
+  }
+
+  const ranked = sortDependentsProductionFirst(dependents);
+  return {
+    dependents: ranked.slice(0, 30),
+    source: ranked.length > 0 ? bestSource : "remote",
+    warnings
+  };
 }
 
 export function buildTestSearchPatterns(file: string): string[] {
@@ -73,52 +200,6 @@ function normalizeHitPath(fileName: string): string | undefined {
     return undefined;
   }
   return trimmed.replace(/^\/+/, "");
-}
-
-/** Search index for files that import/reference the target when SCIP dependents are empty. */
-export async function searchDependentsFallback(
-  indexBackend: IndexBackend,
-  repoId: string,
-  file: string
-): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
-  const warnings: string[] = [];
-  const normalizedRepoId = normalizeGraphRepoId(repoId);
-  const enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
-
-  if (!enabled) {
-    return { dependents: [], source: "remote", warnings };
-  }
-
-  const patterns = buildImportSearchPatterns(file);
-  const seen = new Set<string>([file]);
-  const dependents: BlastRadiusDependentDetail[] = [];
-  let bestSource: GraphEdgeSource = "heuristic";
-
-  for (const pattern of patterns.slice(0, 8)) {
-    try {
-      const result = await indexBackend.search(normalizedRepoId, pattern);
-      const source = mapSearchSourceToGraphSource(result.source);
-      if (source === "zoekt" || source === "scip") {
-        bestSource = source;
-      }
-      for (const hit of result.hits) {
-        const depPath = normalizeHitPath(hit.fileName);
-        if (!depPath || seen.has(depPath)) {
-          continue;
-        }
-        seen.add(depPath);
-        dependents.push({ path: depPath, depth: 1, source });
-      }
-    } catch (error) {
-      warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
-    }
-  }
-
-  return {
-    dependents: dependents.slice(0, 30),
-    source: dependents.length > 0 ? bestSource : "remote",
-    warnings
-  };
 }
 
 /** Find test/spec files that reference the target via index search. */
