@@ -79,8 +79,8 @@ type ContextConstellationProps = {
  * Design-canvas scaled to fit the container; tools pulse → packets flow → chips ease in.
  */
 export function ContextConstellation({ className = "" }: ContextConstellationProps) {
-  const shellRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
+  const fitRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0.5);
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("pulse");
@@ -96,16 +96,17 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
   const activeNode =
     activeIndex >= 0 && activeIndex < orbitNodes.length ? orbitNodes[activeIndex] : null;
 
-  // Fit the fixed design canvas inside whatever box the homepage gives us.
+  // Scale to the fit region only (excludes the caption). Must fit BOTH width and height.
   useEffect(() => {
-    const el = shellRef.current;
+    const el = fitRef.current;
     if (!el) return;
 
     const update = () => {
       const { width, height } = el.getBoundingClientRect();
       if (width < 1 || height < 1) return;
-      const next = Math.min(width / VIEW_W, height / VIEW_H);
-      setScale(Math.max(0.42, Math.min(1, next)));
+      const pad = 4;
+      const next = Math.min((width - pad) / VIEW_W, (height - pad) / VIEW_H);
+      setScale(Math.min(1, Math.max(0.22, next)));
     };
 
     update();
@@ -222,8 +223,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
 
   return (
     <div
-      ref={shellRef}
-      className={`context-constellation relative h-full min-h-[18rem] w-full overflow-hidden rounded-sm border border-coop-border bg-gray-50 ${className}`.trim()}
+      className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-sm border border-coop-border bg-gray-50 ${className}`.trim()}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -237,191 +237,200 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
       <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
       <div className="context-constellation-glow pointer-events-none absolute inset-0" aria-hidden />
 
-      {/* Fixed design canvas, uniformly scaled to fit */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div
-          className={`context-constellation-canvas relative transition-opacity ease-in-out ${
-            fading ? "opacity-0" : "opacity-100"
-          }`}
-          style={{
-            width: VIEW_W,
-            height: VIEW_H,
-            transform: `scale(${scale})`,
-            transformOrigin: "center center",
-            transitionDuration: `${SCENARIO_FADE_MS}ms`
-          }}
-        >
-          <div className="pointer-events-none absolute inset-0" aria-hidden>
-            <div
-              className="context-orbit-ring absolute rounded-full border border-coop-border/70"
-              style={{
-                left: FILE_HUB.x,
-                top: FILE_HUB.y,
-                width: 360,
-                height: 360,
-                transform: "translate(-50%, -50%)"
-              }}
-            />
-            <div
-              className="context-orbit-ring context-orbit-ring--slow absolute rounded-full border border-dashed border-coop-border/50"
-              style={{
-                left: FILE_HUB.x,
-                top: FILE_HUB.y,
-                width: 480,
-                height: 480,
-                transform: "translate(-50%, -50%)"
-              }}
-            />
-          </div>
-
-          <svg
-            className="absolute inset-0"
-            width={VIEW_W}
-            height={VIEW_H}
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            aria-hidden
-          >
-            <defs>
-              <radialGradient id="constellation-hub-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#79C0FF" stopOpacity="0.28" />
-                <stop offset="100%" stopColor="#79C0FF" stopOpacity="0" />
-              </radialGradient>
-              <filter id="constellation-packet-glow" x="-80%" y="-80%" width="260%" height="260%">
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-
-            <circle cx={FILE_HUB.x} cy={FILE_HUB.y} r="100" fill="url(#constellation-hub-glow)" />
-
-            {orbitNodes.map((node) => {
-              const theme = ORBIT_THEME[node.kind] ?? ORBIT_THEME.graph;
-              const isActive =
-                !reduceMotion &&
-                activeNode?.id === node.id &&
-                phase !== "hold" &&
-                phase !== "fade" &&
-                phase !== "between";
-              const landed = chips.some((c) => c.id === node.id);
-              return (
-                <path
-                  key={`${scenario.id}-${node.id}`}
-                  d={orbitConnectionPath(node)}
-                  fill="none"
-                  stroke={node.isGap ? ORBIT_THEME.gap.accent : theme.accent}
-                  strokeWidth={isActive ? 2.2 : landed ? 1.5 : 1.05}
-                  strokeOpacity={isActive ? 0.7 : landed ? 0.36 : 0.14}
-                  strokeLinecap="round"
-                  style={{ transition: "stroke-opacity 0.45s ease, stroke-width 0.45s ease" }}
-                  className={isActive && phase === "flow" ? "context-path-flow" : undefined}
-                />
-              );
-            })}
-
-            {!reduceMotion && activePath && phase === "flow" ? (
-              <g key={packetKey} filter="url(#constellation-packet-glow)">
-                <circle r="5" fill={activeTheme.accent} opacity="0.95">
-                  <animateMotion
-                    dur={`${FLOW_MS}ms`}
-                    path={activePath}
-                    fill="freeze"
-                    calcMode="spline"
-                    keySplines="0.4 0 0.2 1"
-                    keyTimes="0;1"
-                  />
-                </circle>
-                <circle r="2" fill="#fff" opacity="0.9">
-                  <animateMotion
-                    dur={`${FLOW_MS}ms`}
-                    path={activePath}
-                    fill="freeze"
-                    calcMode="spline"
-                    keySplines="0.4 0 0.2 1"
-                    keyTimes="0;1"
-                  />
-                </circle>
-              </g>
-            ) : null}
-          </svg>
-
-          {orbitNodes.map((node, i) => (
-            <OrbitPill
-              key={`${scenario.id}-${node.id}`}
-              node={node}
-              staggerIndex={i}
-              active={
-                !reduceMotion &&
-                activeNode?.id === node.id &&
-                (phase === "pulse" || phase === "flow" || phase === "land")
-              }
-              landed={chips.some((c) => c.id === node.id)}
-              pulsing={!reduceMotion && activeNode?.id === node.id && phase === "pulse"}
-            />
-          ))}
-
-          {/* Hub — fixed footprint so chips don't shove the layout */}
+      {/* Fit region — caption is outside so height isn't stolen from the diagram */}
+      <div ref={fitRef} className="relative min-h-0 w-full flex-1 overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center">
           <div
-            className="absolute z-20"
+            className="relative shrink-0 overflow-hidden"
             style={{
-              left: FILE_HUB.x - (FILE_CARD.width + 28) / 2,
-              top: FILE_HUB.y - 58,
-              width: FILE_CARD.width + 28
+              width: VIEW_W * scale,
+              height: VIEW_H * scale
             }}
           >
             <div
-              className={`context-hub-card relative flex h-[132px] flex-col rounded-xl border bg-white px-3.5 py-3 shadow-sm transition-[border-color,box-shadow] duration-500 ${
-                chips.length > 0
-                  ? "border-[#79C0FF]/55 shadow-[0_0_28px_rgba(121,192,255,0.16)]"
-                  : "border-[#79C0FF]/30"
+              className={`context-constellation-canvas absolute left-0 top-0 transition-opacity ease-in-out ${
+                fading ? "opacity-0" : "opacity-100"
               }`}
-              style={{ borderLeftWidth: 3, borderLeftColor: "#79C0FF" }}
+              style={{
+                width: VIEW_W,
+                height: VIEW_H,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                transitionDuration: `${SCENARIO_FADE_MS}ms`
+              }}
             >
-              <div className="pointer-events-none absolute -inset-1 rounded-xl bg-[#79C0FF]/[0.06] blur-md" aria-hidden />
-              <div className="relative flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs font-semibold text-gray-900">
-                    {scenario.file.name}
-                  </p>
-                  <p className="mt-0.5 truncate font-mono text-[10px] text-coop-muted">
-                    {scenario.file.path}
-                    {scenario.file.symbol ? ` · ${scenario.file.symbol}` : ""}
+              <div className="pointer-events-none absolute inset-0" aria-hidden>
+                <div
+                  className="context-orbit-ring absolute rounded-full border border-coop-border/70"
+                  style={{
+                    left: FILE_HUB.x,
+                    top: FILE_HUB.y,
+                    width: 360,
+                    height: 360,
+                    transform: "translate(-50%, -50%)"
+                  }}
+                />
+                <div
+                  className="context-orbit-ring context-orbit-ring--slow absolute rounded-full border border-dashed border-coop-border/50"
+                  style={{
+                    left: FILE_HUB.x,
+                    top: FILE_HUB.y,
+                    width: 480,
+                    height: 480,
+                    transform: "translate(-50%, -50%)"
+                  }}
+                />
+              </div>
+
+              <svg
+                className="absolute inset-0"
+                width={VIEW_W}
+                height={VIEW_H}
+                viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+                aria-hidden
+              >
+                <defs>
+                  <radialGradient id="constellation-hub-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#79C0FF" stopOpacity="0.28" />
+                    <stop offset="100%" stopColor="#79C0FF" stopOpacity="0" />
+                  </radialGradient>
+                  <filter id="constellation-packet-glow" x="-80%" y="-80%" width="260%" height="260%">
+                    <feGaussianBlur stdDeviation="3.5" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                <circle cx={FILE_HUB.x} cy={FILE_HUB.y} r="100" fill="url(#constellation-hub-glow)" />
+
+                {orbitNodes.map((node) => {
+                  const theme = ORBIT_THEME[node.kind] ?? ORBIT_THEME.graph;
+                  const isActive =
+                    !reduceMotion &&
+                    activeNode?.id === node.id &&
+                    phase !== "hold" &&
+                    phase !== "fade" &&
+                    phase !== "between";
+                  const landed = chips.some((c) => c.id === node.id);
+                  return (
+                    <path
+                      key={`${scenario.id}-${node.id}`}
+                      d={orbitConnectionPath(node)}
+                      fill="none"
+                      stroke={node.isGap ? ORBIT_THEME.gap.accent : theme.accent}
+                      strokeWidth={isActive ? 2.2 : landed ? 1.5 : 1.05}
+                      strokeOpacity={isActive ? 0.7 : landed ? 0.36 : 0.14}
+                      strokeLinecap="round"
+                      style={{ transition: "stroke-opacity 0.45s ease, stroke-width 0.45s ease" }}
+                      className={isActive && phase === "flow" ? "context-path-flow" : undefined}
+                    />
+                  );
+                })}
+
+                {!reduceMotion && activePath && phase === "flow" ? (
+                  <g key={packetKey} filter="url(#constellation-packet-glow)">
+                    <circle r="5" fill={activeTheme.accent} opacity="0.95">
+                      <animateMotion
+                        dur={`${FLOW_MS}ms`}
+                        path={activePath}
+                        fill="freeze"
+                        calcMode="spline"
+                        keySplines="0.4 0 0.2 1"
+                        keyTimes="0;1"
+                      />
+                    </circle>
+                    <circle r="2" fill="#fff" opacity="0.9">
+                      <animateMotion
+                        dur={`${FLOW_MS}ms`}
+                        path={activePath}
+                        fill="freeze"
+                        calcMode="spline"
+                        keySplines="0.4 0 0.2 1"
+                        keyTimes="0;1"
+                      />
+                    </circle>
+                  </g>
+                ) : null}
+              </svg>
+
+              {orbitNodes.map((node, i) => (
+                <OrbitPill
+                  key={`${scenario.id}-${node.id}`}
+                  node={node}
+                  staggerIndex={i}
+                  active={
+                    !reduceMotion &&
+                    activeNode?.id === node.id &&
+                    (phase === "pulse" || phase === "flow" || phase === "land")
+                  }
+                  landed={chips.some((c) => c.id === node.id)}
+                  pulsing={!reduceMotion && activeNode?.id === node.id && phase === "pulse"}
+                />
+              ))}
+
+              <div
+                className="absolute z-20"
+                style={{
+                  left: FILE_HUB.x - (FILE_CARD.width + 28) / 2,
+                  top: FILE_HUB.y - 58,
+                  width: FILE_CARD.width + 28
+                }}
+              >
+                <div
+                  className={`context-hub-card relative flex h-[132px] flex-col rounded-xl border bg-white px-3.5 py-3 shadow-sm transition-[border-color,box-shadow] duration-500 ${
+                    chips.length > 0
+                      ? "border-[#79C0FF]/55 shadow-[0_0_28px_rgba(121,192,255,0.16)]"
+                      : "border-[#79C0FF]/30"
+                  }`}
+                  style={{ borderLeftWidth: 3, borderLeftColor: "#79C0FF" }}
+                >
+                  <div className="pointer-events-none absolute -inset-1 rounded-xl bg-[#79C0FF]/[0.06] blur-md" aria-hidden />
+                  <div className="relative flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs font-semibold text-gray-900">
+                        {scenario.file.name}
+                      </p>
+                      <p className="mt-0.5 truncate font-mono text-[10px] text-coop-muted">
+                        {scenario.file.path}
+                        {scenario.file.symbol ? ` · ${scenario.file.symbol}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">
+                      {scenario.file.language}
+                    </span>
+                  </div>
+
+                  <div className="relative mt-2.5 flex min-h-0 flex-1 flex-wrap content-start gap-1 overflow-hidden">
+                    {chips.length === 0 ? (
+                      <span className="font-mono text-[10px] text-gray-400 transition-opacity duration-300">
+                        {reduceMotion ? `${scenario.sourceCount} sources linked` : "pulling context…"}
+                      </span>
+                    ) : (
+                      chips.map((chip) => (
+                        <span
+                          key={chip.id}
+                          className="context-chip-in inline-flex max-w-full items-center gap-1 rounded-sm border border-coop-border bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] text-gray-700"
+                        >
+                          <OrbitIcon kind={chip.kind} className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{chip.label}</span>
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  <p className="relative mt-auto pt-1 font-mono text-[10px] text-[#3D8BDB]">
+                    {chips.length}/{orbitNodes.length} sources · {scenario.feature}
                   </p>
                 </div>
-                <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">
-                  {scenario.file.language}
-                </span>
               </div>
-
-              <div className="relative mt-2.5 flex min-h-0 flex-1 flex-wrap content-start gap-1 overflow-hidden">
-                {chips.length === 0 ? (
-                  <span className="font-mono text-[10px] text-gray-400 transition-opacity duration-300">
-                    {reduceMotion ? `${scenario.sourceCount} sources linked` : "pulling context…"}
-                  </span>
-                ) : (
-                  chips.map((chip) => (
-                    <span
-                      key={chip.id}
-                      className="context-chip-in inline-flex max-w-full items-center gap-1 rounded-sm border border-coop-border bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] text-gray-700"
-                    >
-                      <OrbitIcon kind={chip.kind} className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{chip.label}</span>
-                    </span>
-                  ))
-                )}
-              </div>
-
-              <p className="relative mt-auto pt-1 font-mono text-[10px] text-[#3D8BDB]">
-                {chips.length}/{orbitNodes.length} sources · {scenario.feature}
-              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <p className="pointer-events-none absolute bottom-2 left-3 right-3 z-30 text-center font-mono text-[9px] text-gray-400 sm:bottom-3 sm:text-[10px]">
+      <p className="relative z-10 shrink-0 border-t border-coop-border/60 bg-gray-50/90 px-2 py-1.5 text-center font-mono text-[9px] text-gray-400 sm:text-[10px]">
         {reduceMotion
           ? "Motion reduced — full stack context shown"
           : paused
