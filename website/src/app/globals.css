@@ -165,6 +165,86 @@
   animation: enterprise-graph-hub-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Context constellation (Lightning Intelligence visual) */
+.context-constellation-glow {
+  background:
+    radial-gradient(ellipse 55% 45% at 50% 48%, rgba(121, 192, 255, 0.14), transparent 70%),
+    radial-gradient(ellipse 40% 35% at 72% 28%, rgba(188, 140, 255, 0.08), transparent 65%);
+}
+
+.context-orbit-ring {
+  animation: context-orbit-spin 48s linear infinite;
+}
+
+.context-orbit-ring--slow {
+  animation-duration: 72s;
+  animation-direction: reverse;
+}
+
+.context-orbit-pill--pulse {
+  animation: context-pill-glow 0.52s ease-out;
+}
+
+.context-chip-in {
+  animation: context-chip-ease 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.context-path-flow {
+  stroke-dasharray: 6 12;
+  animation: context-path-dash 0.9s linear;
+}
+
+@keyframes context-orbit-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes context-pill-glow {
+  0% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  40% {
+    box-shadow: 0 0 0 6px rgba(121, 192, 255, 0.16);
+  }
+  100% {
+    box-shadow: 0 0 0 4px rgba(121, 192, 255, 0.1);
+  }
+}
+
+@keyframes context-chip-ease {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes context-path-dash {
+  from {
+    stroke-dashoffset: 48;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-orbit-ring,
+  .context-orbit-ring--slow,
+  .context-orbit-pill--pulse,
+  .context-chip-in,
+  .context-path-flow {
+    animation: none !important;
+  }
+}
+
 /* Auto-playing file context story demo */
 .story-cursor {
   animation: story-cursor-blink 1s step-end infinite;
