@@ -344,26 +344,49 @@
     min-width: 0;
   }
 
+  /*
+   * Highlight overlay: transparent textarea caret must share exact metrics with the
+   * mirror, or the caret drifts away from visible text (looks like trailing spaces).
+   * Form controls often use a different default font than surrounding divs.
+   */
   .coop-composer-input-mirror,
   .coop-composer-input {
     grid-area: 1 / 1;
+    box-sizing: border-box;
     width: 100%;
     min-width: 0;
     margin: 0;
     border: 0;
     padding: 0.625rem 0.75rem 0.25rem;
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    font-variant: normal;
+    font-feature-settings: "liga" 0, "calt" 0;
+    letter-spacing: normal;
+    word-spacing: normal;
     line-height: 1.625;
+    text-transform: none;
+    text-indent: 0;
+    white-space: pre-wrap;
     max-height: 140px;
     overflow-wrap: break-word;
     word-break: break-word;
+    tab-size: 4;
   }
 
   .coop-composer-input-mirror {
     pointer-events: none;
-    white-space: pre-wrap;
     overflow: hidden;
     color: var(--coop-composer-text);
+  }
+
+  /* Color-only slash highlight — weight/size changes shift caret vs. mirror text. */
+  .coop-composer-input-mirror .coop-slash-hint-command {
+    font-weight: inherit;
+    font-style: inherit;
+    letter-spacing: inherit;
   }
 
   .coop-composer-input {
@@ -1011,6 +1034,11 @@
     color: var(--coop-panel-foreground);
   }
 
+  .chat-message-stopped {
+    @apply m-0 text-[13px] italic leading-[1.55];
+    color: var(--coop-panel-muted);
+  }
+
   .chat-message-body p {
     @apply m-0;
   }
@@ -1626,6 +1654,53 @@
 
   .coop-patch-hunk-actions {
     @apply flex flex-wrap items-center gap-2 px-2.5 pb-2 pt-1;
+  }
+
+  .coop-patch-match-list {
+    @apply flex flex-col gap-2 px-2.5 py-2;
+  }
+
+  .coop-patch-match-option {
+    @apply block cursor-pointer overflow-hidden rounded-md border;
+    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 94%,
+      var(--coop-panel-canvas) 6%
+    );
+  }
+
+  .coop-patch-match-option--selected {
+    border-color: color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 65%, var(--coop-border) 35%);
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 88%,
+      var(--vscode-focusBorder, #007fd4) 12%
+    );
+  }
+
+  .coop-patch-match-option-header {
+    @apply flex items-center gap-2 border-b px-2.5 py-1.5 text-[11px];
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-match-checkbox {
+    @apply m-0 shrink-0;
+  }
+
+  .coop-patch-match-option-title {
+    @apply font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-patch-match-proposals {
+    @apply flex flex-wrap gap-3 border-b px-2.5 py-1.5 text-[11px];
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-match-proposal {
+    @apply flex cursor-pointer items-center gap-1.5;
+    color: var(--coop-panel-muted);
   }
 
   .coop-patch-diff {

@@ -3,8 +3,10 @@ import {
   MAX_USER_FACING_RESPONSE_MS,
   RESPONSE_DEADLINE_REASON,
   RESERVED_SYNTHESIS_MS,
+  SOFT_GATHER_BUDGET_EXHAUSTED_INTERNAL,
   abortablePromise,
   isResponseDeadlineAbort,
+  isSoftGatherLatencyMessage,
   remainingContextGatherBudgetMs,
   remainingResponseBudgetMs,
   scheduleResponseDeadline
@@ -64,6 +66,15 @@ async function main(): Promise<void> {
     const controller = new AbortController();
     controller.abort(RESPONSE_DEADLINE_REASON);
     assert.equal(isResponseDeadlineAbort(controller.signal), true);
+  });
+
+  await test("isSoftGatherLatencyMessage detects internal latency copy", () => {
+    assert.equal(isSoftGatherLatencyMessage(SOFT_GATHER_BUDGET_EXHAUSTED_INTERNAL), true);
+    assert.equal(
+      isSoftGatherLatencyMessage("Soft gather budget exhausted — synthesizing with partial blast evidence."),
+      true
+    );
+    assert.equal(isSoftGatherLatencyMessage("GitHub offline; showing cached impact analysis."), false);
   });
 
   console.log(`\nresponseDeadline: ${passed} passed, ${failed} failed`);

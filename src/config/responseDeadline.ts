@@ -4,8 +4,22 @@
  * 15s is a *start answering* guideline — stop gathering context and hand off to
  * the model with whatever evidence we have. It must never abort the turn,
  * kill the model, or replace an answer with a timeout message.
+ *
+ * Soft gather is silent to the user: synthesize with partial evidence, do not
+ * post degradation banners or engineer jargon about “budget exhausted.”
  */
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;
+
+/** Internal-only marker — never show in chat banners or evidence chrome. */
+export const SOFT_GATHER_BUDGET_EXHAUSTED_INTERNAL =
+  "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence.";
+
+export function isSoftGatherLatencyMessage(message: string | undefined | null): boolean {
+  if (!message) {
+    return false;
+  }
+  return /soft gather budget exhausted|partial blast evidence|responseDeadline/i.test(message);
+}
 
 /** @deprecated Hard abort reason — kept for tests of legacy helpers; never scheduled on turns. */
 export const RESPONSE_DEADLINE_REASON = "coop-response-deadline";

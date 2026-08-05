@@ -53,7 +53,13 @@ export function shouldClearJobActivityOnChatComplete(deliverable?: JobActivityDe
   return deliverable !== "standalone";
 }
 
-/** Map terminal backend statuses to in-progress UI while chat synthesis runs. */
+/**
+ * Map terminal backend statuses to in-progress UI while chat synthesis runs.
+ * Preserve user/system cancel and hard failure — never keep the spinner alive after Stop.
+ */
 export function displayStatusForChatDeliverable(status: JobActivityStatus): JobActivityStatus {
+  if (status === "cancelled" || status === "failed") {
+    return status;
+  }
   return isActiveJobStatus(status) ? status : "running";
 }

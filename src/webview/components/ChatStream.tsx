@@ -12,6 +12,7 @@ import {
   RepoSummaryEvidenceCard
 } from "../EvidenceCards";
 import type { IntegrationChatProvider } from "../../chat/types";
+import { CHAT_STOPPED_MESSAGE } from "../../chat/chatStopped";
 import type {
   BlastRadiusEvidence,
   ConfluenceSearchEvidence,
@@ -261,10 +262,12 @@ function MessageBlock({
 }): React.ReactElement {
   const isUser = message.role === "user";
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
+  const isStoppedNotice =
+    !isUser && !isStreaming && message.content.trim() === CHAT_STOPPED_MESSAGE;
 
   return (
     <article
-      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}`}
+      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}${isStoppedNotice ? " chat-message--stopped" : ""}`}
       data-role={message.role}
     >
       <div className="chat-message-inner">
@@ -273,7 +276,7 @@ function MessageBlock({
             <span className="chat-action-tag">{humanizeActionTag(parsed.tag)}</span>
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
           </div>
-        ) : !isUser ? (
+        ) : !isUser && !isStoppedNotice ? (
           <div className="chat-message-meta">
             <span className="chat-message-label">CoopAI</span>
             {isStreaming ? (
@@ -286,9 +289,9 @@ function MessageBlock({
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
             <ChatMessageActions content={message.content} visible={Boolean(message.content)} />
           </div>
-        ) : (
+        ) : isUser ? (
           <time className="chat-message-time chat-message-time--solo">{formatTime(message.timestamp)}</time>
-        )}
+        ) : null}
 
         {message.attachments?.length ? (
           <div className="chat-message-attachments">
@@ -313,7 +316,9 @@ function MessageBlock({
           </div>
         ) : null}
 
-        {parsed.body ? (
+        {isStoppedNotice ? (
+          <p className="chat-message-stopped">{CHAT_STOPPED_MESSAGE}</p>
+        ) : parsed.body ? (
           isUser && parsed.tag ? (
             <QuickActionBody body={parsed.body} renderBody={renderBody} />
           ) : isUser ? (

@@ -13,6 +13,20 @@ import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
+/** Soft gather is silent — partial evidence only; never a user-facing banner message. */
+function softGatherPartialBlastResult(
+  context: FeatureExecutionContext,
+  params: FeatureExecutionContext["request"]["params"],
+  directOnly: boolean
+) {
+  return contextResult(
+    context,
+    placeholderBlastRadiusData(params, directOnly),
+    undefined,
+    false
+  );
+}
+
 export async function blastRadius(context: FeatureExecutionContext) {
   const params = context.request.params;
   const provider = resolveCodeHostProvider(params);
@@ -76,16 +90,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
         : Date.now();
     const budgetMs = remainingContextGatherBudgetMs(gatherStartedAt);
     if (budgetMs <= 0) {
-      return contextResult(
-        context,
-        placeholderBlastRadiusData(
-          params,
-          directOnly,
-          "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
-        ),
-        "Soft gather budget exhausted — synthesizing with partial blast evidence.",
-        true
-      );
+      return softGatherPartialBlastResult(context, params, directOnly);
     }
 
     try {
@@ -105,16 +110,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
       ]);
 
       if (!report) {
-        return contextResult(
-          context,
-          placeholderBlastRadiusData(
-            params,
-            directOnly,
-            "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
-          ),
-          "Soft gather budget exhausted — synthesizing with partial blast evidence.",
-          true
-        );
+        return softGatherPartialBlastResult(context, params, directOnly);
       }
 
       const data = {

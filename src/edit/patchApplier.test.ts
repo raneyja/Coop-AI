@@ -53,7 +53,7 @@ test("fails when search text is missing", () => {
   assert.equal(result.reason, "not_found");
 });
 
-test("fails when search text is ambiguous", () => {
+test("fails when search text is ambiguous without selection", () => {
   const result = applyHunkToContent("foo\nfoo\n", {
     search: "foo",
     replace: "bar"
@@ -62,7 +62,74 @@ test("fails when search text is ambiguous", () => {
   if (result.ok) {
     return;
   }
-  assert.equal(result.reason, "ambiguous");
+  assert.equal(result.reason, "no_selection");
+});
+
+test("applies ambiguous search to selected match indices", () => {
+  const result = applyHunkToContent("foo\nbar\nfoo\n", {
+    search: "foo",
+    replace: "baz"
+  }, { matchIndices: [1] });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.content, "foo\nbar\nbaz\n");
+});
+
+test("applies ambiguous search to multiple selected match indices", () => {
+  const result = applyHunkToContent("foo\nbar\nfoo\n", {
+    search: "foo",
+    replace: "baz"
+  }, { matchIndices: [0, 1] });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.content, "baz\nbar\nbaz\n");
+});
+
+test("multi-hunk apply uses original offsets so index 0 stays the first match", () => {
+  const source = "foo\nbar\nfoo\n";
+  // Both hunks ask for match index 0 (first foo). After a naive sequential apply,
+  // the second hunk's index 0 would wrongly become the second foo.
+  const sameReplace = applyHunksToContent(
+    source,
+    [
+      { search: "foo", replace: "AAA" },
+      { search: "foo", replace: "AAA" }
+    ],
+    { matchIndicesByHunk: { 0: [0], 1: [0] } }
+  );
+  assert.equal(sameReplace.ok, true);
+  if (!sameReplace.ok) {
+    return;
+  }
+  assert.equal(sameReplace.content, "AAA\nbar\nfoo\n");
+
+  const differentReplace = applyHunksToContent(
+    source,
+    [
+      { search: "foo", replace: "AAA" },
+      { search: "foo", replace: "BBB" }
+    ],
+    { matchIndicesByHunk: { 0: [0], 1: [0] } }
+  );
+  assert.equal(differentReplace.ok, false);
+
+  const distinctPlaces = applyHunksToContent(
+    source,
+    [
+      { search: "foo", replace: "AAA" },
+      { search: "foo", replace: "BBB" }
+    ],
+    { matchIndicesByHunk: { 0: [0], 1: [1] } }
+  );
+  assert.equal(distinctPlaces.ok, true);
+  if (!distinctPlaces.ok) {
+    return;
+  }
+  assert.equal(distinctPlaces.content, "AAA\nbar\nBBB\n");
 });
 
 test("preserves whitespace in search blocks", () => {
@@ -117,7 +184,7 @@ test("fuzzy match trims trailing whitespace on lines", () => {
   assert.equal(result.content, "ALPHA\nBETA\n");
 });
 
-test("fuzzy match fails when trimmed lines are ambiguous", () => {
+test("fuzzy match fails when trimmed lines are ambiguous without selection", () => {
   const source = "foo\nbar\nfoo\n";
   const result = applyHunkToContent(source, {
     search: "foo",
@@ -127,7 +194,7 @@ test("fuzzy match fails when trimmed lines are ambiguous", () => {
   if (result.ok) {
     return;
   }
-  assert.equal(result.reason, "ambiguous");
+  assert.equal(result.reason, "no_selection");
 });
 
 test("fuzzy match fails when no trimmed line block matches", () => {

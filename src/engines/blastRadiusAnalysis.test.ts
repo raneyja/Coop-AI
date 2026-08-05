@@ -129,8 +129,8 @@ async function softBudgetStillSynthesizesPartialReport(): Promise<void> {
   assert.ok(report.dependentDetails.length > 0, "expected core dependents retained for synthesis");
   assert.equal(report.dependentDetails[0]?.path, "apps/web/components/StateGroupSelect.tsx");
   assert.ok(
-    report.warnings.some((warning) => /soft gather budget exhausted/i.test(warning)),
-    "expected soft-budget warning referencing responseDeadline path"
+    !report.warnings.some((warning) => /soft gather budget exhausted/i.test(warning)),
+    "soft gather must not leak latency jargon into user-facing warnings"
   );
   // Secondary enrichment skipped when budget exhausted.
   assert.equal(report.testFiles.length, 0);

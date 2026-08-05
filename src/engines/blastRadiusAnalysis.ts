@@ -124,17 +124,8 @@ export class BlastRadiusAnalysisEngine {
     const gatherStartedAt = params.gatherStartedAt ?? Date.now();
     const softBudgetLeft = (): number => remainingContextGatherBudgetMs(gatherStartedAt);
     const softBudgetExhausted = (): boolean => softBudgetLeft() <= 0;
-    const noteSoftBudgetExhausted = (): void => {
-      if (
-        !warnings.some((warning) =>
-          /soft gather budget exhausted/i.test(warning)
-        )
-      ) {
-        warnings.push(
-          "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence."
-        );
-      }
-    };
+    // Soft gather is silent to users — do not push latency jargon into warnings
+    // (those surface in evidence cards / synthesis). completeness already reflects partial.
 
     const coords: RepoCoordinates = {
       provider: params.provider ?? "github",
@@ -183,8 +174,6 @@ export class BlastRadiusAnalysisEngine {
             );
             transitiveDependents = transitive.paths;
             dependentDetails = [...dependentDetails, ...transitive.details];
-          } else if (includeTransitive && directDependents.length > 0 && softBudgetExhausted()) {
-            noteSoftBudgetExhausted();
           }
 
           if (directDependents.length === 0 && !softBudgetExhausted()) {
@@ -210,8 +199,6 @@ export class BlastRadiusAnalysisEngine {
             } else {
               warnings.push("No dependents found in index or import-pattern search for this file.");
             }
-          } else if (directDependents.length === 0 && softBudgetExhausted()) {
-            noteSoftBudgetExhausted();
           }
         } else {
           warnings.push("Deep index not enabled — run Lightning Mode to map dependents.");
@@ -308,12 +295,9 @@ export class BlastRadiusAnalysisEngine {
         } catch (error) {
           warnings.push(`Slack search unavailable: ${errorMessage(error)}`);
         }
-      } else {
-        noteSoftBudgetExhausted();
       }
-    } else {
-      noteSoftBudgetExhausted();
     }
+    // else: soft gather silent — skip secondary enrichment; return core evidence only.
 
     const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);
 

@@ -641,14 +641,12 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      for (const session of coopSessionRegistry.getAll()) {
-        session.refreshEditorContext(editor);
-      }
+      // Only the focused Coop session follows the editor — never broadcast to every
+      // panel/sidebar (that re-chipped Window A's file into a blank new window).
+      coopSessionRegistry.getActive()?.refreshEditorContext(editor);
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
-      for (const session of coopSessionRegistry.getAll()) {
-        session.refreshEditorContext(event.textEditor);
-      }
+      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor);
     }),
     vscode.workspace.onDidCloseTextDocument(() => {
       for (const session of coopSessionRegistry.getAll()) {

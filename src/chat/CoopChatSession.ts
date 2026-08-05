@@ -8,6 +8,8 @@ import {
   rejectPendingPatchHunk,
   rejectPendingPatchWithState,
   resolvePatchCardsSnapshot,
+  setPendingPatchMatchLocations,
+  setPendingSharedMatchProposal,
   undoLastPatchWithState
 } from "../edit/patchActions";
 import { setLastEditUserMessage } from "../edit/patchSession";
@@ -72,6 +74,7 @@ import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTu
 import {
   abortablePromise,
   clearResponseDeadlineForSynthesis,
+  isSoftGatherLatencyMessage,
   remainingContextGatherBudgetMs
 } from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
@@ -113,6 +116,7 @@ import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";
 import { resolveGitUserEmail } from "./resolveGitUserEmail";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import { ChatQuotaExceededError } from "../api/CoopBackendClient";
+import { CHAT_STOPPED_MESSAGE } from "./chatStopped";
 import { buildQuotaExceededUpgradeUrl, isFreeQuotaExhausted } from "./quotaNotice";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
@@ -403,6 +407,11 @@ export type CoopChatSessionOptions = {
   enforceSidebarMinWidth?: boolean;
   /** When set, enables persisted multi-thread history for this session (sidebar). */
   threadScopeKey?: string;
+  /**
+   * Start with empty chips (no global last-repo restore, no editor harvest).
+   * Used for chat panels moved into a new window so Window A's file/repo does not stick.
+   */
+  startBlank?: boolean;
 };
 
 /**
@@ -452,6 +461,11 @@ export class CoopChatSession {
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
   private editorContextSuppressedUntil = 0;
+  /**
+   * When false, ignore passive editor snaps (active tab / visibility).
+   * Fresh new-window panels stay blank until Use-repo or an explicit file pick.
+   */
+  private allowPassiveEditorSnap = true;
   /** Keeps chat context file anchored during file-scoped quick actions and evidence review opens. */
   private pinnedContextFile?: string;
   /**
@@ -523,6 +537,9 @@ export class CoopChatSession {
       baseUrl: resolveCoopBaseUrl().baseUrl,
       getToken: () => this.options.api.getToken()
     });
+    if (options.startBlank) {
+      this.allowPassiveEditorSnap = false;
+    }
     coopSessionRegistry.register(this);
   }
 
@@ -580,11 +597,16 @@ export class CoopChatSession {
       this.options.codeHostSecrets,
       this.options.integrationSecrets
     );
-    this.applyDefaultRepoToContext();
-    this.restorePersistedRepoContext();
+    // Drop legacy cross-window global chip seed (owner/repo leaked across VS Code windows).
+    void this.options.extensionContext.globalState.update("coopAI.lastRepoContext", undefined);
+    const startBlank = this.options.startBlank === true;
+    if (!startBlank) {
+      // Same-window sidebar reload only — never seed from User/global defaults into a new window.
+      this.applyDefaultRepoToContext();
+    }
     this.postTheme();
     await this.pushSettingsState();
-    if (this.threadStore) {
+    if (this.threadStore && !startBlank) {
       const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.chatHistory.push(...active.messages);
       this.threadArtifacts = [...(active.artifacts ?? [])];
@@ -608,11 +630,37 @@ export class CoopChatSession {
       }
     }
     this.dropFileChipUnlessOpenInEditor();
-    this.snapContextFromOpenEditors();
+    // New windows stay blank until Use-repo / file pick / editor focus in this window.
+    if (!startBlank) {
+      this.snapContextFromOpenEditors();
+    }
     this.postContext();
     this.postChatHistory();
     this.pushThreadsList();
     this.syncAllLocalThreadsToBackend();
+  }
+
+  /**
+   * After moving a chat panel into a new window: wipe chips inherited from the
+   * creating window and wait for an explicit repo/file selection here.
+   * Keeps context if Use-repo / openChatForRepo already assigned one before move finished.
+   */
+  public beginFreshWindowContext(): void {
+    if (isExplicitRepoScope(this.currentContext) || this.currentContext.file?.trim()) {
+      this.enablePassiveEditorSnap();
+      this.postContext();
+      return;
+    }
+    this.pinnedContextFile = undefined;
+    this.remoteProvenanceFile = undefined;
+    this.allowPassiveEditorSnap = false;
+    this.intentDebouncer.cancelAll();
+    this.currentContext = {};
+    this.postContext();
+  }
+
+  private enablePassiveEditorSnap(): void {
+    this.allowPassiveEditorSnap = true;
   }
 
   private threadSyncOptions() {
@@ -655,6 +703,9 @@ export class CoopChatSession {
   }
 
   public refreshEditorContext(editor: vscode.TextEditor | undefined): void {
+    if (!this.allowPassiveEditorSnap) {
+      return;
+    }
     if (Date.now() < this.editorContextSuppressedUntil) {
       return;
     }
@@ -696,6 +747,9 @@ export class CoopChatSession {
 
   /** Tab close / visible-editors change — clear chip if the chipped file is gone. */
   public reconcileEditorFileChips(): void {
+    if (!this.allowPassiveEditorSnap && !this.currentContext.file?.trim()) {
+      return;
+    }
     if (Date.now() < this.editorContextSuppressedUntil) {
       return;
     }
@@ -709,8 +763,9 @@ export class CoopChatSession {
   }
 
   /**
-   * Prefer the passed editor, else a tab matching current context file, else any visible
-   * tab when there is no file chip yet (Downloads / Cmd+O on startup).
+   * Prefer the passed editor, else a tab matching the current context file.
+   * When context is blank, only the focused active editor may chip — never harvest
+   * another window's visible tabs (same extension host / auxiliary windows).
    */
   private resolveEditorForContextRefresh(
     editor: vscode.TextEditor | undefined
@@ -735,25 +790,27 @@ export class CoopChatSession {
     if (this.isWorkingOnRemoteProvenance()) {
       return pickRemoteEditorForContext(preferred);
     }
-    const matched =
-      pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
-    if (matched) {
-      return matched;
-    }
-    // Explorer pick set a file chip but the tab isn't open yet — don't steal it with
-    // an unrelated visible editor (that was the false "opened" CoopSettingsPanel bug).
     if (preferred?.trim()) {
-      return undefined;
+      // Explorer pick set a file chip but the tab isn't open yet — don't steal it with
+      // an unrelated visible editor (that was the false "opened" CoopSettingsPanel bug).
+      return pickLocalEditorForContext(preferred) ?? pickEditorForContext(preferred);
     }
-    return (
-      pickLocalEditorForContext() ??
-      pickEditorForContext() ??
-      vscode.window.activeTextEditor
-    );
+    // Blank context: focused editor only (no visibleTextEditors scan across windows).
+    const active = vscode.window.activeTextEditor;
+    if (active && !active.document.isClosed) {
+      const resolved = resolveEditorFile(active);
+      if (resolved.file?.trim()) {
+        return active;
+      }
+    }
+    return undefined;
   }
 
   /** Immediate chip sync (no debounce) — used on initialize / webview-ready. */
   private snapContextFromOpenEditors(): boolean {
+    if (!this.allowPassiveEditorSnap) {
+      return false;
+    }
     const editor = this.resolveEditorForContextRefresh(vscode.window.activeTextEditor);
     if (!editor) {
       return false;
@@ -844,6 +901,93 @@ export class CoopChatSession {
         turn.jobId = undefined;
       }
     }
+  }
+
+  /**
+   * User Stop: abort the turn, clear thinking/job activity, and land a Cursor-style
+   * "Stopped." message (or keep any partial assistant text).
+   */
+  private handleStreamCancel(threadId: string): void {
+    const turn = this.threadRuns.get(threadId);
+    const partialText = turn?.partialAssistant?.trim() ?? "";
+    const jobId = turn?.jobId;
+    const quickAction = turn?.quickAction;
+    const history = turn ? [...turn.history] : undefined;
+    const artifacts = turn ? [...turn.artifacts] : undefined;
+    const sessionCostUsd = turn?.sessionCostUsd;
+    const turnContext = turn?.context;
+
+    this.abortActiveJob(threadId);
+    this.threadRuns.abort(threadId);
+    this.clearIntentFeedback(threadId);
+
+    if (jobId) {
+      this.postJobProgress(
+        {
+          jobId,
+          status: "cancelled",
+          title: quickAction ? jobTitleForAction(quickAction) : "Stopped",
+          deliverable: quickAction ? deliverableForQuickAction(quickAction) : "chat",
+          showViewResults: false,
+          message: CHAT_STOPPED_MESSAGE,
+          progress: 0
+        },
+        threadId
+      );
+    }
+
+    const stoppedMessage: ChatMessage = {
+      role: "assistant",
+      content: partialText || CHAT_STOPPED_MESSAGE,
+      timestamp: Date.now(),
+      links: []
+    };
+
+    if (history) {
+      history.push(stoppedMessage);
+      if (this.isViewingThread(threadId)) {
+        this.chatHistory.length = 0;
+        this.chatHistory.push(...history);
+        if (artifacts) {
+          this.threadArtifacts = artifacts;
+        }
+        if (sessionCostUsd !== undefined) {
+          this.sessionCostUsd = sessionCostUsd;
+        }
+        this.postForThread(threadId, {
+          type: "chat:cancelled",
+          payload: {
+            message: stoppedMessage,
+            threadId,
+            hadPartial: Boolean(partialText)
+          }
+        });
+        this.postChatHistory();
+        this.persistActiveThread();
+      } else if (this.threadStore && sessionCostUsd !== undefined) {
+        const stored = this.threadStore.getThreadById(threadId);
+        this.threadStore.setThread(
+          threadId,
+          history,
+          sessionCostUsd,
+          stored?.title ?? "New Chat",
+          artifacts ?? stored?.artifacts ?? [],
+          turnContext ?? stored?.repoContext
+        );
+        const thread = this.threadStore.getThreadById(threadId);
+        if (thread) {
+          void syncThreadToBackend(thread, this.threadSyncOptions());
+        }
+      }
+    } else if (this.isViewingThread(threadId)) {
+      // Idempotent Stop with no active turn — clear activity only.
+      this.postForThread(threadId, {
+        type: "chat:cancelled",
+        payload: { threadId }
+      });
+    }
+
+    this.pushThreadsList();
   }
 
   private resetChatState(): void {
@@ -1188,6 +1332,7 @@ export class CoopChatSession {
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
     this.pinnedContextFile = undefined;
     this.remoteProvenanceFile = undefined;
+    this.enablePassiveEditorSnap();
     // Sidebar clicks steal editor focus — suppress prefs-seeded snaps that would
     // resurrect the previously selected repository.
     this.editorContextSuppressedUntil = Date.now() + 8_000;
@@ -1391,8 +1536,11 @@ export class CoopChatSession {
       case "webview-ready":
         this.postTheme();
         if (source === "chat") {
-          // Snap open tabs only — do not drop thread file chips mid-open.
-          this.snapContextFromOpenEditors();
+          // Snap open tabs only when passive editor following is armed.
+          // Fresh new-window panels stay blank until Use-repo / file pick.
+          if (this.allowPassiveEditorSnap) {
+            this.snapContextFromOpenEditors();
+          }
           this.postContext();
           try {
             await this.pushSettingsState();
@@ -1434,7 +1582,6 @@ export class CoopChatSession {
       case "context:dismiss-warning":
         this.currentContext = { ...this.currentContext, contextWarning: undefined };
         this.postContext();
-        void this.persistRepoContext();
         return;
       case "agents:create-skeleton":
       case "agents:start-from-template":
@@ -1466,10 +1613,7 @@ export class CoopChatSession {
         await this.handleCollectionsListRequest();
         return;
       case "chat:stream-cancel": {
-        const threadId = this.activeThreadId();
-        this.abortActiveJob(threadId);
-        this.threadRuns.abort(threadId);
-        this.pushThreadsList();
+        this.handleStreamCancel(this.activeThreadId());
         return;
       }
       case "prompts:list-request":
@@ -1891,7 +2035,8 @@ export class CoopChatSession {
       case "patch:apply":
         await applyPendingPatch(
           (payload) => this.postPatchUpdate(payload),
-          message.payload?.messageTimestamp
+          message.payload?.messageTimestamp,
+          message.payload?.matchSelections
         );
         return;
       case "patch:reject":
@@ -1905,7 +2050,8 @@ export class CoopChatSession {
         await applyPendingPatchHunk(
           (payload) => this.postPatchUpdate(payload),
           message.payload?.messageTimestamp,
-          message.payload.hunkId
+          message.payload.hunkId,
+          message.payload.matchLocationIds
         );
         return;
       case "patch:reject-hunk":
@@ -1913,6 +2059,24 @@ export class CoopChatSession {
           (payload) => this.postPatchUpdate(payload),
           message.payload?.messageTimestamp,
           message.payload.hunkId
+        );
+        return;
+      case "patch:set-match-locations":
+        setPendingPatchMatchLocations(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload.messageTimestamp,
+          message.payload.hunkId,
+          message.payload.locationIds
+        );
+        return;
+      case "patch:set-shared-match-proposal":
+        setPendingSharedMatchProposal(
+          (payload) => this.postPatchUpdate(payload),
+          message.payload.messageTimestamp,
+          message.payload.relativePath,
+          message.payload.groupId,
+          message.payload.locationId,
+          message.payload.proposalId
         );
         return;
       case "patch:undo":
@@ -2081,6 +2245,7 @@ export class CoopChatSession {
     // Cancel pending editor snaps so a late FILE_SWITCHED can't overwrite this pick.
     this.intentDebouncer.cancelAll();
     this.pinnedContextFile = undefined;
+    this.enablePassiveEditorSnap();
     // Hold editor refresh while we open — remote pick must not be overwritten by a
     // leftover local clone tab of the same path before VFS/API content is ready.
     this.editorContextSuppressedUntil = Date.now() + 8_000;
@@ -2303,6 +2468,9 @@ export class CoopChatSession {
       this.processConflicts(event, results);
 
       if (!options.quiet) {
+        if (turn && !this.threadRuns.isStreamActive(turn)) {
+          return turn.contextBundle;
+        }
         const stale = results.find((result) => result.stale);
         const error = results.find((result) => result.error);
         const postFeedback = (payload: IntentFeedbackState) => {
@@ -5845,9 +6013,15 @@ export class CoopChatSession {
     patch: Partial<JobProgressPayload> & Pick<JobProgressPayload, "jobId" | "progress">,
     threadId?: string
   ): void {
+    const targetThreadId = threadId ?? this.activeThreadId();
+    const turn = this.threadRuns.get(targetThreadId);
+    // After Stop the turn is gone — never re-seed loading/thinking UI from a late poll tick.
+    if (!turn || turn.status !== "running") {
+      return;
+    }
+
     const deliverable = deliverableForQuickAction(quickAction);
     const status = patch.status ?? "running";
-    const targetThreadId = threadId ?? this.activeThreadId();
     this.postJobProgress(
       {
         title: jobTitleForAction(quickAction),
@@ -7172,7 +7346,6 @@ export class CoopChatSession {
     const repoId = buildRepoId(this.preferences, this.currentContext);
     this.options.lightningStatusBar.setCurrentRepo(repoId);
     void this.options.lightningStatusBar.refresh();
-    void this.persistRepoContext();
     this.post({ type: "context:update", payload: this.currentContext });
     void this.pushLightningState();
   }
@@ -7826,37 +7999,6 @@ export class CoopChatSession {
     });
   }
 
-  private restorePersistedRepoContext(): void {
-    const saved = this.options.extensionContext.globalState.get<RepoContext>("coopAI.lastRepoContext");
-    if (!saved) {
-      return;
-    }
-    // Restore repo identity only — never resurrect a file chip across reloads.
-    // Editors don't survive EDH restart; Welcome-only must not show yesterday's file.
-    this.currentContext = normalizeRepoContext(
-      mergeRepoContext(this.currentContext, {
-        provider: saved.provider,
-        owner: saved.owner,
-        repo: saved.repo,
-        branch: saved.branch
-      })
-    );
-    this.currentContext = stripStaleContextWarning(this.currentContext);
-  }
-
-  private async persistRepoContext(): Promise<void> {
-    if (!this.currentContext.owner && !this.currentContext.repo && !this.currentContext.file) {
-      return;
-    }
-    // Persist owner/repo for next session; omit file/scope so cold start can't ghost-chip.
-    await this.options.extensionContext.globalState.update("coopAI.lastRepoContext", {
-      provider: this.currentContext.provider,
-      owner: this.currentContext.owner,
-      repo: this.currentContext.repo,
-      branch: this.currentContext.branch
-    } satisfies RepoContext);
-  }
-
   public openLightningPanel(): void {
     void vscode.env.openExternal(vscode.Uri.parse(PRICING_PAGE_URL));
   }
@@ -8291,6 +8433,10 @@ export class CoopChatSession {
     if (!this.degradationConfig.notifyUser) {
       return;
     }
+    // Soft gather latency is silent — never post engineer jargon about budgets.
+    if (isSoftGatherLatencyMessage(payload.message) || isSoftGatherLatencyMessage(payload.title)) {
+      return;
+    }
     if (this.degradationConfig.userNotificationLevel === "critical" && payload.severity !== "critical") {
       return;
     }
@@ -8302,6 +8448,13 @@ export class CoopChatSession {
 
   private maybeNotifyDegradation(request: ContextFetchRequest, result: ContextFetchResult): void {
     if (!result.stale && !result.error) {
+      return;
+    }
+    // Soft gather is an internal latency tradeoff — never show engineer jargon banners.
+    if (
+      isSoftGatherLatencyMessage(result.message) ||
+      isSoftGatherLatencyMessage(result.error)
+    ) {
       return;
     }
     const hasLocal = contextResultHasLocalFiles(result);

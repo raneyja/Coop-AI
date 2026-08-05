@@ -21,6 +21,22 @@ export type ApplyPatchesResult =
   | { ok: true; undo: FileUndoSnapshot[]; filesChanged: number; usedRemoteEditor: boolean }
   | { ok: false; error: string; file?: string };
 
+export type ApplyPatchesOptions = {
+  /**
+   * Match selections keyed by `relativePath::hunkIndex` within the patch set
+   * passed to apply (not the full session patch set).
+   */
+  matchIndicesByFileHunk?: Readonly<Record<string, readonly number[]>>;
+};
+
+function fileHunkKey(relativePath: string, hunkIndex: number): string {
+  return `${relativePath}::${hunkIndex}`;
+}
+
+export function matchIndicesKey(relativePath: string, hunkIndex: number): string {
+  return fileHunkKey(relativePath, hunkIndex);
+}
+
 function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
   const lastLine = Math.max(0, document.lineCount - 1);
   const lastCharacter = document.lineAt(lastLine).text.length;
@@ -28,7 +44,8 @@ function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
 }
 
 export async function applyPatchesToWorkspace(
-  patches: ParsedPatchSet
+  patches: ParsedPatchSet,
+  options?: ApplyPatchesOptions
 ): Promise<ApplyPatchesResult> {
   const planned: Array<{ uri: vscode.Uri; relativePath: string; originalContent: string; nextContent: string }> =
     [];
@@ -53,7 +70,16 @@ export async function applyPatchesToWorkspace(
       return { ok: false, error: `Could not read file: ${filePatch.relativePath}`, file: filePatch.relativePath };
     }
 
-    const applied = applyHunksToContent(originalContent, filePatch.hunks);
+    const matchIndicesByHunk: { [hunkIndex: number]: readonly number[] } = {};
+    for (let hunkIndex = 0; hunkIndex < filePatch.hunks.length; hunkIndex++) {
+      const key = fileHunkKey(filePatch.relativePath, hunkIndex);
+      const indices = options?.matchIndicesByFileHunk?.[key];
+      if (indices) {
+        matchIndicesByHunk[hunkIndex] = indices;
+      }
+    }
+
+    const applied = applyHunksToContent(originalContent, filePatch.hunks, { matchIndicesByHunk });
     if (!applied.ok) {
       return { ok: false, error: `${filePatch.relativePath}: ${applied.error}`, file: filePatch.relativePath };
     }
