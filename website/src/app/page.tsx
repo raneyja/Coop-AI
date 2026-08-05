@@ -3,7 +3,7 @@ import { HomePartnerLogos } from "@/components/HomePartnerLogos";
 import { SectionHeading } from "@/components/SectionHeading";
 import { Testimonial } from "@/components/Testimonial";
 import { CTASection } from "@/components/CTASection";
-import { FileContextGraph } from "@/components/FileContextGraph";
+import { ContextConstellation } from "@/components/ContextConstellation";
 import { QuickActionPromptCarousel } from "@/components/QuickActionPromptCarousel";
 import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
@@ -45,9 +45,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-t border-coop-border py-20">
-        <div className="mx-auto max-w-7xl px-6 lg:grid lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] lg:items-center lg:gap-10 xl:grid-cols-[minmax(0,30rem)_1fr] xl:gap-12">
-          <div>
+      <section className="border-t border-coop-border py-16 md:py-20">
+        <div className="mx-auto max-w-7xl px-6 xl:grid xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-center xl:gap-12">
+          <div className="min-w-0">
             <SectionHeading label="indexing" title={siteConfig.contextIntelligence.title} />
             <p className="mt-4 text-lg font-medium text-gray-800">
               {siteConfig.contextIntelligence.tagline}
@@ -64,9 +64,9 @@ export default function HomePage() {
               ))}
             </dl>
           </div>
-          <div className="mt-10 w-full lg:mt-0">
-            <div className="aspect-[920/580] w-full min-h-[22rem] sm:min-h-[26rem] lg:aspect-auto lg:h-[34rem] xl:h-[38rem]">
-              <FileContextGraph compact className="h-full" />
+          <div className="mt-10 w-full min-w-0 xl:mt-0">
+            <div className="relative mx-auto aspect-[920/580] w-full max-w-4xl overflow-hidden xl:max-w-none xl:h-[36rem] xl:aspect-auto">
+              <ContextConstellation className="absolute inset-0 h-full w-full" />
             </div>
           </div>
         </div>
