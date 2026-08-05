@@ -34,6 +34,7 @@ import {
   ORBIT_THEME,
   VIEW_H,
   VIEW_W,
+  constellationContentBounds,
   layoutOrbitNodes,
   orbitConnectionPath,
   type LaidOutOrbitNode
@@ -45,6 +46,8 @@ const LAND_MS = 480;
 const BETWEEN_MS = 380;
 const HOLD_FULL_MS = 2000;
 const SCENARIO_FADE_MS = 520;
+/** Below this fit width, pull orbits in so the zoomed content stays readable. */
+const COMPACT_FIT_PX = 560;
 
 type Phase = "pulse" | "flow" | "land" | "between" | "hold" | "fade";
 
@@ -81,6 +84,7 @@ type ContextConstellationProps = {
 export function ContextConstellation({ className = "" }: ContextConstellationProps) {
   const fitRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(0.5);
+  const [compact, setCompact] = useState(false);
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("pulse");
@@ -92,11 +96,15 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scenario = FILE_CONTEXT_SCENARIOS[scenarioIndex % FILE_CONTEXT_SCENARIOS.length];
-  const orbitNodes = useMemo(() => layoutOrbitNodes(scenario), [scenario]);
+  const orbitNodes = useMemo(
+    () => layoutOrbitNodes(scenario, compact ? 0.78 : 1),
+    [scenario, compact]
+  );
+  const contentBounds = useMemo(() => constellationContentBounds(orbitNodes), [orbitNodes]);
   const activeNode =
     activeIndex >= 0 && activeIndex < orbitNodes.length ? orbitNodes[activeIndex] : null;
 
-  // Scale to the fit region only (excludes the caption). Must fit BOTH width and height.
+  // Zoom to the constellation content box (not the empty 920×580 margins) so mobile stays readable.
   useEffect(() => {
     const el = fitRef.current;
     if (!el) return;
@@ -104,16 +112,21 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
     const update = () => {
       const { width, height } = el.getBoundingClientRect();
       if (width < 1 || height < 1) return;
-      const pad = 4;
-      const next = Math.min((width - pad) / VIEW_W, (height - pad) / VIEW_H);
-      setScale(Math.min(1, Math.max(0.22, next)));
+      setCompact(width < COMPACT_FIT_PX);
+      const pad = 8;
+      const next = Math.min(
+        (width - pad) / contentBounds.width,
+        (height - pad) / contentBounds.height
+      );
+      // Allow >1 so narrow screens can enlarge the content cluster; soft-cap for desktop.
+      setScale(Math.min(1.45, Math.max(0.35, next)));
     };
 
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [contentBounds.width, contentBounds.height]);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -243,8 +256,8 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
           <div
             className="relative shrink-0 overflow-hidden"
             style={{
-              width: VIEW_W * scale,
-              height: VIEW_H * scale
+              width: contentBounds.width * scale,
+              height: contentBounds.height * scale
             }}
           >
             <div
@@ -254,7 +267,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
               style={{
                 width: VIEW_W,
                 height: VIEW_H,
-                transform: `scale(${scale})`,
+                transform: `scale(${scale}) translate(${-contentBounds.minX}px, ${-contentBounds.minY}px)`,
                 transformOrigin: "top left",
                 transitionDuration: `${SCENARIO_FADE_MS}ms`
               }}
@@ -360,6 +373,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                   key={`${scenario.id}-${node.id}`}
                   node={node}
                   staggerIndex={i}
+                  compact={compact}
                   active={
                     !reduceMotion &&
                     activeNode?.id === node.id &&
@@ -444,12 +458,14 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
 function OrbitPill({
   node,
   staggerIndex,
+  compact,
   active,
   landed,
   pulsing
 }: {
   node: LaidOutOrbitNode;
   staggerIndex: number;
+  compact: boolean;
   active: boolean;
   landed: boolean;
   pulsing: boolean;
@@ -481,16 +497,28 @@ function OrbitPill({
         }}
       >
         <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-500"
+          className={`flex shrink-0 items-center justify-center rounded-full transition-colors duration-500 ${
+            compact ? "h-7 w-7" : "h-6 w-6"
+          }`}
           style={{ backgroundColor: `${theme.accent}18`, color: theme.accent }}
         >
-          <OrbitIcon kind={node.kind} className="h-3.5 w-3.5" />
+          <OrbitIcon kind={node.kind} className={compact ? "h-4 w-4" : "h-3.5 w-3.5"} />
         </span>
-        <div className="min-w-0 max-w-[7.25rem]">
-          <p className="truncate font-mono text-[10px] font-medium leading-tight text-gray-900">
+        <div className={`min-w-0 ${compact ? "max-w-[8.5rem]" : "max-w-[7.25rem]"}`}>
+          <p
+            className={`truncate font-mono font-medium leading-tight text-gray-900 ${
+              compact ? "text-[11px]" : "text-[10px]"
+            }`}
+          >
             {node.label}
           </p>
-          <p className="truncate text-[9px] leading-tight text-coop-muted">{node.sublabel}</p>
+          <p
+            className={`truncate leading-tight text-coop-muted ${
+              compact ? "text-[10px]" : "text-[9px]"
+            }`}
+          >
+            {node.sublabel}
+          </p>
         </div>
       </div>
     </div>
