@@ -95,16 +95,62 @@ export function orbitConnectionPath(node: LaidOutOrbitNode): string {
   return bezierPathBetween(start.x, start.y, end.x, end.y);
 }
 
-export function layoutOrbitNodes(scenario: FileContextScenario): LaidOutOrbitNode[] {
+export function layoutOrbitNodes(
+  scenario: FileContextScenario,
+  radiusScale = 1
+): LaidOutOrbitNode[] {
   return scenario.orbitNodes.map((node) => {
-    const { x, y } = polarToCartesian(FILE_HUB.x, FILE_HUB.y, node.angle, node.radius);
+    const { x, y } = polarToCartesian(
+      FILE_HUB.x,
+      FILE_HUB.y,
+      node.angle,
+      node.radius * radiusScale
+    );
     return {
       ...node,
+      radius: node.radius * radiusScale,
       cardWidth: displayOrbitWidth(node.label, node.sublabel),
       x,
       y
     };
   });
+}
+
+/** Axis-aligned bounds of hub + orbit pills — used to zoom mobile into content, not empty canvas. */
+export function constellationContentBounds(nodes: LaidOutOrbitNode[]): {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+} {
+  const pillHalfH = 30;
+  const hubHalfW = (FILE_CARD.width + 28) / 2;
+  const hubHalfH = 66;
+  let minX = FILE_HUB.x - hubHalfW;
+  let maxX = FILE_HUB.x + hubHalfW;
+  let minY = FILE_HUB.y - hubHalfH;
+  let maxY = FILE_HUB.y + hubHalfH;
+
+  for (const node of nodes) {
+    const halfW = Math.max(72, node.cardWidth / 2);
+    minX = Math.min(minX, node.x - halfW);
+    maxX = Math.max(maxX, node.x + halfW);
+    minY = Math.min(minY, node.y - pillHalfH);
+    maxY = Math.max(maxY, node.y + pillHalfH);
+  }
+
+  const pad = 20;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(VIEW_W, maxX + pad);
+  maxY = Math.min(VIEW_H, maxY + pad);
+
+  return {
+    minX,
+    minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY)
+  };
 }
 
 export function widthPct(cardWidth: number): number {

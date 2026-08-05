@@ -65,8 +65,8 @@ export default function HomePage() {
             </dl>
           </div>
           <div className="mt-10 w-full min-w-0 xl:mt-0">
-            {/* Mobile: taller box so width+height both fit; desktop/xl: design aspect / fixed height */}
-            <div className="relative mx-auto w-full max-w-full overflow-hidden aspect-[5/4] sm:aspect-[920/580] sm:max-w-4xl xl:aspect-auto xl:max-w-none xl:h-[36rem]">
+            {/* Mobile: near-square so content-zoom can use height; sm+: design aspect */}
+            <div className="relative mx-auto w-full max-w-full overflow-hidden aspect-[6/5] sm:aspect-[920/580] sm:max-w-4xl xl:aspect-auto xl:max-w-none xl:h-[36rem]">
               <ContextConstellation className="absolute inset-0 h-full w-full" />
             </div>
           </div>
