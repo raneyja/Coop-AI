@@ -190,7 +190,7 @@ export function appendIncidentReconstructionContract(
   lines.push("");
   lines.push(`**${INCIDENT_SECTION_INTEGRATIONS}**`);
   lines.push(
-    `(Also acceptable heading: **${INCIDENT_SECTION_TICKETS_THREADS}**.) Required — never omit. Use the integration outcomes below verbatim as bullets (you may add hit titles/keys when present):`
+    `Required heading — use **${INCIDENT_SECTION_INTEGRATIONS}** (not only **${INCIDENT_SECTION_TICKETS_THREADS}**). Never omit. Use the integration outcomes below verbatim as bullets (you may add hit titles/keys when present):`
   );
   for (const bullet of buildIncidentTicketsThreadsBullets(integrations)) {
     lines.push(bullet);
@@ -319,7 +319,8 @@ function insertSectionBeforeSources(content: string, heading: string, body: stri
 
 /**
  * Post-process: ensure incident answers always include Code paths, Integrations
- * (or Tickets / threads), and Gaps. Empty integrations still require an explicit section.
+ * (Jira + Slack status lines), and Gaps. Empty integrations still require an
+ * explicit **Integrations** section — Tickets/threads alone is not enough.
  */
 export function enrichIncidentReconstructionResponse(
   content: string,
@@ -338,15 +339,16 @@ export function enrichIncidentReconstructionResponse(
     );
   }
 
-  const hasIntegrations =
-    hasSection(result, INCIDENT_SECTION_INTEGRATIONS) ||
-    hasSection(result, INCIDENT_SECTION_TICKETS_THREADS);
-  if (!hasIntegrations) {
+  const integrationBullets = buildIncidentTicketsThreadsBullets(integrations).join("\n");
+  if (!hasSection(result, INCIDENT_SECTION_INTEGRATIONS)) {
     result = insertSectionBeforeSources(
       result,
       INCIDENT_SECTION_INTEGRATIONS,
-      buildIncidentTicketsThreadsBullets(integrations).join("\n")
+      integrationBullets
     );
+  } else if (!incidentIntegrationsSectionHasToolLines(result)) {
+    // Heading present but missing Jira/Slack status — append authoritative lines.
+    result = appendBulletsUnderSection(result, INCIDENT_SECTION_INTEGRATIONS, integrationBullets);
   }
 
   if (!hasSection(result, INCIDENT_SECTION_GAPS)) {
@@ -358,6 +360,20 @@ export function enrichIncidentReconstructionResponse(
   }
 
   return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function incidentIntegrationsSectionHasToolLines(content: string): boolean {
+  const match = content.match(/\*\*Integrations\*\*\s*\n([\s\S]*?)(?=\n\*\*[^*]+\*\*|\n*$)/i);
+  const body = match?.[1] ?? "";
+  return /\bjira\b/i.test(body) && /\bslack\b/i.test(body);
+}
+
+function appendBulletsUnderSection(content: string, heading: string, bullets: string): string {
+  const headingRe = new RegExp(`(\\*\\*${escapeRegExp(heading)}\\*\\*\\s*\\n)`);
+  if (!headingRe.test(content)) {
+    return content;
+  }
+  return content.replace(headingRe, `$1${bullets.trim()}\n`);
 }
 
 /** Extract jira/slack blocks from a context bundle for incident assembly. */

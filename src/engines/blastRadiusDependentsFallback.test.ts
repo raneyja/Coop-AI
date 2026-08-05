@@ -6,6 +6,7 @@ import {
   buildImportSearchPatterns,
   groupDependentsByTopLevelFolder,
   isDocsReferencePath,
+  mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   scoreDependentRisk,
   sortDependentsProductionFirst,
@@ -185,6 +186,38 @@ test("buildImportSearchPatterns includes symbol and alias forms", () => {
   assert.ok(patterns.some((p) => p.includes("StateGroup")));
   assert.ok(patterns.some((p) => p.includes("@/")));
   assert.ok(patterns.some((p) => p.includes("from state import")));
+});
+
+test("mergeSearchDependentsFallbackIntoDependenciesData fills callers when job sample empty", () => {
+  const merged = mergeSearchDependentsFallbackIntoDependenciesData(
+    {
+      file: "apps/api/plane/db/models/state.py",
+      jobScan: { source: "dependency-graph-job", edgeCount: 0, dependentsSample: [] }
+    },
+    {
+      dependents: [
+        { path: "apps/api/plane/api/views/issue.py", depth: 1, source: "zoekt" },
+        { path: "apps/web/core/components/issues/issue-detail.tsx", depth: 1, source: "zoekt" }
+      ],
+      source: "zoekt",
+      warnings: []
+    }
+  );
+  assert.deepEqual(merged.directDependents, [
+    "apps/api/plane/api/views/issue.py",
+    "apps/web/core/components/issues/issue-detail.tsx"
+  ]);
+  assert.ok((merged.warnings as string[]).some((w) => /import\/symbol search/i.test(w)));
+  assert.equal((merged.graphMeta as { source: string }).source, "zoekt");
+});
+
+test("mergeSearchDependentsFallbackIntoDependenciesData marks unverified when still empty", () => {
+  const merged = mergeSearchDependentsFallbackIntoDependenciesData(
+    { file: "state.py", jobScan: { dependentsSample: [] } },
+    { dependents: [], source: "remote", warnings: [] }
+  );
+  assert.equal(merged.directDependents, undefined);
+  assert.ok((merged.warnings as string[]).some((w) => /Impact unverified/i.test(w)));
 });
 
 const total = passed + failed;

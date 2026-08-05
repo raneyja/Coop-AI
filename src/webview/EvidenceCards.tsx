@@ -262,6 +262,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelConfluence())}
               open={expanded.confluence}
               onToggle={() => setExpanded((state) => ({ ...state, confluence: !state.confluence }))}
+              inventory={confluenceCount > 0}
             >
               {evidence.confluence.error ? (
                 <IntegrationResultText muted>{evidence.confluence.error}</IntegrationResultText>
@@ -288,6 +289,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelJira())}
               open={expanded.jira}
               onToggle={() => setExpanded((state) => ({ ...state, jira: !state.jira }))}
+              inventory={jiraCount > 0}
             >
               {evidence.jira.error ? (
                 <IntegrationResultText muted>{evidence.jira.error}</IntegrationResultText>
@@ -314,6 +316,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelSlack())}
               open={expanded.slack}
               onToggle={() => setExpanded((state) => ({ ...state, slack: !state.slack }))}
+              inventory={slackCount > 0}
             >
               {evidence.slack.error ? (
                 <IntegrationResultText muted>{evidence.slack.error}</IntegrationResultText>
@@ -340,6 +343,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelTeams())}
               open={expanded.teams}
               onToggle={() => setExpanded((state) => ({ ...state, teams: !state.teams }))}
+              inventory={teamsCount > 0}
             >
               {evidence.teams.error ? (
                 <IntegrationResultText muted>{evidence.teams.error}</IntegrationResultText>
@@ -366,6 +370,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelNotion())}
               open={expanded.notion}
               onToggle={() => setExpanded((state) => ({ ...state, notion: !state.notion }))}
+              inventory={notionCount > 0}
             >
               {evidence.notion.error ? (
                 <IntegrationResultText muted>{evidence.notion.error}</IntegrationResultText>
@@ -392,6 +397,7 @@ export function RepoSummaryEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, repoSummarySourceLabelGoogleDocs())}
               open={expanded.googleDocs}
               onToggle={() => setExpanded((state) => ({ ...state, googleDocs: !state.googleDocs }))}
+              inventory={googleDocsCount > 0}
             >
               {evidence.googleDocs.error ? (
                 <IntegrationResultText muted>{evidence.googleDocs.error}</IntegrationResultText>
@@ -858,6 +864,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelSlack())}
               open={expanded.slack}
               onToggle={() => setExpanded((state) => ({ ...state, slack: !state.slack }))}
+              inventory={slackCount > 0}
             >
               {evidence.slackSearch.error ? (
                 <IntegrationResultText muted>{evidence.slackSearch.error}</IntegrationResultText>
@@ -884,6 +891,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelJira())}
               open={expanded.jira}
               onToggle={() => setExpanded((state) => ({ ...state, jira: !state.jira }))}
+              inventory={jiraCount > 0}
             >
               {evidence.jiraSearch.error ? (
                 <IntegrationResultText muted>{evidence.jiraSearch.error}</IntegrationResultText>
@@ -910,6 +918,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelConfluence())}
               open={expanded.confluence}
               onToggle={() => setExpanded((state) => ({ ...state, confluence: !state.confluence }))}
+              inventory={confluenceCount > 0}
             >
               {evidence.confluenceSearch.error ? (
                 <IntegrationResultText muted>{evidence.confluenceSearch.error}</IntegrationResultText>
@@ -937,6 +946,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelNotion())}
               open={expanded.notion}
               onToggle={() => setExpanded((state) => ({ ...state, notion: !state.notion }))}
+              inventory={notionCount > 0}
             >
               {evidence.notionSearch.error ? (
                 <IntegrationResultText muted>{evidence.notionSearch.error}</IntegrationResultText>
@@ -963,6 +973,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelGoogleDocs())}
               open={expanded.googleDocs}
               onToggle={() => setExpanded((state) => ({ ...state, googleDocs: !state.googleDocs }))}
+              inventory={googleDocsCount > 0}
             >
               {evidence.googleDocsSearch.error ? (
                 <IntegrationResultText muted>{evidence.googleDocsSearch.error}</IntegrationResultText>
@@ -989,6 +1000,7 @@ export function BlastRadiusEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelTeams())}
               open={expanded.teams}
               onToggle={() => setExpanded((state) => ({ ...state, teams: !state.teams }))}
+              inventory={teamsCount > 0}
             >
               {evidence.teamsSearch.error ? (
                 <IntegrationResultText muted>{evidence.teamsSearch.error}</IntegrationResultText>
@@ -1254,6 +1266,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelConfluence())}
               open={expanded.confluence}
               onToggle={() => setExpanded((state) => ({ ...state, confluence: !state.confluence }))}
+              inventory={pageCount > 0}
             >
               {confluence.error ? (
                 <IntegrationResultText muted>{confluence.error}</IntegrationResultText>
@@ -1281,6 +1294,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelJira())}
               open={expanded.jira}
               onToggle={() => setExpanded((state) => ({ ...state, jira: !state.jira }))}
+              inventory={jiraCount > 0}
             >
               {jira.error ? (
                 <IntegrationResultText muted>{jira.error}</IntegrationResultText>
@@ -1307,6 +1321,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelSlack())}
               open={expanded.slack}
               onToggle={() => setExpanded((state) => ({ ...state, slack: !state.slack }))}
+              inventory={slackCount > 0}
             >
               {slack.error ? (
                 <IntegrationResultText muted>{slack.error}</IntegrationResultText>
@@ -1333,6 +1348,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelNotion())}
               open={expanded.notion}
               onToggle={() => setExpanded((state) => ({ ...state, notion: !state.notion }))}
+              inventory={notionCount > 0}
             >
               {notion.error ? (
                 <IntegrationResultText muted>{notion.error}</IntegrationResultText>
@@ -1359,6 +1375,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelGoogleDocs())}
               open={expanded.googleDocs}
               onToggle={() => setExpanded((state) => ({ ...state, googleDocs: !state.googleDocs }))}
+              inventory={googleDocsCount > 0}
             >
               {googleDocs.error ? (
                 <IntegrationResultText muted>{googleDocs.error}</IntegrationResultText>
@@ -1385,6 +1402,7 @@ export function KnowledgeGapsEvidenceCard({
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelTeams())}
               open={expanded.teams}
               onToggle={() => setExpanded((state) => ({ ...state, teams: !state.teams }))}
+              inventory={teamsCount > 0}
             >
               {teams.error ? (
                 <IntegrationResultText muted>{teams.error}</IntegrationResultText>

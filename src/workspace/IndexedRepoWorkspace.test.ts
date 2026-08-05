@@ -268,6 +268,50 @@ void (async () => {
     assert.equal(file?.repoId, "github:CoopAI-Corp/plane");
   });
 
+  await test("listDirectory falls back to org tree API when code-host listing is empty", async () => {
+    const calls: string[] = [];
+    const deps = {
+      apiBaseUrl: "https://api.coop-ai.dev",
+      api: {
+        fetchRepoTreeViaCloud: async (_base: string, _repoId: string, path: string) => {
+          calls.push(`cloud:${path}`);
+          return {
+            path,
+            branch: "preview",
+            entries: [
+              { path: `${path}/web`, name: "web", type: "dir" as const },
+              { path: `${path}/api`, name: "api", type: "dir" as const }
+            ]
+          };
+        }
+      },
+      codeHostRouter: {
+        getRepositoryTree: async () => {
+          calls.push("host");
+          return { entries: [] };
+        }
+      }
+    } as unknown as RepoInventoryDeps;
+
+    const workspace = new IndexedRepoWorkspace(deps);
+    const entries = await workspace.listDirectory(
+      {
+        repoId: "github:CoopAI-Corp/plane",
+        owner: "CoopAI-Corp",
+        repo: "plane",
+        branch: "preview",
+        provider: "github"
+      },
+      "apps"
+    );
+    assert.deepEqual(
+      entries?.map((e) => e.name).sort(),
+      ["api", "web"]
+    );
+    assert.ok(calls.includes("host"));
+    assert.ok(calls.some((c) => c.startsWith("cloud:")));
+  });
+
   console.log(`\nIndexedRepoWorkspace: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

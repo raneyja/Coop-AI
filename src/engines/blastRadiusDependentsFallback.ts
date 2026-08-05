@@ -178,6 +178,55 @@ export async function searchDependentsFallback(
   };
 }
 
+/**
+ * Merge client-side import/symbol fallback into the dependencies bundle entry
+ * used by the Extension Host blast-radius job path (when SCIP sample is empty).
+ */
+export function mergeSearchDependentsFallbackIntoDependenciesData(
+  data: Record<string, unknown>,
+  fallback: {
+    dependents: BlastRadiusDependentDetail[];
+    source: GraphEdgeSource;
+    warnings: string[];
+  }
+): Record<string, unknown> {
+  const priorWarnings = Array.isArray(data.warnings)
+    ? (data.warnings as unknown[]).filter((w): w is string => typeof w === "string")
+    : [];
+  const warnings = [...priorWarnings, ...fallback.warnings];
+  if (fallback.dependents.length === 0) {
+    warnings.push(
+      "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
+    );
+    return {
+      ...data,
+      warnings: [...new Set(warnings)],
+      graphMeta: {
+        ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+          ? (data.graphMeta as Record<string, unknown>)
+          : {}),
+        source: fallback.source
+      }
+    };
+  }
+  const ranked = sortDependentsProductionFirst(fallback.dependents);
+  warnings.push(
+    `Dependents inferred via ${fallback.source} import/symbol search — verify before relying on impact list.`
+  );
+  return {
+    ...data,
+    directDependents: ranked.map((entry) => entry.path),
+    dependentDetails: ranked,
+    warnings: [...new Set(warnings)],
+    graphMeta: {
+      ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+        ? (data.graphMeta as Record<string, unknown>)
+        : {}),
+      source: fallback.source
+    }
+  };
+}
+
 export function buildTestSearchPatterns(file: string): string[] {
   const basename = file.split("/").pop() ?? file;
   const stem = basename.replace(/\.[^.]+$/, "");

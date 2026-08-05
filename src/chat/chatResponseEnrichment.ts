@@ -126,9 +126,10 @@ export function enrichChatResponseForAction(options: {
     (isRepoPackageBoundaryQuery(options.userQuestion) || isRepoStructureQuery(options.userQuestion))
   ) {
     const structure = packageStructureFromBundle(contextBundle);
-    if (structure?.packages?.length) {
-      enriched = enrichPackageStructureResponse(enriched, structure.packages, {
-        workspaceGlobs: structure.workspaceGlobs
+    if (structure) {
+      enriched = enrichPackageStructureResponse(enriched, structure.packages ?? [], {
+        workspaceGlobs: structure.workspaceGlobs,
+        parents: structure.parents
       });
     }
   }

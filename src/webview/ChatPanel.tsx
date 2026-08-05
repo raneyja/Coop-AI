@@ -22,6 +22,7 @@ import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
 import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
+  ACTIVITY_PHASE_MS,
   ACTIVITY_START_DELAY_MS,
   buildConcreteActivityMessages,
   buildThinkingMessageSequence,
@@ -625,6 +626,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     if (shouldRestartPace) {
       activityStartedAtRef.current = Date.now();
       setActivityElapsedMs(0);
+    } else if (isPrefixGrowth && nextKey !== previousKey) {
+      // New tool/job line arrived — unlock the full current list so Slack isn't hidden
+      // behind the timed reveal of older steps.
+      const count = nextKey.split("\u0001").filter(Boolean).length;
+      const unlockMs = ACTIVITY_START_DELAY_MS + Math.max(0, count - 1) * ACTIVITY_PHASE_MS;
+      activityStartedAtRef.current = Date.now() - unlockMs;
+      setActivityElapsedMs(unlockMs);
     }
     prevConcreteActivityKeyRef.current = nextKey;
 

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import {
   filterSuggestableActions,
   shouldOfferQuickActionSuggest,
-  suggestQuickActions
+  suggestQuickActions,
+  suggestRunChipLabel
 } from "./quickActionSuggestIntent";
 import type { RepoContext } from "./types";
 
@@ -53,7 +54,7 @@ test("owner: signing-request email delivery example → find-owner high", () => 
   );
   assert.equal(result.confidence, "high");
   assert.equal(result.suggestions[0]?.actionId, "find-owner");
-  assert.match(result.clarifyingPrompt, /ownership/i);
+  assert.match(result.clarifyingPrompt, /Find Owner/);
 });
 
 test("owner: who maintains / CODEOWNERS / who to ask", () => {
@@ -131,6 +132,12 @@ test("collision: max two suggestions", () => {
   assert.ok(result.suggestions.length <= 2);
 });
 
+test("warnings: business impact and test coverage stay quiet", () => {
+  assert.deepEqual(ids("What's the business impact of this feature?"), []);
+  assert.deepEqual(ids("Any test coverage gaps in auth?"), []);
+  assert.deepEqual(ids("What's the customer impact of shipping late?"), []);
+});
+
 // --- File / repo gates ---
 test("filter: blast/trace blocked without file", () => {
   const raw = suggestQuickActions("What breaks if I change this?").suggestions;
@@ -179,6 +186,93 @@ test("shouldOffer: undefined for normal chat", () => {
     shouldOfferQuickActionSuggest("How do I run unit tests?", repoWithFile),
     undefined
   );
+});
+
+test("suggestRunChipLabel uses slash tokens", () => {
+  assert.equal(suggestRunChipLabel("blast-radius"), "Run /blast");
+  assert.equal(suggestRunChipLabel("find-owner"), "Run /owner");
+  assert.equal(suggestRunChipLabel("trace-decision"), "Run /trace");
+});
+
+/** Primary + secondary paraphrases from agent expansion. */
+const GOLDEN: Array<{ ask: string; action: string }> = [
+  // Owner — primary + secondary
+  { ask: "Point me at the expert for signing emails", action: "find-owner" },
+  { ask: "Who's responsible for the webhook delivery path?", action: "find-owner" },
+  { ask: "Who is the right person for auth permissions?", action: "find-owner" },
+  { ask: "Who knows about send-signing-email?", action: "find-owner" },
+  { ask: "Ownership of this billing module?", action: "find-owner" },
+  { ask: "Who last touched this file?", action: "find-owner" },
+  { ask: "What's the escalation path for this area?", action: "find-owner" },
+  { ask: "Find the SME for envelope sealing", action: "find-owner" },
+  { ask: "Who's the DRI for payments?", action: "find-owner" },
+  { ask: "Who is on point for auth?", action: "find-owner" },
+  { ask: "How do I find the owner of this module?", action: "find-owner" },
+  { ask: "Who is the technical lead for signing?", action: "find-owner" },
+  { ask: "Point of contact for the seal job?", action: "find-owner" },
+  // Trace — primary + secondary
+  { ask: "Why was this designed this way?", action: "trace-decision" },
+  { ask: "What's the backstory behind StateGroup?", action: "trace-decision" },
+  { ask: "Why did we choose this abstraction?", action: "trace-decision" },
+  { ask: "What's the design rationale for this model?", action: "trace-decision" },
+  { ask: "How did this end up in the codebase?", action: "trace-decision" },
+  { ask: "Historical context for this middleware?", action: "trace-decision" },
+  { ask: "What's the thinking behind this approach?", action: "trace-decision" },
+  { ask: "Do some code archaeology on this auth path", action: "trace-decision" },
+  { ask: "What alternatives were considered for StateGroup?", action: "trace-decision" },
+  { ask: "How do I find why this was added?", action: "trace-decision" },
+  { ask: "Is there an ADR for this decision?", action: "trace-decision" },
+  // Blast — primary + secondary
+  { ask: "What would break if we rename StateGroup?", action: "blast-radius" },
+  { ask: "Is it safe to change these enum values?", action: "blast-radius" },
+  { ask: "What depends on this function?", action: "blast-radius" },
+  { ask: "Downstream impact of deleting this helper?", action: "blast-radius" },
+  { ask: "If we refactor this, what else is affected?", action: "blast-radius" },
+  { ask: "Callers for validate_identifier?", action: "blast-radius" },
+  { ask: "Side effects of changing this handler?", action: "blast-radius" },
+  { ask: "Ripple effects of renaming this symbol?", action: "blast-radius" },
+  { ask: "Find all usages of this helper before I edit", action: "blast-radius" },
+  { ask: "Can I delete this safely?", action: "blast-radius" },
+  { ask: "How do I find what depends on this module?", action: "blast-radius" },
+  // Understand — primary + secondary
+  { ask: "Orient me on this codebase", action: "understand-repo" },
+  { ask: "What's the high-level architecture of this repo?", action: "understand-repo" },
+  { ask: "How is this monorepo organized?", action: "understand-repo" },
+  { ask: "Where are the package boundaries in this monorepo?", action: "understand-repo" },
+  { ask: "What's in the top-level package structure?", action: "understand-repo" },
+  { ask: "Map of the key systems here?", action: "understand-repo" },
+  { ask: "Bird's-eye view of this codebase", action: "understand-repo" },
+  { ask: "Where should I start in this repo?", action: "understand-repo" },
+  { ask: "Lay of the land in this project", action: "understand-repo" },
+  { ask: "10,000-foot view of this project", action: "understand-repo" },
+  // Gaps — primary + secondary
+  { ask: "What don't we know about auth?", action: "knowledge-gaps" },
+  { ask: "Where is documentation missing for integrations?", action: "knowledge-gaps" },
+  { ask: "Any tribal knowledge risks in billing?", action: "knowledge-gaps" },
+  { ask: "What should we document in this area?", action: "knowledge-gaps" },
+  { ask: "Blind spots in the signing flow docs?", action: "knowledge-gaps" },
+  { ask: "Open questions about envelope status?", action: "knowledge-gaps" },
+  { ask: "Documentation debt in the webhook path?", action: "knowledge-gaps" },
+  { ask: "What only exists in people's heads here?", action: "knowledge-gaps" },
+  { ask: "README gaps for onboarding?", action: "knowledge-gaps" },
+  { ask: "Knowledge silos around sealing?", action: "knowledge-gaps" }
+];
+
+test("golden corpus: primary + secondary paraphrases", () => {
+  for (const row of GOLDEN) {
+    const got = top(row.ask);
+    assert.equal(got, row.action, `ask=${JSON.stringify(row.ask)} got=${got}`);
+  }
+});
+
+test("negatives: more normal chat stays quiet", () => {
+  assert.deepEqual(ids("What does the SEND_SIGNING_EMAIL job definition do in this file?"), []);
+  assert.deepEqual(ids("How do I install dependencies?"), []);
+  assert.deepEqual(ids("Show me the type signature of StateGroup"), []);
+  assert.deepEqual(ids("Translate this error message to plain English"), []);
+  assert.deepEqual(ids("Why is CI red on this PR?"), []);
+  assert.deepEqual(ids("How do I set up the .env file?"), []);
+  assert.deepEqual(ids("Write a unit test for this"), []);
 });
 
 console.log(`\nquickActionSuggestIntent: ${passed}/${passed + failed} tests passed`);

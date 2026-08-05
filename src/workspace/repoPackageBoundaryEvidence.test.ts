@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { mergeRepoInventoryContext } from "./IndexedRepoWorkspace";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import {
+  answerInventsVaguePackageStructure,
   answerLacksConcretePackageNames,
   buildTopLevelPackageStructure,
   collectPackageManifestCandidatePaths,
+  commonChildPackageNames,
   enrichPackageStructureResponse,
   extractWorkspaceGlobs,
   filterManifestPathsToActiveRepoEvidence,
@@ -320,6 +322,27 @@ test("enrichPackageStructureResponse injects concrete names over glob-only answe
   assert.ok(enriched.includes("apps/web"));
   assert.ok(enriched.includes("apps/api"));
   assert.ok(enriched.includes("packages/ui"));
+});
+
+test("empty listings still probe common child package.json paths", () => {
+  const tree = {
+    topLevelDirs: ["apps", "packages"],
+    topLevelFiles: ["package.json"],
+    truncated: false
+  };
+  const paths = collectPackageManifestCandidatePaths(tree, new Map());
+  assert.ok(paths.includes("apps/web/package.json"));
+  assert.ok(paths.includes("packages/ui/package.json"));
+  assert.ok(commonChildPackageNames("apps").includes("web"));
+});
+
+test("enrichPackageStructureResponse blocks vague invention when packages unresolved", () => {
+  const vague = "Look for folders under apps/ and packages/* for Next.js apps.";
+  assert.equal(answerInventsVaguePackageStructure(vague), true);
+  const enriched = enrichPackageStructureResponse(vague, [], { parents: ["apps", "packages"] });
+  assert.ok(/unavailable/i.test(enriched));
+  assert.ok(enriched.includes("apps"));
+  assert.ok(!/^Look for folders/i.test(enriched.trim()));
 });
 
 console.log(`\nrepoPackageBoundaryEvidence: ${passed} passed, ${failed} failed`);

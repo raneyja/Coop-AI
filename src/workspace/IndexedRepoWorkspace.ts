@@ -96,13 +96,15 @@ export class IndexedRepoWorkspace {
   }
 
   /**
-   * One-level directory listing for the active Use-repo (code host), used to find
-   * package.json files under apps/packages parents. Never reads a foreign local disk.
+   * One-level directory listing for the active Use-repo.
+   * Prefer code-host tree; fall back to Coop org tree API (same path Remote browse uses)
+   * so package-boundary gather works when the host listing is unavailable.
    */
   public async listDirectory(
     target: RepoTarget,
     path = ""
   ): Promise<Array<{ name: string; type: "dir" | "file" }> | undefined> {
+    const cleanPath = path.replace(/^\/+|\/+$/g, "");
     const repoId = target.repoId?.trim();
     const resolved = repoId
       ? resolveInventoryRepoIds(repoId, target)
@@ -110,15 +112,37 @@ export class IndexedRepoWorkspace {
         ? resolveInventoryRepoIds(`${target.owner}/${target.repo}`, target)
         : undefined;
     const coords = resolved?.coords;
-    if (!coords) {
+    if (coords) {
+      try {
+        const tree = await this.deps.codeHostRouter.getRepositoryTree(cleanPath, coords);
+        const entries = (tree.entries ?? []).map((entry) => ({
+          name: entry.name,
+          type: (entry.type === "dir" ? "dir" : "file") as "dir" | "file"
+        }));
+        if (entries.length) {
+          return entries;
+        }
+      } catch {
+        /* fall through to org API */
+      }
+    }
+
+    const preferredRepoId = resolved?.preferred ?? repoId;
+    if (!preferredRepoId) {
       return undefined;
     }
     try {
-      const tree = await this.deps.codeHostRouter.getRepositoryTree(path.replace(/^\/+|\/+$/g, ""), coords);
-      return (tree.entries ?? []).map((entry) => ({
+      const tree = await this.deps.api.fetchRepoTreeViaCloud(
+        this.deps.apiBaseUrl,
+        preferredRepoId,
+        cleanPath,
+        target.branch
+      );
+      const entries = (tree.entries ?? []).map((entry) => ({
         name: entry.name,
-        type: entry.type === "dir" ? ("dir" as const) : ("file" as const)
+        type: (entry.type === "dir" ? "dir" : "file") as "dir" | "file"
       }));
+      return entries.length ? entries : undefined;
     } catch {
       return undefined;
     }

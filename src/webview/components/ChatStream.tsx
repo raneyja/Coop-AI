@@ -258,6 +258,26 @@ function QuickActionBody({
   return <div className="chat-message-body">{renderBody(body)}</div>;
 }
 
+function SuggestClarifyingBody({ content }: { content: string }): React.ReactElement {
+  // Highlight quick-action product names so they read like slash/QA chrome.
+  const parts = content.split(
+    /(Find Owner|Trace Decision|Blast Radius|Understand Repo|Knowledge Gaps)/g
+  );
+  return (
+    <p className="coop-suggest-clarifying m-0">
+      {parts.map((part, index) =>
+        /^(Find Owner|Trace Decision|Blast Radius|Understand Repo|Knowledge Gaps)$/.test(part) ? (
+          <span key={`${part}-${index}`} className="coop-suggest-action-name">
+            {part}
+          </span>
+        ) : (
+          <React.Fragment key={`t-${index}`}>{part}</React.Fragment>
+        )
+      )}
+    </p>
+  );
+}
+
 function SuggestChipRow({
   message,
   onSuggestResolve
@@ -298,7 +318,16 @@ function SuggestChipRow({
               }
             }}
           >
-            {chip.label}
+            {chip.kind === "quick-action" ? (
+              <span className="coop-suggest-chip-label">
+                <span className="coop-suggest-chip-run">Run </span>
+                <span className="coop-suggest-action-name">
+                  {chip.label.replace(/^Run\s+/i, "")}
+                </span>
+              </span>
+            ) : (
+              chip.label
+            )}
           </button>
         );
       })}
@@ -380,6 +409,11 @@ function MessageBlock({
             <QuickActionBody body={parsed.body} renderBody={renderBody} />
           ) : isUser ? (
             <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
+          ) : message.suggest ? (
+            <div className="chat-message-body">
+              <SuggestClarifyingBody content={parsed.body} />
+              <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />
+            </div>
           ) : (
             <div className="chat-message-body">
               {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}

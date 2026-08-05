@@ -102,6 +102,9 @@ export function OwnershipCard({
     () => buildSlackPresenceViewModel(report.scores),
     [report.scores]
   );
+  const slackDiscussionCount = slackSearch?.messages?.length ?? 0;
+  const hasSlackDiscussionEvidence = slackDiscussionCount > 0;
+  const showSlackDiscussions = isIntegrationConnectedForSources(slackSearch);
   const resolvedArtifactId = artifactId ?? `ownership-${report.path}`;
 
   return (
@@ -222,73 +225,80 @@ export function OwnershipCard({
           ) : null}
         </EvidenceConnectionGroup>
 
-        <EvidenceConnectionGroup
-          connection="slack"
-          briefSummary={
-            isIntegrationConnectedForSources(slackSearch)
-              ? {
-                  title: `Discussions (${slackSearch?.messages?.length ?? 0})`,
-                  sourceLabel: ownershipSourceLabelSlackDiscussions()
-                }
-              : slackPresenceView.showSection
+        {slackPresenceView.showSection || showSlackDiscussions ? (
+          <EvidenceConnectionGroup
+            connection="slack"
+            briefSummary={
+              hasSlackDiscussionEvidence
                 ? {
-                    title: "Presence",
-                    sourceLabel: ownershipSourceLabelSlack()
+                    title: `Discussions (${slackDiscussionCount})`,
+                    sourceLabel: ownershipSourceLabelSlackDiscussions()
                   }
-                : undefined
-          }
-        >
-          {slackPresenceView.showSection ? (
-            <IntegrationResultCollapsible
-              title="Presence"
-              subtitle={expanded.presence ? undefined : slackPresenceView.collapsedSummary}
-              sourceLabel={ownershipSourceLabelSlack()}
-              sectionDomId={evidenceSectionDomId(resolvedArtifactId, ownershipSourceLabelSlack())}
-              open={expanded.presence}
-              onToggle={() => setExpanded((s) => ({ ...s, presence: !s.presence }))}
-            >
-              {slackPresenceView.resolvedEntries.length > 0 ? (
-                <ul className="space-y-1">
-                  {slackPresenceView.resolvedEntries.map((expert) => (
-                    <li key={expert.owner} className="coop-result-text coop-result-text--muted">
-                      @{expert.owner} · {expert.label}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {slackPresenceView.detailLine ? (
-                <IntegrationResultText muted={slackPresenceView.resolvedEntries.length === 0}>
-                  {slackPresenceView.detailLine}
-                </IntegrationResultText>
-              ) : null}
-            </IntegrationResultCollapsible>
-          ) : null}
+                : slackPresenceView.hasEvidence
+                  ? {
+                      title: "Presence",
+                      sourceLabel: ownershipSourceLabelSlack()
+                    }
+                  : { title: "No matching evidence" }
+            }
+          >
+            {slackPresenceView.showSection ? (
+              <IntegrationResultCollapsible
+                title="Presence"
+                subtitle={expanded.presence ? undefined : slackPresenceView.collapsedSummary}
+                sourceLabel={ownershipSourceLabelSlack()}
+                sectionDomId={evidenceSectionDomId(resolvedArtifactId, ownershipSourceLabelSlack())}
+                open={expanded.presence}
+                onToggle={() => setExpanded((s) => ({ ...s, presence: !s.presence }))}
+                inventory={slackPresenceView.hasEvidence}
+              >
+                {slackPresenceView.resolvedEntries.length > 0 ? (
+                  <ul className="space-y-1">
+                    {slackPresenceView.resolvedEntries.map((expert) => (
+                      <li key={expert.owner} className="coop-result-text coop-result-text--muted">
+                        @{expert.owner} · {expert.label}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {slackPresenceView.detailLine ? (
+                  <IntegrationResultText muted={slackPresenceView.resolvedEntries.length === 0}>
+                    {slackPresenceView.detailLine}
+                  </IntegrationResultText>
+                ) : null}
+              </IntegrationResultCollapsible>
+            ) : null}
 
-          {isIntegrationConnectedForSources(slackSearch) ? (
-            <IntegrationResultCollapsible
-              title={`Discussions (${slackSearch!.messages?.length ?? 0})`}
-              sourceLabel={ownershipSourceLabelSlackDiscussions()}
-              sectionDomId={evidenceSectionDomId(resolvedArtifactId, ownershipSourceLabelSlackDiscussions())}
-              open={expanded.slack}
-              onToggle={() => setExpanded((s) => ({ ...s, slack: !s.slack }))}
-            >
-              {slackSearch.error ? (
-                <IntegrationResultText muted>{slackSearch.error}</IntegrationResultText>
-              ) : slackSearch.messages?.length ? (
-                <ul className="space-y-2">
-                  {slackSearch.messages.slice(0, 8).map((message, index) => (
-                    <li key={index} className="coop-result-text">
-                      {message.channelName ? `#${message.channelName}` : "Slack"} · {message.userName ?? "unknown"}:{" "}
-                      {message.text.slice(0, 200)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <IntegrationResultText muted>No matching Slack discussions.</IntegrationResultText>
-              )}
-            </IntegrationResultCollapsible>
-          ) : null}
-        </EvidenceConnectionGroup>
+            {showSlackDiscussions ? (
+              <IntegrationResultCollapsible
+                title={`Discussions (${slackDiscussionCount})`}
+                sourceLabel={ownershipSourceLabelSlackDiscussions()}
+                sectionDomId={evidenceSectionDomId(
+                  resolvedArtifactId,
+                  ownershipSourceLabelSlackDiscussions()
+                )}
+                open={expanded.slack}
+                onToggle={() => setExpanded((s) => ({ ...s, slack: !s.slack }))}
+                inventory={hasSlackDiscussionEvidence}
+              >
+                {slackSearch!.error ? (
+                  <IntegrationResultText muted>{slackSearch!.error}</IntegrationResultText>
+                ) : hasSlackDiscussionEvidence ? (
+                  <ul className="space-y-2">
+                    {slackSearch!.messages!.slice(0, 8).map((message, index) => (
+                      <li key={index} className="coop-result-text">
+                        {message.channelName ? `#${message.channelName}` : "Slack"} ·{" "}
+                        {message.userName ?? "unknown"}: {message.text.slice(0, 200)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <IntegrationResultText muted>No matching Slack discussions.</IntegrationResultText>
+                )}
+              </IntegrationResultCollapsible>
+            ) : null}
+          </EvidenceConnectionGroup>
+        ) : null}
       </EvidenceConnectionStack>
     </EvidenceCardShell>
   );

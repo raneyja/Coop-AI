@@ -139,6 +139,11 @@ import {
   teamsSearchFromBundle,
   type RepoSummaryEvidence
 } from "../context/contextBundleEvidence";
+import {
+  extractBlastSearchSymbols,
+  mergeSearchDependentsFallbackIntoDependenciesData,
+  searchDependentsFallback
+} from "../engines/blastRadiusDependentsFallback";
 import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
@@ -146,7 +151,7 @@ import {
   buildMissingIntentClarificationResponse,
   shouldClarifyFirstChatTurn
 } from "./chatMessageIntent";
-import { shouldOfferQuickActionSuggest } from "./quickActionSuggestIntent";
+import { shouldOfferQuickActionSuggest, suggestRunChipLabel } from "./quickActionSuggestIntent";
 import { openReferencedLink } from "./openReferencedLink";
 import {
   buildUserMessageWithContext,
@@ -454,6 +459,10 @@ export class CoopChatSession {
   private lastJobResult?: unknown;
   /** Accumulates status lines for chat-deliverable jobs so the narrative timeline keeps moving. */
   private readonly chatDeliverableNarrative = new Map<string, string[]>();
+  /** Last activityMessages posted per thread — preserved when job narrative starts. */
+  private readonly lastActivityMessagesByThread = new Map<string, string[]>();
+  /** Thread receiving live tool activity during enrich (including quiet /gaps gather). */
+  private activityFeedbackThreadId?: string;
   private lastContextBundle: ContextFetchResult[] = [];
   private lastTraceDecisionTimeline?: DecisionTimeline;
   private pendingEvidenceArtifactId?: string;
@@ -2449,6 +2458,8 @@ export class CoopChatSession {
     const loadingState = this.loadingFeedbackFor(event);
     const turn = options.turn;
     const feedbackThreadId = turn?.threadId;
+    const previousActivityThread = this.activityFeedbackThreadId;
+    this.activityFeedbackThreadId = feedbackThreadId ?? this.activeThreadId();
 
     if (!options.quiet) {
       if (feedbackThreadId) {
@@ -2456,6 +2467,23 @@ export class CoopChatSession {
       } else {
         this.postIntentFeedback(loadingState);
       }
+    } else if (loadingState.activityMessages?.length && this.activityFeedbackThreadId) {
+      // Quiet gather (e.g. /gaps) still seeds tool lines so Slack/Jira stay visible.
+      const threadId = this.activityFeedbackThreadId;
+      const actionId = event.context.buttonClicked;
+      const key = `${threadId}:${actionId ?? "chat"}`;
+      const prior = this.chatDeliverableNarrative.get(key) ?? [];
+      const merged = mergeActivityMessageLists(prior, loadingState.activityMessages);
+      this.chatDeliverableNarrative.set(key, merged);
+      this.postIntentFeedbackForThread(threadId, {
+        status: "loading",
+        intent: event.intent,
+        actionId,
+        title: loadingState.title,
+        message: merged[merged.length - 1] ?? loadingState.message,
+        activityMessages: merged,
+        progress: loadingState.progress
+      });
     }
 
     const requests = buildContextRequests(event, requestTypes).map((request) => {
@@ -2567,6 +2595,8 @@ export class CoopChatSession {
         }
       }
       return turn?.contextBundle ?? this.lastContextBundle;
+    } finally {
+      this.activityFeedbackThreadId = previousActivityThread;
     }
   }
 
@@ -3409,6 +3439,7 @@ export class CoopChatSession {
       !openFileRelatedToGapsFocus(request.params.file, gapsFocus)
         ? undefined
         : request.params.file;
+    const gathering = this.contextGatheringOptions();
     return mergeIntegrationChatContext({
       result,
       request,
@@ -3418,11 +3449,23 @@ export class CoopChatSession {
       repo: request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
       activeFile: activeFileForIntegrations,
       contextText,
-      codeHostProvider: this.preferences.defaultCodeHost,
-      codeHostConnected: this.isCodeHostConnected(),
+      codeHostProvider: gathering.codeHostProvider ?? this.preferences.defaultCodeHost,
+      codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
+      integrations: gathering.integrations,
       integrationScopes,
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
+      // Live tool lines in thinking UI — including quiet /gaps gather.
+      onToolActivity: (toolEvent) => {
+        if (toolEvent.phase !== "start") {
+          return;
+        }
+        this.appendLiveToolActivityLine(
+          toolEvent.label,
+          request.params.quickAction,
+          String(request.intent.intent)
+        );
+      },
       // Understand Repo pulls from every connected tool but is time-bounded so a
       // single slow integration can't block the overview. Slower tools are dropped.
       budgetMs:
@@ -3433,6 +3476,46 @@ export class CoopChatSession {
                 shouldFetchIncidentIntegrations(request.intent.context.queryText))
             ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
             : undefined
+    });
+  }
+
+  /** Append a real tool line to the activity checklist (Slack, Jira, …). */
+  private appendLiveToolActivityLine(
+    line: string,
+    actionId: string | undefined,
+    intent?: string
+  ): void {
+    const threadId = this.activityFeedbackThreadId ?? this.activeThreadId();
+    const turn = this.threadRuns.get(threadId);
+    if (turn && turn.status !== "running") {
+      return;
+    }
+    const key = `${threadId}:${actionId ?? "chat"}`;
+    const prior =
+      this.chatDeliverableNarrative.get(key) ??
+      this.lastActivityMessagesByThread.get(threadId) ??
+      [];
+    if (prior.includes(line)) {
+      // Re-post so the webview treats this tool as the active step again.
+      this.postIntentFeedbackForThread(threadId, {
+        status: "loading",
+        intent,
+        actionId,
+        title: actionId ? jobTitleForAction(actionId) : "Fetching context...",
+        message: line,
+        activityMessages: prior
+      });
+      return;
+    }
+    const next = [...prior, line];
+    this.chatDeliverableNarrative.set(key, next);
+    this.postIntentFeedbackForThread(threadId, {
+      status: "loading",
+      intent,
+      actionId,
+      title: actionId ? jobTitleForAction(actionId) : "Fetching context...",
+      message: line,
+      activityMessages: next
     });
   }
 
@@ -4310,7 +4393,10 @@ export class CoopChatSession {
           }
           this.enrichKnowledgeGapsBundle(quickAction, turn);
           if (quickAction === "blast-radius") {
-            this.applyBlastRadiusJobResultToBundle(quickAction, turn);
+            await abortablePromise(
+              this.applyBlastRadiusJobResultToBundle(quickAction, turn),
+              turn.streamAbort.signal
+            );
           }
           await abortablePromise(
             this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
@@ -4502,7 +4588,7 @@ export class CoopChatSession {
       ...offer.suggestions.map((suggestion) => ({
         kind: "quick-action" as const,
         actionId: suggestion.actionId,
-        label: suggestion.label
+        label: suggestRunChipLabel(suggestion.actionId)
       })),
       { kind: "plain" as const, label: "Just answer" }
     ];
@@ -6219,12 +6305,16 @@ export class CoopChatSession {
     );
 
     // Blast Radius / Knowledge Gaps can wait on a job for a long time. Keep the
-    // Copilot-style timeline alive with concrete progress lines — not one frozen status.
+    // Copilot-style timeline alive — merge job lines with tool lines (Slack/Jira/…),
+    // never replace a rich checklist with a generic seed.
     if (deliverable === "chat") {
       const line = (patch.message || activeJobMessageForAction(quickAction)).trim();
       if (line) {
         const key = `${targetThreadId}:${quickAction}`;
-        const prior = this.chatDeliverableNarrative.get(key) ?? seedChatDeliverableNarrative(quickAction);
+        const prior =
+          this.chatDeliverableNarrative.get(key) ??
+          this.lastActivityMessagesByThread.get(targetThreadId) ??
+          seedChatDeliverableNarrative(quickAction);
         const next = prior.includes(line) ? prior : [...prior, line];
         this.chatDeliverableNarrative.set(key, next);
         this.postIntentFeedbackForThread(targetThreadId, {
@@ -6238,10 +6328,10 @@ export class CoopChatSession {
     }
   }
 
-  private applyBlastRadiusJobResultToBundle(
+  private async applyBlastRadiusJobResultToBundle(
     quickAction: string | undefined,
     turn?: ChatTurn
-  ): void {
+  ): Promise<void> {
     this.withTurnSessionMirrors(turn, () => {
       if (quickAction !== "blast-radius" || !this.lastJobResult) {
         return;
@@ -6278,6 +6368,66 @@ export class CoopChatSession {
         data: { ...(targetFile ? { file: targetFile } : {}), jobScan },
         fetchedAt: new Date()
       });
+    });
+
+    // Job path often returns an empty dependentsSample. Recover via symbol/import
+    // search before synthesis — same mechanism as BlastRadiusAnalysisEngine.
+    await this.recoverBlastDependentsWhenJobSampleEmpty(turn);
+  }
+
+  /**
+   * When the dependency-graph job left 0 callers, run client-side import/symbol
+   * search within the remaining soft gather budget and merge into the bundle.
+   */
+  private async recoverBlastDependentsWhenJobSampleEmpty(turn?: ChatTurn): Promise<void> {
+    const ctx = turn?.context ?? this.currentContext;
+    const targetFile = ctx.file?.trim();
+    if (!targetFile) {
+      return;
+    }
+    const evidence = blastRadiusFromBundle(
+      turn ? turn.contextBundle : this.lastContextBundle
+    );
+    if (evidence?.directDependents?.length || evidence?.dependentDetails?.length) {
+      return;
+    }
+
+    const repoId = buildRepoId(this.preferences, ctx);
+    if (!repoId) {
+      return;
+    }
+
+    const askText = (turn?.modelMessage ?? "").trim();
+    const remainingMs = remainingContextGatherBudgetMs(
+      turn?.startedAt ?? this.chatTurnStartedAt ?? Date.now()
+    );
+    const maxPatterns = remainingMs <= 0 ? 4 : remainingMs < 4_000 ? 6 : 10;
+    const symbols = extractBlastSearchSymbols(askText, targetFile);
+
+    let fallback: Awaited<ReturnType<typeof searchDependentsFallback>>;
+    try {
+      fallback = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
+        maxPatterns,
+        symbols
+      });
+    } catch {
+      return;
+    }
+
+    this.withTurnSessionMirrors(turn, () => {
+      const index = this.lastContextBundle.findIndex((entry) => entry.type === "dependencies");
+      if (index < 0) {
+        return;
+      }
+      const existing = this.lastContextBundle[index];
+      const data =
+        typeof existing.data === "object" && existing.data !== null
+          ? { ...(existing.data as Record<string, unknown>) }
+          : {};
+      this.lastContextBundle[index] = {
+        ...existing,
+        data: mergeSearchDependentsFallbackIntoDependenciesData(data, fallback)
+      };
     });
   }
 
@@ -8508,6 +8658,7 @@ export class CoopChatSession {
         this.chatDeliverableNarrative.delete(key);
       }
     }
+    this.lastActivityMessagesByThread.delete(id);
     this.postForThread(id, {
       type: "intent:feedback",
       payload: { status: "complete", title: "" }
@@ -8519,6 +8670,9 @@ export class CoopChatSession {
   }
 
   private postIntentFeedbackForThread(threadId: string, payload: IntentFeedbackState): void {
+    if (payload.activityMessages?.length) {
+      this.lastActivityMessagesByThread.set(threadId, payload.activityMessages);
+    }
     this.postForThread(threadId, { type: "intent:feedback", payload });
   }
 
@@ -9347,6 +9501,20 @@ function seedChatDeliverableNarrative(actionId: string): string[] {
     default:
       return ["Running background scan…"];
   }
+}
+
+function mergeActivityMessageLists(prior: string[], incoming: string[]): string[] {
+  const seen = new Set(prior);
+  const merged = [...prior];
+  for (const message of incoming) {
+    const trimmed = message.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    merged.push(trimmed);
+  }
+  return merged;
 }
 
 function jobTitleForAction(actionId: string): string {

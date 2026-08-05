@@ -37,7 +37,7 @@ Retry helpers exist in webhook_task.py.
     incidentReconstruction: { jiraConnected: true, slackConnected: true }
   });
   assert.ok(enriched.includes("**Code paths**"));
-  assert.ok(enriched.includes("**Integrations**") || enriched.includes("**Tickets / threads**"));
+  assert.ok(enriched.includes("**Integrations**"));
   assert.ok(enriched.includes("**Gaps**"));
   assert.ok(/Searched Jira/i.test(enriched));
   assert.ok(/Searched Slack/i.test(enriched));
@@ -48,7 +48,7 @@ test("incident reconstruction with disconnected tools still has gaps", () => {
     content: "**Answer**\nRetries in code.",
     incidentReconstruction: { jiraConnected: false, slackConnected: false }
   });
-  assert.ok(enriched.includes("**Integrations**") || enriched.includes("**Tickets / threads**"));
+  assert.ok(enriched.includes("**Integrations**"));
   assert.ok(enriched.includes("**Gaps**"));
   assert.ok(/not connected/i.test(enriched));
 });
