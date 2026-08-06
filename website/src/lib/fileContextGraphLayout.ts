@@ -12,7 +12,7 @@ export const FILE_CARD = { width: 228, height: 80 };
 export const ORBIT_CARD = { height: 54, minWidth: 148 };
 
 const LAYOUT_SAFETY = 1.08;
-const COLLISION_CLEARANCE = 18;
+const COLLISION_CLEARANCE = 24;
 
 export const ORBIT_THEME: Record<
   string,
@@ -89,10 +89,33 @@ export function orbitConnectionPath(node: LaidOutOrbitNode): string {
   const halfW = (node.cardWidth / 2) * LAYOUT_SAFETY;
   const halfH = (ORBIT_CARD.height / 2) * LAYOUT_SAFETY;
   const start = intersectRectToward(node.x, node.y, halfW, halfH, FILE_HUB.x, FILE_HUB.y);
-  const fileHalfW = FILE_CARD.width / 2;
-  const fileHalfH = FILE_CARD.height / 2;
+  // Match the visual hub card (taller than FILE_CARD.height — chips stack inside).
+  const fileHalfW = HUB_VISUAL.width / 2;
+  const fileHalfH = HUB_VISUAL.height / 2;
   const end = intersectRectToward(FILE_HUB.x, FILE_HUB.y, fileHalfW, fileHalfH, node.x, node.y);
   return bezierPathBetween(start.x, start.y, end.x, end.y);
+}
+
+/** Visual hub footprint used in ContextConstellation (includes chip stack). */
+export const HUB_VISUAL = {
+  width: FILE_CARD.width + 28,
+  height: 132
+};
+
+function rayRectExtent(halfW: number, halfH: number, ux: number, uy: number): number {
+  const tx = Math.abs(ux) < 1e-6 ? Number.POSITIVE_INFINITY : halfW / Math.abs(ux);
+  const ty = Math.abs(uy) < 1e-6 ? Number.POSITIVE_INFINITY : halfH / Math.abs(uy);
+  return Math.min(tx, ty);
+}
+
+/** Minimum polar radius so a pill does not overlap the hub card. */
+export function minOrbitRadiusClearingHub(angleDeg: number, cardWidth: number): number {
+  const rad = (angleDeg * Math.PI) / 180;
+  const ux = Math.cos(rad);
+  const uy = Math.sin(rad);
+  const hubExtent = rayRectExtent(HUB_VISUAL.width / 2, HUB_VISUAL.height / 2, ux, uy);
+  const pillExtent = rayRectExtent(cardWidth / 2, ORBIT_CARD.height / 2, ux, uy);
+  return hubExtent + pillExtent + COLLISION_CLEARANCE;
 }
 
 export function layoutOrbitNodes(
@@ -100,16 +123,14 @@ export function layoutOrbitNodes(
   radiusScale = 1
 ): LaidOutOrbitNode[] {
   return scenario.orbitNodes.map((node) => {
-    const { x, y } = polarToCartesian(
-      FILE_HUB.x,
-      FILE_HUB.y,
-      node.angle,
-      node.radius * radiusScale
-    );
+    const cardWidth = displayOrbitWidth(node.label, node.sublabel);
+    const scaled = node.radius * radiusScale;
+    const cleared = Math.max(scaled, minOrbitRadiusClearingHub(node.angle, cardWidth));
+    const { x, y } = polarToCartesian(FILE_HUB.x, FILE_HUB.y, node.angle, cleared);
     return {
       ...node,
-      radius: node.radius * radiusScale,
-      cardWidth: displayOrbitWidth(node.label, node.sublabel),
+      radius: cleared,
+      cardWidth,
       x,
       y
     };
@@ -123,23 +144,23 @@ export function constellationContentBounds(nodes: LaidOutOrbitNode[]): {
   width: number;
   height: number;
 } {
-  const pillHalfH = 30;
-  const hubHalfW = (FILE_CARD.width + 28) / 2;
-  const hubHalfH = 66;
+  const pillHalfH = ORBIT_CARD.height / 2 + 4;
+  const hubHalfW = HUB_VISUAL.width / 2;
+  const hubHalfH = HUB_VISUAL.height / 2;
   let minX = FILE_HUB.x - hubHalfW;
   let maxX = FILE_HUB.x + hubHalfW;
   let minY = FILE_HUB.y - hubHalfH;
   let maxY = FILE_HUB.y + hubHalfH;
 
   for (const node of nodes) {
-    const halfW = Math.max(72, node.cardWidth / 2);
+    const halfW = node.cardWidth / 2 + 4;
     minX = Math.min(minX, node.x - halfW);
     maxX = Math.max(maxX, node.x + halfW);
     minY = Math.min(minY, node.y - pillHalfH);
     maxY = Math.max(maxY, node.y + pillHalfH);
   }
 
-  const pad = 20;
+  const pad = 8;
   minX = Math.max(0, minX - pad);
   minY = Math.max(0, minY - pad);
   maxX = Math.min(VIEW_W, maxX + pad);

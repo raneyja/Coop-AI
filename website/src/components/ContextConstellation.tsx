@@ -29,8 +29,8 @@ import {
   type OrbitNodeKind
 } from "@/lib/fileContextScenarios";
 import {
-  FILE_CARD,
   FILE_HUB,
+  HUB_VISUAL,
   ORBIT_THEME,
   VIEW_H,
   VIEW_W,
@@ -46,8 +46,11 @@ const LAND_MS = 480;
 const BETWEEN_MS = 380;
 const HOLD_FULL_MS = 2000;
 const SCENARIO_FADE_MS = 520;
-/** Below this fit width, pull orbits in so the zoomed content stays readable. */
+/** Below this fit width, pull orbits in tighter for phone readability. */
 const COMPACT_FIT_PX = 560;
+/** Default orbit pull-in so the cluster fills the frame instead of floating in whitespace. */
+const RADIUS_DESKTOP = 0.88;
+const RADIUS_COMPACT = 0.78;
 
 type Phase = "pulse" | "flow" | "land" | "between" | "hold" | "fade";
 
@@ -91,20 +94,19 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
   const [chips, setChips] = useState<Chip[]>([]);
   const [packetKey, setPacketKey] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [paused, setPaused] = useState(false);
   const [fading, setFading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scenario = FILE_CONTEXT_SCENARIOS[scenarioIndex % FILE_CONTEXT_SCENARIOS.length];
   const orbitNodes = useMemo(
-    () => layoutOrbitNodes(scenario, compact ? 0.78 : 1),
+    () => layoutOrbitNodes(scenario, compact ? RADIUS_COMPACT : RADIUS_DESKTOP),
     [scenario, compact]
   );
   const contentBounds = useMemo(() => constellationContentBounds(orbitNodes), [orbitNodes]);
   const activeNode =
     activeIndex >= 0 && activeIndex < orbitNodes.length ? orbitNodes[activeIndex] : null;
 
-  // Zoom to the constellation content box (not the empty 920×580 margins) so mobile stays readable.
+  // Fill the fit region with the constellation cluster (tight bounds + denser orbits).
   useEffect(() => {
     const el = fitRef.current;
     if (!el) return;
@@ -113,13 +115,12 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
       const { width, height } = el.getBoundingClientRect();
       if (width < 1 || height < 1) return;
       setCompact(width < COMPACT_FIT_PX);
-      const pad = 8;
+      const edge = 2;
       const next = Math.min(
-        (width - pad) / contentBounds.width,
-        (height - pad) / contentBounds.height
+        (width - edge) / contentBounds.width,
+        (height - edge) / contentBounds.height
       );
-      // Allow >1 so narrow screens can enlarge the content cluster; soft-cap for desktop.
-      setScale(Math.min(1.45, Math.max(0.35, next)));
+      setScale(Math.min(2.15, Math.max(0.4, next)));
     };
 
     update();
@@ -165,7 +166,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
   );
 
   useEffect(() => {
-    if (reduceMotion || paused) {
+    if (reduceMotion) {
       clearTimer();
       return;
     }
@@ -225,7 +226,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
         setPhase("pulse");
       }, SCENARIO_FADE_MS);
     }
-  }, [phase, activeIndex, orbitNodes, reduceMotion, paused, schedule, clearTimer]);
+  }, [phase, activeIndex, orbitNodes, reduceMotion, schedule, clearTimer]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
@@ -237,14 +238,6 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
   return (
     <div
       className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-sm border border-coop-border bg-gray-50 ${className}`.trim()}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-          setPaused(false);
-        }
-      }}
       aria-label={`${scenario.file.name} gathering context from ${scenario.sourceCount} stack sources`}
     >
       <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
@@ -278,8 +271,8 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                   style={{
                     left: FILE_HUB.x,
                     top: FILE_HUB.y,
-                    width: 360,
-                    height: 360,
+                    width: compact ? 280 : 300,
+                    height: compact ? 280 : 300,
                     transform: "translate(-50%, -50%)"
                   }}
                 />
@@ -288,8 +281,8 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                   style={{
                     left: FILE_HUB.x,
                     top: FILE_HUB.y,
-                    width: 480,
-                    height: 480,
+                    width: compact ? 380 : 400,
+                    height: compact ? 380 : 400,
                     transform: "translate(-50%, -50%)"
                   }}
                 />
@@ -387,18 +380,22 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
               <div
                 className="absolute z-20"
                 style={{
-                  left: FILE_HUB.x - (FILE_CARD.width + 28) / 2,
-                  top: FILE_HUB.y - 58,
-                  width: FILE_CARD.width + 28
+                  left: FILE_HUB.x - HUB_VISUAL.width / 2,
+                  top: FILE_HUB.y - HUB_VISUAL.height / 2,
+                  width: HUB_VISUAL.width
                 }}
               >
                 <div
-                  className={`context-hub-card relative flex h-[132px] flex-col rounded-xl border bg-white px-3.5 py-3 shadow-sm transition-[border-color,box-shadow] duration-500 ${
+                  className={`context-hub-card relative flex flex-col rounded-xl border bg-white px-3.5 py-3 shadow-sm transition-[border-color,box-shadow] duration-500 ${
                     chips.length > 0
                       ? "border-[#79C0FF]/55 shadow-[0_0_28px_rgba(121,192,255,0.16)]"
                       : "border-[#79C0FF]/30"
                   }`}
-                  style={{ borderLeftWidth: 3, borderLeftColor: "#79C0FF" }}
+                  style={{
+                    borderLeftWidth: 3,
+                    borderLeftColor: "#79C0FF",
+                    height: HUB_VISUAL.height
+                  }}
                 >
                   <div className="pointer-events-none absolute -inset-1 rounded-xl bg-[#79C0FF]/[0.06] blur-md" aria-hidden />
                   <div className="relative flex items-start justify-between gap-2">
@@ -447,9 +444,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
       <p className="relative z-10 shrink-0 border-t border-coop-border/60 bg-gray-50/90 px-2 py-1.5 text-center font-mono text-[9px] text-gray-400 sm:text-[10px]">
         {reduceMotion
           ? "Motion reduced — full stack context shown"
-          : paused
-            ? "Paused · hover away to resume"
-            : "Stack → Coop → grounded answers"}
+          : "Stack → Coop → grounded answers"}
       </p>
     </div>
   );
