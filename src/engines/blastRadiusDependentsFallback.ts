@@ -179,8 +179,11 @@ export async function searchDependentsFallback(
 }
 
 /**
- * Merge client-side import/symbol fallback into the dependencies bundle entry
- * used by the Extension Host blast-radius job path (when SCIP sample is empty).
+ * Merge verified import/symbol search into the blast dependencies bundle entry.
+ *
+ * Prefer search hits over any prior job sample. When search is empty, clear
+ * unverified directDependents so junk remote edges cannot survive as "callers."
+ * Optional `keepIfSearchEmpty` preserves already-filtered job edges (to===file).
  */
 export function mergeSearchDependentsFallbackIntoDependenciesData(
   data: Record<string, unknown>,
@@ -188,18 +191,26 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
     dependents: BlastRadiusDependentDetail[];
     source: GraphEdgeSource;
     warnings: string[];
-  }
+  },
+  options?: { keepFilteredJobDependentsIfSearchEmpty?: boolean }
 ): Record<string, unknown> {
   const priorWarnings = Array.isArray(data.warnings)
     ? (data.warnings as unknown[]).filter((w): w is string => typeof w === "string")
     : [];
   const warnings = [...priorWarnings, ...fallback.warnings];
-  if (fallback.dependents.length === 0) {
+  const priorDirect = Array.isArray(data.directDependents)
+    ? (data.directDependents as unknown[]).filter((p): p is string => typeof p === "string")
+    : [];
+
+  if (fallback.dependents.length > 0) {
+    const ranked = sortDependentsProductionFirst(fallback.dependents);
     warnings.push(
-      "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
+      `Dependents verified via ${fallback.source} import/symbol search — prefer these over unfiltered graph samples.`
     );
     return {
       ...data,
+      directDependents: ranked.map((entry) => entry.path),
+      dependentDetails: ranked,
       warnings: [...new Set(warnings)],
       graphMeta: {
         ...(typeof data.graphMeta === "object" && data.graphMeta !== null
@@ -209,14 +220,25 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
       }
     };
   }
-  const ranked = sortDependentsProductionFirst(fallback.dependents);
+
+  if (options?.keepFilteredJobDependentsIfSearchEmpty && priorDirect.length > 0) {
+    warnings.push(
+      "Import/symbol search found no additional callers — keeping dependency edges that target this file only."
+    );
+    return {
+      ...data,
+      warnings: [...new Set(warnings)]
+    };
+  }
+
   warnings.push(
-    `Dependents inferred via ${fallback.source} import/symbol search — verify before relying on impact list.`
+    "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
   );
+  const { directDependents: _dropDirect, dependentDetails: _dropDetails, ...rest } = data;
   return {
-    ...data,
-    directDependents: ranked.map((entry) => entry.path),
-    dependentDetails: ranked,
+    ...rest,
+    directDependents: [],
+    dependentDetails: [],
     warnings: [...new Set(warnings)],
     graphMeta: {
       ...(typeof data.graphMeta === "object" && data.graphMeta !== null

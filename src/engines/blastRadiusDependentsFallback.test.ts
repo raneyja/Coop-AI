@@ -211,13 +211,54 @@ test("mergeSearchDependentsFallbackIntoDependenciesData fills callers when job s
   assert.equal((merged.graphMeta as { source: string }).source, "zoekt");
 });
 
-test("mergeSearchDependentsFallbackIntoDependenciesData marks unverified when still empty", () => {
+test("mergeSearchDependentsFallbackIntoDependenciesData replaces junk job callers with search hits", () => {
   const merged = mergeSearchDependentsFallbackIntoDependenciesData(
-    { file: "state.py", jobScan: { dependentsSample: [] } },
+    {
+      file: "src/config/responseDeadline.ts",
+      directDependents: [
+        "admin/src/lib/activeGrantRepoIds.ts",
+        "src/api/dataSanitization.ts"
+      ],
+      jobScan: { source: "dependency-graph-job", dependentsSample: [] }
+    },
+    {
+      dependents: [
+        { path: "src/chat/CoopChatSession.ts", depth: 1, source: "zoekt" },
+        { path: "src/jobs/JobApiClient.ts", depth: 1, source: "zoekt" }
+      ],
+      source: "zoekt",
+      warnings: []
+    }
+  );
+  assert.deepEqual(merged.directDependents, [
+    "src/chat/CoopChatSession.ts",
+    "src/jobs/JobApiClient.ts"
+  ]);
+  assert.ok(!(merged.directDependents as string[]).includes("admin/src/lib/activeGrantRepoIds.ts"));
+});
+
+test("mergeSearchDependentsFallbackIntoDependenciesData clears junk when search empty", () => {
+  const merged = mergeSearchDependentsFallbackIntoDependenciesData(
+    {
+      file: "src/config/responseDeadline.ts",
+      directDependents: ["admin/src/lib/activeGrantRepoIds.ts"]
+    },
     { dependents: [], source: "remote", warnings: [] }
   );
-  assert.equal(merged.directDependents, undefined);
+  assert.deepEqual(merged.directDependents, []);
   assert.ok((merged.warnings as string[]).some((w) => /Impact unverified/i.test(w)));
+});
+
+test("mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job edges when search empty", () => {
+  const merged = mergeSearchDependentsFallbackIntoDependenciesData(
+    {
+      file: "fastify.js",
+      directDependents: ["test/app.test.js"]
+    },
+    { dependents: [], source: "remote", warnings: [] },
+    { keepFilteredJobDependentsIfSearchEmpty: true }
+  );
+  assert.deepEqual(merged.directDependents, ["test/app.test.js"]);
 });
 
 const total = passed + failed;

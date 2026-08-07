@@ -87,6 +87,28 @@ test("blastRadiusFromBundle filters job dependents to target file", () => {
   assert.equal(evidence!.graphMeta?.edgeCount, 42);
 });
 
+test("blastRadiusFromBundle never promotes unfiltered remote job edges", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        jobScan: {
+          source: "dependency-graph-job",
+          edgeCount: 10,
+          dependentsSample: [
+            { from: "admin/src/lib/activeGrantRepoIds.ts", to: "admin/src/lib/other.ts" },
+            { from: "src/api/dataSanitization.ts", to: "src/api/unrelated.ts" }
+          ]
+        }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.equal(evidence!.directDependents?.length ?? 0, 0);
+  assert.ok((evidence!.warnings ?? []).some((w) => /ignored unfiltered/i.test(w)));
+});
+
 test("blastRadiusFromBundle merges integration searches from bundle entries", () => {
   const evidence = blastRadiusFromBundle([
     {

@@ -142,6 +142,7 @@ import {
 } from "../context/contextBundleEvidence";
 import {
   extractBlastSearchSymbols,
+  filterJobDependentsForFile,
   mergeSearchDependentsFallbackIntoDependenciesData,
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
@@ -6353,25 +6354,18 @@ export class CoopChatSession {
       });
     });
 
-    // Job path often returns an empty dependentsSample. Recover via symbol/import
-    // search before synthesis — same mechanism as BlastRadiusAnalysisEngine.
-    await this.recoverBlastDependentsWhenJobSampleEmpty(turn);
+    // Prefer verified import/symbol callers over unfiltered remote job samples.
+    await this.reconcileBlastDependentsWithVerifiedSearch(turn);
   }
 
   /**
-   * When the dependency-graph job left 0 callers, run client-side import/symbol
-   * search within the remaining soft gather budget and merge into the bundle.
+   * Always run import/symbol search after the dependency job. Prefer verified
+   * hits; never leave unfiltered remote edges as "production callers."
    */
-  private async recoverBlastDependentsWhenJobSampleEmpty(turn?: ChatTurn): Promise<void> {
+  private async reconcileBlastDependentsWithVerifiedSearch(turn?: ChatTurn): Promise<void> {
     const ctx = turn?.context ?? this.currentContext;
     const targetFile = ctx.file?.trim();
     if (!targetFile) {
-      return;
-    }
-    const evidence = blastRadiusFromBundle(
-      turn ? turn.contextBundle : this.lastContextBundle
-    );
-    if (evidence?.directDependents?.length || evidence?.dependentDetails?.length) {
       return;
     }
 
@@ -6407,9 +6401,27 @@ export class CoopChatSession {
         typeof existing.data === "object" && existing.data !== null
           ? { ...(existing.data as Record<string, unknown>) }
           : {};
+      // Keep only job edges that already target this file (filter applied in
+      // blastRadiusFromBundle). Search hits replace everything when present.
+      const jobScan = asRecord(data.jobScan);
+      const filteredJob = filterJobDependentsForFile(
+        Array.isArray(jobScan.dependentsSample)
+          ? (jobScan.dependentsSample as Array<{ from?: string; to?: string }>)
+          : undefined,
+        targetFile
+      );
+      if (filteredJob.length && !Array.isArray(data.directDependents)) {
+        data.directDependents = filteredJob;
+      } else if (filteredJob.length && Array.isArray(data.directDependents)) {
+        // Drop any prior unfiltered list; re-seed with file-targeted edges only.
+        data.directDependents = filteredJob;
+      }
+
       this.lastContextBundle[index] = {
         ...existing,
-        data: mergeSearchDependentsFallbackIntoDependenciesData(data, fallback)
+        data: mergeSearchDependentsFallbackIntoDependenciesData(data, fallback, {
+          keepFilteredJobDependentsIfSearchEmpty: filteredJob.length > 0
+        })
       };
     });
   }

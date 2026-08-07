@@ -410,18 +410,24 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
         jobScan.dependentsSample as Array<{ from?: string; to?: string }>,
         targetFile
       );
-      const sample =
-        filtered.length > 0
-          ? filtered
-          : (jobScan.dependentsSample as Array<{ from?: string; to?: string }>)
-              .map((edge) => edge.from)
-              .filter(Boolean) as string[];
-      if (sample.length > 0 && !merged.directDependents?.length) {
-        merged.directDependents = sample;
+      // Never promote unfiltered sample `from` paths — those are often unrelated
+      // remote edges and become fake "production callers."
+      if (filtered.length > 0 && !merged.directDependents?.length) {
+        merged.directDependents = filtered;
         merged.graphMeta = {
           ...merged.graphMeta,
-          source: filtered.length > 0 ? "scip" : merged.graphMeta?.source ?? "remote"
+          source: "scip"
         };
+      } else if (
+        !merged.directDependents?.length &&
+        (jobScan.dependentsSample as unknown[]).length > 0 &&
+        filtered.length === 0
+      ) {
+        const prior = merged.warnings ?? [];
+        merged.warnings = [
+          ...prior,
+          "Dependency-graph job sample had no edges targeting this file — ignored unfiltered remote edges."
+        ];
       }
       merged.graphMeta = {
         ...merged.graphMeta,
