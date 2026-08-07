@@ -323,7 +323,7 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
 }
 
 function blastCallerSourceRank(source: string | undefined): number {
-  if (source === "zoekt" || source === "scip") {
+  if (source === "zoekt" || source === "scip" || source === "workspace") {
     return 3;
   }
   if (source === "remote") {

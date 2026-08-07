@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import * as path from "node:path";
 import {
   classifyDependentSurface,
   codePathsFromDependentDetails,
   extractBlastSearchSymbols,
   extractExportNamesFromSource,
   buildImportSearchPatterns,
+  buildLocalCallerNeedles,
   groupDependentsByTopLevelFolder,
   hitLooksLikeReferenceToTarget,
   isDocsReferencePath,
@@ -13,6 +15,7 @@ import {
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   scoreDependentRisk,
+  searchDependentsInLocalRoots,
   sortDependentsProductionFirst,
   splitBlastRadiusDependents,
   type BlastRadiusDependentDetail
@@ -239,6 +242,30 @@ export const RESERVED_SYNTHESIS_MS = 6_000;
 `);
   assert.ok(names.includes("MAX_USER_FACING_RESPONSE_MS"));
   assert.ok(names.includes("remainingContextGatherBudgetMs"));
+});
+
+test("buildLocalCallerNeedles includes path suffixes and exports", () => {
+  const needles = buildLocalCallerNeedles("src/config/responseDeadline.ts", [
+    "MAX_USER_FACING_RESPONSE_MS"
+  ]);
+  assert.ok(needles.includes("config/responseDeadline"));
+  assert.ok(needles.includes("MAX_USER_FACING_RESPONSE_MS"));
+});
+
+test("searchDependentsInLocalRoots finds real responseDeadline importers", () => {
+  const roots = [path.resolve(__dirname, "../..")];
+  const result = searchDependentsInLocalRoots(roots, "src/config/responseDeadline.ts", {
+    symbols: ["MAX_USER_FACING_RESPONSE_MS", "remainingContextGatherBudgetMs"],
+    maxHits: 20
+  });
+  assert.ok(result.dependents.length > 0, "expected local callers");
+  const paths = result.dependents.map((entry) => entry.path);
+  assert.ok(
+    paths.some((p) => p.includes("CoopChatSession") || p.includes("JobApiClient")),
+    `expected real importer, got ${paths.slice(0, 8).join(", ")}`
+  );
+  assert.equal(result.source, "workspace");
+  assert.ok(!paths.includes("admin/src/components/IndexingQueueList.tsx"));
 });
 
 test("buildImportSearchPatterns includes symbol and alias forms", () => {

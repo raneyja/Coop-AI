@@ -12,6 +12,7 @@ import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
 import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
+import * as vscode from "vscode";
 
 /** Soft gather is silent — partial evidence only; never a user-facing banner message. */
 function softGatherPartialBlastResult(
@@ -103,7 +104,8 @@ export async function blastRadius(context: FeatureExecutionContext) {
           branch: params.branch,
           includeTransitive: !directOnly,
           gatherStartedAt,
-          askText: context.request.intent?.context?.queryText
+          askText: context.request.intent?.context?.queryText,
+          localRoots: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
         }),
         new Promise<undefined>((resolve) => {
           setTimeout(() => resolve(undefined), budgetMs);

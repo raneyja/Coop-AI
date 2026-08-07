@@ -6404,7 +6404,8 @@ export class CoopChatSession {
     try {
       fallback = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
         maxPatterns,
-        symbols
+        symbols,
+        localRoots: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
       });
     } catch {
       return;

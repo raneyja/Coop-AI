@@ -1,10 +1,18 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 
-export type GraphEdgeSource = "scip" | "zoekt" | "heuristic" | "remote";
+export type GraphEdgeSource = "scip" | "zoekt" | "heuristic" | "remote" | "workspace";
 
 export function asGraphEdgeSource(source: string | undefined): GraphEdgeSource {
-  if (source === "scip" || source === "zoekt" || source === "heuristic" || source === "remote") {
+  if (
+    source === "scip" ||
+    source === "zoekt" ||
+    source === "heuristic" ||
+    source === "remote" ||
+    source === "workspace"
+  ) {
     return source;
   }
   return "remote";
@@ -267,7 +275,115 @@ export type SearchDependentsFallbackOptions = {
   maxPatterns?: number;
   /** Extra symbols from the user ask (StateGroup, DocumentStatus, …). */
   symbols?: string[];
+  /**
+   * Absolute workspace/clone roots. When index text search (Zoekt) is empty or
+   * embedding-only, scan these roots for real import/symbol references.
+   */
+  localRoots?: string[];
 };
+
+/** High-signal substrings for a single local filesystem walk. */
+export function buildLocalCallerNeedles(file: string, symbols: string[] = []): string[] {
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const parts = withoutExt.split("/").filter(Boolean);
+  const needles: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string): void => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 3 || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    needles.push(trimmed);
+  };
+  for (let i = 0; i < parts.length; i++) {
+    add(parts.slice(i).join("/"));
+  }
+  for (const symbol of symbols.slice(0, 6)) {
+    add(symbol);
+  }
+  return needles;
+}
+
+/**
+ * Scan local workspace/clone roots for import/symbol references when the remote
+ * index cannot verify callers (no Zoekt / embedding-only).
+ */
+export function searchDependentsInLocalRoots(
+  roots: string[],
+  file: string,
+  options: { symbols?: string[]; maxHits?: number } = {}
+): { dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] } {
+  const warnings: string[] = [];
+  const needles = buildLocalCallerNeedles(file, options.symbols ?? []);
+  if (!roots.length || !needles.length) {
+    return { dependents: [], source: "remote", warnings };
+  }
+
+  const maxHits = Math.max(1, Math.min(options.maxHits ?? 30, 40));
+  const seen = new Set<string>([file.replace(/\\/g, "/")]);
+  const dependents: BlastRadiusDependentDetail[] = [];
+  const needleLower = needles.map((needle) => needle.toLowerCase());
+
+  for (const root of roots) {
+    if (!root || !fsExists(root)) {
+      continue;
+    }
+    walkLocalTextFiles(root, (absolutePath, relativePath) => {
+      if (dependents.length >= maxHits) {
+        return false;
+      }
+      const depPath = relativePath.replace(/\\/g, "/");
+      if (!depPath || seen.has(depPath) || depPath === file) {
+        return true;
+      }
+      let content: string;
+      try {
+        content = fsReadFile(absolutePath);
+      } catch {
+        return true;
+      }
+      const lines = content.split("\n");
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index] ?? "";
+        const lower = line.toLowerCase();
+        if (!needleLower.some((needle) => lower.includes(needle))) {
+          continue;
+        }
+        if (
+          !hitLooksLikeReferenceToTarget(
+            { fileName: depPath, content: line },
+            file,
+            options.symbols ?? []
+          )
+        ) {
+          continue;
+        }
+        seen.add(depPath);
+        dependents.push({ path: depPath, depth: 1, source: "workspace" });
+        break;
+      }
+      return dependents.length < maxHits;
+    });
+    if (dependents.length >= maxHits) {
+      break;
+    }
+  }
+
+  if (dependents.length === 0) {
+    warnings.push("Workspace text search found no import/symbol callers for this file.");
+    return { dependents: [], source: "remote", warnings };
+  }
+
+  warnings.push(
+    `Dependents verified via workspace text search (${dependents.length} file(s)) — index Zoekt unavailable or empty.`
+  );
+  return {
+    dependents: sortDependentsProductionFirst(dependents).slice(0, maxHits),
+    source: "workspace",
+    warnings
+  };
+}
 
 /** Search index for files that import/reference the target when SCIP dependents are empty. */
 export async function searchDependentsFallback(
@@ -278,13 +394,16 @@ export async function searchDependentsFallback(
 ): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
   const warnings: string[] = [];
   const normalizedRepoId = normalizeGraphRepoId(repoId);
-  const enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
+  const symbols = options.symbols ?? [];
+  const localRoots = (options.localRoots ?? []).filter((root) => Boolean(root?.trim()));
 
-  if (!enabled) {
-    return { dependents: [], source: "remote", warnings };
+  let enabled = false;
+  try {
+    enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
+  } catch {
+    enabled = false;
   }
 
-  const symbols = options.symbols ?? [];
   const patterns = buildImportSearchPatterns(file, symbols);
   // Prefer import-path patterns first; symbol patterns second (enums/classes).
   // Never let bare English tokens from the ask crowd out real import queries.
@@ -299,40 +418,42 @@ export async function searchDependentsFallback(
   let bestSource: GraphEdgeSource = "remote";
   let skippedUnverified = 0;
 
-  for (const pattern of ordered.slice(0, maxPatterns)) {
-    try {
-      const result = await indexBackend.search(normalizedRepoId, pattern);
-      const verifiedHits = result.hits.filter((hit) => {
-        const hitSource = hit.source ?? result.source;
-        return isVerifiedCallerSearchSource(hitSource);
-      });
-      if (verifiedHits.length === 0) {
-        if (result.hits.length > 0) {
-          skippedUnverified += result.hits.length;
-        }
-        continue;
-      }
-      const resultSource = isVerifiedCallerSearchSource(result.source)
-        ? result.source
-        : (verifiedHits[0]?.source ?? "zoekt");
-      const source = mapSearchSourceToGraphSource(resultSource);
-      if (source === "zoekt" || source === "scip") {
-        bestSource = source;
-      }
-      for (const hit of verifiedHits) {
-        const depPath = normalizeHitPath(hit.fileName);
-        if (!depPath || seen.has(depPath) || depPath === file) {
+  if (enabled) {
+    for (const pattern of ordered.slice(0, maxPatterns)) {
+      try {
+        const result = await indexBackend.search(normalizedRepoId, pattern);
+        const verifiedHits = result.hits.filter((hit) => {
+          const hitSource = hit.source ?? result.source;
+          return isVerifiedCallerSearchSource(hitSource);
+        });
+        if (verifiedHits.length === 0) {
+          if (result.hits.length > 0) {
+            skippedUnverified += result.hits.length;
+          }
           continue;
         }
-        if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
-          continue;
+        const resultSource = isVerifiedCallerSearchSource(result.source)
+          ? result.source
+          : (verifiedHits[0]?.source ?? "zoekt");
+        const source = mapSearchSourceToGraphSource(resultSource);
+        if (source === "zoekt" || source === "scip") {
+          bestSource = source;
         }
-        const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
-        seen.add(depPath);
-        dependents.push({ path: depPath, depth: 1, source: hitGraphSource });
+        for (const hit of verifiedHits) {
+          const depPath = normalizeHitPath(hit.fileName);
+          if (!depPath || seen.has(depPath) || depPath === file) {
+            continue;
+          }
+          if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
+            continue;
+          }
+          const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
+          seen.add(depPath);
+          dependents.push({ path: depPath, depth: 1, source: hitGraphSource });
+        }
+      } catch (error) {
+        warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
       }
-    } catch (error) {
-      warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
     }
   }
 
@@ -342,11 +463,26 @@ export async function searchDependentsFallback(
     );
   }
 
+  if (dependents.length === 0 && localRoots.length > 0) {
+    const local = searchDependentsInLocalRoots(localRoots, file, {
+      symbols,
+      maxHits: 30
+    });
+    warnings.push(...local.warnings);
+    if (local.dependents.length > 0) {
+      return {
+        dependents: local.dependents,
+        source: local.source,
+        warnings: [...new Set(warnings)]
+      };
+    }
+  }
+
   const ranked = sortDependentsProductionFirst(dependents);
   return {
     dependents: ranked.slice(0, 30),
     source: ranked.length > 0 ? bestSource : "remote",
-    warnings
+    warnings: [...new Set(warnings)]
   };
 }
 
@@ -811,4 +947,89 @@ function uniqueStrings(values: string[]): string[] {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function fsExists(root: string): boolean {
+  try {
+    return fs.existsSync(root);
+  } catch {
+    return false;
+  }
+}
+
+function fsReadFile(absolutePath: string): string {
+  return fs.readFileSync(absolutePath, "utf8");
+}
+
+const LOCAL_SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "out",
+  "build",
+  ".next",
+  "coverage",
+  ".turbo",
+  ".cache",
+  "vendor"
+]);
+
+function isLocalTextCandidate(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  if (
+    !/\.(ts|tsx|js|jsx|mjs|cjs|py|go|java|kt|rs|cs|rb|php|swift)$/i.test(lower) &&
+    !lower.endsWith(".vue") &&
+    !lower.endsWith(".svelte")
+  ) {
+    return false;
+  }
+  if (lower.endsWith(".d.ts") || lower.includes(".min.")) {
+    return false;
+  }
+  return true;
+}
+
+/** Depth-first walk; visitor returns false to stop. */
+function walkLocalTextFiles(
+  root: string,
+  visitor: (absolutePath: string, relativePath: string) => boolean
+): void {
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".github") {
+        if (LOCAL_SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
+        if (entry.isDirectory() && entry.name !== ".github") {
+          continue;
+        }
+      }
+      if (LOCAL_SKIP_DIRS.has(entry.name)) {
+        continue;
+      }
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || !isLocalTextCandidate(fullPath)) {
+        continue;
+      }
+      const relativePath = path.relative(root, fullPath);
+      if (!visitor(fullPath, relativePath)) {
+        return;
+      }
+    }
+  }
 }

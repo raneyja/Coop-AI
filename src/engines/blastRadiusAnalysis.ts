@@ -118,6 +118,8 @@ export type BlastRadiusAnalysisParams = {
   askText?: string;
   /** Explicit symbols to search when graph dependents are empty. */
   symbols?: string[];
+  /** Absolute workspace/clone roots for local text-search fallback. */
+  localRoots?: string[];
 };
 
 export class BlastRadiusAnalysisEngine {
@@ -198,7 +200,8 @@ export class BlastRadiusAnalysisEngine {
           ];
           const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
             maxPatterns: softBudgetExhausted() ? 4 : 12,
-            symbols: [...new Set(symbols)]
+            symbols: [...new Set(symbols)],
+            localRoots: params.localRoots
           });
           warnings.push(...fallback.warnings);
           if (fallback.dependents.length > 0) {
