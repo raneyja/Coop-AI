@@ -28,6 +28,7 @@ import {
   blastRadiusSourceLabelTeams,
   blastRadiusSourceLabelTests,
   hasPartialIndexCoverage,
+  hasVerifiedRemoteBlastDependents,
   listBlastRadiusSourceLabels,
   listBlastRadiusSourcesChecklist
 } from "./blastRadiusSourceLabels";
@@ -125,6 +126,17 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
+  if (hasVerifiedRemoteBlastDependents(evidence)) {
+    lines.push("## Summary guidance");
+    lines.push(
+      "- Callers come from a verified remote dependency graph. Lead **Summary** with impact (top risk surfaces) — do **not** open with partial-index or incomplete-coverage hedging."
+    );
+    lines.push(
+      "- Treat listed import-parse / scip / zoekt callers as real. Mention missing PR/Slack only as optional context, not as weak dependency evidence."
+    );
+    lines.push("");
+    return;
+  }
   if (!hasPartialIndexCoverage(evidence)) {
     return;
   }

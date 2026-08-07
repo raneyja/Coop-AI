@@ -35,6 +35,14 @@ export function isTrustedBlastGraphSource(source: string | undefined): boolean {
   );
 }
 
+/**
+ * Remote Zero-Clone sources that should not be undercut with “partial index”
+ * caveats when callers are present (excludes local workspace scans).
+ */
+export function isRemoteTrustedBlastGraphSource(source: string | undefined): boolean {
+  return source === "import-parse" || source === "scip" || source === "zoekt";
+}
+
 export type BlastRadiusDependentDetail = {
   path: string;
   depth: number;

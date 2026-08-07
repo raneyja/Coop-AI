@@ -1,5 +1,6 @@
 import type { BlastRadiusEvidence } from "../context/contextBundleEvidence";
 import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";
+import { isRemoteTrustedBlastGraphSource } from "../engines/blastRadiusDependentsFallback";
 import { buildSourcesChecklistFromKeys } from "./evidenceSynthesis";
 
 export function blastRadiusSourceLabelDependencies(): string {
@@ -122,7 +123,19 @@ export function listBlastRadiusSourceLabels(evidence: BlastRadiusEvidence): stri
   return labels;
 }
 
+/** True when verified remote callers exist — do not undercut with partial-index copy. */
+export function hasVerifiedRemoteBlastDependents(evidence: BlastRadiusEvidence): boolean {
+  const dependents =
+    (evidence.directDependents?.length ?? 0) + (evidence.transitiveDependents?.length ?? 0);
+  return dependents > 0 && isRemoteTrustedBlastGraphSource(evidence.graphMeta?.source);
+}
+
 export function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean {
+  // Import-parse / SCIP / Zoekt callers are the product win (Zero-Clone). Missing
+  // Lightning, PRs, or Slack must not force “partial index” undercutting.
+  if (hasVerifiedRemoteBlastDependents(evidence)) {
+    return false;
+  }
   if (evidence.graphMeta?.lightningEnabled === false) {
     return true;
   }
@@ -136,7 +149,12 @@ export function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean 
 
 export function listBlastRadiusSourcesChecklist(evidence: BlastRadiusEvidence): string[] {
   const dependencyNotes: string[] = [];
-  if (hasPartialIndexCoverage(evidence)) {
+  if (hasVerifiedRemoteBlastDependents(evidence)) {
+    const source = evidence.graphMeta?.source ?? "import-parse";
+    dependencyNotes.push(
+      `Verified ${source} dependency graph; listed callers are import/symbol-backed.`
+    );
+  } else if (hasPartialIndexCoverage(evidence)) {
     dependencyNotes.push("Index coverage is partial; dependency impact may be incomplete.");
   }
   if (!evidence.directDependents?.length && !evidence.transitiveDependents?.length) {

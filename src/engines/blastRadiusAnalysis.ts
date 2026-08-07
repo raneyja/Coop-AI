@@ -363,7 +363,13 @@ export class BlastRadiusAnalysisEngine {
     }
     // else: soft gather silent — skip secondary enrichment; return core evidence only.
 
-    const completeness = assessCompleteness(directDependents, openPullRequests, slackSearch, warnings);
+    const completeness = assessCompleteness(
+      directDependents,
+      openPullRequests,
+      slackSearch,
+      warnings,
+      graphMeta?.source
+    );
 
     const split = splitBlastRadiusDependents(dependentDetails);
     const rankedCode = sortDependentsProductionFirst(split.codeDependentDetails);
@@ -514,12 +520,22 @@ function assessCompleteness(
   directDependents: string[],
   openPullRequests: CodeHostPullRequestSnippet[],
   slackSearch: BlastRadiusReport["slackSearch"] | undefined,
-  warnings: string[]
+  warnings: string[],
+  graphSource?: string
 ): BlastRadiusReport["completeness"] {
-  if (directDependents.length > 0 && (openPullRequests.length > 0 || (slackSearch?.messages.length ?? 0) > 0)) {
+  const hasIntegration =
+    openPullRequests.length > 0 || (slackSearch?.messages.length ?? 0) > 0;
+  // Verified remote callers are full dependency evidence even without PR/Slack.
+  if (
+    directDependents.length > 0 &&
+    (hasIntegration ||
+      graphSource === "import-parse" ||
+      graphSource === "scip" ||
+      graphSource === "zoekt")
+  ) {
     return "full";
   }
-  if (directDependents.length > 0 || openPullRequests.length > 0 || (slackSearch?.messages.length ?? 0) > 0) {
+  if (directDependents.length > 0 || hasIntegration) {
     return "partial";
   }
   return warnings.length <= 1 ? "partial" : "minimal";
