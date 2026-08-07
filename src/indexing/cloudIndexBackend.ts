@@ -2,6 +2,7 @@ import type { CoopBackendClient } from "../api/CoopBackendClient";
 import { isLightningEnabledForRepo, type LightningConfiguration } from "../config/lightningConfig";
 import { canUseLightningMode, resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 import type { IndexBackend, IndexRepoStatus } from "./indexBackend";
+import { mapSearchProvenance } from "./searchProvenance";
 import type { LocalDependentsResult, LocalSearchResult } from "./types";
 
 export class CloudIndexBackend implements IndexBackend {
@@ -134,9 +135,10 @@ export class CloudIndexBackend implements IndexBackend {
         character: 0,
         displayName: entry.displayName ?? entry.symbol
       }));
-      // hybrid = zoekt/scip mixed with something else — treat as verified text search.
-      // Unlabeled / embedding-only must not become fake Blast callers.
-      const source = mapRemoteAggregateSource(remote.freshness, hits);
+      const source = mapSearchProvenance(remote.freshness, {
+        hasHits: hits.length > 0,
+        hitSources: hits.map((hit) => hit.source)
+      });
       return {
         source,
         hits,
@@ -155,12 +157,24 @@ export class CloudIndexBackend implements IndexBackend {
     try {
       const remote = (await this.client.graphDependents(this.getBaseUrl(), repoId, file)) as {
         data?: Array<{ from: string }>;
+        freshness?: string;
       };
       const dependents = (remote.data ?? []).map((edge) => edge.from);
+      const freshness = remote.freshness;
+      const source =
+        freshness === "import-parse" ||
+        freshness === "scip" ||
+        freshness === "zoekt" ||
+        freshness === "workspace" ||
+        freshness === "heuristic"
+          ? freshness
+          : dependents.length > 0
+            ? "import-parse"
+            : "remote";
       return {
         file,
         dependents,
-        source: dependents.length > 0 ? "scip" : "remote"
+        source
       };
     } catch {
       return { file, dependents: [], source: "remote" };
@@ -207,31 +221,7 @@ function mapRemoteHitSource(
   if (hitSource === "zoekt" || hitSource === "scip" || hitSource === "embedding" || hitSource === "fallback") {
     return hitSource;
   }
-  return mapRemoteAggregateSource(freshness, []);
-}
-
-function mapRemoteAggregateSource(
-  freshness: string | undefined,
-  hits: Array<{ source?: LocalSearchResult["source"] }>
-): LocalSearchResult["source"] {
-  if (freshness === "zoekt" || freshness === "scip") {
-    return freshness;
-  }
-  if (freshness === "hybrid") {
-    // Mixed zoekt/scip + other — still has verified text hits; do not downgrade to embedding.
-    return "zoekt";
-  }
-  if (freshness === "embedding") {
-    return "embedding";
-  }
-  const verifiedHit = hits.find((hit) => hit.source === "zoekt" || hit.source === "scip");
-  if (verifiedHit?.source) {
-    return verifiedHit.source;
-  }
-  if (hits.some((hit) => hit.source === "embedding") || (hits.length > 0 && !freshness)) {
-    return "embedding";
-  }
-  return hits.length > 0 ? "embedding" : "fallback";
+  return mapSearchProvenance(freshness);
 }
 
 function cloudRecordToStatus(record: Record<string, unknown>): IndexRepoStatus {

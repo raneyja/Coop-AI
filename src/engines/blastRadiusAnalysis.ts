@@ -15,6 +15,7 @@ import {
   codePathsFromDependentDetails,
   extractBlastSearchSymbols,
   extractExportNamesFromSource,
+  isTrustedBlastGraphSource,
   normalizeGraphRepoId,
   searchCiWorkflowReferences,
   searchCrossRepoConsumers,
@@ -213,18 +214,27 @@ export class BlastRadiusAnalysisEngine {
             warnings.push(
               `Dependents verified via ${fallback.source} import/symbol search — prefer these over unfiltered graph samples.`
             );
+          } else if (
+            directDependents.length > 0 &&
+            isTrustedBlastGraphSource(result.source)
+          ) {
+            // Durable import-parse / SCIP edges establish real callers even when
+            // Zoekt text search is unavailable.
+            warnings.push(
+              `Dependents from durable ${result.source} graph — ${directDependents.length} direct caller(s).`
+            );
           } else if (directDependents.length > 0) {
-            // Graph returned paths but nothing import-verified — do not show fakes.
+            // Untrusted graph sample (heuristic) — do not show fakes.
             directDependents = [];
             dependentDetails = [];
             transitiveDependents = [];
             graphMeta = { ...graphMeta, source: "remote" };
             warnings.push(
-              "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
+              "No dependents verified in import graph or search for this file. Impact unverified — do not claim zero impact."
             );
           } else {
             warnings.push(
-              "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
+              "No dependents found in import graph or search for this file. Impact unverified — do not claim zero impact."
             );
           }
 

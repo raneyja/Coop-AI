@@ -3,7 +3,13 @@ import * as path from "node:path";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 
-export type GraphEdgeSource = "scip" | "zoekt" | "heuristic" | "remote" | "workspace";
+export type GraphEdgeSource =
+  | "scip"
+  | "zoekt"
+  | "heuristic"
+  | "remote"
+  | "workspace"
+  | "import-parse";
 
 export function asGraphEdgeSource(source: string | undefined): GraphEdgeSource {
   if (
@@ -11,11 +17,22 @@ export function asGraphEdgeSource(source: string | undefined): GraphEdgeSource {
     source === "zoekt" ||
     source === "heuristic" ||
     source === "remote" ||
-    source === "workspace"
+    source === "workspace" ||
+    source === "import-parse"
   ) {
     return source;
   }
   return "remote";
+}
+
+/** Durable / lexical sources that establish real callers (not embedding lookalikes). */
+export function isTrustedBlastGraphSource(source: string | undefined): boolean {
+  return (
+    source === "import-parse" ||
+    source === "scip" ||
+    source === "zoekt" ||
+    source === "workspace"
+  );
 }
 
 export type BlastRadiusDependentDetail = {

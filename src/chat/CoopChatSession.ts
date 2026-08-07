@@ -144,6 +144,7 @@ import {
   extractBlastSearchSymbols,
   extractExportNamesFromSource,
   filterJobDependentsForFile,
+  isTrustedBlastGraphSource,
   mergeSearchDependentsFallbackIntoDependenciesData,
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
@@ -6409,6 +6410,31 @@ export class CoopChatSession {
       });
     } catch {
       return;
+    }
+
+    // When Zoekt/workspace search is empty, prefer durable import-parse edges from API/DB.
+    if (fallback.dependents.length === 0) {
+      try {
+        const apiDeps = await this.options.indexBackend.dependents(repoId, targetFile);
+        if (
+          apiDeps.dependents.length > 0 &&
+          isTrustedBlastGraphSource(apiDeps.source)
+        ) {
+          fallback = {
+            dependents: apiDeps.dependents.map((path) => ({
+              path,
+              depth: 1,
+              source: apiDeps.source as "import-parse" | "scip" | "zoekt" | "workspace"
+            })),
+            source: apiDeps.source as "import-parse" | "scip" | "zoekt" | "workspace",
+            warnings: [
+              `Dependents from durable ${apiDeps.source} graph — ${apiDeps.dependents.length} direct caller(s).`
+            ]
+          };
+        }
+      } catch {
+        // Soft gather — leave search/workspace result as-is.
+      }
     }
 
     this.withTurnSessionMirrors(turn, () => {

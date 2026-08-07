@@ -41,7 +41,8 @@ const LEDGER_PROBES = {
   "018_org_integration_policies.sql": { table: "org_integration_policies" },
   "019_chat_threads.sql": { table: "chat_threads" },
   "024_repo_stats.sql": { table: "repo_stats" },
-  "025_org_repos_browse_status.sql": { table: "org_repos", column: "browse_status" }
+  "025_org_repos_browse_status.sql": { table: "org_repos", column: "browse_status" },
+  "026_repo_dependency_edges.sql": { table: "repo_dependency_edges" }
 };
 
 async function tableExists(client, tableName) {

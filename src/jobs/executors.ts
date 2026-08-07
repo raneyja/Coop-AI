@@ -1,8 +1,12 @@
 import type { DependencyEdge, GraphCache } from "../cache/graphCache";
 import type { GraphConsistencyManager } from "../cache/graphConsistency";
 import { chunkAndEmbed } from "../indexing/chunkAndEmbed";
-import { SYMBOL_EDGE_BUILD_LIMIT } from "../indexing/repoSymbolIndexStore";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
+import {
+  RepoDependencyEdgesStore,
+  type RepoDependencyEdgeRow
+} from "../indexing/repoDependencyEdgesStore";
+import { extractImportEdges } from "../indexing/importGraphExtractor";
 import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getConnector } from "../server/codeHostConnectors/registry";
 import type { CodeHostProvider } from "../api/codeHosts/types";
@@ -144,10 +148,9 @@ export async function buildDependencyGraph(
     });
   }
 
-  await report(50, "Rebuilding dependency edges");
+  await report(50, "Loading durable dependency edges");
   const filePaths = new Set(graph.fileTree.map((f) => f.path));
-  const preserved = graph.dependencies.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to));
-  const merged = await resolveDependencyEdges(orgId, repoId, graph.fileTree.map((f) => f.path), preserved);
+  const merged = await loadDurableDependencyEdges(orgId, repoId, filePaths);
   const updated = ctx.cache.setDependencies(repoId, merged);
   graph = updated ?? graph;
 
@@ -159,9 +162,11 @@ export async function buildDependencyGraph(
     repoId,
     nodeCount,
     edgeCount,
+    // Sample only — never treat as file-specific dependents without filtering by `to`.
     dependentsSample: graph.dependencies.slice(0, 10),
     lastIndexedAt: graph.metadata.lastIndexedAt.toISOString(),
-    indexVersion: graph.metadata.indexVersion
+    indexVersion: graph.metadata.indexVersion,
+    edgeSource: "durable"
   };
 }
 
@@ -281,22 +286,64 @@ async function indexRepository(
     graph.lastUpdated = now;
     ctx.cache.setGraph(graph);
 
+    // Import graph while clone still exists — durable edges, no filename heuristics.
+    await report(87, "Extracting import graph");
+    const filePathSet = new Set(graph.fileTree.map((file) => file.path));
+    const importEdges = extractImportEdges(clone.localPath);
+    const edgeRows: RepoDependencyEdgeRow[] = importEdges
+      .filter((edge) => filePathSet.has(edge.from) && filePathSet.has(edge.to))
+      .map((edge) => ({
+        fromPath: edge.from,
+        toPath: edge.to,
+        kind: edge.kind,
+        symbol: edge.symbol,
+        line: edge.line,
+        source: "import-parse" as const
+      }));
+
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
-        const store = new RepoSymbolIndexStore(pool);
-        const symbolCount = await store.countSymbols(orgId, repoId);
-        if (symbolCount > 0 && symbolCount <= SYMBOL_EDGE_BUILD_LIMIT) {
-          await report(87, "Building symbol dependency graph");
-          const filePaths = new Set(graph.fileTree.map((file) => file.path));
-          const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
-          ctx.cache.setDependencies(
-            repoId,
-            dedupeEdges(symbolEdges.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to)))
+        try {
+          const symbolStore = new RepoSymbolIndexStore(pool);
+          const symbolEdges = await symbolStore.loadDependencyEdges(orgId, repoId);
+          for (const edge of symbolEdges) {
+            if (!filePathSet.has(edge.from) || !filePathSet.has(edge.to)) {
+              continue;
+            }
+            edgeRows.push({
+              fromPath: edge.from,
+              toPath: edge.to,
+              kind: edge.type || "reference",
+              source: "scip"
+            });
+          }
+        } catch (error) {
+          console.warn(
+            `[index] SCIP edge merge skipped: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+
+        try {
+          await new RepoDependencyEdgesStore(pool).replaceEdges(orgId, repoId, edgeRows, now);
+        } catch (error) {
+          console.warn(
+            `[index] Failed to persist dependency edges: ${
+              error instanceof Error ? error.message : String(error)
+            }`
           );
         }
       }
     }
+
+    const cacheEdges = dedupeEdges(
+      edgeRows.map((edge) => ({
+        from: edge.fromPath,
+        to: edge.toPath,
+        type: edge.kind === "reference" ? ("reference" as const) : ("import" as const)
+      }))
+    );
+    ctx.cache.setDependencies(repoId, cacheEdges);
 
     // Measure the repo while the clone still exists — chat answers counts from
     // this record instead of estimating from a retrieval sample.
@@ -559,49 +606,47 @@ function normalizeRepoIds(params: Record<string, unknown>): string[] {
   return [];
 }
 
-async function resolveDependencyEdges(
+/**
+ * Load durable edges from Postgres. Never invent filename-heuristic edges.
+ * Empty means impact unverified — not "zero impact."
+ */
+async function loadDurableDependencyEdges(
   orgId: string | undefined,
   repoId: string,
-  filePaths: string[],
-  preserved: DependencyEdge[]
+  filePaths: Set<string>
 ): Promise<DependencyEdge[]> {
-  const pathSet = new Set(filePaths);
-  if (orgId) {
-    const pool = await getDbPool();
-    if (pool) {
-      const store = new RepoSymbolIndexStore(pool);
-      const symbolCount = await store.countSymbols(orgId, repoId);
-      if (symbolCount > 0) {
-        const symbolEdges = await store.loadDependencyEdges(orgId, repoId);
-        return dedupeEdges([
-          ...preserved,
-          ...symbolEdges.filter((edge) => pathSet.has(edge.from) && pathSet.has(edge.to))
-        ]);
-      }
-    }
+  if (!orgId) {
+    return [];
   }
-
-  const inferred = inferDependenciesFromPaths(filePaths);
-  return dedupeEdges([...preserved, ...inferred]);
-}
-
-function inferDependenciesFromPaths(paths: string[]): Array<{ from: string; to: string; type: "import" }> {
-  const edges: Array<{ from: string; to: string; type: "import" }> = [];
-  const index = new Set(paths);
-  for (const from of paths) {
-    const base = from.replace(/\.[^.]+$/, "");
-    for (const to of paths) {
-      if (from === to) {
-        continue;
-      }
-      if (to.startsWith(base) || from.includes(to.replace(/\.[^.]+$/, ""))) {
-        if (index.has(to)) {
-          edges.push({ from, to, type: "import" });
-        }
-      }
-    }
+  const pool = await getDbPool();
+  if (!pool) {
+    return [];
   }
-  return edges.slice(0, 500);
+  try {
+    const store = new RepoDependencyEdgesStore(pool);
+    const rows = await store.loadAllEdges(orgId, repoId);
+    return dedupeEdges(
+      rows
+        .filter((edge) => filePaths.has(edge.fromPath) && filePaths.has(edge.toPath))
+        .map((edge) => ({
+          from: edge.fromPath,
+          to: edge.toPath,
+          type:
+            edge.kind === "reference"
+              ? ("reference" as const)
+              : edge.kind === "require"
+                ? ("require" as const)
+                : ("import" as const)
+        }))
+    );
+  } catch (error) {
+    console.warn(
+      `[deps] loadDurableDependencyEdges failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return [];
+  }
 }
 
 function dedupeEdges<T extends { from: string; to: string }>(edges: T[]): T[] {

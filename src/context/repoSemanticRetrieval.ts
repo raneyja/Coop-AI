@@ -1,6 +1,7 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostProviderPreference } from "../chat/types";
 import type { IndexBackend } from "../indexing/indexBackend";
+import { mapSearchProvenance } from "../indexing/searchProvenance";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
@@ -389,7 +390,7 @@ async function runRepoSearch(
         displayName: ""
       }));
     return {
-      source: remote.freshness ?? (hits.length > 0 ? "zoekt" : "fallback"),
+      source: mapSearchProvenance(remote.freshness, { hasHits: hits.length > 0 }),
       hits,
       symbols,
       stale: Boolean(remote.stale)
