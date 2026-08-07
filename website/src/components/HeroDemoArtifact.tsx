@@ -10,6 +10,20 @@ import {
   SlackIcon,
   TeamsIcon
 } from "./logos/brand-icons";
+import {
+  HERO_EDIT_PATCH_LINES,
+  HERO_JIRA_PATCH_LINES,
+  HeroPatchDemoCard,
+  type HeroPatchLine,
+  type HeroPatchPhase
+} from "./HeroPatchDemoCard";
+import {
+  HERO_COMPLETE_GHOST_SUFFIX,
+  HERO_COMPLETE_PREFIX_LINES,
+  HERO_COMPLETE_TYPED_PREFIX,
+  HeroCompleteDemoCard,
+  type HeroCompletePhase
+} from "./HeroCompleteDemoCard";
 
 type ContextItem = {
   label: string;
@@ -17,7 +31,8 @@ type ContextItem = {
   status: "done" | "loading";
 };
 
-type Scenario = {
+type ProseScenario = {
+  kind?: "prose";
   question: string;
   /** Filenames/paths in the question that turn blue once fully typed (extension file-link style). */
   questionFiles?: string[];
@@ -29,8 +44,53 @@ type Scenario = {
   };
 };
 
+type PatchScenario = {
+  kind: "patch";
+  question: string;
+  questionFiles?: string[];
+  context: ContextItem[];
+  patch: {
+    file: string;
+    meta: string;
+    lines: HeroPatchLine[];
+  };
+};
+
+type CompleteScenario = {
+  kind: "complete";
+  question: string;
+  questionFiles?: string[];
+  context: ContextItem[];
+  complete: {
+    file: string;
+    prefixLines: string[];
+    typedPrefix: string;
+    ghostSuffix: string;
+  };
+};
+
+type Scenario = ProseScenario | PatchScenario | CompleteScenario;
+
 const SCENARIOS: Scenario[] = [
   {
+    kind: "patch",
+    question:
+      "Rewrite the selected refresh-token branch in oauth_refresh.ts — match AuthError rejection from token_validator.ts.",
+    questionFiles: ["oauth_refresh.ts", "token_validator.ts"],
+    context: [
+      { label: "Symbol graph", desc: "refreshOAuthToken() · AuthError usages · 3 callers", status: "done" },
+      { label: "GitHub · token_validator.ts", desc: "AuthError('empty_or_unsigned_payload')", status: "done" },
+      { label: "Pattern match", desc: "billing/auth rejection semantics", status: "done" },
+      { label: "Selection", desc: "oauth_refresh.ts · lines 44–46 highlighted", status: "loading" }
+    ],
+    patch: {
+      file: "oauth_refresh.ts",
+      meta: "1 file · 1 edit",
+      lines: HERO_EDIT_PATCH_LINES
+    }
+  },
+  {
+    kind: "complete",
     question:
       "Complete the empty-payload guard in token_validator.ts — match the AuthError pattern from billing/auth.",
     questionFiles: ["token_validator.ts"],
@@ -40,12 +100,11 @@ const SCENARIOS: Scenario[] = [
       { label: "Dependents", desc: "3 importers require matching guard semantics", status: "done" },
       { label: "Open file", desc: "token_validator.ts · cursor at line 5", status: "loading" }
     ],
-    response: {
-      summary:
-        "**Completion ready** — matched AuthError guard from billing/auth. Graph shows 3 downstream callers on this path.\n\nTab to accept ghost text at your cursor:",
-      codeFile: "token_validator.ts",
-      code:
-        "  if (!payload?.signature || !payload?.exp) {\n    throw new AuthError('empty_or_unsigned_payload');\n  }"
+    complete: {
+      file: "token_validator.ts",
+      prefixLines: HERO_COMPLETE_PREFIX_LINES,
+      typedPrefix: HERO_COMPLETE_TYPED_PREFIX,
+      ghostSuffix: HERO_COMPLETE_GHOST_SUFFIX
     }
   },
   {
@@ -63,17 +122,20 @@ const SCENARIOS: Scenario[] = [
     }
   },
   {
-    question: "Can you fix this bug by looking at the Jira ticket?",
+    kind: "patch",
+    question:
+      "Implement the null guard from PLATFORM-2847 in webhook-processor — match api-gateway PR #891 before validate().",
+    questionFiles: ["webhook-processor"],
     context: [
       { label: "Jira · PLATFORM-2847", desc: "Null check missing in webhook auth path", status: "done" },
-      { label: "GitHub · webhook-processor", desc: "validate() called before payload parse", status: "done" },
+      { label: "GitHub · api-gateway PR #891", desc: "Reject unauthorized payloads before validate()", status: "done" },
       { label: "Symbol graph", desc: "AuthMiddleware.validate() · 4 importers", status: "done" },
       { label: "Slack · #platform-bugs", desc: "Reported in thread · Oct 3", status: "done" }
     ],
-    response: {
-      summary:
-        "**Short answer:** PLATFORM-2847 — add a null guard before validate() in the webhook path.\n\nMatched the pattern from api-gateway PR #891: reject unauthorized payloads before the middleware chain runs. Four importers depend on consistent rejection semantics.",
-      code: "if (payload == null) return unauthorized();\nawait AuthMiddleware.validate(req);"
+    patch: {
+      file: "workers/webhook-processor/auth.ts",
+      meta: "1 file · 1 edit · PLATFORM-2847",
+      lines: HERO_JIRA_PATCH_LINES
     }
   },
   {
@@ -86,7 +148,10 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "**Short answer:** PR #412 centralized validation per the Auth ADR — one middleware wrapper instead of per-route checks.\n\n**Decision trail:**\n• Jira PROJ-1847 — \"Add zero-retention headers to middleware\"\n• Slack #architecture — Marcus proposed the wrapper Mar 2024; Elena confirmed with security\n• Confluence Auth RFC v2 — linked from the PR description\n\n14 downstream refs include api-gateway middleware — not an isolated change."
+        "**Short answer:** PR #412 centralized validation per the Auth ADR — one middleware wrapper instead of per-route checks.\n\n**Decision trail:**\n• Jira PROJ-1847 — \"Add zero-retention headers to middleware\"\n• Slack #architecture — Marcus proposed the wrapper Mar 2024; Elena confirmed with security\n• Confluence Auth RFC v2 — linked from the PR description\n\nThe pattern that shipped:",
+      codeFile: "api-gateway/middleware/auth_middleware.go:88-96",
+      code:
+        "func (m *AuthMiddleware) Validate(next http.Handler) http.Handler {\n  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n    if err := m.validateSession(r); err != nil {\n      writeUnauthorized(w, err)\n      return\n    }\n    next.ServeHTTP(w, r)\n  })\n}"
     }
   },
   {
@@ -99,7 +164,10 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "**Short answer:** 6 services break on signature change — billing-worker batch retry and webhook-processor auth chain fail first.\n\n**Blast radius:**\n• billing-worker — batch retry imports validate() on every job tick\n• webhook-processor — auth middleware chain assumes current error shapes\n• api-gateway — 4 importers share the runtime dependency\n\nJira PLATFORM-1102 tracks the blocked refactor. Coordinate with owners before merging."
+        "**Short answer:** 6 services break on signature change — billing-worker batch retry and webhook-processor auth chain fail first.\n\n**Blast radius:**\n• billing-worker — batch retry imports validate() on every job tick\n• webhook-processor — auth middleware chain assumes current error shapes\n• api-gateway — 4 importers share the runtime dependency\n\nFirst break site in the graph:",
+      codeFile: "workers/billing-worker/retry.go:54-61",
+      code:
+        "func (w *BatchRetry) tick(ctx context.Context, job Job) error {\n  payload, err := w.loadPayload(job)\n  if err != nil {\n    return err\n  }\n  // Signature change here breaks every retry loop\n  return auth.Validate(ctx, payload)\n}"
     }
   }
 ];
@@ -175,7 +243,18 @@ const TIMING = {
   beforeCodeMs: 180,
   /** Min/max dwell after response finishes streaming (ms) */
   responseHoldMinMs: 2200,
-  responseHoldMaxMs: 3800
+  responseHoldMaxMs: 3800,
+  /** Patch card choreography */
+  patchDiffLineMs: 220,
+  patchActionsMs: 450,
+  patchAimMs: 900,
+  patchClickMs: 320,
+  patchAppliedHoldMs: 2800,
+  /** Inline complete choreography */
+  completeGhostCharsPerSec: 56,
+  completeTabAimMs: 850,
+  completeTabPressMs: 300,
+  completeAcceptedHoldMs: 2600
 };
 
 type Stage = 1 | 2 | 3 | 4;
@@ -243,6 +322,45 @@ function completedResponseHoldMs(summary: string, code?: string): number {
   const totalChars = summary.length + (code?.length ?? 0);
   const scaled = 1600 + totalChars * 3.5;
   return Math.min(TIMING.responseHoldMaxMs, Math.max(TIMING.responseHoldMinMs, scaled));
+}
+
+function isPatchScenario(scenario: Scenario): scenario is PatchScenario {
+  return scenario.kind === "patch";
+}
+
+function isCompleteScenario(scenario: Scenario): scenario is CompleteScenario {
+  return scenario.kind === "complete";
+}
+
+function patchDiffLineCount(scenario: PatchScenario): number {
+  return scenario.patch.lines.filter((l) => l.kind !== "context").length;
+}
+
+/** Parse `path:12-18` or `path:12` from a cite-style codeFile label. */
+function parseCiteCodeFile(codeFile: string): { path: string; startLine: number | null } {
+  const match = codeFile.match(/^(.*?):(\d+)(?:-\d+)?$/);
+  if (!match) return { path: codeFile, startLine: null };
+  return { path: match[1], startLine: Number(match[2]) };
+}
+
+/** Render streamed code with optional starting line numbers (cite-style). */
+function renderCitedCodeLines(code: string, startLine: number | null, showCursor: boolean) {
+  const lines = code.split("\n");
+  return (
+    <>
+      {lines.map((line, i) => (
+        <div key={i} className="flex gap-2">
+          {startLine != null ? (
+            <span className="w-6 shrink-0 select-none text-right text-gray-400">
+              {startLine + i}
+            </span>
+          ) : null}
+          <span className="min-w-0 whitespace-pre">{line || " "}</span>
+        </div>
+      ))}
+      {showCursor ? <span className="hero-demo-response-cursor text-blue-500">|</span> : null}
+    </>
+  );
 }
 
 /** Hide a trailing lone `*` while the opening `**` is still being typed. */
@@ -342,6 +460,10 @@ export function HeroDemoArtifact() {
   const [streamedSummary, setStreamedSummary] = useState("");
   const [streamedCode, setStreamedCode] = useState("");
   const [responseStreaming, setResponseStreaming] = useState(false);
+  const [patchPhase, setPatchPhase] = useState<HeroPatchPhase>("building");
+  const [revealedDiffLines, setRevealedDiffLines] = useState(0);
+  const [completePhase, setCompletePhase] = useState<HeroCompletePhase>("typing");
+  const [revealedGhostChars, setRevealedGhostChars] = useState(0);
   const [paused, setPaused] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const responseStreamTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -353,6 +475,8 @@ export function HeroDemoArtifact() {
   const reduceMotionRef = useRef(false);
 
   const scenario = SCENARIOS[scenarioIndex];
+  const patchScenario = isPatchScenario(scenario) ? scenario : null;
+  const completeScenario = isCompleteScenario(scenario) ? scenario : null;
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -410,7 +534,7 @@ export function HeroDemoArtifact() {
         responseRafRef.current = null;
       }
 
-      const { summary, code } = SCENARIOS[index].response;
+      const active = SCENARIOS[index];
       let cancelled = false;
 
       const wait = (ms: number) =>
@@ -432,9 +556,109 @@ export function HeroDemoArtifact() {
         responseRafRef.current = id;
       };
 
-      async function streamResponse() {
+      async function streamPatch(patch: PatchScenario) {
+        const diffCount = patchDiffLineCount(patch);
         setStreamedSummary("");
         setStreamedCode("");
+        setPatchPhase("building");
+        setRevealedDiffLines(0);
+        setCompletePhase("typing");
+        setRevealedGhostChars(0);
+        setResponseStreaming(true);
+
+        if (reduceMotionRef.current) {
+          setRevealedDiffLines(diffCount);
+          setPatchPhase("applied");
+          setResponseStreaming(false);
+          await wait(TIMING.patchAppliedHoldMs);
+          if (isActive()) advanceScenario();
+          return;
+        }
+
+        for (let i = 1; i <= diffCount; i += 1) {
+          if (!isActive()) return;
+          await wait(TIMING.patchDiffLineMs);
+          if (!isActive()) return;
+          setRevealedDiffLines(i);
+        }
+
+        if (!isActive()) return;
+        await wait(TIMING.patchActionsMs);
+        if (!isActive()) return;
+        setPatchPhase("ready");
+        setResponseStreaming(false);
+
+        await waitWhilePaused();
+        if (!isActive()) return;
+        await wait(TIMING.patchAimMs);
+        if (!isActive()) return;
+        setPatchPhase("clicking");
+        await wait(TIMING.patchClickMs);
+        if (!isActive()) return;
+        setPatchPhase("applied");
+
+        await waitWhilePaused();
+        if (!isActive()) return;
+        await wait(TIMING.patchAppliedHoldMs);
+        if (isActive()) advanceScenario();
+      }
+
+      async function streamComplete(complete: CompleteScenario) {
+        const ghost = complete.complete.ghostSuffix;
+        setStreamedSummary("");
+        setStreamedCode("");
+        setPatchPhase("building");
+        setRevealedDiffLines(0);
+        setCompletePhase("typing");
+        setRevealedGhostChars(0);
+        setResponseStreaming(true);
+
+        if (reduceMotionRef.current) {
+          setRevealedGhostChars(ghost.length);
+          setCompletePhase("accepted");
+          setResponseStreaming(false);
+          await wait(TIMING.completeAcceptedHoldMs);
+          if (isActive()) advanceScenario();
+          return;
+        }
+
+        setCompletePhase("ghost");
+        await streamTextSmooth(
+          ghost,
+          TIMING.completeGhostCharsPerSec,
+          (slice) => setRevealedGhostChars(slice.length),
+          isActive,
+          trackRaf
+        );
+        if (!isActive()) return;
+
+        responseRafRef.current = null;
+        setCompletePhase("tab-ready");
+        setResponseStreaming(false);
+
+        await waitWhilePaused();
+        if (!isActive()) return;
+        await wait(TIMING.completeTabAimMs);
+        if (!isActive()) return;
+        setCompletePhase("tab-press");
+        await wait(TIMING.completeTabPressMs);
+        if (!isActive()) return;
+        setCompletePhase("accepted");
+
+        await waitWhilePaused();
+        if (!isActive()) return;
+        await wait(TIMING.completeAcceptedHoldMs);
+        if (isActive()) advanceScenario();
+      }
+
+      async function streamProse(prose: ProseScenario) {
+        const { summary, code } = prose.response;
+        setStreamedSummary("");
+        setStreamedCode("");
+        setPatchPhase("building");
+        setRevealedDiffLines(0);
+        setCompletePhase("typing");
+        setRevealedGhostChars(0);
 
         if (reduceMotionRef.current) {
           setStreamedSummary(summary);
@@ -471,7 +695,13 @@ export function HeroDemoArtifact() {
         if (isActive()) advanceScenario();
       }
 
-      streamResponse();
+      if (isPatchScenario(active)) {
+        streamPatch(active);
+      } else if (isCompleteScenario(active)) {
+        streamComplete(active);
+      } else {
+        streamProse(active);
+      }
     },
     [advanceScenario]
   );
@@ -495,6 +725,10 @@ export function HeroDemoArtifact() {
     setStreamedSummary("");
     setStreamedCode("");
     setResponseStreaming(false);
+    setPatchPhase("building");
+    setRevealedDiffLines(0);
+    setCompletePhase("typing");
+    setRevealedGhostChars(0);
 
     const scheduleStagesAfterQuestion = () => {
       const stage3At = TIMING.afterQuestionMs + TIMING.stage2Ms;
@@ -540,12 +774,29 @@ export function HeroDemoArtifact() {
     return clearQuestionTimers;
   }, [scenarioIndex, addTimer, clearQuestionTimers, startResponseStream]);
 
-  const summaryComplete = streamedSummary.length >= scenario.response.summary.length;
-  const codeText = scenario.response.code ?? "";
+  const proseScenario =
+    !patchScenario && !completeScenario && scenario.kind !== "patch" && scenario.kind !== "complete"
+      ? scenario
+      : null;
+  const summaryComplete = proseScenario
+    ? streamedSummary.length >= proseScenario.response.summary.length
+    : false;
+  const codeText = proseScenario?.response.code ?? "";
   const showSummaryCursor =
-    stage === 4 && responseStreaming && streamedSummary.length > 0 && !summaryComplete;
+    stage === 4 &&
+    !!proseScenario &&
+    responseStreaming &&
+    streamedSummary.length > 0 &&
+    !summaryComplete;
   const showCodeCursor =
-    stage === 4 && responseStreaming && summaryComplete && codeText.length > 0 && streamedCode.length < codeText.length;
+    stage === 4 &&
+    !!proseScenario &&
+    responseStreaming &&
+    summaryComplete &&
+    codeText.length > 0 &&
+    streamedCode.length < codeText.length;
+
+  const responseLabel = patchScenario ? "// edit" : completeScenario ? "// complete" : "// response";
 
   return (
     <div
@@ -613,7 +864,7 @@ export function HeroDemoArtifact() {
 
         <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
           <div className="mb-4 flex items-center gap-2 font-mono text-sm text-gray-500">
-            <span>// response</span>
+            <span>{responseLabel}</span>
             {responseStreaming ? (
               <span className="hero-demo-streaming-indicator" aria-hidden="true">
                 <span className="hero-demo-streaming-dot" />
@@ -622,27 +873,63 @@ export function HeroDemoArtifact() {
               </span>
             ) : null}
           </div>
-          <div className={`${DEMO_MESSAGE_CARD} space-y-4`}>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
-              {renderStreamedBoldText(streamedSummary)}
-              {showSummaryCursor ? (
-                <span className="hero-demo-response-cursor text-blue-500">|</span>
-              ) : null}
-            </p>
-            {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
-              <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
-                {scenario.response.codeFile ? (
-                  <span className="mb-2 block font-sans text-[10px] uppercase tracking-wide text-blue-500">
-                    {scenario.response.codeFile}
-                  </span>
-                ) : null}
-                {streamedCode}
-                {showCodeCursor ? (
+          {patchScenario ? (
+            <HeroPatchDemoCard
+              file={patchScenario.patch.file}
+              meta={patchScenario.patch.meta}
+              lines={patchScenario.patch.lines}
+              revealedDiffLines={revealedDiffLines}
+              phase={patchPhase}
+            />
+          ) : completeScenario ? (
+            <HeroCompleteDemoCard
+              file={completeScenario.complete.file}
+              prefixLines={completeScenario.complete.prefixLines}
+              typedPrefix={completeScenario.complete.typedPrefix}
+              ghostSuffix={completeScenario.complete.ghostSuffix}
+              revealedGhostChars={revealedGhostChars}
+              phase={completePhase}
+            />
+          ) : (
+            <div className={`${DEMO_MESSAGE_CARD} space-y-4`}>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+                {renderStreamedBoldText(streamedSummary)}
+                {showSummaryCursor ? (
                   <span className="hero-demo-response-cursor text-blue-500">|</span>
                 ) : null}
-              </pre>
-            ) : null}
-          </div>
+              </p>
+              {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
+                <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
+                  {proseScenario?.response.codeFile
+                    ? (() => {
+                        const cite = parseCiteCodeFile(proseScenario.response.codeFile);
+                        return (
+                          <>
+                            <span className="mb-2 block border-b border-gray-100 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-blue-500">
+                              {cite.path}
+                              {cite.startLine != null ? (
+                                <span className="text-gray-400">
+                                  :
+                                  {proseScenario.response.codeFile.split(":").slice(1).join(":")}
+                                </span>
+                              ) : null}
+                            </span>
+                            {renderCitedCodeLines(streamedCode, cite.startLine, showCodeCursor)}
+                          </>
+                        );
+                      })()
+                    : (
+                      <>
+                        {streamedCode}
+                        {showCodeCursor ? (
+                          <span className="hero-demo-response-cursor text-blue-500">|</span>
+                        ) : null}
+                      </>
+                    )}
+                </pre>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 
