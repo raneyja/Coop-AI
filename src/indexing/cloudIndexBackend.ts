@@ -121,14 +121,18 @@ export class CloudIndexBackend implements IndexBackend {
         character: 0,
         displayName: entry.displayName ?? entry.symbol
       }));
+      // Unlabeled hits must not default to zoekt — embedding similarity was
+      // previously treated as verified Blast callers (fake "heuristic" dependents).
       const source =
         remote.freshness === "embedding"
           ? "embedding"
           : remote.freshness === "scip"
             ? "scip"
-            : hits.length > 0
+            : remote.freshness === "zoekt"
               ? "zoekt"
-              : "fallback";
+              : hits.length > 0
+                ? "embedding"
+                : "fallback";
       return {
         source,
         hits,

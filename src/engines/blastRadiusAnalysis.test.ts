@@ -54,8 +54,10 @@ function delay(ms: number): Promise<void> {
 function mockIndexBackend(options: {
   dependentsDelayMs?: number;
   dependents?: string[];
+  searchHits?: Array<{ fileName: string }>;
 }): IndexBackend {
   const dependents = options.dependents ?? ["src/app/Caller.tsx", "Foo.stories.tsx"];
+  const searchHits = options.searchHits ?? dependents.map((fileName) => ({ fileName }));
   return {
     kind: "local",
     async isEnabledForRepo() {
@@ -77,13 +79,23 @@ function mockIndexBackend(options: {
       return [];
     },
     async search() {
-      return { source: "zoekt", hits: [], symbols: [] };
+      return {
+        source: "zoekt",
+        hits: searchHits.map((hit, index) => ({
+          fileName: hit.fileName,
+          lineNumber: index + 1,
+          content: `from './state-group'`,
+          score: 1
+        })),
+        symbols: [],
+        stale: false
+      };
     },
     async dependents() {
       if (options.dependentsDelayMs) {
         await delay(options.dependentsDelayMs);
       }
-      return { dependents, source: "scip" };
+      return { dependents, source: "scip", file: "packages/ui/src/state-group.tsx" };
     },
     async summarize() {
       return { enabledRepos: 1, totalDiskBytes: 1, readyRepos: 1, indexingRepos: 0 };
@@ -126,8 +138,9 @@ async function softBudgetStillSynthesizesPartialReport(): Promise<void> {
   const elapsed = Date.now() - started;
 
   assert.ok(elapsed < 3_000, `expected soft-budget path to finish quickly, took ${elapsed}ms`);
-  assert.ok(report.dependentDetails.length > 0, "expected core dependents retained for synthesis");
+  assert.ok(report.dependentDetails.length > 0, "expected verified import-search dependents for synthesis");
   assert.equal(report.dependentDetails[0]?.path, "apps/web/components/StateGroupSelect.tsx");
+  assert.equal(report.graphMeta?.source, "zoekt");
   assert.ok(
     !report.warnings.some((warning) => /soft gather budget exhausted/i.test(warning)),
     "soft gather must not leak latency jargon into user-facing warnings"

@@ -5,7 +5,10 @@ import {
   extractBlastSearchSymbols,
   buildImportSearchPatterns,
   groupDependentsByTopLevelFolder,
+  hitLooksLikeReferenceToTarget,
   isDocsReferencePath,
+  isGenericBlastImpactAsk,
+  isVerifiedCallerSearchSource,
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   scoreDependentRisk,
@@ -179,6 +182,45 @@ test("extractBlastSearchSymbols prefers StateGroup from smoke ask", () => {
     "apps/api/plane/db/models/state.py"
   );
   assert.ok(symbols.includes("StateGroup"));
+});
+
+test("isGenericBlastImpactAsk ignores default chip copy", () => {
+  assert.equal(isGenericBlastImpactAsk("Estimate the impact of changing this code."), true);
+  assert.equal(isGenericBlastImpactAsk("What breaks if we rename StateGroup?"), false);
+});
+
+test("extractBlastSearchSymbols skips default blast ask (no Estimate noise)", () => {
+  assert.deepEqual(
+    extractBlastSearchSymbols("Estimate the impact of changing this code.", "src/config/responseDeadline.ts"),
+    []
+  );
+});
+
+test("isVerifiedCallerSearchSource rejects embedding and fallback", () => {
+  assert.equal(isVerifiedCallerSearchSource("zoekt"), true);
+  assert.equal(isVerifiedCallerSearchSource("scip"), true);
+  assert.equal(isVerifiedCallerSearchSource("embedding"), false);
+  assert.equal(isVerifiedCallerSearchSource("fallback"), false);
+});
+
+test("hitLooksLikeReferenceToTarget requires stem when content is a code line", () => {
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/chat/CoopChatSession.ts", content: `import { x } from "../config/responseDeadline";` },
+      "src/config/responseDeadline.ts"
+    ),
+    true
+  );
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      {
+        fileName: "admin/src/components/IndexingQueueList.tsx",
+        content: "export function IndexingQueueList() { return null; }"
+      },
+      "src/config/responseDeadline.ts"
+    ),
+    false
+  );
 });
 
 test("buildImportSearchPatterns includes symbol and alias forms", () => {

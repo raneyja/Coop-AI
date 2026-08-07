@@ -75,8 +75,28 @@ function quoteSafe(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.]/g, "_");
 }
 
+/** Default Blast chip ask — no domain symbols; searching "Estimate" only adds noise. */
+export function isGenericBlastImpactAsk(ask: string | undefined): boolean {
+  const text = ask?.trim() ?? "";
+  if (!text) {
+    return true;
+  }
+  return /^estimate the impact of changing this code\.?$/i.test(text);
+}
+
+/**
+ * Only zoekt/scip text hits count as verified callers. Embedding similarity is
+ * labeled "heuristic" in the UI and routinely returns unrelated files.
+ */
+export function isVerifiedCallerSearchSource(source: LocalSearchResult["source"]): boolean {
+  return source === "zoekt" || source === "scip";
+}
+
 /** PascalCase / CamelCase symbols from the blast ask (e.g. StateGroup, DocumentStatus). */
 export function extractBlastSearchSymbols(ask: string | undefined, file?: string): string[] {
+  if (isGenericBlastImpactAsk(ask)) {
+    return [];
+  }
   const symbols = new Set<string>();
   const stop = new Set([
     "What",
@@ -88,6 +108,7 @@ export function extractBlastSearchSymbols(ask: string | undefined, file?: string
     "With",
     "From",
     "Change",
+    "Changing",
     "Rename",
     "Values",
     "Break",
@@ -95,7 +116,36 @@ export function extractBlastSearchSymbols(ask: string | undefined, file?: string
     "Draft",
     "Pending",
     "Completed",
-    "Rejected"
+    "Rejected",
+    "Estimate",
+    "Impact",
+    "Code",
+    "File",
+    "Files",
+    "Radius",
+    "Blast",
+    "Summary",
+    "Direct",
+    "None",
+    "Related",
+    "Testing",
+    "Sources",
+    "Medium",
+    "High",
+    "Low",
+    "Partial",
+    "Index",
+    "Coverage",
+    "Analysis",
+    "Identify",
+    "Surfaces",
+    "Risk",
+    "Risks",
+    "Operational",
+    "Transitive",
+    "Dependents",
+    "Caller",
+    "Callers"
   ]);
   const text = ask?.trim() ?? "";
   for (const match of text.matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g)) {
@@ -140,26 +190,38 @@ export async function searchDependentsFallback(
 
   const symbols = options.symbols ?? [];
   const patterns = buildImportSearchPatterns(file, symbols);
-  // Prefer symbol patterns first — they find enum/class usages when imports miss.
-  const ordered = [
-    ...patterns.filter((pattern) => symbols.some((symbol) => pattern.includes(symbol))),
-    ...patterns.filter((pattern) => !symbols.some((symbol) => pattern.includes(symbol)))
-  ];
+  // Prefer import-path patterns first; symbol patterns second (enums/classes).
+  // Never let bare English tokens from the ask crowd out real import queries.
+  const importPatterns = patterns.filter(
+    (pattern) => !symbols.some((symbol) => pattern === symbol || pattern.startsWith(`${symbol}.`) || pattern.startsWith(`${symbol}(`))
+  );
+  const symbolPatterns = patterns.filter((pattern) => !importPatterns.includes(pattern));
+  const ordered = [...importPatterns, ...symbolPatterns];
   const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
   const seen = new Set<string>([file]);
   const dependents: BlastRadiusDependentDetail[] = [];
-  let bestSource: GraphEdgeSource = "heuristic";
+  let bestSource: GraphEdgeSource = "remote";
+  let skippedUnverified = 0;
 
   for (const pattern of ordered.slice(0, maxPatterns)) {
     try {
       const result = await indexBackend.search(normalizedRepoId, pattern);
+      if (!isVerifiedCallerSearchSource(result.source)) {
+        if (result.hits.length > 0) {
+          skippedUnverified += result.hits.length;
+        }
+        continue;
+      }
       const source = mapSearchSourceToGraphSource(result.source);
       if (source === "zoekt" || source === "scip") {
         bestSource = source;
       }
       for (const hit of result.hits) {
         const depPath = normalizeHitPath(hit.fileName);
-        if (!depPath || seen.has(depPath)) {
+        if (!depPath || seen.has(depPath) || depPath === file) {
+          continue;
+        }
+        if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
           continue;
         }
         seen.add(depPath);
@@ -170,12 +232,38 @@ export async function searchDependentsFallback(
     }
   }
 
+  if (skippedUnverified > 0 && dependents.length === 0) {
+    warnings.push(
+      `Skipped ${skippedUnverified} embedding/fallback hit(s) — not import-verified callers.`
+    );
+  }
+
   const ranked = sortDependentsProductionFirst(dependents);
   return {
     dependents: ranked.slice(0, 30),
     source: ranked.length > 0 ? bestSource : "remote",
     warnings
   };
+}
+
+/** When hit content is real line text, require the module stem or an ask symbol. */
+export function hitLooksLikeReferenceToTarget(
+  hit: { fileName: string; content?: string },
+  file: string,
+  symbols: string[] = []
+): boolean {
+  const content = (hit.content ?? "").trim();
+  const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
+  if (pathOnly) {
+    // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
+    return true;
+  }
+  const basename = file.split("/").pop() ?? file;
+  const stem = basename.replace(/\.[^.]+$/, "");
+  if (content.includes(stem) || content.includes(basename) || content.includes(file)) {
+    return true;
+  }
+  return symbols.some((symbol) => symbol.length >= 3 && content.includes(symbol));
 }
 
 /**

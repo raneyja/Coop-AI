@@ -109,6 +109,44 @@ test("blastRadiusFromBundle never promotes unfiltered remote job edges", () => {
   assert.ok((evidence!.warnings ?? []).some((w) => /ignored unfiltered/i.test(w)));
 });
 
+test("blastRadiusFromBundle does not let heuristic overwrite zoekt callers", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        directDependents: ["src/chat/CoopChatSession.ts", "src/jobs/JobApiClient.ts"],
+        dependentDetails: [
+          { path: "src/chat/CoopChatSession.ts", depth: 1, source: "zoekt" },
+          { path: "src/jobs/JobApiClient.ts", depth: 1, source: "zoekt" }
+        ],
+        graphMeta: { source: "zoekt" }
+      }
+    },
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        directDependents: [
+          "admin/src/components/IndexingQueueList.tsx",
+          "src/context/requestPrioritizer.ts"
+        ],
+        dependentDetails: [
+          { path: "admin/src/components/IndexingQueueList.tsx", depth: 1, source: "heuristic" },
+          { path: "src/context/requestPrioritizer.ts", depth: 1, source: "heuristic" }
+        ],
+        graphMeta: { source: "heuristic" }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.deepEqual(evidence!.directDependents, [
+    "src/chat/CoopChatSession.ts",
+    "src/jobs/JobApiClient.ts"
+  ]);
+  assert.equal(evidence!.graphMeta?.source, "zoekt");
+});
+
 test("blastRadiusFromBundle merges integration searches from bundle entries", () => {
   const evidence = blastRadiusFromBundle([
     {

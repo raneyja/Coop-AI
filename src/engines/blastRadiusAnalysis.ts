@@ -170,6 +170,41 @@ export class BlastRadiusAnalysisEngine {
             source: result.source as GraphEdgeSource
           }));
 
+          // Always reconcile with import/symbol search (zoekt/scip only). Prefer
+          // verified hits; never keep embedding/heuristic lookalikes as callers.
+          const symbols = [
+            ...(params.symbols ?? []),
+            ...extractBlastSearchSymbols(params.askText, file)
+          ];
+          const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
+            maxPatterns: softBudgetExhausted() ? 4 : 10,
+            symbols: [...new Set(symbols)]
+          });
+          warnings.push(...fallback.warnings);
+          if (fallback.dependents.length > 0) {
+            const ranked = sortDependentsProductionFirst(fallback.dependents);
+            directDependents = ranked.map((entry) => entry.path);
+            dependentDetails = ranked;
+            transitiveDependents = [];
+            graphMeta = { ...graphMeta, source: fallback.source };
+            warnings.push(
+              `Dependents verified via ${fallback.source} import/symbol search — prefer these over unfiltered graph samples.`
+            );
+          } else if (directDependents.length > 0) {
+            // Graph returned paths but nothing import-verified — do not show fakes.
+            directDependents = [];
+            dependentDetails = [];
+            transitiveDependents = [];
+            graphMeta = { ...graphMeta, source: "remote" };
+            warnings.push(
+              "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
+            );
+          } else {
+            warnings.push(
+              "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
+            );
+          }
+
           if (includeTransitive && directDependents.length > 0 && !softBudgetExhausted()) {
             const transitive = await this.collectTransitiveDependents(
               repoId,
@@ -179,43 +214,6 @@ export class BlastRadiusAnalysisEngine {
             );
             transitiveDependents = transitive.paths;
             dependentDetails = [...dependentDetails, ...transitive.details];
-          }
-
-          // Always attempt import/symbol fallback when the graph returns 0 —
-          // cap patterns if soft budget is exhausted; never skip entirely.
-          if (directDependents.length === 0) {
-            const symbols = [
-              ...(params.symbols ?? []),
-              ...extractBlastSearchSymbols(params.askText, file)
-            ];
-            const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
-              maxPatterns: softBudgetExhausted() ? 4 : 10,
-              symbols: [...new Set(symbols)]
-            });
-            warnings.push(...fallback.warnings);
-            if (fallback.dependents.length > 0) {
-              const ranked = sortDependentsProductionFirst(fallback.dependents);
-              directDependents = ranked.map((entry) => entry.path);
-              dependentDetails = ranked;
-              graphMeta = { ...graphMeta, source: fallback.source };
-              warnings.push(
-                `Dependents inferred via ${fallback.source} import/symbol search — verify before relying on impact list.`
-              );
-              if (includeTransitive && directDependents.length > 0 && !softBudgetExhausted()) {
-                const transitive = await this.collectTransitiveDependents(
-                  repoId,
-                  file,
-                  directDependents,
-                  gatherStartedAt
-                );
-                transitiveDependents = transitive.paths;
-                dependentDetails = [...dependentDetails, ...transitive.details];
-              }
-            } else {
-              warnings.push(
-                "No dependents found in index or import/symbol search for this file. Impact unverified — do not claim zero impact."
-              );
-            }
           }
         } else {
           warnings.push("Deep index not enabled — run Lightning Mode to map dependents.");

@@ -322,6 +322,17 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     : undefined;
 }
 
+function blastCallerSourceRank(source: string | undefined): number {
+  if (source === "zoekt" || source === "scip") {
+    return 3;
+  }
+  if (source === "remote") {
+    return 1;
+  }
+  // heuristic / embedding / unknown — weakest; must not overwrite verified callers
+  return 0;
+}
+
 export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | undefined {
   const merged: BlastRadiusEvidence = {};
   for (const entry of bundle) {
@@ -329,12 +340,38 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
     const type = asRecord(entry).type;
     if (type === "dependencies" || data.report || data.directDependents) {
       if (data.file) merged.file = String(data.file);
-      if (Array.isArray(data.directDependents)) merged.directDependents = data.directDependents as string[];
-      if (Array.isArray(data.transitiveDependents)) {
-        merged.transitiveDependents = data.transitiveDependents as string[];
-      }
-      if (Array.isArray(data.dependentDetails)) {
-        merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+      const incomingSource = String(
+        asRecord(data.graphMeta).source ?? merged.graphMeta?.source ?? ""
+      );
+      const incomingRank = blastCallerSourceRank(incomingSource);
+      const existingRank = blastCallerSourceRank(merged.graphMeta?.source);
+      const shouldReplaceCallers =
+        Array.isArray(data.directDependents) &&
+        (incomingRank > existingRank ||
+          !merged.directDependents?.length ||
+          (incomingRank === existingRank && (data.directDependents as string[]).length > 0));
+      // Never let weaker (heuristic) callers overwrite stronger verified lists.
+      if (shouldReplaceCallers && incomingRank >= existingRank) {
+        merged.directDependents = data.directDependents as string[];
+        if (Array.isArray(data.transitiveDependents)) {
+          merged.transitiveDependents = data.transitiveDependents as string[];
+        }
+        if (Array.isArray(data.dependentDetails)) {
+          merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+        }
+        if (data.graphMeta) {
+          merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
+        }
+      } else if (!merged.directDependents?.length && Array.isArray(data.directDependents)) {
+        merged.directDependents = data.directDependents as string[];
+        if (Array.isArray(data.dependentDetails)) {
+          merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+        }
+        if (data.graphMeta) {
+          merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
+        }
+      } else if (data.graphMeta && !merged.graphMeta) {
+        merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
       }
       if (Array.isArray(data.docsReferences)) {
         merged.docsReferences = data.docsReferences as BlastRadiusEvidence["docsReferences"];
@@ -370,7 +407,6 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
         merged.googleDocsSearch = data.googleDocsSearch as GoogleDocsSearchEvidence;
       }
       if (data.teamsSearch) merged.teamsSearch = data.teamsSearch as TeamsSearchEvidence;
-      if (data.graphMeta) merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
       if (data.dependencyGraph) merged.dependencyGraph = data.dependencyGraph as Record<string, unknown>;
       if (data.includeTransitive !== undefined) merged.includeTransitive = Boolean(data.includeTransitive);
       if (data.localFiles) merged.localFiles = data.localFiles as BlastRadiusEvidence["localFiles"];
