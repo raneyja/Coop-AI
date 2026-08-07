@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   blastRadiusFromBundle,
+  contextBundleHasRepoFactEvidence,
   knowledgeGapsFromBundle,
   repoSummaryFromBundle
 } from "./contextBundleEvidence";
@@ -128,6 +129,36 @@ test("repoSummaryFromBundle merges all integration searches", () => {
   assert.ok(summary?.teams);
   assert.ok(summary?.notion);
   assert.ok(summary?.googleDocs);
+});
+
+test("contextBundleHasRepoFactEvidence detects packageStructure and tree", () => {
+  assert.equal(contextBundleHasRepoFactEvidence([]), false);
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      {
+        type: "chat_context",
+        data: {
+          packageStructure: { packages: ["apps/web"], parents: ["apps"] }
+        }
+      }
+    ]),
+    true
+  );
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      {
+        type: "chat_context",
+        data: { treeOverview: { topLevelDirs: ["apps"], topLevelFiles: ["package.json"] } }
+      }
+    ]),
+    true
+  );
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      { type: "chat_context", data: { localFiles: { files: [{ path: "package.json" }] } } }
+    ]),
+    false
+  );
 });
 
 const total = passed + failed;

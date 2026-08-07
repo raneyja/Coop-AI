@@ -683,3 +683,48 @@ export function integrationSearchFromBundle(
       return undefined;
   }
 }
+
+/**
+ * True when the bundle carries indexed-repo facts that must reach the LLM even
+ * when an open file (e.g. package.json) is also attached as local context.
+ * Without this, synthesis can drop tree/packageStructure and invent layout.
+ */
+export function contextBundleHasRepoFactEvidence(bundle: unknown): boolean {
+  if (!Array.isArray(bundle)) {
+    return false;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as { data?: Record<string, unknown> }).data;
+    if (!data || typeof data !== "object") {
+      continue;
+    }
+    if (data.packageStructure && typeof data.packageStructure === "object") {
+      const structure = data.packageStructure as {
+        packages?: unknown[];
+        parents?: unknown[];
+        workspaceGlobs?: unknown[];
+      };
+      if (
+        (structure.packages?.length ?? 0) > 0 ||
+        (structure.parents?.length ?? 0) > 0 ||
+        (structure.workspaceGlobs?.length ?? 0) > 0
+      ) {
+        return true;
+      }
+    }
+    if (data.treeOverview) {
+      return true;
+    }
+    if (typeof data.packageBoundaryNote === "string" && data.packageBoundaryNote.trim()) {
+      return true;
+    }
+    if (data.repoInventory) {
+      return true;
+    }
+  }
+  return false;
+}
+

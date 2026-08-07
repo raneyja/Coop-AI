@@ -30,7 +30,9 @@ export function isConcreteFileEditAsk(message: string): boolean {
   if (APPLY_LANGUAGE_RE.test(text)) {
     return true;
   }
-  if (ADVISORY_ASK_RE.test(text) && !CONCRETE_EDIT_VERB_RE.test(text)) {
+  // Blast / ownership / “why do we…” archaeology — never auto-edit, even when the
+  // sentence also contains change/rename + `backticks` (those are impact targets).
+  if (ADVISORY_ASK_RE.test(text)) {
     return false;
   }
   if (!CONCRETE_EDIT_VERB_RE.test(text)) {

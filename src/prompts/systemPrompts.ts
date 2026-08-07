@@ -1034,10 +1034,12 @@ function formatPackageStructureForLlm(structure: PackageStructureSnippet): strin
     "Concrete top-level packages/apps from the live repository tree under apps/, packages/, etc. Prefer these names over workspace globs."
   );
   if (packages.length) {
-    lines.push(`packages: ${packages.join(", ")}`);
+    lines.push(
+      `REQUIRED in the answer — name these concrete packages (do not stop at parent dirs apps/ or packages/ alone): ${packages.join(", ")}`
+    );
   } else if (parents.length) {
     lines.push(
-      `parents listed (${parents.join(", ")}) but child package directories were unavailable — do not invent package names.`
+      `parents listed (${parents.join(", ")}) but child package directories were unavailable — do not invent package names; say child packages could not be listed.`
     );
   }
   if (globs.length) {

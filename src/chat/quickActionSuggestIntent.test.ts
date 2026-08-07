@@ -265,6 +265,14 @@ test("golden corpus: primary + secondary paraphrases", () => {
   }
 });
 
+test("regression: responseDeadline blast ask offers chip when file in scope", () => {
+  const ask =
+    "What breaks if we change or rename `MAX_USER_FACING_RESPONSE_MS` or `remainingContextGatherBudgetMs`?";
+  const offer = shouldOfferQuickActionSuggest(ask, repoWithFile);
+  assert.ok(offer);
+  assert.equal(offer!.suggestions[0]?.actionId, "blast-radius");
+});
+
 test("negatives: more normal chat stays quiet", () => {
   assert.deepEqual(ids("What does the SEND_SIGNING_EMAIL job definition do in this file?"), []);
   assert.deepEqual(ids("How do I install dependencies?"), []);

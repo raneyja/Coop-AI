@@ -3,6 +3,7 @@ import { mergeRepoInventoryContext } from "./IndexedRepoWorkspace";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import {
   answerInventsVaguePackageStructure,
+  answerIsRootTreeWithoutChildPackages,
   answerLacksConcretePackageNames,
   buildTopLevelPackageStructure,
   collectPackageManifestCandidatePaths,
@@ -331,8 +332,10 @@ test("empty listings still probe common child package.json paths", () => {
     truncated: false
   };
   const paths = collectPackageManifestCandidatePaths(tree, new Map());
-  assert.ok(paths.includes("apps/web/package.json"));
-  assert.ok(paths.includes("packages/ui/package.json"));
+  assert.ok(paths.includes("apps/remix/package.json") || paths.includes("apps/web/package.json"));
+  assert.ok(
+    paths.includes("packages/signing/package.json") || paths.includes("packages/ui/package.json")
+  );
   assert.ok(commonChildPackageNames("apps").includes("web"));
 });
 
@@ -343,6 +346,28 @@ test("enrichPackageStructureResponse blocks vague invention when packages unreso
   assert.ok(/unavailable/i.test(enriched));
   assert.ok(enriched.includes("apps"));
   assert.ok(!/^Look for folders/i.test(enriched.trim()));
+});
+
+test("enrichPackageStructureResponse flags root-tree dump without child packages", () => {
+  const rootOnly = `**Summary**
+Top-level directories: apps, packages, scripts.
+Files: package.json, turbo.json.`;
+  assert.equal(answerIsRootTreeWithoutChildPackages(rootOnly, ["apps", "packages"]), true);
+  const enriched = enrichPackageStructureResponse(rootOnly, [], { parents: ["apps", "packages"] });
+  assert.ok(/unavailable|could not be listed/i.test(enriched));
+});
+
+test("empty listing probes prefer remix/signing ahead of filler names", () => {
+  assert.equal(commonChildPackageNames("apps")[0], "remix");
+  assert.equal(commonChildPackageNames("packages")[0], "signing");
+  const tree = {
+    topLevelDirs: ["apps", "packages"],
+    topLevelFiles: ["package.json"],
+    truncated: false
+  };
+  const paths = collectPackageManifestCandidatePaths(tree, new Map());
+  assert.ok(paths.includes("apps/remix/package.json"));
+  assert.ok(paths.includes("packages/signing/package.json"));
 });
 
 console.log(`\nrepoPackageBoundaryEvidence: ${passed} passed, ${failed} failed`);

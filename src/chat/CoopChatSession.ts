@@ -129,6 +129,7 @@ import { buildIntegrationSynthesisUserPrompt } from "../prompts/integrationSynth
 import {
   blastRadiusFromBundle,
   confluenceSearchFromBundle,
+  contextBundleHasRepoFactEvidence,
   googleDocsSearchFromBundle,
   integrationSearchFromBundle,
   jiraSearchFromBundle,
@@ -329,12 +330,7 @@ import {
   rankMentionSearchResults
 } from "./mentionSearchMerge";
 import { isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
-import { wantsConfluenceContext } from "../context/confluenceContext";
-import { wantsGoogleDocsContext } from "../context/googleDocsContext";
-import { wantsJiraContext } from "../context/jiraContext";
-import { wantsNotionContext } from "../context/notionContext";
-import { wantsSlackContext } from "../context/slackContext";
-import { wantsTeamsContext } from "../context/teamsContext";
+import { resolvePlainChatIntegrationProvider } from "./integrationProviderRouting";
 import { isIncidentShapedQuery, shouldFetchIncidentIntegrations } from "../context/incidentIntent";
 import {
   isStatusTransitionAsk,
@@ -4108,6 +4104,28 @@ export class CoopChatSession {
       }
     }
 
+    // QA suggest chips before /edit auto-route — blast/owner archaeology often
+    // contains change/rename + `backticks` and must not be stolen by edit mode.
+    if (
+      !quickAction &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      !options?.composerMode &&
+      !options?.skipQuickActionSuggest &&
+      !this.detectChatIntegrationProvider(message)
+    ) {
+      const offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+      if (offer) {
+        await this.completeQuickActionSuggestClarification(
+          message,
+          offer,
+          options?.mentions,
+          attachments
+        );
+        return;
+      }
+    }
+
     // Concrete "change this file" asks in plain chat must use the /edit Apply path —
     // soft prompt guidance alone still yields Copy-only language fences.
     if (
@@ -4194,27 +4212,6 @@ export class CoopChatSession {
     ) {
       await this.completeMissingIntentClarification(message, options?.mentions, attachments);
       return;
-    }
-
-    // Plain chat that looks like a quick action → clarifying chips (not silent auto-run).
-    if (
-      !quickAction &&
-      !options?.sourceHint &&
-      !options?.integrationProvider &&
-      !options?.composerMode &&
-      !options?.skipQuickActionSuggest &&
-      !this.detectChatIntegrationProvider(message)
-    ) {
-      const offer = shouldOfferQuickActionSuggest(message, this.currentContext);
-      if (offer) {
-        await this.completeQuickActionSuggestClarification(
-          message,
-          offer,
-          options?.mentions,
-          attachments
-        );
-        return;
-      }
     }
 
     const actionContext = quickAction
@@ -4844,25 +4841,10 @@ export class CoopChatSession {
   }
 
   private detectChatIntegrationProvider(message: string): IntegrationChatProvider | undefined {
-    if (this.isIntegrationConnected("jira") && wantsJiraContext(message)) {
-      return "jira";
-    }
-    if (this.isIntegrationConnected("slack") && wantsSlackContext(message)) {
-      return "slack";
-    }
-    if (this.isIntegrationConnected("teams") && wantsTeamsContext(message)) {
-      return "teams";
-    }
-    if (this.isIntegrationConnected("confluence") && wantsConfluenceContext(message)) {
-      return "confluence";
-    }
-    if (this.isIntegrationConnected("notion") && wantsNotionContext(message)) {
-      return "notion";
-    }
-    if (this.isIntegrationConnected("google-docs") && wantsGoogleDocsContext(message)) {
-      return "google-docs";
-    }
-    return undefined;
+    return resolvePlainChatIntegrationProvider({
+      message,
+      isConnected: (provider) => this.isIntegrationConnected(provider)
+    });
   }
 
   private isCodeHostConnected(): boolean {
@@ -5670,6 +5652,7 @@ export class CoopChatSession {
         Boolean(effectiveQuickAction) ||
         Boolean(integrationProvider) ||
         contextBundleHasIntegrationSearch(contextBundle) ||
+        contextBundleHasRepoFactEvidence(contextBundle) ||
         contextBundle.some(
           (entry) =>
             entry.type === "file_metadata" ||

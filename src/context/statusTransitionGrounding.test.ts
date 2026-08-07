@@ -136,6 +136,21 @@ test("isStatusTransitionAsk detects stuck PENDING / where status moves", () => {
   assert.equal(isStatusTransitionAsk("hi"), false);
 });
 
+test("A9 incident ask is not stolen by status-transition via 'still open'", () => {
+  const ask =
+    "Last week’s webhook delivery failures — what Jira tickets and Slack threads are related, which code paths handle retries/monitoring, and what’s still open?";
+  assert.equal(isStatusTransitionAsk(ask), false);
+});
+
+test("incident + clear PENDING→COMPLETED still counts as status-transition", () => {
+  assert.equal(
+    isStatusTransitionAsk(
+      "incident: documents stuck PENDING — where does status move to COMPLETED?"
+    ),
+    true
+  );
+});
+
 test("parseAskedStatusTransition reads PENDING→COMPLETED", () => {
   const parsed = parseAskedStatusTransition(
     "stuck PENDING / where status moves to COMPLETED"

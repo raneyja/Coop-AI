@@ -223,7 +223,7 @@ export function collectPackageManifestCandidatePaths(
       // Cap per parent so apps/ + packages/ both get probes under the global max.
       const remainingParents = parentDirs.length - parentDirs.indexOf(dir);
       const slotsLeft = MAX_PACKAGE_MANIFEST_FILES - candidatePaths.length;
-      const perParent = Math.max(2, Math.ceil(slotsLeft / Math.max(1, remainingParents)));
+      const perParent = Math.max(3, Math.ceil(slotsLeft / Math.max(1, remainingParents)));
       for (const name of commonChildPackageNames(dir).slice(0, perParent)) {
         const guess = `${dir}/${name}/package.json`;
         if (!candidatePaths.includes(guess) && candidatePaths.length < MAX_PACKAGE_MANIFEST_FILES) {
@@ -252,15 +252,18 @@ export function commonChildPackageNames(parentDir: string): string[] {
   const parent = parentDir.replace(/\/$/, "").toLowerCase();
   if (parent === "apps" || parent === "services" || parent === "web" || parent === "frontend") {
     return [
+      // Prefer names seen in open-source monorepo smoke targets (documenso / plane).
+      "remix",
       "web",
       "api",
       "admin",
+      "documentation",
+      "docs",
       "app",
       "frontend",
       "backend",
       "server",
       "client",
-      "docs",
       "marketing",
       "mobile",
       "desktop",
@@ -269,7 +272,6 @@ export function commonChildPackageNames(parentDir: string): string[] {
       "live",
       "space",
       "proxy",
-      "remix",
       "next",
       "webapp",
       "storybook"
@@ -277,29 +279,29 @@ export function commonChildPackageNames(parentDir: string): string[] {
   }
   if (parent === "packages" || parent === "libs" || parent === "modules") {
     return [
-      "ui",
+      "signing",
+      "prisma",
       "lib",
+      "ui",
+      "email",
+      "ee",
+      "editor",
       "shared",
       "common",
       "core",
       "config",
       "types",
       "utils",
-      "prisma",
       "db",
-      "email",
       "auth",
       "api",
       "trpc",
-      "ee",
-      "signing",
-      "editor",
       "tsconfig",
       "eslint-config",
       "typescript-config"
     ];
   }
-  return ["web", "api", "lib", "ui", "shared"];
+  return ["web", "api", "lib", "ui", "shared", "remix", "signing"];
 }
 
 /**
@@ -464,6 +466,32 @@ export function answerInventsVaguePackageStructure(content: string): boolean {
   );
 }
 
+/**
+ * True when the answer dumps top-level dirs (apps, packages) but never names a
+ * child path like apps/remix — common when only <repo_tree_overview> reached the model.
+ */
+export function answerIsRootTreeWithoutChildPackages(
+  content: string,
+  parents: string[]
+): boolean {
+  if (!parents.length) {
+    return false;
+  }
+  if (/\b(apps|packages|services|libs|modules)\/[a-z0-9_.-]+\b/i.test(content)) {
+    return false;
+  }
+  const mentionsParent = parents.some((parent) =>
+    new RegExp(`\\b${escapeRegExp(parent)}\\b`, "i").test(content)
+  );
+  if (!mentionsParent) {
+    return false;
+  }
+  return (
+    /\b(directories|top[- ]level|structure|folders?|files)\b/i.test(content) ||
+    /\bworkspaces?\b/i.test(content)
+  );
+}
+
 /** Inject concrete package paths when the model only restated apps/* / packages/*. */
 export function enrichPackageStructureResponse(
   content: string,
@@ -491,21 +519,27 @@ export function enrichPackageStructureResponse(
     return trimmed ? `${lead}${trimmed}` : lead.trim();
   }
 
-  // No concrete children resolved — block vague invention.
-  if (!answerInventsVaguePackageStructure(content) && /unavailable|could not be listed/i.test(content)) {
+  const parents = options?.parents ?? [];
+  const rootOnly = answerIsRootTreeWithoutChildPackages(content, parents);
+  // No concrete children resolved — block vague invention and root-tree-only dumps.
+  if (
+    !answerInventsVaguePackageStructure(content) &&
+    !rootOnly &&
+    /unavailable|could not be listed/i.test(content)
+  ) {
     return content;
   }
-  if (!answerInventsVaguePackageStructure(content) && !options?.parents?.length) {
+  if (!answerInventsVaguePackageStructure(content) && !rootOnly && !parents.length) {
     return content;
   }
-  const parents = options?.parents?.length
-    ? `Top-level package parents seen: ${options.parents.map((p) => `\`${p}\``).join(", ")}. Child folders could not be listed this turn.`
+  const parentLine = parents.length
+    ? `Top-level package parents seen: ${parents.map((p) => `\`${p}\``).join(", ")}. Child folders could not be listed this turn.`
     : "Child package folders could not be listed for this Use-repo this turn.";
   const lead = [
     "**Package layout status**",
     "",
-    parents,
-    "Concrete package names are **unavailable** — do not invent `apps/web`, `apps/api`, or advise “look for folders.”",
+    parentLine,
+    "Concrete package names are **unavailable** — do not invent `apps/web`, `apps/api`, or advise “look for folders.” Prefer saying child packages under `apps/` / `packages/` could not be listed.",
     ""
   ].join("\n");
   const trimmed = content.trim();

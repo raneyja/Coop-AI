@@ -1,4 +1,4 @@
-import { isStatusTransitionIntent } from "./incidentIntent";
+import { isIncidentShapedQuery, isStatusTransitionIntent } from "./incidentIntent";
 
 /**
  * Status-transition / stuck-status grounding for plain chat.
@@ -88,6 +88,12 @@ const RECIPIENT_STATUS_TYPES = new Set([
 
 /** Detect stuck-status / status-transition asks for plain chat. */
 export function isStatusTransitionAsk(message: string | undefined): boolean {
+  // Incident / on-call reconstruction owns failure asks. "What's still open?" on a
+  // webhook failure must not become A8 status-machine synthesis (OPEN is a status token).
+  // Clear PENDING→COMPLETED / stuck-status asks still use A8 via isStatusTransitionIntent.
+  if (isIncidentShapedQuery(message) && !isStatusTransitionIntent(message)) {
+    return false;
+  }
   // Shared A8/A9 split — status-machine asks must not become incident-only.
   if (isStatusTransitionIntent(message)) {
     return true;

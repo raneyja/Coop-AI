@@ -30,6 +30,15 @@ test("smoke: board sync / webhook failures is incident-shaped", () => {
   assert.equal(shouldFetchIncidentIntegrations("webhook failures and retries on board sync"), true);
 });
 
+test("A9 smoke ask is incident-shaped even when it names Jira/Slack", () => {
+  assert.equal(
+    isIncidentShapedQuery(
+      "Last week’s webhook delivery failures — what Jira tickets and Slack threads are related, which code paths handle retries/monitoring, and what’s still open?"
+    ),
+    true
+  );
+});
+
 test("outage / on-call / incident keywords match", () => {
   assert.equal(isIncidentShapedQuery("was there an outage in payments?"), true);
   assert.equal(isIncidentShapedQuery("on-call: API errors last week"), true);
