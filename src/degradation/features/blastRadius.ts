@@ -3,16 +3,9 @@ import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
-import {
-  attachLocalFilesToData,
-  hasLocalDiskContext,
-  readLocalWorkspaceFiles
-} from "../../context/localFileContext";
-import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
 import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
-import * as vscode from "vscode";
 
 /** Soft gather is silent — partial evidence only; never a user-facing banner message. */
 function softGatherPartialBlastResult(
@@ -48,10 +41,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
         true
       );
     }
-    const local = await tryLocalBlastRadiusFallback(context, provider);
-    if (local) {
-      return local;
-    }
+    // Zero-Clone: never fall back to local workspace disk.
     return unavailableResult(
       context,
       `${codeHostLabel(provider)} is offline and no cached blast radius data is available.`
@@ -104,8 +94,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
           branch: params.branch,
           includeTransitive: !directOnly,
           gatherStartedAt,
-          askText: context.request.intent?.context?.queryText,
-          localRoots: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)
+          askText: context.request.intent?.context?.queryText
         }),
         new Promise<undefined>((resolve) => {
           setTimeout(() => resolve(undefined), budgetMs);
@@ -236,37 +225,3 @@ function codeHostLabel(provider: CodeHostProvider): string {
   return "GitHub";
 }
 
-async function tryLocalBlastRadiusFallback(context: FeatureExecutionContext, provider: CodeHostProvider) {
-  const params = context.request.params;
-  if (!hasLocalDiskContext(params) || !params.file) {
-    return undefined;
-  }
-
-  const local = await readLocalWorkspaceFiles({
-    file: params.file,
-    fileSource: params.fileSource,
-    openEditors: context.request.intent.context.openEditors,
-    lines: params.lines,
-    resolveAbsolutePath: resolveLocalAbsolutePath
-  });
-  if (!local) {
-    return undefined;
-  }
-
-  return contextResult(
-    context,
-    attachLocalFilesToData(
-      {
-        file: params.file,
-        directDependents: [],
-        transitiveDependents: [],
-        warnings: [`${codeHostLabel(provider)} offline — local workspace only.`],
-        completeness: "minimal",
-        includeTransitive: false
-      },
-      local
-    ),
-    `${codeHostLabel(provider)} offline — analyzing from local workspace.`,
-    true
-  );
-}

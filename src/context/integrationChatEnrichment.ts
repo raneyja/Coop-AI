@@ -7,8 +7,6 @@ import { fetchCodeHostSearchContext, shouldFetchCodeHostContext } from "./codeHo
 import { fetchConfluenceSearchContext, shouldFetchConfluenceContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext, shouldFetchGoogleDocsContext } from "./googleDocsContext";
 import { fetchJiraSearchContext, shouldFetchJiraContext } from "./jiraContext";
-import { hasLocalDiskContext, readLocalWorkspaceFiles } from "./localFileContext";
-import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionContext";
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
@@ -293,23 +291,8 @@ async function resolveTraceDecisionSearchSeeds(options: {
   }
 
   const file = options.request.params.file ?? timeline.file;
-  let fileContent: string | undefined;
-  if (file && hasLocalDiskContext(options.request.params)) {
-    try {
-      const local = await readLocalWorkspaceFiles({
-        file,
-        fileSource: options.request.params.fileSource,
-        openEditors: options.request.intent.context.openEditors,
-        lines: options.request.params.lines,
-        resolveAbsolutePath: resolveLocalAbsolutePath
-      });
-      fileContent = local?.files.map((entry) => entry.content).join("\n");
-    } catch {
-      /* optional local read */
-    }
-  }
-
-  return buildTraceDecisionSearchSeeds(timeline, file, fileContent);
+  // Zero-Clone: seeds from timeline only — never hydrate from local disk.
+  return buildTraceDecisionSearchSeeds(timeline, file, undefined);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

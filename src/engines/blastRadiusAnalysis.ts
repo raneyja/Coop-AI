@@ -119,8 +119,6 @@ export type BlastRadiusAnalysisParams = {
   askText?: string;
   /** Explicit symbols to search when graph dependents are empty. */
   symbols?: string[];
-  /** Absolute workspace/clone roots for local text-search fallback. */
-  localRoots?: string[];
 };
 
 export class BlastRadiusAnalysisEngine {
@@ -174,8 +172,10 @@ export class BlastRadiusAnalysisEngine {
             source: result.source as GraphEdgeSource
           }));
 
-          // Always reconcile with import/symbol search (zoekt/scip only). Prefer
-          // verified hits; never keep embedding/heuristic lookalikes as callers.
+          // Remote-only reconcile: durable import graph first, then Zoekt/SCIP
+          // search. Never scan open VS Code folders (Zero-Clone).
+          const durableTrusted =
+            directDependents.length > 0 && isTrustedBlastGraphSource(result.source);
           let exportSymbols: string[] = [];
           try {
             const fileContent = await this.options.codeHostRouter.getFileContent(file, {
@@ -202,10 +202,35 @@ export class BlastRadiusAnalysisEngine {
           const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
             maxPatterns: softBudgetExhausted() ? 4 : 12,
             symbols: [...new Set(symbols)],
-            localRoots: params.localRoots
+            remoteOnly: true
           });
           warnings.push(...fallback.warnings);
-          if (fallback.dependents.length > 0) {
+          if (durableTrusted) {
+            // Keep durable import-parse/SCIP as provenance; merge any extra remote hits.
+            const seen = new Set(directDependents);
+            for (const entry of fallback.dependents) {
+              if (!seen.has(entry.path)) {
+                seen.add(entry.path);
+                directDependents.push(entry.path);
+                dependentDetails.push({
+                  ...entry,
+                  source: result.source as GraphEdgeSource
+                });
+              }
+            }
+            const ranked = sortDependentsProductionFirst(
+              dependentDetails.map((entry) => ({
+                ...entry,
+                source: result.source as GraphEdgeSource
+              }))
+            );
+            directDependents = ranked.map((entry) => entry.path);
+            dependentDetails = ranked;
+            graphMeta = { ...graphMeta, source: result.source as GraphEdgeSource };
+            warnings.push(
+              `Dependents from durable ${result.source} graph — ${directDependents.length} direct caller(s).`
+            );
+          } else if (fallback.dependents.length > 0 && fallback.source !== "workspace") {
             const ranked = sortDependentsProductionFirst(fallback.dependents);
             directDependents = ranked.map((entry) => entry.path);
             dependentDetails = ranked;
@@ -213,15 +238,6 @@ export class BlastRadiusAnalysisEngine {
             graphMeta = { ...graphMeta, source: fallback.source };
             warnings.push(
               `Dependents verified via ${fallback.source} import/symbol search — prefer these over unfiltered graph samples.`
-            );
-          } else if (
-            directDependents.length > 0 &&
-            isTrustedBlastGraphSource(result.source)
-          ) {
-            // Durable import-parse / SCIP edges establish real callers even when
-            // Zoekt text search is unavailable.
-            warnings.push(
-              `Dependents from durable ${result.source} graph — ${directDependents.length} direct caller(s).`
             );
           } else if (directDependents.length > 0) {
             // Untrusted graph sample (heuristic) — do not show fakes.

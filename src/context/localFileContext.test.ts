@@ -98,7 +98,7 @@ async function run(): Promise<void> {
     }
   });
 
-  await test("applyLocalFallbackToResult clears hard errors when local files exist", () => {
+  await test("applyLocalFallbackToResult ignores local disk under Zero-Clone", () => {
     const merged = applyLocalFallbackToResult(
       {
         requestId: "req-1",
@@ -114,9 +114,8 @@ async function run(): Promise<void> {
       }
     );
 
-    assert.equal(merged.error, undefined);
-    assert.equal(contextResultHasLocalFiles(merged), true);
-    assert.ok(merged.message?.includes("local workspace"));
+    assert.equal(merged.error, "GitHub is offline and no cached blast radius data is available.");
+    assert.equal(contextResultHasLocalFiles(merged), false);
   });
 
   const total = passed + failed;

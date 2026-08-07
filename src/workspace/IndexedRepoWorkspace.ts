@@ -149,13 +149,8 @@ export class IndexedRepoWorkspace {
   }
 
   /**
-   * Read any file in the indexed repo: matching local clone when present,
-   * otherwise fetched from the code host. Indexed does not mean mirrored.
-   *
-   * Never prefer an unrelated workspace file (e.g. Coop-AI's package.json while
-   * the active remote repo is documenso) — that silently fed the wrong evidence.
-   * Callers that bypass this facade (semantic attach, Gaps gather) must use the
-   * same local-disk gate via {@link localDiskMatchesTargetRepo}.
+   * Read any file in the indexed repo from the code host / API only (Zero-Clone).
+   * Indexed does not mean mirrored — never prefer a local clone or workspace disk.
    */
   public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {
     const cleanPath = path.trim().replace(/^\/+/, "");
@@ -164,24 +159,6 @@ export class IndexedRepoWorkspace {
     }
     const repoId = target.repoId?.trim();
     const identity = this.getIdentity(target);
-
-    if (await localDiskMatchesTargetRepo(identity)) {
-      try {
-        const { readWorkspaceFileFromDisk } = await import("../context/localFileResolver");
-        const local = readWorkspaceFileFromDisk(cleanPath);
-        const localContent = local?.files[0]?.content;
-        if (localContent?.trim()) {
-          return {
-            path: cleanPath,
-            repoId: repoId ?? "",
-            content: localContent,
-            origin: "local"
-          };
-        }
-      } catch {
-        /* fall through to remote */
-      }
-    }
 
     if (!repoId) {
       return undefined;
@@ -236,7 +213,11 @@ export class IndexedRepoWorkspace {
   }
 }
 
-/** True when an open workspace folder is actually this repo (local clone or VFS). */
+/**
+ * True when an open workspace folder is actually this Use-repo (clone or VFS).
+ * Used only to drop *foreign* editor chips — never as permission to read disk
+ * for file bodies (Zero-Clone: {@link mayReadLocalRepoDiskForIntelligence}).
+ */
 export async function localDiskMatchesTargetRepo(
   identity: { owner?: string; repo?: string; provider?: string } | undefined
 ): Promise<boolean> {

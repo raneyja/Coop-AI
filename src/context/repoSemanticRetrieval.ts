@@ -431,22 +431,10 @@ async function resolveSemanticFileContent(
       return remote.content.trim();
     }
   } catch {
-    /* fall through to local only when workspace is the Use-repo */
+    /* Zero-Clone: no local disk hydrate */
   }
 
-  const { localDiskMatchesTargetRepo } = await import("../workspace/IndexedRepoWorkspace");
-  const mayReadLocal = await localDiskMatchesTargetRepo({
-    owner: options.owner,
-    repo: options.repo,
-    provider: options.provider
-  });
-  if (!mayReadLocal) {
-    return undefined;
-  }
-
-  const { readWorkspaceFileFromDisk } = await import("./localFileResolver");
-  const local = readWorkspaceFileFromDisk(filePath);
-  return local?.files[0]?.content?.trim() || undefined;
+  return undefined;
 }
 
 /**

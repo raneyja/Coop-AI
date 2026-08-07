@@ -293,10 +293,16 @@ export type SearchDependentsFallbackOptions = {
   /** Extra symbols from the user ask (StateGroup, DocumentStatus, …). */
   symbols?: string[];
   /**
-   * Absolute workspace/clone roots. When index text search (Zoekt) is empty or
-   * embedding-only, scan these roots for real import/symbol references.
+   * Absolute filesystem roots for offline/dev-only scans.
+   * Must stay empty for Zero-Clone / remote indexed repos — never pass open
+   * VS Code folders on the Blast hot path or we fake a local-repo success.
    */
   localRoots?: string[];
+  /**
+   * When true (default), ignore localRoots so Blast cannot claim callers from
+   * a downloaded folder. Set false only for explicit offline tooling/tests.
+   */
+  remoteOnly?: boolean;
 };
 
 /** High-signal substrings for a single local filesystem walk. */
@@ -412,7 +418,11 @@ export async function searchDependentsFallback(
   const warnings: string[] = [];
   const normalizedRepoId = normalizeGraphRepoId(repoId);
   const symbols = options.symbols ?? [];
-  const localRoots = (options.localRoots ?? []).filter((root) => Boolean(root?.trim()));
+  // Zero-Clone default: never scan open folders for Blast callers.
+  const remoteOnly = options.remoteOnly !== false;
+  const localRoots = remoteOnly
+    ? []
+    : (options.localRoots ?? []).filter((root) => Boolean(root?.trim()));
 
   let enabled = false;
   try {

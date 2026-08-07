@@ -15,6 +15,7 @@ import {
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   scoreDependentRisk,
+  searchDependentsFallback,
   searchDependentsInLocalRoots,
   sortDependentsProductionFirst,
   splitBlastRadiusDependents,
@@ -23,6 +24,7 @@ import {
 
 let passed = 0;
 let failed = 0;
+const asyncTests: Array<Promise<void>> = [];
 
 function test(name: string, fn: () => void): void {
   try {
@@ -34,6 +36,22 @@ function test(name: string, fn: () => void): void {
     console.error(`    ${err instanceof Error ? err.message : String(err)}`);
     failed++;
   }
+}
+
+function testAsync(name: string, fn: () => Promise<void>): void {
+  asyncTests.push(
+    (async () => {
+      try {
+        await fn();
+        console.log(`  ✓ ${name}`);
+        passed++;
+      } catch (err) {
+        console.error(`  ✗ ${name}`);
+        console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+        failed++;
+      }
+    })()
+  );
 }
 
 test("isDocsReferencePath detects markdown, docs trees, and d.ts", () => {
@@ -268,6 +286,25 @@ test("searchDependentsInLocalRoots finds real responseDeadline importers", () =>
   assert.ok(!paths.includes("admin/src/components/IndexingQueueList.tsx"));
 });
 
+testAsync("searchDependentsFallback ignores localRoots by default (Zero-Clone)", async () => {
+  const roots = [path.resolve(__dirname, "../..")];
+  const stubBackend = {
+    isEnabledForRepo: async () => false,
+    search: async () => ({ hits: [], source: "remote" as const })
+  };
+  const result = await searchDependentsFallback(
+    stubBackend as never,
+    "github:raneyja/Coop-AI",
+    "src/config/responseDeadline.ts",
+    {
+      localRoots: roots,
+      symbols: ["MAX_USER_FACING_RESPONSE_MS"]
+    }
+  );
+  assert.equal(result.dependents.length, 0);
+  assert.notEqual(result.source, "workspace");
+});
+
 test("buildImportSearchPatterns includes symbol and alias forms", () => {
   const patterns = buildImportSearchPatterns("apps/api/plane/db/models/state.py", ["StateGroup"]);
   assert.ok(patterns.some((p) => p.includes("StateGroup")));
@@ -348,8 +385,10 @@ test("mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job ed
   assert.deepEqual(merged.directDependents, ["test/app.test.js"]);
 });
 
-const total = passed + failed;
-console.log(`\nblastRadiusDependentsFallback: ${passed}/${total} tests passed`);
-if (failed > 0) {
-  process.exit(1);
-}
+void Promise.all(asyncTests).then(() => {
+  const total = passed + failed;
+  console.log(`\nblastRadiusDependentsFallback: ${passed}/${total} tests passed`);
+  if (failed > 0) {
+    process.exit(1);
+  }
+});
