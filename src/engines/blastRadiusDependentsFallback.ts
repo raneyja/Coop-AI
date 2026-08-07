@@ -27,48 +27,104 @@ export function normalizeGraphRepoId(repoId: string, provider = "github"): strin
 
 /** Build Zoekt/import search patterns that find files referencing the target. */
 export function buildImportSearchPatterns(file: string, symbols: string[] = []): string[] {
-  const basename = file.split("/").pop() ?? file;
-  const stem = basename.replace(/\.[^.]+$/, "");
-  const patterns = new Set<string>();
+  const stem = (file.split("/").pop() ?? file).replace(/\.[^.]+$/, "");
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const pathParts = withoutExt.split("/").filter(Boolean);
+  const patterns: string[] = [];
+  const seen = new Set<string>();
 
+  const add = (pattern: string): void => {
+    const trimmed = pattern.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    patterns.push(trimmed);
+  };
+
+  // 1) Bare path suffixes first — Zoekt substring match for
+  // `from "../config/responseDeadline"` via `config/responseDeadline`.
+  const suffixes = pathParts
+    .map((_, index) => pathParts.slice(index).join("/"))
+    .filter((suffix) => suffix.length >= 3);
+  for (const suffix of suffixes) {
+    add(suffix);
+  }
+
+  // 2) A few relative-import shapes for the last 2 suffixes only (avoid burning maxPatterns).
+  for (const suffix of suffixes.slice(-2)) {
+    for (const quote of ["'", '"']) {
+      add(`from ${quote}../${suffix}${quote}`);
+      add(`from ${quote}../../${suffix}${quote}`);
+      add(`from ${quote}./${suffix}${quote}`);
+      add(`from ${quote}${suffix}${quote}`);
+    }
+  }
+
+  // 3) Basename / alias forms.
   for (const quote of ["'", '"']) {
-    patterns.add(`require(${quote}${basename}${quote})`);
-    patterns.add(`require(${quote}./${basename}${quote})`);
-    patterns.add(`from ${quote}${basename}${quote}`);
-    patterns.add(`from ${quote}./${basename}${quote}`);
-    patterns.add(`from ${quote}@/${stem}${quote}`);
-    patterns.add(`from ${quote}@/${basename}${quote}`);
-    if (stem !== basename) {
-      patterns.add(`require(${quote}${stem}${quote})`);
-      patterns.add(`require(${quote}./${stem}${quote})`);
-      patterns.add(`from ${quote}${stem}${quote}`);
-      patterns.add(`from ${quote}./${stem}${quote}`);
-    }
+    add(`from ${quote}${stem}${quote}`);
+    add(`from ${quote}./${stem}${quote}`);
+    add(`require(${quote}./${stem}${quote})`);
+    add(`from ${quote}@/${stem}${quote}`);
     if (file.includes("/")) {
-      patterns.add(`from ${quote}${file}${quote}`);
-      patterns.add(`require(${quote}${file}${quote})`);
+      add(`from ${quote}${withoutExt}${quote}`);
+      add(`from ${quote}${file}${quote}`);
     }
   }
 
-  // Python-style imports of the module stem.
+  // 4) Python-style imports of the module stem.
   if (/\.py$/i.test(file)) {
-    patterns.add(`from ${stem} import`);
-    patterns.add(`import ${stem}`);
+    add(`from ${stem} import`);
+    add(`import ${stem}`);
   }
 
+  // 5) Exported / ask symbols last (MAX_USER_FACING_RESPONSE_MS, StateGroup, …).
   for (const symbol of symbols) {
     const trimmed = symbol.trim();
     if (trimmed.length < 3) {
       continue;
     }
-    patterns.add(trimmed);
-    patterns.add(`${trimmed}.`);
-    patterns.add(`${trimmed}(`);
-    patterns.add(`import ${trimmed}`);
-    patterns.add(`from ${quoteSafe(stem)} import ${trimmed}`);
+    add(trimmed);
+    add(`import { ${trimmed}`);
+    add(`import ${trimmed}`);
+    add(`from ${quoteSafe(stem)} import ${trimmed}`);
   }
 
-  return [...patterns];
+  return patterns;
+}
+
+/**
+ * Exported names from source text — used as verified Zoekt queries when the
+ * default Blast ask has no domain symbols (e.g. MAX_USER_FACING_RESPONSE_MS).
+ */
+export function extractExportNamesFromSource(source: string): string[] {
+  const names = new Set<string>();
+  for (const match of source.matchAll(
+    /export\s+(?:async\s+)?(?:function|const|class|type|enum|interface|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+  )) {
+    names.add(match[1]);
+  }
+  for (const match of source.matchAll(/export\s+\{\s*([^}]+)\}/g)) {
+    for (const part of match[1].split(",")) {
+      const name = part
+        .trim()
+        .replace(/\s+as\s+[A-Za-z_][A-Za-z0-9_]*$/i, "")
+        .trim();
+      if (name && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+        names.add(name);
+      }
+    }
+  }
+  // Prefer distinctive identifiers (SCREAMING_SNAKE / long names).
+  return [...names]
+    .filter((name) => name.length >= 4)
+    .sort((a, b) => {
+      const score = (s: string): number =>
+        (/^[A-Z][A-Z0-9_]+$/.test(s) ? 0 : 2) + (s.length >= 12 ? 0 : 1);
+      return score(a) - score(b) || b.length - a.length;
+    })
+    .slice(0, 8);
 }
 
 function quoteSafe(value: string): string {
@@ -87,9 +143,49 @@ export function isGenericBlastImpactAsk(ask: string | undefined): boolean {
 /**
  * Only zoekt/scip text hits count as verified callers. Embedding similarity is
  * labeled "heuristic" in the UI and routinely returns unrelated files.
+ * Aggregate "hybrid" (zoekt+…) is treated as verified at the client via
+ * mapSearchSourceToGraphSource / isVerifiedCallerSearchSource on remapped zoekt.
  */
 export function isVerifiedCallerSearchSource(source: LocalSearchResult["source"]): boolean {
   return source === "zoekt" || source === "scip";
+}
+
+export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]): GraphEdgeSource {
+  if (source === "scip") {
+    return "scip";
+  }
+  if (source === "zoekt") {
+    return "zoekt";
+  }
+  return "heuristic";
+}
+
+/** When hit content is real line text, require the module stem, path suffix, or symbol. */
+export function hitLooksLikeReferenceToTarget(
+  hit: { fileName: string; content?: string },
+  file: string,
+  symbols: string[] = []
+): boolean {
+  const content = (hit.content ?? "").trim();
+  const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
+  if (pathOnly) {
+    // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
+    return true;
+  }
+  const basename = file.split("/").pop() ?? file;
+  const stem = basename.replace(/\.[^.]+$/, "");
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const pathParts = withoutExt.split("/").filter(Boolean);
+  if (content.includes(stem) || content.includes(basename) || content.includes(file)) {
+    return true;
+  }
+  for (let i = 0; i < pathParts.length; i++) {
+    const suffix = pathParts.slice(i).join("/");
+    if (suffix.length >= 3 && content.includes(suffix)) {
+      return true;
+    }
+  }
+  return symbols.some((symbol) => symbol.length >= 3 && content.includes(symbol));
 }
 
 /** PascalCase / CamelCase symbols from the blast ask (e.g. StateGroup, DocumentStatus). */
@@ -206,17 +302,24 @@ export async function searchDependentsFallback(
   for (const pattern of ordered.slice(0, maxPatterns)) {
     try {
       const result = await indexBackend.search(normalizedRepoId, pattern);
-      if (!isVerifiedCallerSearchSource(result.source)) {
+      const verifiedHits = result.hits.filter((hit) => {
+        const hitSource = hit.source ?? result.source;
+        return isVerifiedCallerSearchSource(hitSource);
+      });
+      if (verifiedHits.length === 0) {
         if (result.hits.length > 0) {
           skippedUnverified += result.hits.length;
         }
         continue;
       }
-      const source = mapSearchSourceToGraphSource(result.source);
+      const resultSource = isVerifiedCallerSearchSource(result.source)
+        ? result.source
+        : (verifiedHits[0]?.source ?? "zoekt");
+      const source = mapSearchSourceToGraphSource(resultSource);
       if (source === "zoekt" || source === "scip") {
         bestSource = source;
       }
-      for (const hit of result.hits) {
+      for (const hit of verifiedHits) {
         const depPath = normalizeHitPath(hit.fileName);
         if (!depPath || seen.has(depPath) || depPath === file) {
           continue;
@@ -224,8 +327,9 @@ export async function searchDependentsFallback(
         if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
           continue;
         }
+        const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
         seen.add(depPath);
-        dependents.push({ path: depPath, depth: 1, source });
+        dependents.push({ path: depPath, depth: 1, source: hitGraphSource });
       }
     } catch (error) {
       warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
@@ -244,26 +348,6 @@ export async function searchDependentsFallback(
     source: ranked.length > 0 ? bestSource : "remote",
     warnings
   };
-}
-
-/** When hit content is real line text, require the module stem or an ask symbol. */
-export function hitLooksLikeReferenceToTarget(
-  hit: { fileName: string; content?: string },
-  file: string,
-  symbols: string[] = []
-): boolean {
-  const content = (hit.content ?? "").trim();
-  const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
-  if (pathOnly) {
-    // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
-    return true;
-  }
-  const basename = file.split("/").pop() ?? file;
-  const stem = basename.replace(/\.[^.]+$/, "");
-  if (content.includes(stem) || content.includes(basename) || content.includes(file)) {
-    return true;
-  }
-  return symbols.some((symbol) => symbol.length >= 3 && content.includes(symbol));
 }
 
 /**
@@ -341,16 +425,6 @@ export function buildTestSearchPatterns(file: string): string[] {
   const basename = file.split("/").pop() ?? file;
   const stem = basename.replace(/\.[^.]+$/, "");
   return uniqueStrings([basename, stem, file]);
-}
-
-export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]): GraphEdgeSource {
-  if (source === "scip") {
-    return "scip";
-  }
-  if (source === "zoekt") {
-    return "zoekt";
-  }
-  return "heuristic";
 }
 
 function normalizeHitPath(fileName: string): string | undefined {

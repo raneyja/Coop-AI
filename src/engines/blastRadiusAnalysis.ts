@@ -14,6 +14,7 @@ import {
   type GraphEdgeSource,
   codePathsFromDependentDetails,
   extractBlastSearchSymbols,
+  extractExportNamesFromSource,
   normalizeGraphRepoId,
   searchCiWorkflowReferences,
   searchCrossRepoConsumers,
@@ -172,12 +173,31 @@ export class BlastRadiusAnalysisEngine {
 
           // Always reconcile with import/symbol search (zoekt/scip only). Prefer
           // verified hits; never keep embedding/heuristic lookalikes as callers.
+          let exportSymbols: string[] = [];
+          try {
+            const fileContent = await this.options.codeHostRouter.getFileContent(file, {
+              provider: resolved.provider,
+              owner: resolved.owner,
+              repo: resolved.repo,
+              branch: resolved.branch
+            });
+            const text =
+              fileContent.content?.trim() ||
+              fileContent.lines?.map((line) => line.text).join("\n") ||
+              "";
+            if (text.trim()) {
+              exportSymbols = extractExportNamesFromSource(text);
+            }
+          } catch {
+            // Soft gather — path-suffix patterns still run.
+          }
           const symbols = [
+            ...exportSymbols,
             ...(params.symbols ?? []),
             ...extractBlastSearchSymbols(params.askText, file)
           ];
           const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
-            maxPatterns: softBudgetExhausted() ? 4 : 10,
+            maxPatterns: softBudgetExhausted() ? 4 : 12,
             symbols: [...new Set(symbols)]
           });
           warnings.push(...fallback.warnings);

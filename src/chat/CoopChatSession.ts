@@ -142,6 +142,7 @@ import {
 } from "../context/contextBundleEvidence";
 import {
   extractBlastSearchSymbols,
+  extractExportNamesFromSource,
   filterJobDependentsForFile,
   mergeSearchDependentsFallbackIntoDependenciesData,
   searchDependentsFallback
@@ -6378,8 +6379,26 @@ export class CoopChatSession {
     const remainingMs = remainingContextGatherBudgetMs(
       turn?.startedAt ?? this.chatTurnStartedAt ?? Date.now()
     );
-    const maxPatterns = remainingMs <= 0 ? 4 : remainingMs < 4_000 ? 6 : 10;
-    const symbols = extractBlastSearchSymbols(askText, targetFile);
+    const maxPatterns = remainingMs <= 0 ? 4 : remainingMs < 4_000 ? 6 : 12;
+    const askSymbols = extractBlastSearchSymbols(askText, targetFile);
+    let exportSymbols: string[] = [];
+    try {
+      const workspace = this.indexedRepoWorkspace();
+      const target: RepoTarget = {
+        repoId,
+        owner: ctx.owner ?? this.preferences.owner,
+        repo: ctx.repo ?? this.preferences.repo,
+        branch: ctx.branch ?? this.preferences.branch,
+        provider: ctx.provider ?? this.preferences.defaultCodeHost
+      };
+      const evidence = await workspace.readFile(target, targetFile);
+      if (evidence?.content?.trim()) {
+        exportSymbols = extractExportNamesFromSource(evidence.content);
+      }
+    } catch {
+      // Soft gather — continue with path-suffix patterns only.
+    }
+    const symbols = [...new Set([...exportSymbols, ...askSymbols])];
 
     let fallback: Awaited<ReturnType<typeof searchDependentsFallback>>;
     try {

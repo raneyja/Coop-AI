@@ -1066,6 +1066,8 @@ function formatLightningSearchResult(
     data: search.hits.map((hit) => ({
       repoId: hit.repoId,
       path: hit.path,
+      content: hit.content,
+      source: hit.source,
       size: hit.content.length,
       lastModified: new Date(),
       lastAuthor: "lightning-index",

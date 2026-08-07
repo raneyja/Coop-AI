@@ -23,6 +23,8 @@ export type ZoektSearchHit = {
   lineNumber: number;
   content: string;
   score: number;
+  /** Per-hit provenance when API provides it (zoekt/scip vs embedding). */
+  source?: "zoekt" | "scip" | "embedding" | "fallback";
 };
 
 export type ScipSymbol = {

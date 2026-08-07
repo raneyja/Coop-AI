@@ -106,13 +106,26 @@ export class CloudIndexBackend implements IndexBackend {
         freshness?: string;
         stale?: boolean;
       };
-      const hits = (remote.data ?? []).map((entry, index) => ({
-        fileName: entry.path,
-        repoId: (entry as { repoId?: string }).repoId,
-        lineNumber: index + 1,
-        content: entry.path,
-        score: 1
-      }));
+      const hits = (remote.data ?? []).map((entry, index) => {
+        const record = entry as {
+          path: string;
+          size?: number;
+          content?: string;
+          source?: string;
+          repoId?: string;
+        };
+        const hitSource = mapRemoteHitSource(record.source, remote.freshness);
+        const content =
+          typeof record.content === "string" && record.content.trim() ? record.content : record.path;
+        return {
+          fileName: record.path,
+          repoId: record.repoId,
+          lineNumber: index + 1,
+          content,
+          score: 1,
+          source: hitSource
+        };
+      });
       const symbols = (remote.symbols ?? []).map((entry) => ({
         symbol: entry.symbol,
         kind: entry.kind,
@@ -121,18 +134,9 @@ export class CloudIndexBackend implements IndexBackend {
         character: 0,
         displayName: entry.displayName ?? entry.symbol
       }));
-      // Unlabeled hits must not default to zoekt — embedding similarity was
-      // previously treated as verified Blast callers (fake "heuristic" dependents).
-      const source =
-        remote.freshness === "embedding"
-          ? "embedding"
-          : remote.freshness === "scip"
-            ? "scip"
-            : remote.freshness === "zoekt"
-              ? "zoekt"
-              : hits.length > 0
-                ? "embedding"
-                : "fallback";
+      // hybrid = zoekt/scip mixed with something else — treat as verified text search.
+      // Unlabeled / embedding-only must not become fake Blast callers.
+      const source = mapRemoteAggregateSource(remote.freshness, hits);
       return {
         source,
         hits,
@@ -194,6 +198,40 @@ export class CloudIndexBackend implements IndexBackend {
     const { setRepoLightningEnabled } = await import("../config/lightningConfig");
     await setRepoLightningEnabled(repoId, enabled);
   }
+}
+
+function mapRemoteHitSource(
+  hitSource: string | undefined,
+  freshness: string | undefined
+): LocalSearchResult["source"] {
+  if (hitSource === "zoekt" || hitSource === "scip" || hitSource === "embedding" || hitSource === "fallback") {
+    return hitSource;
+  }
+  return mapRemoteAggregateSource(freshness, []);
+}
+
+function mapRemoteAggregateSource(
+  freshness: string | undefined,
+  hits: Array<{ source?: LocalSearchResult["source"] }>
+): LocalSearchResult["source"] {
+  if (freshness === "zoekt" || freshness === "scip") {
+    return freshness;
+  }
+  if (freshness === "hybrid") {
+    // Mixed zoekt/scip + other — still has verified text hits; do not downgrade to embedding.
+    return "zoekt";
+  }
+  if (freshness === "embedding") {
+    return "embedding";
+  }
+  const verifiedHit = hits.find((hit) => hit.source === "zoekt" || hit.source === "scip");
+  if (verifiedHit?.source) {
+    return verifiedHit.source;
+  }
+  if (hits.some((hit) => hit.source === "embedding") || (hits.length > 0 && !freshness)) {
+    return "embedding";
+  }
+  return hits.length > 0 ? "embedding" : "fallback";
 }
 
 function cloudRecordToStatus(record: Record<string, unknown>): IndexRepoStatus {

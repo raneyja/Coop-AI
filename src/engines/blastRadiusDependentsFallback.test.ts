@@ -3,6 +3,7 @@ import {
   classifyDependentSurface,
   codePathsFromDependentDetails,
   extractBlastSearchSymbols,
+  extractExportNamesFromSource,
   buildImportSearchPatterns,
   groupDependentsByTopLevelFolder,
   hitLooksLikeReferenceToTarget,
@@ -221,6 +222,23 @@ test("hitLooksLikeReferenceToTarget requires stem when content is a code line", 
     ),
     false
   );
+});
+
+test("buildImportSearchPatterns includes path suffixes for relative imports", () => {
+  const patterns = buildImportSearchPatterns("src/config/responseDeadline.ts");
+  assert.ok(patterns.includes("config/responseDeadline"));
+  assert.ok(patterns.includes("src/config/responseDeadline"));
+  assert.ok(patterns.indexOf("config/responseDeadline") < 10);
+});
+
+test("extractExportNamesFromSource prefers distinctive exports", () => {
+  const names = extractExportNamesFromSource(`
+export const MAX_USER_FACING_RESPONSE_MS = 15_000;
+export function remainingContextGatherBudgetMs() {}
+export const RESERVED_SYNTHESIS_MS = 6_000;
+`);
+  assert.ok(names.includes("MAX_USER_FACING_RESPONSE_MS"));
+  assert.ok(names.includes("remainingContextGatherBudgetMs"));
 });
 
 test("buildImportSearchPatterns includes symbol and alias forms", () => {
