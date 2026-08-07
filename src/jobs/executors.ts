@@ -287,6 +287,7 @@ async function indexRepository(
     ctx.cache.setGraph(graph);
 
     // Import graph while clone still exists — durable edges, no filename heuristics.
+    // Zoekt is often unavailable in prod; Blast dependents depend on these rows.
     await report(87, "Extracting import graph");
     const filePathSet = new Set(graph.fileTree.map((file) => file.path));
     const importEdges = extractImportEdges(clone.localPath);
@@ -300,6 +301,11 @@ async function indexRepository(
         line: edge.line,
         source: "import-parse" as const
       }));
+    const filteredOut = importEdges.length - edgeRows.length;
+    console.log(
+      `[index] import-graph repo=${repoId} extracted=${importEdges.length} ` +
+        `inFileTree=${edgeRows.length} filteredOut=${filteredOut} clone=${clone.localPath}`
+    );
 
     if (orgId) {
       const pool = await getDbPool();
@@ -326,14 +332,22 @@ async function indexRepository(
 
         try {
           await new RepoDependencyEdgesStore(pool).replaceEdges(orgId, repoId, edgeRows, now);
+          console.log(
+            `[index] import-graph persisted repo=${repoId} edges=${edgeRows.length}`
+          );
         } catch (error) {
-          console.warn(
-            `[index] Failed to persist dependency edges: ${
+          console.error(
+            `[index] Failed to persist dependency edges for ${repoId}: ${
               error instanceof Error ? error.message : String(error)
             }`
           );
+          throw error;
         }
+      } else {
+        console.warn(`[index] import-graph skipped persist — no DB pool for ${repoId}`);
       }
+    } else {
+      console.warn(`[index] import-graph skipped persist — missing orgId for ${repoId}`);
     }
 
     const cacheEdges = dedupeEdges(
@@ -417,6 +431,7 @@ async function indexRepository(
       indexQuality: scipResult?.indexQuality ?? "none",
       language: scipResult?.language,
       zoektAvailable: zoektResult?.zoektAvailable ?? false,
+      dependencyEdgeCount: edgeRows.length,
       embeddingCount: embedResult?.chunkCount ?? 0,
       embeddedFiles: embedResult?.embeddedFiles ?? 0,
       embeddingStatus,

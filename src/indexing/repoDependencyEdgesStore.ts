@@ -41,25 +41,35 @@ export class RepoDependencyEdgesStore {
     rows: RepoDependencyEdgeRow[],
     indexedAt: Date
   ): Promise<void> {
-    await this.pool.query(`DELETE FROM repo_dependency_edges WHERE org_id = $1 AND repo_id = $2`, [
-      orgId,
-      repoId
-    ]);
     const deduped = dedupeDependencyEdgeRows(rows);
-    if (deduped.length === 0) {
-      return;
-    }
-
-    for (let offset = 0; offset < deduped.length; offset += INSERT_BATCH_SIZE) {
-      const batch = deduped.slice(offset, offset + INSERT_BATCH_SIZE);
-      const { placeholders, values } = buildInsertBatch(orgId, repoId, batch, indexedAt);
-      await this.pool.query(
-        `INSERT INTO repo_dependency_edges (
-           org_id, repo_id, from_path, to_path, kind, symbol, line, source, indexed_at
-         )
-         VALUES ${placeholders.join(", ")}`,
-        values
-      );
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM repo_dependency_edges WHERE org_id = $1 AND repo_id = $2`, [
+        orgId,
+        repoId
+      ]);
+      for (let offset = 0; offset < deduped.length; offset += INSERT_BATCH_SIZE) {
+        const batch = deduped.slice(offset, offset + INSERT_BATCH_SIZE);
+        const { placeholders, values } = buildInsertBatch(orgId, repoId, batch, indexedAt);
+        await client.query(
+          `INSERT INTO repo_dependency_edges (
+             org_id, repo_id, from_path, to_path, kind, symbol, line, source, indexed_at
+           )
+           VALUES ${placeholders.join(", ")}`,
+          values
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        /* ignore rollback errors */
+      }
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
