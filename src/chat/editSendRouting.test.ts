@@ -46,6 +46,19 @@ test("isConcreteFileEditAsk rejects ownership / archaeology asks", () => {
   );
 });
 
+test("isConcreteFileEditAsk rejects blast-shaped what-breaks asks with change/rename + backticks", () => {
+  assert.equal(
+    isConcreteFileEditAsk(
+      "What breaks if we change or rename `MAX_USER_FACING_RESPONSE_MS` or `remainingContextGatherBudgetMs`?"
+    ),
+    false
+  );
+  assert.equal(
+    isConcreteFileEditAsk("What breaks if I change this handler?"),
+    false
+  );
+});
+
 test("shouldTrackEditRequest is true for edit composer without quick action", () => {
   assert.equal(shouldTrackEditRequest({ composerMode: "edit" }, undefined), true);
 });

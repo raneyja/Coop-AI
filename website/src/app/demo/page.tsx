@@ -4,12 +4,14 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { ContactForm } from "@/components/ContactForm";
 import { InstallExtensionButton } from "@/components/Button";
-import { installExtensionHref } from "@/lib/site.config";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { installExtensionHref, siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Book a Demo",
-  description: "Schedule a demo with the CoopAI team."
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/demo",
+  siteConfig.seo.pages.demo.title,
+  siteConfig.seo.pages.demo.description
+);
 
 type DemoPageProps = {
   searchParams: Promise<{ intent?: string; prompt?: string }>;

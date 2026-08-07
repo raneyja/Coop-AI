@@ -475,6 +475,47 @@ test("language-tagged fence recovers to citation from nearby path prose", () => 
   }
 });
 
+test("javascript fence upgrades to cite for open .ts file (js/ts family)", () => {
+  const input = [
+    "Here's a relevant code snippet:",
+    "```javascript",
+    "export const SEND_SIGNING_EMAIL_JOB_DEFINITION = {",
+    "  id: 'SEND',",
+    "};",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input, {
+    activeFilePath: "packages/lib/jobs/definitions/emails/send-signing-email.ts"
+  });
+  assert.equal(doc.blocks[1]!.type, "code-citation");
+  if (doc.blocks[1]!.type === "code-citation") {
+    assert.equal(
+      doc.blocks[1]!.path,
+      "packages/lib/jobs/definitions/emails/send-signing-email.ts"
+    );
+  }
+});
+
+test("language fence upgrades when open-file basename appears in prose", () => {
+  const input = [
+    "What does SEND do in send-signing-email.ts?",
+    "",
+    "```javascript",
+    "export const SEND = {};",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input, {
+    activeFilePath: "packages/lib/jobs/definitions/emails/send-signing-email.ts"
+  });
+  assert.equal(doc.blocks[1]!.type, "code-citation");
+});
+
+test("bash fences stay anonymous even with active file", () => {
+  const input = "```bash\nnpm test\n```";
+  const doc = parseChatProse(input, { activeFilePath: "src/foo.ts" });
+  assert.equal(doc.blocks[0]!.type, "code-fence");
+});
+
 test("plain language tag typescript is not treated as a path citation", () => {
   const input = "```typescript\nconst x = 1;\n```";
   const doc = parseChatProse(input);

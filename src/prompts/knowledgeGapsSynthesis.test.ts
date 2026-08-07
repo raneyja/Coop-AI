@@ -126,6 +126,21 @@ test("knowledge-gaps synthesis frames zero-gap scan with attached docs in respon
   assert.ok(prompt.includes("do not contradict the zero-gap scan"));
 });
 
+test("knowledge-gaps synthesis labels Confluence as org docs not repo architecture SoT", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    confluence: {
+      pages: [{ id: "1", title: "Coop AI — Architecture Overview", updated: "2026-01-01" }]
+    },
+    owner: "CoopAI-Corp",
+    repo: "plane"
+  });
+  assert.ok(prompt.includes("Org docs"));
+  assert.ok(prompt.includes("CoopAI-Corp/plane"));
+  assert.ok(prompt.includes("architecture source of truth"));
+  assert.ok(prompt.includes("Coop-AI ADRs"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

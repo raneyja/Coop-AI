@@ -1,5 +1,6 @@
 import type { CommitInfo } from "../api/codeHosts/types";
 import type { DecisionCommit, LineRange } from "../types/decisionTimeline";
+import { scoreTextForTraceFocus } from "./traceFileGrounding";
 
 const WEAK_DECISION_COMMIT_MESSAGE_RE = /^(wip|fix|update|changes?|misc|tmp|test|merge|refactor)\b/i;
 
@@ -20,7 +21,7 @@ function mapCommit(commit: CommitInfo): DecisionCommit {
 }
 
 /**
- * Full-file traces prefer a recent post-introduction commit for rationale enrichment.
+ * Full-file traces prefer a commit aligned with the open file + user ask when possible.
  * Line selections keep the blame introduction as the focus.
  * Uses commits already loaded for evolution — no extra API calls.
  */
@@ -28,17 +29,47 @@ export function selectFocusCommit(options: {
   lineRange?: LineRange;
   introduction: DecisionCommit;
   recentCommits: DecisionCommit[];
+  /** Terms from open file stem, user ask, and snippet — rank commits toward that ask. */
+  focusTerms?: string[];
 }): DecisionCommit {
   if (options.lineRange) {
     return options.introduction;
   }
+
   const introSha = options.introduction.sha;
-  const candidates = options.recentCommits.filter((commit) => commit.sha !== introSha);
-  if (!candidates.length) {
+  const recent = options.recentCommits.filter((commit) => commit.sha !== introSha);
+  const focusTerms = (options.focusTerms ?? []).filter((term) => term.trim().length >= 3);
+
+  if (focusTerms.length > 0) {
+    const ranked = [options.introduction, ...recent]
+      .map((commit) => ({
+        commit,
+        score: scoreTextForTraceFocus(commit.message, focusTerms)
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        // Prefer recent evolution over birth when scores tie.
+        if (a.commit.sha === introSha) {
+          return 1;
+        }
+        if (b.commit.sha === introSha) {
+          return -1;
+        }
+        return 0;
+      });
+    if (ranked[0]) {
+      return ranked[0].commit;
+    }
+  }
+
+  if (!recent.length) {
     return options.introduction;
   }
-  const highSignal = candidates.find((commit) => isHighSignalCommitMessage(commit.message));
-  return highSignal ?? candidates[0];
+  const highSignal = recent.find((commit) => isHighSignalCommitMessage(commit.message));
+  return highSignal ?? recent[0];
 }
 
 /** Newest-first history → up to `limit` commits after introduction. */

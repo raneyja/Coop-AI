@@ -333,9 +333,22 @@ export function computeOwnershipRisk(
   };
 }
 
+/** Evidence-backed inputs for on-call escalation when score tiers lack a secondary. */
+export type TeamDomainEscalationInput = {
+  orgContext?: OrgTeamContext;
+  /** Recent PR reviewers (logins), excluding anyone not grounded in review evidence. */
+  recentReviewers?: string[];
+};
+
+const ESCALATION_SOURCE_COMMITS_REVIEWS = "[Sources: GitHub commits & reviews]";
+const ESCALATION_SOURCE_CODEOWNERS = "[Sources: CODEOWNERS]";
+const ESCALATION_ADMIN_GAP =
+  "No CODEOWNERS team or path owners matched; no strong secondary from commits/reviews. Escalate via repository admins/maintainers";
+
 export function buildTeamDomainGraph(
   scores: OwnershipScore[],
-  activity: ActivityWindow[] = []
+  activity: ActivityWindow[] = [],
+  escalationInput: TeamDomainEscalationInput = {}
 ): TeamDomainGraph {
   const primary = scores.find((s) => s.tier === "primary");
   const secondary = scores.filter((s) => s.tier === "secondary");
@@ -359,19 +372,156 @@ export function buildTeamDomainGraph(
     };
   });
 
-  let escalationPath = "No clear escalation path identified.";
-  if (primary) {
-    const backupOwner = secondary[0] ?? backup[0];
-    if (backupOwner && backupOwner.owner !== primary.owner) {
-      escalationPath = `If @${primary.owner} is unavailable, reach out to @${backupOwner.owner} next.`;
-    } else {
-      escalationPath = `@${primary.owner} is the primary contact; no strong backup identified.`;
-    }
-  } else if (secondary[0]) {
-    escalationPath = `No primary owner; @${secondary[0].owner} has the most context.`;
-  }
+  const escalationPath = buildEscalationPath({
+    primary,
+    secondaryLead: secondary[0],
+    scoreBackup: secondary[0] ?? backup[0],
+    escalationInput
+  });
 
   return { members, escalationPath };
+}
+
+function buildEscalationPath(args: {
+  primary: OwnershipScore | undefined;
+  secondaryLead: OwnershipScore | undefined;
+  scoreBackup: OwnershipScore | undefined;
+  escalationInput: TeamDomainEscalationInput;
+}): string {
+  const { primary, secondaryLead, scoreBackup, escalationInput } = args;
+  const primaryLogin = primary?.owner;
+  const scoreBackupLogin =
+    scoreBackup && (!primaryLogin || !sameOwnerLogin(scoreBackup.owner, primaryLogin))
+      ? scoreBackup.owner
+      : undefined;
+
+  if (primaryLogin && scoreBackupLogin) {
+    return (
+      `If @${primaryLogin} is unavailable, reach out to @${scoreBackupLogin} next ` +
+      `${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+    );
+  }
+
+  const avenues = collectEscalationAvenues(primaryLogin, escalationInput);
+  if (primaryLogin) {
+    if (avenues.length > 0) {
+      return (
+        `@${primaryLogin} is the primary contact ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+        `Escalation: ${avenues.join("; ")}.`
+      );
+    }
+    return (
+      `@${primaryLogin} is the primary contact ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+      `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+    );
+  }
+
+  if (secondaryLead) {
+    if (avenues.length > 0) {
+      return (
+        `No primary owner; @${secondaryLead.owner} has the most context ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+        `Escalation: ${avenues.join("; ")}.`
+      );
+    }
+    return (
+      `No primary owner; @${secondaryLead.owner} has the most context ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+      `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+    );
+  }
+
+  if (avenues.length > 0) {
+    return `No scored primary from commits/reviews. Escalation: ${avenues.join("; ")}.`;
+  }
+
+  return `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`;
+}
+
+/**
+ * Prefer CODEOWNERS team → CODEOWNERS path owners → recent reviewers.
+ * Every named handle must come from orgContext or recentReviewers (never invented).
+ */
+export function collectEscalationAvenues(
+  primaryLogin: string | undefined,
+  escalationInput: TeamDomainEscalationInput
+): string[] {
+  const avenues: string[] = [];
+  const named = new Set<string>();
+  if (primaryLogin) {
+    named.add(normalizeOwnerLogin(primaryLogin));
+  }
+
+  const org = escalationInput.orgContext;
+  if (org) {
+    const teamHandle = org.teamSlug?.trim() || (org.source === "github_teams" ? org.teamName.trim() : "");
+    if (teamHandle) {
+      avenues.push(`CODEOWNERS team @${teamHandle.replace(/^@/, "")} ${ESCALATION_SOURCE_CODEOWNERS}`);
+      named.add(normalizeOwnerLogin(teamHandle));
+    }
+
+    const pathOwners = org.members
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .filter((m) => {
+        const key = normalizeOwnerLogin(m);
+        if (!key || named.has(key)) {
+          return false;
+        }
+        // Skip when teamName is only the joined members string already covered by team avenue.
+        if (teamHandle && normalizeOwnerLogin(teamHandle) === key) {
+          return false;
+        }
+        named.add(key);
+        return true;
+      });
+    if (pathOwners.length > 0) {
+      avenues.push(
+        `CODEOWNERS path owners ${pathOwners.map((m) => `@${m.replace(/^@/, "")}`).join(", ")} ${ESCALATION_SOURCE_CODEOWNERS}`
+      );
+    } else if (!teamHandle && org.teamName.trim()) {
+      // teamName may be a joined CODEOWNERS owner list when teams API did not resolve.
+      const fromTeamName = org.teamName
+        .split(",")
+        .map((part) => part.trim().replace(/^@/, ""))
+        .filter(Boolean)
+        .filter((m) => !named.has(normalizeOwnerLogin(m)));
+      if (fromTeamName.length > 0) {
+        for (const m of fromTeamName) {
+          named.add(normalizeOwnerLogin(m));
+        }
+        avenues.push(
+          `CODEOWNERS path owners ${fromTeamName.map((m) => `@${m}`).join(", ")} ${ESCALATION_SOURCE_CODEOWNERS}`
+        );
+      }
+    }
+  }
+
+  const reviewers = (escalationInput.recentReviewers ?? [])
+    .map((r) => r.trim().replace(/^@/, ""))
+    .filter(Boolean)
+    .filter((r) => {
+      const key = normalizeOwnerLogin(r);
+      if (!key || named.has(key)) {
+        return false;
+      }
+      named.add(key);
+      return true;
+    })
+    .slice(0, 3);
+  if (reviewers.length > 0) {
+    avenues.push(
+      `recent reviewers ${reviewers.map((r) => `@${r}`).join(", ")} ${ESCALATION_SOURCE_COMMITS_REVIEWS}`
+    );
+  }
+
+  return avenues;
+}
+
+function normalizeOwnerLogin(value: string): string {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function sameOwnerLogin(a: string, b: string): boolean {
+  return normalizeOwnerLogin(a) === normalizeOwnerLogin(b);
 }
 
 export function buildOwnershipEvolution(commits: CommitInfo[], now = Date.now()): OwnershipEvolution[] {

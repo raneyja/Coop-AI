@@ -21,6 +21,13 @@ export function buildIntegrationSearchTermList(options: {
   jiraIssueKeys?: string[];
 }): string[] {
   const terms = new Set<string>();
+  // Caller extras (e.g. Gaps focus phrases) first so they survive the term cap.
+  for (const term of options.extraTerms ?? []) {
+    const trimmed = term.trim();
+    if (trimmed) {
+      terms.add(trimmed);
+    }
+  }
   for (const term of buildRepoSearchTerms(options.owner, options.repo)) {
     terms.add(term);
   }
@@ -36,12 +43,6 @@ export function buildIntegrationSearchTermList(options: {
     ...(options.jiraIssueKeys ?? [])
   ]) {
     terms.add(key);
-  }
-  for (const term of options.extraTerms ?? []) {
-    const trimmed = term.trim();
-    if (trimmed) {
-      terms.add(trimmed);
-    }
   }
   return [...terms].slice(0, MAX_INTEGRATION_SEARCH_TERMS);
 }

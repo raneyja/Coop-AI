@@ -28,6 +28,7 @@ import {
   blastRadiusSourceLabelTeams,
   blastRadiusSourceLabelTests,
   hasPartialIndexCoverage,
+  hasVerifiedRemoteBlastDependents,
   listBlastRadiusSourceLabels,
   listBlastRadiusSourcesChecklist
 } from "./blastRadiusSourceLabels";
@@ -45,8 +46,8 @@ import { appendIntegrationDocsResponseContract } from "./integrationDocsResponse
 
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
-Code dependents (tests, examples, integration) are the primary blast surface; docs/README/.d.ts hits are secondary references — mention counts, not full lists.
-Be explicit about transitive effects and testing surfaces when dependency data is available.
+Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
+Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -117,7 +118,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
     "Synthesize impact for the primary target file only. Out-of-scope @ paths must not replace the dependency evidence for the open file."
   );
   lines.push(
-    "Keep the narrative short: lead with ## Top risk surfaces in **Summary**, mirror them exactly in **Direct impact** (no extra paths), cite test files in **Testing surfaces**, treat docs references as secondary."
+    "Keep the narrative short: lead with ## Top risk surfaces in **Summary** (production callers first), mirror them exactly in **Direct impact** (no extra paths), cite test/story/e2e files in **Testing surfaces**, treat docs references as secondary."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
@@ -125,6 +126,17 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
+  if (hasVerifiedRemoteBlastDependents(evidence)) {
+    lines.push("## Summary guidance");
+    lines.push(
+      "- Callers come from a verified remote dependency graph. Lead **Summary** with impact (top risk surfaces) — do **not** open with partial-index or incomplete-coverage hedging."
+    );
+    lines.push(
+      "- Treat listed import-parse / scip / zoekt callers as real. Mention missing PR/Slack only as optional context, not as weak dependency evidence."
+    );
+    lines.push("");
+    return;
+  }
   if (!hasPartialIndexCoverage(evidence)) {
     return;
   }
@@ -393,4 +405,76 @@ function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastR
     ...(evidence.directDependents ?? []).map((path) => ({ path, depth: 1, source })),
     ...(evidence.transitiveDependents ?? []).map((path) => ({ path, depth: 2, source }))
   ];
+}
+
+const ZERO_IMPACT_CLAIM =
+  /\b(?:0|zero|no)\s+(?:code\s+)?dependents?\b|\b(?:will\s+not|won'?t|does\s+not|doesn'?t)\s+break\b|\bno\s+impact\b|\bnothing\s+depends\b|\bimpact\s+is\s+(?:none|negligible|zero)\b/i;
+
+/** True when the model claimed safe/zero impact despite empty or unverified evidence. */
+export function blastResponseClaimsZeroImpact(content: string): boolean {
+  return ZERO_IMPACT_CLAIM.test(content);
+}
+
+/**
+ * Prevent “0 dependents / no impact” claims when evidence is empty/unverified,
+ * and prepend production-ranked callers when the model omitted them.
+ */
+export function enrichBlastRadiusResponse(
+  content: string,
+  evidence: BlastRadiusEvidence | undefined
+): string {
+  if (!evidence) {
+    return content;
+  }
+  const details = codeDependentDetailsFromEvidence(evidence);
+  const ranked = rankCodeDependentsByRisk(details, 8);
+  const trimmed = content.trim();
+  const claimsZero = blastResponseClaimsZeroImpact(trimmed);
+  const hasDependents = ranked.length > 0;
+  const unverifiedWarning = (evidence.warnings ?? []).some((w) =>
+    /impact unverified|no dependents found/i.test(w)
+  );
+
+  if (hasDependents) {
+    const missingTop = ranked
+      .slice(0, 5)
+      .filter((entry) => !trimmed.includes(entry.path));
+    if (missingTop.length === 0 && !claimsZero) {
+      return content;
+    }
+    const lines = ranked.slice(0, 5).map((entry) => {
+      const surface = entry.riskReason.toLowerCase().includes("test")
+        ? "test surface"
+        : "production / code caller";
+      return `- \`${entry.path}\` (${surface})`;
+    });
+    const lead = [
+      "**Direct impact (index / search)**",
+      "",
+      ...lines,
+      "",
+      claimsZero
+        ? "Do not treat missing SCIP edges as zero impact — callers above were found via dependency or symbol search."
+        : "",
+      ""
+    ]
+      .filter((line) => line !== undefined)
+      .join("\n");
+    return `${lead}${trimmed}`;
+  }
+
+  if (claimsZero || unverifiedWarning) {
+    const lead = [
+      "**Impact status**",
+      "",
+      "Impact is **unverified** — no dependents were confirmed in the index/search for this turn. Do not claim zero impact or that nothing will break.",
+      ""
+    ].join("\n");
+    if (!claimsZero && trimmed.includes("Impact unverified")) {
+      return content;
+    }
+    return `${lead}${trimmed}`;
+  }
+
+  return content;
 }

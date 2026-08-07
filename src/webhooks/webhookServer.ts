@@ -3,6 +3,7 @@ import { URL } from "node:url";
 import { GraphQueryApi, GraphQueryName } from "../api/graphQuery";
 import { lightningSearch, type LightningSearchResult } from "../indexing/lightningSearch";
 import { parseGraphSearchScope } from "../indexing/graphSearchScope";
+import { RepoDependencyEdgesStore } from "../indexing/repoDependencyEdgesStore";
 import { RateLimitTracker } from "../api/rateLimitTracker";
 import { TokenPool } from "../api/tokenPool";
 import { GraphCache } from "../cache/graphCache";
@@ -859,6 +860,44 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             }
           }
         }
+        // Prefer durable import/SCIP edges over process-local GraphCache.
+        if (!result && query === "getDependents" && filters.file) {
+          const pool = await getDbPool();
+          if (pool) {
+            try {
+              const edgeStore = new RepoDependencyEdgesStore(pool);
+              const edgeCount = await edgeStore.countEdges(auth!.orgId, repoId);
+              if (edgeCount > 0) {
+                const edges = await edgeStore.loadDependentsForFile(
+                  auth!.orgId,
+                  repoId,
+                  filters.file
+                );
+                const source = edges[0]?.source ?? "import-parse";
+                result = {
+                  repoId,
+                  data: edges.map((edge) => ({
+                    from: edge.fromPath,
+                    to: edge.toPath,
+                    type: edge.kind,
+                    symbol: edge.symbol,
+                    line: edge.line,
+                    source: edge.source
+                  })),
+                  lastUpdated: new Date(),
+                  freshness: source,
+                  stale: false
+                };
+              }
+            } catch (error) {
+              console.warn(
+                `[graph] durable dependents lookup failed: ${
+                  error instanceof Error ? error.message : String(error)
+                }`
+              );
+            }
+          }
+        }
         if (!result) {
           result = await graphQuery.queryGraph({
             repoId,
@@ -1066,6 +1105,8 @@ function formatLightningSearchResult(
     data: search.hits.map((hit) => ({
       repoId: hit.repoId,
       path: hit.path,
+      content: hit.content,
+      source: hit.source,
       size: hit.content.length,
       lastModified: new Date(),
       lastAuthor: "lightning-index",

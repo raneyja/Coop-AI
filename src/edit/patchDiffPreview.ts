@@ -1,5 +1,14 @@
-import type { PatchCardState, PatchDiffLine, PatchPreviewFile, PatchPreviewHunk } from "../chat/types";
-import { findSearchMatch } from "./patchContent";
+import type {
+  PatchCardState,
+  PatchDiffLine,
+  PatchMatchLocation,
+  PatchMatchProposal,
+  PatchPreviewFile,
+  PatchPreviewHunk,
+  PatchSharedMatchGroup,
+  PatchSharedMatchLocation
+} from "../chat/types";
+import { findAllSearchMatches, findSearchMatch, type SearchMatchHit } from "./patchContent";
 import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
 import { resolveEditablePatchTarget } from "./patchTarget";
@@ -45,8 +54,36 @@ function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<str
 }
 
 function lineIndexAtOffset(content: string, offset: number): number {
-  const prefix = content.slice(0, Math.max(0, offset));
-  return splitLines(prefix).length - 1;
+  if (offset <= 0) {
+    return 0;
+  }
+  const prefix = content.slice(0, offset);
+  const lines = splitLines(prefix);
+  return Math.max(0, lines.length - 1);
+}
+
+export function matchLocationId(index: number): string {
+  return `loc-${index}`;
+}
+
+export function parseMatchLocationIndex(locationId: string): number | undefined {
+  const match = /^loc-(\d+)$/.exec(locationId);
+  if (!match) {
+    return undefined;
+  }
+  return Number(match[1]);
+}
+
+function sharedLocationId(startLine: number, endLine: number): string {
+  return `line-${startLine}-${endLine}`;
+}
+
+function proposalId(hunkId: string, matchIndex: number): string {
+  return `${hunkId}:${matchIndex}`;
+}
+
+function buildReplaceLines(hunk: PatchHunk): PatchDiffLine[] {
+  return splitLines(hunk.replace).map((line) => ({ kind: "add" as const, text: line }));
 }
 
 function buildUnmatchedHunkPreview(hunk: PatchHunk, hunkId: string): PatchPreviewHunk {
@@ -54,27 +91,20 @@ function buildUnmatchedHunkPreview(hunk: PatchHunk, hunkId: string): PatchPrevie
   for (const line of splitLines(hunk.search)) {
     lines.push({ kind: "remove", text: line });
   }
-  for (const line of splitLines(hunk.replace)) {
-    lines.push({ kind: "add", text: line });
+  for (const line of buildReplaceLines(hunk)) {
+    lines.push(line);
   }
   return { id: hunkId, lines, matchStatus: "not_found", status: "pending" };
 }
 
-function buildMatchedHunkPreview(
+function buildLocationPreviewLines(
   content: string,
-  hunk: PatchHunk,
-  hunkId: string,
-  matchStatus: "matched" | "ambiguous"
-): PatchPreviewHunk {
-  const match = findSearchMatch(content, hunk.search);
-  if (!match.ok) {
-    return { ...buildUnmatchedHunkPreview(hunk, hunkId), matchStatus };
-  }
-
+  hit: SearchMatchHit,
+  hunk: PatchHunk
+): { lines: PatchDiffLine[]; startLine: number; endLine: number } {
   const contentLines = splitLines(content);
-  const matchedLines = splitLines(match.matched);
-  const replaceLines = splitLines(hunk.replace);
-  const startLineIdx = lineIndexAtOffset(content, match.start);
+  const matchedLines = splitLines(hit.matched);
+  const startLineIdx = lineIndexAtOffset(content, hit.start);
   const endLineIdx = startLineIdx + Math.max(matchedLines.length, 1) - 1;
   const contextStart = Math.max(0, startLineIdx - CONTEXT_LINES);
   const contextEnd = Math.min(contentLines.length - 1, endLineIdx + CONTEXT_LINES);
@@ -90,14 +120,243 @@ function buildMatchedHunkPreview(
       lineNumber: startLineIdx + i + 1
     });
   }
-  for (const line of replaceLines) {
-    lines.push({ kind: "add", text: line });
+  for (const line of buildReplaceLines(hunk)) {
+    lines.push(line);
   }
   for (let i = endLineIdx + 1; i <= contextEnd; i++) {
     lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: i + 1 });
   }
 
-  return { id: hunkId, lines, matchStatus, status: "pending" };
+  return {
+    lines,
+    startLine: startLineIdx + 1,
+    endLine: endLineIdx + 1
+  };
+}
+
+function buildMatchedHunkPreview(content: string, hunk: PatchHunk, hunkId: string): PatchPreviewHunk {
+  const match = findSearchMatch(content, hunk.search);
+  if (!match.ok) {
+    return { ...buildUnmatchedHunkPreview(hunk, hunkId), matchStatus: "not_found" };
+  }
+
+  const preview = buildLocationPreviewLines(content, match, hunk);
+  return { id: hunkId, lines: preview.lines, matchStatus: "matched", status: "pending" };
+}
+
+function buildAmbiguousHunkPreview(
+  content: string,
+  hunk: PatchHunk,
+  hunkId: string,
+  matches: SearchMatchHit[],
+  previousSelected?: ReadonlySet<string>
+): PatchPreviewHunk {
+  const matchLocations: PatchMatchLocation[] = matches.map((hit, index) => {
+    const id = matchLocationId(index);
+    const preview = buildLocationPreviewLines(content, hit, hunk);
+    return {
+      id,
+      startLine: preview.startLine,
+      endLine: preview.endLine,
+      lines: preview.lines,
+      selected: previousSelected?.has(id) ?? false
+    };
+  });
+
+  return {
+    id: hunkId,
+    lines: buildReplaceLines(hunk),
+    matchStatus: "ambiguous",
+    matchLocations,
+    status: "pending"
+  };
+}
+
+function buildPairedHunkPreview(
+  content: string,
+  hunk: PatchHunk,
+  hunkId: string,
+  hit: SearchMatchHit,
+  matchIndex: number
+): PatchPreviewHunk {
+  const preview = buildLocationPreviewLines(content, hit, hunk);
+  return {
+    id: hunkId,
+    lines: preview.lines,
+    matchStatus: "matched",
+    resolvedMatchIndices: [matchIndex],
+    status: "pending"
+  };
+}
+
+type PriorSharedSelection = {
+  locationId: string;
+  proposalId: string;
+};
+
+function locationFingerprint(preview: PatchPreviewHunk): string {
+  return (preview.matchLocations ?? [])
+    .map((location) => `${location.startLine}:${location.endLine}`)
+    .join("|");
+}
+
+/**
+ * When several hunks hit the same ambiguous places in a file (same line spans):
+ * - Equal hunk/match counts → pair hunk[i] to match[i] (one edit per place, no picker).
+ * - Otherwise → one shared location list (checkbox = place; at most one edit per place).
+ *
+ * Grouping is by preview line spans, not raw SEARCH bytes, so slight SEARCH wording
+ * differences still collapse duplicate Option 1 · L15 / Option 2 · L30 pickers.
+ */
+function coalesceAmbiguousHunksForFile(
+  content: string,
+  rawHunks: readonly PatchHunk[],
+  previews: PatchPreviewHunk[],
+  previousSharedSelections: readonly PriorSharedSelection[]
+): { hunks: PatchPreviewHunk[]; sharedMatchGroups?: PatchSharedMatchGroup[] } {
+  const ambiguousIndexes = previews
+    .map((preview, index) => ({ preview, index }))
+    .filter(({ preview }) => preview.matchStatus === "ambiguous");
+
+  if (ambiguousIndexes.length <= 1) {
+    return { hunks: previews };
+  }
+
+  const byFingerprint = new Map<string, number[]>();
+  for (const { preview, index } of ambiguousIndexes) {
+    const fingerprint = locationFingerprint(preview);
+    if (!fingerprint) {
+      continue;
+    }
+    const list = byFingerprint.get(fingerprint) ?? [];
+    list.push(index);
+    byFingerprint.set(fingerprint, list);
+  }
+
+  const nextHunks = [...previews];
+  const sharedMatchGroups: PatchSharedMatchGroup[] = [];
+  let sharedGroupCounter = 0;
+
+  for (const [, indexes] of byFingerprint) {
+    if (indexes.length <= 1) {
+      continue;
+    }
+
+    const firstIndex = indexes[0]!;
+    const firstPreview = nextHunks[firstIndex]!;
+    const matchCount = firstPreview.matchLocations?.length ?? 0;
+    if (matchCount === 0) {
+      continue;
+    }
+
+    // Resolve hits from the first hunk's SEARCH; pairing/shared indices refer to
+    // that hunk's match list (same line spans as the group fingerprint).
+    const matches = findAllSearchMatches(content, rawHunks[firstIndex]!.search);
+    if (matches.length !== matchCount) {
+      continue;
+    }
+
+    if (indexes.length === matchCount) {
+      for (let i = 0; i < indexes.length; i++) {
+        const hunkIndex = indexes[i]!;
+        // Prefer this hunk's own SEARCH hits when available at the same lines.
+        const ownMatches = findAllSearchMatches(content, rawHunks[hunkIndex]!.search);
+        const hit =
+          ownMatches.length === matchCount
+            ? ownMatches[i]!
+            : matches[i]!;
+        nextHunks[hunkIndex] = buildPairedHunkPreview(
+          content,
+          rawHunks[hunkIndex]!,
+          nextHunks[hunkIndex]!.id,
+          hit,
+          i
+        );
+      }
+      continue;
+    }
+
+    const groupId = `shared-${sharedGroupCounter}`;
+    sharedGroupCounter += 1;
+    const hunkIds = indexes.map((index) => nextHunks[index]!.id);
+    const priorByLocation = new Map(
+      previousSharedSelections
+        .filter((entry) => hunkIds.some((id) => entry.proposalId.startsWith(`${id}:`)))
+        .map((entry) => [entry.locationId, entry.proposalId] as const)
+    );
+
+    const locations: PatchSharedMatchLocation[] = matches.map((hit, matchIndex) => {
+      const startEnd = buildLocationPreviewLines(content, hit, rawHunks[firstIndex]!);
+      const locationId = sharedLocationId(startEnd.startLine, startEnd.endLine);
+      const proposals: PatchMatchProposal[] = indexes.map((hunkIndex) => {
+        const hunkId = nextHunks[hunkIndex]!.id;
+        const ownMatches = findAllSearchMatches(content, rawHunks[hunkIndex]!.search);
+        const ownHit =
+          ownMatches.length === matchCount
+            ? ownMatches[matchIndex]!
+            : hit;
+        const preview = buildLocationPreviewLines(content, ownHit, rawHunks[hunkIndex]!);
+        return {
+          id: proposalId(hunkId, matchIndex),
+          hunkId,
+          matchIndex,
+          lines: preview.lines
+        };
+      });
+
+      const priorProposal = priorByLocation.get(locationId);
+      const selectedProposalId =
+        priorProposal && proposals.some((proposal) => proposal.id === priorProposal)
+          ? priorProposal
+          : undefined;
+
+      return {
+        id: locationId,
+        startLine: startEnd.startLine,
+        endLine: startEnd.endLine,
+        proposals,
+        selectedProposalId
+      };
+    });
+
+    sharedMatchGroups.push({ id: groupId, hunkIds, locations });
+
+    for (const hunkIndex of indexes) {
+      const hunk = nextHunks[hunkIndex]!;
+      nextHunks[hunkIndex] = {
+        ...hunk,
+        matchStatus: "ambiguous",
+        matchLocations: undefined,
+        lines: buildReplaceLines(rawHunks[hunkIndex]!),
+        resolvedMatchIndices: undefined
+      };
+    }
+  }
+
+  return {
+    hunks: nextHunks,
+    sharedMatchGroups: sharedMatchGroups.length > 0 ? sharedMatchGroups : undefined
+  };
+}
+
+function collectPriorSharedSelections(
+  previousFiles?: readonly PatchPreviewFile[]
+): Map<string, PriorSharedSelection[]> {
+  const byPath = new Map<string, PriorSharedSelection[]>();
+  for (const file of previousFiles ?? []) {
+    const selected: PriorSharedSelection[] = [];
+    for (const group of file.sharedMatchGroups ?? []) {
+      for (const location of group.locations) {
+        if (location.selectedProposalId) {
+          selected.push({ locationId: location.id, proposalId: location.selectedProposalId });
+        }
+      }
+    }
+    if (selected.length > 0) {
+      byPath.set(file.relativePath, selected);
+    }
+  }
+  return byPath;
 }
 
 export function buildPatchCardState(
@@ -114,10 +373,19 @@ export function buildPatchCardState(
   }
 ): PatchCardState {
   const previousStatusById = new Map<string, NonNullable<PatchPreviewHunk["status"]>>();
+  const previousSelectedByHunk = new Map<string, Set<string>>();
+  const previousSharedByPath = collectPriorSharedSelections(options.previousFiles);
+
   for (const file of options.previousFiles ?? []) {
     for (const hunk of file.hunks) {
       if (hunk.status) {
         previousStatusById.set(hunk.id, hunk.status);
+      }
+      if (hunk.matchLocations?.length) {
+        previousSelectedByHunk.set(
+          hunk.id,
+          new Set(hunk.matchLocations.filter((loc) => loc.selected).map((loc) => loc.id))
+        );
       }
     }
   }
@@ -127,29 +395,46 @@ export function buildPatchCardState(
 
   for (const filePatch of patches.files) {
     const content = readWorkspaceFile(filePatch.relativePath, options.fileContents);
-    const hunks: PatchPreviewHunk[] = [];
+    const rawPreviews: PatchPreviewHunk[] = [];
 
     for (const hunk of filePatch.hunks) {
       const hunkId = `hunk-${hunkCounter}`;
       hunkCounter += 1;
-      const match = findSearchMatch(content, hunk.search);
+      const allMatches = findAllSearchMatches(content, hunk.search);
       let preview: PatchPreviewHunk;
-      if (!match.ok) {
-        preview = {
-          ...buildUnmatchedHunkPreview(hunk, hunkId),
-          matchStatus: match.reason === "ambiguous" ? "ambiguous" : "not_found"
-        };
+      if (allMatches.length === 0) {
+        preview = buildUnmatchedHunkPreview(hunk, hunkId);
+      } else if (allMatches.length === 1) {
+        preview = buildMatchedHunkPreview(content, hunk, hunkId);
       } else {
-        preview = buildMatchedHunkPreview(content, hunk, hunkId, "matched");
+        preview = buildAmbiguousHunkPreview(
+          content,
+          hunk,
+          hunkId,
+          allMatches,
+          previousSelectedByHunk.get(hunkId)
+        );
       }
-      const prior = previousStatusById.get(hunkId);
-      if (prior) {
-        preview = { ...preview, status: prior };
-      }
-      hunks.push(preview);
+      rawPreviews.push(preview);
     }
 
-    files.push({ relativePath: filePatch.relativePath, hunks });
+    const coalesced = coalesceAmbiguousHunksForFile(
+      content,
+      filePatch.hunks,
+      rawPreviews,
+      previousSharedByPath.get(filePatch.relativePath) ?? []
+    );
+
+    const hunks = coalesced.hunks.map((preview) => {
+      const prior = previousStatusById.get(preview.id);
+      return prior ? { ...preview, status: prior } : preview;
+    });
+
+    files.push({
+      relativePath: filePatch.relativePath,
+      hunks,
+      sharedMatchGroups: coalesced.sharedMatchGroups
+    });
   }
 
   return {
@@ -178,6 +463,143 @@ export function setHunkStatusOnCard(
   };
 }
 
+export function setHunkMatchLocationsOnCard(
+  card: PatchCardState,
+  hunkId: string,
+  locationIds: readonly string[]
+): PatchCardState {
+  const selected = new Set(locationIds);
+  return {
+    ...card,
+    error: undefined,
+    files: card.files.map((file) => ({
+      ...file,
+      hunks: file.hunks.map((hunk) => {
+        if (hunk.id !== hunkId || !hunk.matchLocations) {
+          return hunk;
+        }
+        return {
+          ...hunk,
+          matchLocations: hunk.matchLocations.map((loc) => ({
+            ...loc,
+            selected: selected.has(loc.id)
+          }))
+        };
+      })
+    }))
+  };
+}
+
+export function setSharedMatchProposalOnCard(
+  card: PatchCardState,
+  relativePath: string,
+  groupId: string,
+  locationId: string,
+  proposalIdValue: string | null | undefined
+): PatchCardState {
+  return {
+    ...card,
+    error: undefined,
+    files: card.files.map((file) => {
+      if (file.relativePath !== relativePath || !file.sharedMatchGroups) {
+        return file;
+      }
+      return {
+        ...file,
+        sharedMatchGroups: file.sharedMatchGroups.map((group) => {
+          if (group.id !== groupId) {
+            return group;
+          }
+          return {
+            ...group,
+            locations: group.locations.map((location) => {
+              if (location.id !== locationId) {
+                return location;
+              }
+              const nextId = proposalIdValue || undefined;
+              if (nextId && !location.proposals.some((proposal) => proposal.id === nextId)) {
+                return location;
+              }
+              return { ...location, selectedProposalId: nextId };
+            })
+          };
+        })
+      };
+    })
+  };
+}
+
+export function selectedMatchIndicesForHunk(hunk: PatchPreviewHunk): number[] {
+  if (hunk.resolvedMatchIndices?.length) {
+    return [...hunk.resolvedMatchIndices];
+  }
+  if (!hunk.matchLocations?.length) {
+    return [];
+  }
+  return hunk.matchLocations
+    .filter((loc) => loc.selected)
+    .map((loc) => parseMatchLocationIndex(loc.id))
+    .filter((index): index is number => index !== undefined);
+}
+
+/** Match indices implied by shared location proposals for a given hunk. */
+export function sharedMatchIndicesForHunk(
+  file: PatchPreviewFile,
+  hunkId: string
+): number[] | undefined {
+  const groups = file.sharedMatchGroups?.filter((group) => group.hunkIds.includes(hunkId));
+  if (!groups?.length) {
+    return undefined;
+  }
+  const indices: number[] = [];
+  for (const group of groups) {
+    for (const location of group.locations) {
+      const proposal = location.proposals.find((entry) => entry.id === location.selectedProposalId);
+      if (proposal?.hunkId === hunkId) {
+        indices.push(proposal.matchIndex);
+      }
+    }
+  }
+  return indices;
+}
+
+export function hunkNeedsMatchSelection(hunk: PatchPreviewHunk, file?: PatchPreviewFile): boolean {
+  if ((hunk.status ?? "pending") !== "pending") {
+    return false;
+  }
+  if (hunk.resolvedMatchIndices?.length) {
+    return false;
+  }
+  if (file?.sharedMatchGroups?.some((group) => group.hunkIds.includes(hunk.id))) {
+    const indices = sharedMatchIndicesForHunk(file, hunk.id);
+    return !indices || indices.length === 0;
+  }
+  return hunk.matchStatus === "ambiguous";
+}
+
+export function hunkReadyToApply(hunk: PatchPreviewHunk, file?: PatchPreviewFile): boolean {
+  if ((hunk.status ?? "pending") !== "pending") {
+    return false;
+  }
+  if (hunk.matchStatus === "not_found") {
+    return false;
+  }
+  if (hunk.resolvedMatchIndices?.length) {
+    return true;
+  }
+  if (hunk.matchStatus === "matched") {
+    return true;
+  }
+  if (file?.sharedMatchGroups?.some((group) => group.hunkIds.includes(hunk.id))) {
+    const indices = sharedMatchIndicesForHunk(file, hunk.id);
+    return Boolean(indices && indices.length > 0);
+  }
+  if (hunk.matchStatus === "ambiguous") {
+    return selectedMatchIndicesForHunk(hunk).length > 0;
+  }
+  return false;
+}
+
 export function pendingHunkIds(card: PatchCardState): string[] {
   return card.files.flatMap((file) =>
     file.hunks.filter((hunk) => (hunk.status ?? "pending") === "pending").map((hunk) => hunk.id)
@@ -199,4 +621,27 @@ export function deriveCardStatusFromHunks(card: PatchCardState): PatchCardState[
     return "applied";
   }
   return "pending";
+}
+
+export function cardHasAmbiguousPending(card: PatchCardState): boolean {
+  for (const file of card.files) {
+    for (const group of file.sharedMatchGroups ?? []) {
+      const pendingMembers = group.hunkIds.some((hunkId) => {
+        const hunk = file.hunks.find((entry) => entry.id === hunkId);
+        return (hunk?.status ?? "pending") === "pending";
+      });
+      if (pendingMembers) {
+        return true;
+      }
+    }
+    for (const hunk of file.hunks) {
+      if ((hunk.status ?? "pending") !== "pending") {
+        continue;
+      }
+      if (hunk.matchStatus === "ambiguous" && (hunk.matchLocations?.length ?? 0) > 1) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

@@ -3,14 +3,23 @@ import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { CodeHostProvider } from "../../api/codeHosts/types";
 import { coordinatesFromRepoId } from "../../api/codeHosts/types";
-import {
-  attachLocalFilesToData,
-  hasLocalDiskContext,
-  readLocalWorkspaceFiles
-} from "../../context/localFileContext";
-import { resolveLocalAbsolutePath } from "../../context/localFileResolver";
+import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
+
+/** Soft gather is silent — partial evidence only; never a user-facing banner message. */
+function softGatherPartialBlastResult(
+  context: FeatureExecutionContext,
+  params: FeatureExecutionContext["request"]["params"],
+  directOnly: boolean
+) {
+  return contextResult(
+    context,
+    placeholderBlastRadiusData(params, directOnly),
+    undefined,
+    false
+  );
+}
 
 export async function blastRadius(context: FeatureExecutionContext) {
   const params = context.request.params;
@@ -32,10 +41,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
         true
       );
     }
-    const local = await tryLocalBlastRadiusFallback(context, provider);
-    if (local) {
-      return local;
-    }
+    // Zero-Clone: never fall back to local workspace disk.
     return unavailableResult(
       context,
       `${codeHostLabel(provider)} is offline and no cached blast radius data is available.`
@@ -67,15 +73,37 @@ export async function blastRadius(context: FeatureExecutionContext) {
   }
 
   if (engine && codeHost && file) {
+    // Soft gather only (responseDeadline.ts): cap analyzeImpact to remaining budget,
+    // then return partial evidence so synthesis still runs — never hang / never timeout bubble.
+    const gatherStartedAt =
+      typeof params.gatherStartedAt === "number" && Number.isFinite(params.gatherStartedAt)
+        ? params.gatherStartedAt
+        : Date.now();
+    const budgetMs = remainingContextGatherBudgetMs(gatherStartedAt);
+    if (budgetMs <= 0) {
+      return softGatherPartialBlastResult(context, params, directOnly);
+    }
+
     try {
-      const report = await engine.analyzeImpact({
-        provider: codeHost.provider,
-        owner: codeHost.owner,
-        repo: codeHost.repo,
-        file,
-        branch: params.branch,
-        includeTransitive: !directOnly
-      });
+      const report = await Promise.race([
+        engine.analyzeImpact({
+          provider: codeHost.provider,
+          owner: codeHost.owner,
+          repo: codeHost.repo,
+          file,
+          branch: params.branch,
+          includeTransitive: !directOnly,
+          gatherStartedAt,
+          askText: context.request.intent?.context?.queryText
+        }),
+        new Promise<undefined>((resolve) => {
+          setTimeout(() => resolve(undefined), budgetMs);
+        })
+      ]);
+
+      if (!report) {
+        return softGatherPartialBlastResult(context, params, directOnly);
+      }
 
       const data = {
         file,
@@ -197,37 +225,3 @@ function codeHostLabel(provider: CodeHostProvider): string {
   return "GitHub";
 }
 
-async function tryLocalBlastRadiusFallback(context: FeatureExecutionContext, provider: CodeHostProvider) {
-  const params = context.request.params;
-  if (!hasLocalDiskContext(params) || !params.file) {
-    return undefined;
-  }
-
-  const local = await readLocalWorkspaceFiles({
-    file: params.file,
-    fileSource: params.fileSource,
-    openEditors: context.request.intent.context.openEditors,
-    lines: params.lines,
-    resolveAbsolutePath: resolveLocalAbsolutePath
-  });
-  if (!local) {
-    return undefined;
-  }
-
-  return contextResult(
-    context,
-    attachLocalFilesToData(
-      {
-        file: params.file,
-        directDependents: [],
-        transitiveDependents: [],
-        warnings: [`${codeHostLabel(provider)} offline — local workspace only.`],
-        completeness: "minimal",
-        includeTransitive: false
-      },
-      local
-    ),
-    `${codeHostLabel(provider)} offline — analyzing from local workspace.`,
-    true
-  );
-}

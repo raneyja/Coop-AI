@@ -18,9 +18,8 @@ import {
   sourceCitationSlug
 } from "../../prompts/sourceCitationRegistry";
 import {
-  findRepoPathNearFence,
   isOrdinaryLanguageTag,
-  languageTagMatchesPath,
+  resolveCitePathForLanguageFence,
   tryParseCitationLocator
 } from "./codeCitationLocator";
 
@@ -162,19 +161,18 @@ function tryParseCodeFence(
     };
   }
 
-  // Model dumped ```typescript of repo code — recover cite chrome from nearby path or active file.
+  // Model dumped ```typescript / ```javascript of repo code — recover cite chrome.
   if (isOrdinaryLanguageTag(infoString) && body.join("\n").trim()) {
-    const nearbyPath = findRepoPathNearFence(lines, startIndex);
-    if (nearbyPath) {
+    const citePath = resolveCitePathForLanguageFence({
+      language: infoString,
+      code: body.join("\n"),
+      lines,
+      fenceStartIndex: startIndex,
+      activeFilePath: options?.activeFilePath
+    });
+    if (citePath) {
       return {
-        block: citationBlockFromLocator({ path: nearbyPath }, body.join("\n")),
-        nextIndex
-      };
-    }
-    const activePath = options?.activeFilePath?.trim();
-    if (activePath && languageTagMatchesPath(infoString, activePath)) {
-      return {
-        block: citationBlockFromLocator({ path: activePath }, body.join("\n")),
+        block: citationBlockFromLocator({ path: citePath }, body.join("\n")),
         nextIndex
       };
     }

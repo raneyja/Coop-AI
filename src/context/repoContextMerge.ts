@@ -6,6 +6,7 @@ import {
 } from "./fileChipIdentity";
 import { isLocalDiskFileSource } from "./localFileContext";
 import { isOsAbsoluteDiskPath } from "./outsideWorkspaceFile";
+import { sameRepoCoords } from "../workspace/repoEvidenceIsolation";
 
 const DISK_LINK_WARNING = "Only files on disk can be linked to GitHub";
 
@@ -42,7 +43,7 @@ function applyIncomingFileMeta(merged: RepoContext, incoming: RepoContext): void
  */
 export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): RepoContext {
   // Explicit explorer "Use repo" clears any prior file chip — including Downloads / Cmd+O.
-  // (normalize's absolute-path early-exit would otherwise re-force scope:"file".)
+  // (normalize's absolute-path early-exit would otherwise re-force scope:"file").
   if (isExplicitRepoScope(incoming) && !incoming.file?.trim()) {
     const cleared: RepoContext = {
       ...existing,
@@ -77,9 +78,9 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
   };
 
   // Sticky Use repo: ignore passive editor/Settings snaps so the picker selection stays.
-  // Only another explicit Use-repo (handled above) or a Coop remote / outside-workspace
-  // file pick may leave this scope. Never take incoming owner/repo — those are often
-  // stale Settings prefs from the previously used repository.
+  // Only another explicit Use-repo (handled above), an in-repo Coop remote pick, or an
+  // outside-workspace file pick may leave this scope. Never take incoming owner/repo —
+  // those are often stale Settings prefs from the previously used repository.
   if (isExplicitRepoScope(existing) && !isExplicitRepoScope(incoming)) {
     const incomingFile = incoming.file?.trim();
     if (!incomingFile) {
@@ -88,7 +89,15 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     const outside =
       isOsAbsoluteDiskPath(incomingFile) || incoming.fileSource === "external";
     const coopFilePick = incoming.fileSource === "remote";
-    if (!outside && !coopFilePick) {
+    const foreignRemotePick =
+      coopFilePick &&
+      Boolean(incoming.owner?.trim() && incoming.repo?.trim()) &&
+      !sameRepoCoords(
+        { owner: incoming.owner, repo: incoming.repo },
+        { owner: existing.owner, repo: existing.repo }
+      );
+    if (foreignRemotePick || (!outside && !coopFilePick)) {
+      // Workspace/git snaps and foreign-repo remote tabs must not become Gaps/chat evidence.
       return stripStaleContextWarning(
         normalizeRepoContext({
           ...existing,
@@ -102,6 +111,11 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
         })
       );
     }
+    // In-repo remote pick or Downloads — keep sticky owner/repo; allow file below.
+    merged.owner = existing.owner;
+    merged.repo = existing.repo;
+    merged.branch = existing.branch;
+    merged.provider = existing.provider ?? merged.provider;
   }
 
   // Active editor / Coop file pick wins over explorer "Use repo" when allowed above.

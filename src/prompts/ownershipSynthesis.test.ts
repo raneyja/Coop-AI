@@ -133,6 +133,14 @@ test("ownership synthesis omits outreach draft and includes pathEvolution guidan
   assert.ok(!prompt.includes("Suggested outreach draft"));
 });
 
+test("ownership synthesis requires on-call escalation or explicit admin gap", () => {
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Never end on \"no backup\""));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Never invent people"));
+  const prompt = buildOwnershipSynthesisUserPrompt({ report, file: report.path });
+  assert.ok(prompt.includes("Required on-call shape"));
+  assert.ok(prompt.includes("Do not invent contacts"));
+});
+
 test("ownership synthesis cites Slack presence when discussions are empty", () => {
   const reportWithPresence: OwnershipReport = {
     ...report,

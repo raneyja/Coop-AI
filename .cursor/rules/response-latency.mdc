@@ -46,6 +46,7 @@ Does **not** apply to:
 | Polling jobs for minutes before answering | Poll within soft gather budget, then answer with partial/cached context |
 | Aborting mid-stream because wall clock hit 15s | User Stop only; finish in-flight answers |
 | Silent hang after Stop | Cancel cleanly; do not show a latency timeout message |
+| Banners / copy about “soft gather budget” or “best-effort context” from latency | Stay silent; answer with partial evidence |
 
 ## Self-check
 

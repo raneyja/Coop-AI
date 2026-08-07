@@ -95,6 +95,18 @@ test("shouldFetchJiraContext includes knowledge-gaps quick action", () => {
   assert.equal(shouldFetchJiraContext(request), true);
 });
 
+test("shouldFetchJiraContext includes incident-shaped chat without jira keyword", () => {
+  const request = {
+    type: "chat_context",
+    params: {},
+    intent: {
+      context: { queryText: "webhook failures and retries on board sync last week" }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchJiraContext(request), true);
+  assert.equal(wantsJiraContext("webhook failures and retries on board sync last week"), false);
+});
+
 const total = passed + failed;
 console.log(`\njiraContext: ${passed}/${total} tests passed`);
 if (failed > 0) {

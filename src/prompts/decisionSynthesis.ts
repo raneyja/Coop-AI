@@ -44,6 +44,8 @@ Synthesize a clear narrative explaining:
 
 The primary trace target is the file in ## Task and the decision timeline in ## Evidence bundle — not @-attached paths unless listed as in-scope in ## @ attachments.
 Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ attachments.
+Never retarget the narrative to a different repo path (migration, sibling model, drive-by file in a multi-file PR). Unrelated paths may appear only as clearly labeled secondary context.
+If warnings say history for the target file is thin, truncated, or missing, say so honestly for that file — do not substitute another popular file's story.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}
@@ -52,7 +54,7 @@ Follow-up questions use the same required section structure; omit sections the u
 For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
 When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
 When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking, focusCommit), use them per the Evidence enrichment section in the user prompt.
-For full-file traces, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as birth/background unless the user selected specific lines.`;
+When a user focus ask is present, prefer commits/PRs that match that ask and the open file over a generic recent multi-file change. Otherwise, for full-file traces without a specific ask, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as birth/background unless the user selected specific lines.`;
 
 export type DecisionSynthesisInput = {
   timeline: DecisionTimeline;
@@ -92,6 +94,9 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   if (input.owner && input.repo) {
     lines.push(`- Repository: ${input.owner}/${input.repo}`);
   }
+  lines.push(
+    `- Grounding rule: Summary / Technical decision / Your question must be about \`${file}\` (or commits/PRs that touch it). Other paths in multi-file PRs are secondary only.`
+  );
   appendMentionScopeSection(lines, input);
   lines.push("");
 
@@ -122,13 +127,21 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     appendFollowUpInstructions(lines, input.userBubble ?? userQuestion);
   }
   lines.push(
-    "Synthesize the decision for the primary trace target only. Use the timeline evidence for that file — do not rewrite the narrative around out-of-scope @ attachments."
+    "Synthesize the decision for the primary trace target only. Use the timeline evidence for that file — do not rewrite the narrative around out-of-scope @ attachments or unrelated paths from a multi-file commit/PR."
   );
   if (!input.isFollowUp) {
     lines.push(
       "Produce the full trace narrative (Summary, Business context, Technical decision, Domain experts, etc.) for the primary file — do not collapse the answer to only alternatives or trade-offs."
     );
   }
+  if (input.userFocus?.trim()) {
+    lines.push(
+      "Weight commits/PRs that match the user focus and primary file over weakly related multi-file PRs labeled secondary in warnings or rationale ranking."
+    );
+  }
+  lines.push(
+    "If the bundle warns that history for this file is thin/truncated/missing, say that plainly for this file — never substitute a different migration or model file as the main subject."
+  );
   lines.push(
     "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants; say unknown when the bundle is thin."
   );

@@ -3,20 +3,14 @@ import { BlogIndex } from "@/components/BlogIndex";
 import { BlogQuoteHighlight } from "@/components/BlogQuoteHighlight";
 import { CTASection } from "@/components/CTASection";
 import { getAllPosts, getFeaturedPosts, getHighlightedQuote } from "@/lib/blog";
+import { buildPageMetadata } from "@/lib/pageMetadata";
+import { siteConfig } from "@/lib/site.config";
 
-export const metadata: Metadata = {
-  title: "Latest thinking",
-  description:
-    "Latest thinking from CoopAI on code intelligence, context aggregation, and SDLC tooling.",
-  openGraph: {
-    description:
-      "Read CoopAI's latest perspectives on team code intelligence and organizational context."
-  },
-  twitter: {
-    description:
-      "Read CoopAI's latest perspectives on team code intelligence and organizational context."
-  }
-};
+export const metadata: Metadata = buildPageMetadata(
+  "/blog",
+  siteConfig.seo.pages.blog.title,
+  siteConfig.seo.pages.blog.description
+);
 
 export default function BlogPage() {
   const posts = getAllPosts();

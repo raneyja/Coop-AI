@@ -1,9 +1,15 @@
 import React from "react";
+import type { IntegrationSourceId } from "./components/IntegrationSourceBrand";
 
 export type EvidenceConnectionBrief = {
   title: string;
   sourceLabel?: string;
   sectionDomId?: string;
+  provider?: IntegrationSourceId;
+  destination?: string;
+  subtitle?: string;
+  /** False for empty/error stubs that should not appear in the collapsed inventory. */
+  inventory?: boolean;
 };
 
 const COLLAPSIBLE_DISPLAY_NAME = "IntegrationResultCollapsible";
@@ -12,6 +18,18 @@ export function extractConnectionBriefs(children: React.ReactNode): EvidenceConn
   const briefs: EvidenceConnectionBrief[] = [];
   collectConnectionBriefs(children, briefs);
   return briefs;
+}
+
+/** Source evidence rows shown in the collapsed connection preview (excludes narrative-only sections). */
+export function extractSourceInventoryBriefs(children: React.ReactNode): EvidenceConnectionBrief[] {
+  return extractConnectionBriefs(children).filter(isSourceInventoryBrief);
+}
+
+export function isSourceInventoryBrief(brief: EvidenceConnectionBrief): boolean {
+  if (brief.inventory === false) {
+    return false;
+  }
+  return Boolean(brief.provider || brief.sourceLabel);
 }
 
 function isCollapsibleElement(child: React.ReactElement): boolean {
@@ -30,12 +48,20 @@ function collectConnectionBriefs(node: React.ReactNode, briefs: EvidenceConnecti
         title?: string;
         sourceLabel?: string;
         sectionDomId?: string;
+        provider?: IntegrationSourceId;
+        destination?: string;
+        subtitle?: string;
+        inventory?: boolean;
       };
       if (props.title?.trim()) {
         briefs.push({
           title: props.title.trim(),
           sourceLabel: props.sourceLabel?.trim() || undefined,
-          sectionDomId: props.sectionDomId?.trim() || undefined
+          sectionDomId: props.sectionDomId?.trim() || undefined,
+          provider: props.provider,
+          destination: props.destination?.trim() || undefined,
+          subtitle: props.subtitle?.trim() || undefined,
+          inventory: props.inventory
         });
       }
       return;
@@ -55,7 +81,7 @@ export function resolveConnectionBrief(
     return briefSummary;
   }
 
-  const extracted = extractConnectionBriefs(children);
+  const extracted = extractSourceInventoryBriefs(children);
   return extracted.find((brief) => brief.sourceLabel) ?? extracted[0];
 }
 

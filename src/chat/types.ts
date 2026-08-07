@@ -72,6 +72,22 @@ export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
 
 export type ComposerMode = "ask" | "edit";
 
+/** Chip on a clarifying assistant turn (plain-chat → quick-action suggest). */
+export type ChatSuggestChip = {
+  kind: "quick-action" | "plain";
+  /** QuickActionId when kind is quick-action. */
+  actionId?: string;
+  label: string;
+};
+
+export type ChatSuggestPayload = {
+  /** Original user focus text to pass into the chosen pipeline. */
+  focus: string;
+  chips: ChatSuggestChip[];
+  /** True after the user picks a chip or sends a new message. */
+  resolved?: boolean;
+};
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -81,6 +97,8 @@ export type ChatMessage = {
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
   relatedArtifactId?: string;
+  /** Clarifying suggest chips under an assistant message. */
+  suggest?: ChatSuggestPayload;
 };
 
 /** Serializable evidence card stored with chat thread history. */
@@ -112,10 +130,57 @@ export type PatchDiffLine = {
 
 export type PatchPreviewHunkStatus = "pending" | "applied" | "rejected";
 
+/** One SEARCH hit when the same block matches multiple places in a file. */
+export type PatchMatchLocation = {
+  id: string;
+  /** 1-based start line in the current file. */
+  startLine: number;
+  /** 1-based end line (inclusive) of the SEARCH match. */
+  endLine: number;
+  /** Context + remove/add lines for this location. */
+  lines: PatchDiffLine[];
+  /** User chose this location for Apply. */
+  selected?: boolean;
+};
+
+/** Competing edit that could apply at a shared file location. */
+export type PatchMatchProposal = {
+  id: string;
+  hunkId: string;
+  /** Index into findAllSearchMatches for this SEARCH. */
+  matchIndex: number;
+  lines: PatchDiffLine[];
+};
+
+/**
+ * Unique place in a file when several patch hunks share the same ambiguous SEARCH.
+ * At most one proposal may be selected per location.
+ */
+export type PatchSharedMatchLocation = {
+  id: string;
+  startLine: number;
+  endLine: number;
+  proposals: PatchMatchProposal[];
+  selectedProposalId?: string;
+};
+
+export type PatchSharedMatchGroup = {
+  id: string;
+  hunkIds: string[];
+  locations: PatchSharedMatchLocation[];
+};
+
 export type PatchPreviewHunk = {
   id: string;
   lines: PatchDiffLine[];
   matchStatus: "matched" | "not_found" | "ambiguous";
+  /** Present when matchStatus is ambiguous — user picks one or more. */
+  matchLocations?: PatchMatchLocation[];
+  /**
+   * When SEARCH is still ambiguous in the file but this hunk was paired to
+   * specific match index(es). Apply must use these indices.
+   */
+  resolvedMatchIndices?: number[];
   /** Per-edit review state — defaults to pending when omitted. */
   status?: PatchPreviewHunkStatus;
 };
@@ -123,6 +188,11 @@ export type PatchPreviewHunk = {
 export type PatchPreviewFile = {
   relativePath: string;
   hunks: PatchPreviewHunk[];
+  /**
+   * When multiple hunks share one ambiguous SEARCH and cannot be 1:1 paired,
+   * locations are listed once here (checkbox = file place; proposal = which edit).
+   */
+  sharedMatchGroups?: PatchSharedMatchGroup[];
 };
 
 export type PatchCardStatus = "idle" | "pending" | "applied" | "failed" | "undone" | "rejected";
@@ -371,6 +441,10 @@ export type WebviewInbound =
         targetFile?: string;
       };
     }
+  | {
+      type: "chat:suggest-resolve";
+      payload: { choice: "plain" } | { choice: "action"; actionId: string };
+    }
   | { type: "mention:search"; payload: { pattern: string } }
   | { type: "collections:list-request" }
   | { type: "prompts:list-request" }
@@ -505,15 +579,46 @@ export type WebviewInbound =
   | { type: "agents:open" }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
-  | { type: "patch:apply"; payload?: { messageTimestamp?: number } }
+  | {
+      type: "patch:apply";
+      payload?: {
+        messageTimestamp?: number;
+        /** Selected match location ids per ambiguous hunk (`hunkId` → location ids). */
+        matchSelections?: Record<string, string[]>;
+      };
+    }
   | { type: "patch:reject"; payload?: { messageTimestamp?: number } }
   | {
       type: "patch:apply-hunk";
-      payload: { messageTimestamp?: number; hunkId: string };
+      payload: {
+        messageTimestamp?: number;
+        hunkId: string;
+        /** Required when that hunk's SEARCH matches multiple places. */
+        matchLocationIds?: string[];
+      };
     }
   | {
       type: "patch:reject-hunk";
       payload: { messageTimestamp?: number; hunkId: string };
+    }
+  | {
+      type: "patch:set-match-locations";
+      payload: {
+        messageTimestamp?: number;
+        hunkId: string;
+        locationIds: string[];
+      };
+    }
+  | {
+      type: "patch:set-shared-match-proposal";
+      payload: {
+        messageTimestamp?: number;
+        relativePath: string;
+        groupId: string;
+        locationId: string;
+        /** Proposal id to select, or null/empty to clear. */
+        proposalId?: string | null;
+      };
     }
   | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
   | { type: "patch:open-file"; payload: { path: string } }
@@ -564,6 +669,10 @@ export type WebviewOutbound =
       };
     }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
+  | {
+      type: "chat:cancelled";
+      payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
+    }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
   | {

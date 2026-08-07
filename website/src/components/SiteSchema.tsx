@@ -1,6 +1,12 @@
-import { siteConfig } from "@/lib/site.config";
+import { marketplaceHref, siteConfig } from "@/lib/site.config";
 
 export function SiteSchema() {
+  const marketplaceUrl = marketplaceHref();
+  const sameAs = [
+    siteConfig.links.github,
+    ...(marketplaceUrl ? [marketplaceUrl] : [])
+  ];
+
   const schema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -11,7 +17,8 @@ export function SiteSchema() {
         url: siteConfig.url,
         logo: `${siteConfig.url}/coop-wordmark.png`,
         email: siteConfig.contactEmail,
-        description: siteConfig.seo.defaultDescription
+        description: siteConfig.seo.defaultDescription,
+        sameAs
       },
       {
         "@type": "WebSite",
@@ -30,6 +37,7 @@ export function SiteSchema() {
         operatingSystem: "VS Code",
         description: siteConfig.description,
         url: siteConfig.url,
+        ...(marketplaceUrl ? { downloadUrl: marketplaceUrl } : {}),
         offers: {
           "@type": "Offer",
           price: "0",

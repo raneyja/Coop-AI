@@ -20,6 +20,16 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
+/** Extra async layers (tool activity wrappers) need a few more turns of the queue. */
+async function flushUntil(predicate: () => boolean, maxTurns = 20): Promise<void> {
+  for (let i = 0; i < maxTurns; i += 1) {
+    if (predicate()) {
+      return;
+    }
+    await flushMicrotasks();
+  }
+}
+
 test("enrichChatContextWithIntegrations runs staged parallel integration batches", async () => {
   const localFileResolverPath = require.resolve("./localFileResolver");
   const originalLocalFileResolverCache = require.cache[localFileResolverPath];
@@ -137,7 +147,7 @@ test("enrichChatContextWithIntegrations runs staged parallel integration batches
     confluenceGate.resolve({
       pages: [{ title: "Confluence Architecture", excerpt: "COOP-12 acceptance criteria" }]
     });
-    await flushMicrotasks();
+    await flushUntil(() => started.includes("jira") && started.includes("google-docs"));
     assert.equal(started.includes("jira"), true);
     assert.equal(started.includes("google-docs"), true);
     assert.equal(started.includes("slack"), false);
@@ -149,7 +159,7 @@ test("enrichChatContextWithIntegrations runs staged parallel integration batches
     assert.equal(started.includes("teams"), false);
 
     jiraGate.resolve({ issues: [{ key: "COOP-12" }] });
-    await flushMicrotasks();
+    await flushUntil(() => started.includes("slack") && started.includes("teams"));
     assert.equal(started.includes("slack"), true);
     assert.equal(started.includes("teams"), true);
 

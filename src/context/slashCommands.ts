@@ -5,7 +5,8 @@ import { combineSlashFocus } from "./userFocusQuery";
 export type SlashCommandTarget =
   | { kind: "action"; actionId: QuickActionId }
   | { kind: "integration"; provider: IntegrationChatProvider }
-  | { kind: "composer-mode"; mode: Exclude<ComposerMode, "ask"> };
+  | { kind: "composer-mode"; mode: Exclude<ComposerMode, "ask"> }
+  | { kind: "compare" };
 
 export type SlashCommandDef = {
   /** Canonical command token, without the leading slash. */
@@ -119,6 +120,13 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     target: { kind: "composer-mode", mode: "edit" },
     label: "Edit code",
     description: "Generate search-replace patches for code changes"
+  },
+  {
+    name: "compare",
+    aliases: ["diff-repos", "cross-repo"],
+    target: { kind: "compare" },
+    label: "Compare repos",
+    description: "Compare two indexed repos in one answer"
   },
   {
     name: "slack",

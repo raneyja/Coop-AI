@@ -254,6 +254,24 @@ test("blast radius summary handles no dependents with unverified messaging", () 
   );
 });
 
+test("blast radius summary is strong for verified import-parse callers", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "src/config/responseDeadline.ts",
+    directDependents: [
+      "src/chat/CoopChatSession.ts",
+      "src/jobs/JobApiClient.ts",
+      "src/api/CoopBackendClient.ts"
+    ],
+    graphMeta: { edgeCount: 2907, source: "import-parse", lightningEnabled: false },
+    warnings: []
+  };
+
+  const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts");
+  assert.equal(summary.quality, "strong");
+  assert.match(summary.qualityReason, /import-parse/i);
+  assert.match(summary.primaryFinding ?? "", /3 code dependent/i);
+});
+
 test("integration summary marks empty result sets as weak", () => {
   const summary = summarizeIntegrationSearch("slack", { messages: [] });
   assert.equal(summary.quality, "weak");

@@ -117,6 +117,8 @@ export function IntegrationResultCollapsible({
   link,
   linkLabel,
   hideHeader = false,
+  /** When false, omit from the collapsed source-inventory preview (empty/error stubs). */
+  inventory = true,
   children
 }: {
   title: string;
@@ -131,6 +133,7 @@ export function IntegrationResultCollapsible({
   link?: string;
   linkLabel?: string;
   hideHeader?: boolean;
+  inventory?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const { onOpenLink } = useChatLinks();

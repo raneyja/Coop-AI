@@ -1,4 +1,5 @@
 import type { ContextFetchResult } from "./requestBatcher";
+import { mayReadLocalRepoDiskForIntelligence } from "../workspace/zeroClonePolicy";
 import {
   attachLocalFilesToData,
   localFilesFromContextData,
@@ -9,7 +10,8 @@ export function applyLocalFallbackToResult(
   result: ContextFetchResult,
   local: LocalFileContextPayload | undefined
 ): ContextFetchResult {
-  if (!local) {
+  // Zero-Clone: never merge workspace/disk bodies into gather results.
+  if (!local || !mayReadLocalRepoDiskForIntelligence()) {
     return result;
   }
 

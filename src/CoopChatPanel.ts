@@ -44,12 +44,22 @@ export class CoopChatPanel {
       }
     );
 
-    const instance = new CoopChatPanel(panel, extensionUri, extensionContext, api, services, sessionId);
+    const instance = new CoopChatPanel(
+      panel,
+      extensionUri,
+      extensionContext,
+      api,
+      services,
+      sessionId,
+      { startBlank: options?.moveToNewWindow === true }
+    );
     CoopChatPanel.panels.set(sessionId, instance);
     panel.reveal(vscode.ViewColumn.Active, true);
 
     if (options?.moveToNewWindow) {
-      void CoopChatPanel.moveToNewWindow(panel);
+      void CoopChatPanel.moveToNewWindow(panel).then(() => {
+        instance.session.beginFreshWindowContext();
+      });
     }
 
     return instance;
@@ -95,6 +105,7 @@ export class CoopChatPanel {
 
   private readonly session: CoopChatSession;
   private readonly sessionId: string;
+  private readonly startBlank: boolean;
 
   private constructor(
     public readonly panel: vscode.WebviewPanel,
@@ -102,14 +113,17 @@ export class CoopChatPanel {
     extensionContext: vscode.ExtensionContext,
     api: SecureApiClient,
     services: CoopRuntimeServices,
-    sessionId: string
+    sessionId: string,
+    sessionOptions?: { startBlank?: boolean }
   ) {
     this.sessionId = sessionId;
+    this.startBlank = sessionOptions?.startBlank === true;
     this.session = new CoopChatSession({
       extensionUri,
       extensionContext,
       api,
       ...services,
+      startBlank: this.startBlank,
       onTitleChange: (title) => {
         this.panel.title = title;
       }
@@ -117,12 +131,16 @@ export class CoopChatPanel {
     this.session.attachWebview(panel.webview);
 
     void this.session.initialize().then(() => {
-      this.session.refreshEditorContext(vscode.window.activeTextEditor);
+      // Fresh new-window panels stay blank; do not inherit the creating window's editor.
+      if (!this.startBlank) {
+        this.session.refreshEditorContext(vscode.window.activeTextEditor);
+      }
     });
 
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.visible) {
         this.session.touch();
+        // Session gates passive snaps (startBlank stays off until Use-repo / file pick).
         this.session.refreshEditorContext(vscode.window.activeTextEditor);
       }
     });

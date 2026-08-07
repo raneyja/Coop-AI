@@ -20,7 +20,7 @@ export function BlogPostSchema({ post }: BlogPostSchemaProps) {
     },
     publisher: {
       "@type": "Organization",
-      name: post.author,
+      name: siteConfig.name,
       url: siteConfig.url
     },
     datePublished: post.publishedAt,

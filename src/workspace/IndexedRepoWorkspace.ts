@@ -96,11 +96,61 @@ export class IndexedRepoWorkspace {
   }
 
   /**
-   * Read any file in the indexed repo: matching local clone when present,
-   * otherwise fetched from the code host. Indexed does not mean mirrored.
-   *
-   * Never prefer an unrelated workspace file (e.g. Coop-AI's package.json while
-   * the active remote repo is documenso) — that silently fed the wrong evidence.
+   * One-level directory listing for the active Use-repo.
+   * Prefer code-host tree; fall back to Coop org tree API (same path Remote browse uses)
+   * so package-boundary gather works when the host listing is unavailable.
+   */
+  public async listDirectory(
+    target: RepoTarget,
+    path = ""
+  ): Promise<Array<{ name: string; type: "dir" | "file" }> | undefined> {
+    const cleanPath = path.replace(/^\/+|\/+$/g, "");
+    const repoId = target.repoId?.trim();
+    const resolved = repoId
+      ? resolveInventoryRepoIds(repoId, target)
+      : target.owner && target.repo
+        ? resolveInventoryRepoIds(`${target.owner}/${target.repo}`, target)
+        : undefined;
+    const coords = resolved?.coords;
+    if (coords) {
+      try {
+        const tree = await this.deps.codeHostRouter.getRepositoryTree(cleanPath, coords);
+        const entries = (tree.entries ?? []).map((entry) => ({
+          name: entry.name,
+          type: (entry.type === "dir" ? "dir" : "file") as "dir" | "file"
+        }));
+        if (entries.length) {
+          return entries;
+        }
+      } catch {
+        /* fall through to org API */
+      }
+    }
+
+    const preferredRepoId = resolved?.preferred ?? repoId;
+    if (!preferredRepoId) {
+      return undefined;
+    }
+    try {
+      const tree = await this.deps.api.fetchRepoTreeViaCloud(
+        this.deps.apiBaseUrl,
+        preferredRepoId,
+        cleanPath,
+        target.branch
+      );
+      const entries = (tree.entries ?? []).map((entry) => ({
+        name: entry.name,
+        type: (entry.type === "dir" ? "dir" : "file") as "dir" | "file"
+      }));
+      return entries.length ? entries : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Read any file in the indexed repo from the code host / API only (Zero-Clone).
+   * Indexed does not mean mirrored — never prefer a local clone or workspace disk.
    */
   public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {
     const cleanPath = path.trim().replace(/^\/+/, "");
@@ -109,24 +159,6 @@ export class IndexedRepoWorkspace {
     }
     const repoId = target.repoId?.trim();
     const identity = this.getIdentity(target);
-
-    if (await localDiskMatchesTargetRepo(identity)) {
-      try {
-        const { readWorkspaceFileFromDisk } = await import("../context/localFileResolver");
-        const local = readWorkspaceFileFromDisk(cleanPath);
-        const localContent = local?.files[0]?.content;
-        if (localContent?.trim()) {
-          return {
-            path: cleanPath,
-            repoId: repoId ?? "",
-            content: localContent,
-            origin: "local"
-          };
-        }
-      } catch {
-        /* fall through to remote */
-      }
-    }
 
     if (!repoId) {
       return undefined;
@@ -181,8 +213,12 @@ export class IndexedRepoWorkspace {
   }
 }
 
-/** True when an open workspace folder is actually this repo (local clone or VFS). */
-async function localDiskMatchesTargetRepo(
+/**
+ * True when an open workspace folder is actually this Use-repo (clone or VFS).
+ * Used only to drop *foreign* editor chips — never as permission to read disk
+ * for file bodies (Zero-Clone: {@link mayReadLocalRepoDiskForIntelligence}).
+ */
+export async function localDiskMatchesTargetRepo(
   identity: { owner?: string; repo?: string; provider?: string } | undefined
 ): Promise<boolean> {
   if (!identity?.owner?.trim() || !identity?.repo?.trim()) {
@@ -225,13 +261,38 @@ function unavailableNote(needs: RepoFactNeeds): string {
   );
 }
 
+export type RepoStructureEntryFile = {
+  path: string;
+  content: string;
+  truncated?: boolean;
+  repoId?: string;
+};
+
 /** Attach workspace evidence to the chat context bundle. */
 export function mergeRepoInventoryContext(
   result: ContextFetchResult,
   inventory: RepoInventoryEvidence | undefined,
-  treeOverview?: RepoTreeEvidence
+  treeOverview?: RepoTreeEvidence,
+  options?: {
+    entryFiles?: RepoStructureEntryFile[];
+    packageBoundaryNote?: string;
+    packageStructure?: {
+      packages: string[];
+      parents: string[];
+      workspaceGlobs?: string[];
+    };
+  }
 ): ContextFetchResult {
-  if (!inventory && !treeOverview) {
+  const entryFiles = options?.entryFiles?.filter((file) => file.path?.trim() && file.content?.trim());
+  const note = options?.packageBoundaryNote?.trim();
+  const packageStructure =
+    options?.packageStructure &&
+    (options.packageStructure.packages.length > 0 ||
+      options.packageStructure.parents.length > 0 ||
+      (options.packageStructure.workspaceGlobs?.length ?? 0) > 0)
+      ? options.packageStructure
+      : undefined;
+  if (!inventory && !treeOverview && !entryFiles?.length && !note && !packageStructure) {
     return result;
   }
   const baseData =
@@ -243,7 +304,10 @@ export function mergeRepoInventoryContext(
     data: {
       ...baseData,
       ...(inventory ? { repoInventory: inventory } : {}),
-      ...(treeOverview ? { treeOverview } : {})
+      ...(treeOverview ? { treeOverview } : {}),
+      ...(entryFiles?.length ? { entryFiles } : {}),
+      ...(note ? { packageBoundaryNote: note } : {}),
+      ...(packageStructure ? { packageStructure } : {})
     }
   };
 }

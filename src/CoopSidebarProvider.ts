@@ -54,7 +54,7 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = getWebviewOptions(this.extensionUri);
     this.session.attachWebview(webviewView.webview);
     await this.session.initialize();
-    // initialize already snaps visible editors; refresh again after view attaches.
+    // initialize already snaps when allowed; refresh again after view attaches.
     this.session.refreshEditorContext(vscode.window.activeTextEditor);
 
     webviewView.onDidChangeVisibility(() => {

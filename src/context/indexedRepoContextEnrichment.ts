@@ -133,7 +133,7 @@ export async function enrichContextWithIndexedRepo(options: {
       const inventoryPromise = needsInventory
         ? workspace.getInventory(
             normalizedTarget,
-            { fileCount: true, treeOverview: false, lineCount: false },
+            { fileCount: true, treeOverview: false, lineCount: false, packageManifests: false },
             { allowExpensiveTreeWalk: false }
           )
         : Promise.resolve(undefined);

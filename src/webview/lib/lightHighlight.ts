@@ -5,6 +5,8 @@ export type HighlightToken = {
   kind: HighlightTokenKind;
 };
 
+type HighlightFamily = "javascript" | "python" | "json" | "hash-comment" | "slash-comment" | "text";
+
 const JS_KEYWORDS = [
   "as",
   "async",
@@ -18,6 +20,7 @@ const JS_KEYWORDS = [
   "default",
   "delete",
   "else",
+  "enum",
   "export",
   "extends",
   "false",
@@ -26,6 +29,7 @@ const JS_KEYWORDS = [
   "from",
   "function",
   "if",
+  "implements",
   "import",
   "in",
   "instanceof",
@@ -34,6 +38,10 @@ const JS_KEYWORDS = [
   "new",
   "null",
   "of",
+  "package",
+  "private",
+  "protected",
+  "public",
   "return",
   "static",
   "super",
@@ -92,22 +100,156 @@ const PYTHON_KEYWORDS = [
 
 const JSON_KEYWORDS = ["true", "false", "null"] as const;
 
-function normalizeLanguage(language?: string): "javascript" | "typescript" | "python" | "json" | "text" {
+/** Shared keywords across Go / Rust / Java / C-family / Ruby / PHP / Kotlin / Swift / Scala. */
+const C_LIKE_KEYWORDS = [
+  "abstract",
+  "as",
+  "async",
+  "await",
+  "base",
+  "bool",
+  "boolean",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "chan",
+  "char",
+  "class",
+  "const",
+  "continue",
+  "crate",
+  "debugger",
+  "default",
+  "defer",
+  "def",
+  "del",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "except",
+  "export",
+  "extends",
+  "extern",
+  "false",
+  "False",
+  "final",
+  "finally",
+  "float",
+  "fn",
+  "for",
+  "foreach",
+  "from",
+  "func",
+  "function",
+  "go",
+  "goto",
+  "if",
+  "impl",
+  "implements",
+  "import",
+  "in",
+  "inline",
+  "instanceof",
+  "int",
+  "interface",
+  "internal",
+  "let",
+  "long",
+  "match",
+  "mod",
+  "module",
+  "mut",
+  "namespace",
+  "new",
+  "nil",
+  "None",
+  "null",
+  "object",
+  "operator",
+  "override",
+  "package",
+  "private",
+  "protected",
+  "pub",
+  "public",
+  "raise",
+  "return",
+  "self",
+  "sizeof",
+  "static",
+  "struct",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "trait",
+  "true",
+  "True",
+  "try",
+  "type",
+  "typedef",
+  "typeof",
+  "unsafe",
+  "use",
+  "using",
+  "var",
+  "virtual",
+  "void",
+  "volatile",
+  "where",
+  "while",
+  "with",
+  "yield"
+] as const;
+
+function normalizeFamily(language?: string): HighlightFamily {
   if (!language) {
     return "text";
   }
   const normalized = language.trim().toLowerCase();
-  if (["js", "jsx", "javascript", "mjs", "cjs"].includes(normalized)) {
+  if (["js", "jsx", "javascript", "mjs", "cjs", "ts", "tsx", "typescript", "node"].includes(normalized)) {
     return "javascript";
   }
-  if (["ts", "tsx", "typescript"].includes(normalized)) {
-    return "typescript";
-  }
-  if (["py", "python"].includes(normalized)) {
+  if (["py", "python", "python3"].includes(normalized)) {
     return "python";
   }
   if (["json", "jsonc"].includes(normalized)) {
     return "json";
+  }
+  if (["rb", "ruby", "pyi"].includes(normalized)) {
+    return "hash-comment";
+  }
+  if (
+    [
+      "go",
+      "golang",
+      "rs",
+      "rust",
+      "java",
+      "kt",
+      "kotlin",
+      "kts",
+      "swift",
+      "cs",
+      "csharp",
+      "c",
+      "h",
+      "cpp",
+      "cc",
+      "cxx",
+      "hpp",
+      "php",
+      "scala",
+      "sc"
+    ].includes(normalized)
+  ) {
+    return "slash-comment";
+  }
+  // Unknown source-looking tags still get C-like coloring rather than monochrome.
+  if (/^[a-z][a-z0-9#+_-]*$/i.test(normalized) && !["text", "plaintext", "markdown", "md"].includes(normalized)) {
+    return "slash-comment";
   }
   return "text";
 }
@@ -139,80 +281,73 @@ function tokenizeWithRegex(
   return tokens;
 }
 
+function highlightWithKeywords(
+  code: string,
+  keywords: readonly string[],
+  style: "slash" | "hash"
+): HighlightToken[] {
+  const keywordSet = new Set(keywords);
+  const keywordPattern = keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const commentParts =
+    style === "slash"
+      ? [String.raw`\/\/.*$`, String.raw`\/\*[\s\S]*?\*\/`]
+      : [String.raw`#.*$`];
+  const matcher = new RegExp(
+    [
+      ...commentParts,
+      String.raw`"(?:\\.|[^"\\])*"`,
+      String.raw`'(?:\\.|[^'\\])*'`,
+      "`(?:\\\\.|[^`\\\\])*`",
+      String.raw`\b(?:${keywordPattern})\b`,
+      String.raw`\b\d+(?:\.\d+)?\b`
+    ].join("|"),
+    "gm"
+  );
+  return tokenizeWithRegex(code, matcher, (token) => {
+    if (token.startsWith("//") || token.startsWith("/*") || token.startsWith("#")) {
+      return "comment";
+    }
+    if (token.startsWith('"') || token.startsWith("'") || token.startsWith("`")) {
+      return "string";
+    }
+    if (keywordSet.has(token)) {
+      return "keyword";
+    }
+    if (/^\d/.test(token)) {
+      return "number";
+    }
+    return "plain";
+  });
+}
+
 export function lightHighlight(code: string, language?: string): HighlightToken[] {
-  const lang = normalizeLanguage(language);
   if (!code) {
     return [];
   }
 
-  if (lang === "javascript" || lang === "typescript") {
-    const keywordSet = new Set(JS_KEYWORDS);
-    const keywordPattern = JS_KEYWORDS.join("|");
-    const matcher = new RegExp(
-      [
-        String.raw`\/\/.*$`,
-        String.raw`\/\*[\s\S]*?\*\/`,
-        String.raw`"(?:\\.|[^"\\])*"`,
-        String.raw`'(?:\\.|[^'\\])*'`,
-        "`(?:\\\\.|[^`\\\\])*`",
-        String.raw`\b(?:${keywordPattern})\b`,
-        String.raw`\b\d+(?:\.\d+)?\b`
-      ].join("|"),
-      "gm"
-    );
-    return tokenizeWithRegex(code, matcher, (token) => {
-      if (token.startsWith("//") || token.startsWith("/*")) {
-        return "comment";
-      }
-      if (token.startsWith('"') || token.startsWith("'") || token.startsWith("`")) {
-        return "string";
-      }
-      if (keywordSet.has(token as (typeof JS_KEYWORDS)[number])) {
-        return "keyword";
-      }
-      if (/^\d/.test(token)) {
-        return "number";
-      }
-      return "plain";
-    });
-  }
+  const family = normalizeFamily(language);
 
-  if (lang === "python") {
-    const keywordSet = new Set(PYTHON_KEYWORDS);
-    const keywordPattern = PYTHON_KEYWORDS.join("|");
-    const matcher = new RegExp(
-      [
-        String.raw`#.*$`,
-        String.raw`"(?:\\.|[^"\\])*"`,
-        String.raw`'(?:\\.|[^'\\])*'`,
-        String.raw`\b(?:${keywordPattern})\b`,
-        String.raw`\b\d+(?:\.\d+)?\b`
-      ].join("|"),
-      "gm"
-    );
-    return tokenizeWithRegex(code, matcher, (token) => {
-      if (token.startsWith("#")) {
-        return "comment";
-      }
-      if (token.startsWith('"') || token.startsWith("'")) {
-        return "string";
-      }
-      if (keywordSet.has(token as (typeof PYTHON_KEYWORDS)[number])) {
-        return "keyword";
-      }
-      if (/^\d/.test(token)) {
-        return "number";
-      }
-      return "plain";
-    });
+  if (family === "javascript") {
+    return highlightWithKeywords(code, JS_KEYWORDS, "slash");
   }
-
-  if (lang === "json") {
+  if (family === "python") {
+    return highlightWithKeywords(code, PYTHON_KEYWORDS, "hash");
+  }
+  if (family === "hash-comment") {
+    return highlightWithKeywords(code, [...PYTHON_KEYWORDS, ...C_LIKE_KEYWORDS], "hash");
+  }
+  if (family === "slash-comment") {
+    return highlightWithKeywords(code, [...JS_KEYWORDS, ...C_LIKE_KEYWORDS], "slash");
+  }
+  if (family === "json") {
     const keywordSet = new Set(JSON_KEYWORDS);
-    const matcher = /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/gm;
+    const matcher =
+      /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/gm;
     return tokenizeWithRegex(code, matcher, (token) => {
       if (token.startsWith('"') && token.endsWith('"')) {
-        return token.endsWith('"') ? "property" : "string";
+        // Keys matched with (?=\s*:) and values are both quoted — treat as string;
+        // property tint when followed by colon is approximate via property class unused here.
+        return "string";
       }
       if (keywordSet.has(token as (typeof JSON_KEYWORDS)[number])) {
         return "keyword";
@@ -224,5 +359,6 @@ export function lightHighlight(code: string, language?: string): HighlightToken[
     });
   }
 
-  return [{ text: code, kind: "plain" }];
+  // Last resort: still color strings/comments/numbers so blocks never look like plain markdown.
+  return highlightWithKeywords(code, [...JS_KEYWORDS, ...C_LIKE_KEYWORDS, ...PYTHON_KEYWORDS], "slash");
 }

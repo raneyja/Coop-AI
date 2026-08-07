@@ -459,11 +459,17 @@ export function summarizeBlastRadius(
     recentCount > 0 ||
     (evidence.localFiles?.files?.length ?? 0) > 0;
 
+  const trustedRemoteGraph =
+    dependentCount > 0 &&
+    (graphSource === "import-parse" || graphSource === "scip" || graphSource === "zoekt");
+
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0)) {
+  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0 || trustedRemoteGraph)) {
     quality = "strong";
-    qualityReason = "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
+    qualityReason = trustedRemoteGraph
+      ? `Verified ${graphSource} dependency graph identified ${dependentCount} code dependent(s).`
+      : "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
   } else if (dependentCount > 0) {
     quality = "medium";
     qualityReason = "Dependency graph shows impact paths, but owner/release context is limited.";

@@ -23,6 +23,7 @@ const allUnlinked = buildSlackPresenceViewModel([
   score("b", { state: "unknown", label: "Not linked" })
 ]);
 assert.equal(allUnlinked.collapsedSummary, "Unavailable · 2 owners unmapped");
+assert.equal(allUnlinked.hasEvidence, false);
 assert.ok(allUnlinked.detailLine?.includes("couldn't be matched"));
 
 const oneCoopEightExternal = buildSlackPresenceViewModel([
@@ -32,6 +33,7 @@ const oneCoopEightExternal = buildSlackPresenceViewModel([
   )
 ]);
 assert.equal(oneCoopEightExternal.collapsedSummary, "1/9 mapped · @coopai-dev active");
+assert.equal(oneCoopEightExternal.hasEvidence, true);
 assert.equal(oneCoopEightExternal.detailLine, "8 others unmapped");
 assert.equal(oneCoopEightExternal.resolvedEntries.length, 0);
 
@@ -40,6 +42,7 @@ const allResolved = buildSlackPresenceViewModel([
   score("b", { state: "active", label: "Active", slackUserId: "U2" })
 ]);
 assert.equal(allResolved.collapsedSummary, "2 mapped in Slack");
+assert.equal(allResolved.hasEvidence, true);
 assert.equal(allResolved.resolvedEntries.length, 2);
 
 console.log("slackPresenceDisplay: ok");

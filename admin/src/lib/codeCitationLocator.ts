@@ -1,27 +1,53 @@
 /**
- * Shared citation-locator parsing for chat prose fences.
- * Keep in sync with admin/website chatProseParser copies (see chat-code-surfaces rule).
+ * Keep in sync with src/webview/lib/codeCitationLocator.ts (chat-code-surfaces rule).
  */
 
 export type CodeCitationLocator = {
   path: string;
-  /** Present when the model emitted real line integers. */
   startLine?: number;
   endLine?: number;
 };
 
 const NUMERIC_LOCATOR_RE = /^(\d+):(\d+):(.+)$/;
-/** Models sometimes paste the prompt template literally. */
 const PLACEHOLDER_LOCATOR_RE =
   /^(?:startLine|start)\s*:\s*(?:endLine|end)\s*:\s*(.+)$/i;
-/**
- * First-line path-only locators (no line range).
- * Requires a slash and a file extension so prose sentences do not match.
- */
 const PATH_ONLY_LOCATOR_RE =
   /^(?:\.\/)?(?:[\w.@+-]+\/)+[\w.@+-]+\.[A-Za-z0-9]{1,12}$/;
-
 const LANGUAGE_TAG_RE = /^[A-Za-z][A-Za-z0-9_+#-]*$/;
+const JS_TS_FAMILY = new Set([
+  "javascript",
+  "typescript",
+  "js",
+  "ts",
+  "jsx",
+  "tsx",
+  "mjs",
+  "cjs",
+  "node"
+]);
+const NEVER_UPGRADE_LANGS = new Set([
+  "patch",
+  "diff",
+  "bash",
+  "sh",
+  "shell",
+  "zsh",
+  "powershell",
+  "ps1",
+  "console",
+  "text",
+  "plaintext",
+  "markdown",
+  "md",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "env",
+  "dockerfile",
+  "makefile",
+  "sql"
+]);
 
 export function looksLikeRepoFilePath(path: string): boolean {
   const trimmed = path.trim();
@@ -34,21 +60,14 @@ export function looksLikeRepoFilePath(path: string): boolean {
   return PATH_ONLY_LOCATOR_RE.test(trimmed) || /\/[^/]+\.[A-Za-z0-9]{1,12}$/.test(trimmed);
 }
 
-/**
- * Parse a citation locator from a fence info-string or first body line.
- * Returns null when the value is an ordinary language tag or unrelated text.
- */
 export function tryParseCitationLocator(value: string): CodeCitationLocator | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
-
-  // Ordinary language tags must never become citations.
   if (LANGUAGE_TAG_RE.test(trimmed) && !trimmed.includes("/")) {
     return null;
   }
-
   const numeric = trimmed.match(NUMERIC_LOCATOR_RE);
   if (numeric) {
     const path = numeric[3]!.trim();
@@ -62,7 +81,6 @@ export function tryParseCitationLocator(value: string): CodeCitationLocator | nu
     }
     return { startLine, endLine, path };
   }
-
   const placeholder = trimmed.match(PLACEHOLDER_LOCATOR_RE);
   if (placeholder) {
     const path = placeholder[1]!.trim();
@@ -71,15 +89,12 @@ export function tryParseCitationLocator(value: string): CodeCitationLocator | nu
     }
     return { path };
   }
-
   if (looksLikeRepoFilePath(trimmed)) {
     return { path: trimmed.replace(/^\.\//, "") };
   }
-
   return null;
 }
 
-/** Infer highlight language from a file path extension. */
 export function languageFromFilePath(path: string): string | undefined {
   const fileName = path.split("/").filter(Boolean).pop() ?? path;
   const ext = fileName.includes(".") ? fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase() : "";
@@ -92,7 +107,7 @@ export function languageFromFilePath(path: string): string | undefined {
   if (ext === "js" || ext === "jsx" || ext === "mjs" || ext === "cjs") {
     return "javascript";
   }
-  if (ext === "py") {
+  if (ext === "py" || ext === "pyi") {
     return "python";
   }
   if (ext === "json" || ext === "jsonc") {
@@ -101,7 +116,10 @@ export function languageFromFilePath(path: string): string | undefined {
   return ext;
 }
 
-/** True when a fence language tag matches the active file's extension family. */
+function fileBasename(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
 export function languageTagMatchesPath(language: string | undefined, path: string | undefined): boolean {
   const lang = language?.trim().toLowerCase();
   if (!lang || !path?.trim()) {
@@ -123,21 +141,83 @@ export function languageTagMatchesPath(language: string | undefined, path: strin
   if ((lang === "py" || lang === "python3") && fromPath === "python") {
     return true;
   }
+  if (JS_TS_FAMILY.has(lang) && JS_TS_FAMILY.has(fromPath)) {
+    return true;
+  }
   return false;
 }
 
-/**
- * Pull a repo path from prose near a code fence (backticks or bare path tokens).
- */
-export function findRepoPathNearFence(lines: string[], fenceStartIndex: number): string | undefined {
+export function isOrdinaryLanguageTag(value: string | undefined): boolean {
+  const trimmed = value?.trim() ?? "";
+  return Boolean(trimmed) && LANGUAGE_TAG_RE.test(trimmed) && !trimmed.includes("/");
+}
+
+export function shouldNeverUpgradeLanguageFence(language: string | undefined): boolean {
+  const lang = language?.trim().toLowerCase() ?? "";
+  return NEVER_UPGRADE_LANGS.has(lang);
+}
+
+export function resolveCitePathForLanguageFence(options: {
+  language: string | undefined;
+  code: string;
+  lines: string[];
+  fenceStartIndex: number;
+  activeFilePath?: string;
+}): string | undefined {
+  if (!options.code.trim() || shouldNeverUpgradeLanguageFence(options.language)) {
+    return undefined;
+  }
+  const nearby = findRepoPathNearFence(options.lines, options.fenceStartIndex, options.activeFilePath);
+  if (nearby) {
+    return nearby;
+  }
+  const activePath = options.activeFilePath?.trim();
+  if (!activePath) {
+    return undefined;
+  }
+  if (languageTagMatchesPath(options.language, activePath)) {
+    return activePath;
+  }
+  const base = fileBasename(activePath);
+  if (base && proseNearFenceMentionsBasename(options.lines, options.fenceStartIndex, base)) {
+    return activePath;
+  }
+  return undefined;
+}
+
+function proseNearFenceMentionsBasename(
+  lines: string[],
+  fenceStartIndex: number,
+  basename: string
+): boolean {
+  const needle = basename.toLowerCase();
   let seen = 0;
-  for (let i = fenceStartIndex - 1; i >= 0 && seen < 4; i -= 1) {
+  for (let i = fenceStartIndex - 1; i >= 0 && seen < 24; i -= 1) {
     const line = lines[i]?.trim() ?? "";
     if (!line) {
       continue;
     }
     seen += 1;
+    if (line.toLowerCase().includes(needle)) {
+      return true;
+    }
+  }
+  return false;
+}
 
+export function findRepoPathNearFence(
+  lines: string[],
+  fenceStartIndex: number,
+  activeFilePath?: string
+): string | undefined {
+  const activeBase = activeFilePath?.trim() ? fileBasename(activeFilePath.trim()) : undefined;
+  let seen = 0;
+  for (let i = fenceStartIndex - 1; i >= 0 && seen < 24; i -= 1) {
+    const line = lines[i]?.trim() ?? "";
+    if (!line) {
+      continue;
+    }
+    seen += 1;
     const tickMatches = line.matchAll(/`([^`\n]+)`/g);
     for (const match of tickMatches) {
       const inner = (match[1] ?? "").trim();
@@ -145,20 +225,20 @@ export function findRepoPathNearFence(lines: string[], fenceStartIndex: number):
       if (looksLikeRepoFilePath(pathPart)) {
         return pathPart.replace(/^\.\//, "");
       }
+      if (activeFilePath && activeBase && pathPart === activeBase) {
+        return activeFilePath.trim();
+      }
     }
-
     for (const token of line.split(/\s+/)) {
       const cleaned = token.replace(/^[("'\[]+|[)"'\],.:;]+$/g, "");
       const pathPart = cleaned.replace(/:\d+(?:-\d+)?$/, "");
       if (looksLikeRepoFilePath(pathPart)) {
         return pathPart.replace(/^\.\//, "");
       }
+      if (activeFilePath && activeBase && pathPart === activeBase) {
+        return activeFilePath.trim();
+      }
     }
   }
   return undefined;
-}
-
-export function isOrdinaryLanguageTag(value: string | undefined): boolean {
-  const trimmed = value?.trim() ?? "";
-  return Boolean(trimmed) && LANGUAGE_TAG_RE.test(trimmed) && !trimmed.includes("/");
 }

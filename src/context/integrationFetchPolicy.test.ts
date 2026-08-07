@@ -150,6 +150,35 @@ test("plain chat still requires keyword intent", () => {
   }
 });
 
+test("incident-shaped chat fetches Jira and Slack without saying jira/slack", () => {
+  const incidentRequest = {
+    type: "chat_context",
+    params: {},
+    intent: {
+      context: {
+        queryText: "board sync webhook failures last week — retries storm?"
+      }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchJiraContext(incidentRequest), true);
+  assert.equal(shouldFetchSlackContext(incidentRequest), true);
+  assert.equal(shouldFetchNotionContext(incidentRequest), false);
+});
+
+test("status-transition chat does not auto-fetch Jira/Slack as incident", () => {
+  const statusRequest = {
+    type: "chat_context",
+    params: {},
+    intent: {
+      context: {
+        queryText: "stuck PENDING — where does status move to COMPLETED?"
+      }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchJiraContext(statusRequest), false);
+  assert.equal(shouldFetchSlackContext(statusRequest), false);
+});
+
 const total = passed + failed;
 console.log(`\nintegrationFetchPolicy: ${passed}/${total} tests passed`);
 if (failed > 0) {

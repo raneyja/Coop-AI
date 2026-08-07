@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   blastRadiusSourceLabelDependencies,
+  hasPartialIndexCoverage,
   listBlastRadiusSourceLabels,
   listBlastRadiusSourcesChecklist
 } from "./blastRadiusSourceLabels";
@@ -45,5 +46,25 @@ assert.equal(
 );
 assert.ok(combinedChecklist[0].includes("Index coverage is partial"));
 assert.ok(combinedChecklist[0].includes("Impact unverified"));
+
+const verifiedImportParse = {
+  file: "src/config/responseDeadline.ts",
+  directDependents: [
+    "src/chat/CoopChatSession.ts",
+    "src/jobs/JobApiClient.ts"
+  ],
+  graphMeta: { source: "import-parse", lightningEnabled: false, edgeCount: 2907 },
+  completeness: "partial" as const
+};
+assert.equal(hasPartialIndexCoverage(verifiedImportParse), false);
+const verifiedChecklist = listBlastRadiusSourcesChecklist(verifiedImportParse);
+assert.ok(
+  verifiedChecklist.some((line) => /Verified import-parse/i.test(line)),
+  "expected verified import-parse checklist note"
+);
+assert.ok(
+  !verifiedChecklist.some((line) => /Index coverage is partial/i.test(line)),
+  "must not undercut verified import-parse callers"
+);
 
 console.log("blastRadiusSourceLabels: ok");

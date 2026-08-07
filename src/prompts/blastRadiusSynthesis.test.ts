@@ -82,18 +82,20 @@ test("blast-radius synthesis includes top risk surfaces ranking", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "fastify.js",
-      directDependents: ["test/a.test.js", "integration/server.js", "examples/https.js"],
+      directDependents: ["test/a.test.js", "integration/server.js", "examples/https.js", "src/plugin.js"],
       dependentDetails: [
         { path: "test/a.test.js", depth: 1, source: "heuristic" },
         { path: "integration/server.js", depth: 1, source: "heuristic" },
-        { path: "examples/https.js", depth: 1, source: "heuristic" }
+        { path: "examples/https.js", depth: 1, source: "heuristic" },
+        { path: "src/plugin.js", depth: 1, source: "scip" }
       ]
     },
     file: "fastify.js"
   });
   assert.ok(prompt.includes("### Top risk surfaces"));
-  assert.ok(prompt.includes("integration/server.js"));
-  assert.ok(/1\. integration\/server\.js/.test(prompt));
+  assert.ok(prompt.includes("src/plugin.js"));
+  assert.ok(/1\. src\/plugin\.js/.test(prompt));
+  assert.ok(/Test surface/i.test(prompt));
 });
 
 test("blast-radius synthesis includes CI rollout guidance when workflows present", () => {
@@ -111,13 +113,32 @@ test("blast-radius synthesis includes CI rollout guidance when workflows present
   assert.ok(prompt.includes("CODEOWNERS"));
 });
 
-test("blast-radius synthesis leads Summary with partial index caveat when graph is partial", () => {
+test("blast-radius synthesis skips partial caveat when remote graph has verified callers", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({
+    evidence: {
+      file: "src/config/responseDeadline.ts",
+      directDependents: ["src/chat/CoopChatSession.ts", "src/jobs/JobApiClient.ts"],
+      graphMeta: { edgeCount: 2907, lightningEnabled: false, source: "import-parse" },
+      completeness: "partial"
+    },
+    file: "src/config/responseDeadline.ts",
+    owner: "raneyja",
+    repo: "Coop-AI"
+  });
+  assert.ok(prompt.includes("## Summary guidance"));
+  assert.ok(prompt.includes("verified remote dependency graph"));
+  assert.ok(!prompt.includes("partial index coverage caveat"));
+  assert.ok(!prompt.includes("Index coverage is partial"));
+  assert.ok(prompt.includes("Verified import-parse"));
+});
+
+test("blast-radius synthesis leads Summary with partial index caveat when graph is empty", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "src/server/githubAppApi.ts",
-      directDependents: ["src/server/routes.ts"],
-      graphMeta: { edgeCount: 12, lightningEnabled: false, source: "zoekt" },
-      completeness: "partial"
+      directDependents: [],
+      graphMeta: { edgeCount: 0, lightningEnabled: false, source: "remote" },
+      completeness: "minimal"
     },
     file: "src/server/githubAppApi.ts",
     owner: "raneyja",

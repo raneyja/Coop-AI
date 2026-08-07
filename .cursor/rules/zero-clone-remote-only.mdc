@@ -1,0 +1,48 @@
+---
+description: Zero-Clone — never use local disk for indexed-repo intelligence
+alwaysApply: true
+---
+
+# Zero-Clone — indexed remote only
+
+## Product law
+
+Coop works **without downloading a local copy** of any repo. Repository intelligence
+(chat, quick actions, slash commands, agent tools, Blast, Gaps, Trace, Owner,
+Understand Repo) must use **indexed remote evidence + on-demand codehost fetches**.
+
+**Never** scan open VS Code folders, local clones, or `workspaceFolders` for
+callers, file bodies, or “verified” dependents and present that as remote success.
+
+## Canonical sources
+
+| Need | Source |
+|---|---|
+| File body | `IndexedRepoWorkspace.readFile` → API / codehost only |
+| Inventory / tree | Indexed `repo_stats` / graph (via `IndexedRepoWorkspace`) |
+| Dependents / Blast | Durable import graph / SCIP / Zoekt — never `workspace` disk walk |
+| Search | Cloud index / Zoekt — never local `findFiles` for answer gather |
+
+Policy flag: `src/workspace/zeroClonePolicy.ts` (`mayReadLocalRepoDiskForIntelligence`).
+
+## Banned
+
+| Reject | Prefer |
+|---|---|
+| `readWorkspaceFileFromDisk` / `readLocalWorkspaceFiles` on gather | Remote fetch |
+| Preferring local clone in `IndexedRepoWorkspace.readFile` | Codehost / `fetchRepoFile` |
+| Blast `localRoots` / `source: "workspace"` as a remote win | `import-parse` / `scip` / `zoekt` |
+| Offline “analyze from local workspace” fallbacks for Use-repo | Cached remote or unavailable |
+| Agent `read_file` resolving workspace absolute paths first | Remote reader first/only |
+
+## Allowed exceptions (not repo intelligence)
+
+- Patch apply into an open editor buffer
+- AGENTS.md / prompt library pickers
+- Autocomplete on the active buffer
+- Explicit `fileSource: "external"` uploads (Cmd+O outside the Use-repo)
+
+## Self-check
+
+Before shipping gather/quick-action changes: if the user has Coop-AI open locally
+and Use-repo is `plane`, could any path still answer from Coop-AI’s disk? If yes, fail.

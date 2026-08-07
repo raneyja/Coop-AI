@@ -18,9 +18,11 @@ import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patc
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
 import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
+import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
 import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
+  ACTIVITY_PHASE_MS,
   ACTIVITY_START_DELAY_MS,
   buildConcreteActivityMessages,
   buildThinkingMessageSequence,
@@ -102,6 +104,10 @@ type InboundMessage =
       };
     }
   | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
+  | {
+      type: "chat:cancelled";
+      payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
+    }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
   | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
   | {
@@ -376,6 +382,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   } | null>(null);
   const threadsStateRef = useRef(threadsState);
   threadsStateRef.current = threadsState;
+  /** After Stop, ignore late host deltas/feedback until the next send. */
+  const userStoppedRef = useRef(false);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
@@ -384,6 +392,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const debouncedStream = useDebouncedProse(streamingBuffer, 75);
 
   const resetEphemeralChatState = useCallback(() => {
+    userStoppedRef.current = false;
     setStreamingBuffer("");
     setThinkingBuffer("");
     setAgentOverlay(undefined);
@@ -393,6 +402,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setUsageLabel(undefined);
     setIntentFeedback(undefined);
     setJobProgress(undefined);
+    setDegradationNotification(undefined);
     setCommandConfirm(undefined);
     setAttachmentError("");
   }, []);
@@ -616,6 +626,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     if (shouldRestartPace) {
       activityStartedAtRef.current = Date.now();
       setActivityElapsedMs(0);
+    } else if (isPrefixGrowth && nextKey !== previousKey) {
+      // New tool/job line arrived — unlock the full current list so Slack isn't hidden
+      // behind the timed reveal of older steps.
+      const count = nextKey.split("\u0001").filter(Boolean).length;
+      const unlockMs = ACTIVITY_START_DELAY_MS + Math.max(0, count - 1) * ACTIVITY_PHASE_MS;
+      activityStartedAtRef.current = Date.now() - unlockMs;
+      setActivityElapsedMs(unlockMs);
     }
     prevConcreteActivityKeyRef.current = nextKey;
 
@@ -708,6 +725,32 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onRejectHunk={(hunkId) =>
               post({ type: "patch:reject-hunk", payload: { messageTimestamp, hunkId } })
             }
+            onToggleMatchLocation={(hunkId, locationId, selected) => {
+              const locations =
+                card.files
+                  .flatMap((file) => file.hunks)
+                  .find((hunk) => hunk.id === hunkId)
+                  ?.matchLocations ?? [];
+              const nextIds = locations
+                .filter((loc) => (loc.id === locationId ? selected : loc.selected))
+                .map((loc) => loc.id);
+              post({
+                type: "patch:set-match-locations",
+                payload: { messageTimestamp, hunkId, locationIds: nextIds }
+              });
+            }}
+            onSelectSharedProposal={(relativePath, groupId, locationId, proposalId) => {
+              post({
+                type: "patch:set-shared-match-proposal",
+                payload: {
+                  messageTimestamp,
+                  relativePath,
+                  groupId,
+                  locationId,
+                  proposalId
+                }
+              });
+            }}
           />
         );
       }
@@ -754,6 +797,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setStreamingBuffer("");
       setThinkingBuffer("");
       setAgentOverlay(undefined);
+      userStoppedRef.current = false;
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -780,6 +824,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           : `/${actionId}`;
 
       setError("");
+      userStoppedRef.current = false;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -798,6 +843,30 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentions([]);
       setMentionResults([]);
       setMentionError("");
+    },
+    [post]
+  );
+
+  const handleSuggestResolve = useCallback(
+    (choice: { choice: "plain" } | { choice: "action"; actionId: string }) => {
+      setError("");
+      userStoppedRef.current = false;
+      setIsStreaming(true);
+      setStreamingBuffer("");
+      setThinkingBuffer("");
+      setAgentOverlay(undefined);
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          const entry = next[i];
+          if (entry?.role === "assistant" && entry.suggest && !entry.suggest.resolved) {
+            next[i] = { ...entry, suggest: { ...entry.suggest, resolved: true } };
+            break;
+          }
+        }
+        return next;
+      });
+      post({ type: "chat:suggest-resolve", payload: choice });
     },
     [post]
   );
@@ -937,6 +1006,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
+          userStoppedRef.current = false;
           setIntentFeedback(undefined);
           setThinkingBuffer("");
           setAgentOverlay(undefined);
@@ -945,6 +1015,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:thinking-delta": {
+          if (userStoppedRef.current) {
+            break;
+          }
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
@@ -954,6 +1027,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "agent:activity": {
+          if (userStoppedRef.current) {
+            break;
+          }
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
@@ -963,6 +1039,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:delta": {
+          if (userStoppedRef.current) {
+            break;
+          }
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
@@ -977,6 +1056,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
+          userStoppedRef.current = false;
           setMessages((prev) => [...prev, message.payload.message]);
           setIntentFeedback(undefined);
           setJobProgress((current) =>
@@ -988,11 +1068,42 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIsStreaming(false);
           break;
         }
+        case "chat:cancelled": {
+          const activeId = threadsStateRef.current?.activeId;
+          if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
+          userStoppedRef.current = true;
+          setIntentFeedback(undefined);
+          setJobProgress(undefined);
+          setDegradationNotification(undefined);
+          setStreamingBuffer("");
+          setThinkingBuffer("");
+          setAgentOverlay(undefined);
+          setIsStreaming(false);
+          setError("");
+          if (message.payload.message?.content) {
+            const stopped = message.payload.message;
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (
+                last?.role === "assistant" &&
+                last.content === stopped.content &&
+                Math.abs((last.timestamp ?? 0) - stopped.timestamp) < 5_000
+              ) {
+                return prev;
+              }
+              return [...prev, stopped];
+            });
+          }
+          break;
+        }
         case "chat:error": {
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
+          userStoppedRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -1057,6 +1168,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           break;
         case "intent:feedback":
+          if (userStoppedRef.current) {
+            break;
+          }
           if (message.payload.status === "complete") {
             setIntentFeedback(undefined);
             break;
@@ -1095,6 +1209,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "degradation:notification":
+          if (userStoppedRef.current) {
+            break;
+          }
           setDegradationNotification(message.payload);
           break;
         case "trace:autoload":
@@ -1188,9 +1305,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           ]);
           break;
         case "job:progress":
+          if (userStoppedRef.current) {
+            break;
+          }
           setJobProgress(message.payload);
           break;
         case "job:complete":
+          if (userStoppedRef.current) {
+            break;
+          }
           if (message.payload.deliverable !== "chat") {
             setJobProgress(message.payload);
           }
@@ -1242,6 +1365,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       }
       setError("");
       setAttachmentError("");
+      userStoppedRef.current = false;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1359,6 +1483,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         return undefined;
       }
       setError("");
+      userStoppedRef.current = false;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1369,11 +1494,31 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [post]);
 
   const handleStopStreaming = useCallback(() => {
+    userStoppedRef.current = true;
     post({ type: "chat:stream-cancel" });
     setIsStreaming(false);
-    setStreamingBuffer("");
     setThinkingBuffer("");
     setAgentOverlay(undefined);
+    setIntentFeedback(undefined);
+    setJobProgress(undefined);
+    setDegradationNotification(undefined);
+    setError("");
+    // Finalize locally so Thinking disappears immediately; host chat:cancelled dedupes.
+    setStreamingBuffer((buf) => {
+      const partial = buf.trim();
+      const content = partial || CHAT_STOPPED_MESSAGE;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.content === content) {
+          return prev;
+        }
+        return [
+          ...prev,
+          { role: "assistant", content, timestamp: Date.now(), links: [] }
+        ];
+      });
+      return "";
+    });
   }, [post]);
 
   const syncExplorerRepoFromContext = useCallback(() => {
@@ -1707,6 +1852,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             actionContext={evidenceActionContext}
             conflicts={conflictState?.conflicts}
             scrollEpoch={scrollEpoch}
+            onSuggestResolve={handleSuggestResolve}
           />
           <DegradationNotification
             compact
