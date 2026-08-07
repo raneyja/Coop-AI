@@ -568,7 +568,7 @@
 
 .hero-demo-section {
   position: relative;
-  min-height: 520px;
+  min-height: 620px;
   overflow: hidden;
 }
 
@@ -588,10 +588,53 @@
   opacity: 1;
 }
 
+.hero-patch-pointer {
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+}
+
+.hero-patch-pointer-aim {
+  animation: hero-patch-aim 0.9s ease-out forwards;
+}
+
+.hero-patch-pointer-press {
+  animation: hero-patch-press 0.32s ease-in forwards;
+}
+
+@keyframes hero-patch-aim {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + 18px), calc(-50% + 14px)) scale(0.85);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes hero-patch-press {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  45% {
+    opacity: 1;
+    transform: translate(calc(-50% + 2px), calc(-50% + 3px)) scale(0.88);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + 2px), calc(-50% + 3px)) scale(0.75);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-demo-scatter-animation,
   .hero-demo-context-card,
-  .hero-demo-loading-spinner {
+  .hero-demo-loading-spinner,
+  .hero-patch-pointer-aim,
+  .hero-patch-pointer-press {
     animation: none;
     opacity: 1;
   }
