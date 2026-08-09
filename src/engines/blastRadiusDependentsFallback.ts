@@ -1,7 +1,17 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
+import type { Dirent } from "node:fs";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
+
+/** Lazy Node builtins — keeps the webview bundle free of top-level node: imports. */
+function nodeFs(): typeof import("node:fs") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("node:fs") as typeof import("node:fs");
+}
+
+function nodePath(): typeof import("node:path") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("node:path") as typeof import("node:path");
+}
 
 export type GraphEdgeSource =
   | "scip"
@@ -986,14 +996,14 @@ function errorMessage(error: unknown): string {
 
 function fsExists(root: string): boolean {
   try {
-    return fs.existsSync(root);
+    return nodeFs().existsSync(root);
   } catch {
     return false;
   }
 }
 
 function fsReadFile(absolutePath: string): string {
-  return fs.readFileSync(absolutePath, "utf8");
+  return nodeFs().readFileSync(absolutePath, "utf8");
 }
 
 const LOCAL_SKIP_DIRS = new Set([
@@ -1035,9 +1045,9 @@ function walkLocalTextFiles(
     if (!current) {
       continue;
     }
-    let entries: fs.Dirent[];
+    let entries: Dirent[];
     try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
+      entries = nodeFs().readdirSync(current, { withFileTypes: true });
     } catch {
       continue;
     }
@@ -1053,7 +1063,7 @@ function walkLocalTextFiles(
       if (LOCAL_SKIP_DIRS.has(entry.name)) {
         continue;
       }
-      const fullPath = path.join(current, entry.name);
+      const fullPath = nodePath().join(current, entry.name);
       if (entry.isDirectory()) {
         stack.push(fullPath);
         continue;
@@ -1061,7 +1071,7 @@ function walkLocalTextFiles(
       if (!entry.isFile() || !isLocalTextCandidate(fullPath)) {
         continue;
       }
-      const relativePath = path.relative(root, fullPath);
+      const relativePath = nodePath().relative(root, fullPath);
       if (!visitor(fullPath, relativePath)) {
         return;
       }

@@ -105,17 +105,20 @@ const PROVIDER_LABEL: Record<CodeHostProviderPreference, string> = {
   bitbucket: "Bitbucket"
 };
 
+/** Full class strings — Tailwind purges dynamic `codehost--${provider}` suffixes. */
+const PROVIDER_CLASS: Record<CodeHostProviderPreference, string> = {
+  github: "coop-explorer-codehost coop-explorer-codehost--github",
+  gitlab: "coop-explorer-codehost coop-explorer-codehost--gitlab",
+  bitbucket: "coop-explorer-codehost coop-explorer-codehost--bitbucket"
+};
+
 /** Plain-text host label — same hues as admin CodeHostBadge, no chip chrome. */
 function CodeHostTextLabel({ path }: { path: string }): React.ReactElement | null {
   const parsed = parseRepoNodePath(path);
   if (!parsed) {
     return null;
   }
-  return (
-    <span className={`coop-explorer-codehost coop-explorer-codehost--${parsed.provider}`}>
-      {PROVIDER_LABEL[parsed.provider]}
-    </span>
-  );
+  return <span className={PROVIDER_CLASS[parsed.provider]}>{PROVIDER_LABEL[parsed.provider]}</span>;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;

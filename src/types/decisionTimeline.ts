@@ -118,6 +118,8 @@ export type DecisionIntegrationSearch = {
 
 export type DecisionTimeline = {
   file: string;
+  /** Active Use-repo code host for this trace (GitHub / GitLab / Bitbucket). */
+  provider?: import("../api/codeHosts/types").CodeHostProvider;
   targetLabel?: string;
   lineRange?: LineRange;
   codeSnippet?: string;

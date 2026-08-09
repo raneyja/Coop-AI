@@ -738,16 +738,42 @@ export type WebviewOutbound =
       };
     };
     }
-  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: unknown; dismissed?: boolean } }
-  | { type: "ownership:card"; payload: { artifactId?: string; report: unknown; slackSearch?: unknown; dismissed?: boolean } }
+  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: unknown; codeHost?: string; dismissed?: boolean } }
+  | {
+      type: "ownership:card";
+      payload: { artifactId?: string; report: unknown; slackSearch?: unknown; codeHost?: string; dismissed?: boolean };
+    }
   | {
       type: "repo-summary:card";
-      payload: { artifactId?: string; evidence: unknown; owner: string; repo: string; branch?: string; dismissed?: boolean };
+      payload: {
+        artifactId?: string;
+        evidence: unknown;
+        owner: string;
+        repo: string;
+        branch?: string;
+        codeHost?: string;
+        dismissed?: boolean;
+      };
     }
-  | { type: "blast-radius:card"; payload: { artifactId?: string; evidence: unknown; file: string; dismissed?: boolean } }
+  | {
+      type: "blast-radius:card";
+      payload: { artifactId?: string; evidence: unknown; file: string; codeHost?: string; dismissed?: boolean };
+    }
   | {
       type: "knowledge-gaps:card";
-      payload: { artifactId?: string; evidence: unknown; confluence?: unknown; jira?: unknown; slack?: unknown; notion?: unknown; googleDocs?: unknown; teams?: unknown; file?: string; dismissed?: boolean };
+      payload: {
+        artifactId?: string;
+        evidence: unknown;
+        confluence?: unknown;
+        jira?: unknown;
+        slack?: unknown;
+        notion?: unknown;
+        googleDocs?: unknown;
+        teams?: unknown;
+        file?: string;
+        codeHost?: string;
+        dismissed?: boolean;
+      };
     }
   | {
       type: "integration:card";

@@ -4999,6 +4999,14 @@ export class CoopChatSession {
     };
   }
 
+  private activeEvidenceCodeHost(): import("./types").CodeHostProviderPreference {
+    return (
+      this.currentContext.provider ??
+      this.preferences.defaultCodeHost ??
+      "github"
+    );
+  }
+
   private async postRepoSummaryEvidenceFromBundle(): Promise<void> {
     let evidence = repoSummaryFromBundle(this.lastContextBundle);
     if (!evidence) {
@@ -5011,7 +5019,8 @@ export class CoopChatSession {
       evidence,
       owner: this.currentContext.owner ?? this.preferences.owner ?? "unknown",
       repo: this.currentContext.repo ?? this.preferences.repo ?? "unknown",
-      branch: this.currentContext.branch ?? this.preferences.branch
+      branch: this.currentContext.branch ?? this.preferences.branch,
+      codeHost: this.activeEvidenceCodeHost()
     };
     this.recordEvidenceArtifact("repo-summary", artifactId, payload);
     this.post({ type: "repo-summary:card", payload });
@@ -5024,7 +5033,12 @@ export class CoopChatSession {
     }
     const evidence = blastRadiusFromBundle(this.lastContextBundle) ?? { file };
     const artifactId = this.beginEvidenceArtifact();
-    const payload = { artifactId, evidence, file };
+    const payload = {
+      artifactId,
+      evidence,
+      file,
+      codeHost: this.activeEvidenceCodeHost()
+    };
     this.recordEvidenceArtifact("blast-radius", artifactId, payload);
     this.post({ type: "blast-radius:card", payload });
   }
@@ -5050,7 +5064,8 @@ export class CoopChatSession {
       notion,
       googleDocs,
       teams,
-      file: this.currentContext.file
+      file: this.currentContext.file,
+      codeHost: this.activeEvidenceCodeHost()
     };
     this.recordEvidenceArtifact("knowledge-gaps", artifactId, payload);
     this.post({ type: "knowledge-gaps:card", payload });
@@ -5072,11 +5087,15 @@ export class CoopChatSession {
     if (!report) {
       return;
     }
+    if (!report.provider) {
+      report.provider = this.activeEvidenceCodeHost();
+    }
     const artifactId = this.beginEvidenceArtifact();
     const payload = {
       artifactId,
       report,
-      slackSearch: slackSearchFromBundle(this.lastContextBundle)
+      slackSearch: slackSearchFromBundle(this.lastContextBundle),
+      codeHost: report.provider ?? this.activeEvidenceCodeHost()
     };
     this.recordEvidenceArtifact("ownership", artifactId, payload);
     this.post({ type: "ownership:card", payload });
@@ -5115,7 +5134,10 @@ export class CoopChatSession {
     }
 
     const artifactId = this.beginEvidenceArtifact();
-    const payload = { artifactId, timeline };
+    if (!timeline.provider) {
+      timeline.provider = this.activeEvidenceCodeHost();
+    }
+    const payload = { artifactId, timeline, codeHost: timeline.provider };
     this.recordEvidenceArtifact("decision", artifactId, payload);
     this.post({ type: "decision:timeline", payload });
   }
@@ -8378,7 +8400,7 @@ export class CoopChatSession {
 
   /** Align quick-action health with Settings → Tools (org GitHub App / OAuth). */
   private applyOrgCodeHostHealthOverrides(health: IntegrationHealth[]): IntegrationHealth[] {
-    if (isCoopDevMode() || readLightningBackend() !== "cloud") {
+    if (readLightningBackend() !== "cloud") {
       return health;
     }
     const provider = this.preferences.defaultCodeHost ?? "github";

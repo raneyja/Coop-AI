@@ -234,8 +234,11 @@ async function crawlStructureManifestForRepo(
 
 export function parseRepoId(repoId: string): ParsedRepo {
   const providerPart = repoId.includes(":") ? repoId.split(":")[0] : "github";
-  const slug = repoId.includes(":") ? repoId.split(":")[1] : repoId;
-  const [owner, repo] = (slug ?? repoId).split("/");
+  const slug = repoId.includes(":") ? repoId.slice(repoId.indexOf(":") + 1) : repoId;
+  const slash = (slug ?? "").indexOf("/");
+  const owner = slash > 0 ? slug.slice(0, slash) : "";
+  // Keep nested GitLab paths (group/subgroup/project) — do not truncate at the second segment.
+  const repo = slash > 0 ? slug.slice(slash + 1) : "";
   if (!owner || !repo) {
     throw new Error(`Invalid repoId: ${repoId}`);
   }
@@ -460,11 +463,15 @@ async function fetchBitbucketFile(
   token: string,
   branch: string
 ): Promise<string> {
-  const headers = bitbucketHeaders(token);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "*/*",
+    "User-Agent": "coop-ai-backend"
+  };
   const repoUrl = `${BITBUCKET_API}/repositories/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
   const response = await fetch(
     `${repoUrl}/src/${encodeURIComponent(branch)}/${encodeBitbucketPath(filePath)}`,
-    { headers }
+    { headers, redirect: "follow" }
   );
   if (!response.ok) {
     const body = await response.text();

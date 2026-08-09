@@ -169,6 +169,7 @@ export class OwnershipGraphEngine {
 
     const report: OwnershipReport = {
       path,
+      provider: resolved.provider,
       owner: params.owner,
       repo: params.repo,
       scores,

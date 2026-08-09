@@ -2682,13 +2682,12 @@
   }
 
   .coop-explorer-codehost--github {
-    /* Admin CodeHostBadge: text-white */
-    color: #ffffff;
+    /* Distinct from repo name; violet pops on light and dark */
+    color: #a78bfa;
   }
 
   [data-theme="light"] .coop-explorer-codehost--github {
-    /* White disappears on light canvas — violet keeps the same “bright host” role */
-    color: #8b5cf6;
+    color: #7c3aed;
   }
 
   .coop-explorer-codehost--gitlab {

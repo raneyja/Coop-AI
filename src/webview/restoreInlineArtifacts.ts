@@ -35,7 +35,8 @@ function restoreInlineArtifact(entry: ChatPersistedArtifact): ChatInlineArtifact
         id: entry.id,
         kind: "decision",
         timestamp: entry.timestamp,
-        timeline: payload.timeline as DecisionTimelinePayload
+        timeline: payload.timeline as DecisionTimelinePayload,
+        codeHost: payload.codeHost as string | undefined
       };
     case "ownership":
       return {
@@ -43,7 +44,8 @@ function restoreInlineArtifact(entry: ChatPersistedArtifact): ChatInlineArtifact
         kind: "ownership",
         timestamp: entry.timestamp,
         report: payload.report as OwnershipCardPayload,
-        slackSearch: payload.slackSearch as SlackSearchEvidence | undefined
+        slackSearch: payload.slackSearch as SlackSearchEvidence | undefined,
+        codeHost: payload.codeHost as string | undefined
       };
     case "repo-summary":
       return {
@@ -53,7 +55,8 @@ function restoreInlineArtifact(entry: ChatPersistedArtifact): ChatInlineArtifact
         evidence: payload.evidence as RepoSummaryEvidence,
         owner: String(payload.owner ?? ""),
         repo: String(payload.repo ?? ""),
-        branch: payload.branch as string | undefined
+        branch: payload.branch as string | undefined,
+        codeHost: payload.codeHost as string | undefined
       };
     case "blast-radius":
       return {
@@ -61,7 +64,8 @@ function restoreInlineArtifact(entry: ChatPersistedArtifact): ChatInlineArtifact
         kind: "blast-radius",
         timestamp: entry.timestamp,
         evidence: payload.evidence as BlastRadiusEvidence,
-        file: String(payload.file ?? "")
+        file: String(payload.file ?? ""),
+        codeHost: payload.codeHost as string | undefined
       };
     case "knowledge-gaps":
       return {
@@ -75,7 +79,8 @@ function restoreInlineArtifact(entry: ChatPersistedArtifact): ChatInlineArtifact
         notion: payload.notion as NotionSearchEvidence | undefined,
         googleDocs: payload.googleDocs as GoogleDocsSearchEvidence | undefined,
         teams: payload.teams as TeamsSearchEvidence | undefined,
-        file: payload.file as string | undefined
+        file: payload.file as string | undefined,
+        codeHost: payload.codeHost as string | undefined
       };
     case "integration":
       return {

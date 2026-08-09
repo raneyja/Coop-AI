@@ -53,6 +53,7 @@ export type ChatInlineArtifact =
       kind: "decision";
       timestamp: number;
       timeline: DecisionTimelinePayload;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -60,6 +61,7 @@ export type ChatInlineArtifact =
       timestamp: number;
       report: OwnershipCardPayload;
       slackSearch?: SlackSearchEvidence;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -69,6 +71,7 @@ export type ChatInlineArtifact =
       owner: string;
       repo: string;
       branch?: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -76,6 +79,7 @@ export type ChatInlineArtifact =
       timestamp: number;
       evidence: BlastRadiusEvidence;
       file: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -89,6 +93,7 @@ export type ChatInlineArtifact =
       googleDocs?: GoogleDocsSearchEvidence;
       teams?: TeamsSearchEvidence;
       file?: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -543,6 +548,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost ?? artifact.timeline.provider}
         />
       );
     case "ownership":
@@ -553,6 +559,7 @@ function renderArtifact(
           slackSearch={artifact.slackSearch}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost ?? artifact.report.provider}
         />
       );
     case "repo-summary":
@@ -565,6 +572,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "blast-radius":
@@ -575,6 +583,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "knowledge-gaps":
@@ -591,6 +600,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "integration":

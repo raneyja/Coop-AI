@@ -124,6 +124,7 @@ export class DecisionArchaeologyEngine {
 
     const timeline: DecisionTimeline = {
       file,
+      provider: coords.provider,
       targetLabel: formatTargetLabel(file, lineRange),
       lineRange,
       codeSnippet,

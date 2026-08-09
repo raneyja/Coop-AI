@@ -270,6 +270,19 @@ test("blast radius summary is strong for verified import-parse callers", () => {
   assert.equal(summary.quality, "strong");
   assert.match(summary.qualityReason, /import-parse/i);
   assert.match(summary.primaryFinding ?? "", /3 code dependent/i);
+  assert.ok(summary.sourceContributions.some((entry) => entry.provider === "github"));
+});
+
+test("blast radius source brands follow the active Use-repo code host", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "apps/api/plane/db/models/state.py",
+    directDependents: ["apps/api/plane/app/views/state.py"],
+    graphMeta: { edgeCount: 12, source: "import-parse", lightningEnabled: true },
+    warnings: []
+  };
+  const summary = summarizeBlastRadius(evidence, "apps/api/plane/db/models/state.py", "bitbucket");
+  assert.ok(summary.sourceContributions.some((entry) => entry.provider === "bitbucket"));
+  assert.ok(summary.sourceContributions.every((entry) => entry.provider !== "github"));
 });
 
 test("integration summary marks empty result sets as weak", () => {

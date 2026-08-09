@@ -178,10 +178,15 @@ type InboundMessage =
       };
     }
   | { type: "prompts:insert"; payload: { text: string; actionId?: string } }
-  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: DecisionTimelinePayload } }
+  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: DecisionTimelinePayload; codeHost?: string } }
   | {
       type: "ownership:card";
-      payload: { artifactId?: string; report: OwnershipCardPayload; slackSearch?: import("../context/contextBundleEvidence").SlackSearchEvidence };
+      payload: {
+        artifactId?: string;
+        report: OwnershipCardPayload;
+        slackSearch?: import("../context/contextBundleEvidence").SlackSearchEvidence;
+        codeHost?: string;
+      };
     }
   | {
       type: "repo-summary:card";
@@ -191,6 +196,7 @@ type InboundMessage =
         owner: string;
         repo: string;
         branch?: string;
+        codeHost?: string;
       };
     }
   | {
@@ -199,6 +205,7 @@ type InboundMessage =
         artifactId?: string;
         evidence: import("../context/contextBundleEvidence").BlastRadiusEvidence;
         file: string;
+        codeHost?: string;
       };
     }
   | {
@@ -213,6 +220,7 @@ type InboundMessage =
         googleDocs?: import("../context/contextBundleEvidence").GoogleDocsSearchEvidence;
         teams?: import("../context/contextBundleEvidence").TeamsSearchEvidence;
         file?: string;
+        codeHost?: string;
       };
     }
   | {
@@ -1232,7 +1240,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               id: message.payload.artifactId ?? `decision-${Date.now()}-${current.length}`,
               kind: "decision",
               timestamp: Date.now(),
-              timeline: message.payload.timeline
+              timeline: {
+                ...message.payload.timeline,
+                provider:
+                  message.payload.timeline.provider ??
+                  (message.payload.codeHost as DecisionTimelinePayload["provider"])
+              },
+              codeHost: message.payload.codeHost
             }
           ]);
           break;
@@ -1243,8 +1257,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               id: message.payload.artifactId ?? `ownership-${Date.now()}-${current.length}`,
               kind: "ownership",
               timestamp: Date.now(),
-              report: message.payload.report,
-              slackSearch: message.payload.slackSearch
+              report: {
+                ...message.payload.report,
+                provider:
+                  message.payload.report.provider ??
+                  (message.payload.codeHost as OwnershipCardPayload["provider"])
+              },
+              slackSearch: message.payload.slackSearch,
+              codeHost: message.payload.codeHost
             }
           ]);
           break;
@@ -1258,7 +1278,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               evidence: message.payload.evidence,
               owner: message.payload.owner,
               repo: message.payload.repo,
-              branch: message.payload.branch
+              branch: message.payload.branch,
+              codeHost: message.payload.codeHost
             }
           ]);
           break;
@@ -1270,7 +1291,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               kind: "blast-radius",
               timestamp: Date.now(),
               evidence: message.payload.evidence,
-              file: message.payload.file
+              file: message.payload.file,
+              codeHost: message.payload.codeHost
             }
           ]);
           break;
@@ -1288,7 +1310,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               notion: message.payload.notion,
               googleDocs: message.payload.googleDocs,
               teams: message.payload.teams,
-              file: message.payload.file
+              file: message.payload.file,
+              codeHost: message.payload.codeHost
             }
           ]);
           break;

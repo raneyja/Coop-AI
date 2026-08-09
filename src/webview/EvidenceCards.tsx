@@ -78,6 +78,7 @@ import {
   type IntegrationSourceId
 } from "./components/IntegrationSourceBrand";
 import { isIntegrationConnectedForSources, type IntegrationSearchEvidenceLike } from "./integrationEvidenceVisibility";
+import { evidenceCodeHostConnection } from "./evidenceCodeHost";
 
 export function RepoSummaryEvidenceCard({
   evidence,
@@ -86,7 +87,8 @@ export function RepoSummaryEvidenceCard({
   branch,
   artifactId,
   conflicts,
-  actionContext
+  actionContext,
+  codeHost
 }: {
   evidence: RepoSummaryEvidence;
   owner: string;
@@ -95,7 +97,9 @@ export function RepoSummaryEvidenceCard({
   artifactId: string;
   conflicts?: ConflictSummary[];
   actionContext: EvidenceActionContext;
+  codeHost?: string;
 }): React.ReactElement {
+  const host = evidenceCodeHostConnection(codeHost);
   const [expanded, setExpanded] = useState({
     manifest: true,
     entry: true,
@@ -117,8 +121,8 @@ export function RepoSummaryEvidenceCard({
   const googleDocsCount = evidence.googleDocs?.documents?.length ?? 0;
 
   const summary = useMemo(
-    () => summarizeRepoSummary(evidence, owner, repo),
-    [evidence, owner, repo]
+    () => summarizeRepoSummary(evidence, owner, repo, codeHost),
+    [evidence, owner, repo, codeHost]
   );
 
   const userWarnings = useMemo(() => {
@@ -128,7 +132,7 @@ export function RepoSummaryEvidenceCard({
 
   const sources = useMemo(() => {
     const list: EvidenceCardSource[] = [
-      { provider: "github", detail: `${entryCount} anchor file${entryCount === 1 ? "" : "s"}` }
+      { provider: host, detail: `${entryCount} anchor file${entryCount === 1 ? "" : "s"}` }
     ];
     if (isIntegrationConnectedForSources(evidence.confluence)) list.push({ provider: "confluence", detail: `${confluenceCount} page(s)` });
     if (isIntegrationConnectedForSources(evidence.jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
@@ -137,7 +141,7 @@ export function RepoSummaryEvidenceCard({
     if (isIntegrationConnectedForSources(evidence.notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
     if (isIntegrationConnectedForSources(evidence.googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
     return list;
-  }, [entryCount, evidence.confluence, evidence.jira, evidence.slack, evidence.teams, evidence.notion, evidence.googleDocs, confluenceCount, jiraCount, slackCount, teamsCount, notionCount, googleDocsCount]);
+  }, [host, entryCount, evidence.confluence, evidence.jira, evidence.slack, evidence.teams, evidence.notion, evidence.googleDocs, confluenceCount, jiraCount, slackCount, teamsCount, notionCount, googleDocsCount]);
 
   const ownershipScores = evidence.ownershipReport?.scores ?? [];
   const ownershipPrimary = ownershipScores.find((score) => score.tier === "primary");
@@ -157,7 +161,7 @@ export function RepoSummaryEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection="github"
+          connection={host}
           briefSummary={
             entryCount > 0
               ? {
@@ -515,14 +519,17 @@ export function BlastRadiusEvidenceCard({
   file,
   artifactId,
   conflicts,
-  actionContext
+  actionContext,
+  codeHost
 }: {
   evidence: BlastRadiusEvidence;
   file: string;
   artifactId: string;
   conflicts?: ConflictSummary[];
   actionContext: EvidenceActionContext;
+  codeHost?: string;
 }): React.ReactElement {
+  const host = evidenceCodeHostConnection(codeHost);
   const [expanded, setExpanded] = useState({
     graph: false,
     docs: false,
@@ -597,8 +604,8 @@ export function BlastRadiusEvidenceCard({
   );
 
   const summary = useMemo(
-    () => summarizeBlastRadius(evidence, file),
-    [evidence, file]
+    () => summarizeBlastRadius(evidence, file, codeHost),
+    [evidence, file, codeHost]
   );
   const targetMeta = summary.target ?? file;
 
@@ -610,13 +617,13 @@ export function BlastRadiusEvidenceCard({
   const sources = useMemo(() => {
     const list: EvidenceCardSource[] = [];
     if (directCount || transitiveCount) {
-      list.push({ provider: "github", detail: `${directCount + transitiveCount} code dependent(s)` });
+      list.push({ provider: host, detail: `${directCount + transitiveCount} code dependent(s)` });
     }
     if (docsCount) {
-      list.push({ provider: "github", detail: `${docsCount} docs reference(s)` });
+      list.push({ provider: host, detail: `${docsCount} docs reference(s)` });
     }
-    if (prCount) list.push({ provider: "github", detail: `${prCount} open PR(s)` });
-    if (evidence.ownersByFile?.length) list.push({ provider: "github", detail: "CODEOWNERS" });
+    if (prCount) list.push({ provider: host, detail: `${prCount} open PR(s)` });
+    if (evidence.ownersByFile?.length) list.push({ provider: host, detail: "CODEOWNERS" });
     if (isIntegrationConnectedForSources(evidence.slackSearch)) {
       list.push({ provider: "slack", detail: `${slackCount} message(s)` });
     }
@@ -635,9 +642,10 @@ export function BlastRadiusEvidenceCard({
     if (isIntegrationConnectedForSources(evidence.teamsSearch)) {
       list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
     }
-    if (list.length === 0) list.push({ provider: "github", detail: "Limited graph" });
+    if (list.length === 0) list.push({ provider: host, detail: "Limited graph" });
     return list;
   }, [
+    host,
     directCount,
     transitiveCount,
     docsCount,
@@ -670,7 +678,7 @@ export function BlastRadiusEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection="github"
+          connection={host}
           briefSummary={{
             title: `Code dependents (${directCount + transitiveCount})`,
             sourceLabel: blastRadiusSourceLabelDependencies()
@@ -1068,7 +1076,8 @@ export function KnowledgeGapsEvidenceCard({
   file,
   artifactId,
   conflicts,
-  actionContext
+  actionContext,
+  codeHost
 }: {
   evidence: KnowledgeGapsEvidence;
   confluence?: ConfluenceSearchEvidence;
@@ -1081,7 +1090,9 @@ export function KnowledgeGapsEvidenceCard({
   artifactId: string;
   conflicts?: ConflictSummary[];
   actionContext: EvidenceActionContext;
+  codeHost?: string;
 }): React.ReactElement {
+  const host = evidenceCodeHostConnection(codeHost);
   const [expanded, setExpanded] = useState({
     scan: true,
     confluence: true,
@@ -1103,8 +1114,8 @@ export function KnowledgeGapsEvidenceCard({
   const depCount = evidence.dependencyGraph?.directDependents?.length ?? 0;
 
   const summary = useMemo(
-    () => summarizeKnowledgeGaps(evidence, file, confluence, jira, slack, notion, googleDocs, teams),
-    [evidence, file, confluence, jira, slack, notion, googleDocs, teams]
+    () => summarizeKnowledgeGaps(evidence, file, confluence, jira, slack, notion, googleDocs, teams, codeHost),
+    [evidence, file, confluence, jira, slack, notion, googleDocs, teams, codeHost]
   );
   const targetMeta = summary.target ?? file;
 
@@ -1114,23 +1125,24 @@ export function KnowledgeGapsEvidenceCard({
   );
 
   const sources = useMemo(() => {
-    const list: EvidenceCardSource[] = [{ provider: "github", detail: "Repo scan" }];
-    if (evidence.jobScan) list.push({ provider: "github", detail: "Gap scan" });
+    const list: EvidenceCardSource[] = [{ provider: host, detail: "Repo scan" }];
+    if (evidence.jobScan) list.push({ provider: host, detail: "Gap scan" });
     if (isIntegrationConnectedForSources(confluence)) list.push({ provider: "confluence", detail: `${pageCount} page(s)` });
     if (isIntegrationConnectedForSources(jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
     if (isIntegrationConnectedForSources(slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
     if (isIntegrationConnectedForSources(notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
     if (isIntegrationConnectedForSources(googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
     if (isIntegrationConnectedForSources(teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
-    if (evidence.ownershipReport) list.push({ provider: "github", detail: `${ownerCount} owner score(s)` });
+    if (evidence.ownershipReport) list.push({ provider: host, detail: `${ownerCount} owner score(s)` });
     if (evidence.dependencyGraph) {
       list.push({
-        provider: "github",
+        provider: host,
         detail: `${depCount || evidence.dependencyGraph?.edgeCount || 0} dependent(s)`
       });
     }
     return list;
   }, [
+    host,
     evidence.jobScan,
     confluence,
     jira,
@@ -1162,7 +1174,7 @@ export function KnowledgeGapsEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection="github"
+          connection={host}
           briefSummary={
             evidence.jobScan
               ? {

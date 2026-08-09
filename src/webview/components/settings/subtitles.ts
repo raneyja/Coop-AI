@@ -82,6 +82,44 @@ export function bitbucketIsConfigured(prefs: Preferences): boolean {
   return prefs.hasBitbucketAppInstalled;
 }
 
+/** Org App / OAuth only — used to hide local PAT fallback UI when already connected. */
+export function codeHostOrgInstalled(
+  prefs: Preferences,
+  provider: Preferences["defaultCodeHost"]
+): boolean {
+  if (provider === "github") {
+    return prefs.hasGitHubAppInstalled;
+  }
+  if (provider === "gitlab") {
+    return prefs.hasGitLabAppInstalled;
+  }
+  return prefs.hasBitbucketAppInstalled;
+}
+
+/** Org install only — hide local token fallback when the browser OAuth path is live. */
+export function integrationOrgInstalled(
+  prefs: Preferences,
+  provider: IntegrationChatProvider
+): boolean {
+  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
+  if (orgStatus) {
+    return orgStatus.installed;
+  }
+  if (provider === "slack") {
+    return prefs.hasSlackInstalled;
+  }
+  if (provider === "jira" || provider === "confluence") {
+    return prefs.hasAtlassianInstalled;
+  }
+  if (provider === "teams") {
+    return prefs.hasTeamsInstalled;
+  }
+  if (provider === "notion") {
+    return prefs.hasNotionInstalled;
+  }
+  return prefs.hasGoogleDocsInstalled;
+}
+
 export function codeHostsHubSubtitle(prefs: Preferences): string {
   const connected: string[] = [];
   if (githubIsConfigured(prefs)) {

@@ -142,6 +142,8 @@ export type OwnershipSignals = {
 
 export type OwnershipReport = {
   path: string;
+  /** Active Use-repo code host for this ownership map. */
+  provider?: import("../api/codeHosts/types").CodeHostProvider;
   owner: string;
   repo: string;
   scores: OwnershipScore[];

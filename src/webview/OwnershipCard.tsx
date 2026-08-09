@@ -17,7 +17,7 @@ import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import type { ConflictSummary } from "./types";
 import type { SlackSearchEvidence } from "../context/contextBundleEvidence";
 import {
-  ownershipSourceLabelGitHub,
+  ownershipSourceLabelCodeHost,
   ownershipSourceLabelSlack,
   ownershipSourceLabelSlackDiscussions
 } from "../prompts/ownershipSourceLabels";
@@ -33,6 +33,7 @@ import {
   EvidenceConnectionStack,
   EvidenceDerivedGroup
 } from "./EvidenceConnectionGroups";
+import { evidenceCodeHostConnection } from "./evidenceCodeHost";
 
 export type OwnershipCardPayload = OwnershipReport & {
   narrative?: string;
@@ -44,6 +45,7 @@ type OwnershipCardProps = {
   slackSearch?: SlackSearchEvidence;
   conflicts?: ConflictSummary[];
   actionContext: EvidenceActionContext;
+  codeHost?: string;
 };
 
 const RISK_LABELS: Record<keyof OwnershipRisk, string> = {
@@ -63,10 +65,16 @@ export function OwnershipCard({
   artifactId,
   slackSearch,
   conflicts,
-  actionContext
+  actionContext,
+  codeHost
 }: OwnershipCardProps): React.ReactElement {
+  const host = evidenceCodeHostConnection(codeHost ?? report.provider);
+  const codeHostLabel = ownershipSourceLabelCodeHost(host);
   const [expanded, setExpanded] = useState({ github: true, presence: false, history: false, slack: true });
-  const summary = useMemo(() => summarizeOwnershipReport(report, slackSearch), [report, slackSearch]);
+  const summary = useMemo(
+    () => summarizeOwnershipReport(report, slackSearch, host),
+    [report, slackSearch, host]
+  );
   const detailWarnings = useMemo(
     () => warningsBeyondLimitations(report.warnings, summary.limitations),
     [report.warnings, summary.limitations]
@@ -78,13 +86,13 @@ export function OwnershipCard({
   );
   const sources = useMemo((): EvidenceCardSource[] => {
     const list: EvidenceCardSource[] = [
-      { provider: "github", detail: `${report.scores.length} owner signal${report.scores.length === 1 ? "" : "s"}` }
+      { provider: host, detail: `${report.scores.length} owner signal${report.scores.length === 1 ? "" : "s"}` }
     ];
     if (report.scores.some((score) => score.presence)) {
       list.push({ provider: "slack", detail: "Presence" });
     }
     if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
-      list.push({ provider: "github", detail: "CODEOWNERS" });
+      list.push({ provider: host, detail: "CODEOWNERS" });
     }
     if (report.signals?.issues?.length) {
       list.push({
@@ -96,7 +104,7 @@ export function OwnershipCard({
       list.push({ provider: "slack", detail: `${slackSearch.messages.length} discussion(s)` });
     }
     return list;
-  }, [report, slackSearch]);
+  }, [report, slackSearch, host]);
 
   const slackPresenceView = useMemo(
     () => buildSlackPresenceViewModel(report.scores),
@@ -150,16 +158,16 @@ export function OwnershipCard({
         </EvidenceDerivedGroup>
 
         <EvidenceConnectionGroup
-          connection="github"
+          connection={host}
           briefSummary={{
             title: "Commits & reviews",
-            sourceLabel: ownershipSourceLabelGitHub()
+            sourceLabel: codeHostLabel
           }}
         >
           <IntegrationResultCollapsible
             title="Commits & reviews"
-            sourceLabel={ownershipSourceLabelGitHub()}
-            sectionDomId={evidenceSectionDomId(resolvedArtifactId, ownershipSourceLabelGitHub())}
+            sourceLabel={codeHostLabel}
+            sectionDomId={evidenceSectionDomId(resolvedArtifactId, codeHostLabel)}
             open={expanded.github}
             onToggle={() => setExpanded((s) => ({ ...s, github: !s.github }))}
           >

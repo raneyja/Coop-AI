@@ -174,9 +174,17 @@ export class BitbucketClient implements CodeHostClient {
   public async getFileContent(coords: RepoCoordinates, filePath: string): Promise<RemoteFileContent> {
     const branch = await this.resolveBranch(coords);
     const path = normalizePath(filePath);
+    // Raw file bodies must not send Accept: application/json (directory listings do).
     const response = await fetch(
       `${this.repoUrl(coords)}/src/${encodeURIComponent(branch)}/${pathSegments(path)}`,
-      { headers: this.headers }
+      {
+        headers: {
+          Authorization: this.headers.Authorization,
+          Accept: "*/*",
+          "User-Agent": this.headers["User-Agent"] ?? "coop-ai-extension"
+        },
+        redirect: "follow"
+      }
     );
     if (!response.ok) {
       throw new CodeHostError(`Failed to fetch file (${response.status}).`, response.status === 404 ? "not_found" : "network", response.status, this.provider);
