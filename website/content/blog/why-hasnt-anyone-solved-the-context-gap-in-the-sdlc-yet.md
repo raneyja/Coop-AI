@@ -1,9 +1,9 @@
 ---
 title: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet?"
-seoTitle: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet? | Coop"
+seoTitle: "Why Hasn't Anyone Solved the Context Gap in the SDLC Yet? | CoopAI"
 description: "Enterprise engineering teams generate enormous institutional knowledge across Slack, Jira, Notion, and GitHub. None of it reaches the editor. Here is why the context gap in the SDLC remains unsolved and what we are building to fix it."
 publishedAt: "2026-06-08"
-author: "Coop"
+author: "CoopAI Team"
 category: ideas
 featured: true
 quote: "The context gap is not inevitable. It is an engineering problem, and it has a solution."

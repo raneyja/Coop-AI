@@ -344,26 +344,49 @@
     min-width: 0;
   }
 
+  /*
+   * Highlight overlay: transparent textarea caret must share exact metrics with the
+   * mirror, or the caret drifts away from visible text (looks like trailing spaces).
+   * Form controls often use a different default font than surrounding divs.
+   */
   .coop-composer-input-mirror,
   .coop-composer-input {
     grid-area: 1 / 1;
+    box-sizing: border-box;
     width: 100%;
     min-width: 0;
     margin: 0;
     border: 0;
     padding: 0.625rem 0.75rem 0.25rem;
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    font-variant: normal;
+    font-feature-settings: "liga" 0, "calt" 0;
+    letter-spacing: normal;
+    word-spacing: normal;
     line-height: 1.625;
+    text-transform: none;
+    text-indent: 0;
+    white-space: pre-wrap;
     max-height: 140px;
     overflow-wrap: break-word;
     word-break: break-word;
+    tab-size: 4;
   }
 
   .coop-composer-input-mirror {
     pointer-events: none;
-    white-space: pre-wrap;
     overflow: hidden;
     color: var(--coop-composer-text);
+  }
+
+  /* Color-only slash highlight — weight/size changes shift caret vs. mirror text. */
+  .coop-composer-input-mirror .coop-slash-hint-command {
+    font-weight: inherit;
+    font-style: inherit;
+    letter-spacing: inherit;
   }
 
   .coop-composer-input {
@@ -1011,12 +1034,43 @@
     color: var(--coop-panel-foreground);
   }
 
+  .chat-message-stopped {
+    @apply m-0 text-[13px] italic leading-[1.55];
+    color: var(--coop-panel-muted);
+  }
+
   .chat-message-body p {
     @apply m-0;
   }
 
   .chat-message-body p + p {
     @apply mt-3;
+  }
+
+  .coop-suggest-chip-row {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+
+  .coop-suggest-chip {
+    @apply text-left;
+  }
+
+  .coop-suggest-chip--plain {
+    @apply px-2 py-1;
+  }
+
+  .coop-suggest-action-name {
+    color: var(--coop-slash-command);
+    font-weight: 700;
+  }
+
+  .coop-suggest-chip-run {
+    font-weight: 500;
+  }
+
+  .coop-suggest-clarifying {
+    @apply text-[13px] leading-[1.55];
+    color: var(--coop-panel-foreground);
   }
 
   .chat-message-attachments {
@@ -1518,6 +1572,16 @@
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
 
+  .coop-chat-code-block--ide {
+    border-color: color-mix(in srgb, var(--coop-pill-border) 70%, var(--vscode-textLink-foreground) 30%);
+    border-left-width: 3px;
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--vscode-textCodeBlock-background)) 96%,
+      var(--vscode-textLink-foreground) 4%
+    );
+  }
+
   .coop-chat-code-header {
     @apply flex items-center justify-between gap-2 border-b px-2.5 py-1.5;
     border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
@@ -1534,9 +1598,18 @@
     border-bottom-color: color-mix(in srgb, var(--coop-border) 55%, transparent);
   }
 
+  .coop-chat-code-header--ide {
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--vscode-textCodeBlock-background)) 82%,
+      var(--coop-panel-canvas) 18%
+    );
+  }
+
   .coop-chat-code-lang {
-    @apply text-[10px] font-medium uppercase tracking-wide;
+    @apply text-[10px] font-medium tracking-wide;
     color: var(--coop-panel-muted);
+    text-transform: none;
   }
 
   .coop-chat-code-copy {
@@ -1553,19 +1626,28 @@
   }
 
   .coop-chat-code-token--comment {
-    color: var(--vscode-editorLineNumber-foreground);
+    color: var(--vscode-editorLineNumber-foreground, #6a9955);
   }
 
   .coop-chat-code-token--string {
-    color: var(--vscode-debugTokenExpression-string);
+    color: var(
+      --vscode-symbolIcon-stringForeground,
+      var(--vscode-debugTokenExpression-string, #a31515)
+    );
   }
 
   .coop-chat-code-token--number {
-    color: var(--vscode-debugTokenExpression-number);
+    color: var(
+      --vscode-symbolIcon-numberForeground,
+      var(--vscode-debugTokenExpression-number, #098658)
+    );
   }
 
   .coop-chat-code-token--keyword {
-    color: var(--vscode-debugTokenExpression-boolean);
+    color: var(
+      --vscode-symbolIcon-keywordForeground,
+      var(--vscode-debugTokenExpression-name, #0000ff)
+    );
   }
 
   .coop-chat-code-token--property {
@@ -1626,6 +1708,53 @@
 
   .coop-patch-hunk-actions {
     @apply flex flex-wrap items-center gap-2 px-2.5 pb-2 pt-1;
+  }
+
+  .coop-patch-match-list {
+    @apply flex flex-col gap-2 px-2.5 py-2;
+  }
+
+  .coop-patch-match-option {
+    @apply block cursor-pointer overflow-hidden rounded-md border;
+    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 94%,
+      var(--coop-panel-canvas) 6%
+    );
+  }
+
+  .coop-patch-match-option--selected {
+    border-color: color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 65%, var(--coop-border) 35%);
+    background: color-mix(
+      in srgb,
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 88%,
+      var(--vscode-focusBorder, #007fd4) 12%
+    );
+  }
+
+  .coop-patch-match-option-header {
+    @apply flex items-center gap-2 border-b px-2.5 py-1.5 text-[11px];
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-match-checkbox {
+    @apply m-0 shrink-0;
+  }
+
+  .coop-patch-match-option-title {
+    @apply font-medium;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-patch-match-proposals {
+    @apply flex flex-wrap gap-3 border-b px-2.5 py-1.5 text-[11px];
+    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
+  }
+
+  .coop-patch-match-proposal {
+    @apply flex cursor-pointer items-center gap-1.5;
+    color: var(--coop-panel-muted);
   }
 
   .coop-patch-diff {
@@ -2547,6 +2676,30 @@
     color: var(--coop-panel-muted);
   }
 
+  /* Host label next to repo name — text only; hues match admin CodeHostBadge */
+  .coop-explorer-codehost {
+    @apply shrink-0 text-[11px] font-medium;
+  }
+
+  .coop-explorer-codehost--github {
+    /* Distinct from repo name; violet pops on light and dark */
+    color: #a78bfa;
+  }
+
+  [data-theme="light"] .coop-explorer-codehost--github {
+    color: #7c3aed;
+  }
+
+  .coop-explorer-codehost--gitlab {
+    /* Admin: text-orange-200 — slightly stronger for light webview contrast */
+    color: #fb923c;
+  }
+
+  .coop-explorer-codehost--bitbucket {
+    /* Admin: text-sky-200 — slightly stronger for light webview contrast */
+    color: #38bdf8;
+  }
+
   .coop-explorer-empty {
     @apply px-3 py-4 text-center text-[11px] leading-relaxed;
     color: var(--coop-panel-muted);
@@ -2694,6 +2847,31 @@
 
   .coop-result-connection-body .coop-result-section {
     @apply !border-b-0 !px-0 !py-2;
+  }
+
+  /* Collapsed preview: scroll through source rows before expanding deep detail */
+  .coop-result-connection-inventory {
+    @apply flex max-h-[7.5rem] flex-col gap-0 overflow-y-auto border-t px-1.5 pb-1.5 pt-0.5;
+    border-color: var(--coop-settings-divider);
+  }
+
+  .coop-result-connection-inventory-item {
+    @apply flex w-full min-w-0 items-start gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40;
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-result-connection-inventory-item:hover {
+    background: color-mix(in srgb, var(--coop-panel-canvas) 84%, var(--coop-panel-foreground) 16%);
+  }
+
+  .coop-result-connection-inventory-item .coop-source-heading-subtitle {
+    @apply line-clamp-1;
+  }
+
+  .coop-result-connection-inventory-item .coop-source-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .coop-result-derived-group {

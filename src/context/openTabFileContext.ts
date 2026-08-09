@@ -17,11 +17,12 @@ export async function readOpenTabFilesForChat(ctx: {
   file?: string;
   selectedLines?: [number, number];
   /**
-   * When true (remote explorer / codehost provenance), only read remote URI tabs.
-   * Never fall through to local disk or workspace clones.
+   * Zero-Clone default: only remote URI tabs. Pass `remoteOnly: false` only for
+   * explicit non-product tooling — never for chat / quick-action gather.
    */
   remoteOnly?: boolean;
 }): Promise<LocalFileContextPayload | undefined> {
+  const remoteOnly = ctx.remoteOnly !== false;
   const lines = ctx.selectedLines
     ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] }
     : undefined;
@@ -48,8 +49,8 @@ export async function readOpenTabFilesForChat(ctx: {
       } catch {
         continue;
       }
-    } else if (ctx.remoteOnly) {
-      // Remote provenance: ignore local clone / workspace tabs for the same path.
+    } else if (remoteOnly) {
+      // Zero-Clone: ignore local clone / workspace tabs for the same path.
       continue;
     } else if (fs.existsSync(ref.absolutePath)) {
       try {
@@ -71,7 +72,7 @@ export async function readOpenTabFilesForChat(ctx: {
 
     const sliced = sliceFileContent(raw, lines);
     return {
-      source: ctx.remoteOnly ? "remote-codehost" : "local-workspace",
+      source: remoteOnly ? "remote-codehost" : "local-workspace",
       activeFile: relativePath,
       files: [
         {
@@ -85,7 +86,7 @@ export async function readOpenTabFilesForChat(ctx: {
     };
   }
 
-  if (wantedPath && !ctx.remoteOnly) {
+  if (wantedPath && !remoteOnly) {
     return readWorkspaceFileFromDisk(wantedPath, lines);
   }
 

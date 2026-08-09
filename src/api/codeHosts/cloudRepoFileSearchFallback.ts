@@ -9,11 +9,15 @@ export function isRemoteFileSearchFallbackCandidate(error: unknown): boolean {
     const message = error.message.toLowerCase();
     return (
       message.includes("403") ||
+      message.includes("400") ||
       message.includes("422") ||
       message.includes("status code 403") ||
+      message.includes("status code 400") ||
       message.includes("status code 422") ||
       message.includes("validation failed") ||
-      message.includes("code search")
+      message.includes("code search") ||
+      message.includes("isn't supported") ||
+      message.includes("advanced search")
     );
   }
   return false;

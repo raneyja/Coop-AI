@@ -29,7 +29,7 @@ All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`**:
 | What repo/branch am I on | `getIdentity` |
 | File count, lines of code, size | `getInventory` |
 | Top-level structure | `getTreeOverview` |
-| Read any file (local clone or remote) | `readFile` |
+| Read any file (codehost / API only — Zero-Clone) | `readFile` |
 
 **Writer:** `INDEX_REPOSITORY` in `executors.ts` stores branch on `repo_stats`.  
 **Readers:** chat, quick actions, repo summary, and agent tools must call
@@ -62,6 +62,7 @@ same question must produce the same number.
 | Race inventory sources for latency | Keep the fixed order: `index-stats` -> `manifest` -> `tree` |
 | Prompt the model to estimate counts when evidence is thin | Say the total is unavailable |
 | Revive the Zero-Clone structure manifest crawl as primary | `repo_stats` is canonical; manifest is legacy fallback |
+| Prefer a local clone in `readFile` or chat attach | Codehost / `fetchRepoFile` only — see `.cursor/rules/zero-clone-remote-only.mdc` |
 
 ## Latency
 

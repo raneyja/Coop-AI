@@ -37,12 +37,13 @@ export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intellig
 Synthesize a response that:
 1. Identifies the true expert(s) for the target path or repository
 2. Highlights any single-point-of-failure risks
-3. Suggests backup experts or escalation paths
+3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from the evidence bundle — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
 4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
 5. Recommends knowledge transfer targets (who should learn this)
 
 Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
+Never invent people or Slack handles — every named human or team must appear in the evidence bundle (commits, reviews, CODEOWNERS) with a source label.
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -107,6 +108,9 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   } else {
     lines.push("Synthesize from evidence only.");
   }
+  lines.push(
+    "Required on-call shape: name the primary expert with a source label, then give at least one escalation avenue from teamGraph.escalationPath / CODEOWNERS / recent reviewers — or quote the explicit admin-gap wording from the evidence. Do not invent contacts."
+  );
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
@@ -154,7 +158,7 @@ export function formatOwnershipReportForPrompt(
 ): string {
   const sections: string[] = [];
 
-  if (report.orgContext?.source === "codeowners") {
+  if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
     const ctx = report.orgContext;
     sections.push(
       `### ${ownershipSourceLabelCodeowners()}\n` +
@@ -217,7 +221,7 @@ export function formatOwnershipReportForPrompt(
     );
   }
 
-  if (report.orgContext && report.orgContext.source !== "codeowners") {
+  if (report.orgContext && report.orgContext.source !== "codeowners" && report.orgContext.source !== "github_teams") {
     sections.push(
       `### Organizational context\n- Team: ${report.orgContext.teamName} (${report.orgContext.source})\n- Members: ${report.orgContext.members.join(", ") || "unknown"}`
     );

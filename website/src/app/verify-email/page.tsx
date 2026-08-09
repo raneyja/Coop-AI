@@ -6,7 +6,7 @@ import VerifyEmailPage from "./VerifyEmailPage";
 export const metadata: Metadata = buildPageMetadata(
   "/verify-email",
   "Verify email",
-  "Confirm your Coop AI email address.",
+  "Confirm your CoopAI email address.",
   { robots: noIndexRobots }
 );
 

@@ -34,6 +34,18 @@ test("buildIntegrationSearchTermList uses only repo file and jira-derived terms"
   assert.ok(!terms.includes("epd"));
 });
 
+test("buildIntegrationSearchTermList puts extraTerms ahead of file basenames", () => {
+  const terms = buildIntegrationSearchTermList({
+    owner: "documenso",
+    repo: "documenso",
+    activeFile: "apps/docs/src/lib/is-document-status.ts",
+    extraTerms: ["webhook delivery", "signature certificates"]
+  });
+  assert.equal(terms[0], "webhook delivery");
+  assert.ok(terms.includes("signature certificates"));
+  assert.ok(terms.indexOf("webhook delivery") < terms.indexOf("is-document-status"));
+});
+
 test("buildDiscussionSearchQueries never uses channel-scoped queries", () => {
   const queries = buildDiscussionSearchQueries({
     owner: "acme",

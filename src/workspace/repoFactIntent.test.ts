@@ -4,7 +4,9 @@ import {
   isRepoFileCountQuery,
   isRepoInventoryQuery,
   isRepoLineCountQuery,
+  isRepoPackageBoundaryQuery,
   isRepoStructureQuery,
+  needsPackageManifests,
   needsRepoTreeOverview,
   repoFactNeeds
 } from "./repoFactIntent";
@@ -61,6 +63,7 @@ test("differently worded LOC questions produce the same needs", () => {
   assert.equal(a.lineCount, true);
   // Line answers carry the file total from the same lookup.
   assert.equal(a.fileCount, true);
+  assert.equal(a.packageManifests, false);
 });
 
 test("LOC questions are inventory + structure questions, so they never route to a sample", () => {
@@ -77,11 +80,27 @@ test("isRepoStructureQuery covers monorepo / top-level structure questions", () 
   assert.equal(isRepoStructureQuery("how does auth work?"), false);
 });
 
+test("isRepoPackageBoundaryQuery covers Next.js / API package boundary smoke ask", () => {
+  assert.equal(
+    isRepoPackageBoundaryQuery("Where are the Next.js / API package boundaries?"),
+    true
+  );
+  assert.equal(isRepoStructureQuery("Where are the Next.js / API package boundaries?"), true);
+  assert.equal(needsRepoTreeOverview("Where are the Next.js / API package boundaries?"), true);
+  assert.equal(needsPackageManifests("Where are the Next.js / API package boundaries?"), true);
+  assert.equal(repoFactNeeds("Where are the Next.js / API package boundaries?").packageManifests, true);
+  assert.equal(isRepoPackageBoundaryQuery("what's the monorepo layout?"), true);
+  assert.equal(isRepoPackageBoundaryQuery("What's in the top-level package structure?"), true);
+  assert.equal(isRepoStructureQuery("What's in the top-level package structure?"), true);
+  assert.equal(isRepoPackageBoundaryQuery("how does auth middleware work?"), false);
+});
+
 test("needsRepoTreeOverview skips pure count questions", () => {
   assert.equal(needsRepoTreeOverview("how many files are inside of this repo?"), false);
   assert.equal(needsRepoTreeOverview("how many lines of code?"), false);
   assert.equal(needsRepoTreeOverview("is this a monorepo?"), true);
   assert.equal(repoFactNeeds("is this a monorepo?").treeOverview, true);
+  assert.equal(repoFactNeeds("is this a monorepo?").packageManifests, true);
 });
 
 console.log(`\nrepoFactIntent: ${passed} passed, ${failed} failed`);

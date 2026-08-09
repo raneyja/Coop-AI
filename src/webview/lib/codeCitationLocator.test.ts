@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { languageFromFilePath, tryParseCitationLocator } from "./codeCitationLocator";
+import {
+  languageFromFilePath,
+  languageTagMatchesPath,
+  resolveCitePathForLanguageFence,
+  tryParseCitationLocator
+} from "./codeCitationLocator";
+import { lightHighlight } from "./lightHighlight";
 
 let passed = 0;
 let failed = 0;
@@ -51,6 +57,35 @@ test("path-only locator works", () => {
 test("languageFromFilePath maps py to python", () => {
   assert.equal(languageFromFilePath("apps/api/foo.py"), "python");
   assert.equal(languageFromFilePath("src/a.tsx"), "typescript");
+});
+
+test("javascript tag matches typescript path (family)", () => {
+  assert.equal(
+    languageTagMatchesPath("javascript", "packages/lib/jobs/send-signing-email.ts"),
+    true
+  );
+});
+
+test("resolveCitePath upgrades javascript fence for open .ts file", () => {
+  const path = resolveCitePathForLanguageFence({
+    language: "javascript",
+    code: "export const X = 1;",
+    lines: ["Here's a relevant code snippet:", "```javascript"],
+    fenceStartIndex: 1,
+    activeFilePath: "packages/lib/jobs/send-signing-email.ts"
+  });
+  assert.equal(path, "packages/lib/jobs/send-signing-email.ts");
+});
+
+test("lightHighlight colors javascript keywords", () => {
+  const tokens = lightHighlight("export const x = 'hi';", "javascript");
+  assert.ok(tokens.some((t) => t.text === "export" && t.kind === "keyword"));
+  assert.ok(tokens.some((t) => t.text === "'hi'" && t.kind === "string"));
+});
+
+test("lightHighlight colors go-like unknown langs instead of monochrome", () => {
+  const tokens = lightHighlight("func main() {\n  return\n}", "go");
+  assert.ok(tokens.some((t) => t.kind === "keyword"));
 });
 
 console.log(`\ncodeCitationLocator: ${passed}/${passed + failed} tests ${failed === 0 ? "passed" : "FAILED"}`);

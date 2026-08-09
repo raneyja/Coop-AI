@@ -1,11 +1,23 @@
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { groupedIntegrationDocLabel } from "./sourcesFooterEnrichment";
+import {
+  evidenceCodeHostDisplayName,
+  resolveEvidenceCodeHost
+} from "../api/codeHosts/codeHostLabels";
 
-export function decisionSourceLabelCommit(sha: string): string {
-  return `[Sources: GitHub commit ${sha.slice(0, 7)}]`;
+export function decisionSourceLabelCommit(
+  sha: string,
+  codeHost?: string | null
+): string {
+  const host = evidenceCodeHostDisplayName(codeHost);
+  return `[Sources: ${host} commit ${sha.slice(0, 7)}]`;
 }
 
-export function decisionSourceLabelPr(number: number): string {
+export function decisionSourceLabelPr(number: number, codeHost?: string | null): string {
+  const host = resolveEvidenceCodeHost(codeHost);
+  if (host === "gitlab") {
+    return `[Sources: MR #${number}]`;
+  }
   return `[Sources: PR #${number}]`;
 }
 
@@ -34,13 +46,17 @@ export function decisionSourceLabelGoogleDocs(title: string): string {
   return `[Sources: Google Docs ${truncateLabel(title)}]`;
 }
 
-export function listDecisionSourceLabels(timeline: DecisionTimeline): string[] {
+export function listDecisionSourceLabels(
+  timeline: DecisionTimeline,
+  codeHost?: string | null
+): string[] {
+  const host = resolveEvidenceCodeHost(codeHost ?? timeline.provider);
   const labels: string[] = [];
   if (timeline.originalCommit) {
-    labels.push(decisionSourceLabelCommit(timeline.originalCommit.sha));
+    labels.push(decisionSourceLabelCommit(timeline.originalCommit.sha, host));
   }
   if (timeline.linkedPR) {
-    labels.push(decisionSourceLabelPr(timeline.linkedPR.number));
+    labels.push(decisionSourceLabelPr(timeline.linkedPR.number, host));
   }
   if (timeline.slackThread) {
     labels.push(
@@ -86,18 +102,21 @@ function truncateLabel(value: string): string {
   return trimmed.length <= 48 ? trimmed : `${trimmed.slice(0, 47)}…`;
 }
 
-export function listDecisionSourcesChecklist(timeline: DecisionTimeline): string[] {
-  return listDecisionSourceLabels(timeline).map((label) => {
+export function listDecisionSourcesChecklist(
+  timeline: DecisionTimeline,
+  codeHost?: string | null
+): string[] {
+  return listDecisionSourceLabels(timeline, codeHost).map((label) => {
     const suffix = decisionSourceChecklistSuffix(label);
     return `${label} — ${suffix}`;
   });
 }
 
 function decisionSourceChecklistSuffix(label: string): string {
-  if (label.startsWith("[Sources: GitHub commit")) {
+  if (/\[Sources: (?:GitHub|GitLab|Bitbucket) commit/.test(label)) {
     return "introducing commit and message — provenance; alternatives unknown unless stated";
   }
-  if (label.startsWith("[Sources: PR #")) {
+  if (label.startsWith("[Sources: PR #") || label.startsWith("[Sources: MR #")) {
     return "PR description, review comments, and approvals — decision rationale and rejected options";
   }
   if (label.startsWith("[Sources: Slack")) {

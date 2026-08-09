@@ -23,6 +23,8 @@ export type ZoektSearchHit = {
   lineNumber: number;
   content: string;
   score: number;
+  /** Per-hit provenance when API provides it (zoekt/scip vs embedding). */
+  source?: "zoekt" | "scip" | "embedding" | "fallback";
 };
 
 export type ScipSymbol = {
@@ -47,7 +49,13 @@ export type LocalSearchResult = {
   stale: boolean;
 };
 
-export type GraphDependentsSource = "scip" | "zoekt" | "heuristic" | "remote";
+export type GraphDependentsSource =
+  | "scip"
+  | "zoekt"
+  | "heuristic"
+  | "remote"
+  | "import-parse"
+  | "workspace";
 
 export type LocalDependentsResult = {
   file: string;

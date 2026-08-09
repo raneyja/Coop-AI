@@ -2,14 +2,25 @@ import * as vscode from "vscode";
 import {
   buildPatchCardState,
   deriveCardStatusFromHunks,
+  hunkNeedsMatchSelection,
+  hunkReadyToApply,
   PATCH_CARD_IDLE,
   pendingHunkIds,
+  selectedMatchIndicesForHunk,
+  setHunkMatchLocationsOnCard,
   setHunkStatusOnCard,
+  setSharedMatchProposalOnCard,
+  sharedMatchIndicesForHunk,
   withSuppressionRegistry
 } from "./patchDiffPreview";
 import { emitPatchEvent } from "./patchEvents";
 import { locateHunkById, type ParsedPatchSet } from "./patchParser";
-import { applyPatchesToWorkspace, undoPatchApplication, type FileUndoSnapshot } from "./patchApplier";
+import {
+  applyPatchesToWorkspace,
+  matchIndicesKey,
+  undoPatchApplication,
+  type FileUndoSnapshot
+} from "./patchApplier";
 import {
   getPatchRecord,
   listPatchCards,
@@ -19,7 +30,7 @@ import {
   updatePatchRecordCard,
   upsertPatchRecord
 } from "./patchSession";
-import type { PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
+import type { PatchCardState, PatchCardsUpdatePayload, PatchPreviewHunk } from "../chat/types";
 
 export type PatchSnapshotPublisher = (payload: PatchCardsUpdatePayload) => void;
 
@@ -66,6 +77,29 @@ export function resolvePatchCardStateForSession(): PatchCardState {
   return live ? withSuppressionRegistry(live) : withSuppressionRegistry(PATCH_CARD_IDLE);
 }
 
+function findPreviewHunk(
+  card: PatchCardState,
+  hunkId: string
+): { hunk: PatchPreviewHunk; file: PatchCardState["files"][number] } | undefined {
+  for (const file of card.files) {
+    const hunk = file.hunks.find((entry) => entry.id === hunkId);
+    if (hunk) {
+      return { hunk, file };
+    }
+  }
+  return undefined;
+}
+
+function matchIndicesForPreviewHunk(
+  located: { hunk: PatchPreviewHunk; file: PatchCardState["files"][number] }
+): number[] {
+  const shared = sharedMatchIndicesForHunk(located.file, located.hunk.id);
+  if (shared !== undefined) {
+    return shared;
+  }
+  return selectedMatchIndicesForHunk(located.hunk);
+}
+
 function patchSetForHunkIds(patches: ParsedPatchSet, hunkIds: string[]): ParsedPatchSet | undefined {
   const files: ParsedPatchSet["files"] = [];
   for (const hunkId of hunkIds) {
@@ -81,6 +115,66 @@ function patchSetForHunkIds(patches: ParsedPatchSet, hunkIds: string[]): ParsedP
     }
   }
   return files.length > 0 ? { files } : undefined;
+}
+
+function buildMatchIndicesForHunkIds(
+  card: PatchCardState,
+  patches: ParsedPatchSet,
+  hunkIds: string[]
+): { ok: true; matchIndicesByFileHunk: Record<string, number[]> } | { ok: false; error: string } {
+  const matchIndicesByFileHunk: Record<string, number[]> = {};
+  const subsetIndexByPath = new Map<string, number>();
+
+  for (const hunkId of hunkIds) {
+    const located = locateHunkById(patches, hunkId);
+    const preview = findPreviewHunk(card, hunkId);
+    if (!located || !preview) {
+      return { ok: false, error: "Could not find that edit in the patch." };
+    }
+
+    const path = located.file.relativePath;
+    const subsetIndex = subsetIndexByPath.get(path) ?? 0;
+    subsetIndexByPath.set(path, subsetIndex + 1);
+
+    if (preview.hunk.matchStatus === "not_found") {
+      return {
+        ok: false,
+        error: `${path}: SEARCH block not found in file`
+      };
+    }
+
+    const indices = matchIndicesForPreviewHunk(preview);
+    const needsIndices =
+      Boolean(preview.hunk.resolvedMatchIndices?.length) ||
+      preview.hunk.matchStatus === "ambiguous" ||
+      Boolean(preview.file.sharedMatchGroups?.some((group) => group.hunkIds.includes(hunkId)));
+
+    if (needsIndices) {
+      if (indices.length === 0) {
+        return {
+          ok: false,
+          error: `${path}: SEARCH block matches multiple locations — select where to apply`
+        };
+      }
+      matchIndicesByFileHunk[matchIndicesKey(path, subsetIndex)] = indices;
+    }
+  }
+
+  return { ok: true, matchIndicesByFileHunk };
+}
+
+function applyMatchSelectionsToCard(
+  card: PatchCardState,
+  matchSelections?: Readonly<Record<string, readonly string[]>>
+): PatchCardState {
+  if (!matchSelections) {
+    return card;
+  }
+  let next = card;
+  for (const [hunkId, locationIds] of Object.entries(matchSelections)) {
+    next = setHunkMatchLocationsOnCard(next, hunkId, locationIds);
+  }
+  return next;
 }
 
 function mergeUndoSnapshots(
@@ -122,9 +216,64 @@ function finalizeCardAfterHunkUpdate(card: PatchCardState): PatchCardState {
   };
 }
 
+export function setPendingPatchMatchLocations(
+  publish: PatchSnapshotPublisher | undefined,
+  messageTimestamp: number | undefined,
+  hunkId: string,
+  locationIds: readonly string[]
+): void {
+  const timestamp = resolveActivePatchTimestamp(messageTimestamp);
+  const record = getPatchRecord(timestamp);
+  if (!record || timestamp === undefined) {
+    publishSnapshot(publish);
+    return;
+  }
+
+  if (record.card.status !== "pending" && record.card.status !== "failed") {
+    publishSnapshot(publish, timestamp);
+    return;
+  }
+
+  const next = setHunkMatchLocationsOnCard(record.card, hunkId, locationIds);
+  updatePatchRecordCard(timestamp, { ...next, status: "pending", suppressMarkdown: true });
+  publishSnapshot(publish, timestamp);
+}
+
+export function setPendingSharedMatchProposal(
+  publish: PatchSnapshotPublisher | undefined,
+  messageTimestamp: number | undefined,
+  relativePath: string,
+  groupId: string,
+  locationId: string,
+  proposalId: string | null | undefined
+): void {
+  const timestamp = resolveActivePatchTimestamp(messageTimestamp);
+  const record = getPatchRecord(timestamp);
+  if (!record || timestamp === undefined) {
+    publishSnapshot(publish);
+    return;
+  }
+
+  if (record.card.status !== "pending" && record.card.status !== "failed") {
+    publishSnapshot(publish, timestamp);
+    return;
+  }
+
+  const next = setSharedMatchProposalOnCard(
+    record.card,
+    relativePath,
+    groupId,
+    locationId,
+    proposalId
+  );
+  updatePatchRecordCard(timestamp, { ...next, status: "pending", suppressMarkdown: true });
+  publishSnapshot(publish, timestamp);
+}
+
 export async function applyPendingPatch(
   publish?: PatchSnapshotPublisher,
-  messageTimestamp?: number
+  messageTimestamp?: number,
+  matchSelections?: Readonly<Record<string, readonly string[]>>
 ): Promise<boolean> {
   const timestamp = resolveActivePatchTimestamp(messageTimestamp);
   const record = getPatchRecord(timestamp);
@@ -140,20 +289,51 @@ export async function applyPendingPatch(
     return false;
   }
 
-  const ids = pendingHunkIds(record.card);
+  let card = applyMatchSelectionsToCard(record.card, matchSelections);
+  if (matchSelections) {
+    updatePatchRecordCard(timestamp, { ...card, status: "pending", suppressMarkdown: true });
+  }
+
+  const ids = pendingHunkIds(card);
   if (ids.length === 0) {
     void vscode.window.showWarningMessage("No pending edits left to apply.");
     publishSnapshot(publish, timestamp);
     return false;
   }
 
-  return applyPendingPatchHunks(publish, timestamp, ids);
+  const readyIds = ids.filter((hunkId) => {
+    const located = findPreviewHunk(card, hunkId);
+    return located ? hunkReadyToApply(located.hunk, located.file) : false;
+  });
+  const needingSelection = ids.filter((hunkId) => {
+    const located = findPreviewHunk(card, hunkId);
+    return located ? hunkNeedsMatchSelection(located.hunk, located.file) : false;
+  });
+
+  if (readyIds.length === 0) {
+    const message =
+      needingSelection.length > 0
+        ? "This edit matches multiple places — select one or more locations, then Apply."
+        : "No pending edits left to apply.";
+    void vscode.window.showWarningMessage(message);
+    updatePatchRecordCard(timestamp, {
+      ...card,
+      status: needingSelection.length > 0 ? "pending" : card.status,
+      error: needingSelection.length > 0 ? message : card.error,
+      suppressMarkdown: true
+    });
+    publishSnapshot(publish, timestamp);
+    return false;
+  }
+
+  return applyPendingPatchHunks(publish, timestamp, readyIds);
 }
 
 export async function applyPendingPatchHunk(
   publish: PatchSnapshotPublisher | undefined,
   messageTimestamp: number | undefined,
-  hunkId: string
+  hunkId: string,
+  matchLocationIds?: readonly string[]
 ): Promise<boolean> {
   const timestamp = resolveActivePatchTimestamp(messageTimestamp);
   if (timestamp === undefined) {
@@ -161,6 +341,19 @@ export async function applyPendingPatchHunk(
     publishSnapshot(publish);
     return false;
   }
+
+  const record = getPatchRecord(timestamp);
+  if (!record) {
+    void vscode.window.showWarningMessage("No patch is pending. Use /edit in chat to generate one.");
+    publishSnapshot(publish);
+    return false;
+  }
+
+  if (matchLocationIds) {
+    const next = setHunkMatchLocationsOnCard(record.card, hunkId, matchLocationIds);
+    updatePatchRecordCard(timestamp, { ...next, status: "pending", suppressMarkdown: true });
+  }
+
   return applyPendingPatchHunks(publish, timestamp, [hunkId]);
 }
 
@@ -183,13 +376,32 @@ async function applyPendingPatchHunks(
     return false;
   }
 
+  const selections = buildMatchIndicesForHunkIds(record.card, record.patches, hunkIds);
+  if (!selections.ok) {
+    setLastPatchApplyError(selections.error);
+    emitPatchEvent("edit.patch_failed", { phase: "apply", error: selections.error });
+    const failed: PatchCardState = {
+      ...record.card,
+      status: "failed",
+      error: selections.error,
+      suppressMarkdown: true,
+      canUndo: Boolean(record.undo?.length)
+    };
+    updatePatchRecordCard(timestamp, failed);
+    publishSnapshot(publish, timestamp);
+    void vscode.window.showErrorMessage(`CoopAI: Patch failed — ${selections.error}`);
+    return false;
+  }
+
   const preview = buildPatchCardState(record.patches, {
     status: "pending",
     messageTimestamp: timestamp,
     previousFiles: record.card.files
   });
 
-  const result = await applyPatchesToWorkspace(subset);
+  const result = await applyPatchesToWorkspace(subset, {
+    matchIndicesByFileHunk: selections.matchIndicesByFileHunk
+  });
   if (!result.ok) {
     setLastPatchApplyError(result.error);
     emitPatchEvent("edit.patch_failed", { phase: "apply", error: result.error, file: result.file });

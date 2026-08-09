@@ -32,6 +32,7 @@ import {
 import { filterDetailWarnings, summarizeDecisionTimeline } from "./evidenceCardSummary";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import type { ConflictSummary } from "./types";
+import { evidenceCodeHostConnection } from "./evidenceCodeHost";
 
 export type DecisionTimelinePayload = DecisionTimelineData & {
   narrative?: string;
@@ -44,6 +45,7 @@ type DecisionTimelineProps = {
   artifactId: string;
   conflicts?: ConflictSummary[];
   actionContext: EvidenceActionContext;
+  codeHost?: string;
 };
 
 type SectionId =
@@ -57,12 +59,18 @@ type SectionId =
   | "code"
   | "warnings";
 
-function evidenceSources(timeline: DecisionTimelineData): Array<{ provider: IntegrationSourceId; detail?: string }> {
+function evidenceSources(
+  timeline: DecisionTimelineData,
+  codeHost?: string
+): Array<{ provider: IntegrationSourceId; detail?: string }> {
+  const host = evidenceCodeHostConnection(codeHost ?? timeline.provider);
   const sources: Array<{ provider: IntegrationSourceId; detail?: string }> = [];
   if (timeline.originalCommit || timeline.fallbackMessage || timeline.linkedPR) {
     sources.push({
-      provider: "github",
-      detail: timeline.linkedPR ? `PR #${timeline.linkedPR.number}` : timeline.originalCommit?.sha.slice(0, 7)
+      provider: host,
+      detail: timeline.linkedPR
+        ? `${host === "gitlab" ? "MR" : "PR"} #${timeline.linkedPR.number}`
+        : timeline.originalCommit?.sha.slice(0, 7)
     });
   }
   if (timeline.slackThread) {
@@ -117,8 +125,10 @@ export function DecisionTimeline({
   timeline,
   artifactId,
   conflicts,
-  actionContext
+  actionContext,
+  codeHost
 }: DecisionTimelineProps): React.ReactElement {
+  const host = evidenceCodeHostConnection(codeHost ?? timeline.provider);
   const jiraTickets = timeline.jiraTickets ?? [];
   const slackMessageCount = timeline.slackThread?.messages.length ?? 0;
   const teamsMessageCount = timeline.teamsThread?.messages.length ?? 0;
@@ -136,7 +146,7 @@ export function DecisionTimeline({
     warnings: true
   });
 
-  const summary = useMemo(() => summarizeDecisionTimeline(timeline), [timeline]);
+  const summary = useMemo(() => summarizeDecisionTimeline(timeline, host), [timeline, host]);
   const detailWarnings = useMemo(
     () => warningsBeyondLimitations(timeline.warnings, summary.limitations),
     [timeline.warnings, summary.limitations]
@@ -147,7 +157,7 @@ export function DecisionTimeline({
     () => shouldShowDecisionMakers(timeline, decisionMakers),
     [timeline, decisionMakers]
   );
-  const sources = useMemo(() => evidenceSources(timeline), [timeline]);
+  const sources = useMemo(() => evidenceSources(timeline, host), [timeline, host]);
   const { onOpenLink } = useChatLinks();
   const meta =
     timeline.targetLabel ??
@@ -192,24 +202,24 @@ export function DecisionTimeline({
         ) : null}
 
         <EvidenceConnectionGroup
-          connection="github"
+          connection={host}
           briefSummary={
             timeline.focusCommit &&
             timeline.originalCommit &&
             timeline.focusCommit.sha !== timeline.originalCommit.sha
               ? {
                   title: "Recent decision",
-                  sourceLabel: decisionSourceLabelCommit(timeline.focusCommit.sha)
+                  sourceLabel: decisionSourceLabelCommit(timeline.focusCommit.sha, host)
                 }
               : timeline.originalCommit
                 ? {
                     title: "Original commit",
-                    sourceLabel: decisionSourceLabelCommit(timeline.originalCommit.sha)
+                    sourceLabel: decisionSourceLabelCommit(timeline.originalCommit.sha, host)
                   }
                 : timeline.linkedPR
                   ? {
                       title: `PR #${timeline.linkedPR.number}`,
-                      sourceLabel: decisionSourceLabelPr(timeline.linkedPR.number)
+                      sourceLabel: decisionSourceLabelPr(timeline.linkedPR.number, host)
                     }
                   : undefined
           }
@@ -241,12 +251,12 @@ export function DecisionTimeline({
           timeline.focusCommit.sha !== timeline.originalCommit.sha ? (
             <IntegrationResultCollapsible
               title="Recent decision commit"
-              provider="github"
+              provider={host}
               destination={timeline.focusCommit.sha.slice(0, 7)}
               subtitle={truncateSingleLine(timeline.focusCommit.message, 120)}
               sectionDomId={evidenceSectionDomId(
                 artifactId,
-                decisionSourceLabelCommit(timeline.focusCommit.sha)
+                decisionSourceLabelCommit(timeline.focusCommit.sha, host)
               )}
               open={expanded.commit}
               onToggle={() => toggle("commit")}
@@ -264,12 +274,12 @@ export function DecisionTimeline({
                   ? "Originally introduced"
                   : "Original commit"
               }
-              provider="github"
+              provider={host}
               destination={timeline.originalCommit.sha.slice(0, 7)}
               subtitle={truncateSingleLine(timeline.originalCommit.message, 120)}
               sectionDomId={evidenceSectionDomId(
                 artifactId,
-                decisionSourceLabelCommit(timeline.originalCommit.sha)
+                decisionSourceLabelCommit(timeline.originalCommit.sha, host)
               )}
               open={
                 expanded.commit &&
@@ -287,14 +297,14 @@ export function DecisionTimeline({
 
           {timeline.linkedPR ? (
             <IntegrationResultCollapsible
-              title={`PR #${timeline.linkedPR.number}`}
-              provider="github"
-              destination={`PR #${timeline.linkedPR.number}`}
+              title={`${host === "gitlab" ? "MR" : "PR"} #${timeline.linkedPR.number}`}
+              provider={host}
+              destination={`${host === "gitlab" ? "MR" : "PR"} #${timeline.linkedPR.number}`}
               subtitle={timeline.linkedPR.title}
-              sourceLabel={decisionSourceLabelPr(timeline.linkedPR.number)}
+              sourceLabel={decisionSourceLabelPr(timeline.linkedPR.number, host)}
               sectionDomId={evidenceSectionDomId(
                 artifactId,
-                decisionSourceLabelPr(timeline.linkedPR.number)
+                decisionSourceLabelPr(timeline.linkedPR.number, host)
               )}
               open={expanded.pr}
               onToggle={() => toggle("pr")}

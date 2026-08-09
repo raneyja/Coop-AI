@@ -6,7 +6,7 @@ import {
   type CoopFeatureId
 } from "../../../config/featureModelAssignments";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
-import { TestButton, type SettingsTestKey } from "../TestButton";
+import { type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
 import { ConfiguredSecretInput } from "../ConfiguredSecretInput";
 import { PromptLibraryTop5Editor } from "../PromptLibraryTop5Editor";
@@ -33,7 +33,12 @@ import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
 import { agentsMdAttached } from "../../lib/agentsMdStatus";
-import { codeHostConfigured, identityLinksHubSubtitle, integrationConfigured } from "./subtitles";
+import {
+  codeHostConfigured,
+  codeHostOrgInstalled,
+  identityLinksHubSubtitle,
+  integrationConfigured
+} from "./subtitles";
 import { IntegrationStatusCard, MemberAdminPortalLink } from "./IntegrationStatusCard";
 import {
   memberToolStatusMeta,
@@ -936,38 +941,36 @@ function GitHubDetail({
       />
     );
   }
-  const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "github");
+  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "github");
   return (
     <SettingsSection>
-      {cloudPath ? (
-        <ConnectionCard
-          name="GitHub"
-          meta={codeHostConnectionMeta(prefs, "github")}
-          connected={connected}
-          required={!connected}
-          description="Connect repositories through the Coop GitHub App. Installation credentials are stored on the server — no personal access token in VS Code."
-          connectLabel={connected ? "Manage GitHub connection" : "Connect GitHub"}
-          onConnect={onInstallGithubApp}
-          onRefresh={onRefreshGithubInstallation}
-          refreshKey="github"
-          pendingRefresh={pendingRefresh}
-          refreshResult={refreshResult}
-          onTest={onTestCodeHost ? () => onTestCodeHost("github") : undefined}
-          testKey="github"
-          testLabel="Test GitHub"
-          pendingTest={pendingTest}
-          testResult={testResult}
-          footer={
-            !connected ? (
-              <p className="coop-settings-card-desc coop-prompt-modal-muted">
-                Organization credentials are stored on the Coop server, not in VS Code.
-              </p>
-            ) : undefined
-          }
-        />
-      ) : null}
-      {prefs.devMode ? (
+      <ConnectionCard
+        name="GitHub"
+        meta={codeHostConnectionMeta(prefs, "github")}
+        connected={connected}
+        required={!connected}
+        description="Connect repositories through the Coop GitHub App. Installation credentials are stored on the server — no personal access token in VS Code."
+        connectLabel={connected ? "Manage GitHub connection" : "Connect GitHub"}
+        onConnect={onInstallGithubApp}
+        onRefresh={onRefreshGithubInstallation}
+        refreshKey="github"
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        onTest={onTestCodeHost ? () => onTestCodeHost("github") : undefined}
+        testKey="github"
+        testLabel="Test GitHub"
+        pendingTest={pendingTest}
+        testResult={testResult}
+        footer={
+          !connected ? (
+            <p className="coop-settings-card-desc coop-prompt-modal-muted">
+              Organization credentials are stored on the Coop server, not in VS Code.
+            </p>
+          ) : undefined
+        }
+      />
+      {showDevFallback ? (
         <>
           <p className="coop-prompt-modal-section-title">Developer fallback (PAT)</p>
           <label className="coop-settings-field-row">
@@ -992,19 +995,10 @@ function GitHubDetail({
             >
               Clear
             </button>
-            {!cloudPath ? (
-              <TestButton
-                testKey="github"
-                label="Test GitHub"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestCodeHost("github")}
-              />
-            ) : null}
             <SaveFlashLabel show={savedFlashKey === "github"} />
           </div>
           <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            Internal use only (`coopAI.devMode`). Production users should use the GitHub App above.
+            For local Lightning experiments when the org GitHub App is not connected.
           </p>
         </>
       ) : null}
@@ -1038,31 +1032,29 @@ function GitLabDetail({
       />
     );
   }
-  const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "gitlab");
+  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "gitlab");
   return (
     <SettingsSection>
-      {cloudPath ? (
-        <ConnectionCard
-          name="GitLab"
-          meta={codeHostConnectionMeta(prefs, "gitlab")}
-          connected={connected}
-          required={!connected}
-          description="Connect repositories through the Coop GitLab OAuth app. Credentials are stored on the server — no personal access token in VS Code."
-          connectLabel={connected ? "Manage GitLab connection" : "Connect GitLab"}
-          onConnect={onInstallGitlabApp}
-          onRefresh={onRefreshGitlabInstallation}
-          refreshKey="gitlab"
-          pendingRefresh={pendingRefresh}
-          refreshResult={refreshResult}
-          onTest={() => onTestCodeHost("gitlab")}
-          testKey="gitlab"
-          testLabel="Test GitLab"
-          pendingTest={pendingTest}
-          testResult={testResult}
-        />
-      ) : null}
-      {prefs.devMode ? (
+      <ConnectionCard
+        name="GitLab"
+        meta={codeHostConnectionMeta(prefs, "gitlab")}
+        connected={connected}
+        required={!connected}
+        description="Connect repositories through the Coop GitLab OAuth app. Credentials are stored on the server — no personal access token in VS Code."
+        connectLabel={connected ? "Manage GitLab connection" : "Connect GitLab"}
+        onConnect={onInstallGitlabApp}
+        onRefresh={onRefreshGitlabInstallation}
+        refreshKey="gitlab"
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        onTest={() => onTestCodeHost("gitlab")}
+        testKey="gitlab"
+        testLabel="Test GitLab"
+        pendingTest={pendingTest}
+        testResult={testResult}
+      />
+      {showDevFallback ? (
         <>
           <p className="coop-prompt-modal-section-title">Developer fallback (PAT)</p>
           <label className="coop-settings-field-row">
@@ -1087,15 +1079,6 @@ function GitLabDetail({
             >
               Clear
             </button>
-            {!cloudPath ? (
-              <TestButton
-                testKey="gitlab"
-                label="Test GitLab"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestCodeHost("gitlab")}
-              />
-            ) : null}
             <SaveFlashLabel show={savedFlashKey === "gitlab"} />
           </div>
 
@@ -1108,7 +1091,7 @@ function GitLabDetail({
             />
           </label>
           <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            Internal use only (`coopAI.devMode`). Production users should use the GitLab OAuth App above.
+            For local Lightning experiments when the org GitLab OAuth app is not connected.
           </p>
         </>
       ) : null}
@@ -1143,31 +1126,29 @@ function BitbucketDetail({
       />
     );
   }
-  const cloudPath = !prefs.devMode;
   const connected = codeHostConfigured(prefs, "bitbucket");
+  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "bitbucket");
   return (
     <SettingsSection>
-      {cloudPath ? (
-        <ConnectionCard
-          name="Bitbucket"
-          meta={codeHostConnectionMeta(prefs, "bitbucket")}
-          connected={connected}
-          required={!connected}
-          description="Connect repositories through the Coop Bitbucket OAuth app. Credentials are stored on the server — no app password in VS Code."
-          connectLabel={connected ? "Manage Bitbucket connection" : "Connect Bitbucket"}
-          onConnect={onInstallBitbucketApp}
-          onRefresh={onRefreshBitbucketInstallation}
-          refreshKey="bitbucket"
-          pendingRefresh={pendingRefresh}
-          refreshResult={refreshResult}
-          onTest={() => onTestCodeHost("bitbucket")}
-          testKey="bitbucket"
-          testLabel="Test Bitbucket"
-          pendingTest={pendingTest}
-          testResult={testResult}
-        />
-      ) : null}
-      {prefs.devMode ? (
+      <ConnectionCard
+        name="Bitbucket"
+        meta={codeHostConnectionMeta(prefs, "bitbucket")}
+        connected={connected}
+        required={!connected}
+        description="Connect repositories through the Coop Bitbucket OAuth app. Credentials are stored on the server — no app password in VS Code."
+        connectLabel={connected ? "Manage Bitbucket connection" : "Connect Bitbucket"}
+        onConnect={onInstallBitbucketApp}
+        onRefresh={onRefreshBitbucketInstallation}
+        refreshKey="bitbucket"
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        onTest={() => onTestCodeHost("bitbucket")}
+        testKey="bitbucket"
+        testLabel="Test Bitbucket"
+        pendingTest={pendingTest}
+        testResult={testResult}
+      />
+      {showDevFallback ? (
         <>
           <p className="coop-prompt-modal-section-title">Developer fallback (app password)</p>
           <div className="grid grid-cols-2 gap-3">
@@ -1204,19 +1185,10 @@ function BitbucketDetail({
             >
               Clear
             </button>
-            {!cloudPath ? (
-              <TestButton
-                testKey="bitbucket"
-                label="Test Bitbucket"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestCodeHost("bitbucket")}
-              />
-            ) : null}
             <SaveFlashLabel show={savedFlashKey === "bitbucket"} />
           </div>
           <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            Internal use only (`coopAI.devMode`). Production users should use the Bitbucket OAuth App above.
+            For local Lightning experiments when the org Bitbucket OAuth app is not connected.
           </p>
         </>
       ) : null}
@@ -1288,17 +1260,10 @@ function SlackDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="slack"
-                label="Test Slack"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("slack")}
-              />
               <SaveFlashLabel show={savedFlashKey === "slack"} />
             </div>
             <p className="coop-settings-card-desc coop-prompt-modal-muted">
-              Internal use only (`coopAI.devMode`). Production users connect Slack in the browser above.
+              Optional local token. Prefer the org Slack connection above when it is connected.
             </p>
           </>
         }
@@ -1394,13 +1359,6 @@ function JiraDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="jira"
-                label="Test Jira"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("jira")}
-              />
               <SaveFlashLabel show={savedFlashKey === "jira"} />
             </div>
           </>
@@ -1476,17 +1434,10 @@ function TeamsDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="teams"
-                label="Test Teams"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("teams")}
-              />
               <SaveFlashLabel show={savedFlashKey === "teams"} />
             </div>
             <p className="coop-settings-card-desc coop-prompt-modal-muted">
-              Internal use only (`coopAI.devMode`). Production users connect Microsoft Teams in the browser above.
+              Optional local token. Prefer the org Teams connection above when it is connected.
             </p>
           </>
         }
@@ -1586,13 +1537,6 @@ function ConfluenceDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="confluence"
-                label="Test Confluence"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("confluence")}
-              />
               <SaveFlashLabel show={savedFlashKey === "confluence"} />
             </div>
           </>
@@ -1668,13 +1612,6 @@ function NotionDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="notion"
-                label="Test Notion"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("notion")}
-              />
               <SaveFlashLabel show={savedFlashKey === "notion"} />
             </div>
           </>
@@ -1750,13 +1687,6 @@ function GoogleDocsDetail({
               >
                 Clear
               </button>
-              <TestButton
-                testKey="google-docs"
-                label="Test Google Docs"
-                pendingTest={pendingTest}
-                testResult={testResult}
-                onClick={() => onTestIntegration("google-docs")}
-              />
               <SaveFlashLabel show={savedFlashKey === "google-docs"} />
             </div>
           </>

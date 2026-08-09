@@ -20,6 +20,18 @@ test("isRemoteFileSearchFallbackCandidate matches axios 403 errors", () => {
   assert.equal(isRemoteFileSearchFallbackCandidate(new Error("Request failed with status code 403")), true);
 });
 
+test("isRemoteFileSearchFallbackCandidate matches axios 400 / unsupported search errors", () => {
+  assert.equal(isRemoteFileSearchFallbackCandidate(new Error("Request failed with status code 400")), true);
+  assert.equal(
+    isRemoteFileSearchFallbackCandidate(new Error("File search isn't supported for this code host yet.")),
+    true
+  );
+  assert.equal(
+    isRemoteFileSearchFallbackCandidate(new Error("You must enable Advanced Search to use this feature")),
+    true
+  );
+});
+
 test("searchFilesViaCloudTree finds files by filename", async () => {
   const hits = await searchFilesViaCloudTree(
     async (path) => {

@@ -2,7 +2,7 @@ import React from "react";
 import type { IntegrationChatProvider } from "../../../chat/types";
 import { ConnectionCard } from "./ConnectionCard";
 import { integrationConnectionMeta, integrationDisplayName } from "./connectionCopy";
-import { integrationConfigured } from "./subtitles";
+import { integrationConfigured, integrationOrgInstalled } from "./subtitles";
 import type { Preferences } from "./types";
 import type { SettingsTestKey } from "../TestButton";
 
@@ -39,38 +39,36 @@ export function IntegrationConnectionShell({
 }: IntegrationConnectionShellProps): React.ReactElement {
   const name = integrationDisplayName(provider);
   const connected = integrationConfigured(prefs, provider);
-  const cloudPath = !prefs.devMode;
+  const showDevFallback = Boolean(prefs.devMode && devFallback && !integrationOrgInstalled(prefs, provider));
 
   return (
     <>
-      {cloudPath ? (
-        <ConnectionCard
-          name={name}
-          meta={integrationConnectionMeta(prefs, provider)}
-          connected={connected}
-          description={description}
-          connectLabel={connected ? `Manage ${name}` : `Connect ${name}`}
-          onConnect={onConnect}
-          onRefresh={onRefresh}
-          refreshKey={testKey}
-          pendingRefresh={pendingRefresh}
-          refreshResult={refreshResult}
-          onTest={connected ? onTest : undefined}
-          testKey={testKey}
-          testLabel={`Test ${name}`}
-          pendingTest={pendingTest}
-          testResult={testResult}
-          footer={
-            !connected ? (
-              <p className="coop-settings-card-desc coop-prompt-modal-muted">
-                Organization credentials are stored on the Coop server, not in VS Code.
-              </p>
-            ) : undefined
-          }
-        />
-      ) : null}
+      <ConnectionCard
+        name={name}
+        meta={integrationConnectionMeta(prefs, provider)}
+        connected={connected}
+        description={description}
+        connectLabel={connected ? `Manage ${name}` : `Connect ${name}`}
+        onConnect={onConnect}
+        onRefresh={onRefresh}
+        refreshKey={testKey}
+        pendingRefresh={pendingRefresh}
+        refreshResult={refreshResult}
+        onTest={onTest}
+        testKey={testKey}
+        testLabel={`Test ${name}`}
+        pendingTest={pendingTest}
+        testResult={testResult}
+        footer={
+          !connected ? (
+            <p className="coop-settings-card-desc coop-prompt-modal-muted">
+              Organization credentials are stored on the Coop server, not in VS Code.
+            </p>
+          ) : undefined
+        }
+      />
       {extraFields}
-      {prefs.devMode ? devFallback : null}
+      {showDevFallback ? devFallback : null}
     </>
   );
 }

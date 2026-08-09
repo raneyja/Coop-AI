@@ -9,6 +9,8 @@ export type SlackPresencePartition = {
 /** Compact copy for a secondary evidence section — keep collapsed by default. */
 export type SlackPresenceViewModel = {
   showSection: boolean;
+  /** True when at least one owner is mapped to a real Slack presence signal. */
+  hasEvidence: boolean;
   /** One line shown when the section is collapsed. */
   collapsedSummary: string;
   /** Optional extra line(s) when expanded — at most one line in practice. */
@@ -61,7 +63,7 @@ export function buildSlackPresenceViewModel(scores: OwnershipScore[]): SlackPres
     partition.resolved.length + partition.unresolved.length + partition.linkedLookupFailed.length;
 
   if (total === 0) {
-    return { showSection: false, collapsedSummary: "", resolvedEntries: [] };
+    return { showSection: false, hasEvidence: false, collapsedSummary: "", resolvedEntries: [] };
   }
 
   const resolvedEntries = partition.resolved.map((expert) => ({
@@ -69,10 +71,12 @@ export function buildSlackPresenceViewModel(scores: OwnershipScore[]): SlackPres
     label: shortPresenceLabel(expert.presence?.label ?? "Unknown")
   }));
   const unmapped = partition.unresolved.length + partition.linkedLookupFailed.length;
+  const hasEvidence = partition.resolved.length > 0;
 
   if (partition.resolved.length === 0) {
     return {
       showSection: true,
+      hasEvidence: false,
       collapsedSummary: compactUnavailableSummary(partition, total),
       detailLine: "Teammate GitHub logins couldn't be matched to Slack automatically",
       resolvedEntries: []
@@ -84,12 +88,14 @@ export function buildSlackPresenceViewModel(scores: OwnershipScore[]): SlackPres
       const entry = resolvedEntries[0];
       return {
         showSection: true,
+        hasEvidence: true,
         collapsedSummary: `@${entry.owner} · ${entry.label}`,
         resolvedEntries: []
       };
     }
     return {
       showSection: true,
+      hasEvidence: true,
       collapsedSummary: `${total} mapped in Slack`,
       resolvedEntries,
       detailLine: undefined
@@ -104,6 +110,7 @@ export function buildSlackPresenceViewModel(scores: OwnershipScore[]): SlackPres
 
   return {
     showSection: true,
+    hasEvidence,
     collapsedSummary,
     detailLine: compactUnmappedDetail(partition.unresolved.length, partition.linkedLookupFailed.length),
     resolvedEntries: partition.resolved.length > 1 ? resolvedEntries : []

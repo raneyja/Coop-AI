@@ -110,6 +110,51 @@ export function isRepoStructureQuery(queryText: string | undefined): boolean {
   if (/\b(list|show) (the )?(top[- ]level |root )?(dirs|directories|folders)\b/.test(q)) {
     return true;
   }
+  // Package / monorepo layout — not answered by a 3-file semantic sample.
+  if (isRepoPackageBoundaryQuery(q)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * "Where are the Next.js / API package boundaries?", monorepo layout, workspaces,
+ * "What's in the top-level package structure?".
+ * Ground in IndexedRepoWorkspace tree + package manifests — never another repo's paths.
+ */
+export function isRepoPackageBoundaryQuery(queryText: string | undefined): boolean {
+  const q = normalize(queryText);
+  if (!q) {
+    return false;
+  }
+  if (/\bpackage\s+boundar(?:y|ies)\b/.test(q)) {
+    return true;
+  }
+  if (/\b(monorepo|package|workspace)\s+layout\b/.test(q)) {
+    return true;
+  }
+  // Onboarding smoke: "What's in the top-level package structure?"
+  if (/\b(top[- ]level\s+)?package\s+structure\b/.test(q)) {
+    return true;
+  }
+  if (/\b(top[- ]level|root)\s+packages?\b/.test(q)) {
+    return true;
+  }
+  if (/\b(pnpm|npm|yarn)[- ]workspaces?\b/.test(q)) {
+    return true;
+  }
+  if (/\bwhere (are|is|do)\b[^?]*\b(packages?|apps?|next\.?js|workspaces?)\b/.test(q)) {
+    return true;
+  }
+  if (/\b(next\.?js|frontend|backend)\b[^?]*\b(api|packages?|apps?)\b[^?]*\b(boundar|package|layout)\b/.test(q)) {
+    return true;
+  }
+  if (/\b(apps|packages)\s*\/\s*(web|api|frontend|backend|server|client)\b/.test(q)) {
+    return true;
+  }
+  if (/\bwhich (packages?|apps?)\b[^?]*\b(next\.?js|api|frontend|backend)\b/.test(q)) {
+    return true;
+  }
   return false;
 }
 
@@ -118,23 +163,32 @@ export function needsRepoTreeOverview(queryText: string | undefined): boolean {
   return isRepoStructureQuery(queryText) && !isRepoInventoryQuery(queryText);
 }
 
+/** Structure / package-boundary turns should also load in-repo package manifests. */
+export function needsPackageManifests(queryText: string | undefined): boolean {
+  return needsRepoTreeOverview(queryText);
+}
+
 export type RepoFactNeeds = {
   fileCount: boolean;
   lineCount: boolean;
   treeOverview: boolean;
+  /** Root and apps package.json manifests via IndexedRepoWorkspace.readFile. */
+  packageManifests: boolean;
 };
 
 /** What the workspace must resolve for this turn. */
 export function repoFactNeeds(queryText: string | undefined): RepoFactNeeds {
   const lineCount = isRepoLineCountQuery(queryText);
+  const treeOverview = needsRepoTreeOverview(queryText);
   return {
     // Line-count answers read better alongside the file total, and both come from one lookup.
     fileCount: isRepoFileCountQuery(queryText) || lineCount,
     lineCount,
-    treeOverview: needsRepoTreeOverview(queryText)
+    treeOverview,
+    packageManifests: treeOverview
   };
 }
 
 export function hasRepoFactNeed(needs: RepoFactNeeds): boolean {
-  return needs.fileCount || needs.lineCount || needs.treeOverview;
+  return needs.fileCount || needs.lineCount || needs.treeOverview || needs.packageManifests;
 }

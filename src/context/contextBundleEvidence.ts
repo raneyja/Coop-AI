@@ -98,6 +98,12 @@ export type KnowledgeGapsEvidence = {
     edgeCount?: number;
     source?: string;
   };
+  /** Slash focus that drove Gaps gather (`/gaps …`). */
+  userFocus?: string;
+  focusSearchQuery?: string;
+  focusSearchPaths?: string[];
+  /** Focus-ranked file bodies from index search (capped). */
+  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string }>;
   warnings?: string[];
 };
 
@@ -316,6 +322,22 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     : undefined;
 }
 
+function blastCallerSourceRank(source: string | undefined): number {
+  if (
+    source === "zoekt" ||
+    source === "scip" ||
+    source === "workspace" ||
+    source === "import-parse"
+  ) {
+    return 3;
+  }
+  if (source === "remote") {
+    return 1;
+  }
+  // heuristic / embedding / unknown — weakest; must not overwrite verified callers
+  return 0;
+}
+
 export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | undefined {
   const merged: BlastRadiusEvidence = {};
   for (const entry of bundle) {
@@ -323,12 +345,38 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
     const type = asRecord(entry).type;
     if (type === "dependencies" || data.report || data.directDependents) {
       if (data.file) merged.file = String(data.file);
-      if (Array.isArray(data.directDependents)) merged.directDependents = data.directDependents as string[];
-      if (Array.isArray(data.transitiveDependents)) {
-        merged.transitiveDependents = data.transitiveDependents as string[];
-      }
-      if (Array.isArray(data.dependentDetails)) {
-        merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+      const incomingSource = String(
+        asRecord(data.graphMeta).source ?? merged.graphMeta?.source ?? ""
+      );
+      const incomingRank = blastCallerSourceRank(incomingSource);
+      const existingRank = blastCallerSourceRank(merged.graphMeta?.source);
+      const shouldReplaceCallers =
+        Array.isArray(data.directDependents) &&
+        (incomingRank > existingRank ||
+          !merged.directDependents?.length ||
+          (incomingRank === existingRank && (data.directDependents as string[]).length > 0));
+      // Never let weaker (heuristic) callers overwrite stronger verified lists.
+      if (shouldReplaceCallers && incomingRank >= existingRank) {
+        merged.directDependents = data.directDependents as string[];
+        if (Array.isArray(data.transitiveDependents)) {
+          merged.transitiveDependents = data.transitiveDependents as string[];
+        }
+        if (Array.isArray(data.dependentDetails)) {
+          merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+        }
+        if (data.graphMeta) {
+          merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
+        }
+      } else if (!merged.directDependents?.length && Array.isArray(data.directDependents)) {
+        merged.directDependents = data.directDependents as string[];
+        if (Array.isArray(data.dependentDetails)) {
+          merged.dependentDetails = data.dependentDetails as BlastRadiusEvidence["dependentDetails"];
+        }
+        if (data.graphMeta) {
+          merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
+        }
+      } else if (data.graphMeta && !merged.graphMeta) {
+        merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
       }
       if (Array.isArray(data.docsReferences)) {
         merged.docsReferences = data.docsReferences as BlastRadiusEvidence["docsReferences"];
@@ -364,7 +412,6 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
         merged.googleDocsSearch = data.googleDocsSearch as GoogleDocsSearchEvidence;
       }
       if (data.teamsSearch) merged.teamsSearch = data.teamsSearch as TeamsSearchEvidence;
-      if (data.graphMeta) merged.graphMeta = data.graphMeta as BlastRadiusEvidence["graphMeta"];
       if (data.dependencyGraph) merged.dependencyGraph = data.dependencyGraph as Record<string, unknown>;
       if (data.includeTransitive !== undefined) merged.includeTransitive = Boolean(data.includeTransitive);
       if (data.localFiles) merged.localFiles = data.localFiles as BlastRadiusEvidence["localFiles"];
@@ -404,18 +451,24 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
         jobScan.dependentsSample as Array<{ from?: string; to?: string }>,
         targetFile
       );
-      const sample =
-        filtered.length > 0
-          ? filtered
-          : (jobScan.dependentsSample as Array<{ from?: string; to?: string }>)
-              .map((edge) => edge.from)
-              .filter(Boolean) as string[];
-      if (sample.length > 0 && !merged.directDependents?.length) {
-        merged.directDependents = sample;
+      // Never promote unfiltered sample `from` paths — those are often unrelated
+      // remote edges and become fake "production callers."
+      if (filtered.length > 0 && !merged.directDependents?.length) {
+        merged.directDependents = filtered;
         merged.graphMeta = {
           ...merged.graphMeta,
-          source: filtered.length > 0 ? "scip" : merged.graphMeta?.source ?? "remote"
+          source: "scip"
         };
+      } else if (
+        !merged.directDependents?.length &&
+        (jobScan.dependentsSample as unknown[]).length > 0 &&
+        filtered.length === 0
+      ) {
+        const prior = merged.warnings ?? [];
+        merged.warnings = [
+          ...prior,
+          "Dependency-graph job sample had no edges targeting this file — ignored unfiltered remote edges."
+        ];
       }
       merged.graphMeta = {
         ...merged.graphMeta,
@@ -520,6 +573,20 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
     const type = record.type;
     if (type === "knowledge_gaps" || data.jobScan || data.documentationCoverage !== undefined || data.fileStructure) {
       if (data.file) merged.file = String(data.file);
+      if (typeof data.userFocus === "string" && data.userFocus.trim()) {
+        merged.userFocus = data.userFocus.trim();
+      }
+      if (typeof data.focusSearchQuery === "string" && data.focusSearchQuery.trim()) {
+        merged.focusSearchQuery = data.focusSearchQuery.trim();
+      }
+      if (Array.isArray(data.focusSearchPaths)) {
+        merged.focusSearchPaths = data.focusSearchPaths.filter(
+          (path): path is string => typeof path === "string" && Boolean(path.trim())
+        );
+      }
+      if (Array.isArray(data.focusFiles)) {
+        merged.focusFiles = data.focusFiles as KnowledgeGapsEvidence["focusFiles"];
+      }
       if (data.jobScan) {
         merged.jobScan = data.jobScan as KnowledgeGapsEvidence["jobScan"];
         const scanWarning = asRecord(data.jobScan).warning;
@@ -566,6 +633,10 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
     merged.fileStructure ||
     merged.ownershipReport ||
     merged.dependencyGraph !== undefined ||
+    merged.userFocus ||
+    merged.focusSearchQuery ||
+    merged.focusSearchPaths?.length ||
+    merged.focusFiles?.length ||
     merged.warnings?.length;
   return hasSignals ? merged : undefined;
 }
@@ -659,3 +730,48 @@ export function integrationSearchFromBundle(
       return undefined;
   }
 }
+
+/**
+ * True when the bundle carries indexed-repo facts that must reach the LLM even
+ * when an open file (e.g. package.json) is also attached as local context.
+ * Without this, synthesis can drop tree/packageStructure and invent layout.
+ */
+export function contextBundleHasRepoFactEvidence(bundle: unknown): boolean {
+  if (!Array.isArray(bundle)) {
+    return false;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as { data?: Record<string, unknown> }).data;
+    if (!data || typeof data !== "object") {
+      continue;
+    }
+    if (data.packageStructure && typeof data.packageStructure === "object") {
+      const structure = data.packageStructure as {
+        packages?: unknown[];
+        parents?: unknown[];
+        workspaceGlobs?: unknown[];
+      };
+      if (
+        (structure.packages?.length ?? 0) > 0 ||
+        (structure.parents?.length ?? 0) > 0 ||
+        (structure.workspaceGlobs?.length ?? 0) > 0
+      ) {
+        return true;
+      }
+    }
+    if (data.treeOverview) {
+      return true;
+    }
+    if (typeof data.packageBoundaryNote === "string" && data.packageBoundaryNote.trim()) {
+      return true;
+    }
+    if (data.repoInventory) {
+      return true;
+    }
+  }
+  return false;
+}
+

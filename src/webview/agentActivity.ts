@@ -1,5 +1,6 @@
 import type { NarrativeStep } from "./agentNarrative";
 import { buildNarrativeTimeline, narrativeIconForLabel } from "./agentNarrative";
+import { isIntegrationActivityLabel } from "../context/integrationActivityLabels";
 import {
   ACTIVITY_START_DELAY_MS,
   activityPaceElapsedMs,
@@ -101,16 +102,33 @@ export function buildActivityTodosFromFeedback(
     concreteCount: prep.length,
     elapsedMs
   });
-  if (activeIndex < 0) {
+  // Live tool lines (Slack/Jira/…) appear as soon as the backend posts them.
+  const revealed = revealActivityMessages(prep, activeIndex);
+  if (!revealed.length) {
     return [];
   }
-  // One-by-one: only steps up through the active index (never a full pre-checked list).
-  const revealed = prep.slice(0, activeIndex + 1);
-  return buildNarrativeTimeline(revealed, activeIndex).map((entry) => ({
+  const timelineIndex = Math.max(0, revealed.length - 1);
+  return buildNarrativeTimeline(revealed, timelineIndex).map((entry) => ({
     id: entry.id,
     content: entry.label,
     status: narrativeStatusToTodo(entry.status)
   }));
+}
+
+/** Timed reveal for generic steps; integration tool lines unlock immediately. */
+function revealActivityMessages(prep: string[], activeIndex: number): string[] {
+  const unlocked = new Set<string>();
+  if (activeIndex >= 0) {
+    for (const line of prep.slice(0, activeIndex + 1)) {
+      unlocked.add(line);
+    }
+  }
+  for (const line of prep) {
+    if (isIntegrationActivityLabel(line)) {
+      unlocked.add(line);
+    }
+  }
+  return prep.filter((line) => unlocked.has(line));
 }
 
 function buildSynthesisActivityTodos(
@@ -122,20 +140,13 @@ function buildSynthesisActivityTodos(
   waitingLabelStep: number,
   gatherElapsedMs: number
 ): AgentTodoItem[] {
-  // Only mark prep complete if it was already revealed one-by-one during gather.
+  // Timed prep + every live tool line that already ran (Slack must stay visible).
   const revealedPrepIndex = resolvePacedActivityIndex({
     concreteCount: Math.max(prep.length, 1),
     elapsedMs: gatherElapsedMs
   });
-  const prepShownCount =
-    prep.length === 0
-      ? 0
-      : revealedPrepIndex < 0
-        ? 0
-        : Math.min(prep.length, revealedPrepIndex + 1);
-  // If we entered via terminal signal before timed reveal finished, still show
-  // whatever prep had appeared — never dump the whole prep list as checked.
-  const completedPrep: AgentTodoItem[] = prep.slice(0, prepShownCount).map((label, index) => ({
+  const revealedPrep = revealActivityMessages(prep, revealedPrepIndex);
+  const completedPrep: AgentTodoItem[] = revealedPrep.map((label, index) => ({
     id: `prep:${index}:${label}`,
     content: label,
     status: "completed"

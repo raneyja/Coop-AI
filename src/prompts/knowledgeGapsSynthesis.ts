@@ -8,6 +8,10 @@ import type {
   TeamsSearchEvidence
 } from "../context/contextBundleEvidence";
 import {
+  knowledgeGapsGatherQuery,
+  resolveKnowledgeGapsAuditScope
+} from "../context/knowledgeGapsFocus";
+import {
   appendCitationKeysSection,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
@@ -38,11 +42,14 @@ import {
   listKnowledgeGapsSourcesChecklist
 } from "./knowledgeGapsSourceLabels";
 import { ownershipTierLabel } from "./ownershipSourceLabels";
+import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace/repoEvidenceIsolation";
 
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
 List scan-backed gaps and integration hits — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, or explicit integration errors in the bundle.
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
+When ## User focus / ## Primary topic is present, audit those subsystems first — leftover open-editor ownership is secondary at most.
+Org Confluence/Notion hits are org-wide supplementary docs — never the active repository's architecture source of truth.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -66,18 +73,63 @@ export type KnowledgeGapsSynthesisInput = {
 };
 
 export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthesisInput): string {
-  const repoWide = !input.file?.trim() && Boolean(input.owner?.trim() && input.repo?.trim());
+  const userFocus =
+    knowledgeGapsGatherQuery(input.userFocus) ??
+    knowledgeGapsGatherQuery(input.evidence.userFocus);
+  const scope = resolveKnowledgeGapsAuditScope({
+    file: input.file,
+    userFocus,
+    focusHitPaths: input.evidence.focusSearchPaths
+  });
+  const repoWide =
+    !scope.focusPrimary &&
+    !input.file?.trim() &&
+    Boolean(input.owner?.trim() && input.repo?.trim());
   const lines: string[] = [];
   lines.push("## Task");
-  lines.push(
-    input.userQuestion?.trim() ||
-      (repoWide
-        ? `Audit knowledge gaps across ${input.owner}/${input.repo}: missing docs, unclear ownership, and open questions.`
-        : `Audit knowledge gaps for ${input.file ?? "this area"}: missing docs, unclear ownership, and open questions.`)
-  );
+  if (scope.focusPrimary && scope.gatherQuery) {
+    // Focus wins over the canned quick-action task sentence (which still names the open file).
+    lines.push(
+      `Audit knowledge gaps for the user's focus — ${scope.gatherQuery}: missing docs, unclear ownership, and open questions for those subsystems.`
+    );
+  } else {
+    lines.push(
+      input.userQuestion?.trim() ||
+        (repoWide
+          ? `Audit knowledge gaps across ${input.owner}/${input.repo}: missing docs, unclear ownership, and open questions.`
+          : `Audit knowledge gaps for ${input.file ?? "this area"}: missing docs, unclear ownership, and open questions.`)
+    );
+  }
   lines.push("");
-  appendUserFocusInstructions(lines, input.userFocus);
-  if (repoWide) {
+  appendUserFocusInstructions(lines, userFocus);
+
+  if (scope.focusPrimary && scope.gatherQuery) {
+    lines.push("## Primary topic");
+    lines.push(`- Focus (primary gather query): ${scope.gatherQuery}`);
+    for (const topic of scope.focusTopics) {
+      lines.push(
+        `- Subsystem topic (must address gaps or state no evidence found): ${topic}`
+      );
+    }
+    if (input.owner && input.repo) {
+      lines.push(`- Repository: ${input.owner}/${input.repo}`);
+    }
+    if (scope.relatedOpenFile) {
+      lines.push(
+        `- Related open file (secondary code anchor — not the Summary headline): ${scope.relatedOpenFile}`
+      );
+    }
+    if (scope.secondaryUnrelatedFile) {
+      lines.push(
+        `- Open editor (secondary — unrelated to focus): ${scope.secondaryUnrelatedFile}`
+      );
+      lines.push(
+        "- Do not make ownership of the unrelated open editor the Summary headline topic."
+      );
+    }
+    appendMentionScopeSection(lines, input);
+    lines.push("");
+  } else if (repoWide) {
     lines.push("## Primary target");
     lines.push(`- Repository: ${input.owner}/${input.repo}`);
     appendMentionScopeSection(lines, input);
@@ -91,19 +143,23 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     appendMentionScopeSection(lines, input);
     lines.push("");
   }
+
   lines.push("## Evidence bundle");
-  lines.push(formatKnowledgeGapsForPrompt(
-    input.evidence,
-    input.confluence,
-    input.jira,
-    input.slack,
-    input.notion,
-    input.googleDocs,
-    input.teams,
-    input.file,
-    input.owner,
-    input.repo
-  ));
+  lines.push(
+    formatKnowledgeGapsForPrompt(
+      input.evidence,
+      input.confluence,
+      input.jira,
+      input.slack,
+      input.notion,
+      input.googleDocs,
+      input.teams,
+      scope.focusPrimary ? scope.relatedOpenFile : input.file,
+      input.owner,
+      input.repo,
+      scope
+    )
+  );
   lines.push("");
   appendCitationKeysSection(
     lines,
@@ -148,17 +204,36 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     googleDocs: input.googleDocs?.documents,
     targetSection: "Documentation gaps"
   });
-  appendKnowledgeGapsResponseContract(lines, input);
-  lines.push(
-    repoWide
-      ? "Synthesize repository-wide blind spots from the evidence bundle — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
-      : "Synthesize gaps for the primary target file only. Out-of-scope @ paths must not replace the audit for the open file."
-  );
+  if (
+    (input.confluence?.pages?.length ?? 0) > 0 ||
+    (input.notion?.pages?.length ?? 0) > 0 ||
+    (input.googleDocs?.documents?.length ?? 0) > 0
+  ) {
+    lines.push(`## ${ORG_DOCS_EVIDENCE_LABEL}`);
+    lines.push(orgDocsSynthesisGuardrail(input.owner, input.repo));
+    lines.push("");
+  }
+  appendKnowledgeGapsResponseContract(lines, input, scope.focusPrimary);
+  if (scope.focusPrimary) {
+    lines.push(
+      "Synthesize gaps for the ## Primary topic focus subsystems first. Cover each listed subsystem topic with evidence-backed gaps or an explicit no-evidence line. Open-file ownership is secondary at most when the open editor is unrelated to focus. Out-of-scope @ paths must not replace the focus audit."
+    );
+  } else {
+    lines.push(
+      repoWide
+        ? "Synthesize repository-wide blind spots from the evidence bundle — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
+        : "Synthesize gaps for the primary target file only. Out-of-scope @ paths must not replace the audit for the open file."
+    );
+  }
   lines.push("Follow the required response structure in your system instructions.");
   return lines.join("\n");
 }
 
-function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGapsSynthesisInput): void {
+function appendKnowledgeGapsResponseContract(
+  lines: string[],
+  input: KnowledgeGapsSynthesisInput,
+  focusPrimary = false
+): void {
   const scanGaps = input.evidence.jobScan?.gaps ?? [];
   const documentationGaps = scanGaps.filter(
     (gap) => gap.type === "missing_docs" || gap.type === "impact_unknown"
@@ -173,6 +248,11 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   );
 
   lines.push("## Response contract (required)");
+  if (focusPrimary) {
+    lines.push(
+      "**Summary** must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the Summary headline."
+    );
+  }
   lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
   for (const gap of documentationGaps) {
     lines.push(`- Scan gap subsection from [Sources: Knowledge gap scan]: ${String(gap.message ?? gap.type ?? "gap")}`);
@@ -187,7 +267,13 @@ function appendKnowledgeGapsResponseContract(lines: string[], input: KnowledgeGa
   }
 
   if (ownerGaps.length > 0) {
-    lines.push("**Ownership & maintenance** — include one subsection per missing_owner scan gap only.");
+    if (focusPrimary) {
+      lines.push(
+        "**Ownership & maintenance** — include missing_owner scan gaps only as secondary when they relate to focus topics; never headline unrelated open-file ownership over the focus ask."
+      );
+    } else {
+      lines.push("**Ownership & maintenance** — include one subsection per missing_owner scan gap only.");
+    }
   } else {
     lines.push(
       "- **Omit Ownership & maintenance entirely** — scan has no missing_owner gaps; do not invent owner or maintainer questions from ownership signals."
@@ -253,13 +339,46 @@ function formatKnowledgeGapsForPrompt(
   teams: TeamsSearchEvidence | undefined,
   file: string | undefined,
   owner?: string,
-  repo?: string
+  repo?: string,
+  scope?: ReturnType<typeof resolveKnowledgeGapsAuditScope>
 ): string {
   const sections: string[] = [];
-  if (file) {
+  if (scope?.focusPrimary && scope.gatherQuery) {
+    sections.push(
+      `### Scope\n- Focus gather query: ${scope.gatherQuery}\n` +
+        (scope.focusTopics.length
+          ? scope.focusTopics.map((topic) => `- Topic: ${topic}`).join("\n") + "\n"
+          : "") +
+        (owner && repo ? `- Repository: ${owner}/${repo}\n` : "") +
+        (scope.relatedOpenFile ? `- Related open file: ${scope.relatedOpenFile}\n` : "") +
+        (scope.secondaryUnrelatedFile
+          ? `- Open editor (secondary — unrelated to focus): ${scope.secondaryUnrelatedFile}`
+          : "")
+    );
+  } else if (file) {
     sections.push(`### Scope\n- File: ${file}`);
   } else if (owner && repo) {
     sections.push(`### Scope\n- Repository: ${owner}/${repo}`);
+  }
+  const focusQuery = evidence.focusSearchQuery ?? scope?.gatherQuery;
+  const focusPaths = evidence.focusSearchPaths ?? [];
+  if (focusQuery || focusPaths.length || evidence.focusFiles?.length) {
+    sections.push(
+      `### Focus search\n` +
+        (focusQuery ? `- Query: ${focusQuery}\n` : "") +
+        (focusPaths.length
+          ? `- Hit paths:\n${focusPaths
+              .slice(0, 12)
+              .map((path) => `  - ${path}`)
+              .join("\n")}`
+          : "- No focus-ranked paths attached") +
+        (evidence.focusFiles?.length
+          ? `\n- Attached bodies: ${evidence.focusFiles
+              .slice(0, 6)
+              .map((fileHit) => fileHit.path)
+              .join(", ")}`
+          : "")
+    );
   }
   if (evidence.jobScan) {
     const scan = evidence.jobScan;
@@ -283,7 +402,7 @@ function formatKnowledgeGapsForPrompt(
   }
   if (confluence) {
     sections.push(
-      `### ${knowledgeGapsSourceLabelConfluence()}\n` +
+      `### ${knowledgeGapsSourceLabelConfluence()} (${ORG_DOCS_EVIDENCE_LABEL})\n` +
         (confluence.error
           ? `- Error: ${confluence.error}`
           : confluence.pages?.length
@@ -322,7 +441,7 @@ function formatKnowledgeGapsForPrompt(
   }
   if (notion) {
     sections.push(
-      `### ${knowledgeGapsSourceLabelNotion()}\n` +
+      `### ${knowledgeGapsSourceLabelNotion()} (${ORG_DOCS_EVIDENCE_LABEL})\n` +
         (notion.error
           ? `- Error: ${notion.error}`
           : notion.pages?.length

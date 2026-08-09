@@ -1,9 +1,11 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostProviderPreference } from "../chat/types";
 import type { IndexBackend } from "../indexing/indexBackend";
+import { mapSearchProvenance } from "../indexing/searchProvenance";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
+import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolation";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
 
 export const MAX_SEMANTIC_FILES = 3;
@@ -322,11 +324,17 @@ async function loadSemanticSearchContext(
     return undefined;
   }
 
+  // Defense in depth: never attach a snippet stamped with a foreign repoId.
+  const isolated = filterSemanticFilesToRepoId(files, options.repoId);
+  if (isolated.length === 0) {
+    return undefined;
+  }
+
   return {
     source: "repo-semantic-search",
     query: options.query,
     searchSource: searchResult.source,
-    files,
+    files: isolated,
     matchedPathCount: rankedPaths.length,
     attachmentCap: options.maxFiles
   };
@@ -382,7 +390,7 @@ async function runRepoSearch(
         displayName: ""
       }));
     return {
-      source: remote.freshness ?? (hits.length > 0 ? "zoekt" : "fallback"),
+      source: mapSearchProvenance(remote.freshness, { hasHits: hits.length > 0 }),
       hits,
       symbols,
       stale: Boolean(remote.stale)
@@ -397,13 +405,8 @@ async function resolveSemanticFileContent(
   repoId: string,
   options: Pick<LoadSemanticSearchOptions, "api" | "apiBaseUrl" | "branch" | "owner" | "repo" | "provider">
 ): Promise<string | undefined> {
-  const { readWorkspaceFileFromDisk } = await import("./localFileResolver");
-  const local = readWorkspaceFileFromDisk(filePath);
-  const localContent = local?.files[0]?.content?.trim();
-  if (localContent) {
-    return localContent;
-  }
-
+  // Prefer indexed / code-host readers first. Never stuff Coop-AI local disk
+  // bodies into plane/documenso evidence when path names collide.
   const { getIndexedRepoFileReader } = await import("./indexedRepoFileRegistry");
   const readIndexed = getIndexedRepoFileReader();
   if (readIndexed) {
@@ -424,10 +427,25 @@ async function resolveSemanticFileContent(
     const remote = await options.api
       .getBackendClient()
       .fetchRepoFile(options.apiBaseUrl, repoId, filePath, options.branch);
-    return remote.content?.trim() || undefined;
+    if (remote.content?.trim()) {
+      return remote.content.trim();
+    }
   } catch {
-    return undefined;
+    /* Zero-Clone: no local disk hydrate */
   }
+
+  return undefined;
+}
+
+/**
+ * Drop snippets whose repoId does not match the search target.
+ * Used by Gaps/chat assembly so collection-wide hits cannot become primary code evidence.
+ */
+export function filterSemanticFilesToRepoId<T extends { path: string; repoId: string }>(
+  files: T[],
+  activeRepoId: string
+): T[] {
+  return filterCodeEvidenceToActiveRepo(files, { repoId: activeRepoId }, { allowMissingRepoId: false });
 }
 
 export function mergeRepoSemanticContext(

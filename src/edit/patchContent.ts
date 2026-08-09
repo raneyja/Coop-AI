@@ -2,17 +2,33 @@ import type { PatchHunk } from "./patchParser";
 
 export type ApplyHunkResult =
   | { ok: true; content: string }
-  | { ok: false; error: string; reason: "not_found" | "ambiguous" };
+  | { ok: false; error: string; reason: "not_found" | "ambiguous" | "no_selection" };
+
+export type SearchMatchHit = {
+  start: number;
+  end: number;
+  matched: string;
+  fuzzy: boolean;
+};
+
+export type SearchMatch =
+  | { ok: true; start: number; end: number; matched: string; fuzzy: boolean }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "ambiguous"; matches: SearchMatchHit[] };
+
+export type ApplyHunkOptions = {
+  /**
+   * When SEARCH matches multiple places, apply only these match indices (0-based).
+   * Required for ambiguous SEARCH — empty/missing → no_selection / ambiguous error.
+   */
+  matchIndices?: readonly number[];
+};
 
 type ParsedLine = {
   start: number;
   end: number;
   text: string;
 };
-
-type SearchMatch =
-  | { ok: true; start: number; end: number; matched: string; fuzzy: boolean }
-  | { ok: false; reason: "not_found" | "ambiguous" };
 
 function parseLines(text: string): ParsedLine[] {
   const lines: ParsedLine[] = [];
@@ -66,14 +82,33 @@ function linesMatchFuzzy(a: string, b: string): boolean {
   return normalizeLineForFuzzyCompare(left) === normalizeLineForFuzzyCompare(right);
 }
 
-function findFuzzyLineBlock(content: string, search: string): SearchMatch {
+function findExactMatches(content: string, search: string): SearchMatchHit[] {
+  const hits: SearchMatchHit[] = [];
+  let from = 0;
+  while (from <= content.length) {
+    const index = content.indexOf(search, from);
+    if (index === -1) {
+      break;
+    }
+    hits.push({
+      start: index,
+      end: index + search.length,
+      matched: search,
+      fuzzy: false
+    });
+    from = index + Math.max(search.length, 1);
+  }
+  return hits;
+}
+
+function findFuzzyLineMatches(content: string, search: string): SearchMatchHit[] {
   const searchLines = parseLines(search);
   if (searchLines.length === 0 || searchLines.every((line) => trimLine(line.text) === "")) {
-    return { ok: false, reason: "not_found" };
+    return [];
   }
 
   const contentLines = parseLines(content);
-  const matches: number[] = [];
+  const hits: SearchMatchHit[] = [];
 
   for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
     let matchesBlock = true;
@@ -84,45 +119,48 @@ function findFuzzyLineBlock(content: string, search: string): SearchMatch {
       }
     }
     if (matchesBlock) {
-      matches.push(i);
+      const first = contentLines[i]!;
+      const last = contentLines[i + searchLines.length - 1]!;
+      hits.push({
+        start: first.start,
+        end: last.end,
+        matched: content.slice(first.start, last.end),
+        fuzzy: true
+      });
     }
   }
 
+  return hits;
+}
+
+/** All exact or fuzzy SEARCH matches in file order (never collapses ambiguous). */
+export function findAllSearchMatches(content: string, search: string): SearchMatchHit[] {
+  if (!search) {
+    return [];
+  }
+  const exact = findExactMatches(content, search);
+  if (exact.length > 0) {
+    return exact;
+  }
+  return findFuzzyLineMatches(content, search);
+}
+
+export function findSearchMatch(content: string, search: string): SearchMatch {
+  const matches = findAllSearchMatches(content, search);
   if (matches.length === 0) {
     return { ok: false, reason: "not_found" };
   }
   if (matches.length > 1) {
-    return { ok: false, reason: "ambiguous" };
+    return { ok: false, reason: "ambiguous", matches };
   }
-
-  const startLine = matches[0]!;
-  const first = contentLines[startLine]!;
-  const last = contentLines[startLine + searchLines.length - 1]!;
-  const matched = content.slice(first.start, last.end);
-  return { ok: true, start: first.start, end: last.end, matched, fuzzy: true };
-}
-
-export function findSearchMatch(content: string, search: string): SearchMatch {
-  if (!search) {
-    return { ok: false, reason: "not_found" };
-  }
-
-  const exactIndex = content.indexOf(search);
-  if (exactIndex !== -1) {
-    const nextIndex = content.indexOf(search, exactIndex + 1);
-    if (nextIndex !== -1) {
-      return { ok: false, reason: "ambiguous" };
-    }
-    return {
-      ok: true,
-      start: exactIndex,
-      end: exactIndex + search.length,
-      matched: search,
-      fuzzy: false
-    };
-  }
-
-  return findFuzzyLineBlock(content, search);
+  const only = matches[0]!;
+  return {
+    ok: true,
+    start: only.start,
+    end: only.end,
+    matched: only.matched,
+    fuzzy: only.fuzzy
+  };
 }
 
 function adjustReplaceIndent(replace: string, search: string, matched: string): string {
@@ -154,36 +192,135 @@ function adjustReplaceIndent(replace: string, search: string, matched: string): 
     .join("\n");
 }
 
-export function applyHunkToContent(content: string, hunk: PatchHunk): ApplyHunkResult {
-  const { search, replace } = hunk;
-  const match = findSearchMatch(content, search);
-  if (!match.ok) {
-    const error =
-      match.reason === "ambiguous"
-        ? "SEARCH block matches multiple locations"
-        : "SEARCH block not found in file";
-    return { ok: false, error, reason: match.reason };
-  }
-
+function replaceAtHit(content: string, hunk: PatchHunk, hit: SearchMatchHit): string {
   const nextContent =
-    match.fuzzy && match.matched !== search
-      ? adjustReplaceIndent(replace, search, match.matched)
-      : replace;
-
-  return {
-    ok: true,
-    content: content.slice(0, match.start) + nextContent + content.slice(match.end)
-  };
+    hit.fuzzy && hit.matched !== hunk.search
+      ? adjustReplaceIndent(hunk.replace, hunk.search, hit.matched)
+      : hunk.replace;
+  return content.slice(0, hit.start) + nextContent + content.slice(hit.end);
 }
 
-export function applyHunksToContent(content: string, hunks: PatchHunk[]): ApplyHunkResult {
-  let current = content;
-  for (const hunk of hunks) {
-    const result = applyHunkToContent(current, hunk);
-    if (!result.ok) {
-      return result;
-    }
-    current = result.content;
+type PlannedReplacement = {
+  start: number;
+  end: number;
+  hunk: PatchHunk;
+  hit: SearchMatchHit;
+};
+
+type PlanHunkResult =
+  | { ok: true; ops: PlannedReplacement[] }
+  | { ok: false; error: string; reason: "not_found" | "ambiguous" | "no_selection" };
+
+function planHunkReplacements(
+  content: string,
+  hunk: PatchHunk,
+  matchIndices?: readonly number[]
+): PlanHunkResult {
+  const matches = findAllSearchMatches(content, hunk.search);
+
+  if (matches.length === 0) {
+    return { ok: false, error: "SEARCH block not found in file", reason: "not_found" };
   }
-  return { ok: true, content: current };
+
+  if (matches.length === 1) {
+    return { ok: true, ops: [{ start: matches[0]!.start, end: matches[0]!.end, hunk, hit: matches[0]! }] };
+  }
+
+  if (!matchIndices || matchIndices.length === 0) {
+    return {
+      ok: false,
+      error: "SEARCH block matches multiple locations — select where to apply",
+      reason: "no_selection"
+    };
+  }
+
+  const ops: PlannedReplacement[] = [];
+  for (const index of [...new Set(matchIndices)]) {
+    if (!Number.isInteger(index) || index < 0 || index >= matches.length) {
+      continue;
+    }
+    const hit = matches[index]!;
+    ops.push({ start: hit.start, end: hit.end, hunk, hit });
+  }
+
+  if (ops.length === 0) {
+    return {
+      ok: false,
+      error: "SEARCH block matches multiple locations — select where to apply",
+      reason: "no_selection"
+    };
+  }
+
+  return { ok: true, ops };
+}
+
+function applyPlannedReplacements(content: string, ops: PlannedReplacement[]): ApplyHunkResult {
+  const sorted = [...ops].sort((a, b) => b.start - a.start);
+  let next = content;
+  for (const op of sorted) {
+    next = replaceAtHit(next, op.hunk, op.hit);
+  }
+  return { ok: true, content: next };
+}
+
+/**
+ * Apply a hunk. For unique SEARCH, applies once. For ambiguous SEARCH, requires
+ * `matchIndices` (one or more). Multiple indices are applied high-offset-first
+ * so earlier offsets stay valid.
+ */
+export function applyHunkToContent(
+  content: string,
+  hunk: PatchHunk,
+  options?: ApplyHunkOptions
+): ApplyHunkResult {
+  const planned = planHunkReplacements(content, hunk, options?.matchIndices);
+  if (!planned.ok) {
+    return planned;
+  }
+  return applyPlannedReplacements(content, planned.ops);
+}
+
+export type ApplyHunksOptions = {
+  /** Per-hunk-index match selections (for ambiguous SEARCH). */
+  matchIndicesByHunk?: { [hunkIndex: number]: readonly number[] };
+};
+
+/**
+ * Apply hunks against the original buffer's match offsets, then splice
+ * high-to-low. Prevents "Option 1 / L15" on a later hunk from silently
+ * targeting a different line after an earlier hunk shifted indices.
+ */
+export function applyHunksToContent(
+  content: string,
+  hunks: PatchHunk[],
+  options?: ApplyHunksOptions
+): ApplyHunkResult {
+  const allOps: PlannedReplacement[] = [];
+
+  for (let i = 0; i < hunks.length; i++) {
+    const planned = planHunkReplacements(content, hunks[i]!, options?.matchIndicesByHunk?.[i]);
+    if (!planned.ok) {
+      return planned;
+    }
+    allOps.push(...planned.ops);
+  }
+
+  // Same file span cannot receive two different edits in one apply.
+  const bySpan = new Map<string, PlannedReplacement>();
+  for (const op of allOps) {
+    const key = `${op.start}:${op.end}`;
+    const existing = bySpan.get(key);
+    if (existing && existing.hunk.replace !== op.hunk.replace) {
+      return {
+        ok: false,
+        error: "Two edits target the same location — pick one change per place",
+        reason: "ambiguous"
+      };
+    }
+    if (!existing) {
+      bySpan.set(key, op);
+    }
+  }
+
+  return applyPlannedReplacements(content, [...bySpan.values()]);
 }

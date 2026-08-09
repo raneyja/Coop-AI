@@ -414,9 +414,43 @@ test("buildUserMessageWithContext renders repo entry files from context bundle",
   });
 
   assert.ok(message.includes("<repo_entry_files>"));
-  assert.ok(message.includes("Representative repository entry points"));
+  assert.ok(message.includes("In-repo package manifests / entry points"));
   assert.ok(message.includes("package.json"));
   assert.ok(message.includes("activate()"));
+});
+
+test("buildUserMessageWithContext renders concrete package structure over workspace globs", () => {
+  const message = buildUserMessageWithContext("What's in the top-level package structure?", {
+    owner: "documenso",
+    repo: "documenso",
+    branch: "main",
+    contextBundle: [
+      {
+        type: "file_metadata",
+        data: {
+          treeOverview: { topLevelDirs: ["apps", "packages"], topLevelFiles: ["package.json"] },
+          entryFiles: [
+            {
+              path: "package.json",
+              content: '{"name":"documenso","workspaces":["apps/*","packages/*"]}'
+            }
+          ],
+          packageStructure: {
+            packages: ["apps/remix", "packages/prisma", "packages/signing"],
+            parents: ["apps", "packages"],
+            workspaceGlobs: ["apps/*", "packages/*"]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_package_structure>"));
+  assert.ok(message.includes("apps/remix"));
+  assert.ok(message.includes("packages/signing"));
+  assert.ok(message.includes("packages/prisma"));
+  assert.ok(message.includes("workspace_globs"));
+  assert.ok(message.includes("Prefer these names over workspace globs"));
 });
 
 test("buildUserMessageWithContext renders project instructions and dedupes AGENTS.md entry files", () => {
@@ -593,6 +627,62 @@ test("buildUserMessageWithContext marks semantic files as a retrieval sample", (
   assert.ok(message.includes("Retrieval sample only"));
   assert.ok(message.includes("attached 1 of 42 matched path(s)"));
   assert.ok(message.includes("Never count these paths as the total number of files"));
+});
+
+test("buildUserMessageWithContext renders dual repo_compare evidence for both sides", () => {
+  const message = buildUserMessageWithContext("Compare auth.", {
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          dualRepoCompare: {
+            source: "dual-repo-compare",
+            topic: "auth tenancy",
+            stickyRepoExcluded: "github:acme/other",
+            left: {
+              repoId: "github:CoopAI-Corp/plane",
+              owner: "CoopAI-Corp",
+              repo: "plane",
+              files: [
+                {
+                  path: "apps/api/plane/authentication.py",
+                  repoId: "github:CoopAI-Corp/plane",
+                  content: "class APIKeyAuthentication"
+                }
+              ]
+            },
+            right: {
+              repoId: "github:CoopAI-Corp/documenso",
+              owner: "CoopAI-Corp",
+              repo: "documenso",
+              files: [
+                {
+                  path: "packages/lib/server-only/api-token/get.ts",
+                  repoId: "github:CoopAI-Corp/documenso",
+                  content: "getApiTokenByToken"
+                }
+              ]
+            }
+          },
+          localFiles: {
+            files: [{ path: "src/chat/CoopChatSession.ts", content: "should not attach" }]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes("<repo_compare"));
+  assert.ok(message.includes('side="CoopAI-Corp/plane"'));
+  assert.ok(message.includes('side="CoopAI-Corp/documenso"'));
+  assert.ok(message.includes("APIKeyAuthentication"));
+  assert.ok(message.includes("getApiTokenByToken"));
+  assert.ok(message.includes("excluded_sticky_repo"));
+  assert.ok(!message.includes("src/chat/CoopChatSession.ts"));
+  assert.ok(!message.includes("<local_files>"));
+  assert.match(systemPromptForUseCase("chat"), /repo_compare/);
 });
 
 test("buildUserMessageWithContext renders live tree overview", () => {

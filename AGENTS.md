@@ -18,11 +18,13 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 Aim to **start** answers within **15 seconds** (stop gathering, synthesize with what you have). This applies to **all** chat answers: plain chat, quick actions, quick-action slash commands, integration slash commands (`/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`), and `/edit`. Use `MAX_USER_FACING_RESPONSE_MS` / `remainingContextGatherBudgetMs` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. **Never** abort the turn or replace an answer with a timeout message solely because 15s elapsed — AbortSignal is for user Stop only. Do not add per-call gather timeouts of 30–120s+ on the interactive hot path.
 
-## Indexed repo = remote workspace layer
+## Indexed repo = remote workspace layer (Zero-Clone)
 
 Deep-Index builds a **searchable map plus durable facts**, then deletes the transient clone. It does **not** keep a copy of every source file. File bodies are fetched on demand from the code host.
 
-All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`** — identity, inventory (file count, lines of code, size), tree overview, and `readFile` (local clone or remote). Intent detection lives in `src/workspace/repoFactIntent.ts`.
+**Product law:** never use a local clone or VS Code workspace folder for repository intelligence (chat, quick actions, slash commands, agent tools, Blast). See `.cursor/rules/zero-clone-remote-only.mdc` and `src/workspace/zeroClonePolicy.ts`.
+
+All repository context goes through **`src/workspace/IndexedRepoWorkspace.ts`** — identity, inventory (file count, lines of code, size), tree overview, and `readFile` (codehost / API only). Intent detection lives in `src/workspace/repoFactIntent.ts`.
 
 **Never estimate a repository fact.** `<repo_inventory>` is the only valid source for totals; `<repo_semantic_files>` is a capped sample and can never answer "how many". When a total is missing, say it is unavailable — do not guess, extrapolate, or reuse a number from an earlier turn.
 

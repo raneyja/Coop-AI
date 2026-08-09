@@ -1142,7 +1142,17 @@ async function handleGetRepoFile(
   const branch = parsed.query?.get("branch")?.trim() || undefined;
   const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
   try {
-    const file = await fetchRepoFile(coords, filePath, token);
+    let file: Awaited<ReturnType<typeof fetchRepoFile>>;
+    try {
+      file = await fetchRepoFile(coords, filePath, token);
+    } catch (error) {
+      // Match tree: wrong/stale branch names (e.g. hardcoded main) should fall back to default.
+      if (branch && error instanceof CodeHostError && error.status === 404) {
+        file = await fetchRepoFile({ ...coords, branch: undefined }, filePath, token);
+      } else {
+        throw error;
+      }
+    }
     writeJson(response, 200, {
       repoId,
       path: file.path,
@@ -1752,7 +1762,7 @@ async function fetchRepoFile(
     case "github":
       return new GitHubClient({ token }).getFileContent(coords, filePath);
     case "gitlab":
-      return new GitLabClient({ token }).getFileContent(coords, filePath);
+      return gitlabClientForOrg(token).getFileContent(coords, filePath);
     case "bitbucket":
       return new BitbucketClient({ token }).getFileContent(coords, filePath);
     default:
@@ -1901,6 +1911,12 @@ async function handleGetRepoSearch(
   }
 }
 
+function gitlabClientForOrg(token: string): GitLabClient {
+  const gitlabConfig = loadGitLabAppConfig();
+  const baseUrl = gitlabConfig ? gitlabApiBaseUrl(gitlabConfig.gitlabBaseUrl) : undefined;
+  return new GitLabClient({ token, baseUrl });
+}
+
 async function searchRepoFiles(
   coords: RepoCoordinates,
   query: string,
@@ -1913,14 +1929,17 @@ async function searchRepoFiles(
       return new GitHubClient({ token }).searchCode(coords, searchQuery, limit);
     }
     case "gitlab":
-      return new GitLabClient({ token }).searchCode(coords, query, limit);
+      try {
+        return await gitlabClientForOrg(token).searchCode(coords, query, limit);
+      } catch (error) {
+        // GitLab Advanced Search is often disabled → 400. Empty lets the extension tree-walk.
+        if (error instanceof CodeHostError && (error.status === 400 || error.status === 403)) {
+          return [];
+        }
+        throw error;
+      }
     case "bitbucket":
-      throw new CodeHostError(
-        "File search isn't supported for this code host yet.",
-        "unsupported",
-        400,
-        coords.provider
-      );
+      return new BitbucketClient({ token }).searchCode(coords, query, limit);
     default:
       throw new CodeHostError(`Unsupported provider: ${coords.provider}`, "unsupported");
   }
@@ -1935,7 +1954,7 @@ async function fetchRepoTree(
     case "github":
       return new GitHubClient({ token }).getRepositoryTree(coords, dirPath);
     case "gitlab":
-      return new GitLabClient({ token }).getRepositoryTree(coords, dirPath);
+      return gitlabClientForOrg(token).getRepositoryTree(coords, dirPath);
     case "bitbucket":
       return new BitbucketClient({ token }).getRepositoryTree(coords, dirPath);
     default:

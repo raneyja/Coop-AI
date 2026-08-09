@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   deliverableForQuickAction,
+  displayStatusForChatDeliverable,
   shouldClearJobActivityOnChatComplete,
   shouldShowJobActivityLine,
   shouldShowViewResultsButton
@@ -58,6 +59,13 @@ test("view results is dev-only and never shown for chat deliverables", () => {
 test("chat deliverables clear job strip when chat completes", () => {
   assert.equal(shouldClearJobActivityOnChatComplete("chat"), true);
   assert.equal(shouldClearJobActivityOnChatComplete("standalone"), false);
+});
+
+test("chat deliverable display status keeps cancelled/failed terminal", () => {
+  assert.equal(displayStatusForChatDeliverable("cancelled"), "cancelled");
+  assert.equal(displayStatusForChatDeliverable("failed"), "failed");
+  assert.equal(displayStatusForChatDeliverable("completed"), "running");
+  assert.equal(displayStatusForChatDeliverable("running"), "running");
 });
 
 const total = passed + failed;

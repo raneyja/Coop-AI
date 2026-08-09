@@ -241,9 +241,125 @@ export function buildThinAlternativesTradeOffsResponse(
   return lines.join("\n");
 }
 
+/** Short SHA / PR anchors present on the timeline that the answer should cite. */
+export function timelineHistoryAnchors(timeline: DecisionTimeline): string[] {
+  const anchors: string[] = [];
+  const focus = timeline.focusCommit ?? timeline.originalCommit;
+  if (focus?.sha) {
+    anchors.push(focus.sha.slice(0, 7), focus.sha.slice(0, 12));
+  }
+  if (
+    timeline.originalCommit?.sha &&
+    timeline.originalCommit.sha !== focus?.sha
+  ) {
+    anchors.push(
+      timeline.originalCommit.sha.slice(0, 7),
+      timeline.originalCommit.sha.slice(0, 12)
+    );
+  }
+  if (timeline.linkedPR?.number != null) {
+    anchors.push(`PR #${timeline.linkedPR.number}`, `#${timeline.linkedPR.number}`);
+  }
+  for (const commit of timeline.evolution?.recentCommits?.slice(0, 3) ?? []) {
+    if (commit.sha) {
+      anchors.push(commit.sha.slice(0, 7));
+    }
+  }
+  return [...new Set(anchors.filter(Boolean))];
+}
+
+export function timelineHasCommitOrPrEvidence(timeline: DecisionTimeline): boolean {
+  return Boolean(
+    timeline.focusCommit?.sha ||
+      timeline.originalCommit?.sha ||
+      timeline.linkedPR?.number != null ||
+      (timeline.evolution?.recentCommits?.length ?? 0) > 0
+  );
+}
+
+/** True when timeline has history but the answer never mentions a commit SHA or PR. */
+export function responseLacksHistoryAnchors(content: string, timeline: DecisionTimeline): boolean {
+  if (!timelineHasCommitOrPrEvidence(timeline)) {
+    return false;
+  }
+  const anchors = timelineHistoryAnchors(timeline);
+  if (anchors.length === 0) {
+    return false;
+  }
+  const haystack = content;
+  if (anchors.some((anchor) => haystack.includes(anchor))) {
+    return false;
+  }
+  // Plain-language commit/PR mentions that still count as an attempt.
+  if (/\b(?:commit|sha)\s+[0-9a-f]{7,40}\b/i.test(haystack)) {
+    return false;
+  }
+  if (/\bPR\s*#?\s*\d+\b/i.test(haystack) || /\bpull request\s*#?\s*\d+\b/i.test(haystack)) {
+    return false;
+  }
+  return true;
+}
+
+function historyLeadParagraph(timeline: DecisionTimeline, file: string): string {
+  const focus = timeline.focusCommit ?? timeline.originalCommit;
+  const parts: string[] = [];
+  if (focus?.sha) {
+    const sha = focus.sha.slice(0, 7);
+    const msg = truncate((focus.message ?? "").replace(/\s+/g, " ").trim(), 140);
+    parts.push(
+      msg
+        ? `Decision history for \`${file}\` includes commit ${sha} (“${msg}”).`
+        : `Decision history for \`${file}\` includes commit ${sha}.`
+    );
+  }
+  if (timeline.linkedPR?.number != null) {
+    const title = truncate((timeline.linkedPR.title ?? "").trim(), 120);
+    parts.push(
+      title
+        ? `Linked PR #${timeline.linkedPR.number}: ${title}.`
+        : `Linked PR #${timeline.linkedPR.number}.`
+    );
+  }
+  if (parts.length === 0) {
+    parts.push(`Commit/PR history is attached for \`${file}\` — see **Sources**.`);
+  }
+  return parts.join(" ");
+}
+
+/** Inject commit/PR grounding when the model answered as a pure code walkthrough. */
+export function injectHistoryGrounding(content: string, timeline: DecisionTimeline, file: string): string {
+  const lead = historyLeadParagraph(timeline, file);
+  let result = content.trim();
+  const summaryBody = extractSectionBody(`\n${result}`, "Summary");
+  if (summaryBody !== undefined) {
+    const nextSummary = `${lead}\n\n${summaryBody}`.trim();
+    result = replaceSectionBody(`\n${result}`, "Summary", nextSummary).replace(/^\n/, "");
+  } else {
+    result = `**Summary**\n${lead}\n\n${result}`;
+  }
+
+  const checklist = listDecisionSourcesChecklist(timeline);
+  if (checklist.length && !/\*\*Sources\*\*/i.test(result)) {
+    result = `${result.trimEnd()}\n\n**Sources**\n${checklist.map((item) => `- ${item}`).join("\n")}`;
+  } else if (checklist.length) {
+    // Ensure at least one history checklist line is present under Sources.
+    const missing = checklist.filter((item) => !result.includes(item.split(" — ")[0] ?? item));
+    if (missing.length) {
+      result = replaceSectionBody(
+        `\n${result}`,
+        "Sources",
+        `${extractSectionBody(`\n${result}`, "Sources") ?? ""}\n${missing.map((item) => `- ${item}`).join("\n")}`.trim()
+      ).replace(/^\n/, "");
+    }
+  }
+
+  return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /**
  * Replaces speculative trade-off filler with a short evidence-bound answer when the
- * timeline lacks PR/discussion metadata.
+ * timeline lacks PR/discussion metadata. Also forces commit/PR anchors when history
+ * exists but the model answered as a code walkthrough.
  */
 export function enrichTraceDecisionResponse(options: {
   content: string;
@@ -260,6 +376,7 @@ export function enrichTraceDecisionResponse(options: {
     return options.content;
   }
 
+  const file = options.activeFile?.trim() || timeline.file;
   const thin = !timelineHasDiscussionEvidence(timeline);
 
   if (thin) {
@@ -268,15 +385,18 @@ export function enrichTraceDecisionResponse(options: {
 
     if (asksAlternatives || speculative) {
       return stripDisallowedNarrativeSourceCitations(
-        buildThinAlternativesTradeOffsResponse(
-          timeline,
-          options.activeFile?.trim() || timeline.file
-        )
+        buildThinAlternativesTradeOffsResponse(timeline, file)
       );
     }
   } else if (shouldReplaceWithGroundedAlternatives(options.content, timeline, options.userQuestion)) {
     return stripDisallowedNarrativeSourceCitations(
       injectGroundedAlternativesSections(options.content, timeline)
+    );
+  }
+
+  if (responseLacksHistoryAnchors(options.content, timeline)) {
+    return stripDisallowedNarrativeSourceCitations(
+      injectHistoryGrounding(options.content, timeline, file)
     );
   }
 

@@ -458,7 +458,12 @@ export async function buildIndexedRepoSummary(
   const [manifest, treeOverview, inventory] = await Promise.all([
     loadManifestEntries(options.api, options.apiBaseUrl, resolved.candidates),
     workspace.getTreeOverview(resolvedTarget),
-    workspace.getInventory(resolvedTarget, { fileCount: true, treeOverview: false, lineCount: false })
+    workspace.getInventory(resolvedTarget, {
+      fileCount: true,
+      treeOverview: false,
+      lineCount: false,
+      packageManifests: false
+    })
   ]);
 
   const manifestStats = manifest.length > 0 ? summarizeManifest(manifest) : undefined;

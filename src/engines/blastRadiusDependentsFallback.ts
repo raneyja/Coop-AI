@@ -1,13 +1,56 @@
+import type { Dirent } from "node:fs";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 
-export type GraphEdgeSource = "scip" | "zoekt" | "heuristic" | "remote";
+/** Lazy Node builtins — keeps the webview bundle free of top-level node: imports. */
+function nodeFs(): typeof import("node:fs") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("node:fs") as typeof import("node:fs");
+}
+
+function nodePath(): typeof import("node:path") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("node:path") as typeof import("node:path");
+}
+
+export type GraphEdgeSource =
+  | "scip"
+  | "zoekt"
+  | "heuristic"
+  | "remote"
+  | "workspace"
+  | "import-parse";
 
 export function asGraphEdgeSource(source: string | undefined): GraphEdgeSource {
-  if (source === "scip" || source === "zoekt" || source === "heuristic" || source === "remote") {
+  if (
+    source === "scip" ||
+    source === "zoekt" ||
+    source === "heuristic" ||
+    source === "remote" ||
+    source === "workspace" ||
+    source === "import-parse"
+  ) {
     return source;
   }
   return "remote";
+}
+
+/** Durable / lexical sources that establish real callers (not embedding lookalikes). */
+export function isTrustedBlastGraphSource(source: string | undefined): boolean {
+  return (
+    source === "import-parse" ||
+    source === "scip" ||
+    source === "zoekt" ||
+    source === "workspace"
+  );
+}
+
+/**
+ * Remote Zero-Clone sources that should not be undercut with “partial index”
+ * caveats when callers are present (excludes local workspace scans).
+ */
+export function isRemoteTrustedBlastGraphSource(source: string | undefined): boolean {
+  return source === "import-parse" || source === "scip" || source === "zoekt";
 }
 
 export type BlastRadiusDependentDetail = {
@@ -26,35 +69,128 @@ export function normalizeGraphRepoId(repoId: string, provider = "github"): strin
 }
 
 /** Build Zoekt/import search patterns that find files referencing the target. */
-export function buildImportSearchPatterns(file: string): string[] {
-  const basename = file.split("/").pop() ?? file;
-  const stem = basename.replace(/\.[^.]+$/, "");
-  const patterns = new Set<string>();
+export function buildImportSearchPatterns(file: string, symbols: string[] = []): string[] {
+  const stem = (file.split("/").pop() ?? file).replace(/\.[^.]+$/, "");
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const pathParts = withoutExt.split("/").filter(Boolean);
+  const patterns: string[] = [];
+  const seen = new Set<string>();
 
-  for (const quote of ["'", '"']) {
-    patterns.add(`require(${quote}${basename}${quote})`);
-    patterns.add(`require(${quote}./${basename}${quote})`);
-    patterns.add(`from ${quote}${basename}${quote}`);
-    patterns.add(`from ${quote}./${basename}${quote}`);
-    if (stem !== basename) {
-      patterns.add(`require(${quote}${stem}${quote})`);
-      patterns.add(`require(${quote}./${stem}${quote})`);
-      patterns.add(`from ${quote}${stem}${quote}`);
-      patterns.add(`from ${quote}./${stem}${quote}`);
+  const add = (pattern: string): void => {
+    const trimmed = pattern.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      return;
     }
-    if (file.includes("/")) {
-      patterns.add(`from ${quote}${file}${quote}`);
-      patterns.add(`require(${quote}${file}${quote})`);
+    seen.add(trimmed);
+    patterns.push(trimmed);
+  };
+
+  // 1) Bare path suffixes first — Zoekt substring match for
+  // `from "../config/responseDeadline"` via `config/responseDeadline`.
+  const suffixes = pathParts
+    .map((_, index) => pathParts.slice(index).join("/"))
+    .filter((suffix) => suffix.length >= 3);
+  for (const suffix of suffixes) {
+    add(suffix);
+  }
+
+  // 2) A few relative-import shapes for the last 2 suffixes only (avoid burning maxPatterns).
+  for (const suffix of suffixes.slice(-2)) {
+    for (const quote of ["'", '"']) {
+      add(`from ${quote}../${suffix}${quote}`);
+      add(`from ${quote}../../${suffix}${quote}`);
+      add(`from ${quote}./${suffix}${quote}`);
+      add(`from ${quote}${suffix}${quote}`);
     }
   }
 
-  return [...patterns];
+  // 3) Basename / alias forms.
+  for (const quote of ["'", '"']) {
+    add(`from ${quote}${stem}${quote}`);
+    add(`from ${quote}./${stem}${quote}`);
+    add(`require(${quote}./${stem}${quote})`);
+    add(`from ${quote}@/${stem}${quote}`);
+    if (file.includes("/")) {
+      add(`from ${quote}${withoutExt}${quote}`);
+      add(`from ${quote}${file}${quote}`);
+    }
+  }
+
+  // 4) Python-style imports of the module stem.
+  if (/\.py$/i.test(file)) {
+    add(`from ${stem} import`);
+    add(`import ${stem}`);
+  }
+
+  // 5) Exported / ask symbols last (MAX_USER_FACING_RESPONSE_MS, StateGroup, …).
+  for (const symbol of symbols) {
+    const trimmed = symbol.trim();
+    if (trimmed.length < 3) {
+      continue;
+    }
+    add(trimmed);
+    add(`import { ${trimmed}`);
+    add(`import ${trimmed}`);
+    add(`from ${quoteSafe(stem)} import ${trimmed}`);
+  }
+
+  return patterns;
 }
 
-export function buildTestSearchPatterns(file: string): string[] {
-  const basename = file.split("/").pop() ?? file;
-  const stem = basename.replace(/\.[^.]+$/, "");
-  return uniqueStrings([basename, stem, file]);
+/**
+ * Exported names from source text — used as verified Zoekt queries when the
+ * default Blast ask has no domain symbols (e.g. MAX_USER_FACING_RESPONSE_MS).
+ */
+export function extractExportNamesFromSource(source: string): string[] {
+  const names = new Set<string>();
+  for (const match of source.matchAll(
+    /export\s+(?:async\s+)?(?:function|const|class|type|enum|interface|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+  )) {
+    names.add(match[1]);
+  }
+  for (const match of source.matchAll(/export\s+\{\s*([^}]+)\}/g)) {
+    for (const part of match[1].split(",")) {
+      const name = part
+        .trim()
+        .replace(/\s+as\s+[A-Za-z_][A-Za-z0-9_]*$/i, "")
+        .trim();
+      if (name && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+        names.add(name);
+      }
+    }
+  }
+  // Prefer distinctive identifiers (SCREAMING_SNAKE / long names).
+  return [...names]
+    .filter((name) => name.length >= 4)
+    .sort((a, b) => {
+      const score = (s: string): number =>
+        (/^[A-Z][A-Z0-9_]+$/.test(s) ? 0 : 2) + (s.length >= 12 ? 0 : 1);
+      return score(a) - score(b) || b.length - a.length;
+    })
+    .slice(0, 8);
+}
+
+function quoteSafe(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_.]/g, "_");
+}
+
+/** Default Blast chip ask — no domain symbols; searching "Estimate" only adds noise. */
+export function isGenericBlastImpactAsk(ask: string | undefined): boolean {
+  const text = ask?.trim() ?? "";
+  if (!text) {
+    return true;
+  }
+  return /^estimate the impact of changing this code\.?$/i.test(text);
+}
+
+/**
+ * Only zoekt/scip text hits count as verified callers. Embedding similarity is
+ * labeled "heuristic" in the UI and routinely returns unrelated files.
+ * Aggregate "hybrid" (zoekt+…) is treated as verified at the client via
+ * mapSearchSourceToGraphSource / isVerifiedCallerSearchSource on remapped zoekt.
+ */
+export function isVerifiedCallerSearchSource(source: LocalSearchResult["source"]): boolean {
+  return source === "zoekt" || source === "scip";
 }
 
 export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]): GraphEdgeSource {
@@ -67,58 +203,417 @@ export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]
   return "heuristic";
 }
 
-function normalizeHitPath(fileName: string): string | undefined {
-  const trimmed = fileName.trim().replace(/\\/g, "/");
-  if (!trimmed || trimmed === ".") {
-    return undefined;
+/** When hit content is real line text, require the module stem, path suffix, or symbol. */
+export function hitLooksLikeReferenceToTarget(
+  hit: { fileName: string; content?: string },
+  file: string,
+  symbols: string[] = []
+): boolean {
+  const content = (hit.content ?? "").trim();
+  const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
+  if (pathOnly) {
+    // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
+    return true;
   }
-  return trimmed.replace(/^\/+/, "");
+  const basename = file.split("/").pop() ?? file;
+  const stem = basename.replace(/\.[^.]+$/, "");
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const pathParts = withoutExt.split("/").filter(Boolean);
+  if (content.includes(stem) || content.includes(basename) || content.includes(file)) {
+    return true;
+  }
+  for (let i = 0; i < pathParts.length; i++) {
+    const suffix = pathParts.slice(i).join("/");
+    if (suffix.length >= 3 && content.includes(suffix)) {
+      return true;
+    }
+  }
+  return symbols.some((symbol) => symbol.length >= 3 && content.includes(symbol));
+}
+
+/** PascalCase / CamelCase symbols from the blast ask (e.g. StateGroup, DocumentStatus). */
+export function extractBlastSearchSymbols(ask: string | undefined, file?: string): string[] {
+  if (isGenericBlastImpactAsk(ask)) {
+    return [];
+  }
+  const symbols = new Set<string>();
+  const stop = new Set([
+    "What",
+    "When",
+    "Where",
+    "Which",
+    "This",
+    "That",
+    "With",
+    "From",
+    "Change",
+    "Changing",
+    "Rename",
+    "Values",
+    "Break",
+    "Breaks",
+    "Draft",
+    "Pending",
+    "Completed",
+    "Rejected",
+    "Estimate",
+    "Impact",
+    "Code",
+    "File",
+    "Files",
+    "Radius",
+    "Blast",
+    "Summary",
+    "Direct",
+    "None",
+    "Related",
+    "Testing",
+    "Sources",
+    "Medium",
+    "High",
+    "Low",
+    "Partial",
+    "Index",
+    "Coverage",
+    "Analysis",
+    "Identify",
+    "Surfaces",
+    "Risk",
+    "Risks",
+    "Operational",
+    "Transitive",
+    "Dependents",
+    "Caller",
+    "Callers"
+  ]);
+  const text = ask?.trim() ?? "";
+  for (const match of text.matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g)) {
+    const token = match[1];
+    if (!stop.has(token)) {
+      symbols.add(token);
+    }
+  }
+  // Prefer class-like names ending in Group/Status/Type/Enum.
+  const ranked = [...symbols].sort((a, b) => {
+    const score = (s: string) =>
+      /(Group|Status|Type|Enum|Kind|Mode)$/.test(s) ? 0 : 1;
+    return score(a) - score(b) || b.length - a.length;
+  });
+  if (file?.endsWith(".py") && ranked.length === 0) {
+    // Fall back to TitleCase stem for Python models (state → State is weak; skip).
+  }
+  return ranked.slice(0, 6);
+}
+
+export type SearchDependentsFallbackOptions = {
+  /** Cap patterns when soft gather budget is thin. */
+  maxPatterns?: number;
+  /** Extra symbols from the user ask (StateGroup, DocumentStatus, …). */
+  symbols?: string[];
+  /**
+   * Absolute filesystem roots for offline/dev-only scans.
+   * Must stay empty for Zero-Clone / remote indexed repos — never pass open
+   * VS Code folders on the Blast hot path or we fake a local-repo success.
+   */
+  localRoots?: string[];
+  /**
+   * When true (default), ignore localRoots so Blast cannot claim callers from
+   * a downloaded folder. Set false only for explicit offline tooling/tests.
+   */
+  remoteOnly?: boolean;
+};
+
+/** High-signal substrings for a single local filesystem walk. */
+export function buildLocalCallerNeedles(file: string, symbols: string[] = []): string[] {
+  const withoutExt = file.replace(/\.[^.]+$/, "");
+  const parts = withoutExt.split("/").filter(Boolean);
+  const needles: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string): void => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 3 || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    needles.push(trimmed);
+  };
+  for (let i = 0; i < parts.length; i++) {
+    add(parts.slice(i).join("/"));
+  }
+  for (const symbol of symbols.slice(0, 6)) {
+    add(symbol);
+  }
+  return needles;
+}
+
+/**
+ * Scan local workspace/clone roots for import/symbol references when the remote
+ * index cannot verify callers (no Zoekt / embedding-only).
+ */
+export function searchDependentsInLocalRoots(
+  roots: string[],
+  file: string,
+  options: { symbols?: string[]; maxHits?: number } = {}
+): { dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] } {
+  const warnings: string[] = [];
+  const needles = buildLocalCallerNeedles(file, options.symbols ?? []);
+  if (!roots.length || !needles.length) {
+    return { dependents: [], source: "remote", warnings };
+  }
+
+  const maxHits = Math.max(1, Math.min(options.maxHits ?? 30, 40));
+  const seen = new Set<string>([file.replace(/\\/g, "/")]);
+  const dependents: BlastRadiusDependentDetail[] = [];
+  const needleLower = needles.map((needle) => needle.toLowerCase());
+
+  for (const root of roots) {
+    if (!root || !fsExists(root)) {
+      continue;
+    }
+    walkLocalTextFiles(root, (absolutePath, relativePath) => {
+      if (dependents.length >= maxHits) {
+        return false;
+      }
+      const depPath = relativePath.replace(/\\/g, "/");
+      if (!depPath || seen.has(depPath) || depPath === file) {
+        return true;
+      }
+      let content: string;
+      try {
+        content = fsReadFile(absolutePath);
+      } catch {
+        return true;
+      }
+      const lines = content.split("\n");
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index] ?? "";
+        const lower = line.toLowerCase();
+        if (!needleLower.some((needle) => lower.includes(needle))) {
+          continue;
+        }
+        if (
+          !hitLooksLikeReferenceToTarget(
+            { fileName: depPath, content: line },
+            file,
+            options.symbols ?? []
+          )
+        ) {
+          continue;
+        }
+        seen.add(depPath);
+        dependents.push({ path: depPath, depth: 1, source: "workspace" });
+        break;
+      }
+      return dependents.length < maxHits;
+    });
+    if (dependents.length >= maxHits) {
+      break;
+    }
+  }
+
+  if (dependents.length === 0) {
+    warnings.push("Workspace text search found no import/symbol callers for this file.");
+    return { dependents: [], source: "remote", warnings };
+  }
+
+  warnings.push(
+    `Dependents verified via workspace text search (${dependents.length} file(s)) — index Zoekt unavailable or empty.`
+  );
+  return {
+    dependents: sortDependentsProductionFirst(dependents).slice(0, maxHits),
+    source: "workspace",
+    warnings
+  };
 }
 
 /** Search index for files that import/reference the target when SCIP dependents are empty. */
 export async function searchDependentsFallback(
   indexBackend: IndexBackend,
   repoId: string,
-  file: string
+  file: string,
+  options: SearchDependentsFallbackOptions = {}
 ): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
   const warnings: string[] = [];
   const normalizedRepoId = normalizeGraphRepoId(repoId);
-  const enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
+  const symbols = options.symbols ?? [];
+  // Zero-Clone default: never scan open folders for Blast callers.
+  const remoteOnly = options.remoteOnly !== false;
+  const localRoots = remoteOnly
+    ? []
+    : (options.localRoots ?? []).filter((root) => Boolean(root?.trim()));
 
-  if (!enabled) {
-    return { dependents: [], source: "remote", warnings };
+  let enabled = false;
+  try {
+    enabled = await indexBackend.isEnabledForRepo(normalizedRepoId);
+  } catch {
+    enabled = false;
   }
 
-  const patterns = buildImportSearchPatterns(file);
+  const patterns = buildImportSearchPatterns(file, symbols);
+  // Prefer import-path patterns first; symbol patterns second (enums/classes).
+  // Never let bare English tokens from the ask crowd out real import queries.
+  const importPatterns = patterns.filter(
+    (pattern) => !symbols.some((symbol) => pattern === symbol || pattern.startsWith(`${symbol}.`) || pattern.startsWith(`${symbol}(`))
+  );
+  const symbolPatterns = patterns.filter((pattern) => !importPatterns.includes(pattern));
+  const ordered = [...importPatterns, ...symbolPatterns];
+  const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
   const seen = new Set<string>([file]);
   const dependents: BlastRadiusDependentDetail[] = [];
-  let bestSource: GraphEdgeSource = "heuristic";
+  let bestSource: GraphEdgeSource = "remote";
+  let skippedUnverified = 0;
 
-  for (const pattern of patterns.slice(0, 8)) {
-    try {
-      const result = await indexBackend.search(normalizedRepoId, pattern);
-      const source = mapSearchSourceToGraphSource(result.source);
-      if (source === "zoekt" || source === "scip") {
-        bestSource = source;
-      }
-      for (const hit of result.hits) {
-        const depPath = normalizeHitPath(hit.fileName);
-        if (!depPath || seen.has(depPath)) {
+  if (enabled) {
+    for (const pattern of ordered.slice(0, maxPatterns)) {
+      try {
+        const result = await indexBackend.search(normalizedRepoId, pattern);
+        const verifiedHits = result.hits.filter((hit) => {
+          const hitSource = hit.source ?? result.source;
+          return isVerifiedCallerSearchSource(hitSource);
+        });
+        if (verifiedHits.length === 0) {
+          if (result.hits.length > 0) {
+            skippedUnverified += result.hits.length;
+          }
           continue;
         }
-        seen.add(depPath);
-        dependents.push({ path: depPath, depth: 1, source });
+        const resultSource = isVerifiedCallerSearchSource(result.source)
+          ? result.source
+          : (verifiedHits[0]?.source ?? "zoekt");
+        const source = mapSearchSourceToGraphSource(resultSource);
+        if (source === "zoekt" || source === "scip") {
+          bestSource = source;
+        }
+        for (const hit of verifiedHits) {
+          const depPath = normalizeHitPath(hit.fileName);
+          if (!depPath || seen.has(depPath) || depPath === file) {
+            continue;
+          }
+          if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
+            continue;
+          }
+          const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
+          seen.add(depPath);
+          dependents.push({ path: depPath, depth: 1, source: hitGraphSource });
+        }
+      } catch (error) {
+        warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
       }
-    } catch (error) {
-      warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
     }
   }
 
+  if (skippedUnverified > 0 && dependents.length === 0) {
+    warnings.push(
+      `Skipped ${skippedUnverified} embedding/fallback hit(s) — not import-verified callers.`
+    );
+  }
+
+  if (dependents.length === 0 && localRoots.length > 0) {
+    const local = searchDependentsInLocalRoots(localRoots, file, {
+      symbols,
+      maxHits: 30
+    });
+    warnings.push(...local.warnings);
+    if (local.dependents.length > 0) {
+      return {
+        dependents: local.dependents,
+        source: local.source,
+        warnings: [...new Set(warnings)]
+      };
+    }
+  }
+
+  const ranked = sortDependentsProductionFirst(dependents);
   return {
-    dependents: dependents.slice(0, 30),
-    source: dependents.length > 0 ? bestSource : "remote",
-    warnings
+    dependents: ranked.slice(0, 30),
+    source: ranked.length > 0 ? bestSource : "remote",
+    warnings: [...new Set(warnings)]
   };
+}
+
+/**
+ * Merge verified import/symbol search into the blast dependencies bundle entry.
+ *
+ * Prefer search hits over any prior job sample. When search is empty, clear
+ * unverified directDependents so junk remote edges cannot survive as "callers."
+ * Optional `keepIfSearchEmpty` preserves already-filtered job edges (to===file).
+ */
+export function mergeSearchDependentsFallbackIntoDependenciesData(
+  data: Record<string, unknown>,
+  fallback: {
+    dependents: BlastRadiusDependentDetail[];
+    source: GraphEdgeSource;
+    warnings: string[];
+  },
+  options?: { keepFilteredJobDependentsIfSearchEmpty?: boolean }
+): Record<string, unknown> {
+  const priorWarnings = Array.isArray(data.warnings)
+    ? (data.warnings as unknown[]).filter((w): w is string => typeof w === "string")
+    : [];
+  const warnings = [...priorWarnings, ...fallback.warnings];
+  const priorDirect = Array.isArray(data.directDependents)
+    ? (data.directDependents as unknown[]).filter((p): p is string => typeof p === "string")
+    : [];
+
+  if (fallback.dependents.length > 0) {
+    const ranked = sortDependentsProductionFirst(fallback.dependents);
+    warnings.push(
+      `Dependents verified via ${fallback.source} import/symbol search — prefer these over unfiltered graph samples.`
+    );
+    return {
+      ...data,
+      directDependents: ranked.map((entry) => entry.path),
+      dependentDetails: ranked,
+      warnings: [...new Set(warnings)],
+      graphMeta: {
+        ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+          ? (data.graphMeta as Record<string, unknown>)
+          : {}),
+        source: fallback.source
+      }
+    };
+  }
+
+  if (options?.keepFilteredJobDependentsIfSearchEmpty && priorDirect.length > 0) {
+    warnings.push(
+      "Import/symbol search found no additional callers — keeping dependency edges that target this file only."
+    );
+    return {
+      ...data,
+      warnings: [...new Set(warnings)]
+    };
+  }
+
+  warnings.push(
+    "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
+  );
+  const { directDependents: _dropDirect, dependentDetails: _dropDetails, ...rest } = data;
+  return {
+    ...rest,
+    directDependents: [],
+    dependentDetails: [],
+    warnings: [...new Set(warnings)],
+    graphMeta: {
+      ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+        ? (data.graphMeta as Record<string, unknown>)
+        : {}),
+      source: fallback.source
+    }
+  };
+}
+
+export function buildTestSearchPatterns(file: string): string[] {
+  const basename = file.split("/").pop() ?? file;
+  const stem = basename.replace(/\.[^.]+$/, "");
+  return uniqueStrings([basename, stem, file]);
+}
+
+function normalizeHitPath(fileName: string): string | undefined {
+  const trimmed = fileName.trim().replace(/\\/g, "/");
+  if (!trimmed || trimmed === ".") {
+    return undefined;
+  }
+  return trimmed.replace(/^\/+/, "");
 }
 
 /** Find test/spec files that reference the target via index search. */
@@ -324,40 +819,82 @@ export type BlastRadiusRiskRankedDependent = BlastRadiusDependentDetail & {
   riskReason: string;
 };
 
-/** Rank code dependents for summary narrative — integration/examples/tests first. */
+export type DependentSurfaceKind = "production" | "integration" | "example" | "build" | "test" | "other";
+
+/** Classify a dependent path for ranking / labeling (stories & e2e count as tests). */
+export function classifyDependentSurface(path: string): DependentSurfaceKind {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  if (isStoryOrDemoPath(lower) || isE2ePath(lower) || looksLikeTestFile(path)) {
+    return "test";
+  }
+  if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
+    return "integration";
+  }
+  if (lower.startsWith("examples/") || /\/examples\//.test(lower)) {
+    return "example";
+  }
+  if (/\/bundler\//.test(lower) || /webpack|esbuild|rollup|vite\.config/.test(lower)) {
+    return "build";
+  }
+  if (isProductionCallerPath(lower)) {
+    return "production";
+  }
+  return "other";
+}
+
+/**
+ * Rank code dependents for summary narrative — production / app callers first.
+ * Stories, e2e, and unit tests rank below and are labeled as test surfaces.
+ */
 export function rankCodeDependentsByRisk(
   details: BlastRadiusDependentDetail[],
   limit = 5
 ): BlastRadiusRiskRankedDependent[] {
-  return details
+  return sortDependentsProductionFirst(details)
     .filter((entry) => !isDocsReferencePath(entry.path))
     .map((entry) => {
       const scored = scoreDependentRisk(entry.path, entry.depth);
       return { ...entry, riskScore: scored.score, riskReason: scored.reason };
     })
-    .sort((left, right) => right.riskScore - left.riskScore || left.path.localeCompare(right.path))
     .slice(0, limit);
 }
 
-function scoreDependentRisk(path: string, depth: number): { score: number; reason: string } {
-  const lower = path.toLowerCase();
-  let score = 40;
+/** Stable production-first order for dependent lists shown in cards / prompts. */
+export function sortDependentsProductionFirst(
+  details: BlastRadiusDependentDetail[]
+): BlastRadiusDependentDetail[] {
+  return [...details].sort((left, right) => {
+    const leftScore = scoreDependentRisk(left.path, left.depth).score;
+    const rightScore = scoreDependentRisk(right.path, right.depth).score;
+    return rightScore - leftScore || left.path.localeCompare(right.path);
+  });
+}
+
+export function scoreDependentRisk(path: string, depth: number): { score: number; reason: string } {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  let score = 55;
   let reason = "Code importer";
 
-  if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
-    score = 90;
+  if (isStoryOrDemoPath(lower)) {
+    score = 22;
+    reason = "Test surface (Storybook / demo)";
+  } else if (isE2ePath(lower)) {
+    score = 20;
+    reason = "Test surface (e2e)";
+  } else if (looksLikeTestFile(path)) {
+    score = 28;
+    reason = "Test surface (unit / regression)";
+  } else if (isProductionCallerPath(lower)) {
+    score = 95;
+    reason = "Production / application caller";
+  } else if (lower.startsWith("integration/") || /\/integration\//.test(lower)) {
+    score = 88;
     reason = "Integration / runtime surface";
   } else if (lower.startsWith("examples/") || /\/examples\//.test(lower)) {
-    score = 85;
+    score = 72;
     reason = "Public example / API usage";
-  } else if (/\.(test|spec)\.[cm]?[jt]sx?$/i.test(path) || /\/test\//.test(lower) || /\/__tests__\//.test(lower)) {
-    score = 80;
-    reason = "Test / regression surface";
-  } else if (/^src\//.test(lower) || /^lib\//.test(lower) || /^packages\//.test(lower)) {
-    score = 70;
-    reason = "Application or library code";
-  } else if (/\/bundler\//.test(lower) || /webpack|esbuild/.test(lower)) {
-    score = 55;
+  } else if (/\/bundler\//.test(lower) || /webpack|esbuild|rollup|vite\.config/.test(lower)) {
+    score = 48;
     reason = "Build / bundler tooling";
   }
 
@@ -367,6 +904,32 @@ function scoreDependentRisk(path: string, depth: number): { score: number; reaso
   }
 
   return { score, reason };
+}
+
+function isProductionCallerPath(lower: string): boolean {
+  return (
+    /^(src|lib|app|apps|packages|server|services|core|web|backend|frontend)\//.test(lower) ||
+    /\/(src|lib|app|packages|server|services|core)\//.test(lower)
+  );
+}
+
+function isStoryOrDemoPath(lower: string): boolean {
+  return (
+    /\.stories\.[cm]?[jt]sx?$/.test(lower) ||
+    /\.story\.[cm]?[jt]sx?$/.test(lower) ||
+    /(^|\/)stories\//.test(lower) ||
+    /(^|\/)storybook\//.test(lower) ||
+    /\.storybook\//.test(lower)
+  );
+}
+
+function isE2ePath(lower: string): boolean {
+  return (
+    /(^|\/)e2e\//.test(lower) ||
+    /(^|\/)(cypress|playwright)\//.test(lower) ||
+    /\.e2e\.[cm]?[jt]sx?$/.test(lower) ||
+    /\/__e2e__\//.test(lower)
+  );
 }
 
 export function filterJobDependentsForFile(
@@ -388,11 +951,15 @@ export function filterJobDependentsForFile(
   );
 }
 
-function looksLikeTestFile(path: string): boolean {
+export function looksLikeTestFile(path: string): boolean {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  if (isStoryOrDemoPath(lower) || isE2ePath(lower)) {
+    return true;
+  }
   return (
     /\.(test|spec)\.[cm]?[jt]sx?$/i.test(path) ||
     /\/__(tests|mocks)__\//i.test(path) ||
-    /\/test\//i.test(path)
+    /\/tests?\//i.test(lower)
   );
 }
 
@@ -425,4 +992,89 @@ function uniqueStrings(values: string[]): string[] {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function fsExists(root: string): boolean {
+  try {
+    return nodeFs().existsSync(root);
+  } catch {
+    return false;
+  }
+}
+
+function fsReadFile(absolutePath: string): string {
+  return nodeFs().readFileSync(absolutePath, "utf8");
+}
+
+const LOCAL_SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "out",
+  "build",
+  ".next",
+  "coverage",
+  ".turbo",
+  ".cache",
+  "vendor"
+]);
+
+function isLocalTextCandidate(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  if (
+    !/\.(ts|tsx|js|jsx|mjs|cjs|py|go|java|kt|rs|cs|rb|php|swift)$/i.test(lower) &&
+    !lower.endsWith(".vue") &&
+    !lower.endsWith(".svelte")
+  ) {
+    return false;
+  }
+  if (lower.endsWith(".d.ts") || lower.includes(".min.")) {
+    return false;
+  }
+  return true;
+}
+
+/** Depth-first walk; visitor returns false to stop. */
+function walkLocalTextFiles(
+  root: string,
+  visitor: (absolutePath: string, relativePath: string) => boolean
+): void {
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+    let entries: Dirent[];
+    try {
+      entries = nodeFs().readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".github") {
+        if (LOCAL_SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
+        if (entry.isDirectory() && entry.name !== ".github") {
+          continue;
+        }
+      }
+      if (LOCAL_SKIP_DIRS.has(entry.name)) {
+        continue;
+      }
+      const fullPath = nodePath().join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || !isLocalTextCandidate(fullPath)) {
+        continue;
+      }
+      const relativePath = nodePath().relative(root, fullPath);
+      if (!visitor(fullPath, relativePath)) {
+        return;
+      }
+    }
+  }
 }

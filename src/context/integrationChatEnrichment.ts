@@ -7,8 +7,6 @@ import { fetchCodeHostSearchContext, shouldFetchCodeHostContext } from "./codeHo
 import { fetchConfluenceSearchContext, shouldFetchConfluenceContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext, shouldFetchGoogleDocsContext } from "./googleDocsContext";
 import { fetchJiraSearchContext, shouldFetchJiraContext } from "./jiraContext";
-import { hasLocalDiskContext, readLocalWorkspaceFiles } from "./localFileContext";
-import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionContext";
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
@@ -19,6 +17,42 @@ import {
 } from "./integrationSearchTerms";
 import { buildTraceDecisionSearchSeeds } from "./traceDecisionSearch";
 import type { DecisionTimeline } from "../types/decisionTimeline";
+import {
+  integrationActivityLabel,
+  type IntegrationActivityTool,
+  type IntegrationToolActivityEvent
+} from "./integrationActivityLabels";
+
+/** Connected flags — keep local to avoid importing chat/UI modules into this hot path. */
+export type IntegrationConnectedFlags = {
+  jira?: boolean;
+  slack?: boolean;
+  teams?: boolean;
+  confluence?: boolean;
+  notion?: boolean;
+  googleDocs?: boolean;
+};
+
+type IntegrationEnrichmentOptions = {
+  result: ContextFetchResult;
+  request: ContextFetchRequest;
+  secrets: IntegrationSecrets;
+  codeHostRouter: CodeHostRouter;
+  owner?: string;
+  repo?: string;
+  activeFile?: string;
+  contextText?: string[];
+  codeHostProvider?: CodeHostProvider;
+  codeHostConnected?: boolean;
+  /** When set, only run tools that are connected (matches thinking UI). */
+  integrations?: IntegrationConnectedFlags;
+  integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
+  extraSearchTerms?: string[];
+  /** Fired when a real integration fetch starts/finishes — drives thinking UI. */
+  onToolActivity?: (event: IntegrationToolActivityEvent) => void;
+  deps?: Partial<IntegrationChatEnrichmentDeps>;
+  budgetMs?: number;
+};
 
 type IntegrationChatEnrichmentDeps = {
   shouldFetchConfluenceContext: typeof shouldFetchConfluenceContext;
@@ -54,27 +88,9 @@ const DEFAULT_INTEGRATION_CHAT_ENRICHMENT_DEPS: IntegrationChatEnrichmentDeps = 
   fetchCodeHostSearchContext
 };
 
-export async function enrichChatContextWithIntegrations(options: {
-  result: ContextFetchResult;
-  request: ContextFetchRequest;
-  secrets: IntegrationSecrets;
-  codeHostRouter: CodeHostRouter;
-  owner?: string;
-  repo?: string;
-  activeFile?: string;
-  contextText?: string[];
-  codeHostProvider?: CodeHostProvider;
-  codeHostConnected?: boolean;
-  integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
-  deps?: Partial<IntegrationChatEnrichmentDeps>;
-  /**
-   * When set, integration search is bounded to this many milliseconds. Whatever
-   * completes within the budget is included; slower tools are dropped so a single
-   * slow integration cannot block synthesis. In-flight fetches are abandoned, not
-   * cancelled. When unset, all requested integrations are awaited to completion.
-   */
-  budgetMs?: number;
-}): Promise<ContextFetchResult> {
+export async function enrichChatContextWithIntegrations(
+  options: IntegrationEnrichmentOptions
+): Promise<ContextFetchResult> {
   const data = asRecord(options.result.data);
   const deps = {
     ...DEFAULT_INTEGRATION_CHAT_ENRICHMENT_DEPS,
@@ -102,19 +118,7 @@ export async function enrichChatContextWithIntegrations(options: {
 }
 
 async function enrichIntegrationStages(
-  options: {
-    result: ContextFetchResult;
-    request: ContextFetchRequest;
-    secrets: IntegrationSecrets;
-    codeHostRouter: CodeHostRouter;
-    owner?: string;
-    repo?: string;
-    activeFile?: string;
-    contextText?: string[];
-    codeHostProvider?: CodeHostProvider;
-    codeHostConnected?: boolean;
-    integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
-  },
+  options: IntegrationEnrichmentOptions,
   data: Record<string, unknown>,
   deps: IntegrationChatEnrichmentDeps
 ): Promise<void> {
@@ -123,35 +127,66 @@ async function enrichIntegrationStages(
     owner: options.owner,
     repo: options.repo,
     queryText: traceSeeds?.queryText ?? options.request.intent.context.queryText,
-    activeFile: options.activeFile ?? options.request.params.file,
+    // Prefer caller-supplied activeFile (may be cleared when Gaps focus demotes an unrelated chip).
+    activeFile: options.activeFile !== undefined ? options.activeFile : options.request.params.file,
     contextText: options.contextText
   };
   const integrationTerms = buildIntegrationSearchTermList({
     ...base,
-    extraTerms: traceSeeds?.searchTerms
+    // Focus / caller terms first so they survive the term cap ahead of file basenames.
+    extraTerms: [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])]
   });
+  const codeHostProvider = options.codeHostProvider ?? "github";
+  const notify = (tool: IntegrationActivityTool, phase: "start" | "done") => {
+    options.onToolActivity?.({
+      tool,
+      phase,
+      label: integrationActivityLabel(tool, codeHostProvider)
+    });
+  };
+  const connected = options.integrations;
+  const allow = (flag: boolean | undefined): boolean => flag !== false;
 
-  const shouldFetchConfluence = deps.shouldFetchConfluenceContext(options.request);
-  const shouldFetchNotion = deps.shouldFetchNotionContext(options.request);
+  const shouldFetchConfluence =
+    deps.shouldFetchConfluenceContext(options.request) && allow(connected?.confluence);
+  const shouldFetchNotion =
+    deps.shouldFetchNotionContext(options.request) && allow(connected?.notion);
+
+  const runTool = async <T>(
+    tool: IntegrationActivityTool,
+    enabled: boolean,
+    fetch: () => Promise<T>
+  ): Promise<T | undefined> => {
+    if (!enabled) {
+      return undefined;
+    }
+    notify(tool, "start");
+    try {
+      return await fetch();
+    } finally {
+      notify(tool, "done");
+    }
+  };
+
   const [confluenceSearch, notionSearch] = await Promise.all([
-    shouldFetchConfluence
-      ? deps.fetchConfluenceSearchContext({
-          secrets: options.secrets,
-          owner: options.owner,
-          repo: options.repo,
-          extraTerms: integrationTerms,
-          integrationScope: options.integrationScopes?.atlassian
-        })
-      : Promise.resolve(undefined),
-    shouldFetchNotion
-      ? deps.fetchNotionSearchContext({
-          secrets: options.secrets,
-          owner: options.owner,
-          repo: options.repo,
-          extraTerms: integrationTerms,
-          integrationScope: options.integrationScopes?.notion
-        })
-      : Promise.resolve(undefined)
+    runTool("confluence", shouldFetchConfluence, () =>
+      deps.fetchConfluenceSearchContext({
+        secrets: options.secrets,
+        owner: options.owner,
+        repo: options.repo,
+        extraTerms: integrationTerms,
+        integrationScope: options.integrationScopes?.atlassian
+      })
+    ),
+    runTool("notion", shouldFetchNotion, () =>
+      deps.fetchNotionSearchContext({
+        secrets: options.secrets,
+        owner: options.owner,
+        repo: options.repo,
+        extraTerms: integrationTerms,
+        integrationScope: options.integrationScopes?.notion
+      })
+    )
   ]);
   if (shouldFetchConfluence) {
     data.confluenceSearch = confluenceSearch;
@@ -164,28 +199,30 @@ async function enrichIntegrationStages(
   const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
   const docExtraTerms = [...integrationTerms, ...crossToolText];
 
-  const shouldFetchJira = deps.shouldFetchJiraContext(options.request);
-  const shouldFetchGoogleDocs = deps.shouldFetchGoogleDocsContext(options.request);
+  const shouldFetchJira =
+    deps.shouldFetchJiraContext(options.request) && allow(connected?.jira);
+  const shouldFetchGoogleDocs =
+    deps.shouldFetchGoogleDocsContext(options.request) && allow(connected?.googleDocs);
   const [jiraSearch, googleDocsSearch] = await Promise.all([
-    shouldFetchJira
-      ? deps.fetchJiraSearchContext({
-          secrets: options.secrets,
-          ...base,
-          crossToolText: crossToolKeys,
-          codeHostRouter: options.codeHostRouter,
-          codeHostConnected: options.codeHostConnected,
-          integrationScope: options.integrationScopes?.atlassian
-        })
-      : Promise.resolve(undefined),
-    shouldFetchGoogleDocs
-      ? deps.fetchGoogleDocsSearchContext({
-          secrets: options.secrets,
-          ...base,
-          crossToolText: crossToolKeys,
-          extraTerms: docExtraTerms,
-          integrationScope: options.integrationScopes?.["google-docs"]
-        })
-      : Promise.resolve(undefined)
+    runTool("jira", shouldFetchJira, () =>
+      deps.fetchJiraSearchContext({
+        secrets: options.secrets,
+        ...base,
+        crossToolText: crossToolKeys,
+        codeHostRouter: options.codeHostRouter,
+        codeHostConnected: options.codeHostConnected,
+        integrationScope: options.integrationScopes?.atlassian
+      })
+    ),
+    runTool("google-docs", shouldFetchGoogleDocs, () =>
+      deps.fetchGoogleDocsSearchContext({
+        secrets: options.secrets,
+        ...base,
+        crossToolText: crossToolKeys,
+        extraTerms: docExtraTerms,
+        integrationScope: options.integrationScopes?.["google-docs"]
+      })
+    )
   ]);
   if (shouldFetchJira) {
     data.jiraSearch = jiraSearch;
@@ -198,26 +235,28 @@ async function enrichIntegrationStages(
   )?.issues
     ?.map((issue) => issue.key?.trim())
     .filter((key): key is string => Boolean(key));
-  const shouldFetchSlack = deps.shouldFetchSlackContext(options.request);
-  const shouldFetchTeams = deps.shouldFetchTeamsContext(options.request);
+  const shouldFetchSlack =
+    deps.shouldFetchSlackContext(options.request) && allow(connected?.slack);
+  const shouldFetchTeams =
+    deps.shouldFetchTeamsContext(options.request) && allow(connected?.teams);
   const [slackSearch, teamsSearch] = await Promise.all([
-    shouldFetchSlack
-      ? deps.fetchSlackSearchContext({
-          secrets: options.secrets,
-          ...base,
-          crossToolText: crossToolKeys,
-          jiraIssueKeys,
-          integrationScope: options.integrationScopes?.slack
-        })
-      : Promise.resolve(undefined),
-    shouldFetchTeams
-      ? deps.fetchTeamsSearchContext({
-          secrets: options.secrets,
-          ...base,
-          crossToolText: crossToolKeys,
-          jiraIssueKeys
-        })
-      : Promise.resolve(undefined)
+    runTool("slack", shouldFetchSlack, () =>
+      deps.fetchSlackSearchContext({
+        secrets: options.secrets,
+        ...base,
+        crossToolText: crossToolKeys,
+        jiraIssueKeys,
+        integrationScope: options.integrationScopes?.slack
+      })
+    ),
+    runTool("teams", shouldFetchTeams, () =>
+      deps.fetchTeamsSearchContext({
+        secrets: options.secrets,
+        ...base,
+        crossToolText: crossToolKeys,
+        jiraIssueKeys
+      })
+    )
   ]);
   if (shouldFetchSlack) {
     data.slackSearch = slackSearch;
@@ -225,12 +264,16 @@ async function enrichIntegrationStages(
   if (shouldFetchTeams) {
     data.teamsSearch = teamsSearch;
   }
-  if (deps.shouldFetchCodeHostContext(options.request) && options.codeHostConnected) {
-    data.codeHostSearch = await deps.fetchCodeHostSearchContext({
-      router: options.codeHostRouter,
-      provider: options.codeHostProvider,
-      ...base
-    });
+  const shouldFetchCodeHost =
+    deps.shouldFetchCodeHostContext(options.request) && Boolean(options.codeHostConnected);
+  if (shouldFetchCodeHost) {
+    data.codeHostSearch = await runTool("code-host", true, () =>
+      deps.fetchCodeHostSearchContext({
+        router: options.codeHostRouter,
+        provider: options.codeHostProvider,
+        ...base
+      })
+    );
   }
 }
 
@@ -248,23 +291,8 @@ async function resolveTraceDecisionSearchSeeds(options: {
   }
 
   const file = options.request.params.file ?? timeline.file;
-  let fileContent: string | undefined;
-  if (file && hasLocalDiskContext(options.request.params)) {
-    try {
-      const local = await readLocalWorkspaceFiles({
-        file,
-        fileSource: options.request.params.fileSource,
-        openEditors: options.request.intent.context.openEditors,
-        lines: options.request.params.lines,
-        resolveAbsolutePath: resolveLocalAbsolutePath
-      });
-      fileContent = local?.files.map((entry) => entry.content).join("\n");
-    } catch {
-      /* optional local read */
-    }
-  }
-
-  return buildTraceDecisionSearchSeeds(timeline, file, fileContent);
+  // Zero-Clone: seeds from timeline only — never hydrate from local disk.
+  return buildTraceDecisionSearchSeeds(timeline, file, undefined);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

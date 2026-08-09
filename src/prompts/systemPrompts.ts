@@ -8,6 +8,10 @@ import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
 import { GENERAL_CHAT_EVIDENCE_RULES, SOURCES_FOOTER_OUTPUT_RULE } from "./evidenceSynthesis";
 import { USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE } from "../chat/paperclipAttachments";
+import {
+  extractDualRepoCompareEvidence,
+  formatDualRepoCompareForLlm
+} from "../context/dualRepoCompare";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
 // soften the fluency bullet or make it conditional — keep the block, don't remove it.
@@ -412,7 +416,10 @@ When drawing conclusions from attached evidence, state strength (strong / medium
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
+When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
 When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn.
+When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
+When \`<repo_package_structure>\` is attached, list the concrete package/app paths from that block (e.g. apps/remix, packages/signing). Do not answer with only workspace globs like \`apps/*\` / \`packages/*\` when concrete names are present. Workspace globs in that block are informational — expand from the listed paths.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}`;
@@ -768,6 +775,7 @@ export function buildUserMessageWithContext(
     (file) => !instructionPaths.has(normalizeInstructionPathForDedup(file.path))
   );
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const dualRepoCompare = extractDualRepoCompareEvidence(context?.contextBundle);
   const repoInventory = extractRepoInventory(context?.contextBundle);
   const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
   const agentSearch = extractAgentSearchSummary(context?.contextBundle);
@@ -786,6 +794,7 @@ export function buildUserMessageWithContext(
     projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
     repoSemanticSnippets.length === 0 &&
+    !dualRepoCompare &&
     !repoInventory &&
     agentFileSnippets.length === 0 &&
     !agentSearch &&
@@ -803,7 +812,11 @@ export function buildUserMessageWithContext(
   }
 
   const lines: string[] = ["<attached_context>"];
-  if (context?.owner && context.repo) {
+  if (dualRepoCompare) {
+    lines.push(
+      `repos: ${dualRepoCompare.left.owner}/${dualRepoCompare.left.repo} vs ${dualRepoCompare.right.owner}/${dualRepoCompare.right.repo}`
+    );
+  } else if (context?.owner && context.repo) {
     lines.push(`repo: ${context.owner}/${context.repo}`);
   }
   if (context?.branch) {
@@ -829,7 +842,7 @@ export function buildUserMessageWithContext(
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));
   }
-  const treeOverview = extractTreeOverview(context?.contextBundle);
+  const treeOverview = dualRepoCompare ? undefined : extractTreeOverview(context?.contextBundle);
   if (treeOverview) {
     lines.push(...formatTreeOverviewForLlm(treeOverview));
     const monorepoNote = buildMonorepoContextNote(treeOverview, context?.file);
@@ -837,12 +850,26 @@ export function buildUserMessageWithContext(
       lines.push(monorepoNote);
     }
   }
-  if (localSnippets.length > 0) {
+  const packageBoundaryNote = dualRepoCompare
+    ? undefined
+    : extractPackageBoundaryNote(context?.contextBundle);
+  if (packageBoundaryNote) {
+    lines.push(`<package_boundary_note>${packageBoundaryNote}</package_boundary_note>`);
+  }
+  const packageStructure = dualRepoCompare
+    ? undefined
+    : extractPackageStructure(context?.contextBundle);
+  if (packageStructure) {
+    lines.push(...formatPackageStructureForLlm(packageStructure));
+  }
+  if (localSnippets.length > 0 && !dualRepoCompare) {
     emitLocalFilesBlock(lines, localSnippets);
   }
-  if (repoSummarySnippets.length > 0) {
+  if (repoSummarySnippets.length > 0 && !dualRepoCompare) {
     lines.push("<repo_entry_files>");
-    lines.push("Representative repository entry points for architecture overview (not limited to the active editor tab).");
+    lines.push(
+      "In-repo package manifests / entry points for architecture and package boundaries (active Use-repo only — not the local Extension Host workspace)."
+    );
     for (const file of repoSummarySnippets) {
       lines.push(`<file_content path="${file.path}">`);
       lines.push(file.content);
@@ -850,10 +877,10 @@ export function buildUserMessageWithContext(
     }
     lines.push("</repo_entry_files>");
   }
-  if (repoInventory) {
+  if (repoInventory && !dualRepoCompare) {
     lines.push(...formatRepoInventoryForLlm(repoInventory));
   }
-  if (repoSemanticSnippets.length > 0) {
+  if (repoSemanticSnippets.length > 0 && !dualRepoCompare) {
     const semanticMeta = extractRepoSemanticMeta(context?.contextBundle);
     const matched = semanticMeta?.matchedPathCount;
     const cap = semanticMeta?.attachmentCap ?? repoSemanticSnippets.length;
@@ -870,6 +897,9 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</repo_semantic_files>");
+  }
+  if (dualRepoCompare) {
+    lines.push(...formatDualRepoCompareForLlm(dualRepoCompare));
   }
   if (agentSearch) {
     lines.push(...formatAgentSearchForLlm(agentSearch));
@@ -949,6 +979,76 @@ function extractTreeOverview(bundle: unknown): TreeOverviewSnippet | undefined {
     }
   }
   return undefined;
+}
+
+function extractPackageBoundaryNote(bundle: unknown): string | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const note = (entry as { data?: { packageBoundaryNote?: string } }).data?.packageBoundaryNote;
+    if (typeof note === "string" && note.trim()) {
+      return note.trim();
+    }
+  }
+  return undefined;
+}
+
+type PackageStructureSnippet = {
+  packages?: string[];
+  parents?: string[];
+  workspaceGlobs?: string[];
+};
+
+function extractPackageStructure(bundle: unknown): PackageStructureSnippet | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const structure = (entry as { data?: { packageStructure?: PackageStructureSnippet } }).data
+      ?.packageStructure;
+    if (
+      structure &&
+      ((structure.packages?.length ?? 0) > 0 ||
+        (structure.parents?.length ?? 0) > 0 ||
+        (structure.workspaceGlobs?.length ?? 0) > 0)
+    ) {
+      return structure;
+    }
+  }
+  return undefined;
+}
+
+function formatPackageStructureForLlm(structure: PackageStructureSnippet): string[] {
+  const packages = structure.packages ?? [];
+  const parents = structure.parents ?? [];
+  const globs = structure.workspaceGlobs ?? [];
+  const lines = ["<repo_package_structure>"];
+  lines.push(
+    "Concrete top-level packages/apps from the live repository tree under apps/, packages/, etc. Prefer these names over workspace globs."
+  );
+  if (packages.length) {
+    lines.push(
+      `REQUIRED in the answer — name these concrete packages (do not stop at parent dirs apps/ or packages/ alone): ${packages.join(", ")}`
+    );
+  } else if (parents.length) {
+    lines.push(
+      `parents listed (${parents.join(", ")}) but child package directories were unavailable — do not invent package names; say child packages could not be listed.`
+    );
+  }
+  if (globs.length) {
+    lines.push(
+      `workspace_globs (from package.json — informational only, not expanded): ${globs.join(", ")}`
+    );
+  }
+  lines.push("</repo_package_structure>");
+  return lines;
 }
 
 function formatTreeOverviewForLlm(treeOverview: TreeOverviewSnippet): string[] {
@@ -1626,6 +1726,25 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         googleDocsSearch?: { documents: unknown[] };
         entryFiles?: Array<{ path: string; content: string; truncated?: boolean }>;
         repoSemanticSearch?: { files?: Array<{ path: string; repoId?: string; content: string; truncated?: boolean }> };
+        dualRepoCompare?: {
+          source?: string;
+          topic?: string;
+          stickyRepoExcluded?: string;
+          left?: {
+            repoId: string;
+            owner: string;
+            repo: string;
+            note?: string;
+            files?: Array<{ path: string; repoId: string; content: string; truncated?: boolean }>;
+          };
+          right?: {
+            repoId: string;
+            owner: string;
+            repo: string;
+            note?: string;
+            files?: Array<{ path: string; repoId: string; content: string; truncated?: boolean }>;
+          };
+        };
         agentTools?: {
           read_file?: { files?: Array<{ path: string; content: string; lineRange?: [number, number] }> };
           search_code?: { hits?: unknown[] };
@@ -1659,6 +1778,36 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
           byteLength: file.content?.length ?? 0,
           ...(file.truncated ? { truncated: true } : {})
         }))
+      };
+    }
+
+    if (source.dualRepoCompare?.left || source.dualRepoCompare?.right) {
+      mutated = true;
+      const stripSide = (side: NonNullable<typeof source.dualRepoCompare>["left"]) => {
+        if (!side) {
+          return side;
+        }
+        return {
+          repoId: side.repoId,
+          owner: side.owner,
+          repo: side.repo,
+          ...(side.note ? { note: side.note } : {}),
+          files: (side.files ?? []).map((file) => ({
+            path: file.path,
+            repoId: file.repoId,
+            byteLength: file.content?.length ?? 0,
+            ...(file.truncated ? { truncated: true } : {})
+          }))
+        };
+      };
+      data.dualRepoCompare = {
+        source: source.dualRepoCompare.source,
+        topic: source.dualRepoCompare.topic,
+        ...(source.dualRepoCompare.stickyRepoExcluded
+          ? { stickyRepoExcluded: source.dualRepoCompare.stickyRepoExcluded }
+          : {}),
+        left: stripSide(source.dualRepoCompare.left),
+        right: stripSide(source.dualRepoCompare.right)
       };
     }
 
@@ -1719,6 +1868,12 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
         mutated = true;
         delete data[key];
       }
+    }
+
+    // Dual-repo compare owns evidence; never leave sticky local / workspace files in graph_context.
+    if (source.dualRepoCompare && data.localFiles !== undefined) {
+      mutated = true;
+      delete data.localFiles;
     }
 
     if (!mutated) {

@@ -6,7 +6,7 @@ import ResetPasswordPage from "./ResetPasswordPage";
 export const metadata: Metadata = buildPageMetadata(
   "/reset-password",
   "Reset password",
-  "Choose a new password for your Coop AI account.",
+  "Choose a new password for your CoopAI account.",
   { robots: noIndexRobots }
 );
 

@@ -1,4 +1,5 @@
 import type { IntegrationChatProvider } from "../chat/types";
+import { resolveEvidenceCodeHost } from "../api/codeHosts/codeHostLabels";
 import type {
   BlastRadiusEvidence,
   ConfluenceSearchEvidence,
@@ -50,7 +51,7 @@ import {
 } from "../prompts/knowledgeGapsSourceLabels";
 import {
   ownershipSourceLabelCodeowners,
-  ownershipSourceLabelGitHub,
+  ownershipSourceLabelCodeHost,
   ownershipSourceLabelJira,
   ownershipSourceLabelSlack,
   ownershipSourceLabelSlackDiscussions
@@ -111,7 +112,8 @@ const OWNERSHIP_RISK_LABELS: Record<keyof OwnershipRisk, string> = {
   teamDispersion: "Expertise is spread across many teams."
 };
 
-export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceCardSummary {
+export function summarizeDecisionTimeline(timeline: DecisionTimeline, codeHost?: string | null): EvidenceCardSummary {
+  const host = resolveEvidenceCodeHost(codeHost ?? timeline.provider);
   const jiraTickets = timeline.jiraTickets ?? [];
   const commit = timeline.originalCommit;
   const linkedPr = timeline.linkedPR;
@@ -221,9 +223,9 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
 
   const sourceContributions: EvidenceSourceContribution[] = [];
   if (commit) {
-    const commitLabel = decisionSourceLabelCommit(commit.sha);
+    const commitLabel = decisionSourceLabelCommit(commit.sha, host);
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: commitLabel,
       contribution: [
         `Commit ${commit.sha.slice(0, 7)} by ${commit.author} introduced the traced code with message "${truncate(cleanLine(commit.message), 120)}".`,
@@ -241,9 +243,9 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
     });
   }
   if (linkedPr) {
-    const prLabel = decisionSourceLabelPr(linkedPr.number);
+    const prLabel = decisionSourceLabelPr(linkedPr.number, host);
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: prLabel,
       contribution: `PR #${linkedPr.number} documents "${cleanLine(linkedPr.title)}" with ${linkedPr.reviews.length} review comment(s) and ${linkedPr.approvers.length} approver(s).`,
       relevance: relevanceFromRationaleRanking(
@@ -323,8 +325,10 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline): EvidenceC
 
 export function summarizeOwnershipReport(
   report: OwnershipReport,
-  slackSearch?: SlackSearchEvidence
+  slackSearch?: SlackSearchEvidence,
+  codeHost?: string | null
 ): EvidenceCardSummary {
+  const host = resolveEvidenceCodeHost(codeHost ?? report.provider);
   const primary = report.scores.find((score) => score.tier === "primary");
   const fallback = report.scores[0];
   const hasSlackPresence = report.scores.some((score) => !!score.presence);
@@ -372,8 +376,8 @@ export function summarizeOwnershipReport(
 
   const sourceContributions: EvidenceSourceContribution[] = [
     {
-      provider: "github",
-      label: ownershipSourceLabelGitHub(),
+      provider: host,
+      label: ownershipSourceLabelCodeHost(host),
       contribution: report.scores.length
         ? `Git history and reviews produced ${report.scores.length} ownership score(s), led by @${(primary ?? fallback)?.owner ?? "unknown"}.`
         : "Git history did not yield a confident owner ranking.",
@@ -391,7 +395,7 @@ export function summarizeOwnershipReport(
   }
   if (report.orgContext?.source === "codeowners") {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: ownershipSourceLabelCodeowners(),
       contribution: `CODEOWNERS maps this area to ${report.orgContext.teamName}, which supports escalation routing.`,
       relevance: "supporting",
@@ -437,8 +441,10 @@ export function summarizeOwnershipReport(
 
 export function summarizeBlastRadius(
   evidence: BlastRadiusEvidence,
-  file: string
+  file: string,
+  codeHost?: string | null
 ): EvidenceCardSummary {
+  const host = resolveEvidenceCodeHost(codeHost);
   const directCount = evidence.directDependents?.length ?? 0;
   const transitiveCount = evidence.transitiveDependents?.length ?? 0;
   const docsCount = evidence.docsReferences?.length ?? 0;
@@ -459,11 +465,17 @@ export function summarizeBlastRadius(
     recentCount > 0 ||
     (evidence.localFiles?.files?.length ?? 0) > 0;
 
+  const trustedRemoteGraph =
+    dependentCount > 0 &&
+    (graphSource === "import-parse" || graphSource === "scip" || graphSource === "zoekt");
+
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0)) {
+  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0 || trustedRemoteGraph)) {
     quality = "strong";
-    qualityReason = "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
+    qualityReason = trustedRemoteGraph
+      ? `Verified ${graphSource} dependency graph identified ${dependentCount} code dependent(s).`
+      : "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
   } else if (dependentCount > 0) {
     quality = "medium";
     qualityReason = "Dependency graph shows impact paths, but owner/release context is limited.";
@@ -506,7 +518,7 @@ export function summarizeBlastRadius(
   const sourceContributions: EvidenceSourceContribution[] = [];
   if (dependentCount > 0 || evidence.graphMeta) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelDependencies(),
       contribution:
         dependentCount > 0
@@ -517,7 +529,7 @@ export function summarizeBlastRadius(
   }
   if (docsCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelDocsReferences(),
       contribution: `${docsCount} docs, README, or type-definition file(s) reference this target (not runtime importers).`,
       relevance: "background"
@@ -525,7 +537,7 @@ export function summarizeBlastRadius(
   }
   if (testCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelTests(),
       contribution: `${testCount} test/spec file(s) reference this target.`,
       relevance: "supporting"
@@ -533,7 +545,7 @@ export function summarizeBlastRadius(
   }
   if (exportCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelPublicApi(),
       contribution: `${exportCount} exported symbol(s) may be consumed downstream.`,
       relevance: "direct"
@@ -541,7 +553,7 @@ export function summarizeBlastRadius(
   }
   if (recentCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelRecentChanges(),
       contribution: `${recentCount} recent PR(s) touch this file or direct dependents.`,
       relevance: "supporting"
@@ -549,7 +561,7 @@ export function summarizeBlastRadius(
   }
   if (prCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelOpenPrs(),
       contribution: `${prCount} open pull request(s) suggest active change surfaces near this file.`,
       relevance: "supporting",
@@ -558,7 +570,7 @@ export function summarizeBlastRadius(
   }
   if (ownerCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: blastRadiusSourceLabelCodeowners(),
       contribution: `CODEOWNERS mapped ${ownerCount} impacted file(s) to owners for escalation.`,
       relevance: "supporting"
@@ -635,8 +647,10 @@ export function summarizeKnowledgeGaps(
   slack?: SlackSearchEvidence,
   notion?: NotionSearchEvidence,
   googleDocs?: GoogleDocsSearchEvidence,
-  teams?: TeamsSearchEvidence
+  teams?: TeamsSearchEvidence,
+  codeHost?: string | null
 ): EvidenceCardSummary {
+  const host = resolveEvidenceCodeHost(codeHost);
   const scan = evidence.jobScan;
   const foundGaps = scan?.foundGaps ?? scan?.gaps?.length ?? 0;
   const highPriority = scan?.highPriority ?? 0;
@@ -776,7 +790,7 @@ export function summarizeKnowledgeGaps(
   }
   if (evidence.ownershipReport) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: knowledgeGapsSourceLabelOwnership(),
       contribution: ownershipCount
         ? `Ownership scoring identified ${ownershipCount} contributor signal(s) for handoff and escalation.`
@@ -786,7 +800,7 @@ export function summarizeKnowledgeGaps(
   }
   if (evidence.dependencyGraph) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: knowledgeGapsSourceLabelDependencies(),
       contribution: dependentCount
         ? `Dependency graph found ${dependentCount} direct dependent file(s) for impact-aware gap analysis.`
@@ -820,8 +834,10 @@ export function summarizeKnowledgeGaps(
 export function summarizeRepoSummary(
   evidence: RepoSummaryEvidence,
   owner: string,
-  repo: string
+  repo: string,
+  codeHost?: string | null
 ): EvidenceCardSummary {
+  const host = resolveEvidenceCodeHost(codeHost);
   const manifest = evidence.manifest;
   const hasManifestSignal = !!manifest || !!evidence.repository;
   const entryCount = evidence.entryFiles?.length ?? 0;
@@ -911,7 +927,7 @@ export function summarizeRepoSummary(
   const sourceContributions: EvidenceSourceContribution[] = [];
   if (hasManifestSignal) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: repoSummarySourceLabelManifest(),
       contribution:
         manifest?.fileCount !== undefined
@@ -922,7 +938,7 @@ export function summarizeRepoSummary(
   }
   if (entryCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: repoSummarySourceLabelEntryFiles(),
       contribution: `${entryCount} anchor file(s) were loaded to ground architecture inference in concrete code.`,
       relevance: "direct"
@@ -995,7 +1011,7 @@ export function summarizeRepoSummary(
   }
   if (hasOwnershipScores) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: repoSummarySourceLabelOwnership(),
       contribution: `Ownership scoring includes ${ownershipCount} contributor signal(s).`,
       relevance: "supporting"
@@ -1003,7 +1019,7 @@ export function summarizeRepoSummary(
   }
   if (dependencyCount > 0) {
     sourceContributions.push({
-      provider: "github",
+      provider: host,
       label: repoSummarySourceLabelDependencies(),
       contribution: `Dependency graph found ${dependencyCount} direct dependent(s) from the scoped entry file.`,
       relevance: "background"

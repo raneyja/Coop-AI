@@ -5,7 +5,7 @@ import type {
   ChatProseBlock,
   ChatProseDocument
 } from "./chatProseTypes";
-import { tryParseCitationLocator, findRepoPathNearFence, isOrdinaryLanguageTag, languageTagMatchesPath } from "./codeCitationLocator";
+import { tryParseCitationLocator, isOrdinaryLanguageTag, resolveCitePathForLanguageFence } from "./codeCitationLocator";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const CODE_FENCE_OPEN_RE = /^```/;
@@ -114,23 +114,18 @@ function tryParseCodeFence(
   }
 
   if (isOrdinaryLanguageTag(infoString) && body.join("\n").trim()) {
-    const nearbyPath = findRepoPathNearFence(lines, startIndex);
-    if (nearbyPath) {
+    const citePath = resolveCitePathForLanguageFence({
+      language: infoString,
+      code: body.join("\n"),
+      lines,
+      fenceStartIndex: startIndex,
+      activeFilePath: options?.activeFilePath
+    });
+    if (citePath) {
       return {
         block: {
           type: "code-citation",
-          path: nearbyPath,
-          code: body.join("\n")
-        },
-        nextIndex
-      };
-    }
-    const activePath = options?.activeFilePath?.trim();
-    if (activePath && languageTagMatchesPath(infoString, activePath)) {
-      return {
-        block: {
-          type: "code-citation",
-          path: activePath,
+          path: citePath,
           code: body.join("\n")
         },
         nextIndex

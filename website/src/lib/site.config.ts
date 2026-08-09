@@ -3,7 +3,7 @@ export const siteConfig = {
   domain: "coop-ai.dev",
   url: "https://coop-ai.dev",
   description:
-    "Understand and refine code in place. CoopAI connects your code graph, Slack, and tickets to answer deep questions and write graph-grounded completions inside VS Code.",
+    "CoopAI is code intelligence for VS Code — understand and refine code with context from your repo graph, Slack, and tickets, plus graph-grounded completions.",
   tagline: "From your stack, to your codebase.",
   subheadline:
     "Slack threads, Jira tickets, and symbol graphs — wired into every answer and every line you write.",
@@ -12,46 +12,46 @@ export const siteConfig = {
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "Your codebase + your entire stack - wired into every answer and every line of code you write.",
+      "CoopAI is code intelligence for VS Code. Understand code, trace decisions, and find owners using context from your repo, Slack, and Jira in every answer.",
     ogImageAlt: "CoopAI — deep code intelligence for VS Code",
     pages: {
       product: {
-        title: "Product",
+        title: "Product — Code intelligence for VS Code",
         description:
           "Explore CoopAI for VS Code: understand repos, trace decisions, find owners, assess blast radius, and write graph-grounded completions across your stack."
       },
       enterprise: {
-        title: "Enterprise",
+        title: "Enterprise — Secure code intelligence",
         description:
           "CoopAI Enterprise: zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment, and self-hosted options for security-conscious teams."
       },
       pricing: {
-        title: "Pricing",
+        title: "Pricing — Plans for engineering teams",
         description:
           "CoopAI pricing for engineering teams — free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
       },
       security: {
-        title: "Security",
+        title: "Security — Zero-clone architecture",
         description:
           "How CoopAI protects your code and context — zero-clone architecture, zero-retention LLM routing, BYOK, audit logging, and compliance documentation."
       },
       blog: {
-        title: "Blog",
+        title: "Blog — Code intelligence & SDLC context",
         description:
           "CoopAI blog — perspectives on code intelligence, organizational context, SDLC tooling, and enterprise developer productivity."
       },
       docs: {
-        title: "Documentation",
+        title: "Documentation — Get started",
         description:
           "CoopAI documentation — getting started, admin portal, integrations, API reference, security architecture, and enterprise deployment."
       },
       demo: {
-        title: "Book a Demo",
+        title: "Book a Demo — See CoopAI on your codebase",
         description:
           "Schedule a CoopAI demo or join the waitlist. See zero-clone code intelligence, cross-tool context, and enterprise deployment options."
       },
       integrations: {
-        title: "Integrations",
+        title: "Integrations — GitHub, Slack, Jira & more",
         description:
           "Connect CoopAI to GitHub, GitLab, Slack, Jira, Notion, Google Docs, and Microsoft Teams for graph-grounded context in VS Code."
       },

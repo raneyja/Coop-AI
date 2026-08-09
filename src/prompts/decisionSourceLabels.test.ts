@@ -60,7 +60,9 @@ const timeline: DecisionTimeline = {
 };
 
 assert.equal(decisionSourceLabelCommit("abc123def456"), "[Sources: GitHub commit abc123d]");
+assert.equal(decisionSourceLabelCommit("abc123def456", "bitbucket"), "[Sources: Bitbucket commit abc123d]");
 assert.equal(decisionSourceLabelPr(1506), "[Sources: PR #1506]");
+assert.equal(decisionSourceLabelPr(1506, "gitlab"), "[Sources: MR #1506]");
 assert.equal(decisionSourceLabelSlack("engineering"), "[Sources: Slack #engineering]");
 assert.equal(decisionSourceLabelTeams(), "[Sources: Teams thread]");
 assert.equal(decisionSourceLabelJira("WID-42"), "[Sources: Jira WID-42]");
@@ -68,6 +70,10 @@ assert.equal(decisionSourceLabelJira("WID-42"), "[Sources: Jira WID-42]");
 const labels = listDecisionSourceLabels(timeline);
 assert.equal(labels.length, 5);
 assert.ok(labels.includes("[Sources: PR #1506]"));
+
+const bitbucketLabels = listDecisionSourceLabels({ ...timeline, provider: "bitbucket" });
+assert.ok(bitbucketLabels.includes("[Sources: Bitbucket commit abc123d]"));
+assert.ok(bitbucketLabels.includes("[Sources: PR #1506]"));
 
 const checklist = listDecisionSourcesChecklist(timeline);
 assert.equal(checklist.length, labels.length);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   blastRadiusFromBundle,
+  contextBundleHasRepoFactEvidence,
   knowledgeGapsFromBundle,
   repoSummaryFromBundle
 } from "./contextBundleEvidence";
@@ -86,6 +87,66 @@ test("blastRadiusFromBundle filters job dependents to target file", () => {
   assert.equal(evidence!.graphMeta?.edgeCount, 42);
 });
 
+test("blastRadiusFromBundle never promotes unfiltered remote job edges", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        jobScan: {
+          source: "dependency-graph-job",
+          edgeCount: 10,
+          dependentsSample: [
+            { from: "admin/src/lib/activeGrantRepoIds.ts", to: "admin/src/lib/other.ts" },
+            { from: "src/api/dataSanitization.ts", to: "src/api/unrelated.ts" }
+          ]
+        }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.equal(evidence!.directDependents?.length ?? 0, 0);
+  assert.ok((evidence!.warnings ?? []).some((w) => /ignored unfiltered/i.test(w)));
+});
+
+test("blastRadiusFromBundle does not let heuristic overwrite zoekt callers", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        directDependents: ["src/chat/CoopChatSession.ts", "src/jobs/JobApiClient.ts"],
+        dependentDetails: [
+          { path: "src/chat/CoopChatSession.ts", depth: 1, source: "zoekt" },
+          { path: "src/jobs/JobApiClient.ts", depth: 1, source: "zoekt" }
+        ],
+        graphMeta: { source: "zoekt" }
+      }
+    },
+    {
+      type: "dependencies",
+      data: {
+        file: "src/config/responseDeadline.ts",
+        directDependents: [
+          "admin/src/components/IndexingQueueList.tsx",
+          "src/context/requestPrioritizer.ts"
+        ],
+        dependentDetails: [
+          { path: "admin/src/components/IndexingQueueList.tsx", depth: 1, source: "heuristic" },
+          { path: "src/context/requestPrioritizer.ts", depth: 1, source: "heuristic" }
+        ],
+        graphMeta: { source: "heuristic" }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.deepEqual(evidence!.directDependents, [
+    "src/chat/CoopChatSession.ts",
+    "src/jobs/JobApiClient.ts"
+  ]);
+  assert.equal(evidence!.graphMeta?.source, "zoekt");
+});
+
 test("blastRadiusFromBundle merges integration searches from bundle entries", () => {
   const evidence = blastRadiusFromBundle([
     {
@@ -128,6 +189,36 @@ test("repoSummaryFromBundle merges all integration searches", () => {
   assert.ok(summary?.teams);
   assert.ok(summary?.notion);
   assert.ok(summary?.googleDocs);
+});
+
+test("contextBundleHasRepoFactEvidence detects packageStructure and tree", () => {
+  assert.equal(contextBundleHasRepoFactEvidence([]), false);
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      {
+        type: "chat_context",
+        data: {
+          packageStructure: { packages: ["apps/web"], parents: ["apps"] }
+        }
+      }
+    ]),
+    true
+  );
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      {
+        type: "chat_context",
+        data: { treeOverview: { topLevelDirs: ["apps"], topLevelFiles: ["package.json"] } }
+      }
+    ]),
+    true
+  );
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      { type: "chat_context", data: { localFiles: { files: [{ path: "package.json" }] } } }
+    ]),
+    false
+  );
 });
 
 const total = passed + failed;

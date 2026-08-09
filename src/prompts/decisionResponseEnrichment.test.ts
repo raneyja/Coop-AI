@@ -242,6 +242,50 @@ test("enrichTraceDecisionResponse strips narrative source pills on thin evidence
   assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73] — introducing commit"));
 });
 
+test("enrichTraceDecisionResponse injects commit/PR when model did a code walkthrough", () => {
+  const walkthrough = [
+    "**Summary**",
+    "The StateGroup model categorizes work item states to streamline project management.",
+    "",
+    "**Technical decision**",
+    "StateGroup is implemented as TextChoices for Django queries."
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: walkthrough,
+    userQuestion: "Why do we model states with StateGroup this way?",
+    contextBundle: bundle,
+    activeFile: "apps/api/plane/db/models/state.py",
+    fallbackTimeline: thinTimeline,
+    isFollowUp: false
+  });
+
+  assert.ok(enriched.includes("dd2bb73"), "must cite introducing commit SHA");
+  assert.ok(enriched.includes("**Summary**"));
+  assert.ok(enriched.includes("**Sources**") || enriched.includes("[Sources: GitHub commit"));
+});
+
+test("enrichTraceDecisionResponse leaves answers that already cite the commit", () => {
+  const cited = [
+    "**Summary**",
+    "StateGroup was introduced in commit dd2bb73.",
+    "",
+    "**Sources**",
+    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: cited,
+    userQuestion: "Why StateGroup?",
+    contextBundle: bundle,
+    activeFile: "state.py",
+    fallbackTimeline: thinTimeline
+  });
+
+  assert.equal(enriched.includes("Decision history for"), false);
+  assert.ok(enriched.includes("dd2bb73"));
+});
+
 console.log(`\ndecisionResponseEnrichment: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

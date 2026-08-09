@@ -80,7 +80,7 @@ export default function FreeSignupPage() {
       <PageHeader
         eyebrow="Developer"
         title="Get started free"
-        description="Create your Coop AI account with email and password. No credit card required."
+        description="Create your CoopAI account with email and password. No credit card required."
         tight
       />
 

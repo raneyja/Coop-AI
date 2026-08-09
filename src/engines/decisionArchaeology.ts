@@ -24,6 +24,13 @@ import {
   pickRecentEvolutionCommits,
   selectFocusCommit
 } from "./decisionFocusCommit";
+import {
+  extractTraceFocusTerms,
+  isBulkRenameOrMoveCommit,
+  linkedPrRelevantToTraceTarget,
+  partitionReviewsForTraceTarget,
+  scoreTextForTraceFocus
+} from "./traceFileGrounding";
 import type {
   DecisionAlternative,
   DecisionCommit,
@@ -71,6 +78,8 @@ export type TraceDecisionParams = {
   lineRange?: LineRange;
   branch?: string;
   codeSnippet?: string;
+  /** Specific ask from slash args / custom prompt — ranks commits toward that question. */
+  userFocus?: string;
   /** Optional doc/integration excerpts to mine for Jira keys and decision context. */
   seedTexts?: string[];
 };
@@ -103,8 +112,9 @@ export class DecisionArchaeologyEngine {
   public constructor(private readonly options: TraceDecisionOptions) {}
 
   public async traceDecision(params: TraceDecisionParams): Promise<DecisionTimeline> {
-    const { owner, repo, lineRange, branch, codeSnippet, seedTexts } = params;
+    const { owner, repo, lineRange, branch, codeSnippet, seedTexts, userFocus } = params;
     const file = toRepositoryRelativePath(params.file);
+    const focusTerms = extractTraceFocusTerms({ file, userFocus, codeSnippet });
     const coords = await this.options.codeHostRouter.resolveCoordinates({
       provider: params.provider,
       owner,
@@ -114,6 +124,7 @@ export class DecisionArchaeologyEngine {
 
     const timeline: DecisionTimeline = {
       file,
+      provider: coords.provider,
       targetLabel: formatTargetLabel(file, lineRange),
       lineRange,
       codeSnippet,
@@ -183,11 +194,12 @@ export class DecisionArchaeologyEngine {
       timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
     });
 
-    // Full-file: lead with recent evolution. Line selection: keep blame introduction.
+    // Full-file: prefer ask/file-aligned commits; line selection keeps blame introduction.
     timeline.focusCommit = selectFocusCommit({
       lineRange,
       introduction: timeline.originalCommit,
-      recentCommits: timeline.evolution?.recentCommits ?? []
+      recentCommits: timeline.evolution?.recentCommits ?? [],
+      focusTerms
     });
 
     const commit = timeline.focusCommit ?? timeline.originalCommit;
@@ -212,6 +224,7 @@ export class DecisionArchaeologyEngine {
     }
 
     let prBody = "";
+    let prRelevantToTarget = false;
     if (prNumber) {
       let pr: Awaited<ReturnType<DecisionArchaeologyEngine["fetchPullRequest"]>> | undefined;
       try {
@@ -233,8 +246,27 @@ export class DecisionArchaeologyEngine {
         } catch (error) {
           timeline.warnings.push(`PR #${prNumber} comments could not be loaded: ${errorMessage(error)}`);
         }
-        const reviews = mapPrComments(comments);
-        const approvers = extractApprovers(prBody, reviews);
+        const allReviews = mapPrComments(comments);
+        const { primary: primaryReviews, secondary: secondaryReviews } = partitionReviewsForTraceTarget(
+          allReviews,
+          file
+        );
+        const reviews = [
+          ...primaryReviews,
+          ...secondaryReviews.map((review) => ({
+            ...review,
+            body: `[Secondary — comment on ${review.path}, not primary file ${file}] ${review.body}`
+          }))
+        ];
+        const approvers = extractApprovers(prBody, primaryReviews);
+
+        prRelevantToTarget = linkedPrRelevantToTraceTarget({
+          title: pr.title,
+          description: prBody,
+          file,
+          focusTerms,
+          reviewPaths: allReviews.map((review) => review.path)
+        });
 
         timeline.linkedPR = {
           number: pr.number,
@@ -247,8 +279,14 @@ export class DecisionArchaeologyEngine {
           approvers
         };
 
+        if (!prRelevantToTarget) {
+          timeline.warnings.push(
+            `PR #${pr.number} ("${truncate(pr.title, 80)}") is only weakly related to ${file} — treat it as secondary context, not the primary why-this-file story.`
+          );
+        }
+
         timeline.alternatives.push(...extractAlternativesFromText(prBody, "PR description"));
-        for (const review of reviews) {
+        for (const review of primaryReviews) {
           timeline.alternatives.push(...extractAlternativesFromText(review.body, `@${review.author} review`));
         }
 
@@ -310,7 +348,12 @@ export class DecisionArchaeologyEngine {
 
     timeline.rationaleRanking = buildRationaleRanking(
       timeline,
-      isHighSignalCommitMessage(commit.message)
+      isHighSignalCommitMessage(commit.message),
+      {
+        prRelevantToTarget,
+        focusTerms,
+        focusCommitScore: scoreTextForTraceFocus(commit.message, focusTerms)
+      }
     );
     if (!timeline.rationaleRanking.length) {
       delete timeline.rationaleRanking;
@@ -374,6 +417,16 @@ export class DecisionArchaeologyEngine {
       }),
       patchExcerpt
     };
+
+    if (isBulkRenameOrMoveCommit(introducingCommit.message, resolvedFilesChanged)) {
+      timeline.warnings.push(
+        `History for ${file} may be truncated by a bulk rename/move (${resolvedFilesChanged} files in the introducing commit). Say so honestly for this path — do not substitute another file's migration or feature story.`
+      );
+    } else if (resolvedFilesChanged >= 40 && !patchExcerpt) {
+      timeline.warnings.push(
+        `Introducing commit touched ${resolvedFilesChanged} files and no patch for ${file} was available. Keep the narrative on ${file}; other paths in that commit are secondary only.`
+      );
+    }
   }
 
   private async enrichEvolution(
@@ -991,9 +1044,16 @@ function parseReferences(text: string): { prNumbers: number[]; jiraKeys: string[
 
 function buildRationaleRanking(
   timeline: DecisionTimeline,
-  hasHighSignalFocusCommitMessage: boolean
+  hasHighSignalFocusCommitMessage: boolean,
+  grounding?: {
+    prRelevantToTarget: boolean;
+    focusTerms: string[];
+    focusCommitScore: number;
+  }
 ): DecisionRationaleRank[] {
   const ranking: DecisionRationaleRank[] = [];
+  const prRelevant = grounding?.prRelevantToTarget ?? true;
+  const focusCommitScore = grounding?.focusCommitScore ?? 0;
 
   if (timeline.linkedPR) {
     const pr = timeline.linkedPR;
@@ -1001,8 +1061,8 @@ function buildRationaleRanking(
       (pr.description?.trim().length ?? 0) >= 20 || pr.reviews.length > 0 || pr.approvers.length > 0;
     ranking.push({
       source: `pr:${pr.number}`,
-      role: hasDetailedPrContext ? "rationale" : "provenance",
-      label: `PR #${pr.number}`
+      role: prRelevant && hasDetailedPrContext ? "rationale" : "provenance",
+      label: prRelevant ? `PR #${pr.number}` : `PR #${pr.number} (secondary — weakly related to file)`
     });
   }
 
@@ -1042,11 +1102,12 @@ function buildRationaleRanking(
   );
 
   if (focus) {
-    const existingRicherSources = ranking.length > 0;
+    const existingRicherSources = ranking.some((entry) => entry.role === "rationale");
+    const commitIsAskAligned = focusCommitScore > 0;
     ranking.push({
       source: `commit:${focus.sha}`,
-      role: hasHighSignalFocusCommitMessage
-        ? existingRicherSources
+      role: hasHighSignalFocusCommitMessage || commitIsAskAligned
+        ? existingRicherSources && !commitIsAskAligned
           ? "provenance"
           : "rationale"
         : existingRicherSources
@@ -1075,6 +1136,18 @@ function buildRationaleRanking(
     }
     seen.add(key);
     deduped.push(entry);
+  }
+
+  // Prefer file/ask-aligned commit as primary rationale when the PR was demoted.
+  if (!prRelevant && focus && focusCommitScore > 0) {
+    const commitIdx = deduped.findIndex((entry) => entry.source === `commit:${focus.sha}`);
+    const prIdx = deduped.findIndex((entry) => entry.source.startsWith("pr:"));
+    if (commitIdx >= 0) {
+      deduped[commitIdx] = { ...deduped[commitIdx], role: "rationale" };
+    }
+    if (prIdx >= 0 && deduped[prIdx].role === "rationale") {
+      deduped[prIdx] = { ...deduped[prIdx], role: "provenance" };
+    }
   }
 
   const hasRationale = deduped.some((entry) => entry.role === "rationale");

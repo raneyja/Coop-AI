@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { buildRepoSearchQuery, buildSlackSearchQueries, buildSlackSearchQuery, wantsSlackContext } from "./slackContext";
+import {
+  buildRepoSearchQuery,
+  buildSlackSearchQueries,
+  buildSlackSearchQuery,
+  shouldFetchSlackContext,
+  wantsSlackContext
+} from "./slackContext";
+import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +73,18 @@ test("buildSlackSearchQueries prioritizes jira keys and searches repo terms indi
   assert.ok(!queries.some((query) => query.startsWith("in:")));
   assert.ok(queries.some((query) => query.includes("raneyja/coop-ai")));
   assert.ok(queries.some((query) => query.includes("githubAppApi")));
+});
+
+test("shouldFetchSlackContext includes incident-shaped chat without slack keyword", () => {
+  const request = {
+    type: "chat_context",
+    params: {},
+    intent: {
+      context: { queryText: "board sync webhook failures — any retries last week?" }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchSlackContext(request), true);
+  assert.equal(wantsSlackContext("board sync webhook failures — any retries last week?"), false);
 });
 
 const total = passed + failed;

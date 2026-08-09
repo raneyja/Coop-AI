@@ -12,6 +12,7 @@ import {
   RepoSummaryEvidenceCard
 } from "../EvidenceCards";
 import type { IntegrationChatProvider } from "../../chat/types";
+import { CHAT_STOPPED_MESSAGE } from "../../chat/chatStopped";
 import type {
   BlastRadiusEvidence,
   ConfluenceSearchEvidence,
@@ -43,6 +44,7 @@ export type ChatMessage = {
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
   relatedArtifactId?: string;
+  suggest?: import("../../chat/types").ChatSuggestPayload;
 };
 
 export type ChatInlineArtifact =
@@ -51,6 +53,7 @@ export type ChatInlineArtifact =
       kind: "decision";
       timestamp: number;
       timeline: DecisionTimelinePayload;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -58,6 +61,7 @@ export type ChatInlineArtifact =
       timestamp: number;
       report: OwnershipCardPayload;
       slackSearch?: SlackSearchEvidence;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -67,6 +71,7 @@ export type ChatInlineArtifact =
       owner: string;
       repo: string;
       branch?: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -74,6 +79,7 @@ export type ChatInlineArtifact =
       timestamp: number;
       evidence: BlastRadiusEvidence;
       file: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -87,6 +93,7 @@ export type ChatInlineArtifact =
       googleDocs?: GoogleDocsSearchEvidence;
       teams?: TeamsSearchEvidence;
       file?: string;
+      codeHost?: string;
     }
   | {
       id: string;
@@ -95,6 +102,10 @@ export type ChatInlineArtifact =
       provider: IntegrationChatProvider;
       evidence: Record<string, unknown>;
     };
+
+type ChatSuggestResolveChoice =
+  | { choice: "plain" }
+  | { choice: "action"; actionId: string };
 
 type ChatStreamProps = {
   messages: ChatMessage[];
@@ -117,6 +128,8 @@ type ChatStreamProps = {
   conflicts?: ConflictSummary[];
   /** Bumps when thread/history loads so the view jumps to the latest messages. */
   scrollEpoch?: number;
+  /** Resolve a clarifying quick-action suggest chip. */
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 };
 
 const SCROLL_PIN_THRESHOLD_PX = 64;
@@ -250,21 +263,102 @@ function QuickActionBody({
   return <div className="chat-message-body">{renderBody(body)}</div>;
 }
 
+function SuggestClarifyingBody({ content }: { content: string }): React.ReactElement {
+  // Highlight quick-action product names so they read like slash/QA chrome.
+  const parts = content.split(
+    /(Find Owner|Trace Decision|Blast Radius|Understand Repo|Knowledge Gaps)/g
+  );
+  return (
+    <p className="coop-suggest-clarifying m-0">
+      {parts.map((part, index) =>
+        /^(Find Owner|Trace Decision|Blast Radius|Understand Repo|Knowledge Gaps)$/.test(part) ? (
+          <span key={`${part}-${index}`} className="coop-suggest-action-name">
+            {part}
+          </span>
+        ) : (
+          <React.Fragment key={`t-${index}`}>{part}</React.Fragment>
+        )
+      )}
+    </p>
+  );
+}
+
+function SuggestChipRow({
+  message,
+  onSuggestResolve
+}: {
+  message: ChatMessage;
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
+}): React.ReactElement | null {
+  const suggest = message.suggest;
+  if (!suggest?.chips.length || suggest.resolved) {
+    return null;
+  }
+
+  return (
+    <div className="coop-suggest-chip-row" role="group" aria-label="Suggested workflows">
+      {suggest.chips.map((chip) => {
+        const key = chip.kind === "plain" ? "plain" : `action-${chip.actionId ?? chip.label}`;
+        const isPrimary = chip.kind === "quick-action";
+        return (
+          <button
+            key={key}
+            type="button"
+            className={
+              isPrimary
+                ? "coop-settings-action-btn coop-suggest-chip coop-suggest-chip--primary"
+                : "coop-text-btn coop-suggest-chip coop-suggest-chip--plain"
+            }
+            disabled={!onSuggestResolve}
+            onClick={() => {
+              if (!onSuggestResolve) {
+                return;
+              }
+              if (chip.kind === "plain") {
+                onSuggestResolve({ choice: "plain" });
+                return;
+              }
+              if (chip.actionId) {
+                onSuggestResolve({ choice: "action", actionId: chip.actionId });
+              }
+            }}
+          >
+            {chip.kind === "quick-action" ? (
+              <span className="coop-suggest-chip-label">
+                <span className="coop-suggest-chip-run">Run </span>
+                <span className="coop-suggest-action-name">
+                  {chip.label.replace(/^Run\s+/i, "")}
+                </span>
+              </span>
+            ) : (
+              chip.label
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBlock({
   message,
   renderBody,
-  isStreaming = false
+  isStreaming = false,
+  onSuggestResolve
 }: {
   message: ChatMessage;
   renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
   isStreaming?: boolean;
+  onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 }): React.ReactElement {
   const isUser = message.role === "user";
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
+  const isStoppedNotice =
+    !isUser && !isStreaming && message.content.trim() === CHAT_STOPPED_MESSAGE;
 
   return (
     <article
-      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}`}
+      className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}${isStoppedNotice ? " chat-message--stopped" : ""}`}
       data-role={message.role}
     >
       <div className="chat-message-inner">
@@ -273,7 +367,7 @@ function MessageBlock({
             <span className="chat-action-tag">{humanizeActionTag(parsed.tag)}</span>
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
           </div>
-        ) : !isUser ? (
+        ) : !isUser && !isStoppedNotice ? (
           <div className="chat-message-meta">
             <span className="chat-message-label">CoopAI</span>
             {isStreaming ? (
@@ -286,9 +380,9 @@ function MessageBlock({
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
             <ChatMessageActions content={message.content} visible={Boolean(message.content)} />
           </div>
-        ) : (
+        ) : isUser ? (
           <time className="chat-message-time chat-message-time--solo">{formatTime(message.timestamp)}</time>
-        )}
+        ) : null}
 
         {message.attachments?.length ? (
           <div className="chat-message-attachments">
@@ -313,14 +407,22 @@ function MessageBlock({
           </div>
         ) : null}
 
-        {parsed.body ? (
+        {isStoppedNotice ? (
+          <p className="chat-message-stopped">{CHAT_STOPPED_MESSAGE}</p>
+        ) : parsed.body ? (
           isUser && parsed.tag ? (
             <QuickActionBody body={parsed.body} renderBody={renderBody} />
           ) : isUser ? (
             <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
+          ) : message.suggest ? (
+            <div className="chat-message-body">
+              <SuggestClarifyingBody content={parsed.body} />
+              <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />
+            </div>
           ) : (
             <div className="chat-message-body">
               {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}
+              <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />
             </div>
           )
         ) : null}
@@ -446,6 +548,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost ?? artifact.timeline.provider}
         />
       );
     case "ownership":
@@ -456,6 +559,7 @@ function renderArtifact(
           slackSearch={artifact.slackSearch}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost ?? artifact.report.provider}
         />
       );
     case "repo-summary":
@@ -468,6 +572,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "blast-radius":
@@ -478,6 +583,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "knowledge-gaps":
@@ -494,6 +600,7 @@ function renderArtifact(
           artifactId={artifact.id}
           conflicts={cardConflicts}
           actionContext={actionContext}
+          codeHost={artifact.codeHost}
         />
       );
     case "integration":
@@ -523,7 +630,8 @@ export function ChatStream({
   renderBody,
   actionContext,
   conflicts,
-  scrollEpoch = 0
+  scrollEpoch = 0,
+  onSuggestResolve
 }: ChatStreamProps): React.ReactElement {
   const timelineEntries = buildTimelineEntries(messages, artifacts);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -587,7 +695,12 @@ export function ChatStream({
       <div className="chat-thread-messages">
         {timelineEntries.map((entry) =>
           entry.type === "message" ? (
-            <MessageBlock key={entry.id} message={entry.message} renderBody={renderBody} />
+            <MessageBlock
+              key={entry.id}
+              message={entry.message}
+              renderBody={renderBody}
+              onSuggestResolve={onSuggestResolve}
+            />
           ) : (
             <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
               <EvidenceArtifactAnchor artifactId={entry.artifact.id}>

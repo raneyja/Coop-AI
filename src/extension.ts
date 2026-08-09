@@ -77,7 +77,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const codeHostCache = new CacheManager({ storageUri: context.globalStorageUri });
   void codeHostCache.initialize();
   const getApiBaseUrl = () => readConfiguration().apiBaseUrl;
-  const useCloudCodeHostProxy = () => readLightningBackend() === "cloud" && !isCoopDevMode();
+  // Prefer org OAuth via the cloud API whenever Lightning is on cloud — including
+  // Extension Dev Host (`coopAI.devMode`). Local PATs are only for `lightning.backend=local`.
+  const useCloudCodeHostProxy = () => readLightningBackend() === "cloud";
   const cloudCodeHostFileFetcher: import("./api/codeHosts/codeHostRouter").CloudCodeHostFileFetcher = async ({
     repoId,
     path,
@@ -118,13 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
     limit
   }) => {
     const baseUrl = getApiBaseUrl();
-    try {
-      return await api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit);
-    } catch (primaryError) {
-      if (!isRemoteFileSearchFallbackCandidate(primaryError)) {
-        throw primaryError;
-      }
-
+    const runTreeFallback = async (): Promise<Array<{ path: string; name: string }>> => {
       try {
         const config = readConfiguration();
         const searchScope = resolveSearchScopeForPlan({
@@ -147,7 +143,7 @@ export function activate(context: vscode.ExtensionContext): void {
         // Fall through to directory walk.
       }
 
-      const treeHits = await searchFilesViaCloudTree(
+      return searchFilesViaCloudTree(
         async (path) => {
           const tree = await api.fetchRepoTreeViaCloud(baseUrl, repoId, path, coords.branch);
           return {
@@ -161,6 +157,24 @@ export function activate(context: vscode.ExtensionContext): void {
         query,
         limit
       );
+    };
+
+    try {
+      const hits = await api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit);
+      // Bitbucket/GitLab code search often returns empty for path-style queries; tree walk finds them.
+      if (hits.length === 0 && (query.includes("/") || query.includes("."))) {
+        const treeHits = await runTreeFallback();
+        if (treeHits.length > 0) {
+          return treeHits;
+        }
+      }
+      return hits;
+    } catch (primaryError) {
+      if (!isRemoteFileSearchFallbackCandidate(primaryError)) {
+        throw primaryError;
+      }
+
+      const treeHits = await runTreeFallback();
       if (treeHits.length > 0) {
         return treeHits;
       }
@@ -641,14 +655,12 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      for (const session of coopSessionRegistry.getAll()) {
-        session.refreshEditorContext(editor);
-      }
+      // Only the focused Coop session follows the editor — never broadcast to every
+      // panel/sidebar (that re-chipped Window A's file into a blank new window).
+      coopSessionRegistry.getActive()?.refreshEditorContext(editor);
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
-      for (const session of coopSessionRegistry.getAll()) {
-        session.refreshEditorContext(event.textEditor);
-      }
+      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor);
     }),
     vscode.workspace.onDidCloseTextDocument(() => {
       for (const session of coopSessionRegistry.getAll()) {

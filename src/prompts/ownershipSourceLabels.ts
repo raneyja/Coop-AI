@@ -1,5 +1,9 @@
 import type { OwnershipReport, OwnershipTier } from "../types/ownership";
 import { buildSourcesChecklistFromKeys } from "./evidenceSynthesis";
+import {
+  evidenceCodeHostDisplayName,
+  resolveEvidenceCodeHost
+} from "../api/codeHosts/codeHostLabels";
 
 /** User-facing tier label (no numeric scores). */
 export function ownershipTierLabel(tier: OwnershipTier): string {
@@ -13,8 +17,13 @@ export function ownershipTierLabel(tier: OwnershipTier): string {
   }
 }
 
+export function ownershipSourceLabelCodeHost(codeHost?: string | null): string {
+  return `[Sources: ${evidenceCodeHostDisplayName(codeHost)} commits & reviews]`;
+}
+
+/** @deprecated Prefer ownershipSourceLabelCodeHost with the active Use-repo host. */
 export function ownershipSourceLabelGitHub(): string {
-  return "[Sources: GitHub commits & reviews]";
+  return ownershipSourceLabelCodeHost("github");
 }
 
 export function ownershipSourceLabelSlack(): string {
@@ -37,14 +46,14 @@ export function listOwnershipSourceLabels(
   report: OwnershipReport,
   slackSearch?: { messages?: unknown[]; error?: string }
 ): string[] {
-  const labels = [ownershipSourceLabelGitHub()];
+  const labels = [ownershipSourceLabelCodeHost(report.provider)];
   if (report.scores.some((score) => score.presence)) {
     labels.push(ownershipSourceLabelSlack());
   }
   if (slackSearch?.messages?.length) {
     labels.push(ownershipSourceLabelSlackDiscussions());
   }
-  if (report.orgContext?.source === "codeowners") {
+  if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
     labels.push(ownershipSourceLabelCodeowners());
   }
   return labels;
