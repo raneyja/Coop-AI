@@ -166,6 +166,24 @@ test("filter: owner blocked with empty context", () => {
   assert.equal(filtered.length, 0);
 });
 
+test("filter: understand offered even with sticky file (repo-wide chip)", () => {
+  const raw = suggestQuickActions("How is this repository structured?").suggestions;
+  assert.equal(raw[0]?.actionId, "understand-repo");
+  const filtered = filterSuggestableActions(raw, repoWithFile);
+  assert.equal(filtered[0]?.actionId, "understand-repo");
+  const offer = shouldOfferQuickActionSuggest(
+    "How is this repository structured?",
+    repoWithFile
+  );
+  assert.ok(offer);
+  assert.equal(offer!.suggestions[0]?.actionId, "understand-repo");
+});
+
+test("filter: understand still blocked with empty context", () => {
+  const raw = suggestQuickActions("How is this repository structured?").suggestions;
+  assert.equal(filterSuggestableActions(raw, emptyContext).length, 0);
+});
+
 test("shouldOffer: owner example with file context", () => {
   const offer = shouldOfferQuickActionSuggest(
     "Who owns signing-request email delivery for this code?",
@@ -269,6 +287,15 @@ test("regression: responseDeadline blast ask offers chip when file in scope", ()
   const ask =
     "What breaks if we change or rename `MAX_USER_FACING_RESPONSE_MS` or `remainingContextGatherBudgetMs`?";
   const offer = shouldOfferQuickActionSuggest(ask, repoWithFile);
+  assert.ok(offer);
+  assert.equal(offer!.suggestions[0]?.actionId, "blast-radius");
+});
+
+test("regression: estimate impact of changing offers blast chip", () => {
+  const offer = shouldOfferQuickActionSuggest(
+    "Estimate the impact of changing this code.",
+    repoWithFile
+  );
   assert.ok(offer);
   assert.equal(offer!.suggestions[0]?.actionId, "blast-radius");
 });

@@ -20,9 +20,11 @@ CoopAI assigns an LLM per feature in production. You do not pick provider or mod
 | **Quick actions** (Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps; integration chat) | Anthropic | Claude Sonnet 4.6 | Same |
 | **/edit patches** (`/edit`, `/patch`, `/fix`) | OpenAI | GPT-5.1 | Same (`code_edit` use case) |
 | **Autocomplete** (inline ghost text) | Mistral | Codestral | `completionRouter.ts` → FIM when available |
+| **Intent suggest** (quick-action chips when phrase match is weak) | OpenAI | GPT-4o mini | Same (`intent_suggest` use case) |
+| **Sources expand preview** (short AI overview for expanded source cards) | OpenAI | GPT-4o mini | Same (`evidence_preview` use case) |
 | **Embeddings** (Deep-Index semantic search) | OpenAI | text-embedding-3-small | Backend only — not shown in settings |
 
-Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment regardless of which model you might have used in an older install.
+Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment regardless of which model you might have used in an older install. Intent suggest runs for everyone when the local phrase classifier is unsure — it never auto-runs a quick action (chips confirm first). Sources expand previews use a short AI overview when the body is long; expanded panels never dump full commit/PR/thread text — use the outbound link for the full record.
 
 ## Settings UI — Model & chat
 
@@ -31,10 +33,10 @@ Quick actions and integration chat share the **quick actions** assignment. Plain
 Production users see:
 
 - Copy: *Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).*
-- Four **read-only** rows — feature name, provider · model, and an **On** / **Off** badge
+- Read-only assignment rows — feature name, provider · model, and an **On** / **Off** badge
 - One toggle you **can** change:
   - **Enable inline autocomplete** — master switch for ghost-text completions
-- Chat, quick actions, and edit mode are always on (no toggle)
+- Chat, quick actions, edit mode, and intent suggest assignment are always on in this list (no toggle)
 - **Save model settings** persists the autocomplete toggle
 
 The Preferences hub subtitle shows **Assigned models** plus autocomplete status (for example, `Assigned models · Autocomplete on`).

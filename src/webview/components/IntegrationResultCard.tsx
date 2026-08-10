@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { buildCodeSnippetPreview } from "../../context/evidenceBodyPreview";
 import { ChatActionLink } from "./ChatActionLink";
 import { ChatProse } from "./ChatProse";
 import { useChatLinks } from "./ChatLinkContext";
@@ -215,7 +216,27 @@ export function IntegrationResultCollapsible({
 }
 IntegrationResultCollapsible.displayName = "IntegrationResultCollapsible";
 
-export function IntegrationResultCode({ children }: { children: React.ReactNode }): React.ReactElement {
+export function IntegrationResultCode({
+  children,
+  /** When false (default), string bodies are hard-capped — never dump a full file. */
+  allowFull = false
+}: {
+  children: React.ReactNode;
+  allowFull?: boolean;
+}): React.ReactElement {
+  if (!allowFull && typeof children === "string") {
+    const { preview, truncated } = buildCodeSnippetPreview(children);
+    return (
+      <div className="space-y-1">
+        <pre className="coop-result-code">{preview}</pre>
+        {truncated ? (
+          <p className="coop-result-text coop-result-text--muted text-[10px]">
+            Truncated preview — open the file for the full source.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
   return <pre className="coop-result-code">{children}</pre>;
 }
 

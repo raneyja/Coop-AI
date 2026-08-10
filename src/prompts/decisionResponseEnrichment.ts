@@ -302,6 +302,22 @@ export function responseLacksHistoryAnchors(content: string, timeline: DecisionT
 
 function historyLeadParagraph(timeline: DecisionTimeline, file: string): string {
   const focus = timeline.focusCommit ?? timeline.originalCommit;
+  const weak =
+    timeline.focusDecisionQuality === "weak" ||
+    timeline.focusDecisionQuality === "unknown" ||
+    timeline.focusIsMegaDriveBy;
+
+  // Phase B gate: never force a demoted/unaligned focus as “the decision.”
+  if (weak && timeline.focusDecisionQuality === "weak") {
+    const parts = [
+      `Commit history for \`${file}\` is attached, but no commit clearly matched the ask — treat Sources as provenance, not a confirmed design rationale.`
+    ];
+    if (focus?.sha) {
+      parts.push(`Nearest history anchor: ${focus.sha.slice(0, 7)}.`);
+    }
+    return parts.join(" ");
+  }
+
   const parts: string[] = [];
   if (focus?.sha) {
     const sha = focus.sha.slice(0, 7);
@@ -312,7 +328,7 @@ function historyLeadParagraph(timeline: DecisionTimeline, file: string): string 
         : `Decision history for \`${file}\` includes commit ${sha}.`
     );
   }
-  if (timeline.linkedPR?.number != null) {
+  if (timeline.linkedPR?.number != null && !timeline.focusIsMegaDriveBy) {
     const title = truncate((timeline.linkedPR.title ?? "").trim(), 120);
     parts.push(
       title
@@ -328,6 +344,10 @@ function historyLeadParagraph(timeline: DecisionTimeline, file: string): string 
 
 /** Inject commit/PR grounding when the model answered as a pure code walkthrough. */
 export function injectHistoryGrounding(content: string, timeline: DecisionTimeline, file: string): string {
+  // Do not force-cite a mega/unaligned focus as the decision story (Z3 Phase B).
+  if (timeline.focusIsMegaDriveBy && timeline.focusDecisionQuality !== "aligned") {
+    return content.trim();
+  }
   const lead = historyLeadParagraph(timeline, file);
   let result = content.trim();
   const summaryBody = extractSectionBody(`\n${result}`, "Summary");
@@ -395,6 +415,10 @@ export function enrichTraceDecisionResponse(options: {
   }
 
   if (responseLacksHistoryAnchors(options.content, timeline)) {
+    // Phase B: skip forced cite when focus is a demoted mega drive-by.
+    if (timeline.focusIsMegaDriveBy && timeline.focusDecisionQuality !== "aligned") {
+      return stripDisallowedNarrativeSourceCitations(options.content);
+    }
     return stripDisallowedNarrativeSourceCitations(
       injectHistoryGrounding(options.content, timeline, file)
     );

@@ -158,7 +158,22 @@ import {
   buildMissingIntentClarificationResponse,
   shouldClarifyFirstChatTurn
 } from "./chatMessageIntent";
-import { shouldOfferQuickActionSuggest, suggestRunChipLabel } from "./quickActionSuggestIntent";
+import {
+  filterSuggestableActions,
+  offerFromActionId,
+  shouldOfferQuickActionSuggest,
+  suggestRunChipLabel
+} from "./quickActionSuggestIntent";
+import {
+  classifyQuickActionIntent,
+  type IntentSuggestCompleteFn
+} from "./quickActionIntentModel";
+import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";
+import { enrichDecisionTimelineSourcePreviews } from "../context/enrichDecisionTimelineSourcePreviews";
+import {
+  EVIDENCE_PREVIEW_TIMEOUT_MS,
+  type EvidencePreviewCompleteFn
+} from "../context/evidencePreviewModel";
 import { openReferencedLink } from "./openReferencedLink";
 import {
   buildUserMessageWithContext,
@@ -483,6 +498,8 @@ export class CoopChatSession {
     attachments?: ChatImageAttachment[];
     assistantTimestamp: number;
   };
+  /** Abort in-flight hybrid intent-suggest model call (user Stop). */
+  private intentSuggestAbort?: AbortController;
   private sessionCostUsd = 0;
   private readonly threadRuns = new ThreadRunManager();
   private workspacePromptWatcher?: vscode.Disposable;
@@ -936,6 +953,9 @@ export class CoopChatSession {
    * "Stopped." message (or keep any partial assistant text).
    */
   private handleStreamCancel(threadId: string): void {
+    this.intentSuggestAbort?.abort();
+    this.intentSuggestAbort = undefined;
+
     const turn = this.threadRuns.get(threadId);
     const partialText = turn?.partialAssistant?.trim() ?? "";
     const jobId = turn?.jobId;
@@ -4163,7 +4183,10 @@ export class CoopChatSession {
       !options?.skipQuickActionSuggest &&
       !this.detectChatIntegrationProvider(message)
     ) {
-      const offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+      let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+      if (!offer && isIntentSuggestModelEnabled()) {
+        offer = await this.resolveHybridIntentSuggestOffer(message);
+      }
       if (offer) {
         await this.completeQuickActionSuggestClarification(
           message,
@@ -4601,6 +4624,70 @@ export class CoopChatSession {
     this.persistActiveThread();
   }
 
+  /**
+   * Hybrid path: call gpt-4o-mini only when the phrase classifier returned nothing.
+   * Fail-open on error/timeout/abort → undefined (plain chat continues).
+   */
+  private async resolveHybridIntentSuggestOffer(
+    message: string
+  ): Promise<ReturnType<typeof shouldOfferQuickActionSuggest>> {
+    this.intentSuggestAbort?.abort();
+    const controller = new AbortController();
+    this.intentSuggestAbort = controller;
+
+    const complete: IntentSuggestCompleteFn = async (params) => {
+      let full = "";
+      await this.options.api.streamChat(
+        {
+          message: params.message,
+          context: {},
+          history: [],
+          model: params.model,
+          provider: params.provider,
+          useCase: "intent_suggest",
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          enableThinking: false
+        },
+        (chunk) => {
+          full += chunk;
+        },
+        this.preferences.apiBaseUrl,
+        params.signal
+      );
+      return full;
+    };
+
+    try {
+      void this.emitUsageEvent("suggest_intent.model_invoked");
+      const result = await classifyQuickActionIntent(message, complete, {
+        activeFile: this.currentContext.file,
+        signal: controller.signal
+      });
+      if (!result || result.suggestions.length === 0) {
+        void this.emitUsageEvent("suggest_intent.model_none");
+        return undefined;
+      }
+      const available = filterSuggestableActions(result.suggestions, this.currentContext);
+      if (available.length === 0) {
+        void this.emitUsageEvent("suggest_intent.model_none");
+        return undefined;
+      }
+      const top = available[0]!;
+      void this.emitUsageEvent("suggest_intent.model_hit", {
+        actionId: top.actionId
+      });
+      return offerFromActionId(top.actionId, result.confidence);
+    } catch {
+      void this.emitUsageEvent("suggest_intent.model_error");
+      return undefined;
+    } finally {
+      if (this.intentSuggestAbort === controller) {
+        this.intentSuggestAbort = undefined;
+      }
+    }
+  }
+
   private markSuggestResolved(assistantTimestamp: number): void {
     for (let i = this.chatHistory.length - 1; i >= 0; i--) {
       const entry = this.chatHistory[i];
@@ -4991,7 +5078,7 @@ export class CoopChatSession {
         return;
       }
       if (quickAction === "trace-decision") {
-        this.postDecisionTimelineFromBundle();
+        await this.postDecisionTimelineFromBundle();
         return;
       }
       if (quickAction === "find-owner") {
@@ -5218,7 +5305,7 @@ export class CoopChatSession {
     return undefined;
   }
 
-  private postDecisionTimelineFromBundle(): void {
+  private async postDecisionTimelineFromBundle(): Promise<void> {
     const timeline = this.enrichedDecisionTimelineFromBundle();
     if (!timeline) {
       const entry = this.lastContextBundle.find((result) => result.type === "decision_history");
@@ -5232,6 +5319,8 @@ export class CoopChatSession {
       return;
     }
 
+    await this.enrichTimelineSourcePreviewsBestEffort(timeline);
+
     const artifactId = this.beginEvidenceArtifact();
     if (!timeline.provider) {
       timeline.provider = this.activeEvidenceCodeHost();
@@ -5239,6 +5328,45 @@ export class CoopChatSession {
     const payload = { artifactId, timeline, codeHost: timeline.provider };
     this.recordEvidenceArtifact("decision", artifactId, payload);
     this.post({ type: "decision:timeline", payload });
+  }
+
+  /**
+   * AI short overviews for Sources expands (fail-open, soft-budget capped).
+   * UI never dumps full bodies even when this skips.
+   */
+  private async enrichTimelineSourcePreviewsBestEffort(timeline: DecisionTimeline): Promise<void> {
+    const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (remainingMs < 400) {
+      return;
+    }
+    const timeoutMs = Math.min(EVIDENCE_PREVIEW_TIMEOUT_MS, Math.max(400, remainingMs));
+    const complete: EvidencePreviewCompleteFn = async (params) => {
+      let full = "";
+      await this.options.api.streamChat(
+        {
+          message: params.message,
+          context: {},
+          history: [],
+          model: params.model,
+          provider: params.provider,
+          useCase: "evidence_preview",
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          enableThinking: false
+        },
+        (chunk) => {
+          full += chunk;
+        },
+        this.preferences.apiBaseUrl,
+        params.signal
+      );
+      return full;
+    };
+    try {
+      await enrichDecisionTimelineSourcePreviews(timeline, complete, { timeoutMs });
+    } catch {
+      // Fail open — deterministic previews in the webview.
+    }
   }
 
   private lineRangeFromContext(context: RepoContext): { start: number; end: number } | undefined {

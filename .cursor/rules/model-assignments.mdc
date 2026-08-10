@@ -18,6 +18,8 @@ Production users **do not** pick LLM provider or model. Coop assigns models per 
 | Quick actions + integration chat | Anthropic | claude-sonnet-4-6 |
 | /edit patches | OpenAI | gpt-5.1 |
 | Autocomplete | Mistral | codestral-latest |
+| Intent suggest (chip classifier) | OpenAI | gpt-4o-mini |
+| Sources expand preview | OpenAI | gpt-4o-mini |
 
 ## Required wiring (all must stay connected)
 

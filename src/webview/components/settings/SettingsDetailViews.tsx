@@ -350,8 +350,8 @@ function ModelDetail({
     <>
       <SettingsSection>
         <p className="coop-settings-card-desc px-0.5">
-          Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an
-          Enterprise capability (coming soon).
+          Models are assigned by Coop for chat, quick actions, edit mode, autocomplete, and intent
+          suggest. Custom model selection is an Enterprise capability (coming soon).
         </p>
 
         <div className="space-y-2">

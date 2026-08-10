@@ -32,8 +32,20 @@ const quickActionModel = resolveAssignedModelForUseCase("blast_radius");
 assert.equal(quickActionModel.provider, "anthropic");
 assert.equal(quickActionModel.model, "claude-sonnet-4-6");
 
-assert.equal(COOP_FEATURE_MODEL_ASSIGNMENTS.length, 4);
+assert.equal(COOP_FEATURE_MODEL_ASSIGNMENTS.length, 6);
 assert.ok(formatAssignedModelMeta(getFeatureModelAssignment("chat")).includes("OpenAI"));
+
+assert.equal(resolveFeatureFromUseCase("intent_suggest"), "intentSuggest");
+const intentSuggest = resolveAssignedModelForUseCase("intent_suggest");
+assert.equal(intentSuggest.provider, "openai");
+assert.equal(intentSuggest.model, "gpt-4o-mini");
+assert.ok(formatAssignedModelMeta(getFeatureModelAssignment("intentSuggest")).includes("mini"));
+
+assert.equal(resolveFeatureFromUseCase("evidence_preview"), "evidencePreview");
+const evidencePreview = resolveAssignedModelForUseCase("evidence_preview");
+assert.equal(evidencePreview.provider, "openai");
+assert.equal(evidencePreview.model, "gpt-4o-mini");
+assert.ok(formatAssignedModelMeta(getFeatureModelAssignment("evidencePreview")).includes("mini"));
 
 const routedChat = resolveRuntimeModelForUseCase("chat", {
   devMode: false,

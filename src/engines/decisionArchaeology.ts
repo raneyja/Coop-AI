@@ -22,19 +22,24 @@ import { collectJiraKeysFromText } from "../context/jiraContext";
 import {
   isHighSignalCommitMessage,
   pickRecentEvolutionCommits,
-  selectFocusCommit
+  selectFocusCommitWithMeta,
+  TRACE_EVOLUTION_DISPLAY_LIMIT,
+  TRACE_FOCUS_SCORE_WINDOW
 } from "./decisionFocusCommit";
+import { buildRationaleRanking } from "./decisionRationaleRanking";
 import {
   extractTraceFocusTerms,
+  extractTraceSymbolTerms,
   isBulkRenameOrMoveCommit,
+  isMegaDriveByCommit,
   linkedPrRelevantToTraceTarget,
   partitionReviewsForTraceTarget,
+  scoreCommitMessageForTraceFocus,
   scoreTextForTraceFocus
 } from "./traceFileGrounding";
 import type {
   DecisionAlternative,
   DecisionCommit,
-  DecisionRationaleRank,
   DecisionReview,
   DecisionTimeline,
   LineRange
@@ -43,8 +48,10 @@ import type {
 export {
   isHighSignalCommitMessage,
   pickRecentEvolutionCommits,
-  selectFocusCommit
+  selectFocusCommit,
+  selectFocusCommitWithMeta
 } from "./decisionFocusCommit";
+export { buildRationaleRanking } from "./decisionRationaleRanking";
 
 export type {
   ChronologyEvent,
@@ -115,6 +122,7 @@ export class DecisionArchaeologyEngine {
     const { owner, repo, lineRange, branch, codeSnippet, seedTexts, userFocus } = params;
     const file = toRepositoryRelativePath(params.file);
     const focusTerms = extractTraceFocusTerms({ file, userFocus, codeSnippet });
+    const symbolTerms = extractTraceSymbolTerms({ userFocus, codeSnippet });
     const coords = await this.options.codeHostRouter.resolveCoordinates({
       provider: params.provider,
       owner,
@@ -155,7 +163,14 @@ export class DecisionArchaeologyEngine {
       );
     }
 
-    const introduction = await this.findOriginalIntroduction(coords, file, blameLines, lineRange);
+    const introduction = await this.findOriginalIntroduction(
+      coords,
+      file,
+      blameLines,
+      lineRange,
+      userFocus,
+      codeSnippet
+    );
     if (!introduction) {
       let recent: CommitInfo | undefined;
       try {
@@ -190,17 +205,44 @@ export class DecisionArchaeologyEngine {
     });
 
     // History already fetched here — reuse for focus selection (no extra round trip).
-    await this.enrichEvolution(timeline, coords, file, timeline.originalCommit).catch((error) => {
-      timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
-    });
+    const scoringPool = await this.enrichEvolution(timeline, coords, file, timeline.originalCommit).catch(
+      (error) => {
+        timeline.warnings.push(`File evolution lookup unavailable: ${errorMessage(error)}`);
+        return [] as DecisionCommit[];
+      }
+    );
 
     // Full-file: prefer ask/file-aligned commits; line selection keeps blame introduction.
-    timeline.focusCommit = selectFocusCommit({
+    // Score a wider history window than the Evolution UI list (Phase A).
+    let focusMeta = selectFocusCommitWithMeta({
       lineRange,
       introduction: timeline.originalCommit,
-      recentCommits: timeline.evolution?.recentCommits ?? [],
-      focusTerms
+      recentCommits: scoringPool.length
+        ? scoringPool
+        : (timeline.evolution?.recentCommits ?? []),
+      focusTerms,
+      symbolTerms
     });
+    focusMeta = await this.refineFocusAgainstMegaCommits(
+      coords,
+      focusMeta,
+      timeline.originalCommit,
+      scoringPool.length ? scoringPool : (timeline.evolution?.recentCommits ?? []),
+      focusTerms,
+      symbolTerms
+    );
+    timeline.focusCommit = focusMeta.commit;
+    timeline.focusDecisionQuality = focusMeta.quality;
+    timeline.focusIsMegaDriveBy = focusMeta.isMegaDriveBy;
+    if (focusMeta.quality === "weak" && focusTerms.length > 0) {
+      timeline.warnings.push(
+        `No commit message in recent history clearly matched the ask (${focusTerms.slice(0, 4).join(", ")}). Treating history as provenance — do not invent a design rationale from current code alone.`
+      );
+    } else if (focusMeta.isMegaDriveBy) {
+      timeline.warnings.push(
+        `Focus commit looks like a large multi-file change with weak ask alignment. Cite it as provenance only — not as the decision that introduced the asked symbol.`
+      );
+    }
 
     const commit = timeline.focusCommit ?? timeline.originalCommit;
     if (!commit) {
@@ -352,7 +394,9 @@ export class DecisionArchaeologyEngine {
       {
         prRelevantToTarget,
         focusTerms,
-        focusCommitScore: scoreTextForTraceFocus(commit.message, focusTerms)
+        focusCommitScore: scoreCommitMessageForTraceFocus(commit.message, focusTerms, symbolTerms),
+        focusIsMegaDriveBy: Boolean(timeline.focusIsMegaDriveBy),
+        focusDecisionQuality: timeline.focusDecisionQuality
       }
     );
     if (!timeline.rationaleRanking.length) {
@@ -391,7 +435,11 @@ export class DecisionArchaeologyEngine {
         ? await this.fetchGithubCommitDiffStats(coords, introducingCommit.sha, file).catch(() => undefined)
         : coords.provider === "gitlab"
           ? await this.fetchGitLabCommitDiffStats(coords, introducingCommit.sha, file).catch(() => undefined)
-          : undefined;
+          : coords.provider === "bitbucket"
+            ? await this.fetchBitbucketCommitDiffStats(coords, introducingCommit.sha, file).catch(
+                () => undefined
+              )
+            : undefined;
 
     if (providerStats) {
       filesChanged = providerStats.filesChanged || filesChanged;
@@ -429,15 +477,19 @@ export class DecisionArchaeologyEngine {
     }
   }
 
+  /**
+   * Loads file history, stores display recent commits, returns a wider scoring pool
+   * for focus selection (Phase A widen window).
+   */
   private async enrichEvolution(
     timeline: DecisionTimeline,
     coords: RepoCoordinates,
     file: string,
     introducingCommit: DecisionCommit
-  ): Promise<void> {
+  ): Promise<DecisionCommit[]> {
     const history = await this.options.codeHostRouter.getFileHistory(file, 250, coords);
     if (!history.length) {
-      return;
+      return [];
     }
 
     const newest = history[0];
@@ -449,19 +501,110 @@ export class DecisionArchaeologyEngine {
     } else {
       const introducingAtMs = Date.parse(introducingCommit.date);
       if (Number.isFinite(introducingAtMs)) {
-        commitCountSinceIntroduction = history.filter((entry) => Date.parse(entry.date) >= introducingAtMs).length;
+        commitCountSinceIntroduction = history.filter(
+          (entry) => Date.parse(entry.date) >= introducingAtMs
+        ).length;
       } else {
         commitCountSinceIntroduction = history.length;
       }
     }
 
-    const recentCommits = pickRecentEvolutionCommits(history, introducingCommit.sha, 3);
+    const scoringPool = pickRecentEvolutionCommits(
+      history,
+      introducingCommit.sha,
+      TRACE_FOCUS_SCORE_WINDOW
+    );
+    const recentCommits = scoringPool.slice(0, TRACE_EVOLUTION_DISPLAY_LIMIT);
 
     timeline.evolution = {
       commitCountSinceIntroduction: Math.max(1, commitCountSinceIntroduction || 1),
       lastModifiedAt: newest.date,
       lastModifiedAuthor: formatCommitAuthor(newest),
       ...(recentCommits.length ? { recentCommits } : {})
+    };
+    return scoringPool;
+  }
+
+  /**
+   * Phase B: when focus has no ask alignment, fetch files-changed and demote mega touches.
+   */
+  private async refineFocusAgainstMegaCommits(
+    coords: RepoCoordinates,
+    focusMeta: import("./decisionFocusCommit").SelectFocusCommitResult,
+    introduction: DecisionCommit,
+    scoringPool: DecisionCommit[],
+    focusTerms: string[],
+    symbolTerms: string[] = []
+  ): Promise<import("./decisionFocusCommit").SelectFocusCommitResult> {
+    if ((focusTerms.length === 0 && symbolTerms.length === 0) || focusMeta.score > 0) {
+      // Still mark oversized unaligned introductions as mega for ranking.
+      if (
+        focusMeta.score === 0 &&
+        isMegaDriveByCommit({
+          focusScore: 0,
+          message: focusMeta.commit.message
+        })
+      ) {
+        return { ...focusMeta, isMegaDriveBy: true, quality: focusMeta.quality === "aligned" ? "weak" : focusMeta.quality };
+      }
+      return focusMeta;
+    }
+
+    const detail = await this.fetchCommitDetail(coords, focusMeta.commit.sha).catch(() => undefined);
+    let filesChanged = detail?.filesChanged?.length;
+    if (filesChanged == null && coords.provider === "bitbucket") {
+      const stats = await this.fetchBitbucketCommitDiffStats(coords, focusMeta.commit.sha, "").catch(
+        () => undefined
+      );
+      filesChanged = stats?.filesChanged;
+    } else if (filesChanged == null && coords.provider === "github") {
+      const stats = await this.fetchGithubCommitDiffStats(coords, focusMeta.commit.sha, "").catch(
+        () => undefined
+      );
+      filesChanged = stats?.filesChanged;
+    } else if (filesChanged == null && coords.provider === "gitlab") {
+      const stats = await this.fetchGitLabCommitDiffStats(coords, focusMeta.commit.sha, "").catch(
+        () => undefined
+      );
+      filesChanged = stats?.filesChanged;
+    }
+
+    const mega = isMegaDriveByCommit({
+      filesChanged,
+      focusScore: focusMeta.score,
+      message: focusMeta.commit.message
+    });
+    if (!mega) {
+      return focusMeta;
+    }
+
+    const filesChangedBySha: Record<string, number | undefined> = {
+      [focusMeta.commit.sha]: filesChanged
+    };
+    return selectFocusCommitWithMeta({
+      introduction,
+      recentCommits: scoringPool.filter((c) => c.sha !== focusMeta.commit.sha),
+      focusTerms,
+      symbolTerms,
+      filesChangedBySha
+    });
+  }
+
+  private async fetchBitbucketCommitDiffStats(
+    coords: RepoCoordinates,
+    sha: string,
+    _file: string
+  ): Promise<IntroducingDiffStats | undefined> {
+    // Bitbucket client getCommitBySha attaches filesChanged via diffstat.
+    const detail = await this.fetchCommitDetail(coords, sha).catch(() => undefined);
+    const filesChanged = detail?.filesChanged?.length ?? 0;
+    if (!filesChanged) {
+      return undefined;
+    }
+    return {
+      filesChanged,
+      // Patch excerpts are not available via Cloud diffstat; symbol intro uses messages.
+      patchExcerpt: undefined
     };
   }
 
@@ -552,7 +695,9 @@ export class DecisionArchaeologyEngine {
     coords: RepoCoordinates,
     file: string,
     blameLines: BlameLine[],
-    lineRange?: LineRange
+    lineRange?: LineRange,
+    userFocus?: string,
+    codeSnippet?: string
   ): Promise<CommitInfo | undefined> {
     const uniqueShas = [...new Set(blameLines.map((line) => line.commitSha))].slice(0, 10);
     if (uniqueShas.length === 0) {
@@ -575,6 +720,17 @@ export class DecisionArchaeologyEngine {
       return commits[0];
     }
 
+    // Phase C: symbol-aware introduction when the ask names a type (e.g. StateGroup).
+    const symbolTerms = extractTraceSymbolTerms({ userFocus, codeSnippet });
+    if (symbolTerms.length > 0) {
+      const symbolIntro = await this.findSymbolAwareIntroduction(coords, file, symbolTerms).catch(
+        () => undefined
+      );
+      if (symbolIntro) {
+        return symbolIntro;
+      }
+    }
+
     commits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const oldest = commits[0];
     const history = await this.options.codeHostRouter.getFileHistory(file, 25, coords).catch(() => []);
@@ -584,6 +740,54 @@ export class DecisionArchaeologyEngine {
       return oldestInHistory;
     }
     return oldest;
+  }
+
+  /**
+   * Prefer the oldest file-history commit whose message (or patch) mentions the asked symbol.
+   */
+  private async findSymbolAwareIntroduction(
+    coords: RepoCoordinates,
+    file: string,
+    symbolTerms: string[]
+  ): Promise<CommitInfo | undefined> {
+    const history = await this.options.codeHostRouter.getFileHistory(file, 100, coords).catch(() => []);
+    if (!history.length) {
+      return undefined;
+    }
+
+    const messageHits = history
+      .map((commit) => ({
+        commit,
+        score: scoreTextForTraceFocus(commit.message, symbolTerms)
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => new Date(a.commit.date).getTime() - new Date(b.commit.date).getTime());
+
+    if (messageHits.length === 0) {
+      return undefined;
+    }
+
+    for (const hit of messageHits.slice(0, 5)) {
+      const stats =
+        coords.provider === "github"
+          ? await this.fetchGithubCommitDiffStats(coords, hit.commit.sha, file).catch(() => undefined)
+          : coords.provider === "gitlab"
+            ? await this.fetchGitLabCommitDiffStats(coords, hit.commit.sha, file).catch(() => undefined)
+            : coords.provider === "bitbucket"
+              ? await this.fetchBitbucketCommitDiffStats(coords, hit.commit.sha, file).catch(
+                  () => undefined
+                )
+              : undefined;
+      const excerpt = stats?.patchExcerpt?.toLowerCase() ?? "";
+      if (!excerpt) {
+        return hit.commit;
+      }
+      if (symbolTerms.some((term) => excerpt.includes(term.toLowerCase()))) {
+        return hit.commit;
+      }
+    }
+
+    return messageHits[0]?.commit;
   }
 
   private async tryRecentFileHistory(coords: RepoCoordinates, file: string): Promise<CommitInfo | undefined> {
@@ -1040,126 +1244,6 @@ function parseReferences(text: string): { prNumbers: number[]; jiraKeys: string[
   const prNumbers = [...text.matchAll(/\b(?:#|PR\s*#?|pull\/)(\d{1,6})\b/gi)].map((m) => Number(m[1]));
   const jiraKeys = JiraClient.extractIssueKeys(text);
   return { prNumbers: [...new Set(prNumbers)], jiraKeys };
-}
-
-function buildRationaleRanking(
-  timeline: DecisionTimeline,
-  hasHighSignalFocusCommitMessage: boolean,
-  grounding?: {
-    prRelevantToTarget: boolean;
-    focusTerms: string[];
-    focusCommitScore: number;
-  }
-): DecisionRationaleRank[] {
-  const ranking: DecisionRationaleRank[] = [];
-  const prRelevant = grounding?.prRelevantToTarget ?? true;
-  const focusCommitScore = grounding?.focusCommitScore ?? 0;
-
-  if (timeline.linkedPR) {
-    const pr = timeline.linkedPR;
-    const hasDetailedPrContext =
-      (pr.description?.trim().length ?? 0) >= 20 || pr.reviews.length > 0 || pr.approvers.length > 0;
-    ranking.push({
-      source: `pr:${pr.number}`,
-      role: prRelevant && hasDetailedPrContext ? "rationale" : "provenance",
-      label: prRelevant ? `PR #${pr.number}` : `PR #${pr.number} (secondary — weakly related to file)`
-    });
-  }
-
-  for (const [index, ticket] of (timeline.jiraTickets ?? []).entries()) {
-    ranking.push({
-      source: `jira:${ticket.key}`,
-      role: index === 0 ? "rationale" : "provenance",
-      label: `Jira ${ticket.key}`
-    });
-  }
-
-  if (timeline.slackThread) {
-    const channel = timeline.slackThread.channelName ?? timeline.slackThread.channelId;
-    ranking.push({
-      source: `slack:${channel}`,
-      role: hasSubstantiveThreadMessages(timeline.slackThread.messages.map((message) => message.text))
-        ? "rationale"
-        : "provenance",
-      label: `Slack #${channel}`
-    });
-  }
-
-  if (timeline.teamsThread) {
-    ranking.push({
-      source: `teams:${timeline.teamsThread.channelId}`,
-      role: hasSubstantiveThreadMessages(timeline.teamsThread.messages.map((message) => message.text))
-        ? "rationale"
-        : "provenance",
-      label: "Teams thread"
-    });
-  }
-
-  const focus = timeline.focusCommit ?? timeline.originalCommit;
-  const introduction = timeline.originalCommit;
-  const focusIsIntroduction = Boolean(
-    focus && introduction && focus.sha === introduction.sha
-  );
-
-  if (focus) {
-    const existingRicherSources = ranking.some((entry) => entry.role === "rationale");
-    const commitIsAskAligned = focusCommitScore > 0;
-    ranking.push({
-      source: `commit:${focus.sha}`,
-      role: hasHighSignalFocusCommitMessage || commitIsAskAligned
-        ? existingRicherSources && !commitIsAskAligned
-          ? "provenance"
-          : "rationale"
-        : existingRicherSources
-          ? "background"
-          : "provenance",
-      label: focusIsIntroduction
-        ? `Commit ${focus.sha.slice(0, 7)}`
-        : `Recent commit ${focus.sha.slice(0, 7)}`
-    });
-  }
-
-  if (introduction && !focusIsIntroduction) {
-    ranking.push({
-      source: `commit:${introduction.sha}`,
-      role: "background",
-      label: `Introduced in ${introduction.sha.slice(0, 7)}`
-    });
-  }
-
-  const deduped: DecisionRationaleRank[] = [];
-  const seen = new Set<string>();
-  for (const entry of ranking) {
-    const key = `${entry.source}|${entry.label}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    deduped.push(entry);
-  }
-
-  // Prefer file/ask-aligned commit as primary rationale when the PR was demoted.
-  if (!prRelevant && focus && focusCommitScore > 0) {
-    const commitIdx = deduped.findIndex((entry) => entry.source === `commit:${focus.sha}`);
-    const prIdx = deduped.findIndex((entry) => entry.source.startsWith("pr:"));
-    if (commitIdx >= 0) {
-      deduped[commitIdx] = { ...deduped[commitIdx], role: "rationale" };
-    }
-    if (prIdx >= 0 && deduped[prIdx].role === "rationale") {
-      deduped[prIdx] = { ...deduped[prIdx], role: "provenance" };
-    }
-  }
-
-  const hasRationale = deduped.some((entry) => entry.role === "rationale");
-  if (!hasRationale && deduped.length > 0) {
-    deduped[0] = { ...deduped[0], role: "rationale" };
-  }
-
-  return deduped;
-}
-
-function hasSubstantiveThreadMessages(messages: string[]): boolean {
-  return messages.some((message) => message.replace(/\s+/g, " ").trim().length >= 80);
 }
 
 function formatTargetLabel(file: string, lineRange?: LineRange): string {

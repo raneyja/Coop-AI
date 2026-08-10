@@ -116,6 +116,32 @@ export function isQuickActionBlocked(actionId: QuickActionId, context: RepoConte
   return !hasExplicitRepoSelection(context);
 }
 
+/**
+ * Suggest-chip gate — slightly looser than the grid for Understand Repo.
+ * A sticky file chip still means the user has a Use-repo; accepting Understand
+ * clears the file before running. Do not hide chips for a clearly repo-wide ask.
+ */
+export function isQuickActionBlockedForSuggest(
+  actionId: QuickActionId,
+  context: RepoContext
+): boolean {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
+    return true;
+  }
+  if (actionId === "understand-repo") {
+    if (hasExplicitRepoSelection(context)) {
+      return false;
+    }
+    // File-scoped Use-repo still has owner/repo coordinates.
+    return !(
+      Boolean(context.file?.trim()) &&
+      Boolean(context.owner?.trim()) &&
+      Boolean(context.repo?.trim())
+    );
+  }
+  return isQuickActionBlocked(actionId, context);
+}
+
 /** Explicit explorer "Use repo" with coordinates — not Settings prefs alone. */
 export function hasExplicitRepoSelection(context: RepoContext): boolean {
   return (

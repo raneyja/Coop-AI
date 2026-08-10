@@ -9,14 +9,16 @@ import {
 } from "../prompts/decisionSourceLabels";
 import {
   IntegrationResultBadge,
-  IntegrationResultCode,
   IntegrationResultCollapsible,
   IntegrationResultNested,
   IntegrationResultSection,
   IntegrationResultText
 } from "./components/IntegrationResultCard";
+import { EvidenceSourcePreview } from "./components/EvidenceSourcePreview";
+import { EvidenceFileSourcePreview } from "./components/EvidenceFileSourcePreview";
 import { ChatActionLink } from "./components/ChatActionLink";
 import { useChatLinks } from "./components/ChatLinkContext";
+import { buildDeterministicEvidencePreview } from "../context/evidenceBodyPreview";
 import { type IntegrationSourceId } from "./components/IntegrationSourceBrand";
 import { evidenceSectionDomId, EvidenceCardShell } from "./EvidenceCardShell";
 import {
@@ -235,10 +237,15 @@ export function DecisionTimeline({
           {timeline.codeSnippet ? (
             <IntegrationResultCollapsible
               title="Code under investigation"
+              subtitle={
+                expanded.code
+                  ? undefined
+                  : truncateSingleLine(timeline.codeSnippet.replace(/\s+/g, " "), 100)
+              }
               open={expanded.code}
               onToggle={() => toggle("code")}
             >
-              <IntegrationResultCode>{timeline.codeSnippet}</IntegrationResultCode>
+              <EvidenceFileSourcePreview path={timeline.file} content={timeline.codeSnippet} />
             </IntegrationResultCollapsible>
           ) : null}
 
@@ -371,13 +378,12 @@ export function DecisionTimeline({
               link={timeline.slackThread.permalink}
               linkLabel="Open in Slack"
             >
-              <ExpandableMessageList
-                messages={timeline.slackThread.messages.map((m) => ({
-                  user: m.user,
-                  text: m.text,
-                  time: m.ts
-                }))}
-                previewCount={2}
+              <EvidenceSourcePreview
+                overview={timeline.slackThread.overview}
+                rawText={timeline.slackThread.messages
+                  .slice(0, 8)
+                  .map((m) => `${m.user}: ${m.text}`)
+                  .join("\n")}
               />
             </IntegrationResultCollapsible>
           </EvidenceConnectionGroup>
@@ -405,13 +411,12 @@ export function DecisionTimeline({
               open={expanded.teams}
               onToggle={() => toggle("teams")}
             >
-              <ExpandableMessageList
-                messages={timeline.teamsThread.messages.map((m) => ({
-                  user: m.user,
-                  text: m.text,
-                  time: m.date
-                }))}
-                previewCount={2}
+              <EvidenceSourcePreview
+                overview={timeline.teamsThread.overview}
+                rawText={timeline.teamsThread.messages
+                  .slice(0, 8)
+                  .map((m) => `${m.user}: ${m.text}`)
+                  .join("\n")}
               />
             </IntegrationResultCollapsible>
           </EvidenceConnectionGroup>
@@ -523,7 +528,7 @@ function ChronologyView({ events }: { events: DecisionTimelineData["chronology"]
 }
 
 function CommitBlock({ commit }: { commit: NonNullable<DecisionTimelineData["originalCommit"]> }): React.ReactElement {
-  return <IntegrationResultCode>{commit.message}</IntegrationResultCode>;
+  return <EvidenceSourcePreview overview={commit.overview} rawText={commit.message} />;
 }
 
 function PrBlock({
@@ -544,7 +549,9 @@ function PrBlock({
       {pr.approvers.length > 0 ? (
         <IntegrationResultText muted>Approvers: {pr.approvers.join(", ")}</IntegrationResultText>
       ) : null}
-      {pr.description ? <IntegrationResultCode>{pr.description}</IntegrationResultCode> : null}
+      {pr.description || pr.overview ? (
+        <EvidenceSourcePreview overview={pr.overview} rawText={pr.description} />
+      ) : null}
       {pr.reviews.length > 0 ? (
         <IntegrationResultCollapsible
           title={`Review comments (${pr.reviews.length})`}
@@ -553,21 +560,23 @@ function PrBlock({
           onToggle={onToggleReviews}
         >
           <ul className="space-y-2">
-            {pr.reviews.slice(0, 12).map((review) => (
+            {pr.reviews.slice(0, 8).map((review) => (
               <li key={review.id}>
                 <IntegrationResultNested>
                   <p className="text-[10px] text-[var(--coop-panel-muted)]">
                     @{review.author}
                     {review.path ? ` · ${review.path}:${review.line ?? "?"}` : ""} · {formatDate(review.createdAt)}
                   </p>
-                  <p className="mt-0.5 whitespace-pre-wrap coop-result-message-text">{review.body}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap coop-result-message-text">
+                    {buildDeterministicEvidencePreview(review.body)}
+                  </p>
                 </IntegrationResultNested>
               </li>
             ))}
           </ul>
-          {pr.reviews.length > 12 ? (
+          {pr.reviews.length > 8 ? (
             <IntegrationResultText muted>
-              {pr.reviews.length - 12} more comments not shown.
+              {pr.reviews.length - 8} more comments — open the PR for the full review thread.
             </IntegrationResultText>
           ) : null}
         </IntegrationResultCollapsible>
@@ -594,15 +603,17 @@ function JiraBlock({
         <div>
           <p className="coop-result-section-label">Acceptance criteria</p>
           <ul className="list-disc pl-4">
-            {ticket.acceptanceCriteria.map((item) => (
+            {ticket.acceptanceCriteria.slice(0, 6).map((item) => (
               <li key={item} className="coop-result-text">
-                {item}
+                {buildDeterministicEvidencePreview(item)}
               </li>
             ))}
           </ul>
         </div>
       ) : null}
-      {!compact && ticket.description ? <IntegrationResultCode>{ticket.description}</IntegrationResultCode> : null}
+      {!compact && (ticket.description || ticket.overview) ? (
+        <EvidenceSourcePreview overview={ticket.overview} rawText={ticket.description} />
+      ) : null}
     </div>
   );
 }
@@ -626,44 +637,6 @@ function AlternativesList({
         </li>
       ))}
     </ul>
-  );
-}
-
-function ExpandableMessageList({
-  messages,
-  previewCount = 2
-}: {
-  messages: Array<{ user: string; text: string; time: string }>;
-  previewCount?: number;
-}): React.ReactElement {
-  const [showAll, setShowAll] = useState(messages.length <= previewCount);
-  const visible = showAll ? messages : messages.slice(0, previewCount);
-  const hiddenCount = messages.length - previewCount;
-
-  return (
-    <div className="space-y-2">
-      <ul className="coop-result-message-list space-y-2">
-        {visible.map((message, index) => (
-          <li key={`${message.time}-${index}`}>
-            <IntegrationResultNested>
-              <p className="coop-result-message-meta">
-                @{message.user} · {formatDate(message.time)}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap coop-result-message-text">{message.text}</p>
-            </IntegrationResultNested>
-          </li>
-        ))}
-      </ul>
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          className="coop-text-btn text-[11px]"
-          onClick={() => setShowAll((current) => !current)}
-        >
-          {showAll ? "Show fewer messages" : `Show ${hiddenCount} more message${hiddenCount === 1 ? "" : "s"}`}
-        </button>
-      ) : null}
-    </div>
   );
 }
 

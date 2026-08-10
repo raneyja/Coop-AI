@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import {
   extractTraceFocusTerms,
+  extractTraceSymbolTerms,
+  isMegaDriveByCommit,
+  isOversizedCommitMessage,
   linkedPrRelevantToTraceTarget,
   partitionReviewsForTraceTarget,
+  scoreCommitMessageForTraceFocus,
   scoreTextForTraceFocus,
   tracePathsReferToSameFile
 } from "./traceFileGrounding";
@@ -54,6 +58,50 @@ async function run(): Promise<void> {
     );
     assert.ok(stateScore > migrationScore, `expected ${stateScore} > ${migrationScore}`);
     assert.ok(stateScore > 0);
+  });
+
+  await test("Z3 Gate A: session-auth full body scores 0 (subject + symbol only)", () => {
+    const terms = extractTraceFocusTerms({
+      file: "apps/api/plane/db/models/state.py",
+      userFocus: "Why do we model StateGroup this way?"
+    });
+    const symbols = extractTraceSymbolTerms({
+      userFocus: "Why do we model StateGroup this way?"
+    });
+    const megaBody = [
+      "feat: session auth implementation (#4411)",
+      "",
+      "* chore: instance empty state for god-mode.",
+      "* fix: state of the session store"
+    ].join("\n");
+    assert.equal(scoreCommitMessageForTraceFocus(megaBody, terms, symbols), 0);
+    assert.ok(isOversizedCommitMessage(megaBody + "\n".repeat(50) + "x".repeat(1500)));
+  });
+
+  await test("Z3 Gate A: session-auth message scores 0 against StateGroup ask", () => {
+    const terms = extractTraceFocusTerms({
+      file: "apps/api/plane/db/models/state.py",
+      userFocus: "Why do we model StateGroup this way?"
+    });
+    const authScore = scoreTextForTraceFocus("feat: session auth implementation (#4411)", terms);
+    assert.equal(authScore, 0);
+  });
+
+  await test("scoreTextForTraceFocus does not treat statement as state", () => {
+    assert.equal(scoreTextForTraceFocus("clarify the statement in docs", ["state"]), 0);
+  });
+
+  await test("extractTraceSymbolTerms picks StateGroup from ask", () => {
+    const symbols = extractTraceSymbolTerms({
+      userFocus: "Why do we model issue states with StateGroup this way?"
+    });
+    assert.ok(symbols.includes("stategroup"));
+  });
+
+  await test("isMegaDriveByCommit flags large unaligned touches", () => {
+    assert.equal(isMegaDriveByCommit({ filesChanged: 87, focusScore: 0 }), true);
+    assert.equal(isMegaDriveByCommit({ filesChanged: 87, focusScore: 5 }), false);
+    assert.equal(isMegaDriveByCommit({ filesChanged: undefined, focusScore: 0 }), false);
   });
 
   await test("selectFocusCommit ranks open-file ask over unrelated high-signal commit", () => {

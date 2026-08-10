@@ -32,7 +32,9 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
     hasPaperclipAttachments: requestHasPaperclipAttachments(request)
   });
   const instructionsBlock =
-    request.useCase !== "inline_completion"
+    request.useCase !== "inline_completion" &&
+    request.useCase !== "intent_suggest" &&
+    request.useCase !== "evidence_preview"
       ? buildProjectInstructionsSystemBlock((request.context?.projectInstructions?.length ?? 0) > 0)
       : "";
   return `${basePrompt}${instructionsBlock}`;

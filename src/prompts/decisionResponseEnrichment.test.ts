@@ -265,6 +265,48 @@ test("enrichTraceDecisionResponse injects commit/PR when model did a code walkth
   assert.ok(enriched.includes("**Sources**") || enriched.includes("[Sources: GitHub commit"));
 });
 
+test("Z3 Gate B: does not force-cite mega demoted focus as the decision", () => {
+  const megaTimeline: DecisionTimeline = {
+    ...thinTimeline,
+    focusCommit: {
+      sha: "5933561abcdef",
+      author: "dev",
+      date: "2024-06-01",
+      message: "feat: session auth implementation (#4411)"
+    },
+    focusDecisionQuality: "weak",
+    focusIsMegaDriveBy: true,
+    linkedPR: {
+      number: 4411,
+      title: "feat: session auth implementation",
+      description: "Auth overhaul",
+      state: "merged",
+      labels: [],
+      reviews: [],
+      approvers: []
+    }
+  };
+
+  const walkthrough = [
+    "**Summary**",
+    "StateGroup categorizes work item states.",
+    "",
+    "**Technical decision**",
+    "Implemented as TextChoices."
+  ].join("\n");
+
+  const enriched = enrichTraceDecisionResponse({
+    content: walkthrough,
+    userQuestion: "Why do we model StateGroup this way?",
+    contextBundle: [{ type: "decision_history", data: { timeline: megaTimeline } }],
+    activeFile: "apps/api/plane/db/models/state.py",
+    fallbackTimeline: megaTimeline
+  });
+
+  assert.equal(enriched.includes("Decision history for"), false);
+  assert.equal(enriched.includes("5933561"), false);
+});
+
 test("enrichTraceDecisionResponse leaves answers that already cite the commit", () => {
   const cited = [
     "**Summary**",

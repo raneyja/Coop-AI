@@ -48,7 +48,18 @@ const STOP_TERMS = new Set([
   "please",
   "code",
   "file",
-  "here"
+  "here",
+  // Ask-noise that false-matches mega PR bodies ("empty state", "issue", …)
+  "issue",
+  "issues",
+  "work",
+  "item",
+  "items",
+  "states",
+  "change",
+  "changes",
+  "using",
+  "used"
 ]);
 
 const BULK_RENAME_COMMIT_RE =
@@ -121,24 +132,153 @@ export function extractTraceFocusTerms(options: {
   return [...new Set(terms)].slice(0, 24);
 }
 
-/** Score how well free text matches Trace focus terms (0 = no overlap). */
+/**
+ * Symbol-like terms from the ask/snippet (PascalCase / longer identifiers).
+ * Used for introduction archaeology — prefer commits that mention StateGroup
+ * over the birth-of-file touch.
+ */
+export function extractTraceSymbolTerms(options: {
+  userFocus?: string;
+  codeSnippet?: string;
+}): string[] {
+  const terms: string[] = [];
+  for (const chunk of [options.userFocus, options.codeSnippet]) {
+    if (!chunk?.trim()) {
+      continue;
+    }
+    for (const match of chunk.matchAll(/\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+\b/g)) {
+      terms.push(match[0].toLowerCase());
+    }
+    for (const match of chunk.matchAll(/\b[A-Za-z_][A-Za-z0-9_]{7,}\b/g)) {
+      const lower = match[0].toLowerCase();
+      if (!STOP_TERMS.has(lower)) {
+        terms.push(lower);
+      }
+    }
+  }
+  return [...new Set(terms)].slice(0, 12);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Word-boundary (or snake/kebab) match — avoids `state` hitting `statement`. */
+export function textContainsFocusTerm(haystack: string, term: string): boolean {
+  const needle = term.toLowerCase().trim();
+  if (needle.length < 3) {
+    return false;
+  }
+  const lower = haystack.toLowerCase();
+  if (new RegExp(`(?:^|[^a-z0-9_])${escapeRegExp(needle)}(?:[^a-z0-9_]|$)`).test(lower)) {
+    return true;
+  }
+  // stategroup ↔ "state group" / "state-group"
+  if (needle.length >= 8) {
+    for (const suffix of ["group", "type", "status", "state", "mode", "kind"]) {
+      if (needle.endsWith(suffix) && needle.length > suffix.length + 2) {
+        const head = needle.slice(0, -suffix.length);
+        const phrase = `${head} ${suffix}`;
+        if (lower.includes(phrase) || lower.includes(`${head}-${suffix}`)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Score how well free text matches Trace focus terms (0 = no overlap).
+ * Longer / symbol terms outweigh short file stems; a lone short stem is not enough.
+ */
 export function scoreTextForTraceFocus(text: string, focusTerms: string[]): number {
   if (!text.trim() || focusTerms.length === 0) {
     return 0;
   }
-  const haystack = text.toLowerCase();
   let score = 0;
+  let longHits = 0;
+  let shortHits = 0;
   for (const term of focusTerms) {
     const needle = term.toLowerCase();
     if (needle.length < 3) {
       continue;
     }
-    if (haystack.includes(needle)) {
-      // Longer / more specific tokens weigh more (StateGroup > state).
-      score += Math.min(6, Math.floor(needle.length / 2));
+    if (!textContainsFocusTerm(text, needle)) {
+      continue;
+    }
+    if (needle.length >= 8) {
+      score += Math.min(8, Math.floor(needle.length / 2) + 2);
+      longHits += 1;
+    } else if (needle.length >= 6) {
+      score += 3;
+      shortHits += 1;
+    } else {
+      // length 3–5 (e.g. "state", "group"): weak alone
+      score += 1;
+      shortHits += 1;
     }
   }
+  // Single short-stem hit (file stem pollution) does not count as ask alignment.
+  if (longHits === 0 && shortHits <= 1 && score < 3) {
+    return 0;
+  }
   return score;
+}
+
+/** First line / subject only — never score mega-PR bodies (Z3 false "empty state" hits). */
+export function commitSubjectForTraceFocus(message: string): string {
+  const firstLine = message.split(/\r?\n/, 1)[0] ?? "";
+  return firstLine.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+/** True when the commit message is a huge multi-section body (drive-by mega-PR). */
+export function isOversizedCommitMessage(message: string): boolean {
+  const trimmed = message.trim();
+  if (trimmed.length >= 1500) {
+    return true;
+  }
+  return trimmed.split(/\r?\n/).length >= 40;
+}
+
+/**
+ * Score a commit for Trace focus. Uses subject line only.
+ * When symbol terms exist (StateGroup), require a symbol hit — short stems alone never align.
+ */
+export function scoreCommitMessageForTraceFocus(
+  message: string,
+  focusTerms: string[],
+  symbolTerms: string[] = []
+): number {
+  const subject = commitSubjectForTraceFocus(message);
+  if (!subject) {
+    return 0;
+  }
+  if (symbolTerms.length > 0) {
+    const symbolScore = scoreTextForTraceFocus(subject, symbolTerms);
+    if (symbolScore <= 0) {
+      return 0;
+    }
+    // Symbol hit is the alignment signal; add mild subject stem boost.
+    return symbolScore + scoreTextForTraceFocus(subject, focusTerms);
+  }
+  return scoreTextForTraceFocus(subject, focusTerms);
+}
+
+/** Large multi-file commit with no ask alignment — typical drive-by mega-PR. */
+export function isMegaDriveByCommit(options: {
+  filesChanged?: number;
+  focusScore: number;
+  message?: string;
+}): boolean {
+  if (options.focusScore > 0) {
+    return false;
+  }
+  if (options.message && isOversizedCommitMessage(options.message)) {
+    return true;
+  }
+  const n = options.filesChanged ?? 0;
+  return n >= 20;
 }
 
 export function isBulkRenameOrMoveCommit(message: string, filesChanged?: number): boolean {

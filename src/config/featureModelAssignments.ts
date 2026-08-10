@@ -9,7 +9,13 @@ import {
   resolveInlineModelPreset
 } from "./inlineModelPresets";
 
-export type CoopFeatureId = "chat" | "quickActions" | "edit" | "autocomplete";
+export type CoopFeatureId =
+  | "chat"
+  | "quickActions"
+  | "edit"
+  | "autocomplete"
+  | "intentSuggest"
+  | "evidencePreview";
 
 export type FeatureModelAssignment = {
   feature: CoopFeatureId;
@@ -47,6 +53,20 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
     provider: "mistral",
     model: FIM_MISTRAL_MODEL,
     note: "Codestral FIM when available on the server"
+  },
+  {
+    feature: "intentSuggest",
+    label: "Intent suggest",
+    provider: "openai",
+    model: "gpt-4o-mini",
+    note: "Cheap classifier for quick-action chips when phrase match is weak"
+  },
+  {
+    feature: "evidencePreview",
+    label: "Sources expand preview",
+    provider: "openai",
+    model: "gpt-4o-mini",
+    note: "Short AI overview for expanded source cards (commits, PRs, threads)"
   }
 ];
 
@@ -132,6 +152,12 @@ export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {
   }
   if (useCase === "inline_completion") {
     return "autocomplete";
+  }
+  if (useCase === "intent_suggest") {
+    return "intentSuggest";
+  }
+  if (useCase === "evidence_preview") {
+    return "evidencePreview";
   }
   if (useCase === "chat") {
     return "chat";

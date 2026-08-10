@@ -15,7 +15,9 @@ export type UseCase =
   | "integration"
   | "chat"
   | "code_edit"
-  | "inline_completion";
+  | "inline_completion"
+  | "intent_suggest"
+  | "evidence_preview";
 
 export type FinishReason = "stop" | "length" | "error" | "cancelled";
 

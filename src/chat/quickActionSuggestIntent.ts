@@ -7,7 +7,7 @@
  */
 import type { RepoContext } from "./types";
 import type { QuickActionId } from "../webview/types";
-import { isQuickActionBlocked } from "../context/quickActionScope";
+import { isQuickActionBlockedForSuggest } from "../context/quickActionScope";
 import { SLASH_COMMANDS } from "../context/slashCommands";
 
 export type SuggestConfidence = "high" | "medium" | "low";
@@ -357,6 +357,10 @@ function applyCollisionAdjustments(message: string, scores: Map<QuickActionId, n
       /\bdependents?\b/i.test(message) ||
       /\bcallers?\b/i.test(message) ||
       /\bchange\s+impact\b/i.test(message) ||
+      /\bimpact\s+of\s+(?:changing|editing|renaming|deleting|removing|refactoring|modifying)\b/i.test(
+        message
+      ) ||
+      /\bestimate\s+(?:the\s+)?(?:change\s+)?impact\b/i.test(message) ||
       /\baffected\b/i.test(message) ||
       /\bdownstream\b/i.test(message) ||
       /\bsafe\s+to\s+(?:change|rename|delete|remove)\b/i.test(message) ||
@@ -399,6 +403,25 @@ function clarifyingPromptFor(suggestions: QuickActionSuggestion[]): string {
     return CLARIFY_BY_ACTION[suggestions[0]!.actionId];
   }
   return AMBIGUOUS_CLARIFY;
+}
+
+/** Build a suggest offer from a single model-classified action. */
+export function offerFromActionId(
+  actionId: QuickActionId,
+  confidence: SuggestConfidence = "medium"
+): SuggestQuickActionsResult {
+  const suggestions: QuickActionSuggestion[] = [
+    {
+      actionId,
+      score: confidence === "high" ? 5 : 3,
+      label: labelFor(actionId)
+    }
+  ];
+  return {
+    confidence,
+    suggestions,
+    clarifyingPrompt: clarifyingPromptFor(suggestions)
+  };
 }
 
 /**
@@ -467,12 +490,12 @@ export function suggestQuickActions(
   };
 }
 
-/** Drop actions the grid would block for the current context. */
+/** Drop actions that cannot run from suggest chips in the current context. */
 export function filterSuggestableActions(
   suggestions: QuickActionSuggestion[],
   context: RepoContext
 ): QuickActionSuggestion[] {
-  return suggestions.filter((entry) => !isQuickActionBlocked(entry.actionId, context));
+  return suggestions.filter((entry) => !isQuickActionBlockedForSuggest(entry.actionId, context));
 }
 
 /** True when the classifier wants an interrupt (chips) instead of plain gather. */

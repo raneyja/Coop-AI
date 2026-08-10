@@ -5,7 +5,6 @@ import type {
 } from "../types/decisionTimeline";
 import {
   IntegrationResultBadge,
-  IntegrationResultCode,
   IntegrationResultCollapsible,
   IntegrationResultSection
 } from "./components/IntegrationResultCard";
@@ -175,7 +174,13 @@ export function EvidenceDiffSummary({
     >
       <p className="coop-result-text coop-result-text--muted">{diff.summary}</p>
       {patchStats ? <p className="coop-result-text coop-result-text--muted">{patchStats}</p> : null}
-      {diff.patchExcerpt ? <IntegrationResultCode>{diff.patchExcerpt}</IntegrationResultCode> : null}
+      {diff.patchExcerpt ? (
+        <p className="coop-result-text whitespace-pre-wrap">
+          {diff.patchExcerpt.length > 280
+            ? `${diff.patchExcerpt.slice(0, 279).trimEnd()}…`
+            : diff.patchExcerpt}
+        </p>
+      ) : null}
     </IntegrationResultCollapsible>
   );
 }

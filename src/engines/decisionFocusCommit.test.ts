@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import type { CommitInfo } from "../api/codeHosts/types";
 import {
   pickRecentEvolutionCommits,
-  selectFocusCommit
+  selectFocusCommit,
+  selectFocusCommitWithMeta
 } from "./decisionFocusCommit";
 import type { DecisionCommit } from "../types/decisionTimeline";
 
@@ -73,6 +74,76 @@ async function run(): Promise<void> {
       recentCommits: [recentWeak, recentStrong]
     });
     assert.equal(focus.sha, recentStrong.sha);
+  });
+
+  await test("Z3 Gate A: auth mega-PR must not become focus for StateGroup ask", () => {
+    const introduction = commit({
+      sha: "intro001",
+      message: "Initial models for plane db state helpers."
+    });
+    const authMega = commit({
+      sha: "5933561",
+      message: [
+        "feat: session auth implementation (#4411)",
+        "",
+        "* chore: instance empty state for god-mode.",
+        "* fix: state of the session store",
+        "x".repeat(1600)
+      ].join("\n")
+    });
+    const focus = selectFocusCommit({
+      introduction,
+      recentCommits: [authMega],
+      focusTerms: ["stategroup", "state", "group"],
+      symbolTerms: ["stategroup"]
+    });
+    assert.notEqual(focus.sha, authMega.sha, "auth mega must not win");
+    assert.equal(focus.sha, introduction.sha);
+  });
+
+  await test("Z3 Gate A: prefers StateGroup-aligned commit deeper in score window", () => {
+    const introduction = commit({
+      sha: "intro001",
+      message: "Initial models for plane db helpers."
+    });
+    const authMega = commit({
+      sha: "5933561",
+      message: "feat: session auth implementation (#4411)\n\nempty state for god-mode\n" + "x".repeat(1600)
+    });
+    const noise = commit({
+      sha: "noise002",
+      message: "chore: bump dependency versions across workspace packages."
+    });
+    const aligned = commit({
+      sha: "state9a1",
+      message: "fix: refine StateGroup choices for backlog triage modeling."
+    });
+    const focus = selectFocusCommit({
+      introduction,
+      recentCommits: [authMega, noise, aligned],
+      focusTerms: ["stategroup", "state"],
+      symbolTerms: ["stategroup"]
+    });
+    assert.equal(focus.sha, aligned.sha);
+  });
+
+  await test("Z3 Gate B: mega drive-by with filesChanged is demoted when score is 0", () => {
+    const introduction = commit({
+      sha: "intro001",
+      message: "Initial state model scaffold for plane."
+    });
+    const mega = commit({
+      sha: "megaauth",
+      message: "feat: session auth implementation across services (#4411)"
+    });
+    const meta = selectFocusCommitWithMeta({
+      introduction,
+      recentCommits: [mega],
+      focusTerms: ["stategroup", "state"],
+      filesChangedBySha: { megaauth: 87 }
+    });
+    assert.equal(meta.commit.sha, introduction.sha);
+    assert.equal(meta.quality, "weak");
   });
 
   await test("selectFocusCommit prefers ask-aligned commit over unrelated high-signal recent", () => {

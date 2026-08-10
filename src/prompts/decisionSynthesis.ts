@@ -308,6 +308,15 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
     );
   }
 
+  if (timeline.focusDecisionQuality === "weak" || timeline.focusIsMegaDriveBy) {
+    sections.push(
+      "### Focus confidence\n" +
+        `- quality: ${timeline.focusDecisionQuality ?? "unknown"}` +
+        (timeline.focusIsMegaDriveBy ? "\n- megaDriveBy: true" : "") +
+        "\n- Instruction: Do NOT claim this focus commit/PR as the design rationale for the user's ask. Say the decision record is unclear and keep Sources as provenance only."
+    );
+  }
+
   if (timeline.linkedPR) {
     const pr = timeline.linkedPR;
     sections.push(

@@ -271,7 +271,37 @@ export class BitbucketClient implements CodeHostClient {
         rateLimitTracker: this.options.rateLimitTracker
       }
     );
-    return mapBitbucketCommit(commit);
+    const mapped = mapBitbucketCommit(commit);
+    const filesChanged = await this.getCommitDiffstatPaths(coords, sha).catch(() => undefined);
+    if (filesChanged?.length) {
+      mapped.filesChanged = filesChanged;
+    }
+    return mapped;
+  }
+
+  /**
+   * Bitbucket Cloud diffstat for a commit (vs first parent). Used for mega-PR
+   * demotion and introducing-diff honesty — Trace Decision Phase B.
+   */
+  private async getCommitDiffstatPaths(coords: RepoCoordinates, sha: string): Promise<string[]> {
+    const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketDiffstat>>(
+      `${this.repoUrl(coords)}/diffstat/${encodeURIComponent(sha)}?pagelen=100`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const paths = new Set<string>();
+    for (const entry of payload.values ?? []) {
+      if (entry.new?.path) {
+        paths.add(entry.new.path);
+      }
+      if (entry.old?.path) {
+        paths.add(entry.old.path);
+      }
+    }
+    return [...paths];
   }
 
   public async getBlameData(coords: RepoCoordinates, filePath: string): Promise<BlameData> {

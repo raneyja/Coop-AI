@@ -6,6 +6,8 @@ export type DecisionCommit = {
   date: string;
   message: string;
   htmlUrl?: string;
+  /** Short Sources expand overview (AI or deterministic) — never the full body. */
+  overview?: string;
 };
 
 export type DecisionReview = {
@@ -34,6 +36,8 @@ export type DecisionSlackThread = {
   participants: string[];
   /** How confidently this thread relates to the traced code (weak matches are not attached). */
   relevance?: "direct" | "linked";
+  /** Short Sources expand overview — never full thread dump. */
+  overview?: string;
 };
 
 export type DecisionTeamsThread = {
@@ -42,6 +46,8 @@ export type DecisionTeamsThread = {
   rootMessageId: string;
   messages: Array<{ user: string; text: string; date: string }>;
   participants: string[];
+  /** Short Sources expand overview — never full thread dump. */
+  overview?: string;
 };
 
 export type DecisionJiraTicket = {
@@ -52,6 +58,8 @@ export type DecisionJiraTicket = {
   acceptanceCriteria: string[];
   technicalDebt: boolean;
   htmlUrl: string;
+  /** Short Sources expand overview — never full description dump. */
+  overview?: string;
 };
 
 export type ChronologyEvent = {
@@ -130,6 +138,14 @@ export type DecisionTimeline = {
    * Full-file traces prefer a recent evolution commit; line traces keep blame introduction.
    */
   focusCommit?: DecisionCommit;
+  /**
+   * How strongly focusCommit matches the user's ask.
+   * aligned = message/symbol hit; weak = no ask match (do not force as "why");
+   * unknown = no concrete ask terms.
+   */
+  focusDecisionQuality?: "aligned" | "weak" | "unknown";
+  /** Mega drive-by focus — provenance only; never sole rationale under a concrete ask. */
+  focusIsMegaDriveBy?: boolean;
   introducingDiffSummary?: DecisionIntroducingDiffSummary;
   evolution?: DecisionEvolution;
   rationaleRanking?: DecisionRationaleRank[];
@@ -143,6 +159,8 @@ export type DecisionTimeline = {
     reviews: DecisionReview[];
     approvers: string[];
     updatedAt?: string;
+    /** Short Sources expand overview — never full PR body dump. */
+    overview?: string;
   };
   alternatives: DecisionAlternative[];
   slackThread?: DecisionSlackThread;

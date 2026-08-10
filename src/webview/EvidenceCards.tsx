@@ -72,6 +72,8 @@ import {
   IntegrationResultCollapsible,
   IntegrationResultText
 } from "./components/IntegrationResultCard";
+import { EvidenceFileSourcePreview } from "./components/EvidenceFileSourcePreview";
+import { useChatLinks } from "./components/ChatLinkContext";
 import type { ConflictSummary } from "./types";
 import {
   IntegrationSourceChip,
@@ -99,6 +101,7 @@ export function RepoSummaryEvidenceCard({
   actionContext: EvidenceActionContext;
   codeHost?: string;
 }): React.ReactElement {
+  const { onOpenFile } = useChatLinks();
   const host = evidenceCodeHostConnection(codeHost);
   const [expanded, setExpanded] = useState({
     manifest: true,
@@ -207,13 +210,29 @@ export function RepoSummaryEvidenceCard({
               onToggle={() => setExpanded((state) => ({ ...state, entry: !state.entry }))}
             >
               <IntegrationResultText muted>
-                Key README, package, and entry-point files we loaded to anchor the repo-wide summary (up to six).
+                Key README, package, and entry-point files we loaded to anchor the repo-wide summary.
+                Previews stay short — open a file for the full source.
               </IntegrationResultText>
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 space-y-3">
                 {evidence.entryFiles!.slice(0, 12).map((file) => (
-                  <li key={file.path} className="coop-result-text">
-                    <code>{file.path}</code>
-                    {file.truncated ? " (truncated)" : ""}
+                  <li key={file.path} className="space-y-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <code className="coop-result-text">{file.path}</code>
+                      {onOpenFile ? (
+                        <button
+                          type="button"
+                          className="coop-text-btn shrink-0 text-[11px]"
+                          onClick={() => onOpenFile(file.path)}
+                        >
+                          Open file
+                        </button>
+                      ) : null}
+                    </div>
+                    {file.content?.trim() ? (
+                      <EvidenceFileSourcePreview path={file.path} content={file.content} />
+                    ) : file.truncated ? (
+                      <IntegrationResultText muted>Truncated in bundle — open the file for full source.</IntegrationResultText>
+                    ) : null}
                   </li>
                 ))}
                 {entryCount > 12 ? (

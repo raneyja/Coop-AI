@@ -385,7 +385,9 @@ function readUseCase(value: unknown): UseCase {
     "integration",
     "chat",
     "code_edit",
-    "inline_completion"
+    "inline_completion",
+    "intent_suggest",
+    "evidence_preview"
   ];
   if (typeof value === "string" && (allowed as string[]).includes(value)) {
     return value as UseCase;

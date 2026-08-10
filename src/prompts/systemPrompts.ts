@@ -453,6 +453,31 @@ RULES:
 - If completion would be trivial (only a semicolon), return empty
 - Return ONLY the completion text. No markdown fences, no explanations.`;
 
+/** Tiny JSON classifier — no Cursor output contract / section structure. */
+export const INTENT_SUGGEST_SYSTEM = `You classify whether a developer question should use a Coop quick-action workflow.
+Reply with ONLY a JSON object (no markdown fences, no prose):
+{"action":"none"|"find-owner"|"trace-decision"|"blast-radius"|"understand-repo"|"knowledge-gaps","confidence":"high"|"medium"|"low"}
+
+Rules:
+- Prefer "none" when unsure, or when the user wants a normal code explanation.
+- "blast-radius": change impact, what breaks, callers/dependents of a change.
+- "find-owner": who owns, maintains, or should be asked about this code.
+- "trace-decision": why this was written this way / decision history.
+- "understand-repo": whole-repo architecture or onboarding overview.
+- "knowledge-gaps": missing docs, undocumented areas, tribal knowledge.
+- Compound asks like "what does this file do, and who calls it?" → "none" (plain answer).
+- Never invent other action ids.`;
+
+/** Short Sources expand overview — no section structure / citation contract. */
+export const EVIDENCE_PREVIEW_SYSTEM = `You write short overviews for Coop Sources expand panels.
+Summarize commit messages, PR bodies, or discussion threads for a software engineer.
+Rules:
+- 1–3 short sentences or up to 4 short lines.
+- Capture what changed or what was decided — not a full changelog dump.
+- No markdown headings. No long bullet lists.
+- Do not invent facts missing from the source text.
+- Reply with ONLY the overview text.`;
+
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
   decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
@@ -462,7 +487,9 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   integration: INTEGRATION_SYSTEM,
   chat: GENERAL_CHAT_SYSTEM,
   code_edit: CODE_EDIT_SYSTEM,
-  inline_completion: INLINE_COMPLETION_PROMPT
+  inline_completion: INLINE_COMPLETION_PROMPT,
+  intent_suggest: INTENT_SUGGEST_SYSTEM,
+  evidence_preview: EVIDENCE_PREVIEW_SYSTEM
 };
 
 /**
@@ -490,6 +517,10 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
       return withPatchOutputContract(CODE_EDIT_BODY, hasPaperclip);
     case "inline_completion":
       return INLINE_COMPLETION_PROMPT;
+    case "intent_suggest":
+      return INTENT_SUGGEST_SYSTEM;
+    case "evidence_preview":
+      return EVIDENCE_PREVIEW_SYSTEM;
   }
 }
 
