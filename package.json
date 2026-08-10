@@ -827,7 +827,7 @@
     "test:existing-capability": "npx tsx src/context/existingCapabilityGrounding.test.ts",
     "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
-    "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts",
+    "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts && npx tsx src/context/knowledgeGapsFocus.test.ts && npx tsx src/context/docSearchQuery.test.ts && npx tsx src/context/integrationDocRelevance.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
     "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",

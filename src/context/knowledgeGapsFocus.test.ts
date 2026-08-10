@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
+import { buildConfluenceCql, buildConfluenceRepoOnlyCql } from "./docSearchQuery";
+import {
+  filterDocPagesForUseRepo,
+  sanitizeIntegrationSnippet,
+  scoreDocPageForUseRepo
+} from "./integrationDocRelevance";
 import {
   knowledgeGapsFocusGatherTerms,
   knowledgeGapsFocusTopics,
   knowledgeGapsFocusTopicGapStubs,
   knowledgeGapsGatherQuery,
+  mergeKnowledgeGapsFocusStubsIntoScan,
   openFileRelatedToGapsFocus,
-  resolveKnowledgeGapsAuditScope
+  resolveKnowledgeGapsAuditScope,
+  stripKnowledgeGapsTopicFraming
 } from "./knowledgeGapsFocus";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
 
@@ -23,6 +31,9 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+const SIGNING_FOCUS =
+  "Where are the biggest documentation or knowledge gaps around signing / document status?";
 
 test("knowledgeGapsGatherQuery keeps focus as primary gather query", () => {
   const focus = "focus on webhook delivery and signature certificates";
@@ -43,6 +54,24 @@ test("knowledgeGapsFocusTopics covers notifications and webhooks", () => {
   const topics = knowledgeGapsFocusTopics("focus on notifications and webhooks");
   assert.ok(topics.some((t) => /notification/i.test(t)));
   assert.ok(topics.some((t) => /webhook/i.test(t)));
+});
+
+test("signing/document-status NL ask extracts subsystem topics — not documentation meta", () => {
+  const stripped = stripKnowledgeGapsTopicFraming(SIGNING_FOCUS);
+  assert.match(stripped, /signing/i);
+  assert.match(stripped, /document status/i);
+  assert.ok(!/^where are/i.test(stripped));
+
+  const topics = knowledgeGapsFocusTopics(SIGNING_FOCUS);
+  assert.ok(topics.some((t) => /^signing$/i.test(t.trim())), `topics=${JSON.stringify(topics)}`);
+  assert.ok(
+    topics.some((t) => /document status/i.test(t)),
+    `topics=${JSON.stringify(topics)}`
+  );
+  assert.ok(
+    !topics.some((t) => /documentation or knowledge/i.test(t)),
+    "must not keep the documentation meta phrase as a topic"
+  );
 });
 
 test("openFileRelatedToGapsFocus rejects unrelated helper file", () => {
@@ -90,6 +119,23 @@ test("knowledgeGapsFocusGatherTerms puts webhook/cert tokens first", () => {
   );
 });
 
+test("focus gather terms for signing ask prefer signing/status — not documentation meta flood", () => {
+  const terms = knowledgeGapsFocusGatherTerms(SIGNING_FOCUS);
+  assert.ok(terms.some((t) => /signing/i.test(t)), `terms=${JSON.stringify(terms)}`);
+  assert.ok(
+    terms.some((t) => /document status|status/i.test(t)),
+    `terms=${JSON.stringify(terms)}`
+  );
+  assert.ok(
+    !terms.some((t) => /^documentation$/i.test(t)),
+    "documentation meta must not be a Confluence search term"
+  );
+  assert.ok(
+    !terms.some((t) => /where are the biggest/i.test(t)),
+    "full NL question must not be pushed as a search term"
+  );
+});
+
 test("knowledgeGapsFocusTopicGapStubs emit no-evidence stubs per topic without hits", () => {
   const stubs = knowledgeGapsFocusTopicGapStubs({
     userFocus: "focus on webhook delivery and signature certificates",
@@ -99,6 +145,51 @@ test("knowledgeGapsFocusTopicGapStubs emit no-evidence stubs per topic without h
   assert.ok(stubs.every((gap) => gap.type === "missing_docs"));
   assert.ok(stubs.some((gap) => String(gap.message).includes("webhook")));
   assert.ok(stubs.some((gap) => String(gap.message).includes("certificate")));
+});
+
+test("signing focus stubs survive weak document-path hits (focus influences Gaps gather)", () => {
+  // Index may return document-status helpers; that must not wipe the signing topic stub,
+  // and must not treat the whole NL ask as "covered" via the word documentation/document.
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: SIGNING_FOCUS,
+    focusHitPaths: [
+      "apps/docs/src/lib/is-document-status.ts",
+      "packages/lib/types/document-status.ts",
+      "README.md"
+    ]
+  });
+  assert.ok(
+    stubs.some((gap) => String(gap.topic ?? gap.message).toLowerCase().includes("signing")),
+    `expected signing stub, got ${JSON.stringify(stubs)}`
+  );
+});
+
+test("mergeKnowledgeGapsFocusStubsIntoScan fills empty job scan with focus stubs", () => {
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: SIGNING_FOCUS,
+    focusHitPaths: []
+  });
+  assert.ok(stubs.length >= 1);
+  const merged = mergeKnowledgeGapsFocusStubsIntoScan(
+    {
+      source: "knowledge-gap-job",
+      cached: false,
+      foundGaps: 0,
+      highPriority: 0,
+      mediumPriority: 0,
+      lowPriority: 0,
+      gaps: []
+    },
+    stubs
+  );
+  assert.ok(merged);
+  assert.ok(Number(merged!.foundGaps) >= 1);
+  assert.ok(Array.isArray(merged!.gaps) && (merged!.gaps as unknown[]).length >= 1);
+  assert.ok(
+    (merged!.gaps as Array<Record<string, unknown>>).some((gap) =>
+      String(gap.message).toLowerCase().includes("signing")
+    )
+  );
 });
 
 test("synthesis builder includes focus as primary topic — not unrelated open-file ownership headline", () => {
@@ -160,6 +251,74 @@ test("synthesis with notifications/webhooks focus keeps focus primary for plane-
   assert.match(prompt, /notifications/i);
   assert.match(prompt, /webhooks/i);
   assert.ok(prompt.includes("secondary — unrelated to focus") || prompt.includes("Open editor (secondary"));
+});
+
+test("buildConfluenceCql ANDs Use-repo with focus extras (no documentation OR bleed)", () => {
+  const cql = buildConfluenceCql("documenso", "documenso", [
+    "signing",
+    "document status",
+    "documentation"
+  ]);
+  assert.ok(cql);
+  assert.match(cql!, /text ~ "documenso"/i);
+  assert.match(cql!, /text ~ "signing"/i);
+  assert.ok(cql!.includes(") AND ("), `expected AND between repo and focus: ${cql}`);
+  assert.ok(!cql!.includes('text ~ "documenso" OR text ~ "signing"'));
+});
+
+test("buildConfluenceRepoOnlyCql is repo-scoped without focus extras", () => {
+  const cql = buildConfluenceRepoOnlyCql("documenso", "documenso");
+  assert.ok(cql);
+  assert.match(cql!, /documenso/i);
+  assert.ok(!cql!.includes("signing"));
+});
+
+test("filterDocPagesForUseRepo drops Coop-AI ADRs when Use-repo is documenso", () => {
+  const pages = filterDocPagesForUseRepo(
+    [
+      {
+        title: "ADR: Webview vs native sidebar (COOP-55)",
+        excerpt: "Coop AI architecture decision record template \uFFFD\uFE0F"
+      },
+      {
+        title: "Coop AI Demo Home",
+        excerpt: "Onboarding templates for Coop-AI"
+      },
+      {
+        title: "Documenso signing status overview",
+        excerpt: "How document status transitions work in documenso"
+      }
+    ],
+    { owner: "documenso", repo: "documenso", focusTerms: ["signing", "document status"] }
+  );
+  assert.equal(pages.length, 1);
+  assert.match(pages[0]!.title, /documenso signing/i);
+  assert.ok(!pages.some((page) => /coop/i.test(page.title)));
+});
+
+test("sanitizeIntegrationSnippet strips mojibake and Confluence highlight markers", () => {
+  const cleaned = sanitizeIntegrationSnippet(
+    "Status \uFFFD\uFE0F ready @@@hl@@@signing@@@endhl@@@ flow"
+  );
+  assert.ok(cleaned);
+  assert.ok(!cleaned!.includes("\uFFFD"));
+  assert.ok(!cleaned!.includes("@@@hl@@@"));
+  assert.match(cleaned!, /Status/);
+  assert.match(cleaned!, /signing/);
+});
+
+test("scoreDocPageForUseRepo penalizes foreign Coop pages for documenso", () => {
+  const coop = scoreDocPageForUseRepo(
+    { title: "Coop AI — Architecture Overview", excerpt: "ADR template" },
+    { owner: "documenso", repo: "documenso" }
+  );
+  const doc = scoreDocPageForUseRepo(
+    { title: "Signing pipeline", excerpt: "documenso envelope status" },
+    { owner: "documenso", repo: "documenso", focusTerms: ["signing"] }
+  );
+  assert.ok(coop < 0);
+  assert.ok(doc >= 50);
+  assert.ok(doc > coop);
 });
 
 const total = passed + failed;

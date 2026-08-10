@@ -873,7 +873,10 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
                   repoId,
                   filters.file
                 );
-                const source = edges[0]?.source ?? "import-parse";
+                // Repo may have thousands of edges overall — never advertise
+                // import-parse/scip freshness when THIS file has zero callers.
+                const source =
+                  edges.length > 0 ? (edges[0]?.source ?? "import-parse") : "remote";
                 result = {
                   repoId,
                   data: edges.map((edge) => ({

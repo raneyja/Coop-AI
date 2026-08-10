@@ -60,6 +60,51 @@ test("no invent: lodash and ./missing produce zero edges", () => {
   assert.equal(missingEdges.length, 0);
 });
 
+test("workspace package: @documenso/lib/types/is-document-status resolves", () => {
+  const fileSet = new Set([
+    "packages/lib/package.json",
+    "packages/lib/types/is-document-status.ts",
+    "apps/remix/app/routes/documents.ts"
+  ]);
+  const packageAliases = new Map([["@documenso/lib", "packages/lib"]]);
+  const edges = extractImportEdgesFromSource(
+    "apps/remix/app/routes/documents.ts",
+    `import { isDocumentStatus } from "@documenso/lib/types/is-document-status";`,
+    { fileSet, packageAliases }
+  );
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0].from, "apps/remix/app/routes/documents.ts");
+  assert.equal(edges[0].to, "packages/lib/types/is-document-status.ts");
+  assert.equal(edges[0].symbol, "isDocumentStatus");
+});
+
+test("extractImportEdges resolves monorepo package aliases from package.json", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-import-alias-"));
+  try {
+    fs.mkdirSync(path.join(root, "packages", "lib", "types"), { recursive: true });
+    fs.mkdirSync(path.join(root, "apps", "web"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "packages", "lib", "package.json"),
+      JSON.stringify({ name: "@documenso/lib" })
+    );
+    fs.writeFileSync(
+      path.join(root, "packages", "lib", "types", "is-document-status.ts"),
+      "export const isDocumentStatus = (v: unknown) => true;\n"
+    );
+    fs.writeFileSync(
+      path.join(root, "apps", "web", "page.ts"),
+      `import { isDocumentStatus } from "@documenso/lib/types/is-document-status";\n`
+    );
+
+    const edges = extractImportEdges(root);
+    assert.equal(edges.length, 1);
+    assert.equal(edges[0].from, "apps/web/page.ts");
+    assert.equal(edges[0].to, "packages/lib/types/is-document-status.ts");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("python: from .b import x resolves to pkg/b.py", () => {
   const fileSet = new Set(["pkg/a.py", "pkg/b.py"]);
   const edges = extractImportEdgesFromSource("pkg/a.py", "from .b import x\n", { fileSet });

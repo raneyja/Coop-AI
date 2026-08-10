@@ -12,8 +12,10 @@ import {
   isDocsReferencePath,
   isGenericBlastImpactAsk,
   isVerifiedCallerSearchSource,
+  mergeDurableDependentsIntoContextData,
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
+  resolveTrustedRemoteDependents,
   scoreDependentRisk,
   searchDependentsFallback,
   searchDependentsInLocalRoots,
@@ -21,6 +23,8 @@ import {
   splitBlastRadiusDependents,
   type BlastRadiusDependentDetail
 } from "./blastRadiusDependentsFallback";
+import type { IndexBackend } from "../indexing/indexBackend";
+import type { LocalDependentsResult, LocalSearchResult } from "../indexing/types";
 
 let passed = 0;
 let failed = 0;
@@ -384,6 +388,67 @@ test("mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job ed
   );
   assert.deepEqual(merged.directDependents, ["test/app.test.js"]);
 });
+
+test("mergeDurableDependentsIntoContextData sets directDependents + import-parse source", () => {
+  const merged = mergeDurableDependentsIntoContextData(
+    { file: "src/config/responseDeadline.ts" },
+    {
+      dependents: [
+        { path: "src/chat/CoopChatSession.ts", depth: 1, source: "import-parse" },
+        { path: "src/engines/blastRadiusAnalysis.ts", depth: 1, source: "import-parse" }
+      ],
+      source: "import-parse",
+      warnings: ["Dependents from durable import-parse graph — 2 direct caller(s)."]
+    }
+  );
+  assert.deepEqual(merged.directDependents, [
+    "src/chat/CoopChatSession.ts",
+    "src/engines/blastRadiusAnalysis.ts"
+  ]);
+  assert.equal((merged.graphMeta as { source: string }).source, "import-parse");
+});
+
+asyncTests.push(
+  (async () => {
+    const name = "resolveTrustedRemoteDependents uses durable import-parse without localRoots";
+    try {
+      let searchCalled = false;
+      const backend = {
+        kind: "cloud" as const,
+        isEnabledForRepo: async () => true,
+        dependents: async (): Promise<LocalDependentsResult> => ({
+          file: "src/config/responseDeadline.ts",
+          dependents: [
+            "src/chat/CoopChatSession.ts",
+            "src/engines/blastRadiusAnalysis.ts",
+            "src/jobs/JobApiClient.ts"
+          ],
+          source: "import-parse"
+        }),
+        search: async (): Promise<LocalSearchResult> => {
+          searchCalled = true;
+          return { source: "zoekt", hits: [], symbols: [], stale: false };
+        }
+      } as unknown as IndexBackend;
+
+      const resolved = await resolveTrustedRemoteDependents(
+        backend,
+        "github:raneyja/Coop-AI",
+        "src/config/responseDeadline.ts",
+        { enrichWithSearch: false }
+      );
+      assert.equal(resolved.source, "import-parse");
+      assert.equal(resolved.dependents.length, 3);
+      assert.equal(searchCalled, false);
+      console.log(`  ✓ ${name}`);
+      passed++;
+    } catch (err) {
+      console.error(`  ✗ ${name}`);
+      console.error(`    ${err instanceof Error ? err.message : String(err)}`);
+      failed++;
+    }
+  })()
+);
 
 void Promise.all(asyncTests).then(() => {
   const total = passed + failed;

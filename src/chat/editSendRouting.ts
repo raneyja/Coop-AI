@@ -18,6 +18,14 @@ const APPLY_LANGUAGE_RE =
 const EDIT_TARGET_HINT_RE =
   /\b(in this (?:file|function|method|class)|this (?:file|function|method)|validate_\w+|def \w+|function \w+|method)\b/i;
 
+/** Shown when /edit has no open file / @mention to anchor a patch. */
+export const EDIT_NO_TARGET_FILE_ERROR =
+  "Open a file in the editor (or @mention one), then use /edit so Coop can emit an apply-able patch for that path.";
+
+/** Shown when /edit knows the path but remote/codehost content could not be read. */
+export const EDIT_UNREADABLE_FILE_ERROR =
+  "Could not read the open remote file for /edit. Keep the file tab open (or reopen it from Remote workspace) and try again.";
+
 /**
  * True when plain chat is asking for a concrete code change (not advice / archaeology).
  * Used to auto-route onto the /edit Apply-patch path when a file is in scope.
@@ -48,6 +56,45 @@ export function shouldTrackEditRequest(
   quickAction: string | undefined
 ): boolean {
   return options?.composerMode === "edit" && !quickAction;
+}
+
+/**
+ * /edit must stay on the Apply-patch path when a file (chip or @mention) is in scope.
+ * Callers must not silently demote to ask — that yields Summary / status narratives with no patch.
+ */
+export function hasEditTargetInScope(options: {
+  file?: string;
+  mentionCount?: number;
+}): boolean {
+  return Boolean(options.file?.trim()) || (options.mentionCount ?? 0) > 0;
+}
+
+/**
+ * Status-transition / feature-add / email-template grounding must not hijack /edit.
+ * Those paths emit Summary templates instead of File: + ```patch.
+ */
+export function shouldBypassAdvisoryGroundingForEdit(composerMode?: string): boolean {
+  return composerMode === "edit";
+}
+
+/**
+ * Zero-Clone edit snap order: remote VFS tab first, then local/external only when
+ * remote provenance is not active. Prevents EDH Coop-AI disk files (e.g. tsconfig)
+ * from stealing the patch target when a remote Use-repo file is open.
+ */
+export type EditEditorSnapPreference = "remote-only" | "remote-then-local" | "local-then-any";
+
+export function resolveEditEditorSnapPreference(options: {
+  composerMode?: string;
+  remoteProvenance: boolean;
+}): EditEditorSnapPreference {
+  if (options.remoteProvenance) {
+    return "remote-only";
+  }
+  if (options.composerMode === "edit") {
+    return "remote-then-local";
+  }
+  return "local-then-any";
 }
 
 /** Bubble/history text stored for patch retry — mirrors handleChatSend edit path. */

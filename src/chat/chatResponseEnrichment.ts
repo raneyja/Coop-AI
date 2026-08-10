@@ -36,8 +36,10 @@ import {
   type TopLevelPackageStructureEvidence
 } from "../workspace/repoPackageBoundaryEvidence";
 import { isRepoPackageBoundaryQuery, isRepoStructureQuery } from "../workspace/repoFactIntent";
+import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { blastRadiusFromBundle } from "../context/contextBundleEvidence";
 import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
+import { enrichPlainChatCallerResponse } from "../prompts/plainChatCallerEnrichment";
 import {
   mentionsHaveOutOfScopeForActiveRepo,
   type MentionScopeQuickAction,
@@ -132,6 +134,12 @@ export function enrichChatResponseForAction(options: {
         parents: structure.parents
       });
     }
+  }
+
+  // Plain chat "who calls it" — force durable dependents into the answer when present.
+  if (!quickAction && !integrationProvider && isFileCallerQuery(options.userQuestion)) {
+    const blast = Array.isArray(contextBundle) ? blastRadiusFromBundle(contextBundle) : undefined;
+    enriched = enrichPlainChatCallerResponse(enriched, blast);
   }
 
   switch (quickAction) {

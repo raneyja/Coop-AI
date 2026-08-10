@@ -436,7 +436,7 @@ RULES:
 - Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
-- Output patches only (see Patch output format); no **Summary** section and no ask-mode response template.`;
+- Output patches only (see Patch output format); no **Summary** section, no ask-mode response template, and never invent PENDING/OPEN status-transition stories about unrelated files.`;
 
 export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
 
@@ -788,6 +788,7 @@ export function buildUserMessageWithContext(
   const notionPages = extractNotionSearch(context?.contextBundle);
   const googleDocs = extractGoogleDocsSearch(context?.contextBundle);
   const knowledgeGapScan = extractKnowledgeGapJobScan(context?.contextBundle);
+  const fileDependents = extractFileDependentsEvidence(context?.contextBundle);
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
@@ -806,7 +807,8 @@ export function buildUserMessageWithContext(
     !confluencePages &&
     !notionPages &&
     !googleDocs &&
-    !knowledgeGapScan
+    !knowledgeGapScan &&
+    !fileDependents
   ) {
     return message;
   }
@@ -943,6 +945,9 @@ export function buildUserMessageWithContext(
   }
   if (knowledgeGapScan) {
     lines.push(...formatKnowledgeGapJobScanForLlm(knowledgeGapScan));
+  }
+  if (fileDependents) {
+    lines.push(...formatFileDependentsForLlm(fileDependents));
   }
   if (context?.contextBundle !== undefined) {
     const qualityNote = buildIndexQualityNote(context.contextBundle);
@@ -1703,6 +1708,69 @@ function formatAgentSearchForLlm(summary: AgentSearchSummary): string[] {
     lines.push(`- ${citation}${snippet}`);
   }
   lines.push("</agent_search>");
+  return lines;
+}
+
+type FileDependentsEvidence = {
+  file?: string;
+  paths: string[];
+  source?: string;
+};
+
+/** Trusted import-graph callers from a dependencies bundle entry (plain chat + Blast). */
+export function extractFileDependentsEvidence(bundle: unknown): FileDependentsEvidence | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  let best: FileDependentsEvidence | undefined;
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as { type?: string; data?: Record<string, unknown> }).data;
+    if (!data) {
+      continue;
+    }
+    const direct = Array.isArray(data.directDependents)
+      ? (data.directDependents as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+      : [];
+    const lightning = data.lightning as { dependents?: unknown; dependentsSource?: string } | undefined;
+    const lightningDeps = Array.isArray(lightning?.dependents)
+      ? (lightning!.dependents as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+      : [];
+    const paths = direct.length > 0 ? direct : lightningDeps;
+    if (paths.length === 0) {
+      continue;
+    }
+    const graphMeta = data.graphMeta as { source?: string } | undefined;
+    const source =
+      (typeof graphMeta?.source === "string" && graphMeta.source) ||
+      (typeof lightning?.dependentsSource === "string" && lightning.dependentsSource) ||
+      undefined;
+    const file = typeof data.file === "string" ? data.file : undefined;
+    if (!best || paths.length > best.paths.length) {
+      best = { file, paths, source };
+    }
+  }
+  return best;
+}
+
+export function formatFileDependentsForLlm(evidence: FileDependentsEvidence): string[] {
+  const paths = evidence.paths.slice(0, 12);
+  const sourceAttr = evidence.source ? ` source="${evidence.source}"` : "";
+  const fileAttr = evidence.file ? ` file="${evidence.file}"` : "";
+  const lines = [
+    `<file_dependents${sourceAttr}${fileAttr} count="${paths.length}">`,
+    "Trusted indexed callers from the durable import / symbol graph (Zero-Clone remote evidence).",
+    "When the user asks who calls or who imports this file, name these paths. Do not say callers are unknown, unspecified, or unavailable while this list is present."
+  ];
+  for (const path of paths) {
+    lines.push(`- ${path}`);
+  }
+  if (evidence.paths.length > paths.length) {
+    lines.push(`(+${evidence.paths.length - paths.length} more)`);
+  }
+  lines.push("</file_dependents>");
   return lines;
 }
 

@@ -145,9 +145,12 @@ import {
   extractExportNamesFromSource,
   filterJobDependentsForFile,
   isTrustedBlastGraphSource,
+  mergeDurableDependentsIntoContextData,
   mergeSearchDependentsFallbackIntoDependenciesData,
+  resolveTrustedRemoteDependents,
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
+import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
@@ -254,7 +257,9 @@ import {
 } from "../context/traceDecisionSearch";
 import {
   isQuickActionBlocked,
-  quickActionBlockedMessage
+  quickActionBlockedMessage,
+  shouldSkipOpenFileAttach,
+  shouldWarnOpenFileAttachFailure
 } from "../context/quickActionScope";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
@@ -272,6 +277,7 @@ import {
   knowledgeGapsFocusGatherTerms,
   knowledgeGapsFocusTopicGapStubs,
   knowledgeGapsGatherQuery,
+  mergeKnowledgeGapsFocusStubsIntoScan,
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
@@ -386,7 +392,15 @@ import { shouldFetchSlackContext } from "../context/slackContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { readAgentModeSetting } from "../config/agentModeConfig";
 import { shouldUseAgentMode } from "./agentRouting";
-import { isConcreteFileEditAsk, shouldTrackEditRequest } from "./editSendRouting";
+import {
+  EDIT_NO_TARGET_FILE_ERROR,
+  EDIT_UNREADABLE_FILE_ERROR,
+  hasEditTargetInScope,
+  isConcreteFileEditAsk,
+  resolveEditEditorSnapPreference,
+  shouldBypassAdvisoryGroundingForEdit,
+  shouldTrackEditRequest
+} from "./editSendRouting";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -2626,7 +2640,80 @@ export class CoopChatSession {
       result = await this.enrichKnowledgeGapsWithFocusSearch(request, result);
     }
 
+    // Plain chat "who calls / who imports" — durable remote dependents (same API as Blast).
+    if (
+      request.type === "dependencies" &&
+      !request.params.quickAction &&
+      isFileCallerQuery(request.intent.context?.queryText)
+    ) {
+      result = await this.enrichPlainChatWithDurableDependents(request, result);
+    }
+
     return result;
+  }
+
+  /**
+   * Zero-Clone: indexBackend.dependents / import-parse first, then remote search.
+   * Never localRoots. Soft-budget capped via remainingContextGatherBudgetMs.
+   */
+  private async enrichPlainChatWithDurableDependents(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    const file = request.params.file?.trim();
+    const repoId = request.params.repoId?.trim();
+    if (!file || !repoId) {
+      return result;
+    }
+
+    const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (remainingMs <= 0) {
+      return result;
+    }
+
+    const maxPatterns = remainingMs < 4_000 ? 4 : remainingMs < 8_000 ? 6 : 10;
+    const askSymbols = extractBlastSearchSymbols(request.intent.context?.queryText, file);
+    let exportSymbols: string[] = [];
+    try {
+      const workspace = this.indexedRepoWorkspace();
+      const target = this.repoTargetForRequest(request);
+      const evidence = await workspace.readFile(target, file);
+      if (evidence?.content?.trim()) {
+        exportSymbols = extractExportNamesFromSource(evidence.content);
+      }
+    } catch {
+      // Soft gather — path-suffix patterns still run.
+    }
+    const symbols = [...new Set([...exportSymbols, ...askSymbols])];
+
+    let resolved: Awaited<ReturnType<typeof resolveTrustedRemoteDependents>>;
+    try {
+      // Durable-first: skip Zoekt enrich when import-parse already returned callers.
+      // If durable is empty, resolveTrustedRemoteDependents still runs remote search.
+      resolved = await resolveTrustedRemoteDependents(this.options.indexBackend, repoId, file, {
+        maxPatterns,
+        symbols,
+        enrichWithSearch: false
+      });
+    } catch {
+      return result;
+    }
+
+    if (resolved.dependents.length === 0) {
+      return result;
+    }
+
+    const baseData =
+      typeof result.data === "object" && result.data !== null
+        ? (result.data as Record<string, unknown>)
+        : {};
+    return {
+      ...result,
+      data: mergeDurableDependentsIntoContextData(
+        { ...baseData, file },
+        resolved
+      )
+    };
   }
 
   /**
@@ -4101,18 +4188,25 @@ export class CoopChatSession {
     }
 
     this.snapEditorContextBeforeSend({
-      allowLocalFileForEdit: options?.composerMode === "edit"
+      allowLocalFileForEdit: options?.composerMode === "edit",
+      preferRemoteForEdit: options?.composerMode === "edit"
     });
 
-    // Re-check after editor snap in case the file chip only appeared from the open tab.
+    // /edit requires an anchored file. Never demote to ask — that yields Summary /
+    // status narratives (e.g. PENDING→OPEN) with no apply-able patch.
     if (
       !quickAction &&
       options?.composerMode === "edit" &&
-      !this.currentContext.file?.trim() &&
-      !options.mentions?.length
+      !hasEditTargetInScope({
+        file: this.currentContext.file,
+        mentionCount: options.mentions?.length ?? 0
+      })
     ) {
-      // No file in scope — fall back to ask-mode rather than emit unanchored patches.
-      options = { ...options, composerMode: undefined };
+      this.post({
+        type: "chat:error",
+        payload: { message: EDIT_NO_TARGET_FILE_ERROR }
+      });
+      return;
     }
 
     if (options?.mentions?.length) {
@@ -4184,7 +4278,12 @@ export class CoopChatSession {
     }
     const structureIntent = !quickAction && needsRepoTreeOverview(message);
     this.pendingChatLocalFiles =
-      quickAction === "understand-repo" || structureIntent || Boolean(this.pendingDualRepoCompare)
+      structureIntent ||
+      Boolean(this.pendingDualRepoCompare) ||
+      shouldSkipOpenFileAttach({
+        quickAction,
+        context: this.currentContext
+      })
         ? undefined
         : this.loadLocalFilesSyncForChat({
             // Full active file for /edit and plain chat so SEARCH hunks can match beyond a selection.
@@ -5322,13 +5421,30 @@ export class CoopChatSession {
       const activeRepoId = buildRepoId(this.preferences, turnContext);
       const allMentionsOutOfScope = allMentionsOutOfScopeForActiveRepo(mentionRefs, activeRepoId);
 
-      const skipLocalAttach =
-        effectiveQuickAction === "understand-repo" ||
-        Boolean(integrationProvider) ||
-        (!effectiveQuickAction && !integrationProvider && allMentionsOutOfScope);
+      const skipLocalAttach = shouldSkipOpenFileAttach({
+        quickAction: effectiveQuickAction,
+        hasIntegrationProvider: Boolean(integrationProvider),
+        allMentionsOutOfScope,
+        context: turnContext
+      });
       const localPayload = skipLocalAttach
         ? undefined
         : await abortablePromise(this.resolveChatLocalFiles(), signal);
+      if (
+        options?.composerMode === "edit" &&
+        !allMentionsOutOfScope &&
+        !(options.mentions?.length) &&
+        !localPayload?.files.length
+      ) {
+        this.postForThread(turn.threadId, {
+          type: "chat:error",
+          payload: { message: EDIT_UNREADABLE_FILE_ERROR, threadId: turn.threadId }
+        });
+        this.threadRuns.markError(turn);
+        this.pushThreadsList();
+        this.clearIntentFeedback(turn.threadId);
+        return;
+      }
       if (localPayload?.files.length) {
         this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
@@ -5472,10 +5588,18 @@ export class CoopChatSession {
     const taskContent = options?.taskContent ?? content;
     const userFocus = options?.userFocus?.trim() || undefined;
 
+    // /edit must emit File:+patch — never A8/A10/A11 Summary / status narratives.
+    const bypassAdvisoryGrounding = shouldBypassAdvisoryGroundingForEdit(options?.composerMode);
+
     // A11: jobs + email templates / reminders — follow job→handler→packages/email paths.
     // Distinct from A10 existing-capability (add-feature tickets without email/template signals).
     let emailTemplateMessage: string | undefined;
-    if (!effectiveQuickAction && !integrationProvider && isEmailTemplateTicketAsk(taskContent)) {
+    if (
+      !bypassAdvisoryGrounding &&
+      !effectiveQuickAction &&
+      !integrationProvider &&
+      isEmailTemplateTicketAsk(taskContent)
+    ) {
       emailTemplateMessage = await this.buildEmailTemplateChatPrompt({
         ask: taskContent,
         turn,
@@ -5491,6 +5615,7 @@ export class CoopChatSession {
     let existingCapabilityMessage: string | undefined;
     let existingCapabilityEvidence: ExistingCapabilityEvidence | undefined;
     if (
+      !bypassAdvisoryGrounding &&
       !emailTemplateMessage &&
       !effectiveQuickAction &&
       !integrationProvider &&
@@ -5512,6 +5637,7 @@ export class CoopChatSession {
     let statusTransitionMessage: string | undefined;
     let statusTransitionEvidence: StatusTransitionEvidence | undefined;
     if (
+      !bypassAdvisoryGrounding &&
       !emailTemplateMessage &&
       !existingCapabilityMessage &&
       !effectiveQuickAction &&
@@ -5745,10 +5871,13 @@ export class CoopChatSession {
       );
 
       if (
-        effectiveQuickAction !== "understand-repo" &&
-        !integrationProvider &&
-        !localPayload?.files.length &&
-        collectOpenEditorPaths().length > 0
+        shouldWarnOpenFileAttachFailure({
+          quickAction: effectiveQuickAction,
+          hasIntegrationProvider: Boolean(integrationProvider),
+          hasAttachedFiles: Boolean(localPayload?.files.length),
+          openEditorTabCount: collectOpenEditorPaths().length,
+          intendedFile: turnContext.file
+        })
       ) {
         const roots = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath).join("; ");
         const tabs = collectOpenEditorFileRefs()
@@ -5766,7 +5895,11 @@ export class CoopChatSession {
           this.currentContext = { ...this.currentContext, contextWarning: warning };
           this.postContext();
         }
-      } else if (effectiveQuickAction === "understand-repo" && entryFileCount > 0 && turnContext.contextWarning) {
+      } else if (
+        (effectiveQuickAction === "understand-repo" && entryFileCount > 0 && turnContext.contextWarning) ||
+        (turnContext.contextWarning &&
+          /could not read (the )?open (remote )?file/i.test(turnContext.contextWarning))
+      ) {
         turn.context = { ...turn.context, contextWarning: undefined };
         if (this.isViewingThread(turn.threadId)) {
           this.currentContext = { ...this.currentContext, contextWarning: undefined };
@@ -6324,7 +6457,14 @@ export class CoopChatSession {
             ...data,
             ...(targetFile ? { file: targetFile } : {}),
             jobScan,
-            graphMeta: { edgeCount: jobScan.edgeCount, lastIndexedAt: jobScan.lastIndexedAt }
+            // Merge job scan meta — never wipe verified import-parse/scip/zoekt provenance.
+            graphMeta: {
+              ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+                ? (data.graphMeta as Record<string, unknown>)
+                : {}),
+              edgeCount: jobScan.edgeCount,
+              lastIndexedAt: jobScan.lastIndexedAt
+            }
           }
         };
         return;
@@ -6879,8 +7019,58 @@ export class CoopChatSession {
       this.applyKnowledgeGapJobResultToBundle(quickAction);
       if (!this.knowledgeGapScanInBundle()) {
         this.applyHeuristicKnowledgeGapScan();
+      } else {
+        // Job scan may be empty (foundGaps: 0) while focus topics still lack evidence —
+        // merge focus stubs so Strong evidence + Confluence cannot hide a zero-gap card.
+        this.mergeFocusTopicStubsIntoExistingScan();
       }
     });
+  }
+
+  /** When a job/heuristic scan already exists, still attach uncovered focus-topic stubs. */
+  private mergeFocusTopicStubsIntoExistingScan(): void {
+    const evidence = knowledgeGapsFromBundle(this.lastContextBundle);
+    if (!evidence) {
+      return;
+    }
+    const userFocus =
+      knowledgeGapsGatherQuery(evidence.userFocus) ??
+      knowledgeGapsGatherQuery(
+        typeof evidence.focusSearchQuery === "string" ? evidence.focusSearchQuery : undefined
+      );
+    const scope = resolveKnowledgeGapsAuditScope({
+      file: this.currentContext.file?.trim(),
+      userFocus,
+      focusHitPaths: evidence.focusSearchPaths
+    });
+    if (!scope.focusPrimary) {
+      return;
+    }
+    const stubs = knowledgeGapsFocusTopicGapStubs({
+      userFocus,
+      focusHitPaths: evidence.focusSearchPaths
+    });
+    if (stubs.length === 0) {
+      return;
+    }
+    const index = this.lastContextBundle.findIndex((entry) => entry.type === "knowledge_gaps");
+    if (index < 0) {
+      return;
+    }
+    const existing = this.lastContextBundle[index];
+    const data =
+      typeof existing.data === "object" && existing.data !== null
+        ? { ...(existing.data as Record<string, unknown>) }
+        : {};
+    const priorScan =
+      data.jobScan && typeof data.jobScan === "object"
+        ? (data.jobScan as Record<string, unknown>)
+        : undefined;
+    const merged = mergeKnowledgeGapsFocusStubsIntoScan(priorScan, stubs);
+    if (!merged) {
+      return;
+    }
+    this.mergeKnowledgeGapScanIntoBundle(merged);
   }
 
   private knowledgeGapScanInBundle(): boolean {
@@ -7740,15 +7930,27 @@ export class CoopChatSession {
   }
 
   /** Snap active editor file/selection into context immediately before chat send. */
-  private snapEditorContextBeforeSend(options?: { allowLocalFileForEdit?: boolean }): void {
+  private snapEditorContextBeforeSend(options?: {
+    allowLocalFileForEdit?: boolean;
+    preferRemoteForEdit?: boolean;
+  }): void {
     const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
     const chatPrefs = { ...this.preferences, includeActiveFile: true, includeSelection: true };
-    // Remote provenance: only snap a remote (VFS) tab — never a local clone of the same path.
-    const editor = this.isWorkingOnRemoteProvenance()
-      ? pickRemoteEditorForContext(this.currentContext.file)
-      : allowLocalFileForEdit
-        ? pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file)
-        : pickLocalEditorForContext(this.currentContext.file) ?? pickEditorForContext(this.currentContext.file);
+    const preference = resolveEditEditorSnapPreference({
+      composerMode:
+        options?.preferRemoteForEdit === true || allowLocalFileForEdit ? "edit" : undefined,
+      remoteProvenance: this.isWorkingOnRemoteProvenance()
+    });
+    // Remote provenance / /edit: prefer remote VFS tabs — never invent from local Coop-AI disk.
+    const preferredPath = this.currentContext.file;
+    const editor =
+      preference === "remote-only"
+        ? pickRemoteEditorForContext(preferredPath)
+        : preference === "remote-then-local"
+          ? pickRemoteEditorForContext(preferredPath) ??
+            pickLocalEditorForContext(preferredPath) ??
+            pickEditorForContext(preferredPath)
+          : pickLocalEditorForContext(preferredPath) ?? pickEditorForContext(preferredPath);
     if (!editor) {
       return;
     }

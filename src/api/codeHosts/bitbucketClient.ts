@@ -210,10 +210,17 @@ export class BitbucketClient implements CodeHostClient {
     coords: RepoCoordinates,
     options?: { path?: string; limit?: number }
   ): Promise<CommitInfo[]> {
+    // Bitbucket: GET .../commits[/{revision}]?path=file — path is a query param.
+    // Putting the file path in the URL path treats the first segment as a revision
+    // (e.g. /commits/apps/api/... → revision "apps") and fails file history.
+    const branch = await this.resolveBranch(coords);
     const limit = options?.limit ?? 100;
-    const path = options?.path ? `/${normalizePath(options.path)}` : "";
+    const params = new URLSearchParams({ pagelen: String(Math.min(limit, 100)) });
+    if (options?.path) {
+      params.set("path", normalizePath(options.path));
+    }
     const commits = await paginatedCodeHostFetch<CommitInfo>({
-      firstUrl: `${this.repoUrl(coords)}/commits${path}?pagelen=${Math.min(limit, 100)}`,
+      firstUrl: `${this.repoUrl(coords)}/commits/${encodeURIComponent(branch)}?${params.toString()}`,
       headers: this.headers,
       provider: this.provider,
       rateLimitTracker: this.options.rateLimitTracker,
@@ -228,6 +235,30 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async getFileHistory(coords: RepoCoordinates, filePath: string, limit = 20): Promise<CommitInfo[]> {
+    // Prefer filehistory (follows renames). Fall back to commits?path= if needed.
+    const branch = await this.resolveBranch(coords);
+    const path = normalizePath(filePath);
+    try {
+      const commits = await paginatedCodeHostFetch<CommitInfo>({
+        firstUrl: `${this.repoUrl(coords)}/filehistory/${encodeURIComponent(branch)}/${pathSegments(path)}?pagelen=${Math.min(limit, 100)}`,
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker,
+        maxPages: Math.ceil(limit / 100),
+        mapPage: (payload) => {
+          const page = payload as BitbucketPaginated<BitbucketFileHistoryEntry>;
+          return (page.values ?? [])
+            .map((entry) => (entry.commit ? mapBitbucketCommit(entry.commit) : undefined))
+            .filter((commit): commit is CommitInfo => Boolean(commit?.sha));
+        },
+        nextUrl: (payload) => (payload as BitbucketPaginated<unknown>).next
+      });
+      if (commits.length > 0) {
+        return commits.slice(0, limit);
+      }
+    } catch {
+      // Fall through to commits?path=
+    }
     return this.getCommitHistory(coords, { path: filePath, limit });
   }
 
@@ -244,9 +275,12 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async getBlameData(coords: RepoCoordinates, filePath: string): Promise<BlameData> {
+    // Bitbucket Cloud has no per-line blame API. filehistory returns commits that
+    // touched the file (not line annotations). Expose those SHAs so Trace can resolve
+    // introducing / recent commits instead of treating blame as empty.
     const branch = await this.resolveBranch(coords);
     const path = normalizePath(filePath);
-    const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketAnnotation>>(
+    const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketFileHistoryEntry>>(
       `${this.repoUrl(coords)}/filehistory/${encodeURIComponent(branch)}/${pathSegments(path)}?pagelen=100`,
       {
         headers: this.headers,
@@ -255,13 +289,30 @@ export class BitbucketClient implements CodeHostClient {
       }
     );
     const lines: BlameData["lines"] = [];
+    let sentinelLine = 0;
     for (const segment of payload.values ?? []) {
       const commit = segment.commit;
-      for (const line of segment.lines ?? []) {
+      if (!commit?.hash) {
+        continue;
+      }
+      const author = commit.author?.user?.display_name ?? commit.author?.raw ?? "unknown";
+      const explicitLines = segment.lines ?? [];
+      if (explicitLines.length > 0) {
+        for (const line of explicitLines) {
+          lines.push({
+            lineNumber: line,
+            commitSha: commit.hash,
+            author,
+            date: commit.date
+          });
+        }
+      } else {
+        // Synthetic line numbers: unique SHAs for archaeology, not real line blame.
+        sentinelLine += 1;
         lines.push({
-          lineNumber: line,
+          lineNumber: sentinelLine,
           commitSha: commit.hash,
-          author: commit.author?.user?.display_name ?? commit.author?.raw ?? "unknown",
+          author,
           date: commit.date
         });
       }
@@ -531,11 +582,12 @@ type BitbucketSrcEntry = { path: string; type: string; size?: number };
 type BitbucketCommit = {
   hash: string;
   date: string;
-  message: string;
+  message?: string;
   author?: { user?: { display_name?: string }; raw?: string };
   links?: { html?: { href?: string } };
 };
-type BitbucketAnnotation = { commit: BitbucketCommit; lines?: number[] };
+/** filehistory entry — commit may be sparse; lines are not part of the Cloud API. */
+type BitbucketFileHistoryEntry = { commit?: BitbucketCommit; path?: string; lines?: number[] };
 type BitbucketPull = {
   id: number;
   title: string;
@@ -590,7 +642,7 @@ function mapBitbucketCommit(commit: BitbucketCommit): CommitInfo {
     sha: commit.hash,
     author: commit.author?.user?.display_name ?? commit.author?.raw ?? "unknown",
     date: commit.date,
-    message: commit.message,
+    message: commit.message ?? "",
     htmlUrl: commit.links?.html?.href
   };
 }

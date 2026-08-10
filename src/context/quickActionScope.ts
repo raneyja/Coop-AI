@@ -1,5 +1,6 @@
 import type { RepoContext } from "../chat/types";
 import type { QuickActionId } from "../webview/types";
+import { shouldSkipLocalEditorAttachForRepoScope } from "../workspace/repoEvidenceIsolation";
 import { isExplicitRepoScope } from "./contextScope";
 import { isExternalFileContext } from "./outsideWorkspaceFile";
 
@@ -28,6 +29,67 @@ export function isFileLevelQuickAction(actionId: QuickActionId): boolean {
 
 export function quickActionWorksWithoutFile(actionId: QuickActionId): boolean {
   return REPO_WIDE_ACTIONS.has(actionId);
+}
+
+function isRepoWideQuickActionId(actionId: string | undefined): actionId is QuickActionId {
+  return Boolean(actionId && REPO_WIDE_ACTIONS.has(actionId as QuickActionId));
+}
+
+/**
+ * When true, do not attach open-editor / active-file bodies for this turn.
+ * Repo-wide Use-repo turns and Understand Repo never need leftover editor tabs.
+ */
+export function shouldSkipOpenFileAttach(options: {
+  quickAction?: string;
+  hasIntegrationProvider?: boolean;
+  allMentionsOutOfScope?: boolean;
+  context: Pick<RepoContext, "file" | "scope" | "owner" | "repo">;
+}): boolean {
+  if (options.quickAction === "understand-repo") {
+    return true;
+  }
+  if (options.hasIntegrationProvider) {
+    return true;
+  }
+  if (!options.quickAction && options.allMentionsOutOfScope) {
+    return true;
+  }
+  // Gaps / Owner / sticky Use-repo with no file chip: leftover tabs are not evidence.
+  if (isRepoWideQuickActionId(options.quickAction) && !options.context.file?.trim()) {
+    return true;
+  }
+  return shouldSkipLocalEditorAttachForRepoScope(options.context);
+}
+
+/**
+ * Surface "could not read open file" only when this turn intentionally needed a file
+ * body and attach failed — not when open tabs exist beside a repo-wide ask.
+ */
+export function shouldWarnOpenFileAttachFailure(options: {
+  quickAction?: string;
+  hasIntegrationProvider?: boolean;
+  hasAttachedFiles: boolean;
+  openEditorTabCount: number;
+  /** File chip / target for this turn — required to warn. */
+  intendedFile?: string;
+}): boolean {
+  if (options.hasAttachedFiles) {
+    return false;
+  }
+  if (options.openEditorTabCount <= 0) {
+    return false;
+  }
+  if (options.hasIntegrationProvider) {
+    return false;
+  }
+  if (options.quickAction === "understand-repo") {
+    return false;
+  }
+  // Repo-wide Gaps / Owner without a file chip: leftover tabs must not warn.
+  if (isRepoWideQuickActionId(options.quickAction) && !options.intendedFile?.trim()) {
+    return false;
+  }
+  return Boolean(options.intendedFile?.trim());
 }
 
 export function isQuickActionBlocked(actionId: QuickActionId, context: RepoContext): boolean {

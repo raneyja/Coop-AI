@@ -1,3 +1,5 @@
+import { sanitizeIntegrationSnippet } from "../context/integrationDocRelevance";
+
 export type IntegrationPageForEnrichment = {
   title: string;
   excerpt?: string;
@@ -154,7 +156,7 @@ function confluenceTitleHint(title: string, excerpt: string | undefined, activeF
 }
 
 function integrationPageNote(page: IntegrationPageForEnrichment, activeFile?: string): string {
-  const excerpt = page.excerpt?.replace(/\s+/g, " ").trim();
+  const excerpt = sanitizeIntegrationSnippet(page.excerpt)?.replace(/\s+/g, " ").trim();
   if (excerpt) {
     const clipped = excerpt.length > 220 ? `${excerpt.slice(0, 217)}...` : excerpt;
     if (activeFile && excerpt.toLowerCase().includes(activeFile.toLowerCase())) {
@@ -524,11 +526,11 @@ function mapIntegrationPages(
         return undefined;
       }
       const record = page as { title?: string; excerpt?: string; htmlUrl?: string; url?: string };
-      const title = record.title?.trim();
+      const title = sanitizeIntegrationSnippet(record.title?.trim()) ?? record.title?.trim();
       if (!title) {
         return undefined;
       }
-      const excerpt = record.excerpt?.trim();
+      const excerpt = sanitizeIntegrationSnippet(record.excerpt?.trim());
       const htmlUrl = (record[urlKey] ?? record.htmlUrl ?? record.url)?.trim();
       return {
         title,

@@ -165,7 +165,13 @@ export class BlastRadiusAnalysisEngine {
         if (lightningEnabled) {
           const result = await this.options.indexBackend.dependents(repoId, file);
           directDependents = uniquePaths(result.dependents);
-          graphMeta = { ...graphMeta, source: result.source as GraphEdgeSource };
+          // Never surface import-parse/scip Graph source when this file has zero callers.
+          graphMeta = {
+            ...graphMeta,
+            source: (directDependents.length > 0
+              ? result.source
+              : "remote") as GraphEdgeSource
+          };
           dependentDetails = directDependents.map((path) => ({
             path,
             depth: 1,
@@ -249,6 +255,8 @@ export class BlastRadiusAnalysisEngine {
               "No dependents verified in import graph or search for this file. Impact unverified — do not claim zero impact."
             );
           } else {
+            // Zero callers: never keep import-parse/scip as Graph source.
+            graphMeta = { ...graphMeta, source: "remote" };
             warnings.push(
               "No dependents found in import graph or search for this file. Impact unverified — do not claim zero impact."
             );

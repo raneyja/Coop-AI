@@ -11,6 +11,9 @@ export type ImportEdge = {
   symbol?: string;
 };
 
+/** Workspace package name → package root directory (posix, "" for repo root). */
+export type WorkspacePackageAliases = Map<string, string>;
+
 const DEFAULT_MAX_EDGES = 50_000;
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
 
@@ -71,29 +74,107 @@ function isParseableSourceFile(filePath: string): boolean {
   return isTsJsFile(filePath) || isPythonFile(filePath);
 }
 
-function resolveTsJsSpec(fromFile: string, spec: string, fileSet: Set<string>): string | undefined {
-  if (!spec.startsWith(".")) {
+/** Resolve a candidate path (no leading ./) against the repo file set. */
+function resolveExistingPath(candidate: string, fileSet: Set<string>): string | undefined {
+  const normalized = normalizeRepoPath(path.posix.normalize(candidate)).replace(/^\.\//, "");
+  for (const ext of RESOLVE_EXTENSIONS) {
+    const resolved = normalized + ext;
+    if (fileSet.has(resolved)) {
+      return resolved;
+    }
+  }
+  for (const suffix of INDEX_SUFFIXES) {
+    const resolved = normalized + suffix;
+    if (fileSet.has(resolved)) {
+      return resolved;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Build package-name → directory map from package.json files in the clone.
+ * Enables `@documenso/lib/types/foo` → `packages/lib/types/foo.ts` for monorepos.
+ */
+export function buildWorkspacePackageAliases(
+  root: string,
+  fileSet: Set<string>
+): WorkspacePackageAliases {
+  const aliases: WorkspacePackageAliases = new Map();
+  for (const relativePath of fileSet) {
+    const normalized = normalizeRepoPath(relativePath);
+    if (normalized !== "package.json" && !normalized.endsWith("/package.json")) {
+      continue;
+    }
+    if (normalized.includes("/node_modules/")) {
+      continue;
+    }
+    try {
+      const raw = fs.readFileSync(path.join(root, normalized), "utf8");
+      const parsed = JSON.parse(raw) as { name?: unknown };
+      if (typeof parsed.name !== "string") {
+        continue;
+      }
+      const name = parsed.name.trim();
+      if (!name) {
+        continue;
+      }
+      const dir = normalized === "package.json" ? "" : path.posix.dirname(normalized);
+      // Prefer first hit; nested duplicates are rare for workspace names.
+      if (!aliases.has(name)) {
+        aliases.set(name, dir);
+      }
+    } catch {
+      // Invalid or unreadable package.json — skip.
+    }
+  }
+  return aliases;
+}
+
+function resolveWorkspacePackageSpec(
+  spec: string,
+  fileSet: Set<string>,
+  packageAliases: WorkspacePackageAliases | undefined
+): string | undefined {
+  if (!packageAliases || packageAliases.size === 0) {
     return undefined;
   }
-
-  const fromDir = path.posix.dirname(normalizeRepoPath(fromFile));
-  const candidate = normalizeRepoPath(path.posix.normalize(path.posix.join(fromDir, spec)));
-
-  for (const ext of RESOLVE_EXTENSIONS) {
-    const resolved = candidate + ext;
-    if (fileSet.has(resolved)) {
-      return resolved;
+  let bestName: string | undefined;
+  let bestDir: string | undefined;
+  for (const [name, dir] of packageAliases) {
+    if (spec === name || spec.startsWith(`${name}/`)) {
+      if (!bestName || name.length > bestName.length) {
+        bestName = name;
+        bestDir = dir;
+      }
     }
   }
+  if (!bestName || bestDir === undefined) {
+    return undefined;
+  }
+  const remainder = spec === bestName ? "" : spec.slice(bestName.length + 1);
+  const candidate = remainder
+    ? bestDir
+      ? `${bestDir}/${remainder}`
+      : remainder
+    : bestDir || ".";
+  return resolveExistingPath(candidate === "." ? "" : candidate, fileSet);
+}
 
-  for (const suffix of INDEX_SUFFIXES) {
-    const resolved = candidate + suffix;
-    if (fileSet.has(resolved)) {
-      return resolved;
-    }
+function resolveTsJsSpec(
+  fromFile: string,
+  spec: string,
+  fileSet: Set<string>,
+  packageAliases?: WorkspacePackageAliases
+): string | undefined {
+  if (spec.startsWith(".")) {
+    const fromDir = path.posix.dirname(normalizeRepoPath(fromFile));
+    const candidate = normalizeRepoPath(path.posix.normalize(path.posix.join(fromDir, spec)));
+    return resolveExistingPath(candidate, fileSet);
   }
 
-  return undefined;
+  // Monorepo workspace packages (@documenso/lib/..., @plane/types, …).
+  return resolveWorkspacePackageSpec(spec, fileSet, packageAliases);
 }
 
 function resolvePythonModule(fromFile: string, moduleSpec: string, fileSet: Set<string>): string | undefined {
@@ -161,9 +242,10 @@ function pushTsJsEdge(
   kind: ImportEdgeKind,
   fileSet: Set<string>,
   source: string,
-  matchIndex: number
+  matchIndex: number,
+  packageAliases?: WorkspacePackageAliases
 ): void {
-  const to = resolveTsJsSpec(fromFile, spec, fileSet);
+  const to = resolveTsJsSpec(fromFile, spec, fileSet, packageAliases);
   if (!to) {
     return;
   }
@@ -176,7 +258,12 @@ function pushTsJsEdge(
   });
 }
 
-function extractTsJsEdges(filePath: string, source: string, fileSet: Set<string>): ImportEdge[] {
+function extractTsJsEdges(
+  filePath: string,
+  source: string,
+  fileSet: Set<string>,
+  packageAliases?: WorkspacePackageAliases
+): ImportEdge[] {
   const edges: ImportEdge[] = [];
   const normalizedFrom = normalizeRepoPath(filePath);
 
@@ -189,7 +276,7 @@ function extractTsJsEdges(filePath: string, source: string, fileSet: Set<string>
     re.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = re.exec(source)) !== null) {
-      pushTsJsEdge(edges, normalizedFrom, match[1], kind, fileSet, source, match.index);
+      pushTsJsEdge(edges, normalizedFrom, match[1], kind, fileSet, source, match.index, packageAliases);
     }
   }
 
@@ -248,11 +335,11 @@ function extractPythonEdges(filePath: string, source: string, fileSet: Set<strin
 export function extractImportEdgesFromSource(
   filePath: string,
   source: string,
-  ctx: { fileSet: Set<string> }
+  ctx: { fileSet: Set<string>; packageAliases?: WorkspacePackageAliases }
 ): ImportEdge[] {
   const normalizedPath = normalizeRepoPath(filePath);
   if (isTsJsFile(normalizedPath)) {
-    return extractTsJsEdges(normalizedPath, source, ctx.fileSet);
+    return extractTsJsEdges(normalizedPath, source, ctx.fileSet, ctx.packageAliases);
   }
   if (isPythonFile(normalizedPath)) {
     return extractPythonEdges(normalizedPath, source, ctx.fileSet);
@@ -312,6 +399,7 @@ export function extractImportEdges(
   const maxFileBytes = options?.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const root = path.resolve(localPath);
   const { fileSet, files } = walkCloneOnce(root);
+  const packageAliases = buildWorkspacePackageAliases(root, fileSet);
   const edges: ImportEdge[] = [];
 
   for (const relativePath of files) {
@@ -331,7 +419,10 @@ export function extractImportEdges(
       continue;
     }
 
-    const fileEdges = extractImportEdgesFromSource(relativePath, source, { fileSet });
+    const fileEdges = extractImportEdgesFromSource(relativePath, source, {
+      fileSet,
+      packageAliases,
+    });
     for (const edge of fileEdges) {
       edges.push(edge);
       if (edges.length >= maxEdges) {

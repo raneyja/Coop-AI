@@ -673,7 +673,6 @@ export function BlastRadiusEvidenceCard({
       sources={sources}
       summary={summary}
       actionContext={actionContext}
-      statusTone={evidence.completeness === "full" ? "default" : evidence.completeness === "partial" ? "partial" : "minimal"}
       conflicts={conflicts}
     >
       <EvidenceConnectionStack>
@@ -727,7 +726,9 @@ export function BlastRadiusEvidenceCard({
                 </ul>
               </>
             ) : null}
-            {evidence.graphMeta?.source ? (
+            {evidence.graphMeta?.source &&
+            ((evidence.directDependents?.length ?? 0) > 0 ||
+              (evidence.transitiveDependents?.length ?? 0) > 0) ? (
               <IntegrationResultText muted>Graph source: {evidence.graphMeta.source}</IntegrationResultText>
             ) : null}
           </IntegrationResultCollapsible>

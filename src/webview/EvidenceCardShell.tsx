@@ -50,13 +50,8 @@ export function EvidenceCardShell({
   conflicts,
   children
 }: EvidenceCardShellProps): React.ReactElement {
-  const summaryStatusTone = summary ? qualityStatusTone(summary.quality) : statusTone;
-  const status = summary
-    ? qualityStatusLabel(summary.quality)
-    : statusLabel ??
-      (sources.length > 0
-        ? `${sources.length} connected source${sources.length === 1 ? "" : "s"}`
-        : "Limited evidence");
+  // Summary quality always wins over caller-supplied statusTone/statusLabel (e.g. completeness).
+  const resolved = resolveEvidenceCardHeaderStatus({ summary, statusTone, statusLabel, sources });
   const headerMetaLabel = resolveEvidenceTargetMetaLabel(meta, summary?.target);
 
   return (
@@ -64,8 +59,8 @@ export function EvidenceCardShell({
       <IntegrationResultCard
         title={title}
         meta={headerMetaLabel ? <EvidenceTargetMeta label={headerMetaLabel} /> : undefined}
-        status={status}
-        statusTone={summaryStatusTone}
+        status={resolved.status}
+        statusTone={resolved.statusTone}
         ariaLabel={`${title} sources`}
       >
         {!summary && sources.length > 0 ? (
@@ -114,7 +109,7 @@ function qualityStatusTone(quality: EvidenceQuality): "default" | "partial" | "m
   }
 }
 
-function qualityStatusLabel(quality: EvidenceQuality): string {
+export function qualityStatusLabel(quality: EvidenceQuality): string {
   switch (quality) {
     case "strong":
       return "Strong evidence";
@@ -125,6 +120,29 @@ function qualityStatusLabel(quality: EvidenceQuality): string {
     case "limited":
       return "Limited evidence";
   }
+}
+
+/** Header status for evidence cards — summary.quality beats completeness-driven props. */
+export function resolveEvidenceCardHeaderStatus(input: {
+  summary?: EvidenceCardSummary;
+  statusTone?: "default" | "partial" | "minimal" | "warning";
+  statusLabel?: string;
+  sources: EvidenceCardSource[];
+}): { status: string; statusTone: "default" | "partial" | "minimal" | "warning" } {
+  if (input.summary) {
+    return {
+      status: qualityStatusLabel(input.summary.quality),
+      statusTone: qualityStatusTone(input.summary.quality)
+    };
+  }
+  return {
+    status:
+      input.statusLabel ??
+      (input.sources.length > 0
+        ? `${input.sources.length} connected source${input.sources.length === 1 ? "" : "s"}`
+        : "Limited evidence"),
+    statusTone: input.statusTone ?? "default"
+  };
 }
 
 export function evidenceSectionDomId(artifactId: string, sourceLabel: string): string {

@@ -8,6 +8,7 @@ import { enrichRepoContextWithEditorState } from "./editorManifestContext";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
+import { isFileCallerQuery } from "./fileCallerIntent";
 
 export enum UserIntent {
   QUICK_ACTION_CLICKED = "quick_action_clicked",
@@ -273,9 +274,16 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return event.context.lines ? ["blame"] : [];
   }
   if (event.intent === UserIntent.MANUAL_CHAT_SUBMIT || event.intent === UserIntent.HOTKEY_TRIGGERED) {
+    // Caller/importer asks need durable dependents — same graph Blast uses — not chat_context alone.
+    if (event.context.file && isFileCallerQuery(event.context.queryText)) {
+      return ["chat_context", "dependencies"];
+    }
     return ["chat_context"];
   }
   if (!action) {
+    if (event.context.file && isFileCallerQuery(event.context.queryText)) {
+      return ["chat_context", "dependencies"];
+    }
     return ["chat_context"];
   }
   if (TRACE_ACTIONS.has(action)) {

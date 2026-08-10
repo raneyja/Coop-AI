@@ -161,16 +161,17 @@ export class CloudIndexBackend implements IndexBackend {
       };
       const dependents = (remote.data ?? []).map((edge) => edge.from);
       const freshness = remote.freshness;
+      // Empty dependents must not inherit repo-wide "import-parse" freshness.
       const source =
-        freshness === "import-parse" ||
-        freshness === "scip" ||
-        freshness === "zoekt" ||
-        freshness === "workspace" ||
-        freshness === "heuristic"
-          ? freshness
-          : dependents.length > 0
-            ? "import-parse"
-            : "remote";
+        dependents.length === 0
+          ? "remote"
+          : freshness === "import-parse" ||
+              freshness === "scip" ||
+              freshness === "zoekt" ||
+              freshness === "workspace" ||
+              freshness === "heuristic"
+            ? freshness
+            : "import-parse";
       return {
         file,
         dependents,

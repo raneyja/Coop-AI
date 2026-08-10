@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  EDIT_NO_TARGET_FILE_ERROR,
+  EDIT_UNREADABLE_FILE_ERROR,
+  hasEditTargetInScope,
   isConcreteFileEditAsk,
+  resolveEditEditorSnapPreference,
   resolveEditTrackingMessage,
+  shouldBypassAdvisoryGroundingForEdit,
   shouldTrackEditRequest
 } from "./editSendRouting";
 
@@ -85,6 +90,49 @@ test("resolveEditTrackingMessage appends mention scope to bubble text", () => {
   ]);
   assert.match(content, /update auth flow/);
   assert.match(content, /src\/auth\.ts/);
+});
+
+test("hasEditTargetInScope requires active remote/local file or @mention for composerMode edit", () => {
+  assert.equal(hasEditTargetInScope({}), false);
+  assert.equal(hasEditTargetInScope({ file: "   " }), false);
+  assert.equal(hasEditTargetInScope({ file: "src/config/responseDeadline.ts" }), true);
+  assert.equal(hasEditTargetInScope({ mentionCount: 1 }), true);
+  assert.equal(
+    hasEditTargetInScope({ file: "src/config/responseDeadline.ts", mentionCount: 0 }),
+    true
+  );
+});
+
+test("shouldBypassAdvisoryGroundingForEdit blocks PENDING/OPEN status hijacks on /edit", () => {
+  assert.equal(shouldBypassAdvisoryGroundingForEdit("edit"), true);
+  assert.equal(shouldBypassAdvisoryGroundingForEdit("ask"), false);
+  assert.equal(shouldBypassAdvisoryGroundingForEdit(undefined), false);
+});
+
+test("resolveEditEditorSnapPreference prefers remote tabs for /edit (Zero-Clone)", () => {
+  assert.equal(
+    resolveEditEditorSnapPreference({ composerMode: "edit", remoteProvenance: false }),
+    "remote-then-local"
+  );
+  assert.equal(
+    resolveEditEditorSnapPreference({ composerMode: "edit", remoteProvenance: true }),
+    "remote-only"
+  );
+  assert.equal(
+    resolveEditEditorSnapPreference({ composerMode: "ask", remoteProvenance: false }),
+    "local-then-any"
+  );
+  assert.equal(
+    resolveEditEditorSnapPreference({ remoteProvenance: true }),
+    "remote-only"
+  );
+});
+
+test("edit error copy stays actionable (no silent ask demotion)", () => {
+  assert.match(EDIT_NO_TARGET_FILE_ERROR, /Open a file/i);
+  assert.match(EDIT_NO_TARGET_FILE_ERROR, /\/edit/);
+  assert.match(EDIT_UNREADABLE_FILE_ERROR, /Could not read/i);
+  assert.match(EDIT_UNREADABLE_FILE_ERROR, /remote file/i);
 });
 
 console.log(`\neditSendRouting: ${passed}/${passed + failed} tests passed`);

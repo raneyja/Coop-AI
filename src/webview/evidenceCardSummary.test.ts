@@ -254,6 +254,26 @@ test("blast radius summary handles no dependents with unverified messaging", () 
   );
 });
 
+test("empty dependents must not claim verified import-parse (Documenso smoke)", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "packages/lib/types/is-document-status.ts",
+    directDependents: [],
+    transitiveDependents: [],
+    graphMeta: { edgeCount: 3275, source: "import-parse", lightningEnabled: true },
+    completeness: "partial",
+    warnings: []
+  };
+
+  const summary = summarizeBlastRadius(evidence, "packages/lib/types/is-document-status.ts");
+  assert.notEqual(summary.quality, "strong");
+  assert.match(summary.primaryFinding ?? "", /Impact unverified/i);
+  assert.ok(!/Verified import-parse/i.test(summary.qualityReason));
+  assert.ok(
+    !summary.sourceContributions.some((entry) => /via import-parse/i.test(entry.contribution)),
+    "must not advertise import-parse provenance with zero callers"
+  );
+});
+
 test("blast radius summary is strong for verified import-parse callers", () => {
   const evidence: BlastRadiusEvidence = {
     file: "src/config/responseDeadline.ts",
@@ -263,6 +283,7 @@ test("blast radius summary is strong for verified import-parse callers", () => {
       "src/api/CoopBackendClient.ts"
     ],
     graphMeta: { edgeCount: 2907, source: "import-parse", lightningEnabled: false },
+    completeness: "partial",
     warnings: []
   };
 
@@ -271,6 +292,32 @@ test("blast radius summary is strong for verified import-parse callers", () => {
   assert.match(summary.qualityReason, /import-parse/i);
   assert.match(summary.primaryFinding ?? "", /3 code dependent/i);
   assert.ok(summary.sourceContributions.some((entry) => entry.provider === "github"));
+  assert.ok(
+    !summary.limitations.some((line) => /Lightning|partial index|Deep index/i.test(line)),
+    "must not hedge verified import-parse with Lightning/partial-index limitations"
+  );
+  assert.ok(
+    !summary.recommendedActions.some((action) => action.kind === "open-lightning"),
+    "must not upsell Lightning when remote callers are already verified"
+  );
+});
+
+test("blast radius summary is strong when only dependentDetails carry import-parse", () => {
+  const evidence: BlastRadiusEvidence = {
+    file: "src/config/responseDeadline.ts",
+    directDependents: ["src/chat/CoopChatSession.ts"],
+    dependentDetails: [
+      { path: "src/chat/CoopChatSession.ts", depth: 1, source: "import-parse" }
+    ],
+    graphMeta: { edgeCount: 12, lightningEnabled: false },
+    completeness: "partial",
+    warnings: []
+  };
+
+  const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts");
+  assert.equal(summary.quality, "strong");
+  assert.match(summary.qualityReason, /import-parse/i);
+  assert.ok(!summary.limitations.some((line) => /Deep index|Lightning/i.test(line)));
 });
 
 test("blast radius source brands follow the active Use-repo code host", () => {

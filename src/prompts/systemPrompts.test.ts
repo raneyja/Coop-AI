@@ -139,6 +139,7 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes("## Editor selection (required when present)"));
   assert.ok(prompt.includes("fully implement"));
   assert.ok(prompt.includes("exact copy of the entire"));
+  assert.ok(prompt.includes("PENDING/OPEN"));
   assert.equal(prompt.includes("Uniform response template"), false);
   assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
   assert.equal(prompt.includes("Selection or focus hints mark where to start looking"), false);

@@ -13,7 +13,12 @@ import {
   confluenceScopeBlockMessage,
   isConfluenceScopeBlocked
 } from "../integrationScope/atlassianQuery";
-import { buildConfluenceCql, buildRepoOrQuery } from "./docSearchQuery";
+import {
+  buildConfluenceCql,
+  buildConfluenceRepoOnlyCql,
+  buildRepoOrQuery
+} from "./docSearchQuery";
+import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 
 export type ConfluenceSearchPage = {
@@ -87,11 +92,11 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const cql = scopeConfluenceCql(
+  const primaryCql = scopeConfluenceCql(
     buildConfluenceCql(options.owner, options.repo, options.extraTerms),
     options.integrationScope
   );
-  if (!cql) {
+  if (!primaryCql) {
     return {
       source: "confluence-search",
       cql: "",
@@ -108,7 +113,7 @@ export async function fetchConfluenceSearchContext(options: {
   if (siteError && !creds.atlassianCloudId) {
     return {
       source: "confluence-search",
-      cql,
+      cql: primaryCql,
       pages: [],
       error: siteError
     };
@@ -127,35 +132,62 @@ export async function fetchConfluenceSearchContext(options: {
   if (!client) {
     return {
       source: "confluence-search",
-      cql,
+      cql: primaryCql,
       pages: [],
       error: "Confluence credentials not configured."
     };
   }
 
   try {
-    const pages = await client.searchPages(cql, options.limit ?? 20);
+    const limit = options.limit ?? 20;
+    let pages = await client.searchPages(primaryCql, limit);
+    let cql = primaryCql;
+    // When (repo ∩ focus) is empty, fall back to Use-repo-only — never focus-only OR,
+    // which is what pulled Coop-AI ADR/templates into documenso Gaps.
+    if (pages.length === 0) {
+      const repoOnly = scopeConfluenceCql(
+        buildConfluenceRepoOnlyCql(options.owner, options.repo),
+        options.integrationScope
+      );
+      if (repoOnly && repoOnly !== primaryCql) {
+        pages = await client.searchPages(repoOnly, limit);
+        cql = repoOnly;
+      }
+    }
+
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
         : options.repo?.trim();
 
+    const mapped = pages.map((page) => {
+      const rawExcerpt = page.excerpt ? truncate(page.excerpt, 300) : undefined;
+      const excerpt = sanitizeIntegrationSnippet(rawExcerpt);
+      const title = sanitizeIntegrationSnippet(page.title) ?? page.title;
+      return {
+        id: page.id,
+        title,
+        excerpt,
+        updated: page.updated,
+        htmlUrl: page.htmlUrl
+      };
+    });
+
     return {
       source: "confluence-search",
       cql,
       repoQuery,
-      pages: pages.map((page) => ({
-        id: page.id,
-        title: page.title,
-        excerpt: page.excerpt ? truncate(page.excerpt, 300) : undefined,
-        updated: page.updated,
-        htmlUrl: page.htmlUrl
-      }))
+      pages: filterDocPagesForUseRepo(mapped, {
+        owner: options.owner,
+        repo: options.repo,
+        focusTerms: options.extraTerms,
+        limit
+      })
     };
   } catch (error) {
     return {
       source: "confluence-search",
-      cql,
+      cql: primaryCql,
       pages: [],
       error: error instanceof Error ? error.message : "Confluence search failed."
     };

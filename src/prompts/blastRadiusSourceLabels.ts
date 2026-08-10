@@ -123,11 +123,42 @@ export function listBlastRadiusSourceLabels(evidence: BlastRadiusEvidence): stri
   return labels;
 }
 
+function blastDependentCount(evidence: BlastRadiusEvidence): number {
+  return (evidence.directDependents?.length ?? 0) + (evidence.transitiveDependents?.length ?? 0);
+}
+
 /** True when verified remote callers exist — do not undercut with partial-index copy. */
 export function hasVerifiedRemoteBlastDependents(evidence: BlastRadiusEvidence): boolean {
-  const dependents =
-    (evidence.directDependents?.length ?? 0) + (evidence.transitiveDependents?.length ?? 0);
-  return dependents > 0 && isRemoteTrustedBlastGraphSource(evidence.graphMeta?.source);
+  const dependents = blastDependentCount(evidence);
+  // Never claim verified import-parse/scip/zoekt with an empty Direct dependents list.
+  if (dependents === 0) {
+    return false;
+  }
+  if (isRemoteTrustedBlastGraphSource(evidence.graphMeta?.source)) {
+    return true;
+  }
+  // Per-entry provenance (job merge can temporarily drop graphMeta.source).
+  return (evidence.dependentDetails ?? []).some(
+    (entry) =>
+      (entry.depth ?? 1) <= 1 && isRemoteTrustedBlastGraphSource(entry.source)
+  );
+}
+
+/** Prefer graphMeta.source, then a trusted per-entry detail source — only when callers exist. */
+export function verifiedRemoteBlastGraphSource(
+  evidence: BlastRadiusEvidence
+): string | undefined {
+  if (!hasVerifiedRemoteBlastDependents(evidence)) {
+    return undefined;
+  }
+  if (isRemoteTrustedBlastGraphSource(evidence.graphMeta?.source)) {
+    return evidence.graphMeta?.source;
+  }
+  const detailSource = evidence.dependentDetails?.find(
+    (entry) =>
+      (entry.depth ?? 1) <= 1 && isRemoteTrustedBlastGraphSource(entry.source)
+  )?.source;
+  return detailSource;
 }
 
 export function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean {
@@ -150,7 +181,7 @@ export function hasPartialIndexCoverage(evidence: BlastRadiusEvidence): boolean 
 export function listBlastRadiusSourcesChecklist(evidence: BlastRadiusEvidence): string[] {
   const dependencyNotes: string[] = [];
   if (hasVerifiedRemoteBlastDependents(evidence)) {
-    const source = evidence.graphMeta?.source ?? "import-parse";
+    const source = verifiedRemoteBlastGraphSource(evidence) ?? "import-parse";
     dependencyNotes.push(
       `Verified ${source} dependency graph; listed callers are import/symbol-backed.`
     );

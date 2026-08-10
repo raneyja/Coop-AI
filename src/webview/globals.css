@@ -2676,30 +2676,6 @@
     color: var(--coop-panel-muted);
   }
 
-  /* Host label next to repo name — text only; hues match admin CodeHostBadge */
-  .coop-explorer-codehost {
-    @apply shrink-0 text-[11px] font-medium;
-  }
-
-  .coop-explorer-codehost--github {
-    /* Distinct from repo name; violet pops on light and dark */
-    color: #a78bfa;
-  }
-
-  [data-theme="light"] .coop-explorer-codehost--github {
-    color: #7c3aed;
-  }
-
-  .coop-explorer-codehost--gitlab {
-    /* Admin: text-orange-200 — slightly stronger for light webview contrast */
-    color: #fb923c;
-  }
-
-  .coop-explorer-codehost--bitbucket {
-    /* Admin: text-sky-200 — slightly stronger for light webview contrast */
-    color: #38bdf8;
-  }
-
   .coop-explorer-empty {
     @apply px-3 py-4 text-center text-[11px] leading-relaxed;
     color: var(--coop-panel-muted);

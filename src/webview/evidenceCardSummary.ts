@@ -13,10 +13,8 @@ import type {
 } from "../context/contextBundleEvidence";
 import { formatEvidenceStaleness } from "../context/evidenceStaleness";
 import {
-  blastRadiusSourceLabelCiWorkflows,
   blastRadiusSourceLabelCodeowners,
   blastRadiusSourceLabelConfluence,
-  blastRadiusSourceLabelCrossRepo,
   blastRadiusSourceLabelDependencies,
   blastRadiusSourceLabelDocsReferences,
   blastRadiusSourceLabelJira,
@@ -25,7 +23,9 @@ import {
   blastRadiusSourceLabelPublicApi,
   blastRadiusSourceLabelRecentChanges,
   blastRadiusSourceLabelSlack,
-  blastRadiusSourceLabelTests
+  blastRadiusSourceLabelTests,
+  hasVerifiedRemoteBlastDependents,
+  verifiedRemoteBlastGraphSource
 } from "../prompts/blastRadiusSourceLabels";
 import {
   decisionSourceLabelCommit,
@@ -455,6 +455,8 @@ export function summarizeBlastRadius(
   const exportCount = evidence.publicExports?.length ?? 0;
   const recentCount = evidence.recentChanges?.length ?? 0;
   const graphSource = evidence.graphMeta?.source;
+  const verifiedSource = verifiedRemoteBlastGraphSource(evidence);
+  const trustedRemoteGraph = hasVerifiedRemoteBlastDependents(evidence);
   const lightningDisabled = evidence.graphMeta?.lightningEnabled === false;
   const hasOtherSignals =
     !!evidence.graphMeta ||
@@ -465,16 +467,12 @@ export function summarizeBlastRadius(
     recentCount > 0 ||
     (evidence.localFiles?.files?.length ?? 0) > 0;
 
-  const trustedRemoteGraph =
-    dependentCount > 0 &&
-    (graphSource === "import-parse" || graphSource === "scip" || graphSource === "zoekt");
-
   let quality: EvidenceQuality;
   let qualityReason: string;
   if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0 || trustedRemoteGraph)) {
     quality = "strong";
     qualityReason = trustedRemoteGraph
-      ? `Verified ${graphSource} dependency graph identified ${dependentCount} code dependent(s).`
+      ? `Verified ${verifiedSource ?? graphSource ?? "import-parse"} dependency graph identified ${dependentCount} code dependent(s).`
       : "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
   } else if (dependentCount > 0) {
     quality = "medium";
@@ -487,9 +485,10 @@ export function summarizeBlastRadius(
     qualityReason = "No dependency or impact evidence was available for this file.";
   }
 
+  const displayGraphSource = verifiedSource ?? graphSource;
   const primaryFinding =
     dependentCount > 0
-      ? `${file} has ${directCount} code dependent(s)${transitiveCount ? ` and ${transitiveCount} transitive code dependent(s)` : ""}${docsCount ? ` plus ${docsCount} docs/reference hit(s)` : ""}${graphSource ? ` (source: ${graphSource})` : ""}.`
+      ? `${file} has ${directCount} code dependent(s)${transitiveCount ? ` and ${transitiveCount} transitive code dependent(s)` : ""}${docsCount ? ` plus ${docsCount} docs/reference hit(s)` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
       : docsCount > 0
         ? `${file} has no code dependents in the index, but ${docsCount} docs/reference file(s) mention it.`
         : `Impact unverified — no indexed dependents found for ${file}.`;
@@ -498,8 +497,14 @@ export function summarizeBlastRadius(
     dependentCount === 0
       ? "Impact unverified — no dependents found in index; do not assume zero blast radius."
       : undefined,
-    lightningDisabled ? "Deep index (Lightning Mode) is not enabled for this repository." : undefined,
-    ownerCount === 0 ? "No CODEOWNERS mapping was attached for impacted files." : undefined,
+    // Verified import-parse/scip/zoekt callers are the product win — do not hedge with
+    // Lightning-off / partial-index copy when remote callers are already proven.
+    !trustedRemoteGraph && lightningDisabled
+      ? "Deep index (Lightning Mode) is not enabled for this repository."
+      : undefined,
+    !trustedRemoteGraph && ownerCount === 0
+      ? "No CODEOWNERS mapping was attached for impacted files."
+      : undefined,
     evidence.slackSearch?.error,
     evidence.slackSearch && evidence.slackSearch.messages.length === 0
       ? "No matching Slack discussions were found for this blast radius."
@@ -522,7 +527,7 @@ export function summarizeBlastRadius(
       label: blastRadiusSourceLabelDependencies(),
       contribution:
         dependentCount > 0
-          ? `Dependency graph identified ${directCount} direct and ${transitiveCount} transitive code dependent(s)${graphSource ? ` via ${graphSource}` : ""}.`
+          ? `Dependency graph identified ${directCount} direct and ${transitiveCount} transitive code dependent(s)${displayGraphSource ? ` via ${displayGraphSource}` : ""}.`
           : "Dependency graph metadata is present, but this file has no indexed code dependents.",
       relevance: dependentCount > 0 ? "direct" : "background"
     });
@@ -623,7 +628,8 @@ export function summarizeBlastRadius(
     evidence.directDependents?.[0]
       ? { label: "Open top dependent", kind: "open-file", path: evidence.directDependents[0] }
       : undefined,
-    lightningDisabled || dependentCount === 0
+    // Don't undercut verified remote callers with an Enable Lightning upsell.
+    !trustedRemoteGraph && (lightningDisabled || dependentCount === 0)
       ? { label: "Enable Lightning", kind: "open-lightning" }
       : undefined
   ]);

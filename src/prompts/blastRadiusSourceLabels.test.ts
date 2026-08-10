@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import {
   blastRadiusSourceLabelDependencies,
   hasPartialIndexCoverage,
+  hasVerifiedRemoteBlastDependents,
   listBlastRadiusSourceLabels,
-  listBlastRadiusSourcesChecklist
+  listBlastRadiusSourcesChecklist,
+  verifiedRemoteBlastGraphSource
 } from "./blastRadiusSourceLabels";
 
 const emptyEvidence = { file: "src/handler.ts" };
@@ -65,6 +67,52 @@ assert.ok(
 assert.ok(
   !verifiedChecklist.some((line) => /Index coverage is partial/i.test(line)),
   "must not undercut verified import-parse callers"
+);
+
+// Regression: smoke showed "Graph source: import-parse" with zero Documenso callers.
+const emptyButImportParseLabel = {
+  file: "packages/lib/types/is-document-status.ts",
+  directDependents: [] as string[],
+  transitiveDependents: [] as string[],
+  dependentDetails: [] as Array<{ path: string; depth: number; source: "import-parse" }>,
+  graphMeta: { source: "import-parse" as const, lightningEnabled: true, edgeCount: 3275 },
+  completeness: "partial" as const
+};
+assert.equal(
+  hasVerifiedRemoteBlastDependents(emptyButImportParseLabel),
+  false,
+  "must not claim verified remote callers when Direct dependents is empty"
+);
+assert.equal(
+  verifiedRemoteBlastGraphSource(emptyButImportParseLabel),
+  undefined,
+  "must not expose import-parse as verified source when callers are empty"
+);
+const emptyImportParseChecklist = listBlastRadiusSourcesChecklist(emptyButImportParseLabel);
+assert.ok(
+  !emptyImportParseChecklist.some((line) => /Verified import-parse/i.test(line)),
+  "checklist must not say Verified import-parse with 0 dependents"
+);
+assert.ok(
+  emptyImportParseChecklist.some((line) => /Impact unverified/i.test(line)),
+  "empty dependents must stay Impact unverified"
+);
+
+const verifiedViaDetailsOnly = {
+  file: "src/config/responseDeadline.ts",
+  directDependents: ["src/chat/CoopChatSession.ts"],
+  dependentDetails: [
+    { path: "src/chat/CoopChatSession.ts", depth: 1, source: "import-parse" as const }
+  ],
+  graphMeta: { edgeCount: 10, lightningEnabled: false },
+  completeness: "partial" as const
+};
+assert.equal(hasPartialIndexCoverage(verifiedViaDetailsOnly), false);
+assert.ok(
+  listBlastRadiusSourcesChecklist(verifiedViaDetailsOnly).some((line) =>
+    /Verified import-parse/i.test(line)
+  ),
+  "per-entry import-parse provenance counts as verified"
 );
 
 console.log("blastRadiusSourceLabels: ok");

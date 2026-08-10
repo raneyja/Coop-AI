@@ -116,6 +116,16 @@ export function buildImportSearchPatterns(file: string, symbols: string[] = []):
     }
   }
 
+  // 3b) packages/<pkg>/… → prefer the workspace-relative suffix (matches
+  // `@scope/pkg/...` import strings via Zoekt substring).
+  if (pathParts[0] === "packages" && pathParts.length >= 3) {
+    const pkgAndRest = pathParts.slice(1).join("/");
+    add(pkgAndRest);
+    for (const quote of ["'", '"']) {
+      add(`/${pkgAndRest}${quote}`);
+    }
+  }
+
   // 4) Python-style imports of the module stem.
   if (/\.py$/i.test(file)) {
     add(`from ${stem} import`);
@@ -423,6 +433,122 @@ export function searchDependentsInLocalRoots(
     dependents: sortDependentsProductionFirst(dependents).slice(0, maxHits),
     source: "workspace",
     warnings
+  };
+}
+
+/**
+ * Durable remote dependents for Blast and plain-chat caller asks.
+ * Prefer indexBackend.dependents (import-parse / scip / zoekt); fall back to
+ * remote import-pattern search. Never scans localRoots (Zero-Clone).
+ */
+export async function resolveTrustedRemoteDependents(
+  indexBackend: IndexBackend,
+  repoId: string,
+  file: string,
+  options: {
+    maxPatterns?: number;
+    symbols?: string[];
+    /** When false, skip Zoekt/SCIP search if durable API already returned trusted hits. */
+    enrichWithSearch?: boolean;
+  } = {}
+): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
+  const warnings: string[] = [];
+  const normalizedRepoId = normalizeGraphRepoId(repoId);
+  let fallback: {
+    dependents: BlastRadiusDependentDetail[];
+    source: GraphEdgeSource;
+    warnings: string[];
+  } = { dependents: [], source: "remote", warnings: [] };
+
+  try {
+    const apiDeps = await indexBackend.dependents(normalizedRepoId, file);
+    if (apiDeps.dependents.length > 0 && isTrustedBlastGraphSource(apiDeps.source)) {
+      fallback = {
+        dependents: apiDeps.dependents.map((path) => ({
+          path,
+          depth: 1,
+          source: asGraphEdgeSource(apiDeps.source)
+        })),
+        source: asGraphEdgeSource(apiDeps.source),
+        warnings: [
+          `Dependents from durable ${apiDeps.source} graph — ${apiDeps.dependents.length} direct caller(s).`
+        ]
+      };
+    }
+  } catch {
+    // Soft gather — continue with remote search.
+  }
+
+  const shouldSearch =
+    fallback.dependents.length === 0 || options.enrichWithSearch === true;
+  if (!shouldSearch) {
+    return fallback;
+  }
+
+  try {
+    const search = await searchDependentsFallback(indexBackend, normalizedRepoId, file, {
+      maxPatterns: options.maxPatterns,
+      symbols: options.symbols,
+      remoteOnly: true
+    });
+    warnings.push(...fallback.warnings, ...search.warnings);
+    if (fallback.dependents.length === 0) {
+      return {
+        dependents: search.dependents,
+        source: search.source,
+        warnings: [...new Set(warnings)]
+      };
+    }
+    if (search.dependents.length > 0 && search.source !== "workspace") {
+      const seen = new Set(fallback.dependents.map((entry) => entry.path));
+      for (const entry of search.dependents) {
+        if (!seen.has(entry.path)) {
+          seen.add(entry.path);
+          fallback.dependents.push({
+            ...entry,
+            // Keep durable provenance on the bundle source; per-path may be zoekt.
+            source: entry.source
+          });
+        }
+      }
+      fallback.dependents = sortDependentsProductionFirst(fallback.dependents).slice(0, 30);
+    }
+    return { ...fallback, warnings: [...new Set(warnings)] };
+  } catch {
+    return { ...fallback, warnings: [...new Set([...fallback.warnings, ...warnings])] };
+  }
+}
+
+/**
+ * Promote trusted remote dependents onto a dependencies / chat context data object
+ * for prompt serialization and blastRadiusFromBundle.
+ */
+export function mergeDurableDependentsIntoContextData(
+  data: Record<string, unknown>,
+  resolved: {
+    dependents: BlastRadiusDependentDetail[];
+    source: GraphEdgeSource;
+    warnings: string[];
+  }
+): Record<string, unknown> {
+  if (resolved.dependents.length === 0) {
+    return data;
+  }
+  const ranked = sortDependentsProductionFirst(resolved.dependents);
+  const priorWarnings = Array.isArray(data.warnings)
+    ? (data.warnings as unknown[]).filter((w): w is string => typeof w === "string")
+    : [];
+  return {
+    ...data,
+    directDependents: ranked.map((entry) => entry.path),
+    dependentDetails: ranked,
+    warnings: [...new Set([...priorWarnings, ...resolved.warnings])],
+    graphMeta: {
+      ...(typeof data.graphMeta === "object" && data.graphMeta !== null
+        ? (data.graphMeta as Record<string, unknown>)
+        : {}),
+      source: resolved.source
+    }
   };
 }
 

@@ -3,7 +3,9 @@ import {
   isFileLevelQuickAction,
   isQuickActionBlocked,
   quickActionBlockedMessage,
-  quickActionWorksWithoutFile
+  quickActionWorksWithoutFile,
+  shouldSkipOpenFileAttach,
+  shouldWarnOpenFileAttachFailure
 } from "./quickActionScope";
 import type { RepoContext } from "../chat/types";
 
@@ -156,6 +158,105 @@ async function run(): Promise<void> {
     ] as const) {
       assert.equal(isQuickActionBlocked(action, attached), true);
     }
+  });
+
+  test("skip open-file attach for Understand / Gaps / Owner without a file chip", () => {
+    assert.equal(
+      shouldSkipOpenFileAttach({ quickAction: "understand-repo", context: repoContext }),
+      true
+    );
+    assert.equal(
+      shouldSkipOpenFileAttach({ quickAction: "knowledge-gaps", context: repoContext }),
+      true
+    );
+    assert.equal(
+      shouldSkipOpenFileAttach({ quickAction: "find-owner", context: repoContext }),
+      true
+    );
+    assert.equal(
+      shouldSkipOpenFileAttach({
+        quickAction: "knowledge-gaps",
+        context: { ...repoContext, file: "src/a.ts", scope: "file" }
+      }),
+      false
+    );
+  });
+
+  test("skip open-file attach for sticky Use-repo plain chat without a file chip", () => {
+    assert.equal(shouldSkipOpenFileAttach({ context: repoContext }), true);
+    assert.equal(
+      shouldSkipOpenFileAttach({
+        context: { ...repoContext, file: "src/a.ts", scope: "file" }
+      }),
+      false
+    );
+  });
+
+  test("do not warn about leftover open tabs on repo-wide turns", () => {
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        quickAction: "knowledge-gaps",
+        hasAttachedFiles: false,
+        openEditorTabCount: 2,
+        intendedFile: undefined
+      }),
+      false
+    );
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        quickAction: "understand-repo",
+        hasAttachedFiles: false,
+        openEditorTabCount: 2,
+        intendedFile: undefined
+      }),
+      false
+    );
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        quickAction: "find-owner",
+        hasAttachedFiles: false,
+        openEditorTabCount: 1,
+        intendedFile: undefined
+      }),
+      false
+    );
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        hasAttachedFiles: false,
+        openEditorTabCount: 3,
+        intendedFile: undefined
+      }),
+      false
+    );
+  });
+
+  test("warn when an intentional file chip failed to attach", () => {
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        quickAction: "trace-decision",
+        hasAttachedFiles: false,
+        openEditorTabCount: 1,
+        intendedFile: "src/auth.ts"
+      }),
+      true
+    );
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        hasAttachedFiles: false,
+        openEditorTabCount: 1,
+        intendedFile: "AGENTS.md"
+      }),
+      true
+    );
+    assert.equal(
+      shouldWarnOpenFileAttachFailure({
+        quickAction: "trace-decision",
+        hasAttachedFiles: true,
+        openEditorTabCount: 1,
+        intendedFile: "src/auth.ts"
+      }),
+      false
+    );
   });
 
   const total = passed + failed;
