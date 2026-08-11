@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import {
+  buildFocusAwareJiraJql,
   buildIssueKeysJql,
+  buildJiraFocusTerms,
   buildRepoJql,
   collectJiraKeysFromText,
+  rankJiraIssuesForFocus,
   shouldFetchJiraContext,
   wantsJiraContext,
+  wantsOpenTickets,
   wantsRepoLinkedJiraDiscovery
 } from "./jiraContext";
 import type { ContextFetchRequest } from "./requestBatcher";
@@ -61,6 +65,67 @@ test("buildRepoJql returns undefined without repo", () => {
   assert.equal(buildRepoJql("acme", undefined), undefined);
 });
 
+test("buildJiraFocusTerms includes path stem and basename", () => {
+  const terms = buildJiraFocusTerms({
+    activeFile: "src/workspace/IndexedRepoWorkspace.ts"
+  });
+  assert.ok(terms.includes("IndexedRepoWorkspace"));
+  assert.ok(terms.includes("IndexedRepoWorkspace.ts"));
+  assert.ok(terms.includes("src/workspace/IndexedRepoWorkspace.ts"));
+});
+
+test("buildFocusAwareJiraJql ANDs repo with file focus", () => {
+  const jql = buildFocusAwareJiraJql({
+    owner: "raneyja",
+    repo: "Coop-AI",
+    activeFile: "src/workspace/IndexedRepoWorkspace.ts"
+  });
+  assert.ok(jql);
+  assert.ok(jql!.includes("AND"));
+  assert.ok(jql!.includes('summary ~ "IndexedRepoWorkspace"'));
+  assert.ok(jql!.includes('text ~ "raneyja/Coop-AI"') || jql!.includes('text ~ "Coop-AI"'));
+  assert.ok(jql!.includes("ORDER BY updated DESC"));
+});
+
+test("buildFocusAwareJiraJql undefined without focus", () => {
+  assert.equal(
+    buildFocusAwareJiraJql({ owner: "raneyja", repo: "Coop-AI" }),
+    undefined
+  );
+});
+
+test("rankJiraIssuesForFocus puts path-matching tickets first", () => {
+  const ranked = rankJiraIssuesForFocus(
+    [
+      {
+        key: "COOP-55",
+        summary: "Architecture decision: webview vs native sidebar for chat",
+        status: "Backlog"
+      },
+      {
+        key: "COOP-235",
+        summary: "Blast radius dependents missing for IndexedRepoWorkspace",
+        status: "Selected for Development"
+      },
+      {
+        key: "COOP-101",
+        summary: "Extract auth and repo indexing into coop-backend",
+        status: "In Progress"
+      }
+    ],
+    {
+      activeFile: "src/workspace/IndexedRepoWorkspace.ts",
+      queryText: "check jira for open tickets"
+    }
+  );
+  assert.equal(ranked[0]?.key, "COOP-235");
+});
+
+test("wantsOpenTickets matches open tickets phrasing", () => {
+  assert.equal(wantsOpenTickets("check jira for open tickets as well"), true);
+  assert.equal(wantsOpenTickets("what is the auth flow"), false);
+});
+
 test("wantsRepoLinkedJiraDiscovery matches repo-wide ticket questions", () => {
   assert.equal(wantsRepoLinkedJiraDiscovery("show me any related tickets to this repo"), true);
   assert.equal(wantsRepoLinkedJiraDiscovery("summarize COOP-118"), false);
@@ -105,6 +170,15 @@ test("shouldFetchJiraContext includes incident-shaped chat without jira keyword"
   } as ContextFetchRequest;
   assert.equal(shouldFetchJiraContext(request), true);
   assert.equal(wantsJiraContext("webhook failures and retries on board sync last week"), false);
+});
+
+test("shouldFetchJiraContext respects jira-only allowlist on blast-radius", () => {
+  const request = {
+    type: "chat_context",
+    params: { quickAction: "blast-radius", fetchIntegrations: ["jira"] },
+    intent: { context: { queryText: "impact + jira" } }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchJiraContext(request), true);
 });
 
 const total = passed + failed;

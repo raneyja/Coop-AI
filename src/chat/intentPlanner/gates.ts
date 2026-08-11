@@ -50,7 +50,7 @@ export const PHASE1_GATE_CRITERIA = [
   },
   {
     id: "P1-G3",
-    title: "Disconnected tools are never planned"
+    title: "Named tools stay planned even when disconnected"
   },
   {
     id: "P1-G4",

@@ -67,14 +67,15 @@ test("Phase 1 Chat Intent Planner gates", () => {
         connectedTools: ["jira", "slack", "confluence"]
       });
       assert.deepEqual(plan.tools, []);
-      assert.equal(plan.mode, "none");
+      assert.equal(plan.mode, "plain");
     }),
     evaluateGate(PHASE1_GATE_CRITERIA[2], () => {
       const plan = planChatIntentFromRules({
         message: "Check Jira for the related ticket",
         connectedTools: ["slack"]
       });
-      assert.deepEqual(plan.tools, []);
+      // Named tools stay on the plan so we attempt the call / surface not-connected.
+      assert.deepEqual(plan.tools, ["jira"]);
     }),
     evaluateGate(PHASE1_GATE_CRITERIA[3], () => {
       const request = plannedRequest([
@@ -117,9 +118,23 @@ test("Phase 1 Chat Intent Planner gates", () => {
       assert.equal(plan.tools.length, 2);
       assert.equal(integrationProvider, undefined);
       assert.equal("integrationProvider" in plan, false);
-    })
+    }),
+    evaluateGate(
+      {
+        id: "P1-G7",
+        title: "Slack + Notion named → both tools planned"
+      },
+      () => {
+        const plan = planChatIntentFromRules({
+          message: "cross-check mentions of IndexedRepoWorkspace in slack and notion",
+          connectedTools: ["slack"]
+        });
+        assert.deepEqual(plan.tools, ["slack", "notion"]);
+        assert.equal(plan.mode, "tools-only");
+      }
+    )
   ];
 
-  assert.equal(results.length, PHASE1_GATE_CRITERIA.length);
+  assert.equal(results.length, PHASE1_GATE_CRITERIA.length + 1);
   assertAllGatesPass(results, "Phase 1");
 });

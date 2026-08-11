@@ -12,8 +12,9 @@ import {
 } from "../integrationScope/atlassianQuery";
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
-import { shouldFetchRepoWideIntegrations, shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
-import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
+import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import { filePathSearchTerms } from "./traceDecisionSearch";
 
 export type JiraSearchTicket = {
   key: string;
@@ -71,36 +72,142 @@ export function wantsRepoLinkedJiraDiscovery(query: string): boolean {
 }
 
 export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
-  if (requestAllowsIntegrationFetch(request, "jira")) {
-    return true;
-  }
-  if (shouldFetchTraceDecisionDocIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  const queryText = request.intent.context.queryText ?? "";
-  // Incident / on-call reconstruction (A9) — fetch even when the user did not say "jira".
-  // Keep separate from wantsJiraContext so detectChatIntegrationProvider does not
-  // single-route the turn to Jira-only synthesis.
-  if (shouldFetchIncidentIntegrations(queryText)) {
-    return true;
-  }
-  return wantsJiraContext(queryText);
+  return shouldFetchIntegrationWithAllowlist(request, "jira", () => {
+    if (shouldFetchTraceDecisionDocIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    const queryText = request.intent.context.queryText ?? "";
+    // Incident / on-call reconstruction (A9) — fetch even when the user did not say "jira".
+    // Keep separate from wantsJiraContext so detectChatIntegrationProvider does not
+    // single-route the turn to Jira-only synthesis.
+    if (shouldFetchIncidentIntegrations(queryText)) {
+      return true;
+    }
+    return wantsJiraContext(queryText);
+  });
 }
 
 export function buildRepoJql(owner: string | undefined, repo: string | undefined): string | undefined {
-  const terms = buildRepoSearchTerms(owner, repo);
-  if (terms.length === 0) {
+  const repoClause = buildRepoClause(owner, repo);
+  if (!repoClause) {
     return undefined;
   }
-  const clauses = new Set<string>();
-  for (const term of terms) {
-    clauses.add(`text ~ "${escapeJqlString(term)}"`);
-    clauses.add(`summary ~ "${escapeJqlString(term)}"`);
+  return `${repoClause} ORDER BY updated DESC`;
+}
+
+/** Focus terms for Jira text search (path stem, basename, caller extras). */
+export function buildJiraFocusTerms(options: {
+  activeFile?: string;
+  extraTerms?: string[];
+  owner?: string;
+  repo?: string;
+}): string[] {
+  const repoSlugs = new Set(
+    buildRepoSearchTerms(options.owner, options.repo).map((term) => term.toLowerCase())
+  );
+  const terms = new Set<string>();
+  const add = (raw: string): void => {
+    const trimmed = raw.trim();
+    if (trimmed.length < 3) {
+      return;
+    }
+    if (repoSlugs.has(trimmed.toLowerCase())) {
+      return;
+    }
+    terms.add(trimmed);
+  };
+  for (const term of filePathSearchTerms(options.activeFile)) {
+    add(term);
   }
-  return `(${[...clauses].join(" OR ")}) ORDER BY updated DESC`;
+  const activeFile = options.activeFile?.trim().replace(/^\/+/, "");
+  if (activeFile) {
+    add(activeFile);
+  }
+  for (const term of options.extraTerms ?? []) {
+    add(term);
+  }
+  return [...terms].slice(0, 12);
+}
+
+/**
+ * Prefer tickets that mention the open file / focus terms within the Use-repo.
+ * Returns undefined when there is no focus (caller should use buildRepoJql).
+ */
+export function buildFocusAwareJiraJql(options: {
+  owner?: string;
+  repo?: string;
+  activeFile?: string;
+  extraTerms?: string[];
+}): string | undefined {
+  const repoClause = buildRepoClause(options.owner, options.repo);
+  const focusTerms = buildJiraFocusTerms(options);
+  if (!repoClause || focusTerms.length === 0) {
+    return undefined;
+  }
+  const focusClauses = new Set<string>();
+  for (const term of focusTerms) {
+    focusClauses.add(`text ~ "${escapeJqlString(term)}"`);
+    focusClauses.add(`summary ~ "${escapeJqlString(term)}"`);
+  }
+  return `(${repoClause}) AND (${[...focusClauses].join(" OR ")}) ORDER BY updated DESC`;
+}
+
+export function wantsOpenTickets(query: string | undefined): boolean {
+  const q = query?.trim().toLowerCase() ?? "";
+  if (!q) {
+    return false;
+  }
+  return /\bopen\s+tickets?\b/.test(q) || /\b(in\s+progress|active|unresolved)\s+tickets?\b/.test(q);
+}
+
+function isDoneStatus(status: string | undefined): boolean {
+  const s = (status ?? "").trim().toLowerCase();
+  return s === "done" || s === "closed" || s === "resolved" || s === "complete" || s === "completed";
+}
+
+/**
+ * Rank Jira hits so path/focus matches beat newest-repo dump.
+ * Keep all issues; callers slice after rank.
+ */
+export function rankJiraIssuesForFocus<T extends { key: string; summary: string; status: string }>(
+  issues: T[],
+  options: {
+    activeFile?: string;
+    queryText?: string;
+    extraTerms?: string[];
+    owner?: string;
+    repo?: string;
+  }
+): T[] {
+  if (issues.length <= 1) {
+    return issues;
+  }
+  const focusTerms = buildJiraFocusTerms(options).map((term) => term.toLowerCase());
+  const preferOpen = wantsOpenTickets(options.queryText);
+
+  const scored = issues.map((issue, index) => {
+    const haystack = `${issue.key} ${issue.summary}`.toLowerCase();
+    let score = 0;
+    for (const term of focusTerms) {
+      if (haystack.includes(term.toLowerCase())) {
+        score += term.includes("/") || term.includes(".") ? 40 : 25;
+      }
+    }
+    if (preferOpen && !isDoneStatus(issue.status)) {
+      score += 20;
+    }
+    if (preferOpen && isDoneStatus(issue.status)) {
+      score -= 30;
+    }
+    // Stable tie-break: original order (usually updated DESC).
+    return { issue, score, index };
+  });
+
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  return scored.map((entry) => entry.issue);
 }
 
 export function buildIssueKeysJql(keys: string[]): string | undefined {
@@ -166,6 +273,8 @@ export async function fetchJiraSearchContext(options: {
   contextText?: string[];
   /** Titles/excerpts from Confluence, Notion, or other doc integrations for cross-tool key discovery. */
   crossToolText?: string[];
+  /** File/focus extras (path stems, Gaps phrases) — same list Slack/Confluence already use. */
+  extraTerms?: string[];
   limit?: number;
   codeHostRouter?: CodeHostRouter;
   codeHostConnected?: boolean;
@@ -198,28 +307,62 @@ export async function fetchJiraSearchContext(options: {
   const discoveredKeys = new Set([...queryKeys, ...contextKeys, ...crossToolKeys]);
   const issuesByKey = new Map<string, JiraIssue>();
   const limit = options.limit ?? 20;
+  const focusJqlOptions = {
+    owner: options.owner,
+    repo: options.repo,
+    activeFile: options.activeFile,
+    extraTerms: options.extraTerms
+  };
 
   for (const key of discoveredKeys) {
     await addIssueByKey(client, issuesByKey, key);
   }
 
-  const jql = scopeJql(
-    buildRepoJql(options.owner, options.repo),
-    options.integrationScope
-  );
+  const focusJql = scopeJql(buildFocusAwareJiraJql(focusJqlOptions), options.integrationScope);
+  const repoJql = scopeJql(buildRepoJql(options.owner, options.repo), options.integrationScope);
   let searchError: string | undefined;
   let textSearchCount = 0;
-  if (jql) {
+  let usedJql = focusJql ?? repoJql ?? "";
+
+  if (focusJql) {
     try {
-      const searchHits = await client.searchIssues(jql, limit);
-      textSearchCount = searchHits.length;
-      for (const issue of searchHits) {
+      const focusHits = await client.searchIssues(focusJql, limit);
+      textSearchCount = focusHits.length;
+      for (const issue of focusHits) {
         issuesByKey.set(issue.key, issue);
       }
     } catch (error) {
       searchError = error instanceof Error ? error.message : "Jira search failed.";
     }
   }
+
+  // Fail open: if focus search is thin, merge repo-wide hits then rank.
+  const FOCUS_HIT_FLOOR = 3;
+  if (repoJql && (!focusJql || textSearchCount < FOCUS_HIT_FLOOR)) {
+    try {
+      const repoHits = await client.searchIssues(repoJql, limit);
+      if (!focusJql) {
+        textSearchCount = repoHits.length;
+        usedJql = repoJql;
+      } else if (repoHits.length > 0 && textSearchCount < FOCUS_HIT_FLOOR) {
+        usedJql = focusJql;
+      }
+      for (const issue of repoHits) {
+        issuesByKey.set(issue.key, issue);
+      }
+      if (!focusJql) {
+        /* counted above */
+      } else if (repoHits.length > 0) {
+        textSearchCount = Math.max(textSearchCount, 1);
+      }
+    } catch (error) {
+      if (!searchError) {
+        searchError = error instanceof Error ? error.message : "Jira search failed.";
+      }
+    }
+  }
+
+  const jql = usedJql;
 
   const owner = options.owner?.trim();
   const repo = options.repo?.trim();
@@ -259,7 +402,7 @@ export async function fetchJiraSearchContext(options: {
   let searchNote: string | undefined;
   let matchStrategy: JiraSearchContext["matchStrategy"] = "none";
 
-  if (textSearchCount > 0) {
+  if (textSearchCount > 0 || (focusJql && issuesByKey.size > 0)) {
     matchStrategy = "text";
   } else if (repoKeyHits?.length && issuesByKey.size > 0) {
     matchStrategy = "git";
@@ -292,17 +435,38 @@ export async function fetchJiraSearchContext(options: {
     };
   }
 
+  const ranked = rankJiraIssuesForFocus(mapIssues([...issuesByKey.values()]), {
+    activeFile: options.activeFile,
+    queryText,
+    extraTerms: options.extraTerms,
+    owner: options.owner,
+    repo: options.repo
+  }).slice(0, limit);
+
   return {
     source: "jira-search",
     jql: jql ?? "",
     repoQuery,
-    issues: filterScopedIssues(mapIssues([...issuesByKey.values()]), options.integrationScope),
+    issues: filterScopedIssues(ranked, options.integrationScope),
     issueKeyHits: issueKeys.length > 0 ? issueKeys : undefined,
     repoKeyHits: repoKeyHits?.length ? repoKeyHits : undefined,
     matchStrategy,
     searchNote,
     error: searchError
   };
+}
+
+function buildRepoClause(owner: string | undefined, repo: string | undefined): string | undefined {
+  const terms = buildRepoSearchTerms(owner, repo);
+  if (terms.length === 0) {
+    return undefined;
+  }
+  const clauses = new Set<string>();
+  for (const term of terms) {
+    clauses.add(`text ~ "${escapeJqlString(term)}"`);
+    clauses.add(`summary ~ "${escapeJqlString(term)}"`);
+  }
+  return `(${[...clauses].join(" OR ")})`;
 }
 
 function scopeJql(

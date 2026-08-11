@@ -84,27 +84,31 @@ const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: Re
 ];
 
 const EXPLAIN_ONLY =
-  /^(what\s+does\s+this\s+(function|method|class|file)\s+do\b|explain\s+this\s+(function|method|class|file|code)\b)/i;
+  /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b)/i;
 
 /**
- * Detect named tools in the user ask, filtered to connected tools.
+ * Tools explicitly named or clearly requested in the message (connection-agnostic).
+ * Named tools must stay on the plan so we attempt the call (or surface not-connected).
  */
-export function detectRequestedTools(
-  message: string,
-  connectedTools: IntegrationChatProvider[]
-): IntegrationChatProvider[] {
-  const connected = new Set(connectedTools);
+export function detectNamedTools(message: string): IntegrationChatProvider[] {
   const found: IntegrationChatProvider[] = [];
   for (const { provider, pattern } of TOOL_NAME_PATTERNS) {
-    if (!connected.has(provider)) {
-      continue;
-    }
     if (pattern.test(message) || legacyWants(provider, message)) {
       found.push(provider);
     }
   }
-  // Preserve stable priority matching single-route order when multiple match.
   return CHAT_INTENT_TOOL_PROVIDERS.filter((p) => found.includes(p));
+}
+
+/**
+ * @deprecated Prefer detectNamedTools — connection filtering happens at fetch/trust UX.
+ * Kept for call sites; ignores connectedTools and returns all named tools.
+ */
+export function detectRequestedTools(
+  message: string,
+  _connectedTools: IntegrationChatProvider[]
+): IntegrationChatProvider[] {
+  return detectNamedTools(message);
 }
 
 function legacyWants(provider: IntegrationChatProvider, message: string): boolean {
@@ -150,7 +154,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   }
 
   const focus = message;
-  const tools = detectRequestedTools(message, input.connectedTools);
+  const tools = detectNamedTools(message);
   const incident = isIncidentShapedQuery(message);
   const { workflow, confidence: workflowConfidence } = detectWorkflow(message);
 
@@ -168,7 +172,11 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
 
   if (EXPLAIN_ONLY.test(message) && tools.length === 0 && !workflow) {
     return {
-      ...emptyChatIntentPlan(focus),
+      mode: "plain",
+      tools: [],
+      confidence: "high",
+      focus,
+      execution: "none",
       reason: "local code explanation — no tools"
     };
   }
@@ -205,7 +213,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       confidence: "high",
       focus,
       execution: "none",
-      reason: "named connected tools"
+      reason: "named tools"
     };
   }
 
@@ -225,15 +233,18 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
 }
 
 /**
- * Filter plan tools to currently connected providers (defense in depth).
+ * Defense in depth for model plans: keep tools that are connected OR explicitly named
+ * in the user message (so "notion" is never silently dropped).
  */
 export function filterPlanToConnected(
   plan: ChatIntentPlan,
-  connectedTools: IntegrationChatProvider[]
+  connectedTools: IntegrationChatProvider[],
+  message?: string
 ): ChatIntentPlan {
   const connected = new Set(connectedTools);
+  const named = new Set(message ? detectNamedTools(message) : []);
   return {
     ...plan,
-    tools: plan.tools.filter((t) => connected.has(t))
+    tools: plan.tools.filter((t) => connected.has(t) || named.has(t))
   };
 }

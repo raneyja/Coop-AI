@@ -60,7 +60,7 @@ export function toolActivityMessage(tool: IntegrationChatProvider): string {
 
 /** Checklist lines shown while gathering for a planned plain-chat turn. */
 export function buildIntentPlanActivityMessages(plan: ChatIntentPlan): string[] {
-  if (plan.mode === "none") {
+  if (plan.mode === "none" || plan.mode === "plain") {
     return [];
   }
   const messages: string[] = [];
@@ -78,7 +78,7 @@ export function buildIntentPlanActivityMessages(plan: ChatIntentPlan): string[] 
  * Example: "Checking change impact + Jira"
  */
 export function buildIntentPlanStatusLine(plan: ChatIntentPlan): string | undefined {
-  if (plan.mode === "none") {
+  if (plan.mode === "none" || plan.mode === "plain") {
     return undefined;
   }
   const parts: string[] = [];

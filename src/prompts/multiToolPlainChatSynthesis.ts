@@ -167,6 +167,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "Use the integration evidence below together with repository context.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
     "Prefer concrete citations (ticket keys, thread links, page titles) when present.",
+    "For Jira: cite only tickets that mention the active file/symbol or are clearly about this change. Do not invent a link from same-repo alone.",
     "",
     status ? `Intent: ${status}.` : undefined,
     `Repository: ${repo}`,

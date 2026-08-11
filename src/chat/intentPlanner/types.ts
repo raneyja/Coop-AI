@@ -16,6 +16,7 @@ export type ChatIntentExecution = "silent" | "confirm" | "none";
 
 export type ChatIntentPlanMode =
   | "none"
+  | "plain"
   | "tools-only"
   | "run-workflow"
   | "suggest-chips";
@@ -23,12 +24,16 @@ export type ChatIntentPlanMode =
 /**
  * Deterministic plan produced before gather / synthesis.
  * Always fail-open to `mode: "none"` when unsure.
+ * `mode: "plain"` locks local explain — model must not promote a workflow.
  */
 export type ChatIntentPlan = {
   mode: ChatIntentPlanMode;
   /** Primary workflow (0 or 1). Maps onto existing quick-action pipelines. */
   workflow?: ChatIntentWorkflow;
-  /** Connected tools to pull for this turn (org must also be connected). */
+  /**
+   * Tools named (or clearly needed) for this turn.
+   * Named tools stay even when disconnected so the fetch path can surface a not-connected error.
+   */
   tools: IntegrationChatProvider[];
   confidence: SuggestConfidence;
   /** Short focus string for search / slashUserArgs. */

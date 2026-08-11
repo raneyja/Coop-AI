@@ -9,7 +9,7 @@ import {
 } from "../integrationScope/googleDocsQuery";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
-import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -41,16 +41,15 @@ export function wantsGoogleDocsContext(query: string): boolean {
 }
 
 export function shouldFetchGoogleDocsContext(request: ContextFetchRequest): boolean {
-  if (requestAllowsIntegrationFetch(request, "google-docs")) {
-    return true;
-  }
-  if (shouldFetchTraceDecisionDocIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  return wantsGoogleDocsContext(request.intent.context.queryText ?? "");
+  return shouldFetchIntegrationWithAllowlist(request, "google-docs", () => {
+    if (shouldFetchTraceDecisionDocIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    return wantsGoogleDocsContext(request.intent.context.queryText ?? "");
+  });
 }
 
 export async function fetchGoogleDocsSearchContext(options: {

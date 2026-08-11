@@ -4427,7 +4427,13 @@ export class CoopChatSession {
     }
 
     const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
-    const intentQuickAction = quickAction ?? inheritedQuickAction;
+    // Planner tools-only / plain turns must not inherit a prior [blast-radius] sticky QA.
+    const suppressInheritedQuickAction =
+      Boolean(options?.fetchIntegrations?.length) ||
+      Boolean(options?.integrationProvider) ||
+      options?.intentPlan?.mode === "plain" ||
+      options?.intentPlan?.mode === "tools-only";
+    const intentQuickAction = quickAction ?? (suppressInheritedQuickAction ? undefined : inheritedQuickAction);
 
     const mentionRefs = this.quickActionMentionRefs(options?.mentions);
     const modelMessage = quickAction
@@ -4545,10 +4551,13 @@ export class CoopChatSession {
           return;
         }
         if (ranAsync) {
+          // Keep planner allowlist on async Blast/Gaps enrichment — otherwise
+          // "check Jira" silent Blast reverts to fetching every connected tool.
           const intentEvent = this.intentDetector.fromQuickAction(
             quickAction,
             turn.context,
-            userFocus ?? modelMessage
+            userFocus ?? modelMessage,
+            { fetchIntegrations }
           );
           await abortablePromise(
             this.runIntentFetch(intentEvent, { quiet: true, turn }),
@@ -4565,7 +4574,7 @@ export class CoopChatSession {
             );
           }
           await abortablePromise(
-            this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
+            this.postEvidenceCardsFromBundle(quickAction, undefined, turn, fetchIntegrations),
             turn.streamAbort.signal
           );
           await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -4632,11 +4641,11 @@ export class CoopChatSession {
     this.enrichKnowledgeGapsBundle(quickAction, turn);
     if (quickAction === "understand-repo") {
       // Don't block synthesis on graph enrichment for the evidence card.
-      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
+      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn, fetchIntegrations);
     } else {
       try {
         await abortablePromise(
-          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn),
+          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn, fetchIntegrations),
           turn.streamAbort.signal
         );
       } catch (error) {
@@ -5073,13 +5082,13 @@ export class CoopChatSession {
       case "jira":
         return this.preferences.hasJiraCredentials || this.preferences.hasAtlassianInstalled;
       case "teams":
-        return this.preferences.hasTeamsToken;
+        return this.preferences.hasTeamsToken || this.preferences.hasTeamsInstalled;
       case "confluence":
         return this.preferences.hasConfluenceCredentials || this.preferences.hasAtlassianInstalled;
       case "notion":
-        return this.preferences.hasNotionToken;
+        return this.preferences.hasNotionToken || this.preferences.hasNotionInstalled;
       case "google-docs":
-        return this.preferences.hasGoogleDocsToken;
+        return this.preferences.hasGoogleDocsToken || this.preferences.hasGoogleDocsInstalled;
       default:
         return false;
     }
@@ -5101,7 +5110,8 @@ export class CoopChatSession {
       connectedTools
     };
     const rulesPlan = planChatIntentFromRules(input);
-    if (rulesPlan.mode !== "none") {
+    // Locked plain explain / any non-empty rules plan — do not let the model promote Blast.
+    if (rulesPlan.mode === "plain" || rulesPlan.mode !== "none") {
       return rulesPlan;
     }
     if (!isIntentSuggestModelEnabled()) {
@@ -5217,9 +5227,11 @@ export class CoopChatSession {
   private async postEvidenceCardsFromBundle(
     quickAction?: string,
     integrationProvider?: IntegrationChatProvider,
-    turn?: ChatTurn
+    turn?: ChatTurn,
+    fetchIntegrations?: IntegrationChatProvider[]
   ): Promise<void> {
     await this.withTurnSessionMirrors(turn, async () => {
+      const multiTools = (fetchIntegrations ?? []).filter(Boolean);
       if (turn && !this.isViewingThread(turn.threadId)) {
         // Still allocate evidence ids / artifacts onto the turn; skip UI posts.
         if (quickAction === "trace-decision") {
@@ -5231,7 +5243,8 @@ export class CoopChatSession {
           quickAction === "understand-repo" ||
           quickAction === "blast-radius" ||
           quickAction === "knowledge-gaps" ||
-          integrationProvider
+          integrationProvider ||
+          multiTools.length > 0
         ) {
           this.beginEvidenceArtifact();
         }
@@ -5259,6 +5272,13 @@ export class CoopChatSession {
       }
       if (integrationProvider) {
         this.postIntegrationEvidenceFromBundle(integrationProvider);
+        return;
+      }
+      // Multi-tool plain chat: one Sources card per planned tool that has evidence.
+      if (multiTools.length >= 2) {
+        for (const provider of multiTools) {
+          this.postIntegrationEvidenceFromBundle(provider);
+        }
       }
     });
   }
@@ -5625,7 +5645,15 @@ export class CoopChatSession {
         codeEditIntent: options?.composerMode === "edit"
       });
     const turnContext = turn.context;
-    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
+    // Sticky [blast-radius] in history must not override tools-only / integration turns.
+    const suppressInheritedQuickAction =
+      Boolean(options?.fetchIntegrations?.length) ||
+      Boolean(options?.integrationProvider) ||
+      options?.intentPlan?.mode === "plain" ||
+      options?.intentPlan?.mode === "tools-only";
+    const effectiveQuickAction = suppressInheritedQuickAction
+      ? (quickAction as import("../webview/types").QuickActionId | undefined)
+      : resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
     const minResponseVisibleMs = 0;

@@ -26,6 +26,11 @@ export type ChatIntentExecutionDecision =
     };
 
 export function resolveChatIntentExecution(plan: ChatIntentPlan): ChatIntentExecutionDecision {
+  // Locked local explain — never promote workflow or tools.
+  if (plan.mode === "plain") {
+    return { kind: "none" };
+  }
+
   if (plan.mode === "none" || plan.execution === "none") {
     if (plan.tools.length > 0 && plan.mode === "tools-only") {
       return { kind: "tools-only", tools: plan.tools, plan };

@@ -120,7 +120,7 @@ export function parseChatIntentPlanResponse(
         execution,
         reason: "model-plan"
       };
-      return filterPlanToConnected(plan, connectedTools);
+      return filterPlanToConnected(plan, connectedTools, focus);
     }
 
     return filterPlanToConnected(
@@ -132,7 +132,8 @@ export function parseChatIntentPlanResponse(
         execution: "none",
         reason: "model-tools"
       },
-      connectedTools
+      connectedTools,
+      focus
     );
   } catch {
     return emptyChatIntentPlan(focus);

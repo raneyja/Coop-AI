@@ -11,6 +11,8 @@ import { fetchNotionSearchContext, shouldFetchNotionContext } from "./notionCont
 import { fetchSlackSearchContext, shouldFetchSlackContext } from "./slackContext";
 import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext";
 import { shouldFetchTraceDecisionIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
+import type { IntegrationChatProvider } from "../chat/types";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -146,11 +148,16 @@ async function enrichIntegrationStages(
   };
   const connected = options.integrations;
   const allow = (flag: boolean | undefined): boolean => flag !== false;
+  /** Named/allowlisted tools always attempt fetch (surface not-connected errors). */
+  const allowOrForced = (
+    provider: IntegrationChatProvider,
+    flag: boolean | undefined
+  ): boolean => requestAllowsIntegrationFetch(options.request, provider) || allow(flag);
 
   const shouldFetchConfluence =
-    deps.shouldFetchConfluenceContext(options.request) && allow(connected?.confluence);
+    deps.shouldFetchConfluenceContext(options.request) && allowOrForced("confluence", connected?.confluence);
   const shouldFetchNotion =
-    deps.shouldFetchNotionContext(options.request) && allow(connected?.notion);
+    deps.shouldFetchNotionContext(options.request) && allowOrForced("notion", connected?.notion);
 
   const runTool = async <T>(
     tool: IntegrationActivityTool,
@@ -200,15 +207,17 @@ async function enrichIntegrationStages(
   const docExtraTerms = [...integrationTerms, ...crossToolText];
 
   const shouldFetchJira =
-    deps.shouldFetchJiraContext(options.request) && allow(connected?.jira);
+    deps.shouldFetchJiraContext(options.request) && allowOrForced("jira", connected?.jira);
   const shouldFetchGoogleDocs =
-    deps.shouldFetchGoogleDocsContext(options.request) && allow(connected?.googleDocs);
+    deps.shouldFetchGoogleDocsContext(options.request) &&
+    allowOrForced("google-docs", connected?.googleDocs);
   const [jiraSearch, googleDocsSearch] = await Promise.all([
     runTool("jira", shouldFetchJira, () =>
       deps.fetchJiraSearchContext({
         secrets: options.secrets,
         ...base,
         crossToolText: crossToolKeys,
+        extraTerms: integrationTerms,
         codeHostRouter: options.codeHostRouter,
         codeHostConnected: options.codeHostConnected,
         integrationScope: options.integrationScopes?.atlassian
@@ -236,9 +245,9 @@ async function enrichIntegrationStages(
     ?.map((issue) => issue.key?.trim())
     .filter((key): key is string => Boolean(key));
   const shouldFetchSlack =
-    deps.shouldFetchSlackContext(options.request) && allow(connected?.slack);
+    deps.shouldFetchSlackContext(options.request) && allowOrForced("slack", connected?.slack);
   const shouldFetchTeams =
-    deps.shouldFetchTeamsContext(options.request) && allow(connected?.teams);
+    deps.shouldFetchTeamsContext(options.request) && allowOrForced("teams", connected?.teams);
   const [slackSearch, teamsSearch] = await Promise.all([
     runTool("slack", shouldFetchSlack, () =>
       deps.fetchSlackSearchContext({

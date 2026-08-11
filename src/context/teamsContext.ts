@@ -3,7 +3,7 @@ import type { IntegrationSecrets } from "../api/integrations/integrationSecrets"
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
-import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
 export type TeamsSearchMessage = {
   fromUserName?: string;
@@ -37,16 +37,15 @@ export function wantsTeamsContext(query: string): boolean {
 }
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
-  if (requestAllowsIntegrationFetch(request, "teams")) {
-    return true;
-  }
-  if (shouldFetchDiscussionIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  return wantsTeamsContext(request.intent.context.queryText ?? "");
+  return shouldFetchIntegrationWithAllowlist(request, "teams", () => {
+    if (shouldFetchDiscussionIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    return wantsTeamsContext(request.intent.context.queryText ?? "");
+  });
 }
 
 export function buildTeamsSearchQueries(options: {

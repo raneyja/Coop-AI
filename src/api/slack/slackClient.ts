@@ -1,4 +1,8 @@
 import { fetchWithTimeout } from "../networkResilience";
+import {
+  isSlackBotAccessToken,
+  SLACK_BOT_TOKEN_SEARCH_MESSAGE
+} from "./slackTokenType";
 
 const SLACK_API = "https://slack.com/api";
 const THREAD_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -80,9 +84,28 @@ export class SlackClient {
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
     try {
+      if (isSlackBotAccessToken(this.options.token)) {
+        return { ok: false, message: SLACK_BOT_TOKEN_SEARCH_MESSAGE };
+      }
       const result = await this.api<{ ok: boolean; team?: string; error?: string }>("auth.test");
       if (!result.ok) {
         return { ok: false, message: result.error ?? "Slack auth failed." };
+      }
+      // auth.test succeeds for bot tokens too — probe search so Test Slack matches chat.
+      const searchProbe = await this.api<{ ok: boolean; error?: string }>("search.messages", {
+        method: "GET",
+        query: { query: "coop", count: "1" }
+      });
+      if (!searchProbe.ok) {
+        if (searchProbe.error === "not_allowed_token_type") {
+          return { ok: false, message: SLACK_BOT_TOKEN_SEARCH_MESSAGE };
+        }
+        return {
+          ok: false,
+          message: searchProbe.error
+            ? `Slack auth ok but search failed: ${searchProbe.error}`
+            : "Slack auth ok but search.messages failed."
+        };
       }
       return { ok: true, message: `Connected to Slack workspace${result.team ? `: ${result.team}` : ""}.` };
     } catch (error) {
@@ -97,6 +120,9 @@ export class SlackClient {
    * Search messages the authenticated user can access (channels, groups, DMs).
    */
   public async searchMessages(query: string, options?: { limit?: number }): Promise<SlackSearchHit[]> {
+    if (isSlackBotAccessToken(this.options.token)) {
+      throw new SlackApiError(SLACK_BOT_TOKEN_SEARCH_MESSAGE, "not_allowed_token_type");
+    }
     const limit = options?.limit ?? 20;
     const result = await this.api<{
       ok: boolean;
@@ -123,6 +149,9 @@ export class SlackClient {
     });
 
     if (!result.ok) {
+      if (result.error === "not_allowed_token_type") {
+        throw new SlackApiError(SLACK_BOT_TOKEN_SEARCH_MESSAGE, result.error);
+      }
       throw new SlackApiError(result.error ?? "search.messages failed", result.error);
     }
 

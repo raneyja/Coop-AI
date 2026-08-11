@@ -37,11 +37,21 @@ test("plain jira ask still routes to jira when connected", () => {
   );
 });
 
-test("disconnected jira does not route", () => {
+test("named disconnected jira still single-routes so Sources can show not-connected", () => {
   assert.equal(
     resolvePlainChatIntegrationProvider({
       message: "any jira tickets for this?",
       isConnected: () => false
+    }),
+    "jira"
+  );
+});
+
+test("slack and notion named does not single-route", () => {
+  assert.equal(
+    resolvePlainChatIntegrationProvider({
+      message: "cross-check mentions in slack and notion",
+      isConnected: allConnected
     }),
     undefined
   );
