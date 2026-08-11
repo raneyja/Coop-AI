@@ -10,6 +10,10 @@ import {
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection
 } from "./evidenceSynthesis";
+import {
+  listIntegrationSourceLabels,
+  listIntegrationSourcesChecklist
+} from "./integrationSourceLabels";
 
 export type MultiToolIntegrationSnapshot = Partial<
   Record<IntegrationChatProvider, IntegrationSearchEvidenceLike | null | undefined>
@@ -75,6 +79,18 @@ function hitSummary(
     return `${label}: searched — no hits.`;
   }
   return `${label}: ${parts.join(", ")}.`;
+}
+
+function resultCount(evidence: IntegrationSearchEvidenceLike | null | undefined): number {
+  if (!evidence) {
+    return 0;
+  }
+  return (
+    (evidence.issues?.length ?? 0) +
+    (evidence.messages?.length ?? 0) +
+    (evidence.pages?.length ?? 0) +
+    (evidence.documents?.length ?? 0)
+  );
 }
 
 function evidenceBlock(
@@ -146,7 +162,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     })
     .join("\n\n");
 
-  let prompt = [
+  const lines = [
     "You are answering a plain-chat question that needs multiple connected tools.",
     "Use the integration evidence below together with repository context.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
@@ -165,14 +181,23 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "## Integration evidence",
     evidenceSections
   ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
+    .filter((line): line is string => Boolean(line));
 
-  prompt = appendSourcesChecklistSection(prompt, {
-    includeIntegrations: true,
-    includeCode: true
-  });
-  prompt = appendCitationKeysSection(prompt);
-  prompt = appendEvidenceQualityInstructions(prompt);
-  return prompt;
+  lines.push("");
+  appendCitationKeysSection(
+    lines,
+    input.tools.flatMap((tool) => listIntegrationSourceLabels(tool))
+  );
+  appendSourcesChecklistSection(
+    lines,
+    input.tools.flatMap((tool) => {
+      const evidence = input.integrations[tool];
+      return listIntegrationSourcesChecklist(tool, {
+        error: evidence?.error,
+        resultCount: resultCount(evidence)
+      });
+    })
+  );
+  appendEvidenceQualityInstructions(lines);
+  return lines.join("\n");
 }
