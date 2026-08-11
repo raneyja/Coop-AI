@@ -8801,7 +8801,7 @@ export class CoopChatSession {
       });
       const event = this.intentDetector.fromQuickAction("trace-decision", this.currentContext);
       await this.runIntentFetch(event, { quiet: true });
-      this.postDecisionTimelineFromBundle();
+      await this.postDecisionTimelineFromBundle();
       return;
     }
 
