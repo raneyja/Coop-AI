@@ -140,6 +140,7 @@ import {
   teamsSearchFromBundle,
   type RepoSummaryEvidence
 } from "../context/contextBundleEvidence";
+import { isIntegrationConnectedForSources } from "../context/integrationEvidenceVisibility";
 import {
   extractBlastSearchSymbols,
   extractExportNamesFromSource,
@@ -5440,6 +5441,10 @@ export class CoopChatSession {
   private postIntegrationEvidenceFromBundle(provider: IntegrationChatProvider): void {
     const evidence = integrationSearchFromBundle(this.lastContextBundle, provider);
     if (!evidence) {
+      return;
+    }
+    // Don't post empty Sources chrome for "not configured" stubs (card body returns null).
+    if (!isIntegrationConnectedForSources(evidence)) {
       return;
     }
     const artifactId = this.beginEvidenceArtifact();

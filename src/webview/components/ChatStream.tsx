@@ -36,6 +36,7 @@ import {
   splitPlainChatHistoryBody,
   type HistoryAttachment
 } from "../lib/parseHistoryAttachments";
+import { buildTimelineEntries } from "./chatTimelineEntries";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -440,50 +441,6 @@ export function renderInlineArtifact(
   return renderArtifact(artifact, actionContext, conflicts);
 }
 
-function buildTimelineEntries(messages: ChatMessage[], artifacts: ChatInlineArtifact[]) {
-  const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
-  const emittedArtifacts = new Set<string>();
-  const entries: Array<
-    | { id: string; type: "message"; timestamp: number; message: ChatMessage }
-    | { id: string; type: "artifact"; timestamp: number; artifact: ChatInlineArtifact }
-  > = [];
-
-  const sortedMessages = [...messages].sort((a, b) => a.timestamp - b.timestamp);
-  for (const message of sortedMessages) {
-    if (message.relatedArtifactId && artifactById.has(message.relatedArtifactId)) {
-      const artifact = artifactById.get(message.relatedArtifactId)!;
-      if (!emittedArtifacts.has(artifact.id)) {
-        entries.push({
-          id: `artifact-${artifact.id}`,
-          type: "artifact",
-          timestamp: artifact.timestamp,
-          artifact
-        });
-        emittedArtifacts.add(artifact.id);
-      }
-    }
-    entries.push({
-      id: `msg-${message.timestamp}-${message.content.slice(0, 12)}`,
-      type: "message",
-      timestamp: message.timestamp,
-      message
-    });
-  }
-
-  for (const artifact of [...artifacts].sort((a, b) => a.timestamp - b.timestamp)) {
-    if (!emittedArtifacts.has(artifact.id)) {
-      entries.push({
-        id: `artifact-${artifact.id}`,
-        type: "artifact",
-        timestamp: artifact.timestamp,
-        artifact
-      });
-    }
-  }
-
-  return entries;
-}
-
 function conflictsForArtifact(
   conflicts: ConflictSummary[] | undefined,
   artifact: ChatInlineArtifact
@@ -702,17 +659,25 @@ export function ChatStream({
               onSuggestResolve={onSuggestResolve}
             />
           ) : (
-            <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
-              <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
-                <div className="chat-message-inner">
-                  <div className="chat-message-meta">
-                    <span className="chat-message-label chat-message-label--evidence">Sources</span>
-                    <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
-                  </div>
-                  {renderArtifact(entry.artifact, actionContext, conflicts)}
-                </div>
-              </EvidenceArtifactAnchor>
-            </article>
+            (() => {
+              const body = renderArtifact(entry.artifact, actionContext, conflicts);
+              if (!body) {
+                return null;
+              }
+              return (
+                <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
+                  <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
+                    <div className="chat-message-inner">
+                      <div className="chat-message-meta">
+                        <span className="chat-message-label chat-message-label--evidence">Sources</span>
+                        <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
+                      </div>
+                      {body}
+                    </div>
+                  </EvidenceArtifactAnchor>
+                </article>
+              );
+            })()
           )
         )}
 
