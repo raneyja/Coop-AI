@@ -45,6 +45,8 @@ export type IntentEventContext = {
   queryText?: string;
   /** Slash-command integration source (/jira, /slack, …) requesting live fetch. */
   integrationProvider?: import("../chat/types").IntegrationChatProvider;
+  /** Planner-selected integrations to fetch for a plain-chat turn. */
+  fetchIntegrations?: import("../chat/types").IntegrationChatProvider[];
   buttonClicked?: string;
   source?: "editor" | "webview" | "command" | "test";
 };
@@ -71,6 +73,7 @@ export type IntentDetectionOptions = {
   now?: Date;
   idFactory?: () => string;
   integrationProvider?: IntentEventContext["integrationProvider"];
+  fetchIntegrations?: IntentEventContext["fetchIntegrations"];
 };
 
 const CODE_FILE_PATTERN = /\.(ts|tsx|js|jsx|go|py|rb|java|kt|cs|rs|php|swift|m|mm|c|cc|cpp|h|hpp)$/i;
@@ -162,6 +165,7 @@ export class IntentDetector {
         ...repoContextToIntentContext(context),
         queryText: emptyToUndefined(queryText),
         integrationProvider: options.integrationProvider,
+        fetchIntegrations: options.fetchIntegrations,
         source: options.source ?? "webview"
       },
       options

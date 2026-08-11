@@ -9,6 +9,7 @@ import {
 } from "../integrationScope/googleDocsQuery";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -40,7 +41,7 @@ export function wantsGoogleDocsContext(query: string): boolean {
 }
 
 export function shouldFetchGoogleDocsContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "google-docs") {
+  if (requestAllowsIntegrationFetch(request, "google-docs")) {
     return true;
   }
   if (shouldFetchTraceDecisionDocIntegrations(request)) {

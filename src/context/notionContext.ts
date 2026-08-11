@@ -9,6 +9,7 @@ import {
 } from "../integrationScope/notionQuery";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type NotionSearchPage = {
   id: string;
@@ -40,7 +41,7 @@ export function wantsNotionContext(query: string): boolean {
 }
 
 export function shouldFetchNotionContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "notion") {
+  if (requestAllowsIntegrationFetch(request, "notion")) {
     return true;
   }
   if (shouldFetchTraceDecisionDocIntegrations(request)) {

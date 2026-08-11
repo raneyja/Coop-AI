@@ -3,6 +3,7 @@ import type { IntegrationSecrets } from "../api/integrations/integrationSecrets"
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type TeamsSearchMessage = {
   fromUserName?: string;
@@ -36,7 +37,7 @@ export function wantsTeamsContext(query: string): boolean {
 }
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "teams") {
+  if (requestAllowsIntegrationFetch(request, "teams")) {
     return true;
   }
   if (shouldFetchDiscussionIntegrations(request)) {

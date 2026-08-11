@@ -14,6 +14,7 @@ import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { filePathSearchTerms } from "./traceDecisionSearch";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type SlackSearchMessage = {
   channelName?: string;
@@ -48,7 +49,7 @@ export function wantsSlackContext(query: string): boolean {
 }
 
 export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "slack") {
+  if (requestAllowsIntegrationFetch(request, "slack")) {
     return true;
   }
   if (shouldFetchDiscussionIntegrations(request)) {

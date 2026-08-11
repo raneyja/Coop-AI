@@ -13,6 +13,7 @@ import {
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchRepoWideIntegrations, shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type JiraSearchTicket = {
   key: string;
@@ -70,7 +71,7 @@ export function wantsRepoLinkedJiraDiscovery(query: string): boolean {
 }
 
 export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "jira") {
+  if (requestAllowsIntegrationFetch(request, "jira")) {
     return true;
   }
   if (shouldFetchTraceDecisionDocIntegrations(request)) {

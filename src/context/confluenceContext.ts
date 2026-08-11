@@ -20,6 +20,7 @@ import {
 } from "./docSearchQuery";
 import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 
 export type ConfluenceSearchPage = {
   id: string;
@@ -52,7 +53,7 @@ export function wantsConfluenceContext(query: string): boolean {
 }
 
 export function shouldFetchConfluenceContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "confluence") {
+  if (requestAllowsIntegrationFetch(request, "confluence")) {
     return true;
   }
   if (shouldFetchTraceDecisionDocIntegrations(request)) {
