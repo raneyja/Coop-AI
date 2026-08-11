@@ -35,3 +35,30 @@ Run: `npx tsx src/chat/intentPlanner/phase1.gates.test.ts`
 | P3-G2 | Activity messages cover the workflow and each tool. | Any planned activity is missing. |
 | P3-G3 | The trust preamble carries the status into synthesis context. | Synthesis lacks the plan disclosure. |
 | P3-G4 | A `none` plan emits no status or activity. | Normal chat shows planner noise. |
+
+Run: `npx tsx src/chat/intentPlanner/phase3.gates.test.ts`
+
+## How to run all gates
+
+```bash
+npm run test:chat-intent
+# or per phase:
+npm run test:chat-intent:phase1
+npm run test:chat-intent:phase2
+npm run test:chat-intent:phase3
+```
+
+**Ship gate:** every phase script exits 0. A single FAIL in any phase blocks merge of that phase's behavior.
+
+## Session wiring (all phases)
+
+Plain `handleChatSend` runs the planner after slash parse:
+
+| Decision | Behavior |
+| --- | --- |
+| `silent-workflow` | Re-enters with the quick action + `fetchIntegrations` (Phase 2) |
+| `confirm-workflow` | Existing suggest chips (Phase 2) |
+| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool) (Phase 1) |
+| Activity / preamble | Status line + tool checklist + `<coop_intent_plan>` (Phase 3) |
+
+Slash commands and explicit `/jira`-style routes still win.

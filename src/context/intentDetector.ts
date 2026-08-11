@@ -148,6 +148,8 @@ export class IntentDetector {
         ...repoContextToIntentContext(context),
         queryText: emptyToUndefined(queryText),
         buttonClicked: actionId,
+        integrationProvider: options.integrationProvider,
+        fetchIntegrations: options.fetchIntegrations,
         source: options.source ?? "webview"
       },
       options
