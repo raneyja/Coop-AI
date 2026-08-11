@@ -14,6 +14,7 @@ import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { filePathSearchTerms } from "./traceDecisionSearch";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
 export type SlackSearchMessage = {
   channelName?: string;
@@ -48,21 +49,20 @@ export function wantsSlackContext(query: string): boolean {
 }
 
 export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "slack") {
-    return true;
-  }
-  if (shouldFetchDiscussionIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  const queryText = request.intent.context.queryText ?? "";
-  // Incident / on-call reconstruction (A9) — fetch even when the user did not say "slack".
-  if (shouldFetchIncidentIntegrations(queryText)) {
-    return true;
-  }
-  return wantsSlackContext(queryText);
+  return shouldFetchIntegrationWithAllowlist(request, "slack", () => {
+    if (shouldFetchDiscussionIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    const queryText = request.intent.context.queryText ?? "";
+    // Incident / on-call reconstruction (A9) — fetch even when the user did not say "slack".
+    if (shouldFetchIncidentIntegrations(queryText)) {
+      return true;
+    }
+    return wantsSlackContext(queryText);
+  });
 }
 
 export function buildRepoSearchQuery(owner: string | undefined, repo: string | undefined): string | undefined {

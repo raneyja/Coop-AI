@@ -20,6 +20,7 @@ import {
 } from "./docSearchQuery";
 import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
 export type ConfluenceSearchPage = {
   id: string;
@@ -52,16 +53,15 @@ export function wantsConfluenceContext(query: string): boolean {
 }
 
 export function shouldFetchConfluenceContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "confluence") {
-    return true;
-  }
-  if (shouldFetchTraceDecisionDocIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  return wantsConfluenceContext(request.intent.context.queryText ?? "");
+  return shouldFetchIntegrationWithAllowlist(request, "confluence", () => {
+    if (shouldFetchTraceDecisionDocIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    return wantsConfluenceContext(request.intent.context.queryText ?? "");
+  });
 }
 
 export async function fetchConfluenceSearchContext(options: {

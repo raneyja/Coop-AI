@@ -169,6 +169,17 @@ import {
   type IntentSuggestCompleteFn
 } from "./quickActionIntentModel";
 import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";
+import {
+  planChatIntentFromRules,
+  classifyChatIntentPlan,
+  resolveChatIntentExecution,
+  buildIntentPlanActivityMessages,
+  buildIntentPlanStatusLine,
+  buildIntentPlanTrustPreamble,
+  type ChatIntentPlan
+} from "./intentPlanner";
+import { buildMultiToolPlainChatUserPrompt } from "../prompts/multiToolPlainChatSynthesis";
+import { CHAT_INTENT_TOOL_PROVIDERS } from "./intentPlanner/types";
 import { enrichDecisionTimelineSourcePreviews } from "../context/enrichDecisionTimelineSourcePreviews";
 import {
   EVIDENCE_PREVIEW_TIMEOUT_MS,
@@ -3892,10 +3903,21 @@ export class CoopChatSession {
     return [focus, ...messages.filter((message) => message !== focus)];
   }
 
-  private loadingFeedbackFor(event: IntentEvent): IntentFeedbackState {
+  private loadingFeedbackFor(
+    event: IntentEvent,
+    intentPlan?: ChatIntentPlan
+  ): IntentFeedbackState {
     const action = event.context.buttonClicked;
+    const baseMessages = contextGatheringMessagesFor(event, this.contextGatheringOptions());
+    const planMessages = intentPlan ? buildIntentPlanActivityMessages(intentPlan) : [];
+    const statusLine = intentPlan ? buildIntentPlanStatusLine(intentPlan) : undefined;
+    const merged = [
+      ...(statusLine ? [statusLine] : []),
+      ...planMessages,
+      ...baseMessages
+    ];
     const activityMessages = this.withSelectionFocusActivity(
-      contextGatheringMessagesFor(event, this.contextGatheringOptions()),
+      dedupeActivityMessages(merged),
       intentContextToRepoContext(event.context)
     );
     if (action === "blast-radius") {
@@ -3903,7 +3925,7 @@ export class CoopChatSession {
         status: "loading",
         intent: event.intent,
         actionId: action,
-        title: "Analyzing dependencies...",
+        title: statusLine ?? "Analyzing dependencies...",
         message: activityMessages[0],
         activityMessages,
         progress: 35
@@ -3914,7 +3936,7 @@ export class CoopChatSession {
         status: "loading",
         intent: event.intent,
         actionId: action,
-        title: "Scanning for knowledge gaps",
+        title: statusLine ?? "Scanning for knowledge gaps",
         message: activityMessages[0],
         activityMessages,
         progress: 15
@@ -3924,7 +3946,7 @@ export class CoopChatSession {
       status: "loading",
       intent: event.intent,
       actionId: action,
-      title: "Fetching context...",
+      title: statusLine ?? "Fetching context...",
       message: activityMessages[0],
       activityMessages
     };
@@ -4144,6 +4166,10 @@ export class CoopChatSession {
     options?: {
       sourceHint?: string;
       integrationProvider?: IntegrationChatProvider;
+      /** Planner allowlist — fetch these connected tools even without naming them in heuristics. */
+      fetchIntegrations?: IntegrationChatProvider[];
+      /** Active intent plan for this turn (trust UX + multi-tool synthesis). */
+      intentPlan?: ChatIntentPlan;
       /** Bubble/history text; defaults to message (or quick-action tag prefix). */
       historyContent?: string;
       mentions?: ChatFileMention[];
@@ -4156,6 +4182,8 @@ export class CoopChatSession {
       skipQuickActionSuggest?: boolean;
       /** Continue after suggest without duplicating the user bubble already in history. */
       skipUserHistoryPush?: boolean;
+      /** Skip Chat Intent Planner (already planned / slash / re-entry). */
+      skipChatIntentPlanner?: boolean;
     }
   ): Promise<void> {
     // A new send abandons any unanswered suggest chips.
@@ -4173,28 +4201,76 @@ export class CoopChatSession {
       }
     }
 
-    // QA suggest chips before /edit auto-route — blast/owner archaeology often
-    // contains change/rename + `backticks` and must not be stolen by edit mode.
+    // Chat Intent Planner (plain chat): pick workflow + connected tools before chips/edit.
+    // Slash and explicit integrationProvider remain the override.
     if (
       !quickAction &&
       !options?.sourceHint &&
       !options?.integrationProvider &&
       !options?.composerMode &&
-      !options?.skipQuickActionSuggest &&
-      !this.detectChatIntegrationProvider(message)
+      !options?.skipChatIntentPlanner &&
+      !options?.skipQuickActionSuggest
     ) {
-      let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
-      if (!offer && isIntentSuggestModelEnabled()) {
-        offer = await this.resolveHybridIntentSuggestOffer(message);
+      const plan = await this.resolveChatIntentPlan(message);
+      const decision = resolveChatIntentExecution(plan);
+      if (decision.kind === "silent-workflow") {
+        void this.emitUsageEvent("chat_intent.silent_workflow", {
+          workflow: decision.workflow,
+          tools: decision.tools
+        });
+        await this.handleChatSend("", decision.workflow, attachments, {
+          slashUserArgs: decision.focus,
+          historyContent: message,
+          mentions: options?.mentions,
+          fetchIntegrations: decision.tools.length ? decision.tools : undefined,
+          intentPlan: decision.plan,
+          skipQuickActionSuggest: true,
+          skipChatIntentPlanner: true
+        });
+        return;
       }
-      if (offer) {
+      if (decision.kind === "confirm-workflow") {
+        void this.emitUsageEvent("chat_intent.confirm_workflow", {
+          workflow: decision.plan.workflow,
+          tools: decision.tools
+        });
         await this.completeQuickActionSuggestClarification(
           message,
-          offer,
+          decision.offer,
           options?.mentions,
           attachments
         );
         return;
+      }
+      if (decision.kind === "tools-only") {
+        void this.emitUsageEvent("chat_intent.tools_only", { tools: decision.tools });
+        options = {
+          ...options,
+          fetchIntegrations: decision.tools,
+          intentPlan: decision.plan,
+          // Single named tool keeps primary-source synthesis; multi-tool uses allowlist only.
+          integrationProvider:
+            decision.tools.length === 1 ? decision.tools[0] : options?.integrationProvider,
+          skipChatIntentPlanner: true
+        };
+      } else if (
+        !options?.integrationProvider &&
+        !this.detectChatIntegrationProvider(message)
+      ) {
+        // Legacy chip path when planner has nothing (medium phrase-only still handled above).
+        let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+        if (!offer && isIntentSuggestModelEnabled()) {
+          offer = await this.resolveHybridIntentSuggestOffer(message);
+        }
+        if (offer) {
+          await this.completeQuickActionSuggestClarification(
+            message,
+            offer,
+            options?.mentions,
+            attachments
+          );
+          return;
+        }
       }
     }
 
@@ -4351,7 +4427,13 @@ export class CoopChatSession {
     }
 
     const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
-    const intentQuickAction = quickAction ?? inheritedQuickAction;
+    // Planner tools-only / plain turns must not inherit a prior [blast-radius] sticky QA.
+    const suppressInheritedQuickAction =
+      Boolean(options?.fetchIntegrations?.length) ||
+      Boolean(options?.integrationProvider) ||
+      options?.intentPlan?.mode === "plain" ||
+      options?.intentPlan?.mode === "tools-only";
+    const intentQuickAction = quickAction ?? (suppressInheritedQuickAction ? undefined : inheritedQuickAction);
 
     const mentionRefs = this.quickActionMentionRefs(options?.mentions);
     const modelMessage = quickAction
@@ -4438,17 +4520,26 @@ export class CoopChatSession {
     turn.startedAt = this.chatTurnStartedAt;
     this.pushThreadsList();
 
+    const fetchIntegrations = options?.fetchIntegrations;
     const prefetchIntentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(
           intentQuickAction,
           actionContext,
-          userFocus ?? modelMessage
+          userFocus ?? modelMessage,
+          { fetchIntegrations }
         )
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, {
           integrationProvider:
-            options?.integrationProvider ?? this.detectChatIntegrationProvider(message)
+            options?.integrationProvider ??
+            (fetchIntegrations && fetchIntegrations.length > 1
+              ? undefined
+              : this.detectChatIntegrationProvider(message)),
+          fetchIntegrations
         });
-    this.postIntentFeedbackForThread(turn.threadId, this.loadingFeedbackFor(prefetchIntentEvent));
+    this.postIntentFeedbackForThread(
+      turn.threadId,
+      this.loadingFeedbackFor(prefetchIntentEvent, options?.intentPlan)
+    );
 
     if (quickAction && shouldUseAsyncJob(quickAction)) {
       try {
@@ -4460,10 +4551,13 @@ export class CoopChatSession {
           return;
         }
         if (ranAsync) {
+          // Keep planner allowlist on async Blast/Gaps enrichment — otherwise
+          // "check Jira" silent Blast reverts to fetching every connected tool.
           const intentEvent = this.intentDetector.fromQuickAction(
             quickAction,
             turn.context,
-            userFocus ?? modelMessage
+            userFocus ?? modelMessage,
+            { fetchIntegrations }
           );
           await abortablePromise(
             this.runIntentFetch(intentEvent, { quiet: true, turn }),
@@ -4480,7 +4574,7 @@ export class CoopChatSession {
             );
           }
           await abortablePromise(
-            this.postEvidenceCardsFromBundle(quickAction, undefined, turn),
+            this.postEvidenceCardsFromBundle(quickAction, undefined, turn, fetchIntegrations),
             turn.streamAbort.signal
           );
           await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
@@ -4488,7 +4582,9 @@ export class CoopChatSession {
             composerMode: options?.composerMode,
             taskContent: taskMessage,
             userFocus,
-            turn
+            turn,
+            intentPlan: options?.intentPlan,
+            fetchIntegrations
           });
           return;
         }
@@ -4506,14 +4602,22 @@ export class CoopChatSession {
 
     const integrationProvider =
       options?.integrationProvider ??
-      (quickAction ? undefined : this.detectChatIntegrationProvider(message));
+      (quickAction
+        ? undefined
+        : fetchIntegrations && fetchIntegrations.length > 1
+          ? undefined
+          : this.detectChatIntegrationProvider(message));
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(
           intentQuickAction,
           actionContext,
-          userFocus ?? modelMessage
+          userFocus ?? modelMessage,
+          { fetchIntegrations }
         )
-      : this.intentDetector.fromManualChatSubmit(turn.context, message, { integrationProvider });
+      : this.intentDetector.fromManualChatSubmit(turn.context, message, {
+          integrationProvider,
+          fetchIntegrations
+        });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
     try {
@@ -4537,11 +4641,11 @@ export class CoopChatSession {
     this.enrichKnowledgeGapsBundle(quickAction, turn);
     if (quickAction === "understand-repo") {
       // Don't block synthesis on graph enrichment for the evidence card.
-      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn);
+      void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn, fetchIntegrations);
     } else {
       try {
         await abortablePromise(
-          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn),
+          this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn, fetchIntegrations),
           turn.streamAbort.signal
         );
       } catch (error) {
@@ -4561,7 +4665,9 @@ export class CoopChatSession {
       composerMode: options?.composerMode,
       taskContent: taskMessage,
       userFocus,
-      turn
+      turn,
+      intentPlan: options?.intentPlan,
+      fetchIntegrations
     });
   }
 
@@ -4976,15 +5082,79 @@ export class CoopChatSession {
       case "jira":
         return this.preferences.hasJiraCredentials || this.preferences.hasAtlassianInstalled;
       case "teams":
-        return this.preferences.hasTeamsToken;
+        return this.preferences.hasTeamsToken || this.preferences.hasTeamsInstalled;
       case "confluence":
         return this.preferences.hasConfluenceCredentials || this.preferences.hasAtlassianInstalled;
       case "notion":
-        return this.preferences.hasNotionToken;
+        return this.preferences.hasNotionToken || this.preferences.hasNotionInstalled;
       case "google-docs":
-        return this.preferences.hasGoogleDocsToken;
+        return this.preferences.hasGoogleDocsToken || this.preferences.hasGoogleDocsInstalled;
       default:
         return false;
+    }
+  }
+
+  private listConnectedIntegrationTools(): IntegrationChatProvider[] {
+    return CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => this.isIntegrationConnected(provider));
+  }
+
+  /**
+   * Phrase-first Chat Intent Planner, with optional cheap model when rules return none.
+   * Fail-open → empty plan (plain chat).
+   */
+  private async resolveChatIntentPlan(message: string): Promise<ChatIntentPlan> {
+    const connectedTools = this.listConnectedIntegrationTools();
+    const input = {
+      message,
+      activeFile: this.currentContext.file,
+      connectedTools
+    };
+    const rulesPlan = planChatIntentFromRules(input);
+    // Locked plain explain / any non-empty rules plan — do not let the model promote Blast.
+    if (rulesPlan.mode === "plain" || rulesPlan.mode !== "none") {
+      return rulesPlan;
+    }
+    if (!isIntentSuggestModelEnabled()) {
+      return rulesPlan;
+    }
+
+    this.intentSuggestAbort?.abort();
+    const controller = new AbortController();
+    this.intentSuggestAbort = controller;
+    const complete: IntentSuggestCompleteFn = async (params) => {
+      let full = "";
+      await this.options.api.streamChat(
+        {
+          message: params.message,
+          context: {},
+          history: [],
+          model: params.model,
+          provider: params.provider,
+          useCase: "intent_suggest",
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          enableThinking: false
+        },
+        (chunk) => {
+          full += chunk;
+        },
+        this.preferences.apiBaseUrl,
+        params.signal
+      );
+      return full;
+    };
+
+    try {
+      const modelPlan = await classifyChatIntentPlan(input, complete, {
+        signal: controller.signal
+      });
+      return modelPlan ?? rulesPlan;
+    } catch {
+      return rulesPlan;
+    } finally {
+      if (this.intentSuggestAbort === controller) {
+        this.intentSuggestAbort = undefined;
+      }
     }
   }
 
@@ -5057,9 +5227,11 @@ export class CoopChatSession {
   private async postEvidenceCardsFromBundle(
     quickAction?: string,
     integrationProvider?: IntegrationChatProvider,
-    turn?: ChatTurn
+    turn?: ChatTurn,
+    fetchIntegrations?: IntegrationChatProvider[]
   ): Promise<void> {
     await this.withTurnSessionMirrors(turn, async () => {
+      const multiTools = (fetchIntegrations ?? []).filter(Boolean);
       if (turn && !this.isViewingThread(turn.threadId)) {
         // Still allocate evidence ids / artifacts onto the turn; skip UI posts.
         if (quickAction === "trace-decision") {
@@ -5071,7 +5243,8 @@ export class CoopChatSession {
           quickAction === "understand-repo" ||
           quickAction === "blast-radius" ||
           quickAction === "knowledge-gaps" ||
-          integrationProvider
+          integrationProvider ||
+          multiTools.length > 0
         ) {
           this.beginEvidenceArtifact();
         }
@@ -5099,6 +5272,13 @@ export class CoopChatSession {
       }
       if (integrationProvider) {
         this.postIntegrationEvidenceFromBundle(integrationProvider);
+        return;
+      }
+      // Multi-tool plain chat: one Sources card per planned tool that has evidence.
+      if (multiTools.length >= 2) {
+        for (const provider of multiTools) {
+          this.postIntegrationEvidenceFromBundle(provider);
+        }
       }
     });
   }
@@ -5440,6 +5620,8 @@ export class CoopChatSession {
     options?: {
       sourceHint?: string;
       integrationProvider?: IntegrationChatProvider;
+      fetchIntegrations?: IntegrationChatProvider[];
+      intentPlan?: ChatIntentPlan;
       mentions?: ChatFileMention[];
       composerMode?: ComposerMode;
       turn?: ChatTurn;
@@ -5463,7 +5645,15 @@ export class CoopChatSession {
         codeEditIntent: options?.composerMode === "edit"
       });
     const turnContext = turn.context;
-    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
+    // Sticky [blast-radius] in history must not override tools-only / integration turns.
+    const suppressInheritedQuickAction =
+      Boolean(options?.fetchIntegrations?.length) ||
+      Boolean(options?.integrationProvider) ||
+      options?.intentPlan?.mode === "plain" ||
+      options?.intentPlan?.mode === "tools-only";
+    const effectiveQuickAction = suppressInheritedQuickAction
+      ? (quickAction as import("../webview/types").QuickActionId | undefined)
+      : resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
     const minResponseVisibleMs = 0;
@@ -5785,7 +5975,7 @@ export class CoopChatSession {
       contextBundle = [...turn.contextBundle];
     }
 
-    const llmMessage =
+    let llmMessage =
         emailTemplateMessage
           ? emailTemplateMessage
           : existingCapabilityMessage
@@ -5871,6 +6061,35 @@ export class CoopChatSession {
                       })
                     : !effectiveQuickAction &&
                         !integrationProvider &&
+                        (options?.fetchIntegrations?.length ?? 0) >= 1
+                      ? buildMultiToolPlainChatUserPrompt({
+                          userQuestion: taskContent,
+                          owner: turnContext.owner ?? this.preferences.owner,
+                          repo: turnContext.repo ?? this.preferences.repo,
+                          file: turnContext.file,
+                          tools: options!.fetchIntegrations!,
+                          integrations: {
+                            jira: jiraEvidence,
+                            slack: slackEvidence,
+                            teams: teamsEvidence,
+                            confluence: confluenceEvidence,
+                            notion: notionEvidence,
+                            "google-docs": googleDocsEvidence
+                          },
+                          connected: {
+                            jira: this.isIntegrationConnected("jira"),
+                            slack: this.isIntegrationConnected("slack"),
+                            teams: this.isIntegrationConnected("teams"),
+                            confluence: this.isIntegrationConnected("confluence"),
+                            notion: this.isIntegrationConnected("notion"),
+                            "google-docs": this.isIntegrationConnected("google-docs")
+                          },
+                          statusLine: options?.intentPlan
+                            ? buildIntentPlanStatusLine(options.intentPlan)
+                            : undefined
+                        })
+                    : !effectiveQuickAction &&
+                        !integrationProvider &&
                         isIncidentShapedQuery(taskContent)
                       ? buildIncidentReconstructionUserPrompt({
                           userQuestion: taskContent,
@@ -5885,6 +6104,15 @@ export class CoopChatSession {
                     : sourceHint
                       ? `${sourceHint}\n\n${content}`
                       : content;
+
+      const trustPreamble =
+        options?.intentPlan && !effectiveQuickAction
+          ? buildIntentPlanTrustPreamble(options.intentPlan)
+          : undefined;
+      if (trustPreamble) {
+        // Prepend plan disclosure for the model (Sources / activity already show status).
+        llmMessage = `${trustPreamble}\n\n${llmMessage}`;
+      }
 
       const useContextBundle =
         Boolean(effectiveQuickAction) ||
@@ -9557,6 +9785,10 @@ function mergeActivityMessageLists(prior: string[], incoming: string[]): string[
     merged.push(trimmed);
   }
   return merged;
+}
+
+function dedupeActivityMessages(messages: string[]): string[] {
+  return mergeActivityMessageLists([], messages);
 }
 
 function jobTitleForAction(actionId: string): string {

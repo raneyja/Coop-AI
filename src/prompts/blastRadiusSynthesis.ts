@@ -49,6 +49,7 @@ Be concise: the Sources card already shows full file lists — summarize and pri
 Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
 Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
+When Jira issues are attached: cite only tickets that mention the target file/symbol or are clearly about this change. Do not invent a link from "same repository" alone — say when a ticket is only loosely repo-related.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;

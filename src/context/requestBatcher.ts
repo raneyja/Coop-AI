@@ -30,6 +30,7 @@ export type ContextRequestParams = {
   quickAction?: string;
   fileSource?: string;
   integrationProvider?: import("../chat/types").IntegrationChatProvider;
+  fetchIntegrations?: import("../chat/types").IntegrationChatProvider[];
   [key: string]: unknown;
 };
 
@@ -224,6 +225,7 @@ export function buildContextRequests(event: IntentEvent, types: ContextRequestTy
       quickAction: event.context.buttonClicked,
       fileSource: event.context.fileSource,
       integrationProvider: event.context.integrationProvider,
+      fetchIntegrations: event.context.fetchIntegrations,
       openEditors: event.context.openEditors
     },
     intent: event,

@@ -13,6 +13,8 @@ import { wantsGoogleDocsContext } from "../context/googleDocsContext";
  * Incident / on-call asks often say “Jira tickets and Slack threads” — that must
  * NOT steal the turn into Jira-only synthesis (which skips incident reconstruction).
  * Integrations still fetch via shouldFetchIncidentIntegrations on chat_context.
+ *
+ * When the user names 2+ tools, never single-route — multi-tool allowlist owns the turn.
  */
 export function resolvePlainChatIntegrationProvider(options: {
   message: string;
@@ -25,23 +27,28 @@ export function resolvePlainChatIntegrationProvider(options: {
   if (isIncidentShapedQuery(message)) {
     return undefined;
   }
-  if (options.isConnected("jira") && wantsJiraContext(message)) {
-    return "jira";
+
+  const named: IntegrationChatProvider[] = [];
+  const pushIf = (provider: IntegrationChatProvider, wants: boolean): void => {
+    if (wants) {
+      named.push(provider);
+    }
+  };
+  pushIf("jira", wantsJiraContext(message));
+  pushIf("slack", wantsSlackContext(message));
+  pushIf("teams", wantsTeamsContext(message));
+  pushIf("confluence", wantsConfluenceContext(message));
+  pushIf("notion", wantsNotionContext(message));
+  pushIf("google-docs", wantsGoogleDocsContext(message));
+  if (named.length >= 2) {
+    return undefined;
   }
-  if (options.isConnected("slack") && wantsSlackContext(message)) {
-    return "slack";
-  }
-  if (options.isConnected("teams") && wantsTeamsContext(message)) {
-    return "teams";
-  }
-  if (options.isConnected("confluence") && wantsConfluenceContext(message)) {
-    return "confluence";
-  }
-  if (options.isConnected("notion") && wantsNotionContext(message)) {
-    return "notion";
-  }
-  if (options.isConnected("google-docs") && wantsGoogleDocsContext(message)) {
-    return "google-docs";
+
+  for (const provider of named) {
+    if (options.isConnected(provider) || named.length === 1) {
+      // Single named tool: route even when disconnected so Sources can show not-connected.
+      return provider;
+    }
   }
   return undefined;
 }

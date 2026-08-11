@@ -1,3 +1,7 @@
+import {
+  isSlackBotAccessToken,
+  isSlackUserAccessToken
+} from "../api/slack/slackTokenType";
 import { signOAuthState, verifyOAuthState } from "./oauthState";
 
 const SLACK_AUTHORIZE = "https://slack.com/oauth/v2/authorize";
@@ -28,15 +32,19 @@ export type SlackAppServiceOptions = {
 };
 
 export type SlackOAuthResult = {
-  /** User token — used for presence and user lookup. */
+  /** User token — used for search.messages and user-scoped APIs. */
   userAccessToken: string;
   botAccessToken?: string;
   teamId: string;
   teamName: string;
   authedUserId?: string;
+  /** User-token expiry when token rotation is enabled (not bot expiry). */
   expiresAt?: Date;
+  /** User refresh token when token rotation is enabled (not bot refresh). */
   refreshToken?: string;
 };
+
+export { isSlackBotAccessToken, isSlackUserAccessToken };
 
 export class SlackAppService {
   public constructor(private readonly options: SlackAppServiceOptions) {}
@@ -77,15 +85,25 @@ export class SlackAppService {
 
     const team = data.team as Record<string, unknown> | undefined;
     const authedUser = data.authed_user as Record<string, unknown> | undefined;
+    // search.messages requires a user token. Never fall back to the top-level bot token —
+    // that caused not_allowed_token_type after Connect while auth.test still passed.
     const userAccessToken =
-      typeof authedUser?.access_token === "string"
-        ? authedUser.access_token
-        : typeof data.access_token === "string"
-          ? data.access_token
-          : "";
+      typeof authedUser?.access_token === "string" ? authedUser.access_token.trim() : "";
     if (!userAccessToken) {
-      throw new Error("Slack OAuth response missing user access token");
+      throw new Error(
+        "Slack OAuth did not return a user token. Add User Token Scopes (including search:read) on the Slack app, reinstall to the workspace, then Connect again."
+      );
     }
+    if (isSlackBotAccessToken(userAccessToken)) {
+      throw new Error(
+        "Slack OAuth returned a bot token where a user token was expected. Reconnect Slack after confirming User Token Scopes."
+      );
+    }
+
+    const userRefreshToken =
+      typeof authedUser?.refresh_token === "string" ? authedUser.refresh_token : undefined;
+    const userExpiresIn =
+      typeof authedUser?.expires_in === "number" ? authedUser.expires_in : undefined;
 
     return {
       userAccessToken,
@@ -93,10 +111,12 @@ export class SlackAppService {
       teamId: String(team?.id ?? ""),
       teamName: String(team?.name ?? "Slack workspace"),
       authedUserId: typeof authedUser?.id === "string" ? authedUser.id : undefined,
-      refreshToken: typeof data.refresh_token === "string" ? data.refresh_token : undefined,
+      // Only store user refresh/expiry. Top-level refresh_token belongs to the bot token;
+      // refreshing with it overwrites the stored user token and breaks search.
+      refreshToken: userRefreshToken,
       expiresAt:
-        typeof data.expires_in === "number"
-          ? new Date(Date.now() + data.expires_in * 1000)
+        typeof userExpiresIn === "number"
+          ? new Date(Date.now() + userExpiresIn * 1000)
           : undefined
     };
   }
@@ -133,6 +153,11 @@ export class SlackAppService {
           : "";
     if (!accessToken) {
       throw new Error("Slack refresh response missing access token");
+    }
+    if (isSlackBotAccessToken(accessToken)) {
+      throw new Error(
+        "Slack refresh returned a bot token. Disconnect and Connect Slack again so Coop stores the user refresh token."
+      );
     }
     return {
       accessToken,

@@ -9,6 +9,7 @@ import {
 } from "../integrationScope/notionQuery";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
+import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
 export type NotionSearchPage = {
   id: string;
@@ -40,16 +41,15 @@ export function wantsNotionContext(query: string): boolean {
 }
 
 export function shouldFetchNotionContext(request: ContextFetchRequest): boolean {
-  if (request.params.integrationProvider === "notion") {
-    return true;
-  }
-  if (shouldFetchTraceDecisionDocIntegrations(request)) {
-    return true;
-  }
-  if (request.type !== "chat_context") {
-    return false;
-  }
-  return wantsNotionContext(request.intent.context.queryText ?? "");
+  return shouldFetchIntegrationWithAllowlist(request, "notion", () => {
+    if (shouldFetchTraceDecisionDocIntegrations(request)) {
+      return true;
+    }
+    if (request.type !== "chat_context") {
+      return false;
+    }
+    return wantsNotionContext(request.intent.context.queryText ?? "");
+  });
 }
 
 export async function fetchNotionSearchContext(options: {
