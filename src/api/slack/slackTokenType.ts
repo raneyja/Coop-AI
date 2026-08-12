@@ -10,5 +10,6 @@ export function isSlackBotAccessToken(token: string): boolean {
   return t.startsWith("xoxb-") || t.startsWith("xoxe.xoxb-");
 }
 
+/** Shown in Test Slack / Sources when the org Slack connection cannot search messages. */
 export const SLACK_BOT_TOKEN_SEARCH_MESSAGE =
-  "Slack is using a bot token. Message search needs a user token — disconnect Slack and Connect again (do not paste a bot token).";
+  "Slack search isn’t ready yet. In the Coop admin portal: Disconnect Slack, then Connect again. Return here, click Refresh status, then Test Slack.";

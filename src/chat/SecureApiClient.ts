@@ -364,7 +364,11 @@ export class SecureApiClient {
     return this.backend.getTeamsAppInstallUrl(baseUrl);
   }
 
-  public async getSlackInstallationStatus(baseUrl: string): Promise<{ installed: boolean; teamName?: string }> {
+  public async getSlackInstallationStatus(baseUrl: string): Promise<{
+    installed: boolean;
+    needsReconnect?: boolean;
+    teamName?: string;
+  }> {
     return this.backend.getSlackInstallationStatus(baseUrl);
   }
 
@@ -976,6 +980,7 @@ export async function readPreferences(
   let hasGitLabAppInstalled = false;
   let hasBitbucketAppInstalled = false;
   let hasSlackInstalled = false;
+  let slackNeedsReconnect = false;
   let hasAtlassianInstalled = false;
   let hasNotionInstalled = false;
   let hasGoogleDocsInstalled = false;
@@ -1069,9 +1074,11 @@ export async function readPreferences(
     try {
       const status = await api.getSlackInstallationStatus(base.apiBaseUrl);
       hasSlackInstalled = status.installed;
+      slackNeedsReconnect = Boolean(status.installed && status.needsReconnect);
       slackTeamName = status.teamName;
     } catch {
       hasSlackInstalled = false;
+      slackNeedsReconnect = false;
     }
     try {
       const status = await api.getAtlassianInstallationStatus(base.apiBaseUrl);
@@ -1160,6 +1167,7 @@ export async function readPreferences(
     hasBitbucketAppInstalled,
     hasSlackToken,
     hasSlackInstalled,
+    slackNeedsReconnect,
     slackTeamName,
     hasAtlassianInstalled,
     atlassianSiteName,

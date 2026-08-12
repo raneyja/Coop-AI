@@ -5,6 +5,8 @@ export type ConnectionCardProps = {
   name: string;
   meta: string;
   connected: boolean;
+  /** When true, show Reconnect required instead of Connected/Not connected. */
+  needsReconnect?: boolean;
   required?: boolean;
   description?: string;
   adminNotice?: string;
@@ -28,6 +30,7 @@ export function ConnectionCard({
   name,
   meta,
   connected,
+  needsReconnect = false,
   required = false,
   description,
   adminNotice,
@@ -46,7 +49,20 @@ export function ConnectionCard({
   testResult,
   footer
 }: ConnectionCardProps): React.ReactElement {
-  const statusLabel = connected ? "Connected" : required ? "Required" : "Not connected";
+  const statusLabel = needsReconnect
+    ? "Reconnect required"
+    : connected
+      ? "Connected"
+      : required
+        ? "Required"
+        : "Not connected";
+  const statusClass = needsReconnect
+    ? "coop-health-status--degraded"
+    : connected
+      ? "coop-health-status--healthy"
+      : required
+        ? "coop-health-status--offline"
+        : "coop-health-status--degraded";
 
   return (
     <>
@@ -57,11 +73,7 @@ export function ConnectionCard({
           <div className="coop-health-integration-name">{name}</div>
           <div className="coop-health-integration-meta">{meta}</div>
         </div>
-        <span
-          className={`coop-health-status ${connected ? "coop-health-status--healthy" : required ? "coop-health-status--offline" : "coop-health-status--degraded"}`}
-        >
-          {statusLabel}
-        </span>
+        <span className={`coop-health-status ${statusClass}`}>{statusLabel}</span>
       </div>
       <div className="coop-settings-actions">
         {onConnect ? (

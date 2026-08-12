@@ -39,6 +39,7 @@ export function IntegrationConnectionShell({
 }: IntegrationConnectionShellProps): React.ReactElement {
   const name = integrationDisplayName(provider);
   const connected = integrationConfigured(prefs, provider);
+  const needsReconnect = provider === "slack" && Boolean(prefs.slackNeedsReconnect);
   const showDevFallback = Boolean(prefs.devMode && devFallback && !integrationOrgInstalled(prefs, provider));
 
   return (
@@ -46,9 +47,12 @@ export function IntegrationConnectionShell({
       <ConnectionCard
         name={name}
         meta={integrationConnectionMeta(prefs, provider)}
-        connected={connected}
+        connected={connected && !needsReconnect}
+        needsReconnect={needsReconnect}
         description={description}
-        connectLabel={connected ? `Manage ${name}` : `Connect ${name}`}
+        connectLabel={
+          needsReconnect ? `Manage ${name}` : connected ? `Manage ${name}` : `Connect ${name}`
+        }
         onConnect={onConnect}
         onRefresh={onRefresh}
         refreshKey={testKey}
@@ -60,11 +64,13 @@ export function IntegrationConnectionShell({
         pendingTest={pendingTest}
         testResult={testResult}
         footer={
-          !connected ? (
-            <p className="coop-settings-card-desc coop-prompt-modal-muted">
-              Organization credentials are stored on the Coop server, not in VS Code.
-            </p>
-          ) : undefined
+          <p className="coop-settings-card-desc coop-prompt-modal-muted">
+            {needsReconnect
+              ? `Slack is linked but search isn’t ready. In the admin portal: Disconnect Slack, then Connect again. Return here and click Refresh status.`
+              : connected
+                ? `Manage ${name} opens the Coop admin portal — that’s where tools are connected and scoped.`
+                : `Connect ${name} opens the Coop admin portal. Organization credentials stay on the Coop server, not in VS Code.`}
+          </p>
         }
       />
       {extraFields}

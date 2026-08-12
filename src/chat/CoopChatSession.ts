@@ -8775,119 +8775,46 @@ export class CoopChatSession {
     }
   }
 
-  private async handleInstallSlackApp(): Promise<void> {
-    if (!(await this.options.api.hasToken())) {
-      void vscode.window.showErrorMessage("Sign in to Coop before connecting Slack.");
-      return;
-    }
-    if (this.preferences.canInstallIntegrations === false) {
-      void vscode.window.showErrorMessage(
-        "Only your organization admin can connect Slack. Ask IT to authorize the Slack app."
-      );
-      return;
-    }
+  private adminIntegrationsUrl(): string {
+    const adminBase = (this.preferences.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(
+      /\/$/,
+      ""
+    );
+    return `${adminBase}/integrations`;
+  }
+
+  /** Chat tools are authorized in the admin portal — not via OAuth launched from the extension. */
+  private async handleOpenAdminIntegrations(toolLabel: string): Promise<void> {
     try {
-      const url = await this.options.api.getSlackAppInstallUrl(this.preferences.apiBaseUrl);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+      await vscode.env.openExternal(vscode.Uri.parse(this.adminIntegrationsUrl()));
       void vscode.window.showInformationMessage(
-        "Complete Slack authorization in your browser, then return here."
+        `Connect or manage ${toolLabel} in the Coop admin portal, then return here and click Refresh status.`
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open Slack authorize URL.";
+      const message =
+        error instanceof Error ? error.message : "Could not open the Coop admin portal.";
       void vscode.window.showErrorMessage(message);
     }
+  }
+
+  private async handleInstallSlackApp(): Promise<void> {
+    await this.handleOpenAdminIntegrations("Slack");
   }
 
   private async handleInstallAtlassianApp(): Promise<void> {
-    if (!(await this.options.api.hasToken())) {
-      void vscode.window.showErrorMessage("Sign in to Coop before connecting Atlassian.");
-      return;
-    }
-    if (this.preferences.canInstallIntegrations === false) {
-      void vscode.window.showErrorMessage(
-        "Only your organization admin can connect Atlassian. Ask IT to authorize Jira and Confluence."
-      );
-      return;
-    }
-    try {
-      const url = await this.options.api.getAtlassianAppInstallUrl(this.preferences.apiBaseUrl);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-      void vscode.window.showInformationMessage(
-        "Complete Atlassian authorization in your browser, then return here."
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open Atlassian authorize URL.";
-      void vscode.window.showErrorMessage(message);
-    }
+    await this.handleOpenAdminIntegrations("Atlassian (Jira / Confluence)");
   }
 
   private async handleInstallNotionApp(): Promise<void> {
-    if (!(await this.options.api.hasToken())) {
-      void vscode.window.showErrorMessage("Sign in to Coop before connecting Notion.");
-      return;
-    }
-    if (this.preferences.canInstallIntegrations === false) {
-      void vscode.window.showErrorMessage(
-        "Only your organization admin can connect Notion. Ask IT to authorize the Notion integration."
-      );
-      return;
-    }
-    try {
-      const url = await this.options.api.getNotionAppInstallUrl(this.preferences.apiBaseUrl);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-      void vscode.window.showInformationMessage(
-        "Complete Notion authorization in your browser, then return here."
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open Notion authorize URL.";
-      void vscode.window.showErrorMessage(message);
-    }
+    await this.handleOpenAdminIntegrations("Notion");
   }
 
   private async handleInstallGoogleDocsApp(): Promise<void> {
-    if (!(await this.options.api.hasToken())) {
-      void vscode.window.showErrorMessage("Sign in to Coop before connecting Google Docs.");
-      return;
-    }
-    if (this.preferences.canInstallIntegrations === false) {
-      void vscode.window.showErrorMessage(
-        "Only your organization admin can connect Google Docs. Ask IT to authorize Google Drive access."
-      );
-      return;
-    }
-    try {
-      const url = await this.options.api.getGoogleDocsAppInstallUrl(this.preferences.apiBaseUrl);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-      void vscode.window.showInformationMessage(
-        "Complete Google authorization in your browser, then return here."
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open Google authorize URL.";
-      void vscode.window.showErrorMessage(message);
-    }
+    await this.handleOpenAdminIntegrations("Google Docs");
   }
 
   private async handleInstallTeamsApp(): Promise<void> {
-    if (!(await this.options.api.hasToken())) {
-      void vscode.window.showErrorMessage("Sign in to Coop before connecting Microsoft Teams.");
-      return;
-    }
-    if (this.preferences.canInstallIntegrations === false) {
-      void vscode.window.showErrorMessage(
-        "Only your organization admin can connect Microsoft Teams. Ask IT to authorize the Teams app."
-      );
-      return;
-    }
-    try {
-      const url = await this.options.api.getTeamsAppInstallUrl(this.preferences.apiBaseUrl);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-      void vscode.window.showInformationMessage(
-        "Complete Microsoft authorization in your browser, then return here."
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open Microsoft authorize URL.";
-      void vscode.window.showErrorMessage(message);
-    }
+    await this.handleOpenAdminIntegrations("Microsoft Teams");
   }
 
   private async handleLightningEnableRepo(repoId: string): Promise<void> {

@@ -68,6 +68,7 @@ export type Preferences = {
   hasBitbucketAppInstalled: boolean;
   hasSlackToken: boolean;
   hasSlackInstalled: boolean;
+  slackNeedsReconnect?: boolean;
   slackTeamName?: string;
   hasAtlassianInstalled: boolean;
   atlassianSiteName?: string;

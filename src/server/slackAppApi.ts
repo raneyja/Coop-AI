@@ -5,6 +5,7 @@ import type { AuthContext } from "./orgStore";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { SlackAppConfig } from "./slackAppConfig";
 import type { SlackAppService } from "./slackAppService";
+import { isSlackBotAccessToken } from "../api/slack/slackTokenType";
 import { resolveOAuthSuccessRedirectUrl } from "./oauthCallbackRedirect";
 
 export type SlackAppApiDeps = {
@@ -131,8 +132,15 @@ async function handleInstallationStatus(
     return true;
   }
   const connection = await deps.integrationStore.get(auth.orgId, "slack");
+  let needsReconnect = false;
+  if (connection) {
+    const accessToken = await deps.integrationStore.getAccessToken(auth.orgId, "slack");
+    // search.messages requires a user token; a stored bot token looks "connected" but search fails.
+    needsReconnect = Boolean(accessToken && isSlackBotAccessToken(accessToken));
+  }
   writeJson(response, 200, {
     installed: Boolean(connection),
+    needsReconnect,
     teamName: connection?.metadata.teamName,
     teamId: connection?.metadata.teamId,
     tokenExpiresAt: connection?.tokenExpiresAt?.toISOString()
