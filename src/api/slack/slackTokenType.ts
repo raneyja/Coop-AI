@@ -12,4 +12,4 @@ export function isSlackBotAccessToken(token: string): boolean {
 
 /** Shown in Test Slack / Sources when the org Slack connection cannot search messages. */
 export const SLACK_BOT_TOKEN_SEARCH_MESSAGE =
-  "Slack search isn’t ready yet. In the Coop admin portal: Disconnect Slack, then Connect again. Return here, click Refresh status, then Test Slack.";
+  "Slack search isn’t ready yet. Clear any pasted Slack token under Settings → Tools → Slack (developer fallback), then Refresh status and Test Slack. If that still fails: admin portal → Disconnect → Connect Slack.";
