@@ -10,6 +10,7 @@ import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
+import { WorkflowsMenu } from "./components/WorkflowsMenu";
 import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
@@ -1484,15 +1485,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [submitPrompt]
   );
 
-  const insertSlashCommand = useCallback(
-    (command: string) => {
-      launchIntro.skip();
-      setLaunchIntroConsumed(true);
-      setInput(`/${command} `);
-    },
-    [launchIntro]
-  );
-
   const dismissJobProgress = useCallback(() => setJobProgress(undefined), []);
   const cancelJob = useCallback((jobId: string) => post({ type: "job:cancel", payload: { jobId } }), [post]);
   const viewJobResults = useCallback(
@@ -1848,11 +1840,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onNewThread={() => post({ type: "threads:new" })}
           />
         ) : null}
-        {lightningState && !lightningState.canUseLightning ? (
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <WorkflowsMenu
+            context={context}
+            disabled={isStreaming}
+            onAction={handleQuickAction}
+          />
+          {lightningState && !lightningState.canUseLightning ? (
             <ProUpgradeChip onClick={() => post({ type: "lightning:upgrade" })} />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
       <p className="coop-panel-narrow-notice" role="status">
         Widen the sidebar for the best experience.
@@ -1971,8 +1968,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <EmptyState
             context={context}
             disabled={isStreaming}
-            onAction={handleQuickAction}
-            onSlashCommand={insertSlashCommand}
             launchIntroDone={launchIntroDone}
             onAttachAgentsMd={() => post({ type: "agents:attach" })}
             onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}

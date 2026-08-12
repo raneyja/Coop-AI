@@ -508,6 +508,15 @@
     color: var(--coop-composer-text);
   }
 
+  /* Header Workflows dropdown (opens below trigger; same row chrome as Prompts pill) */
+  .coop-workflows-menu-panel {
+    @apply absolute right-0 top-full z-40 mt-1.5 overflow-hidden rounded-lg border shadow-lg;
+    width: min(220px, calc(100vw - 24px));
+    border-color: var(--coop-border);
+    background: var(--vscode-editorWidget-background, var(--coop-composer-surface));
+    box-shadow: var(--coop-composer-shadow);
+  }
+
   .coop-prompt-modal-backdrop {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
     background: color-mix(in srgb, var(--vscode-editor-background) 25%, transparent);

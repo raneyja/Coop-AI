@@ -1,14 +1,10 @@
 import React from "react";
-import { QUICK_ACTION_SLASH_HINTS } from "../../context/slashCommands";
-import { QuickActionGrid } from "./QuickActionGrid";
 import { shouldPromptForAgentsMd } from "../lib/agentsMdStatus";
-import { QuickActionId, RepoContext } from "../types";
+import type { RepoContext } from "../types";
 
 type EmptyStateProps = {
   context: RepoContext;
   disabled?: boolean;
-  onAction: (actionId: QuickActionId, prompt: string) => void;
-  onSlashCommand?: (command: (typeof QUICK_ACTION_SLASH_HINTS)[number]) => void;
   launchIntroDone?: boolean;
   onAttachAgentsMd?: () => void;
   onStartFromAgentsMdTemplate?: () => void;
@@ -17,8 +13,6 @@ type EmptyStateProps = {
 export function EmptyState({
   context,
   disabled,
-  onAction,
-  onSlashCommand,
   launchIntroDone = true,
   onAttachAgentsMd,
   onStartFromAgentsMdTemplate
@@ -35,8 +29,14 @@ export function EmptyState({
             CoopAI
           </h2>
 
+          <p className="mx-auto mt-3 max-w-[280px] text-center text-[12.5px] leading-relaxed text-[var(--coop-panel-muted)]">
+            Ask anything about this repo.
+            <br />
+            <span className="coop-slash-hint-command font-medium">Type / for commands.</span>
+          </p>
+
           {shouldPromptForAgentsMd(context.projectInstructions) ? (
-            <div className="mt-4 text-center">
+            <div className="mt-5 text-center">
               <button
                 type="button"
                 disabled={disabled || !onStartFromAgentsMdTemplate}
@@ -57,33 +57,6 @@ export function EmptyState({
               ) : null}
             </div>
           ) : null}
-
-          <div className="mt-6">
-            <QuickActionGrid
-              context={context}
-              disabled={disabled}
-              onAction={onAction}
-              launchStagger={launchIntroDone}
-            />
-            <p className="mt-4 text-center text-[11px] leading-relaxed text-[var(--coop-panel-muted)]">
-              Or type{" "}
-              {QUICK_ACTION_SLASH_HINTS.map((command, index) => (
-                <React.Fragment key={command}>
-                  {index > 0 ? ", " : null}
-                  <button
-                    type="button"
-                    disabled={disabled || !onSlashCommand}
-                    className="coop-slash-hint-command inline cursor-pointer border-0 bg-transparent p-0 font-medium disabled:cursor-default disabled:opacity-40"
-                    onClick={() => onSlashCommand?.(command)}
-                  >
-                    /{command}
-                  </button>
-                </React.Fragment>
-              ))}
-              {" "}
-              in chat for the same actions.
-            </p>
-          </div>
         </div>
       </div>
     </div>

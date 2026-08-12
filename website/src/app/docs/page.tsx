@@ -42,7 +42,7 @@ const hubCards = [
   },
   {
     title: "Owner's Manual",
-    description: "Linear guide for daily extension use — quick actions, prompts, and AGENTS.md.",
+    description: "Linear guide for daily extension use — Workflows, prompts, and AGENTS.md.",
     href: "/manual"
   }
 ];

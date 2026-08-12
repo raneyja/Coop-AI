@@ -25,7 +25,7 @@ export type EvidenceRecommendedAction = {
   line?: number;
   searchType?: EvidenceActionSearchType;
   composerPrompt?: string;
-  /** Runs a quick action (same path as grid buttons and slash commands). */
+  /** Runs a quick action (same path as Workflows menu and slash commands). */
   quickActionId?: QuickActionId;
 };
 

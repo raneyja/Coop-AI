@@ -28,7 +28,7 @@ export function ProductScreenshot({ size = "compact" }: ProductScreenshotProps) 
         <div className="overflow-hidden rounded-xl border border-white/5">
           <Image
             src="/screenshots/product-dark.png"
-            alt="CoopAI sidebar in VS Code showing quick actions and chat"
+            alt="CoopAI sidebar in VS Code showing chat and Workflows"
             width={1024}
             height={767}
             className="w-full"
