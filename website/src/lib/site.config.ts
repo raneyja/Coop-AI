@@ -3,57 +3,57 @@ export const siteConfig = {
   domain: "coop-ai.dev",
   url: "https://coop-ai.dev",
   description:
-    "CoopAI is code intelligence for VS Code — understand and refine code with context from your repo graph, Slack, and tickets, plus graph-grounded completions.",
+    "CoopAI is code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets, then complete and edit the way your team already writes.",
   tagline: "From your stack, to your codebase.",
   subheadline:
-    "Slack threads, Jira tickets, and symbol graphs — wired into every answer and every line you write.",
+    "Slack threads, Jira tickets, and symbol graphs in every answer and every line you write.",
   contactEmail: "hello@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
       "CoopAI is code intelligence for VS Code. Understand code, trace decisions, and find owners using context from your repo, Slack, and Jira in every answer.",
-    ogImageAlt: "CoopAI — deep code intelligence for VS Code",
+    ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
-        title: "Product — Code intelligence for VS Code",
+        title: "Product | Code intelligence for VS Code",
         description:
-          "Explore CoopAI for VS Code: understand repos, trace decisions, find owners, assess blast radius, and write graph-grounded completions across your stack."
+          "See how CoopAI works in VS Code: understand repos, trace decisions, find owners, check blast radius, and complete or edit code using your stack."
       },
       enterprise: {
-        title: "Enterprise — Secure code intelligence",
+        title: "Enterprise | Secure code intelligence",
         description:
           "CoopAI Enterprise: zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment, and self-hosted options for security-conscious teams."
       },
       pricing: {
-        title: "Pricing — Plans for engineering teams",
+        title: "Pricing | Plans for engineering teams",
         description:
-          "CoopAI pricing for engineering teams — free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
+          "CoopAI pricing: free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
       },
       security: {
-        title: "Security — Zero-clone architecture",
+        title: "Security | Zero-clone architecture",
         description:
-          "How CoopAI protects your code and context — zero-clone architecture, zero-retention LLM routing, BYOK, audit logging, and compliance documentation."
+          "How CoopAI protects your code and context: zero-clone architecture, zero-retention LLM routing, BYOK, audit logging, and compliance docs."
       },
       blog: {
-        title: "Blog — Code intelligence & SDLC context",
+        title: "Blog | Code intelligence and SDLC context",
         description:
-          "CoopAI blog — perspectives on code intelligence, organizational context, SDLC tooling, and enterprise developer productivity."
+          "Notes on code intelligence, organizational context, SDLC tooling, and how teams actually ship."
       },
       docs: {
-        title: "Documentation — Get started",
+        title: "Documentation | Get started",
         description:
-          "CoopAI documentation — getting started, admin portal, integrations, API reference, security architecture, and enterprise deployment."
+          "Install CoopAI, connect integrations, use the admin portal, and read the API, security, and enterprise deployment guides."
       },
       demo: {
-        title: "Book a Demo — See CoopAI on your codebase",
+        title: "Book a demo | See CoopAI on your codebase",
         description:
-          "Schedule a CoopAI demo or join the waitlist. See zero-clone code intelligence, cross-tool context, and enterprise deployment options."
+          "Schedule a CoopAI demo. We'll walk through zero-clone indexing, cross-tool context, and how it fits your stack."
       },
       integrations: {
-        title: "Integrations — GitHub, Slack, Jira & more",
+        title: "Integrations | GitHub, Slack, Jira, and more",
         description:
-          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Notion, Google Docs, and Microsoft Teams for graph-grounded context in VS Code."
+          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Notion, Google Docs, and Microsoft Teams so VS Code has the same context your team already uses."
       },
       privacy: {
         title: "Privacy Policy",
@@ -110,7 +110,7 @@ export const siteConfig = {
     {
       id: "understand-repo",
       title: "Understand Repo",
-      description: "Architecture, ownership, and key files — without cloning the whole codebase."
+      description: "Architecture, ownership, and key files, without cloning the whole codebase."
     },
     {
       id: "trace-decision",
@@ -125,7 +125,7 @@ export const siteConfig = {
     {
       id: "blast-radius",
       title: "Blast Radius",
-      description: "Impact of changing this code — integrations, APIs, and operational risk."
+      description: "What breaks if you change this: integrations, APIs, and operational risk."
     },
     {
       id: "knowledge-gaps",
@@ -134,36 +134,36 @@ export const siteConfig = {
     }
   ],
   codeCreation: {
-    title: "Graph-grounded code creation",
+    title: "Graph-grounded generation",
     tagline: "Stay in the file. Write like you've been in the repo for years.",
     description:
-      "CoopAI is built for engineers perfecting production code — not vibe-coding greenfield apps. Inline completions use your open buffer by default; Pro can add indexed graph context. In-file edits and completions bias toward team patterns so suggestions match how your org actually writes code.",
+      "Built for people shipping production code, not greenfield demos. Completions start from the open buffer; Pro can add indexed dependents and ownership. Edits follow the patterns your org already uses.",
     features: [
       {
         id: "inline-complete",
         title: "Inline complete",
         description:
-          "Ghost-text completions as you type — single- and multi-line, Tab to accept. Optional graph context (Pro) adds dependents and ownership from your indexed repo."
+          "Ghost text as you type, single- or multi-line. Tab to accept. On Pro, indexed dependents and ownership can ride along."
       },
       {
         id: "edit-selection",
         title: "Edit selection",
         description:
-          "Highlight a block, describe the change, review an inline diff. Accept, retry, or undo — craftsmanship in the editor, not an autonomous agent rewriting your tree."
+          "Highlight a block, describe the change, review an inline diff. Accept, retry, or undo. You stay in the file."
       },
       {
         id: "completion-routing",
         title: "Completion-only routing",
         description:
-          "Inline requests use a separate zero-retention code-completion path (`x-use-case: code-completion-only`) — distinct from chat, with keys on your server."
+          "Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat, with keys on your server."
       }
     ]
   },
   contextIntelligence: {
     title: "Lightning Intelligence",
-    tagline: "Understand any codebase instantly — without cloning monorepos.",
+    tagline: "Understand any codebase without cloning the monorepo.",
     description:
-      "CoopAI builds a secure cross-repo knowledge graph so developers get rich AI context across your entire organization.",
+      "CoopAI builds a cross-repo knowledge graph so developers get real context across the org, not a guess from one file.",
     features: [
       {
         label: "Cross-repo context",
@@ -173,12 +173,12 @@ export const siteConfig = {
       {
         label: "Cross-tool context",
         description:
-          "Slack, Jira, and tickets alongside your code graph — not trapped in tribal knowledge."
+          "Slack, Jira, and tickets sit next to the code graph, instead of living in someone's head."
       },
       {
         label: "Secure by design",
         description:
-          "Context from webhooks and index jobs — not full monorepo copies on every laptop."
+          "Context comes from webhooks and index jobs, not a full monorepo copy on every laptop."
       },
       {
         label: "Lightning-fast when you need it",

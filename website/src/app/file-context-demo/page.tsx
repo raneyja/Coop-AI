@@ -6,7 +6,7 @@ import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 
 export const metadata: Metadata = buildPageMetadata(
   "/file-context-demo",
-  "File Context Story — Preview",
+  "File Context Story: Preview",
   "Auto-playing demo: deep questions, inline complete, and in-file edit in VS Code.",
   { robots: noIndexRobots }
 );

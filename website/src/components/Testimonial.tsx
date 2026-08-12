@@ -132,12 +132,12 @@ export function Testimonial() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="border-y border-coop-border bg-white py-20 md:py-24">
+    <section ref={sectionRef} className="border-y border-coop-border py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="social_proof"
           title="Teams using CoopAI"
-          description="Engineers and leads who stopped hunting context across Slack, tickets, and tribal knowledge."
+          description="Engineers and leads who stopped hunting context across Slack, tickets, and hallway conversations."
         />
 
         <div className="mt-12 md:mt-14">

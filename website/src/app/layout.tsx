@@ -29,7 +29,7 @@ const defaultOgImage = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    default: `${siteConfig.name} | ${siteConfig.tagline}`,
     template: `%s · ${siteConfig.name}`
   },
   description: siteConfig.seo.defaultDescription,
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     canonical: siteConfig.url
   },
   openGraph: {
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    title: `${siteConfig.name} | ${siteConfig.tagline}`,
     description: siteConfig.seo.defaultDescription,
     url: siteConfig.url,
     siteName: siteConfig.name,
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    title: `${siteConfig.name} | ${siteConfig.tagline}`,
     description: siteConfig.seo.defaultDescription,
     images: ["/opengraph-image"]
   },

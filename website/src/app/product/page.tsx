@@ -23,7 +23,7 @@ export default function ProductPage() {
       <PageHeader
         eyebrow="Product"
         title="Context from your entire stack (not just your codebase)"
-        description="CoopAI indexes your entire codebase and the tools that your team uses — then puts that context into every answer and every line you write."
+        description="CoopAI indexes your codebase and the tools your team already uses, then uses that context in every answer and every line you write."
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">

@@ -35,7 +35,7 @@ export function HeroCompleteDemoCard({
       aria-label={
         accepted
           ? `Completion accepted in ${file}`
-          : `Inline completion ready in ${file} — Tab to accept`
+          : `Inline completion ready in ${file}. Tab to accept`
       }
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
@@ -54,7 +54,7 @@ export function HeroCompleteDemoCard({
 
       <p className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">
         {accepted
-          ? "Suggestion applied at your cursor — stay in the file."
+          ? "Suggestion applied at your cursor. Stay in the file."
           : "Matched AuthError from billing/auth. Tab to accept ghost text."}
       </p>
 

@@ -348,7 +348,7 @@ export function FileContextStoryDemo({
             </div>
           ) : (
             <>
-          {/* Chat column — prompt → context → outcome */}
+          {/* Chat column: prompt → context → outcome */}
           <div
             className={`flex min-h-0 w-full shrink-0 flex-col border-b border-[#2a2a2a] sm:h-full ${chatColumnWidth} sm:border-b-0 sm:border-r`}
           >
@@ -413,7 +413,7 @@ export function FileContextStoryDemo({
                 </div>
           </div>
 
-          {/* Editor column — always present to prevent layout shift */}
+          {/* Editor column: always present to prevent layout shift */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {isCodeCreationStory(story) ? (
               <EditorCodeCreationPanel
@@ -435,7 +435,7 @@ export function FileContextStoryDemo({
 
       {!isHomepage ? (
         <p className="mt-5 shrink-0 text-center text-sm text-coop-muted">
-          Auto-playing demo — click the dots to jump scenarios. Every slide follows prompt → context
+          Auto-playing demo: click the dots to jump scenarios. Every slide follows prompt → context
           → outcome.
         </p>
       ) : null}

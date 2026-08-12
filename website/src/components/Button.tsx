@@ -7,7 +7,7 @@ const base =
   "inline-flex items-center justify-center rounded px-6 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-black text-white hover:bg-gray-900",
+  primary: "bg-coop-index text-white hover:bg-[#2ea043]",
   secondary:
     "border border-gray-300 bg-white text-gray-900 hover:bg-gray-50",
   ghost: "text-coop-muted hover:text-gray-900"

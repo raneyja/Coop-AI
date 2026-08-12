@@ -156,7 +156,7 @@ function GraphNodeCard({
         zIndex: 10 + stackOrder,
         animationDelay: `${delay}s`
       }}
-      aria-label={`${node.label} — ${node.categoryLabel}`}
+      aria-label={`${node.label}: ${node.categoryLabel}`}
     >
       <div
         className="group flex h-full w-full items-stretch overflow-hidden rounded-sm border border-gray-200 bg-white transition duration-200 hover:border-gray-300"

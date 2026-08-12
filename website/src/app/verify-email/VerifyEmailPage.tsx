@@ -28,7 +28,7 @@ export default function VerifyEmailPage() {
     if (token.startsWith("preview-")) {
       setState("error");
       setMessage(
-        "This was an email layout preview — the link is not a live verification. Real signup emails use a one-time token."
+        "This was an email layout preview: the link is not a live verification. Real signup emails use a one-time token."
       );
       return;
     }

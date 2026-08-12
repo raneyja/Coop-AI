@@ -38,7 +38,7 @@ export function EmailPreviewContent() {
       <PageHeader
         eyebrow="Account"
         title={copy.title}
-        description="This was a QA layout preview — the button you clicked is not a live account link."
+        description="This was a QA layout preview: the button you clicked is not a live account link."
         tight
       />
 

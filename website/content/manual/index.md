@@ -1,25 +1,25 @@
 ---
 title: "CoopAI Owner's Manual"
-description: "Install, configure, and use CoopAI in VS Code — Workflows, prompt library, and team conventions."
+description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
 lastUpdated: "2026-08-12"
 ---
 
-Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
+Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
 
 ## Why Coop
 
 ### The context gap
 
-Most AI coding tools only see the file you have open. CoopAI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software — not just the current buffer.
+Most AI coding tools only see the file you have open. CoopAI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software, not just the current buffer.
 
 > By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions… I spend at least 6 hours each week answering questions and cut that in half this past week.
 > — Senior Engineer, Row Labs
 
 ### Lightning Intelligence
 
-CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs — not full monorepo copies on every laptop. Your source stays on your infrastructure.
+CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs, not full monorepo copies on every laptop. Your source stays on your infrastructure.
 
-**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode — with AI usage capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher seat-based limits.
+**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode, with AI usage capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher seat-based limits.
 
 ### Quick actions at a glance
 

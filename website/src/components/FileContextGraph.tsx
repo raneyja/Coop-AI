@@ -408,7 +408,7 @@ function OrbitNodeCard({
         opacity,
         transition: "opacity 0.25s ease, transform 0.2s ease"
       }}
-      aria-label={`${node.label} — ${node.sublabel}`}
+      aria-label={`${node.label}: ${node.sublabel}`}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onFocus={onEnter}
@@ -496,7 +496,7 @@ function ContextPacket({
                 }`}
                 aria-hidden
               >
-                {disabled ? "—" : "✓"}
+                {disabled ? "-" : "✓"}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">

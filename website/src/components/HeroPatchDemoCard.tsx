@@ -50,7 +50,7 @@ export function HeroPatchDemoCard({
       aria-label={
         applied
           ? `Patch applied to ${file}`
-          : `Patch ready for ${file} — review diff then apply`
+          : `Patch ready for ${file}. Review the diff, then apply`
       }
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">

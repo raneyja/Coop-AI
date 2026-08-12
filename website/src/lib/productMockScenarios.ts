@@ -56,12 +56,12 @@ export const PRODUCT_MOCK_SCENARIOS: ProductMockScenario[] = [
     answer: {
       content: `**Short answer**
 
-Jessica Dawson owns this routine — 90% blame over the last 60 commits on \`token_validator.ts\`. Marcus and Elena touch adjacent auth and schema paths.
+Jessica Dawson owns this routine: 90% blame over the last 60 commits on \`token_validator.ts\`. Marcus and Elena touch adjacent auth and schema paths.
 
 **Suggested reviewers**
 
-- \`@marcus_vance\` — auth routing
-- \`@elena_rostova\` — downstream DB hooks
+- \`@marcus_vance\`: auth routing
+- \`@elena_rostova\`: downstream DB hooks
 
 **Risk signals**
 
@@ -140,13 +140,13 @@ High blast radius on empty-payload handling. Slack \`#billing-auth\` discussed t
 
 **Affected services**
 
-- \`api-gateway\` — runtime dependency
-- \`billing-worker\` — batch retries
-- \`ledger-svc\` — settlement hooks
+- \`api-gateway\`: runtime dependency
+- \`billing-worker\`: batch retries
+- \`ledger-svc\`: settlement hooks
 
 **Recommendation**
 
-Treat as a **breaking change risk** — staged rollout recommended. Tuned in PR #8821, shared across services.`
+Treat as a **breaking change risk**: staged rollout recommended. Tuned in PR #8821, shared across services.`
     },
     code: {
       lines: [
@@ -158,7 +158,7 @@ Treat as a **breaking change risk** — staged rollout recommended. Tuned in PR 
           n: 5,
           highlight: true,
           tokens: [
-            { t: "comment", v: "  // Tuned in PR #8821 — shared by 3 services" },
+            { t: "comment", v: "  // Tuned in PR #8821: shared by 3 services" },
           ]
         },
         {
@@ -198,11 +198,11 @@ Jessica Dawson authored 61% of touched lines in PR #1247. Marcus Vance reviewed 
 
 **Suggested reviewers**
 
-- \`@jessica_dawson\` — primary owner (61% blame)
-- \`@marcus_vance\` — 9 files in \`auth/\` (last 30d)
-- \`@elena_rostova\` — schema migrations downstream
+- \`@jessica_dawson\`: primary owner (61% blame)
+- \`@marcus_vance\`: 9 files in \`auth/\` (last 30d)
+- \`@elena_rostova\`: schema migrations downstream
 
-Security-sensitive OAuth refresh path — include a security reviewer before merge.`
+Security-sensitive OAuth refresh path: include a security reviewer before merge.`
     },
     code: {
       lines: [
@@ -268,9 +268,9 @@ Auth entry at \`cmd/api\` → \`middleware/auth\` → \`internal/session\`. Toke
 
 **Key paths**
 
-- \`cmd/api/main.go\` — HTTP entry & route registration
-- \`middleware/auth.go\` — session + JWT gate
-- \`billing/auth/token_validator.ts\` — signature validation
+- \`cmd/api/main.go\`: HTTP entry & route registration
+- \`middleware/auth.go\`: session + JWT gate
+- \`billing/auth/token_validator.ts\`: signature validation
 
 12k symbols indexed across 4 packages that touch auth.`
     },
@@ -322,11 +322,11 @@ No commits in 14 months; primary owner left the team. Runbook link 404s. Two rel
 - Incident postmortem references lost Slack thread
 - Downstream schema owner unknown
 
-\`billing_adapter.ts\` is tribal-knowledge risk — confirm with platform-payments before changes.`
+\`billing_adapter.ts\` is tribal-knowledge risk: confirm with platform-payments before changes.`
     },
     code: {
       lines: [
-        { n: 1, tokens: [{ t: "comment", v: "// @deprecated — v1 billing bridge" }] },
+        { n: 1, tokens: [{ t: "comment", v: "// @deprecated: v1 billing bridge" }] },
         {
           n: 2,
           highlight: true,
@@ -371,9 +371,9 @@ Slack \`#incidents\` thread (Feb 12) discusses payload retries. Jira \`BILL-4421
 
 **Linked sources**
 
-- Slack \`#incidents\` — 14 messages, 3 engineers
-- Jira \`BILL-4421\` — P1 billing outage (resolved)
-- PR #1198 — fix merged 2 days after thread`
+- Slack \`#incidents\`: 14 messages, 3 engineers
+- Jira \`BILL-4421\`: P1 billing outage (resolved)
+- PR #1198: fix merged 2 days after thread`
     },
     code: {
       lines: [

@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           (name, email, company, role, message)
         </li>
         <li>
-          <strong>Usage analytics</strong> via Vercel Analytics — aggregated page views, referrers,
+          <strong>Usage analytics</strong> via Vercel Analytics: aggregated page views, referrers,
           and performance metrics. We do not use third-party advertising trackers.
         </li>
         <li>
@@ -41,27 +41,27 @@ export default function PrivacyPage() {
       <p>When you use the CoopAI VS Code extension with a CoopAI server, we process:</p>
       <ul>
         <li>
-          <strong>Repository metadata</strong> — file paths, ownership, dependency graphs, commit
+          <strong>Repository metadata</strong>: file paths, ownership, dependency graphs, commit
           history, and PR metadata indexed via webhooks and background jobs
         </li>
         <li>
-          <strong>Code excerpts</strong> — selected file content and line ranges you include in chat
+          <strong>Code excerpts</strong>: selected file content and line ranges you include in chat
           prompts or quick actions, transmitted to your CoopAI server for context assembly
         </li>
         <li>
-          <strong>Prompts and completions</strong> — chat messages and AI responses, routed through
+          <strong>Prompts and completions</strong>: chat messages and AI responses, routed through
           your CoopAI server to LLM providers for inference
         </li>
         <li>
-          <strong>Authentication credentials</strong> — CoopAI API tokens stored in VS Code SecretStorage;
+          <strong>Authentication credentials</strong>: CoopAI API tokens stored in VS Code SecretStorage;
           LLM provider keys stored on the server (not in the extension)
         </li>
         <li>
-          <strong>Integration data</strong> — Slack messages, ticket references, and other
+          <strong>Integration data</strong>: Slack messages, ticket references, and other
           organizational context when integrations are configured
         </li>
         <li>
-          <strong>Usage metadata</strong> — token counts, model selection, request timestamps, and
+          <strong>Usage metadata</strong>: token counts, model selection, request timestamps, and
           cost estimates for billing and monitoring
         </li>
       </ul>
@@ -122,19 +122,19 @@ export default function PrivacyPage() {
       <p>We share information only with:</p>
       <ul>
         <li>
-          <strong>LLM providers</strong> — to perform inference you request (Anthropic, OpenAI,
+          <strong>LLM providers</strong>: to perform inference you request (Anthropic, OpenAI,
           Google, and others as configured)
         </li>
         <li>
-          <strong>Infrastructure providers</strong> — Vercel (website hosting), and your chosen
+          <strong>Infrastructure providers</strong>: Vercel (website hosting), and your chosen
           deployment environment for the CoopAI server
         </li>
         <li>
-          <strong>Code host platforms</strong> — GitHub, GitLab, Bitbucket for webhook and API
+          <strong>Code host platforms</strong>: GitHub, GitLab, Bitbucket for webhook and API
           access you authorize
         </li>
         <li>
-          <strong>Chat integrations</strong> — Slack or similar, when configured by your organization
+          <strong>Chat integrations</strong>: Slack or similar, when configured by your organization
         </li>
       </ul>
       <p>We do not sell personal information. We do not share data with advertisers.</p>

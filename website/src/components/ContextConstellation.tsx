@@ -443,7 +443,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
 
       <p className="relative z-10 shrink-0 border-t border-coop-border/60 bg-gray-50/90 px-2 py-1.5 text-center font-mono text-[9px] text-gray-400 sm:text-[10px]">
         {reduceMotion
-          ? "Motion reduced — full stack context shown"
+          ? "Motion reduced. Full stack context shown"
           : "Stack → Coop → grounded answers"}
       </p>
     </div>

@@ -13,7 +13,7 @@ export const HERO_EXAMPLES: HeroExample[] = [
   {
     id: "ownership",
     question:
-      "Who owns `services/billing/invoice_handler.go`? I need to change idempotency keys — CODEOWNERS says @platform-payments but git blame shows @marcus. Does `pkg/ledger/posting.go` share the same on-call rotation?",
+      "Who owns `services/billing/invoice_handler.go`? I need to change idempotency keys: CODEOWNERS says @platform-payments but git blame shows @marcus. Does `pkg/ledger/posting.go` share the same on-call rotation?",
     highlights: ["CODEOWNERS + blame", "cross-package owners"]
   },
   {
@@ -31,7 +31,7 @@ export const HERO_EXAMPLES: HeroExample[] = [
   {
     id: "understand-repo",
     question:
-      "I'm onboarding to `coop-backend` — where does webhook ingestion start, and how do events flow into the job queue vs `GraphCache`? What are the 5 files I should read first to trace a GitHub `push` end-to-end?",
+      "I'm onboarding to `coop-backend`: where does webhook ingestion start, and how do events flow into the job queue vs `GraphCache`? What are the 5 files I should read first to trace a GitHub `push` end-to-end?",
     highlights: ["entrypoints + data flow", "read order by layer"]
   },
   {
@@ -43,19 +43,19 @@ export const HERO_EXAMPLES: HeroExample[] = [
   {
     id: "integrations",
     question:
-      "Pull the Slack thread and Jira ticket tied to `auth_middleware.go` — why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days and link the original design note.",
+      "Pull the Slack thread and Jira ticket tied to `auth_middleware.go`: why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days and link the original design note.",
     highlights: ["#platform-auth thread", "PROJ-1847 + commits"]
   },
   {
     id: "inline-complete",
     question:
-      "I'm finishing the empty-payload guard in `token_validator.ts` — complete the `if` using the same `AuthError` pattern as the rest of `billing/auth` and what our graph shows for downstream callers.",
+      "I'm finishing the empty-payload guard in `token_validator.ts`: complete the `if` using the same `AuthError` pattern as the rest of `billing/auth` and what our graph shows for downstream callers.",
     highlights: ["ghost-text complete", "graph · AuthError pattern"]
   },
   {
     id: "edit-selection",
     question:
-      "Select the refresh-token branch in `oauth_refresh.ts` and edit it to match rejection semantics from `token_validator.ts` — throw `AuthError('empty_or_unsigned_payload')` instead of returning null.",
+      "Select the refresh-token branch in `oauth_refresh.ts` and edit it to match rejection semantics from `token_validator.ts`: throw `AuthError('empty_or_unsigned_payload')` instead of returning null.",
     highlights: ["⌥K edit selection", "inline diff accept"]
   }
 ];
@@ -274,7 +274,7 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
         <p
           className={`text-center text-coop-muted ${compact ? "mt-2 text-[10px]" : "mt-3 text-[11px]"}`}
         >
-          Motion reduced — use the dots to browse examples.
+          Motion reduced: use the dots to browse examples.
         </p>
       ) : null}
     </div>

@@ -8,7 +8,7 @@
   }
 
   ::selection {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(63, 185, 80, 0.18);
     color: #1d2633;
   }
 }
@@ -33,6 +33,35 @@
 
   .coop-section-label {
     @apply font-mono text-xs text-gray-500;
+  }
+
+  .coop-section-label::before {
+    content: "// ";
+    @apply text-coop-index;
+  }
+
+  /* Graph paper as a statement, not wallpaper. Use on // the_gap and CTA only. */
+  .coop-grid-band {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .coop-grid-band::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.42;
+    background-image:
+      linear-gradient(to right, rgba(229, 231, 235, 0.9) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(229, 231, 235, 0.9) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .coop-grid-band > * {
+    position: relative;
+    z-index: 1;
   }
 
   .coop-card {

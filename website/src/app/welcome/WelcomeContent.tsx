@@ -110,7 +110,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
               {orgName
-                ? `${orgName} will be ready shortly — usually under a minute.`
+                ? `${orgName} will be ready shortly: usually under a minute.`
                 : "This usually takes less than a minute."}
             </p>
           </div>
@@ -123,7 +123,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
               Check your email for <span className="font-medium text-gray-900">Activate your account</span>{" "}
-              — set a password there, then you&apos;ll be signed in. This is not a Sign in link yet.
+             : set a password there, then you&apos;ll be signed in. This is not a Sign in link yet.
             </p>
           </div>
         ) : null}
@@ -132,7 +132,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
           <div className="border-l-2 border-l-coop-index pl-4">
             <p className="text-sm font-medium text-gray-900">Finish setup from your email</p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              After Pro checkout, open the activate link we sent — create a password before signing in.
+              After Pro checkout, open the activate link we sent: create a password before signing in.
             </p>
           </div>
         ) : null}
@@ -161,7 +161,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
             </p>
           ) : (
             <p className="text-center text-sm leading-relaxed text-coop-muted">
-              Prefer to wait in the inbox — the activate link is the first step.
+              Prefer to wait in the inbox: the activate link is the first step.
             </p>
           )}
           <p className="text-center text-xs leading-relaxed text-coop-muted">

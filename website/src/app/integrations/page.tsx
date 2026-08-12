@@ -31,7 +31,7 @@ const integrationCards = [
   },
   {
     name: "Slack",
-    description: "Pull thread context into Trace Decision and Knowledge Gaps — institutional knowledge alongside code.",
+    description: "Pull thread context into Trace Decision and Knowledge Gaps, next to the code.",
     href: "/docs/slack"
   },
   {
@@ -63,7 +63,7 @@ export default function IntegrationsPage() {
         tight
         eyebrow="Integrations"
         title="Connect your entire stack"
-        description="CoopAI indexes code and collaboration tools once at the org level — so every developer gets Slack, Jira, and repo context inside VS Code."
+        description="CoopAI indexes code and collaboration tools once at the org. Every developer gets Slack, Jira, and repo context inside VS Code."
       />
 
       <section className="border-b border-coop-border py-12 md:py-14">

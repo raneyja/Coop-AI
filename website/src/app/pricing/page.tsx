@@ -29,14 +29,14 @@ const tiers: PricingTier[] = [
   {
     name: "Developer",
     price: "Free",
-    audience: "Individual engineers — one account, no team seats",
+    audience: "Individual engineers. One account, no team seats.",
     features: [
       "GitHub, GitLab, and Bitbucket via admin portal (same as Pro)",
       "All collaboration integrations (Slack, Jira, Notion, Teams, Google Docs)",
-      "Deep-Index / Lightning Mode — up to 3 repos org-wide",
+      "Deep-Index / Lightning Mode, up to 3 repos org-wide",
       "Workspace repos, chat, quick actions, and inline complete & edit",
       "AI credits with rolling 5-hour window (model-weighted)",
-      "Cloud-hosted — solo account (1 seat)"
+      "Cloud-hosted, solo account (1 seat)"
     ],
     note: "Pro adds unlimited Deep-Indexed repos, team seats, and higher AI limits",
     cta: "Get started free",
@@ -50,7 +50,7 @@ const tiers: PricingTier[] = [
     features: [
       "Everything in Developer",
       "Unlimited Deep-Indexed repos (no 3-repo org cap)",
-      "Team seats — invite teammates",
+      "Team seats. Invite teammates.",
       "Higher AI limits and usage analytics",
       "Collections for advanced cross-repo groupings",
       "Priority support"
@@ -66,8 +66,8 @@ const tiers: PricingTier[] = [
     price: "Custom",
     features: [
       "Everything in Pro",
-      "Zero-retention LLM routing — your code never trains models; enterprise-grade data privacy",
-      "Bring Your Own Key (BYOK) — connect your own LLM provider (AWS Bedrock, Azure, Vertex AI) or use your API key",
+      "Zero-retention LLM routing. Your code never trains models.",
+      "Bring Your Own Key (BYOK). Connect Bedrock, Azure, Vertex, or your own API key.",
       "Self-hosted deployment",
       "Compliance attestation & DPA support",
       "Dedicated onboarding"

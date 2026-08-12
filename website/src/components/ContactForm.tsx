@@ -58,7 +58,7 @@ export function ContactForm({
   if (status === "success") {
     return (
       <div className="coop-panel p-8 text-center">
-        <p className="text-lg font-medium text-gray-900">Thanks — we&apos;ll be in touch soon.</p>
+        <p className="text-lg font-medium text-gray-900">Thanks. We&apos;ll be in touch soon.</p>
         <p className="mt-2 text-sm text-coop-muted">Our team will reach out to schedule your demo.</p>
       </div>
     );

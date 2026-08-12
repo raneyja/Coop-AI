@@ -27,7 +27,7 @@ const hubCards = [
   },
   {
     title: "Integrations",
-    description: "GitHub, Slack, Jira, Notion, Google Docs, and more — setup and scope.",
+    description: "GitHub, Slack, Jira, Notion, Google Docs, and more. Setup and scope.",
     href: "/docs/connect-integrations"
   },
   {
@@ -42,7 +42,7 @@ const hubCards = [
   },
   {
     title: "Owner's Manual",
-    description: "Linear guide for daily extension use — Workflows, prompts, and AGENTS.md.",
+    description: "Linear guide for daily extension use: Workflows, prompts, and AGENTS.md.",
     href: "/manual"
   }
 ];
@@ -56,7 +56,7 @@ export default function DocsHubPage() {
       <PageHeader
         eyebrow="Documentation"
         title="CoopAI Docs"
-        description="Everything you need to install, configure, and run CoopAI — from your first chat to enterprise deployment."
+        description="Install, configure, and run CoopAI, from your first chat through enterprise deployment."
         tight
       />
 

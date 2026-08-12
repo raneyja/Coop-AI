@@ -39,13 +39,13 @@ export default function SecurityPage() {
           CoopAI is a code intelligence platform with three primary components: a VS Code
           extension, a Coop API server (graph, jobs, webhooks, OAuth, and LLM routing), and a
           background worker for indexing. All customer data is scoped to an{" "}
-          <strong>organization</strong> — every indexed repo, integration credential, audit record,
+          <strong>organization</strong>: every indexed repo, integration credential, audit record,
           and API key belongs to exactly one org.
         </p>
         <p>
           CoopAI uses <strong>Deep-Index / Lightning Mode</strong> on all plans. When an org admin
-          connects a code host, CoopAI builds a Deep-Code Graph across accessible repositories —
-          symbol metadata, full-text search indexes, and embedding chunks — on Coop infrastructure or
+          connects a code host, CoopAI builds a Deep-Code Graph across accessible repositories
+          (symbol metadata, full-text search indexes, and embedding chunks) on Coop infrastructure or
           your self-hosted deployment (free orgs: up to 3 repos org-wide; Pro: unlimited). Developers
           query this graph from VS Code without maintaining full repository clones on every laptop.
         </p>
@@ -56,7 +56,7 @@ export default function SecurityPage() {
         </p>
         <p>
           LLM inference is routed through a dedicated server-side <strong>Model Router</strong>.
-          Provider API keys live in server configuration — not in the IDE, client settings, or source
+          Provider API keys live in server configuration: not in the IDE, client settings, or source
           control.
         </p>
 
@@ -66,26 +66,26 @@ export default function SecurityPage() {
         </p>
         <ul>
           <li>
-            <strong>Symbol graph</strong> — file paths, symbols, references, and ownership signals
+            <strong>Symbol graph</strong>: file paths, symbols, references, and ownership signals
             (no full source file bodies in the symbol store)
           </li>
           <li>
-            <strong>Full-text search</strong> — searchable file content for Coop-Search across
+            <strong>Full-text search</strong>: searchable file content for Coop-Search across
             Deep-Indexed repos
           </li>
           <li>
-            <strong>Embeddings</strong> — vector chunks for files without symbol coverage (Pro and
+            <strong>Embeddings</strong>: vector chunks for files without symbol coverage (Pro and
             Enterprise, when enabled)
           </li>
           <li>
-            <strong>Graph metadata</strong> — commit summaries, PR and branch metadata, dependency
+            <strong>Graph metadata</strong>: commit summaries, PR and branch metadata, dependency
             edges, and webhook-derived change signals
           </li>
         </ul>
         <p>
           <strong>Queried live at chat time (not background-indexed):</strong> Slack threads, Jira
           issues, Confluence pages, Notion docs, Google Docs, and Microsoft Teams messages. CoopAI
-          fetches integration content on demand when a workflow or chat command needs it — so ticket
+          fetches integration content on demand when a workflow or chat command needs it: so ticket
           and conversation data is not copied into a standing index.
         </p>
         <p>
@@ -100,7 +100,7 @@ export default function SecurityPage() {
             <code>org_id</code>
           </li>
           <li>
-            Org API keys are stored as SHA-256 hashes — raw keys are shown once at creation and
+            Org API keys are stored as SHA-256 hashes: raw keys are shown once at creation and
             never persisted in plaintext
           </li>
           <li>
@@ -142,7 +142,7 @@ export default function SecurityPage() {
           </li>
         </ul>
         <p>
-          Inline completions use a separate <code>x-use-case: code-completion-only</code> path —
+          Inline completions use a separate <code>x-use-case: code-completion-only</code> path,
           distinct from chat, with the same zero-retention posture.
         </p>
 
@@ -181,7 +181,7 @@ export default function SecurityPage() {
           <li>API keys are never written to logs, error reports, or audit payloads</li>
           <li>
             BYOK audit events capture customer ID, provider, model, timestamp, request ID, and
-            status — retained for 90 days
+            status: retained for 90 days
           </li>
           <li>
             BYOK audit events explicitly exclude API keys, prompts, responses, and raw code context
@@ -192,7 +192,7 @@ export default function SecurityPage() {
         <p>
           Human sign-in uses email and password (minimum 12 characters), optional Google OAuth, and
           Enterprise SAML 2.0 SSO. Session tokens are issued server-side and handed off to the admin
-          portal over HTTPS — they are stored as hashes in the database, not as plaintext API keys in
+          portal over HTTPS: they are stored as hashes in the database, not as plaintext API keys in
           email.
         </p>
         <p>
@@ -204,7 +204,7 @@ export default function SecurityPage() {
         <p>
           The VS Code extension stores the Coop API token using VS Code&apos;s SecretStorage API,
           which leverages the operating system keychain. In production mode, developers sign in with
-          their org credentials — integration tokens are not pasted into the IDE.
+          their org credentials: integration tokens are not pasted into the IDE.
         </p>
 
         <h2>Audit logging</h2>
@@ -215,7 +215,7 @@ export default function SecurityPage() {
         </p>
         <p>
           Audit records capture <strong>who</strong> performed an action, <strong>what</strong>{" "}
-          action occurred, and limited metadata (provider, model, repo ID) — not prompt content,
+          action occurred, and limited metadata (provider, model, repo ID): not prompt content,
           response text, or assembled context bundles. Audit write failures are logged but do not
           block user actions.
         </p>
@@ -247,7 +247,7 @@ export default function SecurityPage() {
           CoopAI connects to GitHub, GitLab, and Bitbucket for repository webhooks and catalog
           sync; Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams for
           organizational context. Each integration uses OAuth or host-specific authentication
-          configured on the server — credentials are never stored in VS Code settings in production
+          configured on the server: credentials are never stored in VS Code settings in production
           mode.
         </p>
 
@@ -280,7 +280,7 @@ export default function SecurityPage() {
         <p>
           We provide architecture documentation, subprocessors lists, and retention attestation
           reports during enterprise evaluation. SOC 2 Type II certification is on our compliance
-          roadmap — contact{" "}
+          roadmap: contact{" "}
           <a href={`mailto:${siteConfig.securityEmail}`}>{siteConfig.securityEmail}</a> for current
           status and security questionnaire support.
         </p>

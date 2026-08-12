@@ -15,10 +15,7 @@ export function PageHeader({ eyebrow, title, titleClassName, description, tight 
       className={`mx-auto max-w-3xl px-6 text-center ${tight ? "pt-14 pb-4 md:pt-20 md:pb-5" : "pt-16 pb-12 md:pt-24"}`}
     >
       {eyebrow && (
-        <p className="coop-section-label">
-          <span className="text-gray-400">{"// "}</span>
-          {eyebrow.toLowerCase()}
-        </p>
+        <p className="coop-section-label">{eyebrow.toLowerCase()}</p>
       )}
       <h1
         className={`mt-3 text-4xl font-semibold tracking-tight text-gray-900 md:text-5xl${titleClassName ? ` ${titleClassName}` : ""}`}

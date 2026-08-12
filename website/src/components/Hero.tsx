@@ -4,7 +4,7 @@ import { siteConfig } from "@/lib/site.config";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pb-16 pt-10 md:pb-20 md:pt-14 lg:pt-16">
+    <section className="relative overflow-hidden pb-24 pt-10 md:pb-32 md:pt-14 lg:pt-16">
       <div className="mx-auto max-w-4xl px-6">
         <div className="mb-16 text-center lg:text-left">
           <h1 className="text-4xl font-bold tracking-tight text-gray-900 md:text-5xl lg:text-[3.25rem] xl:text-6xl">
@@ -29,7 +29,7 @@ export function Hero() {
 
         <HeroDemoArtifact />
 
-        <div className="mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="mt-20 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Button href="/demo">Book a demo</Button>
           <InstallExtensionButton />
         </div>

@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
     if (token.startsWith("preview-")) {
       setSubmitting(false);
       setError(
-        "This was an email layout preview — the link is not a live reset. Request a real link from Forgot password."
+        "This was an email layout preview: the link is not a live reset. Request a real link from Forgot password."
       );
       return;
     }
@@ -72,7 +72,7 @@ export default function ResetPasswordPage() {
         <PageHeader
           eyebrow="Account"
           title="Reset link preview"
-          description="This was an email layout preview — not a live password reset."
+          description="This was an email layout preview: not a live password reset."
           tight
         />
         <section className="mx-auto max-w-lg px-6 pb-24">

@@ -55,7 +55,7 @@ export default function TermsPage() {
       <p>
         You retain ownership of code, prompts, and other content you submit through the Services
         (&quot;Customer Content&quot;). You grant Coop a limited license to process Customer Content
-        solely to provide the Services — including indexing repositories, assembling context, and
+        solely to provide the Services: including indexing repositories, assembling context, and
         routing inference requests.
       </p>
       <p>

@@ -218,7 +218,7 @@ export function QuickActionPromptCarousel() {
           </div>
           <p className="max-w-[16rem] text-center text-[11px] leading-snug text-coop-muted sm:max-w-none sm:text-right sm:text-xs">
             {reduceMotion ? (
-              "Motion reduced — pick a command above"
+              "Motion reduced. Pick a command above."
             ) : (
               <>
                 <span className="font-mono text-gray-500">{active.command}</span>

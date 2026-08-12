@@ -2,10 +2,10 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 
 const WITHOUT = [
-  "Autonomous agents rewriting trees they barely understand",
-  "Greenfield vibe-coding demos that ignore your production paths",
-  "Answers from the open file alone — missing Slack, tickets, and ownership",
-                    "Suggestions that don't match how your org actually ships code"
+  "Agents rewriting trees they have barely read",
+  "Greenfield demos that skip your production paths",
+  "Answers from the open file, with no Slack, tickets, or owners",
+  "Suggestions that don't match how your org ships code"
 ] as const;
 
 const WITH_STACK = [
@@ -17,36 +17,30 @@ const WITH_STACK = [
 
 /**
  * Homepage market-problem section: enterprises need stack-wide context,
- * not vibe-coding agents without deep repo/org knowledge.
+ * not agents that generate without knowing the repo or the org.
  */
 export function HomeStackContextSection() {
   return (
-    <section className="relative overflow-hidden border-t border-coop-border py-20 md:py-28">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(31,111,235,0.07),transparent_55%)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:linear-gradient(to_right,rgba(229,231,235,0.7)_1px,transparent_1px),linear-gradient(to_bottom,rgba(229,231,235,0.7)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_75%)]"
-        aria-hidden
-      />
-
-      <div className="relative mx-auto max-w-6xl px-6">
+    <section className="coop-grid-band overflow-hidden border-t border-coop-border py-20 md:py-28">
+      <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="the_gap"
-          title="Enterprises don't need another vibe-coding agent"
-          description="They need AI that is prescriptive and context-rich — grounded in the codebase and the stack where decisions actually live."
+          title="Your team doesn't need another coding agent"
+          description="They need AI that already knows the repo, the tickets, and the people who own the code."
         />
 
         <p className="mt-6 max-w-2xl text-base leading-relaxed text-gray-700 md:text-lg">
-          Generic copilots guess from a buffer. Autonomous agents thrash without knowing your
-          auth patterns, owners, or the Jira thread that blocked the last refactor. The hard
-          problem isn’t generating code — it’s{" "}
-          <span className="font-medium text-gray-900">wiring the entire stack into every answer and every edit</span>.
+          Most copilots only see the file you have open. Agents will happily rewrite a tree they
+          don't understand. That's a demo, not how you ship production software.
+        </p>
+        <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-700 md:text-lg">
+          The hard part isn't generating code. It's having the same context a senior engineer would
+          pull from Slack, Jira, CODEOWNERS, and the last few PRs{" "}
+          <span className="font-medium text-gray-900">before they touch a line</span>.
         </p>
 
         <div className="mt-14 grid gap-6 lg:grid-cols-2 lg:gap-8">
-          <div className="relative overflow-hidden rounded-2xl border border-coop-border bg-white/80 p-6 backdrop-blur-sm md:p-8">
+          <div className="relative overflow-hidden rounded-2xl border border-coop-border bg-white p-6 md:p-8">
             <p className="font-mono text-xs uppercase tracking-wide text-gray-400">Without stack context</p>
             <h3 className="mt-3 text-xl font-semibold tracking-tight text-gray-900">
               Fast, shallow, and risky
@@ -66,20 +60,20 @@ export function HomeStackContextSection() {
             </ul>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-gray-900 bg-gray-900 p-6 text-white md:p-8">
+          <div className="relative overflow-hidden rounded-2xl border border-coop-index bg-gray-900 p-6 text-white md:p-8">
             <div
-              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-coop-blue/20 blur-3xl"
+              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-coop-index/25 blur-3xl"
               aria-hidden
             />
-            <p className="relative font-mono text-xs uppercase tracking-wide text-gray-400">
+            <p className="relative font-mono text-xs uppercase tracking-wide text-coop-index">
               With CoopAI
             </p>
             <h3 className="relative mt-3 text-xl font-semibold tracking-tight">
-              Prescriptive. Context-rich. In the file.
+              Know the stack. Stay in the file.
             </h3>
             <p className="relative mt-3 text-sm leading-relaxed text-gray-300">
-              Understand, complete, and edit using the same graph your team already trusts —
-              not a greenfield toy, not a tree-rewriting agent.
+              Ask, complete, and edit with the same graph your team already uses. No greenfield toy.
+              Nothing chewing through the tree on its own.
             </p>
             <ul className="relative mt-8 space-y-4">
               {WITH_STACK.map((item) => (
@@ -97,8 +91,8 @@ export function HomeStackContextSection() {
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-coop-border pt-10 sm:flex-row sm:items-center">
           <p className="max-w-xl text-sm leading-relaxed text-coop-muted">
-            See Ask, Change, and Indexed — how Coop puts stack context into every question and
-            every line you write.
+            Product walks through Ask, Change, and Indexed: how stack context shows up in questions
+            and in the editor.
           </p>
           <Link
             href="/product"

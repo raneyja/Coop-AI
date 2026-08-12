@@ -138,7 +138,7 @@ export const FILE_CONTEXT_SCENARIOS: FileContextScenario[] = [
       { id: "model", source: "Model", detail: "Routed via BYOK · zero-retention flags" }
     ],
     exampleQuestion:
-      "Pull the Slack thread and Jira ticket tied to `auth_middleware.go` — why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days.",
+      "Pull the Slack thread and Jira ticket tied to `auth_middleware.go`: why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days.",
     highlights: ["#platform-auth thread", "PROJ-1847 + commits"]
   },
   {

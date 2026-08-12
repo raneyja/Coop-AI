@@ -39,11 +39,11 @@ const WRITE_PILLARS = [
 const INDEX_TRUST = [
   {
     title: "Remote knowledge graph",
-    body: "Index via webhooks and jobs — ownership, dependents, decisions without a full local clone."
+    body: "Index via webhooks and jobs: ownership, dependents, and decisions, without a full local clone."
   },
   {
     title: "Cross-tool context",
-    body: "Slack, Jira, PRs, and CODEOWNERS sit beside the symbol graph — not trapped in tribal knowledge."
+    body: "Slack, Jira, PRs, and CODEOWNERS sit next to the symbol graph, not in someone's head."
   },
   {
     title: "Honest when incomplete",
@@ -59,7 +59,7 @@ export function ProductAskScene() {
         <SectionHeading
           label="ask"
           title="Questions that used to take a Slack archaeology dig"
-          description="One place for architecture, owners, blast radius, and the ticket that explains why — across your repo graph and the tools your team already uses."
+          description="Architecture, owners, blast radius, and the ticket that explains why. One place, across the repo graph and the tools you already use."
         />
 
         <div className="mt-8 flex flex-wrap gap-2" aria-label="Quick action commands">
@@ -100,7 +100,7 @@ export function ProductChangeScene() {
             <SectionHeading
               label="change"
               title="Write and edit like a teammate who's already in the repo"
-              description="Graph-grounded complete and in-file edit — craftsmanship in the editor, not an autonomous agent rewriting your tree."
+              description="Complete and edit in the open file, using the graph. You review the diff. Nothing rewrites the tree on its own."
             />
             <ul className="mt-10 space-y-6">
               {WRITE_PILLARS.map((item) => (
@@ -153,10 +153,10 @@ export function ProductIndexedScene() {
           <SectionHeading
             label="indexed"
             title="Cross-repo context without cloning the monorepo"
-            description="Lightning Mode builds a secure knowledge graph so developers get rich AI context across services — instantly, without parking a full tree on every laptop."
+            description="Lightning Mode indexes a knowledge graph across services so you get context without cloning the monorepo onto every laptop."
           />
           <p className="mt-6 text-sm leading-relaxed text-coop-muted">
-            Built for teams with interconnected services where cloning everything isn’t practical.
+            Built for teams with interconnected services, where cloning everything isn't practical.
           </p>
           <p className="mt-4 font-mono text-xs text-gray-700">
             Free: up to 3 Deep-Indexed repos · Pro: unlimited

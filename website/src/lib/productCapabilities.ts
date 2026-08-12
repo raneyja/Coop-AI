@@ -27,11 +27,11 @@ export const productCapabilityGroups: CapabilityGroup[] = [
     items: [
       {
         title: "Inline complete & edit",
-        body: "Ghost-text completions and selection-based edits in the open file. Optional graph context (Pro) and project-style biasing keep suggestions aligned with your codebase — craftsmanship in the editor, not autonomous agents."
+        body: "Ghost-text completions and selection-based edits in the open file. On Pro, indexed dependents and ownership keep suggestions aligned with how your team actually writes."
       },
       {
         title: "Completion-only routing",
-        body: "Inline requests use a dedicated zero-retention path (`x-use-case: code-completion-only`) — separate from chat, with keys on your server."
+        body: "Inline requests use a dedicated zero-retention path (`x-use-case: code-completion-only`), separate from chat, with keys on your server."
       }
     ]
   },
@@ -48,7 +48,7 @@ export const productCapabilityGroups: CapabilityGroup[] = [
       },
       {
         title: "Slack & ticket context",
-        body: "CoopAI connects organizational context — Slack threads, tickets, and PR history — so answers reflect how decisions were actually made."
+        body: "CoopAI pulls Slack threads, tickets, and PR history so answers reflect how the decision was actually made."
       }
     ]
   },
@@ -57,7 +57,7 @@ export const productCapabilityGroups: CapabilityGroup[] = [
     items: [
       {
         title: "Multi-model chat",
-        body: "Stream responses from Anthropic, OpenAI, Gemini, and more. Provider keys live on your CoopAI server — never in the IDE or on developer laptops."
+        body: "Stream responses from Anthropic, OpenAI, Gemini, and more. Provider keys live on your CoopAI server, never in the IDE or on developer laptops."
       }
     ]
   }

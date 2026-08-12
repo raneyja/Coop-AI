@@ -21,10 +21,7 @@ export function LogoStrip({
 
   return (
     <div className={`${sectionStyles} ${className}`.trim()} aria-label={ariaLabel ?? label}>
-      <p className="coop-section-label mb-5 text-center">
-        <span className="text-gray-400">{"// "}</span>
-        {label.toLowerCase()}
-      </p>
+      <p className="coop-section-label mb-5 text-center">{label.toLowerCase()}</p>
       <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4 md:gap-x-10">
         {items.map(({ name, Icon, colored, wide }) => (
           <li

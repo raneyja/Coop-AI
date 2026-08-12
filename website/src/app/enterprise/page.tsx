@@ -53,7 +53,7 @@ export default function EnterprisePage() {
 
       <section className="pt-6 pb-16 md:pt-8">
         <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading label="security" title="Security & Compliance Built In" />
+          <SectionHeading label="security" title="Security and compliance, built in" />
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {securityFeatures.map((feature) => (
               <div key={feature.title} className="coop-card">
@@ -77,7 +77,7 @@ export default function EnterprisePage() {
           <SectionHeading
             label="leadership"
             title="For engineering leaders"
-            description="Reduce the tax of tribal knowledge. CoopAI helps teams onboard faster, answer questions without interrupting senior engineers, and surface ownership and blast radius before changes ship — with controls your security team can review."
+            description="Cut the tax of tribal knowledge. Teams onboard faster, stop pinging seniors for the same questions, and see ownership and blast radius before a change ships. Security gets controls they can review."
           />
           <ul className="mt-8 space-y-3 text-sm text-coop-muted">
             <li className="flex gap-3">
@@ -90,7 +90,7 @@ export default function EnterprisePage() {
             </li>
             <li className="flex gap-3">
               <span className="text-gray-900">✓</span>
-              Zero-clone architecture — no full repo copies on every laptop
+              Zero-clone architecture: no full repo copies on every laptop
             </li>
             <li className="flex gap-3">
               <span className="text-gray-900">✓</span>

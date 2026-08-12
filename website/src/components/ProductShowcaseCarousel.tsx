@@ -117,7 +117,7 @@ export function ProductShowcaseCarousel() {
 
         {reduceMotion ? (
           <p className="text-center text-[11px] text-coop-muted">
-            Motion reduced — select a feature below to browse examples.
+            Motion reduced. Select a feature below to browse examples.
           </p>
         ) : (
           <p className="text-center text-xs text-coop-muted">

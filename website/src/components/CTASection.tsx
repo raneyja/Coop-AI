@@ -16,14 +16,14 @@ export function CTASection({
   showInstall = true
 }: CTASectionProps) {
   return (
-    <section className="py-20">
+    <section className="coop-grid-band overflow-hidden py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="coop-panel overflow-hidden">
           <div className="flex items-center gap-2 border-b border-coop-border bg-gray-100 px-4 py-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" aria-hidden />
             <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" aria-hidden />
             <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" aria-hidden />
-            <span className="ml-2 font-mono text-[11px] text-gray-500">coop — zsh</span>
+            <span className="ml-2 font-mono text-[11px] text-gray-500">coop - zsh</span>
           </div>
 
           <div className="px-6 py-10 md:px-10 md:py-12">

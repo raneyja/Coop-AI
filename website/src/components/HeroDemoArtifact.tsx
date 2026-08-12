@@ -75,7 +75,7 @@ const SCENARIOS: Scenario[] = [
   {
     kind: "patch",
     question:
-      "Rewrite the selected refresh-token branch in oauth_refresh.ts — match AuthError rejection from token_validator.ts.",
+      "Rewrite the selected refresh-token branch in oauth_refresh.ts. Match AuthError rejection from token_validator.ts.",
     questionFiles: ["oauth_refresh.ts", "token_validator.ts"],
     context: [
       { label: "Symbol graph", desc: "refreshOAuthToken() · AuthError usages · 3 callers", status: "done" },
@@ -92,7 +92,7 @@ const SCENARIOS: Scenario[] = [
   {
     kind: "complete",
     question:
-      "Complete the empty-payload guard in token_validator.ts — match the AuthError pattern from billing/auth.",
+      "Complete the empty-payload guard in token_validator.ts. Match the AuthError pattern from billing/auth.",
     questionFiles: ["token_validator.ts"],
     context: [
       { label: "Symbol graph", desc: "validateSession() · AuthError usages · 3 callers", status: "done" },
@@ -118,13 +118,13 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "**Short answer:** 23 dependents across 6 repos — signature or empty-payload changes are breaking for api-gateway and webhook-processor.\n\n**Downstream impact:**\n• api-gateway — 4 runtime importers in the auth middleware chain\n• webhook-processor — validate() called before every inbound handler\n• billing-worker (GitLab) — batch retry path imports the same module\n\n**From your stack:** Slack #platform-auth discussed this Sep 18. Loop in @jessica_dawson (90% blame on auth_middleware.go) before merging."
+        "**Short answer:** 23 dependents across 6 repos. Signature or empty-payload changes break api-gateway and webhook-processor.\n\n**Downstream impact:**\n• api-gateway: 4 runtime importers in the auth middleware chain\n• webhook-processor: validate() called before every inbound handler\n• billing-worker (GitLab): batch retry path imports the same module\n\n**From your stack:** Slack #platform-auth discussed this Sep 18. Loop in @jessica_dawson (90% blame on auth_middleware.go) before merging."
     }
   },
   {
     kind: "patch",
     question:
-      "Implement the null guard from PLATFORM-2847 in webhook-processor — match api-gateway PR #891 before validate().",
+      "Implement the null guard from PLATFORM-2847 in webhook-processor. Match api-gateway PR #891 before validate().",
     questionFiles: ["webhook-processor"],
     context: [
       { label: "Jira · PLATFORM-2847", desc: "Null check missing in webhook auth path", status: "done" },
@@ -148,7 +148,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "**Short answer:** PR #412 centralized validation per the Auth ADR — one middleware wrapper instead of per-route checks.\n\n**Decision trail:**\n• Jira PROJ-1847 — \"Add zero-retention headers to middleware\"\n• Slack #architecture — Marcus proposed the wrapper Mar 2024; Elena confirmed with security\n• Confluence Auth RFC v2 — linked from the PR description\n\nThe pattern that shipped:",
+        "**Short answer:** PR #412 centralized validation per the Auth ADR: one middleware wrapper instead of per-route checks.\n\n**Decision trail:**\n• Jira PROJ-1847: \"Add zero-retention headers to middleware\"\n• Slack #architecture: Marcus proposed the wrapper Mar 2024; Elena confirmed with security\n• Confluence Auth RFC v2: linked from the PR description\n\nThe pattern that shipped:",
       codeFile: "api-gateway/middleware/auth_middleware.go:88-96",
       code:
         "func (m *AuthMiddleware) Validate(next http.Handler) http.Handler {\n  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n    if err := m.validateSession(r); err != nil {\n      writeUnauthorized(w, err)\n      return\n    }\n    next.ServeHTTP(w, r)\n  })\n}"
@@ -164,7 +164,7 @@ const SCENARIOS: Scenario[] = [
     ],
     response: {
       summary:
-        "**Short answer:** 6 services break on signature change — billing-worker batch retry and webhook-processor auth chain fail first.\n\n**Blast radius:**\n• billing-worker — batch retry imports validate() on every job tick\n• webhook-processor — auth middleware chain assumes current error shapes\n• api-gateway — 4 importers share the runtime dependency\n\nFirst break site in the graph:",
+        "**Short answer:** 6 services break on a signature change. Billing-worker batch retry and webhook-processor auth chain fail first.\n\n**Blast radius:**\n• billing-worker: batch retry imports validate() on every job tick\n• webhook-processor: auth middleware chain assumes current error shapes\n• api-gateway: 4 importers share the runtime dependency\n\nFirst break site in the graph:",
       codeFile: "workers/billing-worker/retry.go:54-61",
       code:
         "func (w *BatchRetry) tick(ctx context.Context, job Job) error {\n  payload, err := w.loadPayload(job)\n  if err != nil {\n    return err\n  }\n  // Signature change here breaks every retry loop\n  return auth.Validate(ctx, payload)\n}"

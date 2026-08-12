@@ -1,8 +1,8 @@
 # CoopAI
 
-> Deep code intelligence for VS Code — organizational context from your code graph, Slack, Jira, and docs.
+> Code intelligence for VS Code. Organizational context from your code graph, Slack, Jira, and docs.
 
-CoopAI helps engineering teams understand existing codebases, trace decisions, find owners, and write graph-grounded completions without cloning entire monorepos.
+CoopAI helps engineering teams understand existing codebases, trace decisions, find owners, and complete or edit code without cloning entire monorepos.
 
 ## Product
 
@@ -27,12 +27,12 @@ CoopAI helps engineering teams understand existing codebases, trace decisions, f
 
 ## Key capabilities
 
-- Understand Repo — architecture, ownership, and key files
-- Trace Decision — rationale from commits, PRs, Slack, and tickets
-- Find Owner — CODEOWNERS, blame history, and escalation paths
-- Blast Radius — impact analysis before you ship
-- Knowledge Gaps — missing docs and blind spots
-- Inline complete and edit selection — graph-grounded craftsmanship in VS Code
+- Understand Repo: architecture, ownership, and key files
+- Trace Decision: rationale from commits, PRs, Slack, and tickets
+- Find Owner: CODEOWNERS, blame history, and escalation paths
+- Blast Radius: impact analysis before you ship
+- Knowledge Gaps: missing docs and blind spots
+- Inline complete and edit selection: graph-grounded work in VS Code, in the open file
 
 ## Enterprise
 

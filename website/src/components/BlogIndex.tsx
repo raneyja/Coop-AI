@@ -56,10 +56,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
         <div className="mx-auto max-w-6xl px-6">
           <div className="coop-panel flex flex-col gap-4 px-6 py-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="coop-section-label">
-                <span className="text-gray-400">{"// "}</span>
-                stay in the loop
-              </p>
+              <p className="coop-section-label">stay in the loop</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">
                 Product updates from the CoopAI team
               </h2>

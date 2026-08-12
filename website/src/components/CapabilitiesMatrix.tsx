@@ -16,10 +16,7 @@ export function CapabilitiesMatrix({ groups }: CapabilitiesMatrixProps) {
               groupIndex > 0 ? "border-t" : ""
             }`}
           >
-            <p className="coop-section-label">
-              <span className="text-gray-400">{"// "}</span>
-              {group.label}
-            </p>
+            <p className="coop-section-label">{group.label}</p>
           </div>
           <ul className="divide-y divide-coop-border">
             {group.items.map((item) => {

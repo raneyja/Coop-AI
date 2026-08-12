@@ -7,7 +7,7 @@ import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 import type { Metadata } from "next";
 
-const homeTitle = `${siteConfig.name} — ${siteConfig.tagline}`;
+const homeTitle = `${siteConfig.name} | ${siteConfig.tagline}`;
 const homeMetadata = buildPageMetadata("/", siteConfig.name, siteConfig.seo.defaultDescription);
 
 export const metadata: Metadata = {
@@ -30,13 +30,13 @@ export default function HomePage() {
     <>
       <Hero />
 
-      <section className="border-t border-coop-border py-12 md:py-14">
+      <HomeStackContextSection />
+
+      <section className="border-t border-coop-border py-10 md:py-12">
         <div className="mx-auto max-w-6xl px-6">
           <HomePartnerLogos />
         </div>
       </section>
-
-      <HomeStackContextSection />
 
       <Testimonial />
 

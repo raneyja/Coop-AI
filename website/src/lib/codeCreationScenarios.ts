@@ -15,7 +15,7 @@ type CodeCreationStoryBase = {
   activeTab: string;
   inactiveTab?: string;
   ariaLabel: string;
-  /** User prompt in sidebar — same role as inquiry `question` */
+  /** User prompt in sidebar: same role as inquiry `question` */
   question: string;
   searchSteps: StorySearchStep[];
   /** Brief CoopAI reply after context gather, before editor outcome */
@@ -51,7 +51,7 @@ export const CODE_CREATION_STORIES: CodeCreationStory[] = [
     ariaLabel:
       "CoopAI inline completion finishing an empty-payload guard using graph-informed AuthError patterns",
     question:
-      "Complete the empty-payload guard in `token_validator.ts` — use the same AuthError pattern as billing/auth. Graph shows 3 downstream callers.",
+      "Complete the empty-payload guard in `token_validator.ts`: use the same AuthError pattern as billing/auth. Graph shows 3 downstream callers.",
     searchSteps: [
       {
         id: "graph",
@@ -75,7 +75,7 @@ export const CODE_CREATION_STORIES: CodeCreationStory[] = [
     outcome: {
       content: `**Completion ready**
 
-Matched \`AuthError\` guard from \`billing/auth\` — 3 downstream callers import this path. Ghost text applied at your cursor.`
+Matched \`AuthError\` guard from \`billing/auth\`: 3 downstream callers import this path. Ghost text applied at your cursor.`
     },
     contextHint: "graph · 3 callers · AuthError pattern",
     lines: [
@@ -114,7 +114,7 @@ Matched \`AuthError\` guard from \`billing/auth\` — 3 downstream callers impor
     ariaLabel:
       "CoopAI editing a selected OAuth refresh branch to match team rejection semantics from token_validator.ts",
     question:
-      "Edit this selection in `oauth_refresh.ts` — match rejection semantics from `token_validator.ts`. Throw AuthError instead of returning null.",
+      "Edit this selection in `oauth_refresh.ts`: match rejection semantics from `token_validator.ts`. Throw AuthError instead of returning null.",
     searchSteps: [
       {
         id: "graph",
@@ -138,7 +138,7 @@ Matched \`AuthError\` guard from \`billing/auth\` — 3 downstream callers impor
     outcome: {
       content: `**Edit ready**
 
-Pulled rejection semantics from \`token_validator.ts\`. Review the inline diff — accept, retry, or undo in the editor.`
+Pulled rejection semantics from \`token_validator.ts\`. Review the inline diff: accept, retry, or undo in the editor.`
     },
     instruction: "match token_validator.ts rejection semantics",
     contextHint: "graph · oauth_refresh · billing/auth",

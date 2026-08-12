@@ -37,7 +37,7 @@ export type InquiryStory = {
   repos: StoryRepoHit[];
   sources: StorySourceLink[];
   answer: {
-    /** Cursor-style prose — parsed by the same rules as the extension ChatProse renderer */
+    /** Cursor-style prose: parsed by the same rules as the extension ChatProse renderer */
     content: string;
   };
 };
@@ -58,7 +58,7 @@ export const FILE_CONTEXT_STORIES: InquiryStory[] = [
       language: "TypeScript"
     },
     question:
-      "Hey Coop — I'm new to this repo. If I change TokenValidator.validate() in internal/auth/token_validator.ts, what's the blast radius? What breaks downstream across our services?",
+      "Hey Coop: I'm new to this repo. If I change TokenValidator.validate() in internal/auth/token_validator.ts, what's the blast radius? What breaks downstream across our services?",
     searchSteps: [
       {
         id: "graph",
@@ -133,17 +133,17 @@ export const FILE_CONTEXT_STORIES: InquiryStory[] = [
     answer: {
       content: `**Short answer**
 
-Changing \`TokenValidator.validate()\` affects **23 dependents** across 3 services. Signature or empty-payload changes are breaking for \`api-gateway\` and \`webhook-processor\` — both import this module at runtime.
+Changing \`TokenValidator.validate()\` affects **23 dependents** across 3 services. Signature or empty-payload changes are breaking for \`api-gateway\` and \`webhook-processor\`: both import this module at runtime.
 
 **Downstream impact**
 
-- \`api-gateway\` — 4 importers (\`middleware/auth.ts\`, \`routes/session.ts\`, \`hooks/validateJwt.ts\`)
-- \`webhook-processor\` — 2 importers in the auth middleware chain
-- \`billing-worker\` (GitLab) — batch retry path imports \`validate()\`
+- \`api-gateway\`: 4 importers (\`middleware/auth.ts\`, \`routes/session.ts\`, \`hooks/validateJwt.ts\`)
+- \`webhook-processor\`: 2 importers in the auth middleware chain
+- \`billing-worker\` (GitLab): batch retry path imports \`validate()\`
 
 **From your stack**
 
-Slack thread in \`#billing-auth\` (Sep 18) covers empty-payload handling. Jira \`PROJ-1204\` tracks the auth hardening epic — link your change there.
+Slack thread in \`#billing-auth\` (Sep 18) covers empty-payload handling. Jira \`PROJ-1204\` tracks the auth hardening epic: link your change there.
 
 \`@jessica_dawson\` owns 90% of recent blame on \`internal/auth/token_validator.ts\`.`
     }
@@ -160,7 +160,7 @@ Slack thread in \`#billing-auth\` (Sep 18) covers empty-payload handling. Jira \
       language: "Go"
     },
     question:
-      "Can you pull context on auth_middleware.go? I see zero-retention headers in here and I'm not sure why we added them — anything in Slack or Jira that explains it?",
+      "Can you pull context on auth_middleware.go? I see zero-retention headers in here and I'm not sure why we added them: anything in Slack or Jira that explains it?",
     searchSteps: [
       {
         id: "graph",
@@ -225,8 +225,8 @@ PR #842 added zero-retention headers after incident \`#inc-auth-992\`. \`AuthMid
 
 **Decision trail**
 
-- Jira \`PROJ-1847\` — "Add zero-retention headers to middleware"
-- Slack \`#platform-auth\` — Marcus proposed headers Aug 12; Elena confirmed with security Sep 3
+- Jira \`PROJ-1847\`: "Add zero-retention headers to middleware"
+- Slack \`#platform-auth\`: Marcus proposed headers Aug 12; Elena confirmed with security Sep 3
 - Confluence Auth RFC v2 linked from the PR description
 
 **Where it runs**
@@ -240,7 +240,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 }
 \`\`\`
 
-14 downstream refs include \`api-gateway\` middleware — not an isolated change. Recent commits on \`router.go\` cover the full picture.`
+14 downstream refs include \`api-gateway\` middleware: not an isolated change. Recent commits on \`router.go\` cover the full picture.`
     }
   }
 ];

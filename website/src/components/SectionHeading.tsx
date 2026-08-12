@@ -10,10 +10,7 @@ export function SectionHeading({ label, title, description, className = "" }: Se
   return (
     <div className={className}>
       {label ? (
-        <p className="coop-section-label">
-          <span className="text-gray-400">{"// "}</span>
-          {label}
-        </p>
+        <p className="coop-section-label">{label}</p>
       ) : null}
       <h2 className={`text-2xl font-semibold text-gray-900${label ? " mt-2" : ""}`}>{title}</h2>
       {description ? (
