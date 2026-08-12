@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
-description: "Install, configure, and use CoopAI in VS Code — quick actions, prompt library, and team conventions."
-lastUpdated: "2026-07-23"
+description: "Install, configure, and use CoopAI in VS Code — Workflows, prompt library, and team conventions."
+lastUpdated: "2026-08-12"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it — from your first chat to team-wide prompt libraries.
@@ -247,7 +247,7 @@ See [SAML SSO troubleshooting — Known limits](/docs/saml-sso-troubleshooting#k
 
 ### Open the Coop sidebar
 
-The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **Quick Action** grid and a hint to type `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps`.
+The Coop sidebar lives in the VS Code activity bar. When chat is empty, you'll see the **CoopAI** wordmark with a short hint to ask about the repo or type `/` for commands. Structured workflows (Understand Repo, Trace Decision, and the rest) live in the **Workflows** menu in the chat header — not as a list under the logo.
 
 ### Start a new chat
 
@@ -255,7 +255,8 @@ Use the chat header at the top of the sidebar:
 
 | Control | Action |
 | --- | --- |
-| **+** (New chat) | Start a fresh thread — empty composer and quick-action grid |
+| **+** (New chat) | Start a fresh thread — empty composer and homepage |
+| **Workflows** | Run Understand Repo, Trace Decision, Find Owner, Blast Radius, or Knowledge Gaps (same path as slash commands) |
 | **Thread title** dropdown | Switch between saved threads from this workspace |
 
 <!-- figures -->
@@ -348,7 +349,7 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
 | **Preferences** | Assigned models, prompt library, identity links, timezone |
 
-Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use the grid or `/understand` after **Use repo** in the Remote workspace picker.
+Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use **Workflows → Understand Repo** or `/understand` after **Use repo** in the Remote workspace picker.
 
 ### Model assignments
 
@@ -424,7 +425,7 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 ## Quick Actions
 
-Run quick actions from the **sidebar grid**, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use the grid or `/understand` after **Use repo**. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
+Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -446,13 +447,13 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/under
 
 **Requires:** An explicit **Use repo** selection in the **Remote workspace** picker (repository row, not a file). Settings → Workspace owner/repo alone does **not** unlock it.
 
-**Ignores individual files:** If a file chip is active (open editor file or remote file pick), the grid button and `/understand` stay blocked until you click **Use repo** on the repository. This action never deep-dives a single file — use plain chat, **Trace Decision**, or **Blast Radius** for that.
+**Ignores individual files:** If a file chip is active (open editor file or remote file pick), **Workflows → Understand Repo** and `/understand` stay blocked until you click **Use repo** on the repository. This action never deep-dives a single file — use plain chat, **Trace Decision**, or **Blast Radius** for that.
 
 #### Select a repository (then run Understand Repo)
 
 1. **Extension UI** — Open the remote file / repos picker (repos control in the Coop sidebar).
 2. Select the **repository** (not a file) and click **Use repo**.
-3. Success: a repo-only chip (`/RepoName`), **In use** on the picker, and **Understand Repo** / `/understand` available.
+3. Success: a repo-only chip (`/RepoName`), **In use** on the picker, and **Understand Repo** available from **Workflows** or `/understand`.
 
 <!-- figures -->
 ![Remote workspace — open the repos picker to choose a repository](/screenshots/docs/extension-understand-file-picker.png)
@@ -465,7 +466,7 @@ Run quick actions from the **sidebar grid**, **slash commands** in chat (`/under
 
 ![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success-v2.png)
 
-*3 — Repo chipped — run Understand Repo or `/understand`*
+*3 — Repo chipped — run **Workflows → Understand Repo** or `/understand`*
 <!-- /figures -->
 
 **Default prompt:** "Understand this repository's architecture, subsystems, and risks."

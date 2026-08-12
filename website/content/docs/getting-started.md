@@ -52,7 +52,7 @@ Automation API keys are for CI/scripts only — create them in the [admin portal
 ## Step 4 — Ask your first question
 
 <!-- figures -->
-![Coop sidebar in VS Code (light theme) — quick actions and chat composer](/screenshots/docs/extension-sidebar-light.png)
+![Coop sidebar in VS Code (light theme) — chat homepage and composer](/screenshots/docs/extension-sidebar-light.png)
 
 *Light theme*
 
@@ -61,7 +61,7 @@ Automation API keys are for CI/scripts only — create them in the [admin portal
 *Dark theme*
 <!-- /figures -->
 
-Open the Coop icon in the activity bar. Type in the composer or click a quick action.
+Open the Coop icon in the activity bar. Type in the composer, open **Workflows** in the chat header, or type `/` for commands.
 
 1. Open a file in your workspace. Coop shows it as the **L** (local) or **R** (remote) context chip above the composer — see [Active file context chip](/manual#active-file-context-chip).
 2. **Extension UI** — Type a question in the chat composer (plain chat works with a file chip).
@@ -71,7 +71,7 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 ## Step 5 — Try a quick action
 
-**File-scoped actions** (with a file open): highlight a few lines, then **right-click** the selection. Choose **CoopAI: Trace Decision for Selection** (or **Find Owner**, **Blast Radius**, **Knowledge Gaps**). You can also type `/trace` in the chat composer.
+**File-scoped actions** (with a file open): highlight a few lines, then **right-click** the selection. Choose **CoopAI: Trace Decision for Selection** (or **Find Owner**, **Blast Radius**, **Knowledge Gaps**). You can also open **Workflows** in the chat header, or type `/trace` in the chat composer.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -81,7 +81,7 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 1. **Extension UI** — Open the remote file / repos picker.
 2. Select the **repository** (not a file) and click **Use repo**.
-3. Click **Understand Repo** in the grid, or type `/understand` (aliases: `/repo`, `/architecture`, `/explain`). Success: repo-only chip and the action enabled.
+3. Open **Workflows → Understand Repo**, or type `/understand` (aliases: `/repo`, `/architecture`, `/explain`). Success: repo-only chip and the action enabled.
 
 <!-- figures -->
 ![Remote workspace — open the repos picker to choose a repository](/screenshots/docs/extension-understand-file-picker.png)
@@ -94,7 +94,7 @@ Coop streams an answer grounded in your workspace files and any connected integr
 
 ![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success-v2.png)
 
-*3 — Repo chipped — run Understand Repo or `/understand`*
+*3 — Repo chipped — run **Workflows → Understand Repo** or `/understand`*
 <!-- /figures -->
 
 Quick actions route to **Claude Sonnet 4.6** for structured, repo-grounded answers. Full detail: [Owner's Manual — Understand Repo](/manual#understand-repo).
@@ -128,7 +128,7 @@ After sign-in, confirm the hot path:
 | **Autocomplete** | Sidebar **Autocomplete On** → type in `.ts` → ghost text → **Tab** accepts |
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
 | **Quick action (file)** | `/trace` on a selection → structured answer with sources |
-| **Understand Repo** | **Use repo** on the repository → **Understand Repo** or `/understand` → repo-wide overview |
+| **Understand Repo** | **Use repo** on the repository → **Workflows → Understand Repo** or `/understand` → repo-wide overview |
 | **Plain chat** | Composer question → grounded reply (GPT-5 mini) |
 
 More fixes: [Troubleshooting](/docs/troubleshooting).
