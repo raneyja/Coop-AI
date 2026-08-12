@@ -66,6 +66,9 @@ export function codeHostListSubtitle(prefs: Preferences, provider: CodeHostProvi
 
 export function integrationConnectionMeta(prefs: Preferences, provider: IntegrationProvider): string {
   const name = INTEGRATION_NAMES[provider];
+  if (provider === "slack" && prefs.slackNeedsReconnect) {
+    return "Reconnect required — finish in the Coop admin portal";
+  }
   if (!integrationConfigured(prefs, provider)) {
     return "Not connected";
   }

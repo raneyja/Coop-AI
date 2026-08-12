@@ -464,6 +464,7 @@ export class CoopBackendClient {
 
   public async getSlackInstallationStatus(baseUrl: string): Promise<{
     installed: boolean;
+    needsReconnect?: boolean;
     teamName?: string;
     teamId?: string;
     tokenExpiresAt?: string;
@@ -471,6 +472,7 @@ export class CoopBackendClient {
     assertCoopEndpoint(baseUrl);
     const response = await this.http.get<{
       installed: boolean;
+      needsReconnect?: boolean;
       teamName?: string;
       teamId?: string;
       tokenExpiresAt?: string;
@@ -484,6 +486,7 @@ export class CoopBackendClient {
     }
     return {
       installed: Boolean(response.data?.installed),
+      needsReconnect: Boolean(response.data?.needsReconnect),
       teamName: response.data?.teamName,
       teamId: response.data?.teamId,
       tokenExpiresAt: response.data?.tokenExpiresAt

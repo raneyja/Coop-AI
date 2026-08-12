@@ -75,7 +75,8 @@ test("integrations health marks slack scope required on enterprise", async () =>
             tokenExpiresAt: undefined,
             updatedAt: new Date()
           }
-        : undefined
+        : undefined,
+    getAccessToken: async () => "xoxp-user-token-for-tests"
   };
   const scopePolicyStore = {
     get: async () => undefined
@@ -116,7 +117,8 @@ test("integrations health marks slack scope required on pro", async () => {
             tokenExpiresAt: undefined,
             updatedAt: new Date()
           }
-        : undefined
+        : undefined,
+    getAccessToken: async () => "xoxp-user-token-for-tests"
   };
   const scopePolicyStore = {
     get: async () => undefined

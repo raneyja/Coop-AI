@@ -9,6 +9,7 @@ import { requiresIntegrationScope } from "../license/planSearchScope";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 import { testAdminIntegration } from "./adminIntegrationTest";
+import { isSlackBotAccessToken } from "../api/slack/slackTokenType";
 
 type ParsedRequest = {
   method: string;
@@ -227,12 +228,7 @@ export async function listOrgIntegrations(
       if (!test.ok) {
         return {
           ...status,
-          needsReconnect:
-            status.provider === "github"
-              ? true
-              : "needsReconnect" in status
-                ? status.needsReconnect
-                : undefined,
+          needsReconnect: true,
           liveTestOk: false,
           liveTestMessage: test.message
         };
@@ -310,9 +306,17 @@ async function loadIntegrationStatus(
     installed &&
     orgPlan === "enterprise" &&
     !connection?.metadata.encryptedBotToken;
+  let needsReconnect = scopeNeedsReconnect;
+  if (provider === "slack" && installed && deps.integrationStore) {
+    const accessToken = await deps.integrationStore.getAccessToken(orgId, "slack");
+    if (accessToken && isSlackBotAccessToken(accessToken)) {
+      needsReconnect = true;
+    }
+  }
   return {
     provider,
     installed,
+    needsReconnect: needsReconnect || undefined,
     installUrlPath: `/v1/${provider}/app/install-url`,
     scopeStatus: scope.scopeStatus,
     scopeSummary: scope.scopeSummary,

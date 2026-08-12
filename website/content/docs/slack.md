@@ -58,7 +58,7 @@ The Coop bot must be **invited** to private channels before they appear in the s
 | "Invalid permissions requested" | Add missing scopes in Slack app settings; reinstall to workspace |
 | Channel picker empty | Disconnect + reconnect after reinstalling Slack app |
 | `missing_scope` in Manage access | Add bot scopes `channels:read`, `groups:read`; reconnect |
-| `not_allowed_token_type` / search fails | Coop used a **bot** token for search. Scopes alone don’t fix this — **Disconnect → Connect Slack** again after the API fix so the **user** token is stored. Test Slack must pass search, not only auth. |
+| Test Slack / search fails after “Connected” | Reconnect from the **admin portal** (Extension → Manage Slack). Then Refresh status → Test Slack. |
 | Search returns nothing | Save scope with allowlisted channels; test again |
 
 See [Integration scope](/docs/integration-scope) for Enterprise allowlists.
