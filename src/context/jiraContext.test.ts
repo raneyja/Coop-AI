@@ -72,6 +72,16 @@ test("buildJiraFocusTerms includes path stem and basename", () => {
   assert.ok(terms.includes("IndexedRepoWorkspace"));
   assert.ok(terms.includes("IndexedRepoWorkspace.ts"));
   assert.ok(terms.includes("src/workspace/IndexedRepoWorkspace.ts"));
+  assert.ok(terms.includes("indexed") || terms.includes("workspace") || terms.includes("Indexed"));
+});
+
+test("buildJiraFocusTerms splits camelCase basename tokens", () => {
+  const terms = buildJiraFocusTerms({
+    activeFile: "src/config/responseDeadline.ts"
+  });
+  assert.ok(terms.includes("responseDeadline"));
+  assert.ok(terms.includes("response"));
+  assert.ok(terms.includes("deadline"));
 });
 
 test("buildFocusAwareJiraJql ANDs repo with file focus", () => {

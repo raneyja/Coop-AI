@@ -9,6 +9,7 @@ import type { RepoContext } from "./types";
 import type { QuickActionId } from "../webview/types";
 import { isQuickActionBlockedForSuggest } from "../context/quickActionScope";
 import { SLASH_COMMANDS } from "../context/slashCommands";
+import { shouldSkipQuickActionSuggest as shouldSkipSuggestForRepoFact } from "../workspace/repoFactIntent";
 
 export type SuggestConfidence = "high" | "medium" | "low";
 
@@ -504,6 +505,9 @@ export function shouldOfferQuickActionSuggest(
   context: RepoContext,
   options?: SuggestQuickActionsOptions
 ): SuggestQuickActionsResult | undefined {
+  if (shouldSkipSuggestForRepoFact(message)) {
+    return undefined;
+  }
   const result = suggestQuickActions(message, options);
   if (result.confidence === "low" || result.suggestions.length === 0) {
     return undefined;

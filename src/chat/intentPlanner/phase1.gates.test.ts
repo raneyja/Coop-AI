@@ -59,15 +59,29 @@ test("Phase 1 Chat Intent Planner gates", () => {
         connectedTools: ["jira", "slack"]
       });
       assert.deepEqual(plan.tools, ["jira", "slack"]);
+      const slackOnly = planChatIntentFromRules({
+        message: "search slack for discussions about this file",
+        activeFile: "src/workspace/IndexedRepoWorkspace.ts",
+        connectedTools: ["slack", "teams", "jira"]
+      });
+      assert.deepEqual(slackOnly.tools, ["slack"]);
+      assert.equal(slackOnly.mode, "tools-only");
     }),
     evaluateGate(PHASE1_GATE_CRITERIA[1], () => {
-      const plan = planChatIntentFromRules({
-        message: "Explain this function",
-        activeFile: "src/example.ts",
-        connectedTools: ["jira", "slack", "confluence"]
-      });
-      assert.deepEqual(plan.tools, []);
-      assert.equal(plan.mode, "plain");
+      for (const message of [
+        "Explain this function",
+        "summarize this file",
+        "walk me through this function",
+        "What does this file do?"
+      ]) {
+        const plan = planChatIntentFromRules({
+          message,
+          activeFile: "src/example.ts",
+          connectedTools: ["jira", "slack", "confluence"]
+        });
+        assert.deepEqual(plan.tools, [], message);
+        assert.equal(plan.mode, "plain", message);
+      }
     }),
     evaluateGate(PHASE1_GATE_CRITERIA[2], () => {
       const plan = planChatIntentFromRules({

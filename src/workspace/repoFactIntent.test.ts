@@ -6,9 +6,11 @@ import {
   isRepoLineCountQuery,
   isRepoPackageBoundaryQuery,
   isRepoStructureQuery,
+  isSymbolLocationQuery,
   needsPackageManifests,
   needsRepoTreeOverview,
-  repoFactNeeds
+  repoFactNeeds,
+  shouldSkipQuickActionSuggest
 } from "./repoFactIntent";
 
 let passed = 0;
@@ -101,6 +103,23 @@ test("needsRepoTreeOverview skips pure count questions", () => {
   assert.equal(needsRepoTreeOverview("is this a monorepo?"), true);
   assert.equal(repoFactNeeds("is this a monorepo?").treeOverview, true);
   assert.equal(repoFactNeeds("is this a monorepo?").packageManifests, true);
+});
+
+test("isSymbolLocationQuery matches where-is-defined asks", () => {
+  assert.equal(isSymbolLocationQuery("Where is the soft gather budget defined?"), true);
+  assert.equal(isSymbolLocationQuery("where was AuthError declared?"), true);
+  assert.equal(isSymbolLocationQuery("what are the knowledge gaps in auth?"), false);
+});
+
+test("shouldSkipQuickActionSuggest covers inventory and location facts", () => {
+  assert.equal(shouldSkipQuickActionSuggest("How many files are in this repo?"), true);
+  assert.equal(shouldSkipQuickActionSuggest("Where is the soft gather budget defined?"), true);
+  assert.equal(shouldSkipQuickActionSuggest("Explain this function"), true);
+  assert.equal(
+    shouldSkipQuickActionSuggest("What are the main top-level packages or areas in this repo?"),
+    true
+  );
+  assert.equal(shouldSkipQuickActionSuggest("who owns this file?"), false);
 });
 
 console.log(`\nrepoFactIntent: ${passed} passed, ${failed} failed`);

@@ -192,3 +192,48 @@ export function repoFactNeeds(queryText: string | undefined): RepoFactNeeds {
 export function hasRepoFactNeed(needs: RepoFactNeeds): boolean {
   return needs.fileCount || needs.lineCount || needs.treeOverview || needs.packageManifests;
 }
+
+/**
+ * "Where is X defined / declared / configured?" — answer from code, not Knowledge Gaps chips.
+ */
+export function isSymbolLocationQuery(queryText: string | undefined): boolean {
+  const q = normalize(queryText);
+  if (!q) {
+    return false;
+  }
+  if (/\bwhere\s+(?:is|are|was|were)\b.{0,80}\b(defined|declared|configured|set|implemented|located)\b/.test(q)) {
+    return true;
+  }
+  if (/\bwhere\s+(?:can\s+i\s+)?find\b.{0,60}\b(definition|declaration|constant|config)\b/.test(q)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Plain factual asks that should never interrupt with quick-action suggest chips
+ * (phrase or hybrid model path).
+ */
+export function shouldSkipQuickActionSuggest(queryText: string | undefined): boolean {
+  // Inventory, layout, and "where is X defined" are plain-chat fact answers —
+  // do not interrupt with Understand / Gaps chips.
+  if (
+    isRepoInventoryQuery(queryText) ||
+    isRepoStructureQuery(queryText) ||
+    isSymbolLocationQuery(queryText)
+  ) {
+    return true;
+  }
+  const q = normalize(queryText);
+  if (!q) {
+    return false;
+  }
+  if (
+    /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b|summarize\s+this\s+(?:function|method|class|file|code)\b|walk\s+me\s+through\s+this\s+(?:function|method|class|file|code)\b)/.test(
+      q
+    )
+  ) {
+    return true;
+  }
+  return false;
+}

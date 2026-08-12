@@ -752,7 +752,7 @@ function ToolsListDetail({
         />
       </CoopNavList>
 
-      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Collaboration</p>
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Integrations</p>
       <CoopNavList>
         <CoopNavRow
           title="Slack"
@@ -829,7 +829,7 @@ function MemberToolsListDetail({ prefs }: { prefs: Preferences }): React.ReactEl
         </div>
       </SettingsSection>
 
-      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Collaboration</p>
+      <p className="coop-prompt-modal-section-title px-0.5 mt-4">Integrations</p>
       <SettingsSection>
         <div className="space-y-3">
           {collaborationProviders.map((tool) => (

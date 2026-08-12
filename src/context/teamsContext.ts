@@ -27,13 +27,9 @@ export function wantsTeamsContext(query: string): boolean {
   if (!q) {
     return false;
   }
-  if (/\bteams\b/i.test(q) || /\bmicrosoft teams\b/i.test(q)) {
-    return true;
-  }
-  if (/\b(threads?|discussions?|messages?|conversations?)\b/i.test(q) && /\b(teams|repo|repository|this|channel)\b/i.test(q)) {
-    return true;
-  }
-  return false;
+  // Require an explicit Teams product mention. "discussions about this" is Slack-shaped
+  // and must not also plan Microsoft Teams when the user only named Slack.
+  return /\b(ms\s*)?teams\b/i.test(q) || /\bmicrosoft\s+teams\b/i.test(q);
 }
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {

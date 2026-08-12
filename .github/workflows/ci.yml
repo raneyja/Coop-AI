@@ -26,6 +26,11 @@ jobs:
         run: |
           npm run test:chat-prose
           npm run test:slash-commands
+          npm run test:chat-intent
+          npm run test:response-deadline
+          npm run test:agent-routing
+          npm run test:chat-message-intent
+          npm run test:context-gathering-messages
           npm run test:indexed-repo-workspace
           npm run test:system-prompts
           npm run test:quick-action-prompts

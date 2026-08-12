@@ -310,6 +310,17 @@ test("negatives: more normal chat stays quiet", () => {
   assert.deepEqual(ids("Write a unit test for this"), []);
 });
 
+test("shouldOfferQuickActionSuggest skips inventory and where-defined facts", () => {
+  assert.equal(
+    shouldOfferQuickActionSuggest("How many files are in this repo?", repoWithFile),
+    undefined
+  );
+  assert.equal(
+    shouldOfferQuickActionSuggest("Where is the soft gather budget defined?", repoWithFile),
+    undefined
+  );
+});
+
 console.log(`\nquickActionSuggestIntent: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

@@ -19,7 +19,13 @@ function test(name: string, fn: () => void): void {
 
 test("wantsTeamsContext matches explicit teams questions", () => {
   assert.equal(wantsTeamsContext("any teams threads for this repo?"), true);
+  assert.equal(wantsTeamsContext("microsoft teams discussion about auth"), true);
   assert.equal(wantsTeamsContext("What is the auth flow?"), false);
+  assert.equal(
+    wantsTeamsContext("search slack for discussions about this file"),
+    false,
+    "Slack-only discussion asks must not imply Teams"
+  );
 });
 
 test("shouldFetchTeamsContext includes knowledge-gaps quick action", () => {

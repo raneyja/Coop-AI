@@ -83,21 +83,36 @@ const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: Re
   { provider: "google-docs", pattern: /\b(google\s*docs?|gdocs?)\b/i }
 ];
 
+/** Local explain / summarize — stay plain (no tools, no silent workflow). */
 const EXPLAIN_ONLY =
-  /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b)/i;
+  /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b|summarize\s+this\s+(?:function|method|class|file|code)\b|walk\s+me\s+through\s+this\s+(?:function|method|class|file|code)\b)/i;
 
 /**
  * Tools explicitly named or clearly requested in the message (connection-agnostic).
  * Named tools must stay on the plan so we attempt the call (or surface not-connected).
+ *
+ * When the user names a product (Slack, Jira, …), only those keywords count — do not
+ * also attach other tools via broad phrase heuristics (e.g. "discussions about this"
+ * must not add Teams alongside Slack).
  */
 export function detectNamedTools(message: string): IntegrationChatProvider[] {
-  const found: IntegrationChatProvider[] = [];
+  const namedByKeyword: IntegrationChatProvider[] = [];
   for (const { provider, pattern } of TOOL_NAME_PATTERNS) {
-    if (pattern.test(message) || legacyWants(provider, message)) {
+    if (pattern.test(message)) {
+      namedByKeyword.push(provider);
+    }
+  }
+  if (namedByKeyword.length > 0) {
+    return CHAT_INTENT_TOOL_PROVIDERS.filter((p) => namedByKeyword.includes(p));
+  }
+
+  const found: IntegrationChatProvider[] = [];
+  for (const provider of CHAT_INTENT_TOOL_PROVIDERS) {
+    if (legacyWants(provider, message)) {
       found.push(provider);
     }
   }
-  return CHAT_INTENT_TOOL_PROVIDERS.filter((p) => found.includes(p));
+  return found;
 }
 
 /**

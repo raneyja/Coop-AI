@@ -409,7 +409,7 @@ import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId"
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
-import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds } from "../workspace/repoFactIntent";
+import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds, shouldSkipQuickActionSuggest } from "../workspace/repoFactIntent";
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
@@ -4260,7 +4260,7 @@ export class CoopChatSession {
       ) {
         // Legacy chip path when planner has nothing (medium phrase-only still handled above).
         let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
-        if (!offer && isIntentSuggestModelEnabled()) {
+        if (!offer && isIntentSuggestModelEnabled() && !shouldSkipQuickActionSuggest(message)) {
           offer = await this.resolveHybridIntentSuggestOffer(message);
         }
         if (offer) {

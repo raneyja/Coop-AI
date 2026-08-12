@@ -104,6 +104,7 @@ export function buildJiraFocusTerms(options: {
   extraTerms?: string[];
   owner?: string;
   repo?: string;
+  queryText?: string;
 }): string[] {
   const repoSlugs = new Set(
     buildRepoSearchTerms(options.owner, options.repo).map((term) => term.toLowerCase())
@@ -125,11 +126,69 @@ export function buildJiraFocusTerms(options: {
   const activeFile = options.activeFile?.trim().replace(/^\/+/, "");
   if (activeFile) {
     add(activeFile);
+    const base = activeFile.split("/").pop() ?? activeFile;
+    const stem = base.replace(/\.[^.]+$/, "");
+    add(stem);
+    for (const part of splitIdentifierTokens(stem)) {
+      add(part);
+    }
   }
   for (const term of options.extraTerms ?? []) {
     add(term);
   }
-  return [...terms].slice(0, 12);
+  for (const term of queryFocusTerms(options.queryText)) {
+    add(term);
+  }
+  return [...terms].slice(0, 16);
+}
+
+/** Split camelCase / snake_case identifiers into searchable tokens. */
+export function splitIdentifierTokens(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const spaced = trimmed
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ")
+    .toLowerCase();
+  return spaced
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 4);
+}
+
+const JIRA_QUERY_STOPWORDS = new Set([
+  "check",
+  "jira",
+  "for",
+  "open",
+  "tickets",
+  "ticket",
+  "related",
+  "this",
+  "file",
+  "the",
+  "and",
+  "with",
+  "about",
+  "what",
+  "status",
+  "please",
+  "find",
+  "any",
+  "from"
+]);
+
+function queryFocusTerms(queryText: string | undefined): string[] {
+  const q = queryText?.trim() ?? "";
+  if (!q) {
+    return [];
+  }
+  return q
+    .split(/[^a-zA-Z0-9_./-]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 4 && !JIRA_QUERY_STOPWORDS.has(part.toLowerCase()));
 }
 
 /**
@@ -141,6 +200,7 @@ export function buildFocusAwareJiraJql(options: {
   repo?: string;
   activeFile?: string;
   extraTerms?: string[];
+  queryText?: string;
 }): string | undefined {
   const repoClause = buildRepoClause(options.owner, options.repo);
   const focusTerms = buildJiraFocusTerms(options);
@@ -311,7 +371,8 @@ export async function fetchJiraSearchContext(options: {
     owner: options.owner,
     repo: options.repo,
     activeFile: options.activeFile,
-    extraTerms: options.extraTerms
+    extraTerms: options.extraTerms,
+    queryText
   };
 
   for (const key of discoveredKeys) {

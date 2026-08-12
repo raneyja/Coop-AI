@@ -61,11 +61,12 @@ export function buildIntentSuggestUserMessage(
     "Reply with ONLY a JSON object (no markdown, no prose):",
     '{"action":"none"|"find-owner"|"trace-decision"|"blast-radius"|"understand-repo"|"knowledge-gaps","confidence":"high"|"medium"|"low"}',
     'Prefer "none" when unsure or for normal code explanations.',
+    '"none" for factual inventory ("how many files"), "where is X defined", and simple file/function explanations.',
     '"blast-radius" = change impact / what breaks / callers of a change.',
     '"find-owner" = who owns or maintains this.',
     '"trace-decision" = why this was written / decision history.',
-    '"understand-repo" = whole-repo architecture overview.',
-    '"knowledge-gaps" = missing docs / undocumented areas.',
+    '"understand-repo" = whole-repo architecture overview (not a single file-count fact).',
+    '"knowledge-gaps" = missing docs / undocumented areas (not "where is this constant defined").',
     'Compound "what does this do and who calls it" → "none".'
   ];
   if (file) {
