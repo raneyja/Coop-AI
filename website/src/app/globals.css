@@ -597,8 +597,16 @@
 
 .hero-demo-section {
   position: relative;
-  min-height: 620px;
+  /* Tall enough for the longest slide (citation + patch); short Q&A slides
+     used to sit in a 620px box and left a large gap above the dots. */
+  min-height: 520px;
   overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .hero-demo-section {
+    min-height: 480px;
+  }
 }
 
 .hero-demo-stage {
