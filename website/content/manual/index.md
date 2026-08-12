@@ -463,7 +463,9 @@ Run quick actions from the **Workflows** menu in the chat header, **slash comman
 ![Remote workspace — repository selected before Use repo](/screenshots/docs/extension-understand-repo-select-v2.png)
 
 *2 — Select the repository (not a file)*
+<!-- /figures -->
 
+<!-- figures sm -->
 ![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success-v2.png)
 
 *3 — Repo chipped — run **Workflows → Understand Repo** or `/understand`*
