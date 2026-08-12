@@ -6,8 +6,9 @@ import { PRODUCT_MOCK_SCENARIOS } from "@/lib/productMockScenarios";
 
 const FADE_MS = 480;
 
-/** Fixed height so slide changes never shift page layout below the carousel */
-const SLIDE_HEIGHT = "h-[32rem] sm:h-[30rem] md:h-[28rem]";
+/** Fixed height so slide changes never shift page layout below the carousel.
+ * ~25% taller than the prior 28–32rem band so the demo reads as the page hero. */
+const SLIDE_HEIGHT = "h-[40rem] sm:h-[37.5rem] md:h-[35rem]";
 
 export function ProductShowcaseCarousel() {
   const [index, setIndex] = useState(0);
@@ -64,7 +65,11 @@ export function ProductShowcaseCarousel() {
         }
       }}
     >
-      <div className={`relative w-full ${SLIDE_HEIGHT}`} aria-live="polite" aria-atomic>
+      <div
+        className={`relative w-full overflow-hidden rounded-2xl ring-1 ring-coop-border shadow-sm ${SLIDE_HEIGHT}`}
+        aria-live="polite"
+        aria-atomic
+      >
         <div
           className={`absolute inset-0 transition-opacity duration-500 ${
             visible ? "opacity-100" : "pointer-events-none opacity-0"
@@ -73,7 +78,7 @@ export function ProductShowcaseCarousel() {
           <ProductMock
             key={scenario.id}
             scenario={scenario}
-            className="h-full"
+            className="h-full !max-w-none"
             onAnimationComplete={paused || reduceMotion ? undefined : advance}
           />
         </div>

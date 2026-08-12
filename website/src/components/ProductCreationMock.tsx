@@ -210,7 +210,7 @@ export function ProductCreationMock({
 
   return (
     <div
-      className={`relative mx-auto flex h-full min-h-0 w-full max-w-[52rem] flex-col overflow-hidden rounded-sm bg-[#1e1e1e] ring-1 ring-coop-border ${className}`.trim()}
+      className={`relative mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#1e1e1e] ring-1 ring-coop-border ${className}`.trim()}
       role="img"
       aria-label={ariaLabel}
     >

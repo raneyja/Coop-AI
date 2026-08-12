@@ -153,27 +153,26 @@ export function ProductInquiryMock({
 
   return (
     <div
-      className={`relative mx-auto w-full max-w-[52rem] ${className}`}
+      className={`relative mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#1e1e1e] ring-1 ring-coop-border ${className}`.trim()}
       role="img"
       aria-label={scenario.ariaLabel}
     >
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-sm bg-[#1e1e1e] ring-1 ring-coop-border">
-        <div className="flex items-center gap-3 border-b border-[#2a2a2a] bg-[#252526] px-4 py-2.5">
-          <div className="flex gap-1.5" aria-hidden>
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-          </div>
-          <div className="flex min-w-0 flex-1 gap-1 overflow-hidden font-mono text-[11px] text-coop-muted">
-            <span className="rounded-t bg-[#1e1e1e] px-2.5 py-1 text-white/85">{scenario.tabs.active}</span>
-            {scenario.tabs.inactive ? (
-              <span className="px-2 py-1 opacity-40">{scenario.tabs.inactive}</span>
-            ) : null}
-          </div>
-          <span className="font-mono text-[10px] text-coop-muted">CoopAI</span>
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#2a2a2a] bg-[#252526] px-4 py-2.5">
+        <div className="flex gap-1.5" aria-hidden>
+          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
         </div>
+        <div className="flex min-w-0 flex-1 gap-1 overflow-hidden font-mono text-[11px] text-coop-muted">
+          <span className="rounded-t bg-[#1e1e1e] px-2.5 py-1 text-white/85">{scenario.tabs.active}</span>
+          {scenario.tabs.inactive ? (
+            <span className="px-2 py-1 opacity-40">{scenario.tabs.inactive}</span>
+          ) : null}
+        </div>
+        <span className="font-mono text-[10px] text-coop-muted">CoopAI</span>
+      </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
           <aside className="relative z-10 flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-[#2a2a2a] bg-[#1e1e1e] md:w-[44%] md:border-b-0 md:border-r">
             <div
               ref={threadRef}
@@ -294,7 +293,6 @@ export function ProductInquiryMock({
             ) : null}
           </svg>
         </div>
-      </div>
     </div>
   );
 }
