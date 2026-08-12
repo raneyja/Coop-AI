@@ -27,7 +27,7 @@ import { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
 import { linesFromText } from "./api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "./api/codeHosts/types";
 import { coordinatesFromRepoId } from "./api/codeHosts/types";
-import { isCoopDevMode, readLightningBackend } from "./config/lightningConfig";
+import { readLightningBackend } from "./config/lightningConfig";
 import { IntegrationSecrets } from "./api/integrations/integrationSecrets";
 import { createDecisionArchaeologyEngine } from "./engines/decisionArchaeology";
 import { registerDecisionArchaeologyEngine } from "./engines/decisionArchaeologyRegistry";
@@ -292,7 +292,10 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
   integrationSecrets.setCloudFetcher(async () => {
-    if (isCoopDevMode() || !(await api.hasToken())) {
+    // Always load org credentials when signed in — including Extension Development Host.
+    // coopAI.devMode must NOT skip this: otherwise Test Slack / chat use a stale local
+    // bot token while Settings shows Connected from org install status.
+    if (!(await api.hasToken())) {
       return {};
     }
     const baseUrl = getApiBaseUrl();
@@ -436,7 +439,7 @@ export function activate(context: vscode.ExtensionContext): void {
       integrationSecrets,
       indexBackend,
       resolveSlackScope: async () => {
-        if (isCoopDevMode() || !(await api.hasToken())) {
+        if (!(await api.hasToken())) {
           return undefined;
         }
         try {

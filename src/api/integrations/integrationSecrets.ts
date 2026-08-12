@@ -174,6 +174,8 @@ function mergeIntegrationCredentials(
   local: IntegrationCredentials,
   cloud: Partial<IntegrationCredentials>
 ): IntegrationCredentials {
+  // Cloud (org) credentials win over local SecretStorage when both are set.
+  // Local-only keys remain for developer fallback when the org is not connected.
   const merged = { ...local };
   for (const [key, value] of Object.entries(cloud) as Array<
     [keyof IntegrationCredentials, string | undefined]
@@ -184,3 +186,6 @@ function mergeIntegrationCredentials(
   }
   return merged;
 }
+
+/** @internal exported for unit tests */
+export const mergeIntegrationCredentialsForTests = mergeIntegrationCredentials;
