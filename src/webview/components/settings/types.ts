@@ -97,6 +97,7 @@ export type Preferences = {
   timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
   projectInstructions?: import("../../../chat/types").ProjectInstructionsState;
+  visibleMemory?: import("../../../chat/types").VisibleMemoryFact[];
 };
 
 export type SettingsCollectionSummary = {

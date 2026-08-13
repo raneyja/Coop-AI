@@ -16,6 +16,9 @@ export type WorkspacePromptFile = {
 
 const PROMPT_RELATIVE_PATH = ".coop/prompts.json";
 
+/** Phase D: prompt library stays user-picked. AGENTS.md is the always-on injection. */
+export const PROMPT_LIBRARY_INJECTION_MODE = "opt-in" as const;
+
 export async function loadWorkspacePrompts(): Promise<WorkspacePromptEntry[]> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {

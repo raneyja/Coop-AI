@@ -32,6 +32,15 @@ export type ProjectInstructionsState = {
   attachedAgentsMdLabel?: string;
 };
 
+/** Settings-visible fact. Injected only when `source` is non-empty. */
+export type VisibleMemoryFact = {
+  id: string;
+  text: string;
+  source: string;
+  repoId?: string;
+  createdAt: number;
+};
+
 export type RepoContext = {
   provider?: CodeHostProviderPreference;
   owner?: string;
@@ -328,6 +337,8 @@ export type UserPreferences = {
 export type SettingsStatePayload = UserPreferences & {
   identityDirectory: IdentityDirectory;
   projectInstructions?: ProjectInstructionsState;
+  /** Visible/clearable facts (Settings only — not chat chrome). */
+  visibleMemory?: VisibleMemoryFact[];
 };
 
 export type ChatUsagePayload = {
@@ -578,6 +589,8 @@ export type WebviewInbound =
   | { type: "agents:start-from-template" }
   | { type: "agents:attach" }
   | { type: "agents:open" }
+  | { type: "memory:add"; payload: { text: string; source: string; repoId?: string } }
+  | { type: "memory:clear"; payload?: { id?: string } }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | {
