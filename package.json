@@ -408,6 +408,12 @@
           "minimum": 0,
           "description": "Minutes away from CoopAI before the sidebar opens on a fresh thread instead of restoring the last one. Prior threads stay in the thread list. Set to 0 to always restore the last thread."
         },
+        "coopAI.chat.agentMode": {
+          "type": "string",
+          "enum": ["off", "auto", "on"],
+          "default": "off",
+          "markdownDescription": "Read-only repo hunt loop for plain chat. **off** (default) is today’s chat. **on** lets Coop search/read the indexed Use-repo when the question is a repo hunt — not Trace, `/edit`, or “explain this.” **auto** only for clear repo-hunt phrasing; never because context was empty."
+        },
         "coopAI.projectInstructions.enabled": {
           "type": "boolean",
           "default": true,
@@ -817,6 +823,7 @@
     "package": "npm run build:extension && npm run build:webview && npx --yes @vscode/vsce package --allow-missing-repository --skip-license --out coop-ai.vsix",
     "test:patch": "npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/edit/patchTarget.test.ts && npx tsx src/edit/handlePatchComplete.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts && npx tsx src/webview/lib/patchStreamDisplay.test.ts",
     "test:agent-routing": "npx tsx src/chat/agentRouting.test.ts && npx tsx src/chat/editSendRouting.test.ts && npx tsx src/chat/quickActionSuggestIntent.test.ts && npx tsx src/chat/quickActionIntentModel.test.ts",
+    "test:agent-ship:a": "npx tsx src/api/agent/phaseA.gates.test.ts && npx tsx src/api/agent/phaseA.pressure.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/agent/searchQuery.test.ts && npx tsx src/webview/agentActivity.test.ts",
     "test:chat-intent:phase1": "npx tsx src/chat/intentPlanner/phase1.gates.test.ts",
     "test:chat-intent:phase2": "npx tsx src/chat/intentPlanner/phase2.gates.test.ts",
     "test:chat-intent:phase3": "npx tsx src/chat/intentPlanner/phase3.gates.test.ts",

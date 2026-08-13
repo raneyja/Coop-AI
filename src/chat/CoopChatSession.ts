@@ -177,6 +177,7 @@ import {
   buildIntentPlanActivityMessages,
   buildIntentPlanStatusLine,
   buildIntentPlanTrustPreamble,
+  emptyChatIntentPlan,
   type ChatIntentPlan
 } from "./intentPlanner";
 import { buildMultiToolPlainChatUserPrompt } from "../prompts/multiToolPlainChatSynthesis";
@@ -202,7 +203,7 @@ import {
   quickActionPromptParts,
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
-import { resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
+import { getFeatureModelAssignment, resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
 import {
   filterMentionsByInScopeKeys,
   allMentionsOutOfScopeForActiveRepo,
@@ -418,7 +419,9 @@ import { shouldFetchNotionContext } from "../context/notionContext";
 import { shouldFetchSlackContext } from "../context/slackContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { readAgentModeSetting } from "../config/agentModeConfig";
-import { shouldUseAgentMode } from "./agentRouting";
+import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
+import { shouldRunAgentToolLoop, shouldSuppressSuggestChipsForAgentHunt } from "./agentRouting";
+import { buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import {
   EDIT_NO_TARGET_FILE_ERROR,
   EDIT_UNREADABLE_FILE_ERROR,
@@ -512,6 +515,12 @@ export class CoopChatSession {
   };
   /** Abort in-flight hybrid intent-suggest model call (user Stop). */
   private intentSuggestAbort?: AbortController;
+  /**
+   * Phase A: intent plan for the in-flight send. Every turn re-plans (UX-G7).
+   * Agent loop reads this — do not treat agentMode as a sticky thread.
+   */
+  private turnIntentPlan?: ChatIntentPlan;
+  private turnStreamAbort?: AbortSignal;
   private sessionCostUsd = 0;
   private readonly threadRuns = new ThreadRunManager();
   private workspacePromptWatcher?: vscode.Disposable;
@@ -3461,7 +3470,12 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
-    if (request.type !== "chat_context" || request.params.quickAction || this.pendingDualRepoCompare) {
+    if (
+      request.type !== "chat_context" ||
+      request.params.quickAction ||
+      this.pendingDualRepoCompare ||
+      this.pendingCodeEditIntent
+    ) {
       return result;
     }
 
@@ -3471,10 +3485,12 @@ export class CoopChatSession {
     }
 
     if (
-      !shouldUseAgentMode({
+      !shouldRunAgentToolLoop({
         query,
-        hasQuickAction: false,
+        hasQuickAction: Boolean(request.params.quickAction),
         agentModeSetting: readAgentModeSetting(),
+        intentPlan: this.turnIntentPlan,
+        isEditTurn: this.pendingCodeEditIntent,
         contextBundle: [result]
       })
     ) {
@@ -3491,9 +3507,12 @@ export class CoopChatSession {
         {
           message: query,
           repoId,
-          maxSteps: 8
+          maxSteps: AGENT_MAX_TOOL_ROUNDS
         },
         {
+          signal: this.turnStreamAbort,
+          wallMs: AGENT_JOB_WALL_MS,
+          planTurn: (input) => this.planAgentToolTurn(input),
           onStep: (_step, steps) => {
             this.postForThread(this.activeThreadId(), {
               type: "agent:activity",
@@ -3530,6 +3549,54 @@ export class CoopChatSession {
     } catch {
       return result;
     }
+  }
+
+  /**
+   * Cheap JSON turn that picks the next read-only repo tool.
+   * Fail-open: empty string → orchestrator falls back or stops.
+   */
+  private async planAgentToolTurn(input: {
+    message: string;
+    repoId: string;
+    round: number;
+    priorSteps: Array<{ summary: string }>;
+    lastToolResult?: string;
+  }): Promise<string> {
+    if (this.turnStreamAbort?.aborted) {
+      return JSON.stringify({ done: true });
+    }
+    const assignment = getFeatureModelAssignment("intentSuggest");
+    const prompt = buildAgentToolPlanPrompt({
+      message: input.message,
+      repoId: input.repoId,
+      round: input.round,
+      priorSummaries: input.priorSteps.map((step) => step.summary),
+      lastToolResult: input.lastToolResult
+    });
+    let full = "";
+    try {
+      await this.options.api.streamChat(
+        {
+          message: prompt,
+          context: {},
+          history: [],
+          model: assignment.model,
+          provider: assignment.provider,
+          useCase: "intent_suggest",
+          temperature: 0,
+          maxTokens: 400,
+          enableThinking: false
+        },
+        (chunk) => {
+          full += chunk;
+        },
+        this.preferences.apiBaseUrl,
+        this.turnStreamAbort
+      );
+    } catch {
+      return "";
+    }
+    return full;
   }
 
   private async enrichChatContextWithIntegrations(
@@ -4191,6 +4258,9 @@ export class CoopChatSession {
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
       this.dismissPendingQuickActionSuggest();
     }
+    if (options?.intentPlan) {
+      this.turnIntentPlan = options.intentPlan;
+    }
 
     // Slash-command routing applies only to manually typed messages — never to
     // button-driven quick actions or already-routed integration prompts.
@@ -4213,6 +4283,7 @@ export class CoopChatSession {
       !options?.skipQuickActionSuggest
     ) {
       const plan = await this.resolveChatIntentPlan(message);
+      this.turnIntentPlan = plan;
       const decision = resolveChatIntentExecution(plan);
       if (decision.kind === "silent-workflow") {
         void this.emitUsageEvent("chat_intent.silent_workflow", {
@@ -4231,17 +4302,26 @@ export class CoopChatSession {
         return;
       }
       if (decision.kind === "confirm-workflow") {
-        void this.emitUsageEvent("chat_intent.confirm_workflow", {
-          workflow: decision.plan.workflow,
-          tools: decision.tools
-        });
-        await this.completeQuickActionSuggestClarification(
-          message,
-          decision.offer,
-          options?.mentions,
-          attachments
-        );
-        return;
+        if (
+          shouldSuppressSuggestChipsForAgentHunt({
+            query: message,
+            agentModeSetting: readAgentModeSetting()
+          })
+        ) {
+          this.turnIntentPlan = emptyChatIntentPlan(message);
+        } else {
+          void this.emitUsageEvent("chat_intent.confirm_workflow", {
+            workflow: decision.plan.workflow,
+            tools: decision.tools
+          });
+          await this.completeQuickActionSuggestClarification(
+            message,
+            decision.offer,
+            options?.mentions,
+            attachments
+          );
+          return;
+        }
       }
       if (decision.kind === "tools-only") {
         void this.emitUsageEvent("chat_intent.tools_only", { tools: decision.tools });
@@ -4264,13 +4344,22 @@ export class CoopChatSession {
           offer = await this.resolveHybridIntentSuggestOffer(message);
         }
         if (offer) {
-          await this.completeQuickActionSuggestClarification(
-            message,
-            offer,
-            options?.mentions,
-            attachments
-          );
-          return;
+          if (
+            shouldSuppressSuggestChipsForAgentHunt({
+              query: message,
+              agentModeSetting: readAgentModeSetting()
+            })
+          ) {
+            this.turnIntentPlan = emptyChatIntentPlan(message);
+          } else {
+            await this.completeQuickActionSuggestClarification(
+              message,
+              offer,
+              options?.mentions,
+              attachments
+            );
+            return;
+          }
         }
       }
     }
@@ -4519,6 +4608,7 @@ export class CoopChatSession {
     });
     // Align turn clock with chat timing helper (soft gather budgets use startedAt).
     turn.startedAt = this.chatTurnStartedAt;
+    this.turnStreamAbort = turn.streamAbort.signal;
     this.pushThreadsList();
 
     const fetchIntegrations = options?.fetchIntegrations;
@@ -4886,7 +4976,9 @@ export class CoopChatSession {
       await this.handleChatSend(pending.focus, undefined, pending.attachments, {
         mentions: pending.mentions,
         skipQuickActionSuggest: true,
-        skipUserHistoryPush: true
+        skipUserHistoryPush: true,
+        skipChatIntentPlanner: true,
+        intentPlan: emptyChatIntentPlan(pending.focus)
       });
       return;
     }
@@ -9059,6 +9151,11 @@ export class CoopChatSession {
     });
   }
 
+  /**
+   * Phase D hook — silent system-prompt instructions (no chat banner).
+   * Wave 1: local AGENTS.md loader only. Phase D will fetch via IndexedRepoWorkspace
+   * when Use-repo is remote. Do not add Sources/activity chrome here (UX-G6).
+   */
   private buildProjectInstructionsBlock(): string | undefined {
     const state = this.currentContext.projectInstructions;
     if (!readProjectInstructionsEnabled() || state?.status !== "loaded" || !state.gitRoot) {

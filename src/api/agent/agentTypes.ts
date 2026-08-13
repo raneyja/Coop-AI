@@ -7,6 +7,17 @@ export type AgentStep = {
   completed: boolean;
 };
 
+export type AgentPlanTurnInput = {
+  message: string;
+  repoId: string;
+  round: number;
+  priorSteps: AgentStep[];
+  lastToolResult?: string;
+};
+
+/** Cheap model turn that returns JSON: {tool, args} or {done:true}. */
+export type AgentPlanTurnFn = (input: AgentPlanTurnInput) => Promise<string>;
+
 export type AgentSessionRequest = {
   message: string;
   repoId?: string;

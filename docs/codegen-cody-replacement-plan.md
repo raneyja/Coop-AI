@@ -91,9 +91,9 @@ Phase 2 can parallel with late Phase 1 if no merge conflicts. Phase 3 depends on
 
 **UI rule unchanged:** no ChatPanel layout changes.
 
-**Still honest / deferred:** LLM-driven multi-step tool selection (`agentMode: auto` uses prefetch heuristics, not model-chosen tools); dogfood CAR ≥25% / apply-rate gates are tracked in admin analytics but not enforced in CI.
+**Still honest / deferred:** `auto` is conservative (repo-hunt phrasing only; never empty-bundle). LLM-driven multi-step tool selection ships behind `coopAI.chat.agentMode` **off** by default. Dogfood CAR ≥25% / apply-rate gates are tracked in admin analytics but not enforced in CI.
 
-**Next program:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) — Phase 5b tool loop → multi-file remote apply → PR handoff → instructions/memory → NES. Editor build; pass/fail gates + Boris bar.
+**Next program:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) — Wave 1 = Phase 5b read-only tool loop (A). Wave 2 = B apply, C PR, D instructions, E NES **in parallel**. Wave 3 = join + production eval scorecard. Editor build; pass/fail + pressure tests + notes log.
 
 ## Boris bar — full Cody parity (2026-07-09)
 
