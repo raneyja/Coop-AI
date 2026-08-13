@@ -735,8 +735,8 @@ Wave 2 track D only. Branch cursor/agent-ship-d-2e13.
 
 | Stage | Status |
 |-------|--------|
-| D-0..D-4 | ☐ Not started |
-| D gates | ☐ Not started |
+| D-0..D-4 | ☑ Automated pass 2026-08-13 (`cursor/agent-ship-d-2e13`) |
+| D gates | ☑ D-G1..G6 + D-P1..P6 automated; S7/S14 still for Jon |
 
 ---
 

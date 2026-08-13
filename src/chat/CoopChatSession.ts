@@ -344,12 +344,14 @@ import {
   getAttachedAgentsMdPath,
   setAttachedAgentsMdPath
 } from "../context/agentsMdAttachmentStore";
-import {
-  formatProjectInstructionsBlock
-} from "../context/projectInstructionsLoader";
-import { loadProjectInstructionsCached } from "../context/projectInstructionsCache";
+import { buildProjectInstructionsPromptBlock } from "../context/projectInstructionsPrompt";
 import { resolveProjectInstructionsState } from "../context/projectInstructionsStatus";
 import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
+import {
+  createVisibleMemoryFact,
+  readVisibleMemoryFacts,
+  writeVisibleMemoryFacts
+} from "../context/visibleMemory";
 import {
   MENTION_SEARCH_LIMIT,
   WORKSPACE_LOCAL_REPO_ID,
@@ -1662,6 +1664,27 @@ export class CoopChatSession {
       case "agents:open":
         await this.openAgentsMd();
         return;
+      case "memory:add": {
+        const fact = createVisibleMemoryFact({
+          text: message.payload.text,
+          source: message.payload.source,
+          repoId: message.payload.repoId?.trim() || this.currentUseRepoId()
+        });
+        if (fact) {
+          const existing = readVisibleMemoryFacts(this.options.extensionContext.globalState);
+          await writeVisibleMemoryFacts(this.options.extensionContext.globalState, [...existing, fact]);
+          await this.pushSettingsState();
+        }
+        return;
+      }
+      case "memory:clear": {
+        const existing = readVisibleMemoryFacts(this.options.extensionContext.globalState);
+        const id = message.payload?.id?.trim();
+        const next = id ? existing.filter((fact) => fact.id !== id) : [];
+        await writeVisibleMemoryFacts(this.options.extensionContext.globalState, next);
+        await this.pushSettingsState();
+        return;
+      }
       case "chat:send":
         await this.handleChatSend(
           message.payload.message,
@@ -6285,7 +6308,7 @@ export class CoopChatSession {
                 branch: turnContext.branch
               });
       const projectInstructionsBlock =
-        effectiveQuickAction === "understand-repo" ? undefined : this.buildProjectInstructionsBlock();
+        effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock();
       if (projectInstructionsBlock) {
         apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
       }
@@ -9153,21 +9176,53 @@ export class CoopChatSession {
 
   /**
    * Phase D hook — silent system-prompt instructions (no chat banner).
-   * Wave 1: local AGENTS.md loader only. Phase D will fetch via IndexedRepoWorkspace
-   * when Use-repo is remote. Do not add Sources/activity chrome here (UX-G6).
+   * Remote Use-repo loads AGENTS.md via IndexedRepoWorkspace.readFile (Zero-Clone).
+   * Do not add Sources/activity chrome here (UX-G6).
    */
-  private buildProjectInstructionsBlock(): string | undefined {
-    const state = this.currentContext.projectInstructions;
-    if (!readProjectInstructionsEnabled() || state?.status !== "loaded" || !state.gitRoot) {
+  private async buildProjectInstructionsBlock(): Promise<string | undefined> {
+    const repoId = this.currentUseRepoId();
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    return buildProjectInstructionsPromptBlock({
+      enabled: readProjectInstructionsEnabled(),
+      useRepo: repoId
+        ? {
+            repoId,
+            branch: this.currentContext.branch,
+            version: this.currentContext.branch
+          }
+        : undefined,
+      localGitRoot: repoId ? undefined : this.currentContext.projectInstructions?.gitRoot,
+      activeFile: this.currentContext.file,
+      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext),
+      remainingGatherMs: remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()),
+      readRemoteFile: repoId
+        ? async (filePath) => {
+            const evidence = await this.indexedRepoWorkspace().readFile(
+              {
+                repoId,
+                owner,
+                repo,
+                branch: this.currentContext.branch,
+                provider: this.currentContext.provider ?? this.preferences.defaultCodeHost
+              },
+              filePath
+            );
+            return evidence?.content;
+          }
+        : undefined,
+      memoryFacts: readVisibleMemoryFacts(this.options.extensionContext.globalState)
+    });
+  }
+
+  private currentUseRepoId(): string | undefined {
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!owner || !repo) {
       return undefined;
     }
-    const loaded = loadProjectInstructionsCached({
-      enabled: true,
-      gitRoot: state.gitRoot,
-      activeFile: this.currentContext.file,
-      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext)
-    });
-    return formatProjectInstructionsBlock(loaded);
+    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
+    return buildRepoId(this.preferences, { owner, repo, provider });
   }
 
   private async attachAgentsMd(): Promise<void> {
@@ -9277,7 +9332,8 @@ export class CoopChatSession {
     const payload: SettingsStatePayload = {
       ...this.preferences,
       identityDirectory,
-      projectInstructions: this.resolveProjectInstructionsContext()
+      projectInstructions: this.resolveProjectInstructionsContext(),
+      visibleMemory: readVisibleMemoryFacts(this.options.extensionContext.globalState)
     };
     const message: WebviewOutbound = { type: "settings:state", payload };
     this.postToChat(message);

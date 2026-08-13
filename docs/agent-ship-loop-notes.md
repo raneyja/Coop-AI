@@ -58,7 +58,14 @@ _No entries yet._
 
 ## Wave 2 — Phase D
 
-_No entries yet._
+### 2026-08-13 — Phase D Stages 0–4 — PASS (automated); S7 dogfood still for Jon
+
+- **Owner:** editor Wave 2 D / `cursor/agent-ship-d-2e13`
+- **Commands run:** `npm run test:agent-ship:d` (green), `npm run test:project-instructions` (green), `npm run test:chat-intent` (green), `npm run lint` (green)
+- **Gate IDs:** D-G1..G6 Pass; D-P1..P6 Pass; UX-G6 Pass
+- **What we tried:** Remote Use-repo loads root `AGENTS.md` via `IndexedRepoWorkspace.readFile` (never the open Coop-AI folder). Cap 12k with an INTERNAL truncate note. Cache per repo/branch. Visible memory in Settings requires a source. Prompt library stays opt-in.
+- **What broke / what we skipped:** Live Extension Host S7/S14 is for Jon. Remote path is root `AGENTS.md` only (no nested AGENTS.md / `.cursor/rules` over the network). First turn with gather budget already spent uses cache or injects nothing.
+- **What Jon re-runs:** Extension UI → Use-repo = indexed GitHub repo you do **not** have cloned (Coop-AI may be the open folder). Plain chat. Success = answer follows that repo’s `AGENTS.md`; no new banner/chip/activity row. Settings → Workspace → Saved facts to add/clear sourced memory. Agent mode stays **off**.
 
 ---
 
