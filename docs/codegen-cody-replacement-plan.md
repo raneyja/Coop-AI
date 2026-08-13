@@ -93,6 +93,8 @@ Phase 2 can parallel with late Phase 1 if no merge conflicts. Phase 3 depends on
 
 **Still honest / deferred:** LLM-driven multi-step tool selection (`agentMode: auto` uses prefetch heuristics, not model-chosen tools); dogfood CAR ≥25% / apply-rate gates are tracked in admin analytics but not enforced in CI.
 
+**Next program:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) — Phase 5b tool loop → multi-file remote apply → PR handoff → instructions/memory → NES. Editor build; pass/fail gates + Boris bar.
+
 ## Boris bar — full Cody parity (2026-07-09)
 
 | Gate | Status |

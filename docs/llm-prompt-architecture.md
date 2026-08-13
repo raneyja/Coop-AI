@@ -515,7 +515,7 @@ Plain chat uses single-shot evidence fetch by default. When `coopAI.chat.agentMo
 
 **Shipped:** `createAgentToolRegistry`, `search_code`, `read_file`, opt-in setting, unit tests.
 
-**Deferred (Phase 5b):** LLM tool-use loop in `AgentOrchestrator.run()` — stream model responses, parse tool calls, execute registry handlers iteratively, synthesize final answer. Default remains **off**.
+**Deferred (Phase 5b):** LLM tool-use loop in `AgentOrchestrator.run()` — stream model responses, parse tool calls, execute registry handlers iteratively, synthesize final answer. Default remains **off**. Build plan + gates: [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).
 
 ---
 
