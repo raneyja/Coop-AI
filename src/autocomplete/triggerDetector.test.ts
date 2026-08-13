@@ -30,6 +30,8 @@ function baseSettings(overrides: Partial<AutocompleteSettings> = {}): Autocomple
     showMultipleSuggestions: false,
     requestTimeoutMs: 400,
     useFim: true,
+    useGraphContext: false,
+    nextEditSuggestions: false,
     ...overrides
   };
 }

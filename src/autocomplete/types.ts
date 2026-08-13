@@ -15,6 +15,7 @@ export type AutocompleteSettings = {
   requestTimeoutMs: number;
   useFim: boolean;
   useGraphContext: boolean;
+  nextEditSuggestions: boolean;
 };
 
 export type TriggerKind = "auto" | "manual" | "paste" | "immediate";

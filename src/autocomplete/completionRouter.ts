@@ -22,6 +22,11 @@ export type CompletionRouterDeps = {
   indexBackend?: IndexBackend;
 };
 
+export type FetchCompletionsOptions = {
+  /** Default true. NES after-accept fetches pass false so they do not move base p50/p95. */
+  recordPerformance?: boolean;
+};
+
 const MAX_FIM_PREFIX_CHARS = 4_000;
 const SINGLE_LINE_MAX_TOKENS = 96;
 const MULTI_LINE_MAX_TOKENS = 200;
@@ -53,7 +58,8 @@ export class CompletionRouter {
     context: ExtractedCodeContext,
     settings: AutocompleteSettings,
     signal?: AbortSignal,
-    rankingFileSample?: string
+    rankingFileSample?: string,
+    options?: FetchCompletionsOptions
   ): Promise<CompletionRouterResult> {
     const timer = createLatencyTimer();
 
@@ -94,7 +100,15 @@ export class CompletionRouter {
     }
 
     const controller = new AbortController();
-    const promise = this.executeFetch(context, settings, signal, controller, timer, rankingFileSample);
+    const promise = this.executeFetch(
+      context,
+      settings,
+      signal,
+      controller,
+      timer,
+      rankingFileSample,
+      options
+    );
     this.inFlightByDoc.set(docKey, {
       prefix: prefixKey,
       contextHash: context.contextHash,
@@ -122,7 +136,8 @@ export class CompletionRouter {
     signal: AbortSignal | undefined,
     controller: AbortController,
     timer: ReturnType<typeof createLatencyTimer>,
-    rankingFileSample?: string
+    rankingFileSample?: string,
+    options?: FetchCompletionsOptions
   ): Promise<CompletionRouterResult> {
     const linked = linkAbort(signal, controller.signal);
 
@@ -192,7 +207,9 @@ export class CompletionRouter {
         );
       }
 
-      this.deps.performance.recordRequest(breakdown, context.languageId);
+      if (options?.recordPerformance !== false) {
+        this.deps.performance.recordRequest(breakdown, context.languageId);
+      }
 
       return {
         completions: ranked,
@@ -205,7 +222,9 @@ export class CompletionRouter {
       timer.markNetworkEnd();
       timer.markParseEnd();
       const breakdown = timer.finish();
-      this.deps.performance.recordRequest(breakdown, context.languageId);
+      if (options?.recordPerformance !== false) {
+        this.deps.performance.recordRequest(breakdown, context.languageId);
+      }
       if (controller.signal.aborted) {
         return { completions: [], latencyMs: breakdown.totalMs, fromCache: false };
       }

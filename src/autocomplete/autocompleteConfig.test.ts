@@ -56,6 +56,7 @@ test("readAutocompleteSettings returns package defaults when unset", () => {
   assert.equal(settings.requestTimeoutMs, 3000);
   assert.equal(settings.useFim, true);
   assert.equal(settings.useGraphContext, false);
+  assert.equal(settings.nextEditSuggestions, false);
 });
 
 test("readAutocompleteSettings reads coopAI.autocomplete overrides", () => {
@@ -63,6 +64,7 @@ test("readAutocompleteSettings reads coopAI.autocomplete overrides", () => {
   setMockConfiguration("coopAI.autocomplete", "model", "gpt35");
   setMockConfiguration("coopAI.autocomplete", "customModel", "gpt-4o");
   setMockConfiguration("coopAI.autocomplete", "useGraphContext", true);
+  setMockConfiguration("coopAI.autocomplete", "nextEditSuggestions", true);
   setMockConfiguration("coopAI.autocomplete", "requestTimeoutMs", 800);
 
   const settings = readAutocompleteSettings();
@@ -70,6 +72,7 @@ test("readAutocompleteSettings reads coopAI.autocomplete overrides", () => {
   assert.equal(settings.model, "gpt35");
   assert.equal(settings.customModel, "gpt-4o");
   assert.equal(settings.useGraphContext, true);
+  assert.equal(settings.nextEditSuggestions, true);
   assert.equal(settings.requestTimeoutMs, 800);
 });
 

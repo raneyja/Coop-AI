@@ -54,7 +54,8 @@ const autocompleteSettings: AutocompleteSettings = {
   showMultipleSuggestions: false,
   requestTimeoutMs: 5_000,
   useFim: true,
-  useGraphContext: false
+  useGraphContext: false,
+  nextEditSuggestions: false
 };
 
 async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {

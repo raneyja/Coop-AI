@@ -37,7 +37,9 @@ const settings: AutocompleteSettings = {
   customModel: "",
   showMultipleSuggestions: false,
   requestTimeoutMs: 400,
-  useFim: true
+  useFim: true,
+  useGraphContext: false,
+  nextEditSuggestions: false
 };
 
 const context: ExtractedCodeContext = {

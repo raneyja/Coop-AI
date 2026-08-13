@@ -64,7 +64,17 @@ _No entries yet._
 
 ## Wave 2 — Phase E
 
-_No entries yet._
+### 2026-08-13 — Phase E Stages 0–4 — PASS (automated); S8–S9 dry-run for Jon
+
+- **Owner:** editor Wave 2 E / `cursor/agent-ship-e-2e13`
+- **Commands run:** `npm run test:agent-ship:e` (green), `npm run test:autocomplete` (green), `npm run test:chat-intent` (green), `npm run lint` (green)
+- **Gate IDs:** E-G1..G6 Pass; E-P1..P4 Pass; UX-G5 default off
+- **What we tried:**
+  - **E-0** Tab-accept is `CoopAutocompleteProvider.noteSuggestionAccepted` + `coopAI.internal.autocompleteAccepted` → `completion.accepted` + `HotStreak.activate()`. Second ghost attaches after accept: NES arms `NextEditController`, triggers `editor.action.inlineSuggest.trigger`, next `provideInlineCompletionItems` returns a ghost at `predictNextEditLocation` (buffer). Zero-Clone sources: open buffer + existing graph API on the router — no workspace walk.
+  - **E-1** `coopAI.autocomplete.nextEditSuggestions` default **false**. No toast. No Workflows entry.
+  - **E-2 / E-3** Gate + pressure tests. NES off → zero NES requests and no extra inlineSuggest trigger (base ghost unchanged). NES fetches after Tab-accept only and skip `AutocompletePerformanceMonitor` so base p50/p95 are not mixed. Rapid typing cancels a pending NES (no request storm). Escape increments NES reject; Tab still arms the next one.
+- **What broke / what we skipped:** Live Extension Host S8/S9 is for Jon. Did not flip NES or `agentMode` default on. Did not add extra network on the typing → ghost path.
+- **What Jon re-runs:** Extension UI → Settings `Coop AI › Autocomplete: Next Edit Suggestions` **off** (S8): type + Tab as usual; ghost feels like today. Then **on** (S9): Tab-accept once; a next-edit ghost should appear at a predicted place. Terminal: `npm run test:agent-ship:e && npm run test:autocomplete`
 
 ---
 

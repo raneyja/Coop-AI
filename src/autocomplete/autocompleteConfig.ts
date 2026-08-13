@@ -27,7 +27,8 @@ export function readAutocompleteSettings(): AutocompleteSettings {
     showMultipleSuggestions: config.get<boolean>("showMultipleSuggestions", false),
     requestTimeoutMs: config.get<number>("requestTimeoutMs", 3000),
     useFim: config.get<boolean>("useFim", true),
-    useGraphContext: config.get<boolean>("useGraphContext", false)
+    useGraphContext: config.get<boolean>("useGraphContext", false),
+    nextEditSuggestions: config.get<boolean>("nextEditSuggestions", false)
   };
 }
 

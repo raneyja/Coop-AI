@@ -799,8 +799,12 @@ Notes + plan status. Stop.
 
 | Stage | Status |
 |-------|--------|
-| E-0..E-4 | ☐ Not started |
-| E gates | ☐ Not started |
+| E-0 | Done | [notes](./agent-ship-loop-notes.md#wave-2--phase-e) |
+| E-1 | Done | Setting default off; predicted location after Tab-accept |
+| E-2 | Done | `phaseE.gates.test.ts`; `test:autocomplete` still green |
+| E-3 | Done | `phaseE.pressure.test.ts` |
+| E-4 | Done | Notes + S8–S9 dry-run for Jon |
+| E gates | Automated pass; S8–S9 for Jon |
 
 ---
 
