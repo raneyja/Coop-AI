@@ -546,6 +546,20 @@ export class SecureApiClient {
     return result.pulls;
   }
 
+  public async createRepoPullViaCloud(
+    baseUrl: string,
+    repoId: string,
+    input: {
+      branch: string;
+      title: string;
+      body?: string;
+      base?: string;
+      files: Array<{ path: string; content: string }>;
+    }
+  ): Promise<import("../api/codeHosts/types").CreatePullRequestResult & { repoId: string }> {
+    return this.backend.createRepoPull(baseUrl, repoId, input);
+  }
+
   public async fetchRepoIssuesViaCloud(
     baseUrl: string,
     repoId: string,

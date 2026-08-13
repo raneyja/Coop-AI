@@ -74,7 +74,21 @@ Copy this block. Do not edit older entries except to fix a factual error.
 
 ## Wave 2 — Phase C
 
-_No entries yet._
+### 2026-08-13 — Phase C Stages 0–4 — PASS (automated); live Apply→PR still Join J-G1
+
+- **Owner:** editor Wave 2 C / `cursor/agent-ship-c-2e13`
+- **Commands run:** `npm run test:agent-ship:c`, `npm run test:chat-intent`, `npm run lint`
+- **Gate IDs:** C-G1 Pass, C-G2 Pass, C-G3 Pass (`repo.pull.create`), C-G4 Pass, C-G5 Pass, C-G6 Pass (UX-G3); C-P1..C-P5 Pass
+- **What we tried:** GitHub git-data write (blob → tree → commit → ref → pull) from fixture files; confirm modal is `coop-prompt-modal`; Cancel/Escape/backdrop creates nothing; GL/BB throw/show Not yet; missing `contents`/`pull_requests` blocks before writes; double-confirm shares one in-flight PR; 422 is an error, not a successful PR
+- **What broke / what we skipped:** Live Extension Host Apply→Create PR is **J-G1** (needs B apply session + `CoopChatSession` handler for `patch:create-pr`). Did not flip `agentMode` or NES defaults.
+- **What Jon re-runs after Join (S5–S6):** Extension UI → indexed GitHub Use-repo → apply a patch (B) → Patch card **Create pull request** → confirm branch + title → GitHub shows the PR URL. Cancel/Escape must create nothing. GitLab Use-repo must say **Not yet**.
+
+### C-0 research
+
+- **GitHub git data API:** `POST /git/blobs`, `/git/trees`, `/git/commits`, `/git/refs`, then `POST /pulls`. Preflight `GET /repos/{owner}/{repo}` reads `X-OAuth-Scopes` + `permissions.push`.
+- **Required scopes:** `contents` + `pull_requests` (or classic `repo`). Fail closed with a permission error; no branch/PR claimed.
+- **Audit event:** `repo.pull.create` (handoff metadata: repoId, branch, title, number, htmlUrl, fileCount).
+
 
 ---
 
@@ -109,7 +123,14 @@ _No entries yet._
 
 ## Wave 3 — Join
 
-_No entries yet._
+### 2026-08-13 — Join J-G1 wiring — PASS (automated); S4–S6 dogfood still for Jon
+
+- **Owner:** editor join / `cursor/agent-ship-a-2e13`
+- **Commands run:** (see follow-up after tests)
+- **Gate IDs:** J-G1 wired (Apply populates `prFiles` + `canCreatePr`; `patch:create-pr` handled in CoopChatSession); UX-G4 Create PR only after Apply
+- **What we tried:** Merged B + C. After Apply, Patch card shows one quiet Create pull request. Confirm uses `coop-prompt-modal`. GitLab/Bitbucket still Not yet. Empty file list blocked.
+- **What broke / what we skipped:** Live GitHub PR in Extension Host is for Jon (S5–S6). Modal posts then the extension creates the PR (result is a VS Code notification with the URL).
+- **What Jon re-runs:** Extension UI — close tabs → GitHub Use-repo uncloned → `/edit` two files → Apply → **Create pull request** → confirm. Success = GitHub PR URL. Cancel/Escape creates nothing.
 
 ---
 

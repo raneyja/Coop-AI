@@ -7,10 +7,20 @@ import {
   paginatedCodeHostFetch,
   parseLinkNext
 } from "./codeHostHttp";
+import {
+  GITHUB_PR_REJECTED_MESSAGE,
+  GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubTokenHasWriteScopes,
+  normalizeWriteFiles,
+  sanitizeBranchName,
+  validateCreatePullRequestInput
+} from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
   CommitInfo,
+  CreatePullRequestInput,
+  CreatePullRequestResult,
   IssueSummary,
   PullRequestComment,
   PullRequestReview,
@@ -572,6 +582,128 @@ export class GitHubClient implements CodeHostClient {
     return { fileCount: filePaths.length, truncated };
   }
 
+  public async createBlob(coords: RepoCoordinates, content: string): Promise<string> {
+    const data = await this.writeJson<{ sha: string }>(`${this.repoUrl(coords)}/git/blobs`, {
+      content,
+      encoding: "utf-8"
+    });
+    return data.sha;
+  }
+
+  public async createTree(
+    coords: RepoCoordinates,
+    baseTreeSha: string,
+    files: Array<{ path: string; sha: string }>
+  ): Promise<string> {
+    const data = await this.writeJson<{ sha: string }>(`${this.repoUrl(coords)}/git/trees`, {
+      base_tree: baseTreeSha,
+      tree: files.map((file) => ({
+        path: file.path,
+        mode: "100644",
+        type: "blob",
+        sha: file.sha
+      }))
+    });
+    return data.sha;
+  }
+
+  public async createCommit(
+    coords: RepoCoordinates,
+    input: { message: string; treeSha: string; parentSha: string }
+  ): Promise<string> {
+    const data = await this.writeJson<{ sha: string }>(`${this.repoUrl(coords)}/git/commits`, {
+      message: input.message,
+      tree: input.treeSha,
+      parents: [input.parentSha]
+    });
+    return data.sha;
+  }
+
+  public async createRef(coords: RepoCoordinates, branch: string, sha: string): Promise<void> {
+    await this.writeJson<{ ref: string }>(`${this.repoUrl(coords)}/git/refs`, {
+      ref: `refs/heads/${branch}`,
+      sha
+    });
+  }
+
+  public async createPull(
+    coords: RepoCoordinates,
+    input: { title: string; body?: string; head: string; base: string }
+  ): Promise<{ number: number; htmlUrl: string }> {
+    const data = await this.writeJson<{ number: number; html_url: string }>(`${this.repoUrl(coords)}/pulls`, {
+      title: input.title,
+      body: input.body ?? "",
+      head: input.head,
+      base: input.base
+    });
+    return { number: data.number, htmlUrl: data.html_url };
+  }
+
+  public async createPullFromFiles(
+    coords: RepoCoordinates,
+    input: CreatePullRequestInput
+  ): Promise<CreatePullRequestResult> {
+    const files = normalizeWriteFiles(input.files);
+    const branch = sanitizeBranchName(input.branch);
+    const title = input.title.trim();
+    const validationError = validateCreatePullRequestInput({ ...input, branch: branch ?? "", title, files });
+    if (validationError || !branch) {
+      throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
+    }
+
+    await this.assertWritePermissions(coords);
+
+    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
+    const baseRef = await codeHostRequestJson<{ object: { sha: string } }>(
+      `${this.repoUrl(coords)}/git/ref/heads/${encodeURIComponent(base)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const baseCommit = await codeHostRequestJson<{ tree: { sha: string } }>(
+      `${this.repoUrl(coords)}/git/commits/${baseRef.object.sha}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+
+    const blobShas: Array<{ path: string; sha: string }> = [];
+    for (const file of files) {
+      blobShas.push({ path: file.path, sha: await this.createBlob(coords, file.content) });
+    }
+    const treeSha = await this.createTree(coords, baseCommit.tree.sha, blobShas);
+    const commitSha = await this.createCommit(coords, {
+      message: title,
+      treeSha,
+      parentSha: baseRef.object.sha
+    });
+    await this.createRef(coords, branch, commitSha);
+    try {
+      const pull = await this.createPull(coords, {
+        title,
+        body: input.body,
+        head: branch,
+        base
+      });
+      return {
+        number: pull.number,
+        htmlUrl: pull.htmlUrl,
+        branch,
+        commitSha,
+        title
+      };
+    } catch (error) {
+      if (error instanceof CodeHostError && error.status === 422) {
+        throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+      }
+      throw error;
+    }
+  }
+
   private async fetchRecursiveBlobPaths(
     coords: RepoCoordinates
   ): Promise<{ filePaths: string[]; truncated: boolean }> {
@@ -597,6 +729,57 @@ export class GitHubClient implements CodeHostClient {
         ?.filter((entry) => entry.type === "blob" && entry.path?.trim())
         .map((entry) => entry.path as string) ?? [];
     return { filePaths, truncated: Boolean(tree.truncated) };
+  }
+
+  private async assertWritePermissions(coords: RepoCoordinates): Promise<void> {
+    let response: Response;
+    try {
+      response = await codeHostRequest(this.repoUrl(coords), {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      throw error;
+    }
+    if (!response.ok) {
+      throw this.writePermissionError(response.status);
+    }
+    const scopeOk = githubTokenHasWriteScopes(response.headers.get("x-oauth-scopes"));
+    if (scopeOk === false) {
+      throw this.writePermissionError(403);
+    }
+    const repo = (await response.json()) as { permissions?: { push?: boolean } };
+    if (repo.permissions && repo.permissions.push === false) {
+      throw this.writePermissionError(403);
+    }
+  }
+
+  private writePermissionError(status: number): CodeHostError {
+    return new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
+  }
+
+  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+    try {
+      return await codeHostRequestJson<T>(url, {
+        method: "POST",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      if (error instanceof CodeHostError && error.status === 422) {
+        throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+      }
+      throw error;
+    }
   }
 
   private repoUrl(coords: RepoCoordinates): string {

@@ -12,7 +12,8 @@ import {
   setPendingSharedMatchProposal,
   undoLastPatchWithState
 } from "../edit/patchActions";
-import { setLastEditUserMessage } from "../edit/patchSession";
+import { setLastEditUserMessage, getPatchRecord } from "../edit/patchSession";
+import { pullRequestWriteNotYetMessage } from "../api/codeHosts/pullRequestWrite";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import {
@@ -2183,6 +2184,9 @@ export class CoopChatSession {
       case "patch:open-file":
         void this.handleRemoteFileIntent({ path: message.payload.path, preserveContext: true });
         return;
+      case "patch:create-pr":
+        await this.handleCreatePullRequest(message.payload);
+        return;
       case "ownership:copy-draft":
         await vscode.env.clipboard.writeText(message.payload.text);
         void vscode.window.showInformationMessage("Ownership message draft copied to clipboard.");
@@ -3860,6 +3864,59 @@ export class CoopChatSession {
 
   private pushPatchState(): void {
     this.postPatchUpdate(resolvePatchCardsSnapshot());
+  }
+
+  private async handleCreatePullRequest(payload: {
+    messageTimestamp?: number;
+    repoId?: string;
+    provider?: import("./types").CodeHostProviderPreference;
+    branch: string;
+    title: string;
+    body?: string;
+    base?: string;
+    files: Array<{ path: string; content: string }>;
+  }): Promise<void> {
+    const provider = payload.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    if (provider && provider !== "github") {
+      void vscode.window.showErrorMessage(pullRequestWriteNotYetMessage(provider));
+      return;
+    }
+
+    const repoId = payload.repoId?.trim() || this.currentUseRepoId();
+    if (!repoId) {
+      void vscode.window.showErrorMessage("Pick a Use-repo before creating a pull request.");
+      return;
+    }
+
+    const record = getPatchRecord(payload.messageTimestamp);
+    const fromPayload = (payload.files ?? []).filter((file) => file.path && file.content);
+    const files = fromPayload.length > 0 ? fromPayload : (record?.card.prFiles ?? []);
+    if (!files.length) {
+      void vscode.window.showErrorMessage("Apply the patch first, then create a pull request.");
+      return;
+    }
+
+    try {
+      const result = await this.options.api.createRepoPullViaCloud(this.preferences.apiBaseUrl, repoId, {
+        branch: payload.branch,
+        title: payload.title,
+        body: payload.body,
+        base: payload.base,
+        files
+      });
+      const open = "Open pull request";
+      const choice = await vscode.window.showInformationMessage(
+        `Pull request created: ${result.htmlUrl}`,
+        open
+      );
+      if (choice === open) {
+        void vscode.env.openExternal(vscode.Uri.parse(result.htmlUrl));
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        error instanceof Error ? error.message : "Could not create the pull request."
+      );
+    }
   }
 
   private conflictInputFromResults(event: IntentEvent, results: ContextFetchResult[]): ConflictDetectionInput {

@@ -654,8 +654,8 @@ Wave 2 track C only. Branch cursor/agent-ship-c-2e13. Do not implement B/D/E.
 
 | Stage | Status |
 |-------|--------|
-| C-0..C-4 | ☐ Not started |
-| C gates | ☐ Not started |
+| C-0..C-4 | ☑ Done (Wave 2 C, fixture path) |
+| C gates | ☑ Automated Pass — live Apply→PR is Join J-G1 |
 
 ---
 
@@ -845,9 +845,9 @@ Stop.
 
 | Item | Status |
 |------|--------|
-| J-G1..G8 | ☐ Not started |
-| Scorecard S1–S14 | ☐ Not started |
-| UX-G1..G6 | ☐ Not started |
+| J-G1..G8 | J-G1 wired 2026-08-13 (Apply → Create PR). J-G2..G8 + S1–S14 still Jon’s scorecard |
+| Scorecard S1–S14 | ☐ Not started (Jon) |
+| UX-G1..G6 | ☐ Confirm in Extension Host |
 
 ### Scorecard (you fill this when we return)
 
