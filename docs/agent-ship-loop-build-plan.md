@@ -654,8 +654,8 @@ Wave 2 track C only. Branch cursor/agent-ship-c-2e13. Do not implement B/D/E.
 
 | Stage | Status |
 |-------|--------|
-| C-0..C-4 | ☐ Not started |
-| C gates | ☐ Not started |
+| C-0..C-4 | ☑ Done (Wave 2 C, fixture path) |
+| C gates | ☑ Automated Pass — live Apply→PR is Join J-G1 |
 
 ---
 

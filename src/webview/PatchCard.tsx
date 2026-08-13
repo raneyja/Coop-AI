@@ -1,15 +1,27 @@
-import React from "react";
-import type { PatchCardState, PatchPreviewHunk } from "../chat/types";
+import React, { useMemo, useState } from "react";
+import type { CodeHostProviderPreference, PatchCardState, PatchPreviewHunk } from "../chat/types";
 import { PatchDiffView } from "./PatchDiffView";
+import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
 import {
   IntegrationResultActions,
   IntegrationResultCard,
   IntegrationResultSection,
   IntegrationResultText
 } from "./components/IntegrationResultCard";
+import {
+  CREATE_PULL_REQUEST_BUTTON_CLASS,
+  CREATE_PULL_REQUEST_BUTTON_LABEL,
+  createConfirmSubmitGuard,
+  defaultPrBranchName,
+  defaultPrTitle,
+  filesWithContent,
+  type CreatePullRequestDraft
+} from "./createPullRequestConfirm";
 
 type PatchCardProps = {
   state: PatchCardState;
+  codeHostProvider?: CodeHostProviderPreference;
+  defaultBranch?: string;
   onApply?: () => void;
   onReject?: () => void;
   onUndo?: () => void;
@@ -23,6 +35,7 @@ type PatchCardProps = {
     locationId: string,
     proposalId: string | null
   ) => void;
+  onCreatePullRequest?: (draft: CreatePullRequestDraft) => void | Promise<void>;
 };
 
 function pendingEditCount(state: PatchCardState): number {
@@ -84,6 +97,8 @@ function cardHasAmbiguousPending(state: PatchCardState): boolean {
 
 export function PatchCard({
   state,
+  codeHostProvider,
+  defaultBranch,
   onApply,
   onReject,
   onUndo,
@@ -91,8 +106,15 @@ export function PatchCard({
   onApplyHunk,
   onRejectHunk,
   onToggleMatchLocation,
-  onSelectSharedProposal
+  onSelectSharedProposal,
+  onCreatePullRequest
 }: PatchCardProps): React.ReactElement | null {
+  const [prModalOpen, setPrModalOpen] = useState(false);
+  const [prSubmitting, setPrSubmitting] = useState(false);
+  const [prError, setPrError] = useState<string | undefined>();
+  const submitGuard = useMemo(() => createConfirmSubmitGuard(), []);
+  const prFiles = filesWithContent(state.prFiles);
+
   if (!shouldRenderPatchCard(state)) {
     return null;
   }
@@ -214,6 +236,7 @@ export function PatchCard({
               <button type="button" className="coop-text-btn" onClick={onReject}>
                 Reject all
               </button>
+              <CreatePullRequestButton onClick={() => { setPrError(undefined); setPrModalOpen(true); }} />
             </>
           ) : null}
           {showSingleActions ? (
@@ -229,12 +252,16 @@ export function PatchCard({
               <button type="button" className="coop-text-btn" onClick={onReject}>
                 Reject
               </button>
+              <CreatePullRequestButton onClick={() => { setPrError(undefined); setPrModalOpen(true); }} />
             </>
           ) : null}
           {(state.status === "applied" || state.status === "rejected") && state.canUndo !== false ? (
             <button type="button" className="coop-settings-action-btn" onClick={onUndo}>
               Undo
             </button>
+          ) : null}
+          {state.status === "applied" ? (
+            <CreatePullRequestButton onClick={() => { setPrError(undefined); setPrModalOpen(true); }} />
           ) : null}
           {(showBulkActions || showSingleActions) && state.canUndo ? (
             <button type="button" className="coop-text-btn" onClick={onUndo}>
@@ -243,7 +270,43 @@ export function PatchCard({
           ) : null}
         </IntegrationResultActions>
       </IntegrationResultSection>
+      <CreatePullRequestModal
+        open={prModalOpen}
+        provider={codeHostProvider}
+        branch={defaultPrBranchName()}
+        title={defaultPrTitle(prFiles.map((file) => file.path))}
+        files={prFiles}
+        submitting={prSubmitting}
+        error={prError}
+        onClose={() => {
+          if (!prSubmitting) {
+            setPrModalOpen(false);
+          }
+        }}
+        onConfirm={(draft) => {
+          void submitGuard(async () => {
+            setPrSubmitting(true);
+            setPrError(undefined);
+            try {
+              await onCreatePullRequest?.({ ...draft, base: defaultBranch, provider: codeHostProvider });
+              setPrModalOpen(false);
+            } catch (error) {
+              setPrError(error instanceof Error ? error.message : "Could not create the pull request.");
+            } finally {
+              setPrSubmitting(false);
+            }
+          });
+        }}
+      />
     </IntegrationResultCard>
+  );
+}
+
+function CreatePullRequestButton({ onClick }: { onClick: () => void }): React.ReactElement {
+  return (
+    <button type="button" className={CREATE_PULL_REQUEST_BUTTON_CLASS} onClick={onClick}>
+      {CREATE_PULL_REQUEST_BUTTON_LABEL}
+    </button>
   );
 }
 

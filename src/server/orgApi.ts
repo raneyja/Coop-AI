@@ -64,6 +64,8 @@ import type { IntegrationProvider } from "./integrationConnectionStore";
 import { handleMeAnalyticsRequest } from "./meAnalyticsApi";
 import { handleMeAuditRequest } from "./meAuditApi";
 import { listOrgIntegrations } from "./adminIntegrationsApi";
+import { executeCreateRepoPull, parseCreateRepoPullBody, PR_HANDOFF_AUDIT_ACTION } from "./createRepoPull";
+import type { CreatePullRequestInput, CreatePullRequestResult } from "../api/codeHosts/types";
 
 export type OrgApiDeps = {
   orgStore?: OrgStore;
@@ -76,6 +78,11 @@ export type OrgApiDeps = {
   usageTracker?: UsageTracker;
   integrationStore?: IntegrationConnectionStore;
   scopePolicyStore?: IntegrationScopePolicyStore;
+  createPullFromFiles?: (
+    coords: RepoCoordinates,
+    input: CreatePullRequestInput,
+    token: string
+  ) => Promise<CreatePullRequestResult>;
 };
 
 /** Apply index_repository rate limits only when re-queuing a repo that already reached ready. */
@@ -674,6 +681,14 @@ export async function handleOrgApiRequest(
   }
 
   const repoPullsMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/pulls$/);
+  if (parsed.method === "POST" && repoPullsMatch) {
+    if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
+      return true;
+    }
+    const repoId = decodeURIComponent(repoPullsMatch[1]);
+    await handleCreateRepoPull(repoId, parsed, response, deps, auth!);
+    return true;
+  }
   if (parsed.method === "GET" && repoPullsMatch) {
     const repoId = decodeURIComponent(repoPullsMatch[1]);
     await handleGetRepoPulls(repoId, parsed, response, deps, auth!);
@@ -1110,6 +1125,81 @@ async function handleStoreGithubCredential(
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to store credential";
     writeJson(response, 500, { error: message });
+  }
+}
+
+async function handleCreateRepoPull(
+  repoId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  if (!deps.orgStore) {
+    writeJson(response, 503, { error: "organization database not configured" });
+    return;
+  }
+
+  let target: ReturnType<typeof parseRepoId>;
+  try {
+    target = parseRepoId(repoId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid repoId";
+    writeJson(response, 400, { error: message });
+    return;
+  }
+
+  const parsedBody = parseCreateRepoPullBody(parsed.body);
+  if ("error" in parsedBody) {
+    writeJson(response, 400, { error: parsedBody.error });
+    return;
+  }
+
+  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
+    orgStore: deps.orgStore,
+    connector: getConnector(target.provider),
+    allowPatFallback: deps.serverConfig.devMode
+  });
+  if (!token) {
+    writeJson(response, 401, {
+      error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`
+    });
+    return;
+  }
+
+  const coords: RepoCoordinates = {
+    provider: target.provider,
+    owner: target.owner,
+    repo: target.repo,
+    branch: parsedBody.base
+  };
+
+  try {
+    const result = await executeCreateRepoPull({
+      orgId: auth.orgId,
+      repoId,
+      coords,
+      input: parsedBody,
+      token,
+      createPullFromFiles: deps.createPullFromFiles
+    });
+    await audit(deps, auth, PR_HANDOFF_AUDIT_ACTION, {
+      repoId,
+      provider: target.provider,
+      branch: result.branch,
+      title: result.title,
+      number: result.number,
+      htmlUrl: result.htmlUrl,
+      fileCount: parsedBody.files.length
+    });
+    writeJson(response, 201, result);
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to create pull request";
+    writeJson(response, 502, { error: message });
   }
 }
 

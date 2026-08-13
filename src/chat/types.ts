@@ -216,6 +216,11 @@ export type PatchCardState = {
    * Used so earlier messages keep raw markdown hidden even after newer /edit cards appear.
    */
   suppressedMessageTimestamps?: number[];
+  /**
+   * Full file bodies for a confirmed Create PR (fixture in Wave 2 C; B apply session at Join).
+   * Paths without content are blocked — never an empty commit.
+   */
+  prFiles?: Array<{ path: string; content: string }>;
 };
 
 export type PatchCardsUpdatePayload = {
@@ -623,6 +628,20 @@ export type WebviewInbound =
     }
   | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
   | { type: "patch:open-file"; payload: { path: string } }
+  | {
+      /** Wave 2 C confirm payload. Join (J-G1) wires the CoopChatSession handler. */
+      type: "patch:create-pr";
+      payload: {
+        messageTimestamp?: number;
+        repoId?: string;
+        provider?: CodeHostProviderPreference;
+        branch: string;
+        title: string;
+        body?: string;
+        base?: string;
+        files: Array<{ path: string; content: string }>;
+      };
+    }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }

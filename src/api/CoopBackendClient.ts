@@ -1027,6 +1027,37 @@ export class CoopBackendClient {
     return response.data ?? { repoId, pulls: [] };
   }
 
+  public async createRepoPull(
+    baseUrl: string,
+    repoId: string,
+    input: {
+      branch: string;
+      title: string;
+      body?: string;
+      base?: string;
+      files: Array<{ path: string; content: string }>;
+    }
+  ): Promise<import("./codeHosts/types").CreatePullRequestResult & { repoId: string }> {
+    assertCoopEndpoint(baseUrl);
+    const encodedRepo = encodeURIComponent(repoId);
+    const response = await runResilientRequest({
+      timeoutMs: 30_000,
+      shouldRetryError: isRetryableError,
+      run: async () =>
+        this.http.post<
+          (import("./codeHosts/types").CreatePullRequestResult & { repoId: string }) & CoopApiErrorBody
+        >(`/v1/orgs/repos/${encodedRepo}/pulls`, input, {
+          baseURL: baseUrl.replace(/\/$/, ""),
+          headers: await this.authHeaders(),
+          validateStatus: () => true
+        })
+    });
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    return response.data;
+  }
+
   public async fetchRepoIssues(
     baseUrl: string,
     repoId: string,

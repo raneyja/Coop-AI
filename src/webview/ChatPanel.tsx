@@ -760,6 +760,27 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 }
               });
             }}
+            codeHostProvider={context.provider}
+            defaultBranch={context.branch}
+            onCreatePullRequest={(draft) => {
+              const repoId =
+                context.owner && context.repo
+                  ? `${draft.provider ?? context.provider ?? "github"}:${context.owner}/${context.repo}`
+                  : undefined;
+              post({
+                type: "patch:create-pr",
+                payload: {
+                  messageTimestamp,
+                  repoId,
+                  provider: draft.provider ?? context.provider,
+                  branch: draft.branch,
+                  title: draft.title,
+                  body: draft.body,
+                  base: draft.base ?? context.branch,
+                  files: draft.files
+                }
+              });
+            }}
           />
         );
       }
@@ -774,7 +795,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       );
       return elements;
     },
-    [context.file, patchCards, post, suppressedPatchTimestamps]
+    [context.branch, context.file, context.owner, context.provider, context.repo, patchCards, post, suppressedPatchTimestamps]
   );
 
   const handleCopyEvidenceText = useCallback(
