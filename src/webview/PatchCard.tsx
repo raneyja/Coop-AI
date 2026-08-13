@@ -241,6 +241,15 @@ export function PatchCard({
               Undo applied
             </button>
           ) : null}
+          <button
+            type="button"
+            className="coop-text-btn"
+            disabled={state.canCreatePr !== true}
+            hidden={state.canCreatePr !== true}
+            aria-hidden={state.canCreatePr !== true}
+          >
+            Create pull request
+          </button>
         </IntegrationResultActions>
       </IntegrationResultSection>
     </IntegrationResultCard>

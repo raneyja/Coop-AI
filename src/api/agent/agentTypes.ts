@@ -1,4 +1,9 @@
-export type AgentToolName = "read_file" | "search_code" | "list_directory" | "git_blame";
+export type AgentToolName =
+  | "read_file"
+  | "search_code"
+  | "list_directory"
+  | "git_blame"
+  | "propose_patch";
 
 export type AgentStep = {
   index: number;
@@ -30,6 +35,8 @@ export type AgentSessionContext = {
   read_file?: Record<string, unknown>;
   list_directory?: Record<string, unknown>;
   git_blame?: Record<string, unknown>;
+  /** SEARCH/REPLACE text for the Patch card — never auto-applied. */
+  propose_patch?: Record<string, unknown>;
 };
 
 export type AgentSessionResult = {

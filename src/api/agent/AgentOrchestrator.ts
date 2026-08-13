@@ -179,6 +179,9 @@ export class AgentOrchestrator {
         summary: this.summarize(plan.tool, args, query),
         completed: true
       });
+      if (plan.tool === "propose_patch") {
+        break;
+      }
     }
 
     return { steps, context: steps.length ? context : undefined };
@@ -306,6 +309,10 @@ export class AgentOrchestrator {
       context.list_directory = parsed;
       return;
     }
+    if (tool === "propose_patch") {
+      context.propose_patch = parsed;
+      return;
+    }
     context.git_blame = parsed;
   }
 
@@ -321,6 +328,10 @@ export class AgentOrchestrator {
     if (tool === "list_directory") {
       const path = typeof args.path === "string" && args.path ? args.path : "/";
       return `list_directory: ${path}`;
+    }
+    if (tool === "propose_patch") {
+      const files = Array.isArray(args.files) ? args.files.length : 0;
+      return files > 0 ? `propose_patch: ${files} file${files === 1 ? "" : "s"}` : "propose_patch";
     }
     const path = typeof args.path === "string" ? args.path : "";
     return `git_blame: ${path}`;

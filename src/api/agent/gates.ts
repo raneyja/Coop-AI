@@ -48,6 +48,7 @@ export const UX_FREEZE_GATE_IDS = [
 ] as const;
 
 export const PHASE_B_GATE_IDS = ["B-G1", "B-G2", "B-G3", "B-G4", "B-G5", "B-G6", "B-G7"] as const;
+export const PHASE_B_PRESSURE_IDS = ["B-P1", "B-P2", "B-P3", "B-P4", "B-P5", "B-P6"] as const;
 export const PHASE_C_GATE_IDS = ["C-G1", "C-G2", "C-G3", "C-G4", "C-G5", "C-G6"] as const;
 export const PHASE_D_GATE_IDS = ["D-G1", "D-G2", "D-G3", "D-G4", "D-G5", "D-G6"] as const;
 export const PHASE_E_GATE_IDS = ["E-G1", "E-G2", "E-G3", "E-G4", "E-G5", "E-G6"] as const;

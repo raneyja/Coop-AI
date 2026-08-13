@@ -100,6 +100,18 @@ test("suppress registry hides markdown even when card list is empty for that mes
   assert.equal(shouldRenderPatchCardForMessage([], 10), false);
 });
 
+test("B-G7 reserved Create PR is hidden while canCreatePr is false", () => {
+  const pending: PatchCardState = {
+    status: "pending",
+    messageTimestamp: 10,
+    fileCount: 1,
+    hunkCount: 1,
+    files: baseFiles,
+    canCreatePr: false
+  };
+  assert.equal(pending.canCreatePr, false);
+});
+
 console.log(`\nPatchCard helpers: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

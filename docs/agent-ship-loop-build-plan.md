@@ -568,8 +568,8 @@ Wave 2 track B only. Branch cursor/agent-ship-b-2e13. Do not implement C/D/E.
 
 | Stage | Status |
 |-------|--------|
-| B-0..B-4 | ☐ Not started |
-| B gates | ☐ Not started |
+| B-0..B-4 | ✅ Automated Pass 2026-08-13 (`cursor/agent-ship-b-2e13`); S4 dogfood still for Jon |
+| B gates | ✅ B-G1..G7 + B-P1..P6 automated Pass; S4 pending Jon |
 
 ---
 

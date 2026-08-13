@@ -216,6 +216,11 @@ export type PatchCardState = {
   appliedFileCount?: number;
   canUndo?: boolean;
   /**
+   * Reserved for Phase C Create pull request. Wave 2 B always leaves this false
+   * (button is a disabled/hidden coop-text-btn, not a new primary row).
+   */
+  canCreatePr?: boolean;
+  /**
    * Once a patch card has been shown for this assistant message, keep hiding the raw
    * SEARCH/REPLACE fence for that message.
    */
