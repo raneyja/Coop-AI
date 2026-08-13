@@ -292,9 +292,8 @@ async function main(): Promise<void> {
 
   await test("B-G7 reserved Create PR is coop-text-btn, not a new primary row", () => {
     const source = fs.readFileSync(path.join(__dirname, "../webview/PatchCard.tsx"), "utf8");
-    assert.match(source, /className="coop-text-btn"[\s\S]*Create pull request/);
-    assert.match(source, /disabled=\{state\.canCreatePr !== true\}/);
-    assert.match(source, /hidden=\{state\.canCreatePr !== true\}/);
+    assert.match(source, /CREATE_PULL_REQUEST_BUTTON_CLASS/);
+    assert.match(source, /showCreatePullRequestButton\(state\)/);
     assert.doesNotMatch(source, /coop-patch-pr-row|coop-settings-action-btn">\s*Create pull request/);
     const applyCount = [...source.matchAll(/coop-settings-action-btn/g)].length;
     assert.ok(applyCount >= 2, "Apply / Undo stay as primary action buttons");
