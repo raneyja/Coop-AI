@@ -21,7 +21,8 @@ export const PATCH_CARD_IDLE: PatchCardState = {
   status: "idle",
   fileCount: 0,
   hunkCount: 0,
-  files: []
+  files: [],
+  canCreatePr: false
 };
 
 /**
@@ -445,7 +446,8 @@ export function buildPatchCardState(
     files,
     error: options.error,
     appliedFileCount: options.appliedFileCount,
-    canUndo: options.canUndo
+    canUndo: options.canUndo,
+    canCreatePr: false
   };
 }
 

@@ -4,7 +4,8 @@ const REPO_TOOLS = new Set<AgentToolName>([
   "search_code",
   "read_file",
   "list_directory",
-  "git_blame"
+  "git_blame",
+  "propose_patch"
 ]);
 
 export type ParsedAgentToolPlan =
@@ -76,16 +77,17 @@ export function buildAgentToolPlanPrompt(input: {
       : "(none)";
   const last = input.lastToolResult?.slice(0, 4000) ?? "(none)";
   return [
-    "You pick the next read-only repo tool for Coop. Reply with JSON only.",
+    "You pick the next repo tool for Coop. Reply with JSON only.",
     `Use-repo: ${input.repoId}`,
     `Question: ${input.message}`,
     `Round: ${input.round + 1}`,
-    "Allowed tools: search_code, read_file, list_directory, git_blame.",
+    "Allowed tools: search_code, read_file, list_directory, git_blame, propose_patch.",
     'Call: {"tool":"search_code","args":{"query":"..."}}',
     'Or finish: {"done":true}',
     "Do not call Slack, Jira, or any integration. Do not invent file paths.",
     "search_code query must be a short identifier or 2–4 word phrase (e.g. requireAuth). Never paste the whole question.",
     "Prefer api/server/backend/middleware files. Do not read barrel index.ts re-exports or frontend auth-form/components hits unless nothing else exists.",
+    "propose_patch emits File: + SEARCH/REPLACE only — it does not apply. Use it only when the user asked to change code, then {\"done\":true}. Hunt/explain questions must not propose patches.",
     "Prior steps:",
     prior,
     "Last tool result (truncated):",

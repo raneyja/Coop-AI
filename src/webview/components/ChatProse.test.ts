@@ -62,7 +62,7 @@ test("hides File: headers for multiple files in the same patch response", () => 
   assert.ok(hidden.every(Boolean), "all File: and patch blocks should hide");
 });
 
-test("hides patch content recovered as a code-citation", () => {
+test("hides patch fences even when they are not recovered as citations", () => {
   const content = [
     "File: `packages/lib/server-utils/public-api/get-api-token-by-token.ts`",
     "",
@@ -75,7 +75,12 @@ test("hides patch content recovered as a code-citation", () => {
     "```"
   ].join("\n");
   const doc = parseChatProse(content);
-  assert.ok(doc.blocks.some((block) => block.type === "code-citation"));
+  assert.ok(doc.blocks.some((block) => block.type === "code-fence"));
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-citation"),
+    false,
+    "```patch must stay a patch fence, not a citation"
+  );
   assert.ok(doc.blocks.every(shouldHidePatchBlock));
 });
 
