@@ -12,6 +12,8 @@ import {
   extractDualRepoCompareEvidence,
   formatDualRepoCompareForLlm
 } from "../context/dualRepoCompare";
+import { shouldSkipEvidencePath } from "../api/agent/searchQuery";
+import { extractAgentProposedPatchText as extractAgentProposedPatch } from "../chat/agentProposedPatch";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
 // soften the fluency bullet or make it conditional — keep the block, don't remove it.
@@ -805,11 +807,12 @@ export function buildUserMessageWithContext(
   const repoSummarySnippets = extractRepoSummaryEntryFiles(context?.contextBundle).filter(
     (file) => !instructionPaths.has(normalizeInstructionPathForDedup(file.path))
   );
+  const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
+  const agentSearch = extractAgentSearchSummary(context?.contextBundle);
+  const agentProposedPatch = extractAgentProposedPatch(context?.contextBundle);
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
   const dualRepoCompare = extractDualRepoCompareEvidence(context?.contextBundle);
   const repoInventory = extractRepoInventory(context?.contextBundle);
-  const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
-  const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
   const jiraTickets = extractJiraSearchTickets(context?.contextBundle);
   const slackMessages = extractSlackSearchMessages(context?.contextBundle);
@@ -830,6 +833,7 @@ export function buildUserMessageWithContext(
     !repoInventory &&
     agentFileSnippets.length === 0 &&
     !agentSearch &&
+    !agentProposedPatch &&
     localSnippets.length === 0 &&
     !jiraTickets &&
     !slackMessages &&
@@ -952,6 +956,14 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</agent_files>");
+  }
+  if (agentProposedPatch) {
+    lines.push("<agent_proposed_patch>");
+    lines.push(
+      "The agent already produced a validated File: + SEARCH/REPLACE patch. Include it verbatim in your answer (same File: and ```patch fences) so Apply works. Do not invent a different SEARCH block."
+    );
+    lines.push(agentProposedPatch);
+    lines.push("</agent_proposed_patch>");
   }
   if (jiraTickets) {
     lines.push(...formatJiraTicketsForLlm(jiraTickets));
@@ -1160,11 +1172,21 @@ function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
     if (!entry || typeof entry !== "object") {
       continue;
     }
-    const files = (entry as { data?: { repoSemanticSearch?: { files?: RepoSemanticSnippet[] } } }).data
-      ?.repoSemanticSearch?.files;
-    if (files?.length) {
-      return files.filter((file) => file.path && file.content);
+    const semantic = (
+      entry as {
+        data?: {
+          repoSemanticSearch?: { files?: RepoSemanticSnippet[]; rankQuery?: string; query?: string };
+        };
+      }
+    ).data?.repoSemanticSearch;
+    const files = semantic?.files;
+    if (!files?.length) {
+      continue;
     }
+    const rankQuery = semantic?.rankQuery ?? semantic?.query;
+    return files.filter(
+      (file) => file.path && file.content && !shouldSkipEvidencePath(file.path, rankQuery)
+    );
   }
   return [];
 }

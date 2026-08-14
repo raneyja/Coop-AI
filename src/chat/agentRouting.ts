@@ -1,23 +1,17 @@
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type { ChatIntentPlan } from "./intentPlanner/types";
-
-const REPO_HUNT_KEYWORDS =
-  /\b(where|find|across|codebase|repo|which file|how does|enforced|callers?|defined in)\b/i;
-
-const LOCAL_EXPLAIN =
-  /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b|summarize\s+this\s+(?:function|method|class|file|code)\b|walk\s+me\s+through\s+this\s+(?:function|method|class|file|code)\b|thanks\b|thank you\b|ok\b|okay\b)/i;
+import { classifyRepoCodeIntent, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
 
 export type AgentModeSetting = "off" | "auto" | "on";
 
+/**
+ * Whether answering needs the repository's own code.
+ *
+ * Delegates to {@link classifyRepoCodeIntent}; this used to be a ten-word
+ * keyword regex that routed on incidental vocabulary.
+ */
 export function isRepoInvestigationQuery(query: string): boolean {
-  const trimmed = query.trim();
-  if (trimmed.length < 20) {
-    return false;
-  }
-  if (LOCAL_EXPLAIN.test(trimmed)) {
-    return false;
-  }
-  return REPO_HUNT_KEYWORDS.test(trimmed);
+  return needsRepoCode(query);
 }
 
 /**
@@ -55,16 +49,33 @@ export function shouldRunAgentToolLoop(options: {
   isEditTurn?: boolean;
   contextBundle?: ContextFetchResult[];
 }): boolean {
+  return agentTurnAction(options) !== "none";
+}
+
+/**
+ * What the loop is for this turn: locate, understand, change, or none.
+ *
+ * `change` is what makes `propose_patch` reachable — the agent hunts for the
+ * real code first, so the patch it writes is anchored to lines it actually read.
+ */
+export function agentTurnAction(options: {
+  query: string;
+  hasQuickAction: boolean;
+  agentModeSetting: AgentModeSetting;
+  intentPlan?: ChatIntentPlan;
+  isEditTurn?: boolean;
+  contextBundle?: ContextFetchResult[];
+}): RepoCodeAction {
   if (options.isEditTurn) {
-    return false;
+    return "none";
   }
   if (!shouldUseAgentMode(options)) {
-    return false;
+    return "none";
   }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
-    return false;
+    return "none";
   }
-  return isRepoInvestigationQuery(options.query);
+  return (options.intentPlan?.codeIntent ?? classifyRepoCodeIntent(options.query)).action;
 }
 
 export function plannerAllowsAgentRepoLoop(

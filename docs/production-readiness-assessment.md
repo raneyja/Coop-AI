@@ -1,9 +1,11 @@
 # Coop AI — Production Readiness Assessment
 
-**Date:** July 9, 2026  
+**Date:** July 9, 2026 (status refresh Aug 12, 2026)  
 **Scope:** Full codebase audit across backend, extension, admin portal, marketing site, infrastructure, and competitive landscape.
 
-**Interactive dashboard:** Open [coop-production-readiness.canvas.tsx](/Users/jonraney/.cursor/projects/Users-jonraney-Desktop-Coop-AI/canvases/coop-production-readiness.canvas.tsx) beside this chat for the visual summary with phased action items.
+**Interactive dashboard:** Open [coop-production-readiness.canvas.tsx](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/coop-production-readiness.canvas.tsx) beside this chat — **Aug 12 external prod probes → pilot-go**; operator leftovers listed on the canvas.
+
+> **Aug 12 note:** Outside probes show API auth on (401 without Bearer), admin CORS OK, Stripe webhook route live, LLMs not mocked, public surfaces 200. Local `.env.backend` is still a **dev** template (auth false) — that does **not** mirror Railway. See canvas for Jon-only confirmations (Stripe live keys, email, optional Zoekt).
 
 ---
 

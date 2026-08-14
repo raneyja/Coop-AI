@@ -149,6 +149,21 @@ Slack should send Events API requests to `/webhooks/slack`. Slack requests are v
 
 ## Production Notes
 
-The included `PlaceholderWebhookClient` records webhook registration intent but does not call provider APIs. Replace it with GitHub App, GitLab project hook, and Slack app clients when app credentials and installation flows are available.
+The included `PlaceholderWebhookClient` records webhook registration intent but does not call provider APIs. **Inbound delivery still works** once you register the URL in each vendor console (below). Auto-register from Coop is deferred.
 
 For multi-instance deployments, replace memory cache, dedupe, audit trail, and token pool state with Redis/PostgreSQL-backed adapters before running more than one process.
+
+### Manual webhook registration (operator)
+
+Use when Deep-Index / decision refresh should react to pushes without waiting for the next crawl. Set `WEBHOOK_DOMAIN` or `COOP_PUBLIC_BASE_URL` to `https://api.coop-ai.dev` on Railway first.
+
+| Provider | Where | Payload URL | Auth |
+|----------|-------|-------------|------|
+| **GitHub App** | App settings → Webhook | `https://api.coop-ai.dev/webhooks/github` | `GITHUB_WEBHOOK_SECRET` → `X-Hub-Signature-256` |
+| **GitLab** | Project → Settings → Webhooks | `https://api.coop-ai.dev/webhooks/gitlab` | Secret token → `X-Gitlab-Token` (match server secret) |
+| **Bitbucket** | Repo → Webhooks | `https://api.coop-ai.dev/webhooks/bitbucket` | See Bitbucket connect docs / shared secret |
+| **Slack** | App → Event Subscriptions | `https://api.coop-ai.dev/webhooks/slack` | Signing secret → `X-Slack-Signature` |
+
+**GitHub events (minimum):** `push`, `pull_request`, `pull_request_review`, `issues`, `repository`.
+
+**Success looks like:** Vendor “recent deliveries” show 2xx; `GET https://api.coop-ai.dev/health` → that provider’s `totalDeliveries` increments (may take a real push/event).

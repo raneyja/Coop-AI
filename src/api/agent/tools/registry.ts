@@ -16,6 +16,6 @@ export function createAgentToolRegistry(
     search_code: (args) => handleSearchCode(ctx, args),
     list_directory: (args) => handleListDirectory(ctx, args),
     git_blame: (args) => handleGitBlame(ctx, args),
-    propose_patch: (args) => handleProposePatch(args)
+    propose_patch: (args) => handleProposePatch(ctx, args)
   };
 }

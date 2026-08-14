@@ -1,6 +1,7 @@
 /**
  * Pass/fail gate IDs for the agent ship loop (Wave 1+).
- * Phase tests assert these; see docs/agent-ship-loop-build-plan.md.
+ * Phase tests assert these; see docs/agent-ship-loop-build-plan.md
+ * and enterpriseCriteria.ts for the exact Pass / Fail rule per ID.
  */
 
 export const PHASE_A_GATE_IDS = [
@@ -61,4 +62,58 @@ export const JOIN_GATE_IDS = [
   "J-G6",
   "J-G7",
   "J-G8"
+] as const;
+
+/**
+ * “We built the agent” is a lie unless these pass.
+ * Dogfood must be reachable from Coop Settings, persist, run the hunt, and
+ * show Searched/Read — not only a vscode contributes.configuration key.
+ */
+export const HONESTY_GATE_IDS = [
+  "H-G1",
+  "H-G2",
+  "H-G3",
+  "H-G4",
+  "H-G5",
+  "H-G6",
+  "H-G7",
+  "H-G8",
+  "H-G9",
+  "H-G10",
+  "H-G11",
+  "H-G12",
+  "H-G13"
+] as const;
+
+/**
+ * Scope — what turns run the agent. Replaced the keyword regex.
+ * Fail any of these and shipping “agent for repo questions” is a lie.
+ */
+export const SCOPE_GATE_IDS = [
+  "S-G1",
+  "S-G2",
+  "S-G3",
+  "S-G4",
+  "S-G5",
+  "S-G6",
+  "S-G7"
+] as const;
+
+/**
+ * Retrieval accuracy — golden-repo hunt eval. Threshold is 100%.
+ */
+export const RETRIEVAL_GATE_IDS = ["R-G1", "R-G2", "R-G3", "R-G4"] as const;
+
+/**
+ * Change → propose_patch → Apply card. Fail = change requests are unreachable.
+ */
+export const PATCH_BRIDGE_GATE_IDS = ["PB-G1", "PB-G2", "PB-G3", "PB-G4", "PB-G5"] as const;
+
+/** Enterprise roll-up — must all Pass before Extension Host dogfood. */
+export const ENTERPRISE_GATE_IDS = [
+  "ENT-G1",
+  "ENT-G2",
+  "ENT-G3",
+  "ENT-G4",
+  "ENT-G5"
 ] as const;

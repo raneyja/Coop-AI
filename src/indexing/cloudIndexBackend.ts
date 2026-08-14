@@ -2,7 +2,7 @@ import type { CoopBackendClient } from "../api/CoopBackendClient";
 import { isLightningEnabledForRepo, type LightningConfiguration } from "../config/lightningConfig";
 import { canUseLightningMode, resolveLicenseStatus, usesOrgManagedDeepIndex } from "../license/licenseChecker";
 import type { IndexBackend, IndexRepoStatus } from "./indexBackend";
-import { mapSearchProvenance } from "./searchProvenance";
+import { type GraphSearchResponse, mapGraphSearchResponse } from "./graphSearchHit";
 import type { LocalDependentsResult, LocalSearchResult } from "./types";
 
 export class CloudIndexBackend implements IndexBackend {
@@ -95,56 +95,8 @@ export class CloudIndexBackend implements IndexBackend {
         repoId,
         pattern,
         { collectionId: options?.collectionId, scope: options?.scope }
-      )) as {
-        data?: Array<{ path: string; size?: number }>;
-        symbols?: Array<{
-          symbol: string;
-          kind: string;
-          file: string;
-          line: number;
-          displayName?: string;
-        }>;
-        freshness?: string;
-        stale?: boolean;
-      };
-      const hits = (remote.data ?? []).map((entry, index) => {
-        const record = entry as {
-          path: string;
-          size?: number;
-          content?: string;
-          source?: string;
-          repoId?: string;
-        };
-        const hitSource = mapRemoteHitSource(record.source, remote.freshness);
-        const content =
-          typeof record.content === "string" && record.content.trim() ? record.content : record.path;
-        return {
-          fileName: record.path,
-          repoId: record.repoId,
-          lineNumber: index + 1,
-          content,
-          score: 1,
-          source: hitSource
-        };
-      });
-      const symbols = (remote.symbols ?? []).map((entry) => ({
-        symbol: entry.symbol,
-        kind: entry.kind,
-        file: entry.file,
-        line: entry.line,
-        character: 0,
-        displayName: entry.displayName ?? entry.symbol
-      }));
-      const source = mapSearchProvenance(remote.freshness, {
-        hasHits: hits.length > 0,
-        hitSources: hits.map((hit) => hit.source)
-      });
-      return {
-        source,
-        hits,
-        symbols,
-        stale: Boolean(remote.stale)
-      };
+      )) as GraphSearchResponse;
+      return mapGraphSearchResponse(remote);
     } catch {
       return { source: "fallback", hits: [], symbols: [], stale: false };
     }
@@ -213,16 +165,6 @@ export class CloudIndexBackend implements IndexBackend {
     const { setRepoLightningEnabled } = await import("../config/lightningConfig");
     await setRepoLightningEnabled(repoId, enabled);
   }
-}
-
-function mapRemoteHitSource(
-  hitSource: string | undefined,
-  freshness: string | undefined
-): LocalSearchResult["source"] {
-  if (hitSource === "zoekt" || hitSource === "scip" || hitSource === "embedding" || hitSource === "fallback") {
-    return hitSource;
-  }
-  return mapSearchProvenance(freshness);
 }
 
 function cloudRecordToStatus(record: Record<string, unknown>): IndexRepoStatus {

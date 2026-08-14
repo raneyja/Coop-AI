@@ -7,6 +7,7 @@ import {
   shouldUseAgentMode
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
+import { DOGFOOD_HUNT_QUESTION } from "../api/agent/dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -210,7 +211,7 @@ test("plannerAllowsAgentRepoLoop blocks workflows", () => {
 test("shouldSuppressSuggestChipsForAgentHunt is true for a location hunt when on", () => {
   assert.equal(
     shouldSuppressSuggestChipsForAgentHunt({
-      query: "Where is requireAuth or authentication middleware defined in this repo?",
+      query: DOGFOOD_HUNT_QUESTION,
       agentModeSetting: "on"
     }),
     true
@@ -220,7 +221,7 @@ test("shouldSuppressSuggestChipsForAgentHunt is true for a location hunt when on
 test("shouldSuppressSuggestChipsForAgentHunt is false when off", () => {
   assert.equal(
     shouldSuppressSuggestChipsForAgentHunt({
-      query: "Where is requireAuth or authentication middleware defined in this repo?",
+      query: DOGFOOD_HUNT_QUESTION,
       agentModeSetting: "off"
     }),
     false
@@ -228,7 +229,7 @@ test("shouldSuppressSuggestChipsForAgentHunt is false when off", () => {
 });
 
 test("suggest-chips leftover plan blocks the loop; none plan after Just answer allows it", () => {
-  const query = "Where is requireAuth or authentication middleware defined in this repo?";
+  const query = DOGFOOD_HUNT_QUESTION;
   assert.equal(
     shouldRunAgentToolLoop({
       query,

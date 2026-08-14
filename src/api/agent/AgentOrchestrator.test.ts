@@ -132,8 +132,11 @@ async function run(): Promise<void> {
       repoId: "acme/demo"
     });
 
-    assert.equal(result.steps.length, 1);
-    assert.equal(result.steps[0]?.tool, "search_code");
+    assert.ok(result.steps.length >= 1 && result.steps.length <= 2);
+    assert.equal(
+      result.steps.every((step) => step.tool === "search_code"),
+      true
+    );
     assert.equal(result.context?.read_file, undefined);
   });
 
@@ -233,12 +236,145 @@ async function run(): Promise<void> {
     assert.equal(result.steps[1]?.summary.includes("authentication/middleware.py"), true);
   });
 
-  await test("LLM full-sentence query is rewritten before search", async () => {
-    let seenQuery: string | undefined;
+  await test("reads the declaration line, not the top of the file", async () => {
+    // The 2026-08-13 miss: the text hit carried no real position, so the loop
+    // read lines 1-26 of a file whose definition was hundreds of lines down.
+    // The symbol index knew the answer all along.
+    const body = Array.from({ length: 500 }, (_, i) =>
+      i === 411 ? "def require_auth(request):" : `# line ${i + 1}`
+    ).join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "scip",
+          stale: false,
+          hits: [
+            {
+              fileName: "server/auth/middleware.py",
+              lineNumber: 1,
+              content: "server/auth/middleware.py",
+              score: 1
+            }
+          ],
+          symbols: [
+            {
+              symbol: "require_auth",
+              kind: "function",
+              file: "server/auth/middleware.py",
+              line: 412,
+              character: 0,
+              displayName: "requireAuth"
+            }
+          ]
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => ({ path: rel, content: body })
+    });
+
+    const result = await orchestrator.run({
+      message: "Where is requireAuth or authentication middleware defined in this repo?",
+      repoId: "acme/demo"
+    });
+    const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
+    const content = readFile.files?.[0]?.content ?? "";
+    assert.equal(content.includes("def require_auth(request):"), true);
+    assert.equal(content.startsWith("# line 1\n"), false);
+  });
+
+  await test("reads a bounded window when the index gave no position", async () => {
+    const body = Array.from({ length: 400 }, (_, i) => `line ${i + 1}`).join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            { fileName: "server/auth/adapter.py", lineNumber: 0, content: "auth adapter", score: 1 }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => ({ path: rel, content: body })
+    });
+
+    const result = await orchestrator.run({ message: "where is the auth adapter?", repoId: "acme/demo" });
+    const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
+    const lines = (readFile.files?.[0]?.content ?? "").split("\n");
+    assert.equal(lines[0], "line 1");
+    assert.ok(lines.length > 26 && lines.length <= 120);
+  });
+
+  await test("retries with a broader term when the first search returns only barrels", async () => {
+    const seen: string[] = [];
+    const readPaths: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({
         search: async (_repoId, pattern) => {
-          seenQuery = pattern;
+          seen.push(pattern);
+          if (pattern === "requireAuth") {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: "packages/ui/src/index.ts",
+                  lineNumber: 1,
+                  content: "export * from './auth'",
+                  score: 1
+                },
+                {
+                  fileName: "node_modules/express/lib/router.js",
+                  lineNumber: 1,
+                  content: "exports.requireAuth = null",
+                  score: 1
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: "server/auth/middleware.py",
+                lineNumber: 12,
+                content: "class AuthenticationMiddleware:",
+                score: 1
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        readPaths.push(rel);
+        return { path: rel, content: "class AuthenticationMiddleware:\n  pass\n" };
+      }
+    });
+    const question = "Where is requireAuth or authentication middleware defined in this repo?";
+    const result = await orchestrator.run({ message: question, repoId: "acme/demo" });
+    assert.equal(seen[0], "requireAuth");
+    assert.ok(seen.length >= 2);
+    assert.equal(
+      readPaths.some((path) => path.includes("node_modules") || path.endsWith("index.ts")),
+      false
+    );
+    assert.equal(
+      result.steps.some((step) => step.summary.includes("server/auth/middleware.py")),
+      true
+    );
+  });
+
+  await test("LLM full-sentence query is rewritten before search", async () => {
+    const seen: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repoId, pattern) => {
+          seen.push(pattern);
           return { source: "zoekt", stale: false, hits: [], symbols: [] };
         }
       }),
@@ -252,7 +388,8 @@ async function run(): Promise<void> {
           JSON.stringify({ tool: "search_code", args: { query: question } })
       }
     );
-    assert.equal(seenQuery, "requireAuth");
+    assert.equal(seen[0], "requireAuth");
+    assert.equal(seen.includes(question), false);
   });
 
   await test("invalid first plan fails open to deterministic fallback (A-G3)", async () => {

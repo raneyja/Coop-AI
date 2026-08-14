@@ -1,11 +1,12 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostProviderPreference } from "../chat/types";
 import type { IndexBackend } from "../indexing/indexBackend";
-import { mapSearchProvenance } from "../indexing/searchProvenance";
+import { type GraphSearchResponse, mapGraphSearchResponse } from "../indexing/graphSearchHit";
 import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolation";
+import { indexQueryForRetrieval, selectChatEvidencePaths } from "../api/agent/searchQuery";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
 
 export const MAX_SEMANTIC_FILES = 3;
@@ -23,6 +24,8 @@ export type RepoSemanticSnippet = {
 export type RepoSemanticSearchContext = {
   source: "repo-semantic-search";
   query: string;
+  /** Original user ask — layer matching uses this, not the shortened index query. */
+  rankQuery?: string;
   searchSource?: LocalSearchResult["source"];
   files: RepoSemanticSnippet[];
   /** Unique paths ranked from search before the attach cap — not a repo inventory. */
@@ -220,14 +223,16 @@ export async function searchRepoForChat(
   }
 
   const repoId = options.request.params.repoId?.trim();
-  const query = semanticRetrievalQueryText(gateOptions);
-  if (!repoId || !query) {
+  const userQuery = semanticRetrievalQueryText(gateOptions);
+  if (!repoId || !userQuery) {
     return undefined;
   }
+  const indexQuery = indexQueryForRetrieval(userQuery);
 
   return loadSemanticSearchContext({
     repoId,
-    query,
+    query: indexQuery,
+    rankQuery: userQuery,
     indexBackend: options.indexBackend,
     api: options.api,
     apiBaseUrl: options.apiBaseUrl,
@@ -263,15 +268,16 @@ export type SearchRepoForFocusOptions = {
 export async function searchRepoForFocusQuery(
   options: SearchRepoForFocusOptions
 ): Promise<RepoSemanticSearchContext | undefined> {
-  const query = focusQueryForRetrieval(options.query);
+  const userQuery = focusQueryForRetrieval(options.query);
   const repoId = options.repoId.trim();
-  if (!query || !repoId) {
+  if (!userQuery || !repoId) {
     return undefined;
   }
 
   return loadSemanticSearchContext({
     repoId,
-    query,
+    query: indexQueryForRetrieval(userQuery),
+    rankQuery: userQuery,
     indexBackend: options.indexBackend,
     api: options.api,
     apiBaseUrl: options.apiBaseUrl,
@@ -286,6 +292,8 @@ export async function searchRepoForFocusQuery(
 type LoadSemanticSearchOptions = {
   repoId: string;
   query: string;
+  /** Original user ask — the index query is shortened, ranking needs the full words. */
+  rankQuery?: string;
   indexBackend: IndexBackend;
   api: SecureApiClient;
   apiBaseUrl: string;
@@ -302,13 +310,23 @@ async function loadSemanticSearchContext(
   options: LoadSemanticSearchOptions
 ): Promise<RepoSemanticSearchContext | undefined> {
   const searchResult = await runRepoSearch(options, options.repoId, options.query);
-  const rankedPaths = rankSearchPaths(searchResult, options.maxFiles * 2);
-  if (rankedPaths.length === 0) {
+  const rankedPaths = rankSearchPaths(searchResult, options.maxFiles * 4);
+  const rankQuery = options.rankQuery ?? options.query;
+  const selected = selectChatEvidencePaths(
+    rankedPaths.map((entry) => entry.path),
+    rankQuery,
+    options.maxFiles
+  );
+  const byPath = new Map(rankedPaths.map((entry) => [entry.path, entry]));
+  const filteredPaths = selected
+    .map((path) => byPath.get(path))
+    .filter((entry): entry is { path: string; score: number } => Boolean(entry));
+  if (filteredPaths.length === 0) {
     return undefined;
   }
 
   const resolved: Array<{ path: string; repoId: string; content: string }> = [];
-  for (const candidate of rankedPaths) {
+  for (const candidate of filteredPaths) {
     if (resolved.length >= options.maxFiles) {
       break;
     }
@@ -333,6 +351,7 @@ async function loadSemanticSearchContext(
   return {
     source: "repo-semantic-search",
     query: options.query,
+    rankQuery: options.rankQuery,
     searchSource: searchResult.source,
     files: isolated,
     matchedPathCount: rankedPaths.length,
@@ -365,36 +384,13 @@ async function runRepoSearch(
   }
 
   try {
-    const remote = (await options.api.graphSearch(options.apiBaseUrl, repoId, query, searchOptions)) as {
-      data?: Array<{ path?: string; score?: number }>;
-      symbols?: Array<{ file?: string }>;
-      freshness?: LocalSearchResult["source"];
-      stale?: boolean;
-    };
-    const hits = (remote.data ?? [])
-      .filter((entry) => entry.path?.trim())
-      .map((entry, index) => ({
-        fileName: entry.path!.trim(),
-        lineNumber: index + 1,
-        content: entry.path!.trim(),
-        score: entry.score ?? 1 - index * 0.01
-      }));
-    const symbols = (remote.symbols ?? [])
-      .filter((entry) => entry.file?.trim())
-      .map((entry) => ({
-        symbol: "",
-        kind: "",
-        file: entry.file!.trim(),
-        line: 1,
-        character: 0,
-        displayName: ""
-      }));
-    return {
-      source: mapSearchProvenance(remote.freshness, { hasHits: hits.length > 0 }),
-      hits,
-      symbols,
-      stale: Boolean(remote.stale)
-    };
+    const remote = (await options.api.graphSearch(
+      options.apiBaseUrl,
+      repoId,
+      query,
+      searchOptions
+    )) as GraphSearchResponse;
+    return mapGraphSearchResponse(remote);
   } catch {
     return fromIndex;
   }

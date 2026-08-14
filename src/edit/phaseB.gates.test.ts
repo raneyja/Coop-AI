@@ -114,12 +114,15 @@ async function main(): Promise<void> {
   });
 
   await test("B-G1 agent propose_patch yields parseable 2-file SEARCH/REPLACE", async () => {
-    const raw = await handleProposePatch({
-      files: [
-        { path: "src/a.ts", search: "alpha", replace: "ALPHA" },
-        { path: "src/b.ts", search: "beta", replace: "BETA" }
-      ]
-    });
+    const raw = await handleProposePatch(
+      { indexBackend: {} as never, resolveAbsolutePath: () => undefined },
+      {
+        files: [
+          { path: "src/a.ts", search: "alpha", replace: "ALPHA" },
+          { path: "src/b.ts", search: "beta", replace: "BETA" }
+        ]
+      }
+    );
     const parsed = JSON.parse(raw) as { ok: boolean; applied: boolean; fileCount: number; patchText: string };
     assert.equal(parsed.ok, true);
     assert.equal(parsed.applied, false);

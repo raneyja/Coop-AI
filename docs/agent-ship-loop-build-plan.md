@@ -57,7 +57,7 @@ This is the evaluation you run. Agents cannot mark a wave done without it. Every
 1. **Terminal** — from repo root: `npm run lint && npm run test:agent-ship:a`  
    **Success:** both exit 0. Any FAIL = A is not done.
 
-2. **Extension UI** — Settings → `coopAI.chat.agentMode` = **on**. Default must still have been **off** before you changed it.
+2. **Extension UI** — Coop Settings → **Preferences** → **Model & chat** → check **AgentMode** → **Save model settings**. Default must still have been **off** before you changed it. Backing key is `coopAI.chat.agentMode`.
 
 3. **Extension UI** — Remote workspace → Use-repo = indexed GitHub repo, **no local clone**. Ask: *Where is auth middleware enforced and what calls it?*  
    **Success:** activity shows **≥2 model-chosen** search/read steps; answer cites **real paths from that repo**; you are not stuck on “Preparing answer.”

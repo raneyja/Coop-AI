@@ -6,6 +6,8 @@ import {
   patchFileCapError,
   PATCH_SESSION_MAX_FILES
 } from "../../../edit/patchParser";
+import { findAllSearchMatches } from "../../../edit/patchContent";
+import type { AgentToolContext } from "../agentToolContext";
 
 type ProposedHunk = {
   search: string;
@@ -21,7 +23,10 @@ type ProposedFile = {
  * Emit File: + SEARCH/REPLACE for the Patch card. Does **not** apply, write disk,
  * or open editors — Apply is the user's explicit action.
  */
-export async function handleProposePatch(args: Record<string, unknown>): Promise<string> {
+export async function handleProposePatch(
+  ctx: AgentToolContext,
+  args: Record<string, unknown>
+): Promise<string> {
   const parsed = parseProposePatchArgs(args);
   if (!parsed.ok) {
     return JSON.stringify({ ok: false, applied: false, error: parsed.error });
@@ -33,6 +38,11 @@ export async function handleProposePatch(args: Record<string, unknown>): Promise
       applied: false,
       error: patchFileCapError(parsed.files.length)
     });
+  }
+
+  const anchorError = await findUnanchoredHunk(ctx, parsed.files);
+  if (anchorError) {
+    return JSON.stringify({ ok: false, applied: false, error: anchorError });
   }
 
   const patchText = formatProposedPatches(parsed.files);
@@ -49,6 +59,43 @@ export async function handleProposePatch(args: Record<string, unknown>): Promise
     files: validated.patches.files.map((file) => file.relativePath),
     patchText
   });
+}
+
+/**
+ * A SEARCH block that matches nothing in the file cannot be applied. Catch it
+ * here, while the model can still re-read and correct itself, rather than
+ * letting the user click Apply on a patch that was never going to land.
+ *
+ * Uses the same matcher Apply uses, so this can never reject a patch that would
+ * have applied — a second, stricter notion of "matches" would do exactly that.
+ *
+ * Fails open when the file cannot be fetched: a transient read error must not
+ * swallow a change the user asked for.
+ */
+async function findUnanchoredHunk(
+  ctx: AgentToolContext,
+  files: ProposedFile[]
+): Promise<string | undefined> {
+  if (!ctx.readRemoteFile) {
+    return undefined;
+  }
+  for (const file of files) {
+    let content: string | undefined;
+    try {
+      content = (await ctx.readRemoteFile({ path: file.path }))?.content;
+    } catch {
+      continue;
+    }
+    if (typeof content !== "string" || !content.length) {
+      continue;
+    }
+    for (const hunk of file.hunks) {
+      if (findAllSearchMatches(content, hunk.search).length === 0) {
+        return `SEARCH block was not found in ${file.path}. Read the file first and copy the exact lines you intend to replace.`;
+      }
+    }
+  }
+  return undefined;
 }
 
 function parseProposePatchArgs(

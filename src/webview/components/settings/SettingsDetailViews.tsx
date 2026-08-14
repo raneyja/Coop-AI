@@ -275,13 +275,11 @@ function assignmentFeatureEnabled(
 function AssignedModelRow({
   label,
   meta,
-  enabled,
-  note
+  enabled
 }: {
   label: string;
   meta: string;
   enabled: boolean;
-  note?: string;
 }): React.ReactElement {
   return (
     <div className="coop-health-integration">
@@ -289,7 +287,6 @@ function AssignedModelRow({
         <div className="min-w-0">
           <div className="coop-health-integration-name">{label}</div>
           <div className="coop-health-integration-meta">{meta}</div>
-          {note ? <div className="coop-health-integration-meta mt-1">{note}</div> : null}
         </div>
         <span
           className={`coop-health-status shrink-0 ${enabled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
@@ -307,7 +304,8 @@ function ModelDetail({
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({
-    autocompleteEnabled: prefs.autocompleteEnabled
+    autocompleteEnabled: prefs.autocompleteEnabled,
+    agentMode: prefs.agentMode ?? "off"
   });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -316,10 +314,11 @@ function ModelDetail({
   useEffect(() => {
     if (!dirty) {
       setDraft({
-        autocompleteEnabled: prefs.autocompleteEnabled
+        autocompleteEnabled: prefs.autocompleteEnabled,
+        agentMode: prefs.agentMode ?? "off"
       });
     }
-  }, [prefs.autocompleteEnabled, dirty]);
+  }, [prefs.autocompleteEnabled, prefs.agentMode, dirty]);
 
   useEffect(
     () => () => {
@@ -338,7 +337,8 @@ function ModelDetail({
 
   const handleSave = () => {
     onUpdate({
-      autocompleteEnabled: draft.autocompleteEnabled
+      autocompleteEnabled: draft.autocompleteEnabled,
+      agentMode: draft.agentMode
     });
     setDirty(false);
     setSaved(true);
@@ -351,18 +351,12 @@ function ModelDetail({
   return (
     <>
       <SettingsSection>
-        <p className="coop-settings-card-desc px-0.5">
-          Models are assigned by Coop for chat, quick actions, edit mode, autocomplete, and intent
-          suggest. Custom model selection is an Enterprise capability (coming soon).
-        </p>
-
         <div className="space-y-2">
           {COOP_FEATURE_MODEL_ASSIGNMENTS.map((assignment) => (
             <AssignedModelRow
               key={assignment.feature}
               label={assignment.label}
               meta={formatAssignedModelMeta(assignment)}
-              note={assignment.note}
               enabled={assignmentFeatureEnabled(assignment.feature, draft)}
             />
           ))}
@@ -372,6 +366,12 @@ function ModelDetail({
           title="Enable inline autocomplete"
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
+        />
+
+        <SettingsCheckboxRow
+          title="AgentMode"
+          checked={draft.agentMode === "on"}
+          onChange={(checked) => update({ agentMode: checked ? "on" : "off" })}
         />
 
         <div className="coop-settings-actions">
@@ -869,7 +869,8 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
-            autocompleteEnabled: prefs.autocompleteEnabled
+            autocompleteEnabled: prefs.autocompleteEnabled,
+            agentMode: prefs.agentMode
           })}
           onClick={() => onNavigate("model")}
         />

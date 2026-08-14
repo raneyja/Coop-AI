@@ -22,6 +22,81 @@ Copy this block. Do not edit older entries except to fix a factual error.
 
 ---
 
+## Enterprise scorecard (strict Pass / Fail)
+
+### 2026-08-14 — Enterprise readiness before Extension Host dogfood — PASS (automated)
+
+- **Owner:** editor / enterprise gate
+- **Commands run:** `npm run test:agent-enterprise` (lint + ship A–E + pressure + chat-intent + routing + patch + registry + scorecard)
+- **Gate IDs:** S-G1..G7, R-G1..G4, PB-G1..G5, H-G1..H-G13, J-G1/G3/G4/G6/G7, ENT-G4/G5 — all automated PASS. Manual S1–S14 / J-G2/G5/G8 remain Jon’s Extension Host scorecard tonight.
+- **What we tried:**
+  - Machine-readable criteria in `enterpriseCriteria.ts` (Pass column = ship, Fail column = block).
+  - `enterprise.scorecard.test.ts` prints OVERALL PASS/FAIL and exits 1 on any FAIL.
+  - Scope expanded + Settings copy matches (Agent for repo questions).
+  - Patch bridge wired so Apply appears even when the model forgets to echo SEARCH/REPLACE.
+  - Join automated subset + `test:agent-ship:pressure` script restored for J-G3.
+- **What broke / what we skipped:** Live model tool-picking quality (planTurn) and S1–S14 Extension Host still require Jon.
+- **What Jon re-runs tonight:** Extension UI — Coop Settings → Preferences → Model & chat → **Agent for repo questions** → Save. Then S3–S6 from the build-plan scorecard. Terminal first: `npm run test:agent-enterprise`.
+
+---
+
+## Refactor — Phase 0 + Phase 1
+
+### 2026-08-14 — Root cause of the 2026-08-13 dogfood miss — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-ship-a-2e13`
+- **Commands run:** `npm run test:agent-ship:a`, `npm run test:chat-intent`, `npx tsx src/context/repoSemanticRetrieval.test.ts`, `npm run lint` — all green
+- **Gate IDs:** H-G1..H-G11 rewritten to be repo-agnostic; new `graphSearchHit` contract test
+- **What we tried:** The hunt cited `apps/live` and an auth form because `CloudIndexBackend.search`
+  overwrote every hit with `score: 1` and `lineNumber: index + 1` — the hit's position in the result
+  list, not in the file. `AgentOrchestrator` then read `lineNumber ± 25`, so it always read roughly
+  the first 26 lines of a file and answered from them. The index was never the problem:
+  `lightningSearch` merges SCIP symbols, Zoekt line matches, and embeddings with real positions and
+  scores, and `formatLightningSearchResult` already sends them — the line number just arrived in a
+  field named `sha`, and the client ignored it.
+- **What broke / what we skipped:** Phase 0 removed the repo-specific ranking added on 2026-08-13
+  (`apps/live`, `hocuspocus`, `auth-forms`, `detectEvidenceLayer`); ranking is now barrels, build
+  output, vendored code, and query/path word overlap only. `extractAgentSearchQuery` now prefers a
+  symbol the user named (`requireAuth`) over a prose phrase. Not done: symbol-first hunts
+  (search_code returns `symbols` and the loop still ignores them), one shared retrieval module,
+  and a golden-repo fixture. Source-text `readFileSync` assertions still exist in 8 other test files.
+- **What Jon re-runs:** Coop Settings → Preferences → Model & chat → **Agent for repo hunts** → Save.
+  Use-repo **plane**. Ask: *Where is requireAuth or authentication middleware defined in this repo?*
+  Success = the cited lines are the actual definition, not the top of the file. Terminal:
+  `npm run test:agent-ship:a`
+
+### 2026-08-14 — Phases 2–4: symbol-first hunts, one mapper, hunt eval — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-ship-a-2e13`
+- **Commands run:** `npm run test:agent-ship:a`, `npm run test:chat-intent`, `npm run lint` — all green
+- **Gate IDs:** new `noRepoSpecificRules` guard (4 rules); `graphSearchHit` contract (10); `huntEval` 12 questions × 2 index regimes
+- **What we tried:**
+  - **No repo-specific rules, ever.** `noRepoSpecificRules.test.ts` fails on any path-shaped literal
+    in ranking code outside a universal-infrastructure allowlist, on any product/framework name, and
+    on any non-universal term in the noise module. Verified it fails by planting `/hocuspocus/` and
+    `apps/live` and watching both rules trip.
+  - **Symbol-first.** `search_code` always returned SCIP declarations with real lines; the loop
+    ignored them. `pickSymbolHitsToRead` ranks declarations by how well the name matches the ask,
+    and the loop reads the declaration before any text hit.
+  - **One mapper.** `mapGraphSearchResponse` is now the only place a `/graph/…/search` response
+    becomes hits. It replaced two copies — the second, in `repoSemanticRetrieval`, had the same
+    invented `lineNumber: index + 1` and also fabricated empty symbol names.
+  - **One noise rule.** `evidencePathNoise.ts` replaced three copies of "what is noise"
+    (`searchQuery`, `lightningSearch`, and a duplicate inside `CoopChatSession`).
+  - **Eval.** `eval/huntEval.test.ts` runs 12 hunts across a polyglot fixture in two regimes: index
+    returns match lines, and index returns files only. Scores *right file* and *definition actually
+    in the text we read*. Both 12/12.
+- **What broke / what we skipped:** The eval was insensitive until the fixture files were padded so
+  definitions sit 150–350 lines down — with short files, any read window contains the answer.
+  Disabling symbol-first now drops the paths-only regime to **0/12 definitions in view** while
+  staying 12/12 on file choice: precisely the 2026-08-13 failure. Not done: `CoopChatSession` is
+  still 10k lines, and 8 other test files still assert on source text.
+- **What Jon re-runs:** Coop Settings → Preferences → Model & chat → **Agent for repo hunts** → Save.
+  Use-repo **plane**. Ask: *Where is requireAuth or authentication middleware defined in this repo?*
+  Success = cited lines contain the actual definition. Terminal: `npm run test:agent-ship:a`
+
+---
+
 ## Wave 1 — Phase A
 
 ### 2026-08-13 — Phase A Stages 0–4 — PASS (automated); manual dogfood still for Jon
@@ -31,7 +106,7 @@ Copy this block. Do not edit older entries except to fix a factual error.
 - **Gate IDs:** A-G0..G8 automated where practical; A-P1, A-P2, A-P3, A-P5, A-P6, A-P8, A-P9, A-P10, A-P12, A-P13; UX-G1/G2/G7/G8/G10
 - **What we tried:** Planner-first loop; `auto` no longer fires on empty context; activity cap 3; `read_file` stays remote; invalid JSON fails open; repoId forced to Use-repo
 - **What broke / what we skipped:** Live Extension Host dogfood (S3 / feel freeze) is for Jon after this lands. `auto` is conservative, not a full product “auto agent.”
-- **What Jon re-runs:** Extension UI → Settings `coopAI.chat.agentMode` **on**; indexed remote Use-repo; ask where auth is enforced; then Trace, Stop, explain-this, Slack-named, thanks follow-up. Terminal: `npm run test:agent-ship:a && npm run test:chat-intent`
+- **What Jon re-runs:** Extension UI → Coop Settings → Preferences → Model & chat → **Agent for repo hunts** on → Save. Indexed remote Use-repo; ask where auth is enforced; then Trace, Stop, explain-this, Slack-named, thanks follow-up. Terminal: `npm run test:agent-ship:a && npm run test:chat-intent`
 
 ### 2026-08-13 — Hunt quality pass — PASS (automated)
 
@@ -40,7 +115,7 @@ Copy this block. Do not edit older entries except to fix a factual error.
 - **Gate IDs:** hunt-Q1 short query; hunt-Q2 skip barrels; hunt-Q3 prefer api/middleware
 - **What we tried:** Dogfood searched the whole sentence and read `apps/space/components/.../index.ts` barrels. Extract identifiers (`requireAuth`); rewrite LLM/deterministic `search_code` queries; rank hits so API/middleware beats frontend barrels.
 - **What broke / what we skipped:** Live Extension Host retest is for Jon. Did not flip `agentMode` default on.
-- **What Jon re-runs:** Reload Extension Development Host. VS Code Settings → `Coop AI › Chat: Agent Mode` = **on**. Use-repo **plane**. Ask: *Where is requireAuth or authentication middleware defined in this repo?* Success = activity shows a short search term (not the whole sentence); answer cites `apps/api/...` auth/middleware, not space component barrels. Agent **off** → today’s chat, no hunt steps.
+- **What Jon re-runs:** Reload Extension Development Host. Coop Settings → Preferences → Model & chat → **Agent for repo hunts** on → **Save model settings**. Use-repo **plane**. Ask: *Where is requireAuth or authentication middleware defined in this repo?* Success = activity shows a short search term (not the whole sentence); answer cites `apps/api/...` auth/middleware, not `apps/live` or space component barrels. Agent **off** → today’s chat, no hunt steps.
 
 ---
 
@@ -131,6 +206,15 @@ Copy this block. Do not edit older entries except to fix a factual error.
 - **What we tried:** Merged B + C. After Apply, Patch card shows one quiet Create pull request. Confirm uses `coop-prompt-modal`. GitLab/Bitbucket still Not yet. Empty file list blocked.
 - **What broke / what we skipped:** Live GitHub PR in Extension Host is for Jon (S5–S6). Modal posts then the extension creates the PR (result is a VS Code notification with the URL).
 - **What Jon re-runs:** Extension UI — close tabs → GitHub Use-repo uncloned → `/edit` two files → Apply → **Create pull request** → confirm. Success = GitHub PR URL. Cancel/Escape creates nothing.
+
+### 2026-08-13 — Honesty gates H-G1..H-G10 — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-ship-a-2e13`
+- **Commands run:** `npx tsx src/api/agent/honesty.gates.test.ts` (via `npm run test:agent-ship:a`)
+- **Gate IDs:** H-G1 Coop Settings switch; H-G2 Save + live read; H-G3 default off; H-G4 dogfood hunt loops only when on; H-G5 search query; H-G6 skip live collab; H-G7 Searched/Read activity; H-G8 no header toggle; H-G9 leftover chips; H-G10 dogfood docs name Coop Settings
+- **What we tried:** Encoded the 2026-08-13 dogfood miss: we claimed the agent was ready while the switch was only in VS Code Settings and hunt ranking preferred `apps/live`.
+- **What broke / what we skipped:** Live Extension Host retest is still for Jon. Did not flip `agentMode` default on.
+- **What Jon re-runs:** Coop Settings → Model & chat → Agent for repo hunts → Save. Then the plane middleware question. Success = Searched/Read + `apps/api/...`. Terminal: `npm run test:agent-ship:a`
 
 ---
 

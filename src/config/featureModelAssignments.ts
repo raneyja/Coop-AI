@@ -22,7 +22,6 @@ export type FeatureModelAssignment = {
   label: string;
   provider: LlmProvider;
   model: string;
-  note?: string;
 };
 
 /** Operator-controlled model routing — not user-configurable in production. */
@@ -37,36 +36,31 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
     feature: "quickActions",
     label: "Quick actions",
     provider: "anthropic",
-    model: "claude-sonnet-4-6",
-    note: "Trace, owner, blast radius, and related actions"
+    model: "claude-sonnet-4-6"
   },
   {
     feature: "edit",
     label: "/edit patches",
     provider: "openai",
-    model: "gpt-5.1",
-    note: "OpenAI only — Anthropic is reserved for quick actions"
+    model: "gpt-5.1"
   },
   {
     feature: "autocomplete",
     label: "Autocomplete",
     provider: "mistral",
-    model: FIM_MISTRAL_MODEL,
-    note: "Codestral FIM when available on the server"
+    model: FIM_MISTRAL_MODEL
   },
   {
     feature: "intentSuggest",
     label: "Intent suggest",
     provider: "openai",
-    model: "gpt-4o-mini",
-    note: "Cheap classifier for quick-action chips when phrase match is weak"
+    model: "gpt-4o-mini"
   },
   {
     feature: "evidencePreview",
     label: "Sources expand preview",
     provider: "openai",
-    model: "gpt-4o-mini",
-    note: "Short AI overview for expanded source cards (commits, PRs, threads)"
+    model: "gpt-4o-mini"
   }
 ];
 
@@ -141,9 +135,11 @@ export function resolveRuntimeAutocompleteModel(
 
 export function assignedModelsHubSubtitle(options: {
   autocompleteEnabled: boolean;
+  agentMode?: "off" | "auto" | "on";
 }): string {
   const autocomplete = options.autocompleteEnabled ? "Autocomplete on" : "Autocomplete off";
-  return `Assigned models · ${autocomplete}`;
+  const agent = options.agentMode === "on" ? "Agent on" : "Agent off";
+  return `Assigned models · ${autocomplete} · ${agent}`;
 }
 
 export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {

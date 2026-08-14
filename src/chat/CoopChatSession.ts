@@ -3,6 +3,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
 import {
+  extractAgentProposedPatchText,
+  mergeAnswerWithAgentPatch
+} from "./agentProposedPatch";
+import {
   applyPendingPatch,
   applyPendingPatchHunk,
   rejectPendingPatchHunk,
@@ -292,6 +296,7 @@ import {
 } from "../context/quickActionScope";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
+import { isGeneratedOrVendorPath as isNoisyMentionPath } from "../indexing/evidencePathNoise";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
 import {
   mergeRepoSemanticContext,
@@ -568,6 +573,7 @@ export class CoopChatSession {
       maxTokens: 2000,
       llmEnabled: true,
       autocompleteEnabled: true,
+      agentMode: "off",
       useCachedResponses: true,
       includeSelection: true,
       includeActiveFile: true,
@@ -6542,9 +6548,15 @@ export class CoopChatSession {
         existingCapability: existingCapabilityEvidence,
         statusTransition: statusTransitionEvidence
       });
+      // Agent propose_patch stores SEARCH/REPLACE in context, not in the model
+      // stream. Merge it so Apply still appears when the model forgets to echo it.
+      const contentForPatchCard = mergeAnswerWithAgentPatch(
+        enrichedContent,
+        extractAgentProposedPatchText(contextBundle)
+      );
       const finalMessage: ChatMessage = {
         ...result.message,
-        content: enrichedContent,
+        content: contentForPatchCard,
         ...(turn.pendingEvidenceArtifactId
           ? { relatedArtifactId: turn.pendingEvidenceArtifactId }
           : {})
@@ -9810,19 +9822,6 @@ function resolveMentionRepoScope(pattern: string, repoIds: string[]): MentionRep
   }
 
   return undefined;
-}
-
-function isNoisyMentionPath(path: string): boolean {
-  const normalized = path.toLowerCase();
-  return (
-    normalized.startsWith("testdata/") ||
-    normalized.includes("/testdata/") ||
-    normalized.includes("/shards/") ||
-    normalized.endsWith(".zoekt") ||
-    normalized.endsWith(".pb") ||
-    normalized.includes("/vendor/") ||
-    normalized.includes("/node_modules/")
-  );
 }
 
 function sliceFileLines(content: string, startLine: number, endLine: number): string {

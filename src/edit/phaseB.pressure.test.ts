@@ -121,7 +121,9 @@ async function main(): Promise<void> {
     assert.match(parsed.error, /Malformed SEARCH\/REPLACE/);
 
     const tool = JSON.parse(
-      await handleProposePatch({ files: [{ path: "src/a.ts", search: "alpha" }] })
+      await handleProposePatch({ indexBackend: {} as never, resolveAbsolutePath: () => undefined }, {
+        files: [{ path: "src/a.ts", search: "alpha" }]
+      })
     ) as { ok: boolean; applied: boolean; error: string };
     assert.equal(tool.ok, false);
     assert.equal(tool.applied, false);
@@ -219,13 +221,16 @@ async function main(): Promise<void> {
     assert.equal(parsed.error, patchFileCapError(6));
 
     const tool = JSON.parse(
-      await handleProposePatch({
-        files: files.map((_, index) => ({
-          path: `src/${["a", "b", "c", "d", "e", "f"][index]}.ts`,
-          search: "x",
-          replace: "y"
-        }))
-      })
+      await handleProposePatch(
+        { indexBackend: {} as never, resolveAbsolutePath: () => undefined },
+        {
+          files: files.map((_, index) => ({
+            path: `src/${["a", "b", "c", "d", "e", "f"][index]}.ts`,
+            search: "x",
+            replace: "y"
+          }))
+        }
+      )
     ) as { ok: boolean; error: string };
     assert.equal(tool.ok, false);
     assert.match(tool.error, /5-file maximum/);
