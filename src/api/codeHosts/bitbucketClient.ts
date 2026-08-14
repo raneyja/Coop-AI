@@ -1,9 +1,12 @@
 import { RateLimitTracker } from "../rateLimitTracker";
 import { codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
+import { throwPullRequestWriteNotYet } from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
   CommitInfo,
+  CreatePullRequestInput,
+  CreatePullRequestResult,
   IssueSummary,
   PullRequestComment,
   PullRequestReview,
@@ -556,6 +559,13 @@ export class BitbucketClient implements CodeHostClient {
       }
     }
     return paths.map((path) => ({ path }));
+  }
+
+  public async createPullFromFiles(
+    _coords: RepoCoordinates,
+    _input: CreatePullRequestInput
+  ): Promise<CreatePullRequestResult> {
+    throwPullRequestWriteNotYet(this.provider);
   }
 
   public async listIssues(

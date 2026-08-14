@@ -16,6 +16,11 @@ import { fetchAfterDotMemberCompletions } from "./memberCompletionProvider";
 import { discardContextPayload } from "./privacy";
 import { AutocompletePerformanceMonitor } from "./performance";
 import { HotStreak } from "./hotStreak";
+import {
+  isNextEditSuggestionsEnabled,
+  NextEditController,
+  planNesAfterAccept
+} from "./nextEditSuggestions";
 import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
 import { readLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
@@ -97,6 +102,7 @@ export function registerAutocompleteIndexNotifier(
 export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProvider {
   private settings = readAutocompleteSettings();
   private readonly hotStreak = new HotStreak();
+  private readonly nes = new NextEditController();
   private readonly triggerDetector = new TriggerDetector();
   private readonly performance = new AutocompletePerformanceMonitor();
   private readonly router: CompletionRouter;
@@ -162,6 +168,24 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     return this.performance.snapshot();
   }
 
+  public wasLastShownNes(): boolean {
+    return this.nes.wasLastShownNes();
+  }
+
+  public getNesDebugState(): {
+    requestCount: number;
+    rejectCount: number;
+    armed: boolean;
+    lastShownWasNes: boolean;
+  } {
+    return {
+      requestCount: this.nes.getRequestCount(),
+      rejectCount: this.nes.getRejectCount(),
+      armed: this.nes.isArmed(),
+      lastShownWasNes: this.nes.wasLastShownNes()
+    };
+  }
+
   public async provideInlineCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -173,6 +197,13 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       return null;
     }
     if (!isFileEligible(document)) {
+      return null;
+    }
+
+    if (this.nes.shouldRequest(this.settings.nextEditSuggestions)) {
+      return this.provideNextEditSuggestion(document, position, token);
+    }
+    if (isNextEditSuggestionsEnabled(this.settings) && this.nes.shouldSkipBasePath()) {
       return null;
     }
 
@@ -216,6 +247,9 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   public noteDocumentChange(event: vscode.TextDocumentChangeEvent): void {
     this.hotStreak.noteKeystroke();
     this.triggerDetector.noteKeystroke();
+    if (isNextEditSuggestionsEnabled(this.settings)) {
+      this.nes.noteKeystroke();
+    }
     const pasted = event.contentChanges.some((change) => change.text.length > 1);
     if (pasted) {
       this.triggerDetector.notePaste();
@@ -223,15 +257,26 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   }
 
   public noteSuggestionAccepted(contextHash: string, languageId?: string): void {
+    const inserted = this.lastAlternatives[this.alternativeIndex]?.text ?? "";
     this.clearLastShown();
     this.hotStreak.activate();
     this.triggerDetector.noteAcceptance(contextHash);
     this.performance.recordAccept(languageId);
     this.lastScopeHash = contextHash;
+    if (isNextEditSuggestionsEnabled(this.settings)) {
+      this.nes.armAfterTabAccept(inserted);
+      void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+    }
   }
 
   public noteSuggestionRejected(reason: string, languageId?: string): void {
+    const nesShown = this.nes.wasLastShownNes();
     this.clearLastShown();
+    if (nesShown) {
+      this.nes.markRejected();
+    } else {
+      this.nes.cancel();
+    }
     if (reason !== "superseded") {
       this.triggerDetector.noteRejection();
       this.performance.recordReject(reason, languageId);
@@ -241,7 +286,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   }
 
   /** Reject only when Coop recently showed a suggestion (avoids Copilot escape false positives). */
-  public rejectActiveSuggestion(reason: string): { rejected: boolean; languageId?: string } {
+  public rejectActiveSuggestion(reason: string): {
+    rejected: boolean;
+    languageId?: string;
+    nes?: boolean;
+  } {
     if (
       !this.lastShownContextHash ||
       Date.now() - this.lastShownAt > SHOWN_ITEM_TTL_MS
@@ -249,8 +298,9 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       return { rejected: false };
     }
     const languageId = this.lastShownLanguageId;
+    const nes = this.nes.wasLastShownNes();
     this.noteSuggestionRejected(reason, languageId);
-    return { rejected: true, languageId };
+    return { rejected: true, languageId, nes };
   }
 
   private noteSupersededIfNeeded(newContextHash: string): void {
@@ -400,6 +450,71 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const reqPrefix = requested.currentLinePrefix.trimEnd();
     const livePrefix = live.currentLinePrefix.trimEnd();
     return livePrefix === reqPrefix || livePrefix.startsWith(reqPrefix) || reqPrefix.startsWith(livePrefix);
+  }
+
+  private async provideNextEditSuggestion(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.InlineCompletionItem[] | null> {
+    const lines = document.getText().split(/\r?\n/);
+    const plan = planNesAfterAccept({
+      nesEnabled: true,
+      lines,
+      cursor: { line: position.line, character: position.character },
+      insertedText: this.nes.getLastInsertedText(),
+      throttleBlocked: this.nes.isThrottleBlocked(),
+      inFlight: this.nes.isInFlight()
+    });
+    if (plan.kind !== "nes") {
+      this.nes.cancel();
+      return null;
+    }
+
+    this.nes.beginRequest(plan.prediction);
+    const predictedPos = new vscode.Position(plan.prediction.line, plan.prediction.character);
+    const extracted = analyzeDocumentContext(document, predictedPos);
+    const abort = new AbortController();
+    const cancel = token.onCancellationRequested(() => abort.abort());
+    try {
+      const result = await this.router.fetchCompletions(
+        extracted,
+        this.settings,
+        abort.signal,
+        document.getText().slice(0, 32_768),
+        { recordPerformance: false }
+      );
+      if (result.completions.length === 0) {
+        this.nes.cancel();
+        return null;
+      }
+
+      const items: vscode.InlineCompletionItem[] = [];
+      for (const completion of result.completions) {
+        const item = this.buildInlineItem(document, predictedPos, extracted, completion);
+        if (item) {
+          items.push(item);
+        }
+      }
+      if (items.length === 0) {
+        this.nes.cancel();
+        return null;
+      }
+
+      this.nes.markShown();
+      this.lastAlternatives = result.completions;
+      this.alternativeIndex = 0;
+      this.lastScopeHash = extracted.contextHash;
+      this.trackShownItem(extracted.contextHash, extracted.languageId);
+      discardContextPayload(extracted);
+      return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
+    } catch {
+      this.nes.cancel();
+      return null;
+    } finally {
+      cancel.dispose();
+      this.nes.finishRequest();
+    }
   }
 
   private async executeRequest(

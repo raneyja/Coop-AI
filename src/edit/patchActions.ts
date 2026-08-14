@@ -21,6 +21,7 @@ import {
   undoPatchApplication,
   type FileUndoSnapshot
 } from "./patchApplier";
+import { resolveEditablePatchTarget } from "./patchTarget";
 import {
   getPatchRecord,
   listPatchCards,
@@ -196,7 +197,7 @@ function mergeUndoSnapshots(
 
 function finalizeCardAfterHunkUpdate(card: PatchCardState): PatchCardState {
   const status = deriveCardStatusFromHunks(card);
-  return {
+  const next: PatchCardState = {
     ...card,
     status,
     canUndo:
@@ -214,6 +215,30 @@ function finalizeCardAfterHunkUpdate(card: PatchCardState): PatchCardState {
     error: undefined,
     suppressMarkdown: true
   };
+  return withCreatePrState(next);
+}
+
+/** After Apply, attach live buffer contents so Create PR can commit without a clone. */
+export function collectAppliedPrFiles(card: PatchCardState): Array<{ path: string; content: string }> {
+  const files: Array<{ path: string; content: string }> = [];
+  for (const file of card.files) {
+    if (!file.hunks.some((hunk) => hunk.status === "applied")) {
+      continue;
+    }
+    const content = resolveEditablePatchTarget(file.relativePath)?.readText();
+    if (typeof content === "string" && content.length > 0) {
+      files.push({ path: file.relativePath, content });
+    }
+  }
+  return files;
+}
+
+function withCreatePrState(card: PatchCardState): PatchCardState {
+  if (card.status !== "applied") {
+    return { ...card, canCreatePr: false, prFiles: undefined };
+  }
+  const prFiles = collectAppliedPrFiles(card);
+  return { ...card, prFiles, canCreatePr: prFiles.length > 0 };
 }
 
 export function setPendingPatchMatchLocations(
@@ -565,6 +590,8 @@ export async function undoLastPatchWithState(
           status: "pending",
           canUndo: false,
           appliedFileCount: undefined,
+          canCreatePr: false,
+          prFiles: undefined,
           error: undefined,
           suppressMarkdown: true,
           files: record.card.files.map((file) => ({

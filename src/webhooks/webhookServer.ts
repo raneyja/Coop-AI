@@ -1113,7 +1113,9 @@ function formatLightningSearchResult(
       size: hit.content.length,
       lastModified: new Date(),
       lastAuthor: "lightning-index",
+      // `sha` carried the line number before `line` existed; keep it for older extensions.
       sha: String(hit.lineNumber),
+      line: hit.lineNumber,
       score: hit.score
     })),
     symbols: search.symbols.map((symbol) => ({

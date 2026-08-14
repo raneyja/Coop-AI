@@ -16,10 +16,33 @@ export type ParsePatchResult =
   | { ok: true; patches: ParsedPatchSet }
   | { ok: false; error: string };
 
+/** Cap for one Apply session. Split larger edits rather than unbounded patch sets. */
+export const PATCH_SESSION_MAX_FILES = 5;
+
 const HUNK_PATTERN =
   /<<<<<<< SEARCH\r?\n([\s\S]*?)\r?\n=======\r?\n([\s\S]*?)\r?\n>>>>>>> REPLACE/g;
 
 const FILE_HEADER_PATTERN = /^File:\s*(?:`([^`]+)`|([^\n`]+))\s*$/gm;
+
+const CITATION_FENCE_INFO =
+  /^(?:\d+:\d+:|(?:startLine|start)\s*:\s*(?:endLine|end)\s*:)/i;
+
+/**
+ * Drop ```startLine:endLine:path citation fences so they never become Apply hunks.
+ * Patch fences (```patch) and unfenced SEARCH/REPLACE after File: stay.
+ */
+export function stripCitationFences(content: string): string {
+  return content.replace(/^```([^\n]*)\r?\n([\s\S]*?)^```[ \t]*$/gm, (full, info: string) => {
+    if (CITATION_FENCE_INFO.test(info.trim())) {
+      return "";
+    }
+    return full;
+  });
+}
+
+export function patchFileCapError(fileCount: number): string {
+  return `Patch set exceeds the ${PATCH_SESSION_MAX_FILES}-file maximum (got ${fileCount}). Split into smaller edits.`;
+}
 
 function extractHunks(text: string): PatchHunk[] {
   const hunks: PatchHunk[] = [];
@@ -82,7 +105,7 @@ export function locateHunkById(
 }
 
 export function parsePatchResponse(content: string): ParsePatchResult {
-  const trimmed = content.trim();
+  const trimmed = stripCitationFences(content).trim();
   if (!trimmed) {
     return { ok: false, error: "Empty response" };
   }
@@ -108,11 +131,22 @@ export function parsePatchResponse(content: string): ParsePatchResult {
     const section = trimmed.slice(sectionStart, sectionEnd);
     const hunks = extractHunks(section);
     if (hunks.length === 0) {
+      if (/<<<<<<< SEARCH/.test(section) || />>>>>>> REPLACE/.test(section)) {
+        return {
+          ok: false,
+          error: `Malformed SEARCH/REPLACE for ${relativePath}. Use <<<<<<< SEARCH / ======= / >>>>>>> REPLACE — no files were written.`
+        };
+      }
       return { ok: false, error: `No patch hunks for ${relativePath}` };
     }
 
     files.push({ relativePath, hunks });
   }
 
-  return { ok: true, patches: { files: mergeFilePatchesByPath(files) } };
+  const merged = mergeFilePatchesByPath(files);
+  if (merged.length > PATCH_SESSION_MAX_FILES) {
+    return { ok: false, error: patchFileCapError(merged.length) };
+  }
+
+  return { ok: true, patches: { files: merged } };
 }

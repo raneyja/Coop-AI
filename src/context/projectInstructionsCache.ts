@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import {
   loadProjectInstructions,
+  loadRemoteProjectInstructions,
   resolveProjectInstructionsGitRoot,
   type ProjectInstructionFile
 } from "./projectInstructionsLoader";
@@ -51,6 +52,71 @@ function isCacheValid(entry: CacheEntry, now: number): ProjectInstructionFile[] 
 
 export function clearProjectInstructionsCache(): void {
   cache.entry = undefined;
+  remoteCache.clear();
+}
+
+export const REMOTE_INSTRUCTIONS_HIT_TTL_MS = 10 * 60 * 1000;
+export const REMOTE_INSTRUCTIONS_MISS_TTL_MS = 30_000;
+
+type RemoteCacheEntry = {
+  cacheKey: string;
+  files: ProjectInstructionFile[];
+  expiresAt: number;
+};
+
+const remoteCache = new Map<string, RemoteCacheEntry>();
+
+function remoteCacheKey(repoId: string, branch?: string, version?: string): string {
+  return `remote::${normalizeCacheKeySegment(repoId)}::${normalizeCacheKeySegment(branch)}::${normalizeCacheKeySegment(version)}`;
+}
+
+export function peekRemoteProjectInstructionsCache(
+  repoId: string,
+  branch?: string,
+  version?: string,
+  now = Date.now()
+): ProjectInstructionFile[] | undefined {
+  const key = remoteCacheKey(repoId, branch, version);
+  const entry = remoteCache.get(key);
+  if (!entry || now > entry.expiresAt) {
+    return undefined;
+  }
+  return entry.files;
+}
+
+export type LoadRemoteProjectInstructionsCachedOptions = {
+  repoId: string;
+  branch?: string;
+  version?: string;
+  timeoutMs: number;
+  readFile: (path: string) => Promise<string | undefined>;
+  now?: number;
+};
+
+export async function loadRemoteProjectInstructionsCached(
+  options: LoadRemoteProjectInstructionsCachedOptions
+): Promise<ProjectInstructionFile[]> {
+  const now = options.now ?? Date.now();
+  const key = remoteCacheKey(options.repoId, options.branch, options.version);
+  const hit = peekRemoteProjectInstructionsCache(options.repoId, options.branch, options.version, now);
+  if (hit) {
+    return hit;
+  }
+
+  if (options.timeoutMs <= 0) {
+    return [];
+  }
+
+  const loaded = await loadRemoteProjectInstructions({
+    readFile: options.readFile,
+    timeoutMs: options.timeoutMs
+  });
+  remoteCache.set(key, {
+    cacheKey: key,
+    files: loaded.files,
+    expiresAt: now + (loaded.files.length ? REMOTE_INSTRUCTIONS_HIT_TTL_MS : REMOTE_INSTRUCTIONS_MISS_TTL_MS)
+  });
+  return loaded.files;
 }
 
 export type LoadProjectInstructionsCachedOptions = {

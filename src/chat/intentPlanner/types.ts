@@ -9,6 +9,7 @@
 import type { IntegrationChatProvider } from "../types";
 import type { QuickActionId } from "../../webview/types";
 import type { SuggestConfidence } from "../quickActionSuggestIntent";
+import type { RepoCodeIntent } from "../repoCodeIntent";
 
 export type ChatIntentWorkflow = QuickActionId;
 
@@ -42,6 +43,12 @@ export type ChatIntentPlan = {
   execution: ChatIntentExecution;
   /** Human-readable reason (debug / activity). */
   reason?: string;
+  /**
+   * Whether the turn needs the repository's own code, and what for.
+   * Set when no workflow claims the turn — this is what lets the agent loop run
+   * on ordinary code questions instead of only on hunt-shaped wording.
+   */
+  codeIntent?: RepoCodeIntent;
 };
 
 export type ChatIntentPlannerInput = {

@@ -32,6 +32,15 @@ export type ProjectInstructionsState = {
   attachedAgentsMdLabel?: string;
 };
 
+/** Settings-visible fact. Injected only when `source` is non-empty. */
+export type VisibleMemoryFact = {
+  id: string;
+  text: string;
+  source: string;
+  repoId?: string;
+  createdAt: number;
+};
+
 export type RepoContext = {
   provider?: CodeHostProviderPreference;
   owner?: string;
@@ -207,6 +216,11 @@ export type PatchCardState = {
   appliedFileCount?: number;
   canUndo?: boolean;
   /**
+   * Reserved for Phase C Create pull request. Wave 2 B always leaves this false
+   * (button is a disabled/hidden coop-text-btn, not a new primary row).
+   */
+  canCreatePr?: boolean;
+  /**
    * Once a patch card has been shown for this assistant message, keep hiding the raw
    * SEARCH/REPLACE fence for that message.
    */
@@ -216,6 +230,11 @@ export type PatchCardState = {
    * Used so earlier messages keep raw markdown hidden even after newer /edit cards appear.
    */
   suppressedMessageTimestamps?: number[];
+  /**
+   * Full file bodies for a confirmed Create PR (fixture in Wave 2 C; B apply session at Join).
+   * Paths without content are blocked — never an empty commit.
+   */
+  prFiles?: Array<{ path: string; content: string }>;
 };
 
 export type PatchCardsUpdatePayload = {
@@ -248,6 +267,8 @@ export type UserPreferences = {
   maxTokens: number;
   llmEnabled: boolean;
   autocompleteEnabled: boolean;
+  /** Repo-hunt tool loop. Default off — today’s chat. */
+  agentMode: "off" | "auto" | "on";
   useCachedResponses: boolean;
   includeSelection: boolean;
   includeActiveFile: boolean;
@@ -328,6 +349,8 @@ export type UserPreferences = {
 export type SettingsStatePayload = UserPreferences & {
   identityDirectory: IdentityDirectory;
   projectInstructions?: ProjectInstructionsState;
+  /** Visible/clearable facts (Settings only — not chat chrome). */
+  visibleMemory?: VisibleMemoryFact[];
 };
 
 export type ChatUsagePayload = {
@@ -578,6 +601,8 @@ export type WebviewInbound =
   | { type: "agents:start-from-template" }
   | { type: "agents:attach" }
   | { type: "agents:open" }
+  | { type: "memory:add"; payload: { text: string; source: string; repoId?: string } }
+  | { type: "memory:clear"; payload?: { id?: string } }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
   | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
   | {
@@ -623,6 +648,20 @@ export type WebviewInbound =
     }
   | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
   | { type: "patch:open-file"; payload: { path: string } }
+  | {
+      /** Wave 2 C confirm payload. Join (J-G1) wires the CoopChatSession handler. */
+      type: "patch:create-pr";
+      payload: {
+        messageTimestamp?: number;
+        repoId?: string;
+        provider?: CodeHostProviderPreference;
+        branch: string;
+        title: string;
+        body?: string;
+        base?: string;
+        files: Array<{ path: string; content: string }>;
+      };
+    }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }

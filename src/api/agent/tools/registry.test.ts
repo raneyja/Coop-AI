@@ -92,7 +92,7 @@ async function run(): Promise<void> {
     assert.match(parsed.error, /not enabled/i);
   });
 
-  await test("read_file reads workspace file content", async () => {
+  await test("read_file does not use local workspace absolute paths (Zero-Clone)", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-agent-read-"));
     const filePath = path.join(root, "src", "panel.ts");
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -104,33 +104,22 @@ async function run(): Promise<void> {
         resolveAbsolutePath: (relativePath) => path.join(root, relativePath)
       });
       const raw = await registry.read_file!({ path: "src/panel.ts" });
-      const parsed = JSON.parse(raw) as { files: Array<{ content: string }> };
-      assert.ok(parsed.files[0]?.content.includes("bindSession"));
+      const parsed = JSON.parse(raw) as { error?: string; files?: unknown[] };
+      assert.match(parsed.error ?? "", /Could not read file/i);
+      assert.equal(parsed.files, undefined);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
-  await test("read_file slices line range when requested", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-agent-lines-"));
-    const filePath = path.join(root, "src", "lines.ts");
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, ["line1", "line2", "line3", "line4", "line5"].join("\n"), "utf8");
-
-    try {
-      const registry = createAgentToolRegistry({
-        indexBackend: mockIndexBackend(),
-        resolveAbsolutePath: (relativePath) => path.join(root, relativePath)
-      });
-      const raw = await registry.read_file!({ path: "src/lines.ts", startLine: 3, endLine: 3 });
-      const parsed = JSON.parse(raw) as { files: Array<{ content: string; lineRange?: [number, number] }> };
-      assert.ok(parsed.files[0]?.content.includes("line3"));
-      assert.ok(parsed.files[0]?.lineRange);
-      assert.equal(parsed.files[0]?.lineRange?.[0], 1);
-      assert.equal(parsed.files[0]?.lineRange?.[1], 5);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+  await test("read_file requires a remote reader for line windows", async () => {
+    const registry = createAgentToolRegistry({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => "/tmp/never-used.ts"
+    });
+    const raw = await registry.read_file!({ path: "src/lines.ts", startLine: 3, endLine: 3 });
+    const parsed = JSON.parse(raw) as { error?: string };
+    assert.match(parsed.error ?? "", /Could not read file/i);
   });
 
   await test("read_file falls back to the remote workspace when there is no local clone", async () => {

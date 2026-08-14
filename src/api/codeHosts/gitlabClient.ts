@@ -6,10 +6,13 @@ import {
   paginatedCodeHostFetch,
   parseLinkNext
 } from "./codeHostHttp";
+import { throwPullRequestWriteNotYet } from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
   CommitInfo,
+  CreatePullRequestInput,
+  CreatePullRequestResult,
   IssueSummary,
   PullRequestComment,
   PullRequestReview,
@@ -454,6 +457,13 @@ export class GitLabClient implements CodeHostClient {
       updatedAt: issue.updated_at,
       htmlUrl: issue.web_url
     }));
+  }
+
+  public async createPullFromFiles(
+    _coords: RepoCoordinates,
+    _input: CreatePullRequestInput
+  ): Promise<CreatePullRequestResult> {
+    throwPullRequestWriteNotYet(this.provider);
   }
 
   public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {

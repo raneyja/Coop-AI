@@ -177,6 +177,27 @@ export type DependencyGraph = {
   edges: DependencyGraphEdge[];
 };
 
+export type PullRequestWriteFile = {
+  path: string;
+  content: string;
+};
+
+export type CreatePullRequestInput = {
+  branch: string;
+  title: string;
+  body?: string;
+  base?: string;
+  files: PullRequestWriteFile[];
+};
+
+export type CreatePullRequestResult = {
+  number: number;
+  htmlUrl: string;
+  branch: string;
+  commitSha: string;
+  title: string;
+};
+
 export type CodeHostRepositoryConfig = {
   provider?: CodeHostProvider;
   owner: string;
@@ -242,6 +263,11 @@ export interface CodeHostClient {
   countRepositoryFiles?(
     coords: RepoCoordinates
   ): Promise<{ fileCount: number; truncated: boolean }>;
+  /**
+   * Zero-Clone write: create a branch + commit + PR from file contents (not a local git push).
+   * GitHub is implemented. GitLab / Bitbucket must throw `unsupported` ("not yet") — never call GitHub APIs.
+   */
+  createPullFromFiles(coords: RepoCoordinates, input: CreatePullRequestInput): Promise<CreatePullRequestResult>;
 }
 
 export function repoIdFromCoordinates(coords: RepoCoordinates): string {

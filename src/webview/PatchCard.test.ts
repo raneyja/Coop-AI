@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   shouldHidePatchMarkdownForMessage,
-  shouldRenderPatchCardForMessage
+  shouldRenderPatchCardForMessage,
+  showCreatePullRequestButton
 } from "./PatchCard";
 import type { PatchCardState } from "../chat/types";
 
@@ -98,6 +99,22 @@ test("a newer /edit patch keeps older card visible and markdown suppressed", () 
 test("suppress registry hides markdown even when card list is empty for that message", () => {
   assert.equal(shouldHidePatchMarkdownForMessage([], 10, [10]), true);
   assert.equal(shouldRenderPatchCardForMessage([], 10), false);
+});
+
+test("B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr", () => {
+  const pending: PatchCardState = {
+    status: "pending",
+    messageTimestamp: 10,
+    fileCount: 1,
+    hunkCount: 1,
+    files: baseFiles,
+    canCreatePr: false
+  };
+  assert.equal(showCreatePullRequestButton(pending), false);
+  assert.equal(
+    showCreatePullRequestButton({ ...pending, status: "applied", canCreatePr: true }),
+    true
+  );
 });
 
 console.log(`\nPatchCard helpers: ${passed} passed, ${failed} failed`);

@@ -3,6 +3,8 @@ import { parseRepoId } from "../server/gitCloneService";
 import { CollectionStore } from "../server/collectionStore";
 import { embedQuery } from "./embeddingsClient";
 import { RepoEmbeddingsStore, type SimilarChunkHit } from "./repoEmbeddingsStore";
+import { isGeneratedOrVendorPath } from "./evidencePathNoise";
+import { UNKNOWN_HIT_LINE } from "./graphSearchHit";
 import { mentionPathMinScore, rankMentionPathHits, scoreMentionPath } from "./mentionPathScore";
 
 export type SearchHitSource = "scip" | "zoekt" | "embedding" | "fallback";
@@ -329,7 +331,8 @@ async function collectMentionPathHits(
       repoId: String(row.repo_id),
       path: String(row.file_path),
       content: String(row.file_path),
-      lineNumber: 1,
+      // Matched on path, not on a line — say so rather than implying line 1.
+      lineNumber: UNKNOWN_HIT_LINE,
       score: scoreMentionPath(String(row.file_path), trimmed) / 100,
       source: "scip" as SearchHitSource
     }))
@@ -342,18 +345,7 @@ async function collectMentionPathHits(
     .slice(0, limit);
 }
 
-function isNoisyMentionPath(path: string): boolean {
-  const normalized = path.toLowerCase();
-  return (
-    normalized.startsWith("testdata/") ||
-    normalized.includes("/testdata/") ||
-    normalized.includes("/shards/") ||
-    normalized.endsWith(".zoekt") ||
-    normalized.endsWith(".pb") ||
-    normalized.includes("/vendor/") ||
-    normalized.includes("/node_modules/")
-  );
-}
+const isNoisyMentionPath = isGeneratedOrVendorPath;
 
 function zoektRepoName(repoId: string): string {
   const { provider, owner, repo } = parseRepoId(repoId);

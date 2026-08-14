@@ -33,3 +33,16 @@ test("extractFileChipsFromLabels picks backtick paths", () => {
   assert.ok(chips.some((chip) => chip.path === "**/CODEOWNERS"));
   assert.ok(chips.some((chip) => chip.path === "foo/bar.ts"));
 });
+
+test("agentStepsToActivity caps visible steps at 3 (UX-G2)", () => {
+  const activity = agentStepsToActivity(
+    Array.from({ length: 8 }, (_, index) => ({
+      index,
+      tool: "search_code",
+      summary: `search_code: q${index}`,
+      completed: true
+    }))
+  );
+  assert.equal(activity.tools.length, 3);
+  assert.equal(activity.todos.some((todo) => todo.content.includes("5 more")), true);
+});

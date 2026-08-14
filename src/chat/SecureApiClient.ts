@@ -31,6 +31,7 @@ import type {
 import type { OrgIntegrationStatusEntry } from "./integrationStatusTypes";
 import { DEFAULT_TIMEZONE_ID } from "./timezone";
 import { readCodeHostProvider } from "../config/codeHostConfig";
+import { readAgentModeSetting } from "../config/agentModeConfig";
 import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
@@ -546,6 +547,20 @@ export class SecureApiClient {
     return result.pulls;
   }
 
+  public async createRepoPullViaCloud(
+    baseUrl: string,
+    repoId: string,
+    input: {
+      branch: string;
+      title: string;
+      body?: string;
+      base?: string;
+      files: Array<{ path: string; content: string }>;
+    }
+  ): Promise<import("../api/codeHosts/types").CreatePullRequestResult & { repoId: string }> {
+    return this.backend.createRepoPull(baseUrl, repoId, input);
+  }
+
   public async fetchRepoIssuesViaCloud(
     baseUrl: string,
     repoId: string,
@@ -864,6 +879,7 @@ export function readConfiguration(): Omit<
     maxTokens: config.get<number>("maxTokens", 2000),
     llmEnabled: true,
     autocompleteEnabled: config.get<boolean>("autocomplete.enabled", true),
+    agentMode: readAgentModeSetting(),
     useCachedResponses: config.get<boolean>("useCachedResponses", true),
     includeSelection: config.get<boolean>("includeSelection", true),
     includeActiveFile: config.get<boolean>("includeActiveFile", true),
@@ -1253,6 +1269,9 @@ export async function updateConfiguration(updates: Partial<UserPreferences>): Pr
   }
   if (safeUpdates.autocompleteEnabled !== undefined) {
     ops.push(["autocomplete.enabled", safeUpdates.autocompleteEnabled]);
+  }
+  if (safeUpdates.agentMode !== undefined) {
+    ops.push(["chat.agentMode", safeUpdates.agentMode]);
   }
   if (safeUpdates.useCachedResponses !== undefined) {
     ops.push(["useCachedResponses", safeUpdates.useCachedResponses]);

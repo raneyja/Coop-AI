@@ -24,6 +24,7 @@ export type Preferences = {
   maxTokens: number;
   llmEnabled: boolean;
   autocompleteEnabled: boolean;
+  agentMode: "off" | "auto" | "on";
   useCachedResponses: boolean;
   includeSelection: boolean;
   includeActiveFile: boolean;
@@ -97,6 +98,7 @@ export type Preferences = {
   timezone?: string;
   identityDirectory: import("../../../identity/types").IdentityDirectory;
   projectInstructions?: import("../../../chat/types").ProjectInstructionsState;
+  visibleMemory?: import("../../../chat/types").VisibleMemoryFact[];
 };
 
 export type SettingsCollectionSummary = {

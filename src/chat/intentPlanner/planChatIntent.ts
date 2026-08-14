@@ -17,6 +17,7 @@ import { wantsConfluenceContext } from "../../context/confluenceContext";
 import { wantsNotionContext } from "../../context/notionContext";
 import { wantsGoogleDocsContext } from "../../context/googleDocsContext";
 import { isIncidentShapedQuery } from "../../context/incidentIntent";
+import { classifyRepoCodeIntent } from "../repoCodeIntent";
 
 const WORKFLOW_PATTERNS: Array<{
   workflow: ChatIntentWorkflow;
@@ -228,7 +229,9 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       confidence: "high",
       focus,
       execution: "none",
-      reason: "named tools"
+      reason: "named tools",
+      // A compound ask ("where is X, and what did Slack say?") still needs code.
+      codeIntent: classifyRepoCodeIntent(message)
     };
   }
 
@@ -244,7 +247,9 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     };
   }
 
-  return emptyChatIntentPlan(focus);
+  // Nothing else claimed the turn. If it is a question about the repository's
+  // code, say so on the plan so the agent loop can take it.
+  return { ...emptyChatIntentPlan(focus), codeIntent: classifyRepoCodeIntent(message) };
 }
 
 /**

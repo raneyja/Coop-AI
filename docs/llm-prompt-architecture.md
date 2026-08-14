@@ -511,11 +511,13 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ## Agent loop (Phase 5)
 
-Plain chat uses single-shot evidence fetch by default. When `coopAI.chat.agentMode` is **on**, context gathering prefetches `search_code` hits via `AgentOrchestrator.executeTool` (graph-grounded, `repoId:path:line` citations), then reads the top hit with `read_file`. `read_file` resolves from the local clone when there is one and otherwise fetches the body through `IndexedRepoWorkspace.readFile`, so remote-only repos work the same way.
+Plain chat uses single-shot evidence fetch by default. `coopAI.chat.agentMode` defaults to **off** (today’s chat). When **on**, and the Chat Intent Planner says the turn is a **repo hunt**, `AgentOrchestrator.run()` may call a cheap model to choose `search_code` / `read_file` / `list_directory` / `git_blame` in a loop, then the chat model synthesizes. Invalid tool JSON fails open (deterministic search→read fallback or stop). Default remains **off**. Trace / `/edit` / local explain never enter this loop.
 
-**Shipped:** `createAgentToolRegistry`, `search_code`, `read_file`, opt-in setting, unit tests.
+`read_file` fetches through `IndexedRepoWorkspace.readFile` (code host / index) — Zero-Clone; it does not prefer a local clone.
 
-**Deferred (Phase 5b):** LLM tool-use loop in `AgentOrchestrator.run()` — stream model responses, parse tool calls, execute registry handlers iteratively, synthesize final answer. Default remains **off**. Build plan + gates: [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).
+**Shipped (Wave 1 / 5b read-only):** LLM tool-use loop, planner-first routing, opt-in setting, unit/gate tests. Build plan: [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).
+
+**Still deferred:** `propose_patch`, GitHub PR handoff, always-on remote AGENTS.md, NES.
 
 ---
 

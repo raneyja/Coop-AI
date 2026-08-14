@@ -210,6 +210,8 @@ export type SettingsDetailProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
+  onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
+  onClearVisibleMemory?: (id?: string) => void;
 };
 
 export function SettingsDetailView({
@@ -273,13 +275,11 @@ function assignmentFeatureEnabled(
 function AssignedModelRow({
   label,
   meta,
-  enabled,
-  note
+  enabled
 }: {
   label: string;
   meta: string;
   enabled: boolean;
-  note?: string;
 }): React.ReactElement {
   return (
     <div className="coop-health-integration">
@@ -287,7 +287,6 @@ function AssignedModelRow({
         <div className="min-w-0">
           <div className="coop-health-integration-name">{label}</div>
           <div className="coop-health-integration-meta">{meta}</div>
-          {note ? <div className="coop-health-integration-meta mt-1">{note}</div> : null}
         </div>
         <span
           className={`coop-health-status shrink-0 ${enabled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
@@ -305,7 +304,8 @@ function ModelDetail({
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({
-    autocompleteEnabled: prefs.autocompleteEnabled
+    autocompleteEnabled: prefs.autocompleteEnabled,
+    agentMode: prefs.agentMode ?? "off"
   });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -314,10 +314,11 @@ function ModelDetail({
   useEffect(() => {
     if (!dirty) {
       setDraft({
-        autocompleteEnabled: prefs.autocompleteEnabled
+        autocompleteEnabled: prefs.autocompleteEnabled,
+        agentMode: prefs.agentMode ?? "off"
       });
     }
-  }, [prefs.autocompleteEnabled, dirty]);
+  }, [prefs.autocompleteEnabled, prefs.agentMode, dirty]);
 
   useEffect(
     () => () => {
@@ -336,7 +337,8 @@ function ModelDetail({
 
   const handleSave = () => {
     onUpdate({
-      autocompleteEnabled: draft.autocompleteEnabled
+      autocompleteEnabled: draft.autocompleteEnabled,
+      agentMode: draft.agentMode
     });
     setDirty(false);
     setSaved(true);
@@ -349,18 +351,12 @@ function ModelDetail({
   return (
     <>
       <SettingsSection>
-        <p className="coop-settings-card-desc px-0.5">
-          Models are assigned by Coop for chat, quick actions, edit mode, autocomplete, and intent
-          suggest. Custom model selection is an Enterprise capability (coming soon).
-        </p>
-
         <div className="space-y-2">
           {COOP_FEATURE_MODEL_ASSIGNMENTS.map((assignment) => (
             <AssignedModelRow
               key={assignment.feature}
               label={assignment.label}
               meta={formatAssignedModelMeta(assignment)}
-              note={assignment.note}
               enabled={assignmentFeatureEnabled(assignment.feature, draft)}
             />
           ))}
@@ -370,6 +366,12 @@ function ModelDetail({
           title="Enable inline autocomplete"
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
+        />
+
+        <SettingsCheckboxRow
+          title="AgentMode"
+          checked={draft.agentMode === "on"}
+          onChange={(checked) => update({ agentMode: checked ? "on" : "off" })}
         />
 
         <div className="coop-settings-actions">
@@ -867,7 +869,8 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
-            autocompleteEnabled: prefs.autocompleteEnabled
+            autocompleteEnabled: prefs.autocompleteEnabled,
+            agentMode: prefs.agentMode
           })}
           onClick={() => onNavigate("model")}
         />
@@ -1707,7 +1710,9 @@ function WorkspaceDetail({
   workspacePickerState,
   onAttachAgentsMd,
   onOpenAgentsMd,
-  onStartFromAgentsMdTemplate
+  onStartFromAgentsMdTemplate,
+  onAddVisibleMemory,
+  onClearVisibleMemory
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
   const [dirty, setDirty] = useState(false);
@@ -1847,6 +1852,16 @@ function WorkspaceDetail({
           )}
         </div>
       </SettingsSection>
+      <VisibleMemorySettings
+        facts={prefs.visibleMemory ?? []}
+        repoId={
+          prefs.owner && prefs.repo
+            ? `${prefs.defaultCodeHost || "github"}:${prefs.owner}/${prefs.repo}`
+            : undefined
+        }
+        onAdd={onAddVisibleMemory}
+        onClear={onClearVisibleMemory}
+      />
       <SettingsSection title="Workspace repos">
         <p className="coop-settings-card-desc">
           {prefs.adminControlledRepos
@@ -2082,6 +2097,92 @@ function PromptsDetail({
         onUpdatePinned={onUpdatePinnedPrompts}
         onManageLibrary={onManagePromptLibrary}
       />
+    </SettingsSection>
+  );
+}
+
+function VisibleMemorySettings({
+  facts,
+  repoId,
+  onAdd,
+  onClear
+}: {
+  facts: import("../../../chat/types").VisibleMemoryFact[];
+  repoId?: string;
+  onAdd?: (fact: { text: string; source: string; repoId?: string }) => void;
+  onClear?: (id?: string) => void;
+}): React.ReactElement {
+  const [text, setText] = useState("");
+  const [source, setSource] = useState("");
+  const canAdd = Boolean(onAdd && text.trim() && source.trim());
+
+  return (
+    <SettingsSection title="Saved facts">
+      <div className="coop-settings-card space-y-2">
+        <p className="coop-settings-card-desc">
+          Facts with a source can be used in chat. Facts without a source are not sent. Clear them here — they
+          never appear as a chat banner.
+        </p>
+        {facts.length ? (
+          <ul className="space-y-2">
+            {facts.map((fact) => (
+              <li key={fact.id} className="coop-settings-card space-y-1">
+                <p className="text-[12px]">{fact.text}</p>
+                <p className="coop-settings-card-desc !mb-0">Source: {fact.source}</p>
+                {onClear ? (
+                  <button type="button" className="coop-text-btn" onClick={() => onClear(fact.id)}>
+                    Clear
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="coop-settings-card-desc !mb-0">No saved facts.</p>
+        )}
+        <label className="coop-settings-field-row">
+          <span className="coop-settings-label">Fact</span>
+          <input
+            type="text"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            className="coop-settings-field"
+            placeholder="Auth lives in apps/api"
+          />
+        </label>
+        <label className="coop-settings-field-row">
+          <span className="coop-settings-label">Source</span>
+          <input
+            type="text"
+            value={source}
+            onChange={(event) => setSource(event.target.value)}
+            className="coop-settings-field"
+            placeholder="AGENTS.md or a Slack thread"
+          />
+        </label>
+        <div className="coop-settings-actions">
+          <button
+            type="button"
+            className="coop-settings-action-btn"
+            disabled={!canAdd}
+            onClick={() => {
+              if (!canAdd || !onAdd) {
+                return;
+              }
+              onAdd({ text: text.trim(), source: source.trim(), repoId });
+              setText("");
+              setSource("");
+            }}
+          >
+            Save fact
+          </button>
+          {facts.length && onClear ? (
+            <button type="button" className="coop-text-btn" onClick={() => onClear()}>
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      </div>
     </SettingsSection>
   );
 }

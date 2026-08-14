@@ -16,6 +16,8 @@ import type { IntentFeedbackState, JobProgressState } from "./types";
 
 /** Keep the checklist short so timed reveal stays feelable during long jobs. */
 const MAX_ACTIVITY_TODOS = 5;
+/** UX-G2: extra agent tool steps fold; Sources stay above the answer. */
+const MAX_VISIBLE_AGENT_STEPS = 3;
 
 export type AgentTodoStatus = "pending" | "in_progress" | "completed";
 
@@ -267,12 +269,21 @@ export function mergeAgentActivity(
 export function agentStepsToActivity(
   steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>
 ): AgentActivityState {
-  const todos: AgentTodoItem[] = steps.map((step) => ({
+  const extra = Math.max(0, steps.length - MAX_VISIBLE_AGENT_STEPS);
+  const visible = extra > 0 ? steps.slice(0, MAX_VISIBLE_AGENT_STEPS) : steps;
+  const todos: AgentTodoItem[] = visible.map((step) => ({
     id: `agent-${step.index}-${step.tool}`,
     content: humanizeAgentSummary(step.tool, step.summary),
     status: step.completed ? "completed" : "in_progress"
   }));
-  const tools: AgentToolRow[] = steps.map((step) => ({
+  if (extra > 0) {
+    todos.push({
+      id: "agent-more",
+      content: `${extra} more step${extra === 1 ? "" : "s"}`,
+      status: "pending"
+    });
+  }
+  const tools: AgentToolRow[] = visible.map((step) => ({
     id: `agent-tool-${step.index}`,
     kind: toolKindFromName(step.tool),
     label: humanizeAgentSummary(step.tool, step.summary),

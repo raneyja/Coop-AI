@@ -2,9 +2,10 @@ import * as vscode from "vscode";
 import type { ParsedPatchSet } from "./patchParser";
 import { applyHunksToContent } from "./patchContent";
 import {
-  resolveEditablePatchTarget,
+  ensureEditablePatchTarget,
   undoSnapshotPathForUri,
-  uriFromUndoSnapshotPath
+  uriFromUndoSnapshotPath,
+  type EnsurePatchTargetOptions
 } from "./patchTarget";
 
 export { applyHunkToContent, applyHunksToContent } from "./patchContent";
@@ -27,6 +28,8 @@ export type ApplyPatchesOptions = {
    * passed to apply (not the full session patch set).
    */
   matchIndicesByFileHunk?: Readonly<Record<string, readonly number[]>>;
+  repo?: EnsurePatchTargetOptions["repo"];
+  openRemoteFile?: EnsurePatchTargetOptions["openRemoteFile"];
 };
 
 function fileHunkKey(relativePath: string, hunkIndex: number): string {
@@ -52,16 +55,20 @@ export async function applyPatchesToWorkspace(
   let usedRemoteEditor = false;
 
   for (const filePatch of patches.files) {
-    const target = resolveEditablePatchTarget(filePatch.relativePath);
-    if (!target) {
+    const resolved = await ensureEditablePatchTarget(filePatch.relativePath, {
+      repo: options?.repo,
+      openRemoteFile: options?.openRemoteFile
+    });
+    if (!resolved.ok) {
       return {
         ok: false,
-        error: `Could not resolve file: ${filePatch.relativePath}. Open it in the editor (remote tabs work), then Apply again.`,
+        error: resolved.error,
         file: filePatch.relativePath
       };
     }
+    const target = resolved.target;
 
-    if (target.uri.scheme !== "file") {
+    if (target.uri.scheme !== "file" || resolved.usedRemoteOpen) {
       usedRemoteEditor = true;
     }
 

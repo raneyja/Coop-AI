@@ -21,6 +21,9 @@
     "src/server/githubInstallUrl.test.ts",
     "src/server/githubRelinkService.test.ts",
     "src/server/orgApiAdminGate.test.ts",
+    "src/server/phaseC.gates.test.ts",
+    "src/api/codeHosts/phaseC.gates.test.ts",
+    "src/api/codeHosts/phaseC.pressure.test.ts",
     "**/* 2.*",
     "**/* 3.*",
     "**/* 4.*"

@@ -161,6 +161,13 @@ const vscodeMock = {
       public end: MockPosition
     ) {}
   },
+  ViewColumn: { Active: -1, Beside: -2, One: 1, Two: 2 },
+  WorkspaceEdit: class {
+    replacements: Array<{ uri: { toString(): string }; newText: string }> = [];
+    replace(uri: { toString(): string }, _range: unknown, newText: string) {
+      this.replacements.push({ uri, newText });
+    }
+  },
   workspace: {
     textDocuments: [] as unknown[],
     getWorkspaceFolder: () => ({ uri: { fsPath: "/workspace" } }),
@@ -191,7 +198,24 @@ const vscodeMock = {
     asRelativePath: (uri: { fsPath?: string } | string) => {
       const path = typeof uri === "string" ? uri : (uri.fsPath ?? "");
       return path.replace(/^\/workspace\/?/, "");
-    }
+    },
+    openTextDocument: async (uri: { toString?: () => string; fsPath?: string }) => {
+      const key = uri.toString?.() ?? uri.fsPath ?? "";
+      const docs = vscodeMock.workspace.textDocuments as Array<{
+        uri: { toString: () => string; fsPath?: string };
+      }>;
+      const found = docs.find((doc) => doc.uri.toString() === key || doc.uri.fsPath === uri.fsPath);
+      if (found) {
+        return found;
+      }
+      return {
+        uri,
+        getText: () => "",
+        lineCount: 1,
+        lineAt: () => ({ text: "" })
+      };
+    },
+    applyEdit: async () => true
   },
   extensions: {
     getExtension: (id: string) => {
@@ -216,7 +240,9 @@ const vscodeMock = {
     visibleTextEditors: [] as Array<{ document: { uri: { fsPath: string } } }>,
     tabGroups: { all: [] as unknown[] },
     activeTextEditor: undefined as unknown,
-    showInformationMessage: async () => mockInformationMessageChoice
+    showInformationMessage: async () => mockInformationMessageChoice,
+    showWarningMessage: async () => undefined,
+    showErrorMessage: async () => undefined
   },
   languages: {
     registerInlineCompletionItemProvider: () => ({ dispose: () => undefined })

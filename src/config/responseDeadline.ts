@@ -7,6 +7,9 @@
  *
  * Soft gather is silent to the user: synthesize with partial evidence, do not
  * post degradation banners or engineer jargon about “budget exhausted.”
+ *
+ * Agent jobs (`coopAI.chat.agentMode`) use AGENT_JOB_WALL_MS in
+ * src/config/agentJobBudget.ts — do not reuse this 15s constant as the agent wall.
  */
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;
 
