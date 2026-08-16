@@ -10,6 +10,7 @@ import {
   EVIDENCE_CITATION_RULES,
   extractCitationKeysFromSourcesSection,
   GENERAL_CHAT_EVIDENCE_RULES,
+  AGENT_REPO_HUNT_RULES,
   NARRATIVE_CITATION_RULES,
   stripDisallowedNarrativeSourceCitations,
   supplementaryKeysOmittedFromChecklist,
@@ -187,6 +188,13 @@ test("GENERAL_CHAT_EVIDENCE_RULES covers citations, strength, empty integrations
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Cite concrete file paths/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /search samples \/ capped result sets/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /how many/i);
+});
+
+test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", () => {
+  assert.match(AGENT_REPO_HUNT_RULES, /index miss/i);
+  assert.match(AGENT_REPO_HUNT_RULES, /absent from the repository/i);
+  assert.match(AGENT_REPO_HUNT_RULES, /restating|paraphrasing/i);
+  assert.match(AGENT_REPO_HUNT_RULES, /Your question/);
 });
 
 console.log(`\nevidenceSynthesis: ${passed}/${passed + failed} tests passed`);

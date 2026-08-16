@@ -18,13 +18,56 @@ const APPLY_LANGUAGE_RE =
 const EDIT_TARGET_HINT_RE =
   /\b(in this (?:file|function|method|class)|this (?:file|function|method)|validate_\w+|def \w+|function \w+|method)\b/i;
 
-/** Shown when /edit has no open file / @mention to anchor a patch. */
+/** Shown when explicit /edit has no open file / @mention to anchor a patch. */
 export const EDIT_NO_TARGET_FILE_ERROR =
   "Open a file in the editor (or @mention one), then use /edit so Coop can emit an apply-able patch for that path.";
+
+/**
+ * Shown when a concrete change ask has no file anchor and routing will not hunt.
+ * Prefer Agent hunt → patch over forcing an open tab.
+ */
+export const EDIT_NO_TARGET_WITHOUT_AGENT_ERROR =
+  "Open a file (or @mention one) for /edit, or ask Coop to find the code and propose a patch.";
 
 /** Shown when /edit knows the path but remote/codehost content could not be read. */
 export const EDIT_UNREADABLE_FILE_ERROR =
   "Could not read the open remote file for /edit. Keep the file tab open (or reopen it from Remote workspace) and try again.";
+
+/**
+ * How to handle a change-shaped ask: anchored /edit, Agent hunt→patch, or hard error.
+ * Open file is a hint — not a gate — when Agent can own the change.
+ */
+export type ChangeSendRouting =
+  | { kind: "anchored-edit" }
+  | { kind: "agent-change" }
+  | { kind: "reject-no-target"; message: string }
+  | { kind: "none" };
+
+export function resolveChangeSendRouting(options: {
+  /** User explicitly chose /edit (slash or composer). */
+  explicitEdit: boolean;
+  concreteEditAsk: boolean;
+  hasEditTarget: boolean;
+  /** This turn may run the repo tool loop (locate/understand/change). */
+  agentCanOwnChange: boolean;
+}): ChangeSendRouting {
+  if (options.explicitEdit) {
+    if (options.hasEditTarget) {
+      return { kind: "anchored-edit" };
+    }
+    return { kind: "reject-no-target", message: EDIT_NO_TARGET_FILE_ERROR };
+  }
+  if (!options.concreteEditAsk) {
+    return { kind: "none" };
+  }
+  if (options.hasEditTarget) {
+    return { kind: "anchored-edit" };
+  }
+  if (options.agentCanOwnChange) {
+    return { kind: "agent-change" };
+  }
+  return { kind: "reject-no-target", message: EDIT_NO_TARGET_WITHOUT_AGENT_ERROR };
+}
 
 /**
  * True when plain chat is asking for a concrete code change (not advice / archaeology).

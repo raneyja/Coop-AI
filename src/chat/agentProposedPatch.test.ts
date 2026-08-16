@@ -58,15 +58,38 @@ test("ignores a propose_patch result with no SEARCH markers", () => {
   );
 });
 
+test("ignores propose_patch when ok is false", () => {
+  assert.equal(
+    extractAgentProposedPatchText([
+      { data: { agentTools: { propose_patch: { ok: false, patchText: PATCH } } } }
+    ]),
+    undefined
+  );
+});
+
 test("merge appends the agent patch when the answer forgot it", () => {
   const merged = mergeAnswerWithAgentPatch("Here is the null check.", PATCH);
   assert.match(merged, /Here is the null check/);
   assert.match(merged, /<<<<<<< SEARCH/);
 });
 
-test("merge does not duplicate when the answer already has SEARCH/REPLACE", () => {
-  const answer = `Done.\n\n${PATCH}`;
-  assert.equal(mergeAnswerWithAgentPatch(answer, PATCH), answer);
+test("merge prefers tool-validated agent patch over a model-invented SEARCH block", () => {
+  const wrong = [
+    "File: `apps/space/components/account/auth-forms/auth-root.tsx`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "const searchParams = useSearchParams();",
+    "=======",
+    "const searchParams = useSearchParams();",
+    'console.log("Search Params:", searchParams.toString());',
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const merged = mergeAnswerWithAgentPatch(`Summary\n\n${wrong}`, PATCH);
+  assert.match(merged, /server\/auth\/middleware\.py/);
+  assert.doesNotMatch(merged, /auth-root\.tsx/);
+  assert.match(merged, /def require_auth/);
 });
 
 test("merge is a no-op without an agent patch", () => {

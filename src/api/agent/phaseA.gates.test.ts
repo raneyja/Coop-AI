@@ -3,7 +3,7 @@ import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../../config/agentJobB
 import { MAX_USER_FACING_RESPONSE_MS } from "../../config/responseDeadline";
 import { PHASE_A_GATE_IDS, UX_FREEZE_GATE_IDS } from "./gates";
 import { parseAgentToolPlan } from "./parseAgentToolPlan";
-import { shouldRunAgentToolLoop, shouldUseAgentMode } from "../../chat/agentRouting";
+import { shouldRunAgentToolLoop } from "../../chat/agentRouting";
 import { emptyChatIntentPlan } from "../../chat/intentPlanner/types";
 
 let passed = 0;
@@ -28,12 +28,11 @@ test("A-G0 agent job budget is not the 15s Q&A gather", () => {
   assert.ok(UX_FREEZE_GATE_IDS.includes("UX-G1"));
 });
 
-test("A-G4 / A-G7 Trace/workflow does not enter the loop even when on", () => {
+test("A-G4 / A-G7 Trace/workflow does not enter the loop", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "trace the decision for this auth change",
-      hasQuickAction: true,
-      agentModeSetting: "on"
+      hasQuickAction: true
     }),
     false
   );
@@ -44,7 +43,6 @@ test("A-G7 Slack-named ask does not run search_code", () => {
     shouldRunAgentToolLoop({
       query: "What's in Slack about this login bug?",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: {
         mode: "tools-only",
         tools: ["slack"],
@@ -57,26 +55,39 @@ test("A-G7 Slack-named ask does not run search_code", () => {
   );
 });
 
-test("A-G1 repo hunt with agentMode on is allowed", () => {
+test("A-G1 repo hunt is allowed (always on)", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "Where is auth middleware enforced and what calls it?",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
     }),
     true
   );
 });
 
-test("A-G6 / UX-G1 default off does not loop", () => {
+test("A-G6 / UX-G1 plain explain never loops; hunts always do", () => {
   assert.equal(
-    shouldUseAgentMode({
-      query: "Where is auth middleware enforced and what calls it?",
+    shouldRunAgentToolLoop({
+      query: "Explain this function",
       hasQuickAction: false,
-      agentModeSetting: "off"
+      intentPlan: {
+        mode: "plain",
+        tools: [],
+        confidence: "high",
+        focus: "Explain this function",
+        execution: "none"
+      }
     }),
     false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "Where is auth middleware enforced and what calls it?",
+      hasQuickAction: false,
+      intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
+    }),
+    true
   );
 });
 

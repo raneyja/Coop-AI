@@ -50,20 +50,18 @@ function readRepo(...parts: string[]): string {
   return fs.readFileSync(path.join(__dirname, "../../..", ...parts), "utf8");
 }
 
-function route(q: string, mode: "on" | "off" = "on") {
+function route(q: string) {
   const plan = planChatIntentFromRules({ message: q, connectedTools: [] });
   return {
     plan,
     action: agentTurnAction({
       query: q,
       hasQuickAction: false,
-      agentModeSetting: mode,
       intentPlan: plan
     }),
     loops: shouldRunAgentToolLoop({
       query: q,
       hasQuickAction: false,
-      agentModeSetting: mode,
       intentPlan: plan
     })
   };
@@ -87,7 +85,7 @@ async function main(): Promise<void> {
       return !r.loops || r.action !== c.action;
     });
     if (misses.length === 0) {
-      pass("S-G1", "Scope", "locate/understand/change all loop when on");
+      pass("S-G1", "Scope", "locate/understand/change all loop");
     } else {
       fail("S-G1", "Scope", misses.map((m) => m.q).join(" | "));
     }
@@ -110,11 +108,17 @@ async function main(): Promise<void> {
   }
 
   {
-    const q = "Where is requireAuth defined in this repo?";
-    if (!route(q, "off").loops) {
-      pass("S-G3", "Scope", "agentMode off → no loop");
+    const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
+    const pkg = JSON.parse(readRepo("package.json")) as {
+      contributes: { configuration: { properties: Record<string, unknown> } };
+    };
+    if (
+      !/title="AgentMode"/.test(ui) &&
+      pkg.contributes.configuration.properties["coopAI.chat.agentMode"] === undefined
+    ) {
+      pass("S-G3", "Scope", "no AgentMode setting; hunts always on");
     } else {
-      fail("S-G3", "Scope", "off still loops");
+      fail("S-G3", "Scope", "AgentMode toggle or vscode key still present");
     }
   }
 
@@ -149,11 +153,10 @@ async function main(): Promise<void> {
 
   {
     const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
-    const agentRow = ui.match(/<SettingsCheckboxRow\s+title="AgentMode"[\s\S]*?\/>/)?.[0] ?? "";
-    if (/title="AgentMode"/.test(agentRow) && !/\bdescription=/.test(agentRow)) {
-      pass("S-G6", "Scope", "Settings label is AgentMode with no subtext");
+    if (!/title="AgentMode"/.test(ui) && !/draft\.agentMode/.test(ui)) {
+      pass("S-G6", "Scope", "Settings has no AgentMode control");
     } else {
-      fail("S-G6", "Scope", "Settings label/subtext drifted");
+      fail("S-G6", "Scope", "AgentMode checkbox still in Settings");
     }
   }
 
@@ -264,7 +267,12 @@ async function main(): Promise<void> {
     });
     let round = 0;
     const result = await orchestrator.run(
-      { message: "Add optional flag to requireAuth", repoId: GOLDEN_REPO_ID, maxSteps: 6 },
+      {
+        message: "Add optional flag to requireAuth",
+        repoId: GOLDEN_REPO_ID,
+        maxSteps: 6,
+        action: "change"
+      },
       {
         planTurn: async () => {
           round += 1;
@@ -272,26 +280,27 @@ async function main(): Promise<void> {
             return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
           }
           if (round === 2) {
-            return JSON.stringify({
-              tool: "read_file",
-              args: { path: target, startLine: 1, endLine: 400 }
-            });
+            return JSON.stringify({ tool: "read_file", args: { path: target } });
           }
-          if (round === 3) {
-            return JSON.stringify({
-              tool: "propose_patch",
-              args: { files: [{ path: target, search: searchLine, replace: replaceLine }] }
-            });
-          }
-          return JSON.stringify({ done: true });
+          return JSON.stringify({
+            tool: "propose_patch",
+            args: { files: [{ path: target, search: searchLine, replace: replaceLine }] }
+          });
         }
       }
     );
     const proposed = result.context?.propose_patch as { ok?: boolean; patchText?: string } | undefined;
-    if (proposed?.ok && proposed.patchText && /<<<<<<< SEARCH/.test(proposed.patchText)) {
+    if (
+      proposed?.ok &&
+      proposed.patchText &&
+      /<<<<<<< SEARCH/.test(proposed.patchText) &&
+      result.steps.some((s) => s.tool === "search_code") &&
+      result.steps.some((s) => s.tool === "read_file") &&
+      round >= 3
+    ) {
       pass("PB-G2", "PatchBridge", "search→read→propose_patch yields patchText");
     } else {
-      fail("PB-G2", "PatchBridge", JSON.stringify(proposed));
+      fail("PB-G2", "PatchBridge", JSON.stringify({ proposed, round, steps: result.steps }));
     }
 
     const bad = JSON.parse(

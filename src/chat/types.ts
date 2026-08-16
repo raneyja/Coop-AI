@@ -267,8 +267,6 @@ export type UserPreferences = {
   maxTokens: number;
   llmEnabled: boolean;
   autocompleteEnabled: boolean;
-  /** Repo-hunt tool loop. Default off — today’s chat. */
-  agentMode: "off" | "auto" | "on";
   useCachedResponses: boolean;
   includeSelection: boolean;
   includeActiveFile: boolean;

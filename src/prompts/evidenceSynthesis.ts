@@ -221,6 +221,17 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.
 - Never invent ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
 
+/**
+ * Agent hunt honesty — empty index search ≠ symbol missing from the repo.
+ * Without this, synthesis invents "**Your question**" restatements or false absences.
+ */
+export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are attached:
+- Prefer <agent_files> bodies. Cite real paths and line ranges from those blocks (citation fences with numeric startLine:endLine:path).
+- If the user named a symbol (requireAuth, parse_token), only discuss files whose attached bodies contain that symbol or its snake_case/camelCase alias. Never substitute a nearby auth UI form or AuthRoot component.
+- If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not invent definition paths. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
+- Never open **Your question** (or any section) by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
+- Do not dump the question text under a heading as if it were the answer.`;
+
 export const EVIDENCE_CITATION_RULES = `Citation rules:
 ${NARRATIVE_CITATION_RULES}
 - Format each **Sources** bullet as: \`[Sources: …] — one sentence on what that source contributed\` (plain text labels — not links).

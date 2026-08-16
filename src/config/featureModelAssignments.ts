@@ -135,11 +135,9 @@ export function resolveRuntimeAutocompleteModel(
 
 export function assignedModelsHubSubtitle(options: {
   autocompleteEnabled: boolean;
-  agentMode?: "off" | "auto" | "on";
 }): string {
   const autocomplete = options.autocompleteEnabled ? "Autocomplete on" : "Autocomplete off";
-  const agent = options.agentMode === "on" ? "Agent on" : "Agent off";
-  return `Assigned models · ${autocomplete} · ${agent}`;
+  return `Assigned models · ${autocomplete}`;
 }
 
 export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {

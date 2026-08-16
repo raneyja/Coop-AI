@@ -1,12 +1,13 @@
 /**
- * Agent-job budgets — separate from Q&A soft gather.
+ * Agent-job budgets on the interactive chat path.
  *
- * `MAX_USER_FACING_RESPONSE_MS` (~15s) is the start-answering guideline for plain
- * chat and quick actions. It must not cap or abort an opted-in agent job.
- * See docs/agent-ship-loop-build-plan.md (Wave 1 / UX freeze).
+ * Soft start-answering (~15s gather via `remainingContextGatherBudgetMs`) is for
+ * non-agent chat / quick actions. Agent-owned locate / understand / change turns
+ * use `AGENT_JOB_WALL_MS` (not the 15s gather). AbortSignal remains user Stop only
+ * (never a latency abort).
  */
 
-/** Wall clock for an opted-in repo-hunt tool loop (activity is visible). */
+/** Absolute ceiling for a repo-hunt tool loop (not the Q&A soft gather). */
 export const AGENT_JOB_WALL_MS = 90_000;
 
 /** Max model-chosen tool rounds per job (aligns with AgentOrchestrator DEFAULT_MAX_STEPS). */

@@ -3,8 +3,7 @@ import {
   isRepoInvestigationQuery,
   plannerAllowsAgentRepoLoop,
   shouldRunAgentToolLoop,
-  shouldSuppressSuggestChipsForAgentHunt,
-  shouldUseAgentMode
+  shouldSuppressSuggestChipsForAgentHunt
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
 import { DOGFOOD_HUNT_QUESTION } from "../api/agent/dogfoodContract";
@@ -24,101 +23,17 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-test("shouldUseAgentMode is false when setting is off", () => {
+test("shouldRunAgentToolLoop is false for quick actions", () => {
   assert.equal(
-    shouldUseAgentMode({
-      query: "how does auth work across the codebase?",
-      hasQuickAction: false,
-      agentModeSetting: "off"
-    }),
-    false
-  );
-});
-
-test("shouldUseAgentMode is true when setting is on for plain chat", () => {
-  assert.equal(
-    shouldUseAgentMode({
-      query: "how does auth work?",
-      hasQuickAction: false,
-      agentModeSetting: "on"
-    }),
-    true
-  );
-});
-
-test("shouldUseAgentMode rejects quick actions even when on", () => {
-  assert.equal(
-    shouldUseAgentMode({
+    shouldRunAgentToolLoop({
       query: "blast radius",
-      hasQuickAction: true,
-      agentModeSetting: "on"
+      hasQuickAction: true
     }),
     false
   );
 });
 
-test("shouldUseAgentMode auto triggers on repo-wide search keywords when query is long enough", () => {
-  assert.equal(
-    shouldUseAgentMode({
-      query: "Where is the session token validated across the codebase?",
-      hasQuickAction: false,
-      agentModeSetting: "auto"
-    }),
-    true
-  );
-});
-
-test("shouldUseAgentMode auto ignores short keyword-only queries", () => {
-  assert.equal(
-    shouldUseAgentMode({
-      query: "find auth",
-      hasQuickAction: false,
-      agentModeSetting: "auto",
-      contextBundle: [
-        {
-          requestId: "1",
-          type: "chat_context",
-          fetchedAt: new Date(),
-          data: { localFiles: { files: [{ path: "src/auth.ts", content: "" }] } }
-        }
-      ]
-    }),
-    false
-  );
-});
-
-test("shouldUseAgentMode auto does not trigger when context bundle is empty (UX-G1)", () => {
-  assert.equal(
-    shouldUseAgentMode({
-      query: "summarize recent changes",
-      hasQuickAction: false,
-      agentModeSetting: "auto",
-      contextBundle: [{ requestId: "1", type: "chat_context", fetchedAt: new Date(), data: {} }]
-    }),
-    false
-  );
-});
-
-test("shouldUseAgentMode auto stays off when bundle has localFiles and query is not a hunt", () => {
-  assert.equal(
-    shouldUseAgentMode({
-      query: "summarize recent changes",
-      hasQuickAction: false,
-      agentModeSetting: "auto",
-      contextBundle: [
-        {
-          requestId: "1",
-          type: "chat_context",
-          fetchedAt: new Date(),
-          data: { localFiles: { files: [{ path: "src/a.ts", content: "" }] } }
-        }
-      ]
-    }),
-    false
-  );
-});
-
-test("shouldRunAgentToolLoop is false for local explain even when on (A-P8)", () => {
+test("shouldRunAgentToolLoop is false for local explain even on a hunt-shaped leftover (A-P8)", () => {
   const plan: ChatIntentPlan = {
     ...emptyChatIntentPlan("Explain this function"),
     mode: "plain",
@@ -129,7 +44,6 @@ test("shouldRunAgentToolLoop is false for local explain even when on (A-P8)", ()
     shouldRunAgentToolLoop({
       query: "Explain this function",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: plan
     }),
     false
@@ -148,19 +62,17 @@ test("shouldRunAgentToolLoop is false for Slack-named ask without a repo hunt (A
     shouldRunAgentToolLoop({
       query: "What's in Slack about this?",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: plan
     }),
     false
   );
 });
 
-test("shouldRunAgentToolLoop is true for a repo hunt when on (A-G1)", () => {
+test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "Where is auth middleware enforced and what calls it?",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
     }),
     true
@@ -172,7 +84,6 @@ test("shouldRunAgentToolLoop is false for thanks follow-up (UX-G7)", () => {
     shouldRunAgentToolLoop({
       query: "thanks",
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: emptyChatIntentPlan("thanks")
     }),
     false
@@ -184,7 +95,6 @@ test("shouldRunAgentToolLoop is false for /edit (UX-G8)", () => {
     shouldRunAgentToolLoop({
       query: "Where is auth middleware enforced and what calls it?",
       hasQuickAction: false,
-      agentModeSetting: "on",
       isEditTurn: true
     }),
     false
@@ -208,21 +118,19 @@ test("plannerAllowsAgentRepoLoop blocks workflows", () => {
   );
 });
 
-test("shouldSuppressSuggestChipsForAgentHunt is true for a location hunt when on", () => {
+test("shouldSuppressSuggestChipsForAgentHunt is true for a location hunt", () => {
   assert.equal(
     shouldSuppressSuggestChipsForAgentHunt({
-      query: DOGFOOD_HUNT_QUESTION,
-      agentModeSetting: "on"
+      query: DOGFOOD_HUNT_QUESTION
     }),
     true
   );
 });
 
-test("shouldSuppressSuggestChipsForAgentHunt is false when off", () => {
+test("shouldSuppressSuggestChipsForAgentHunt is false for thanks", () => {
   assert.equal(
     shouldSuppressSuggestChipsForAgentHunt({
-      query: DOGFOOD_HUNT_QUESTION,
-      agentModeSetting: "off"
+      query: "thanks"
     }),
     false
   );
@@ -234,7 +142,6 @@ test("suggest-chips leftover plan blocks the loop; none plan after Just answer a
     shouldRunAgentToolLoop({
       query,
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: {
         mode: "suggest-chips",
         workflow: "find-owner",
@@ -250,7 +157,6 @@ test("suggest-chips leftover plan blocks the loop; none plan after Just answer a
     shouldRunAgentToolLoop({
       query,
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: emptyChatIntentPlan(query)
     }),
     true

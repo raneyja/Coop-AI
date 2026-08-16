@@ -1,6 +1,7 @@
 import {
   isBarrelPath,
   isGeneratedOrVendorPath,
+  isTestPath,
   normalizePath
 } from "../../indexing/evidencePathNoise";
 
@@ -41,7 +42,7 @@ const STOP = new Set(
 const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
-const MAX_FALLBACK_QUERIES = 4;
+const MAX_FALLBACK_QUERIES = 5;
 
 export {
   isBarrelPath,
@@ -75,6 +76,15 @@ export function extractAgentSearchQuery(userMessage: string): string {
   const identifier = firstIdentifier(trimmed);
   if (identifier) {
     return clip(identifier);
+  }
+
+  // "Where is the Button component" — prefer Button over the role phrase.
+  const deniedPascal = /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
+  const pascalName = [...trimmed.matchAll(/\b([A-Z][a-z][a-zA-Z0-9]+)\b/g)]
+    .map((match) => match[1]!)
+    .find((word) => !deniedPascal.test(word));
+  if (pascalName) {
+    return clip(pascalName);
   }
 
   const role = trimmed.match(ROLE_NOUN);
@@ -118,24 +128,47 @@ export function indexQueryForRetrieval(userQuery: string): string {
   if (!trimmed) {
     return trimmed;
   }
-  return shouldFocusIndexQuery(trimmed) ? extractAgentSearchQuery(trimmed) : trimmed;
+  if (!shouldFocusIndexQuery(trimmed)) {
+    return trimmed;
+  }
+  const primary = extractAgentSearchQuery(trimmed);
+  const alias = identifierSearchAliases(primary)[0];
+  // One retrieval covers both casings (requireAuth ↔ require_auth).
+  return alias ? `${primary} or ${alias}` : primary;
 }
 
 /**
  * True when a path is structural noise rather than evidence.
- * Repo-agnostic: only barrels, build output, and vendored code. If the user
- * named the path themselves, it is never noise.
+ * Repo-agnostic: barrels, build/vendor, and (for named-symbol hunts) tests.
+ * If the user named the path themselves, it is never noise.
  */
 export function shouldSkipEvidencePath(fileName: string, userMessage?: string): boolean {
   if (userMessage && userNamedPath(fileName, userMessage)) {
     return false;
   }
-  return isBarrelPath(fileName) || isGeneratedOrVendorPath(fileName);
+  if (isBarrelPath(fileName) || isGeneratedOrVendorPath(fileName)) {
+    return true;
+  }
+  // Named symbol + change/locate: skip tests unless the user asked about tests.
+  // Otherwise contract tests that say "require_authentication" steal requireAuth.
+  if (
+    userMessage &&
+    namedSymbolKeys(userMessage).length > 0 &&
+    isTestPath(fileName) &&
+    !userAskedAboutTests(userMessage)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
  * Progressively broader index queries, tried in order when the first search
  * returns nothing readable. Derived from the question's own words only.
+ *
+ * Identifier aliases matter: users often write `requireAuth` while the repo
+ * defines `require_auth` (or the reverse). A single casing miss returns empty
+ * and the model claims the middleware does not exist.
  */
 export function fallbackAgentSearchQueries(userMessage: string): string[] {
   const primary = extractAgentSearchQuery(userMessage);
@@ -144,22 +177,73 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
   const tokens = significantTokens(userMessage).sort((a, b) => b.length - a.length);
 
   const unique: string[] = [];
-  for (const candidate of [primary, ...identifiers, role, ...tokens]) {
+  const push = (candidate: string | undefined) => {
     const clipped = clip(candidate ?? "");
-    if (clipped && !unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
-      unique.push(clipped);
+    if (!clipped) {
+      return;
     }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+
+  push(primary);
+  for (const id of identifiers) {
+    push(id);
+    for (const alias of identifierSearchAliases(id)) {
+      push(alias);
+    }
+  }
+  for (const alias of identifierSearchAliases(primary)) {
+    push(alias);
+  }
+  push(role);
+  for (const token of tokens) {
+    push(token);
     if (unique.length >= MAX_FALLBACK_QUERIES) {
       break;
     }
   }
-  return unique;
+  return unique.slice(0, MAX_FALLBACK_QUERIES);
+}
+
+/**
+ * camelCase ↔ snake_case forms of the same identifier.
+ * Repo-agnostic: only transforms characters the user already typed.
+ */
+export function identifierSearchAliases(identifier: string): string[] {
+  const trimmed = identifier.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const aliases: string[] = [];
+  if (/[A-Z]/.test(trimmed) && !trimmed.includes("_")) {
+    const snake = trimmed
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+      .toLowerCase();
+    if (snake !== trimmed.toLowerCase()) {
+      aliases.push(snake);
+    }
+  }
+  if (trimmed.includes("_")) {
+    const camel = trimmed
+      .toLowerCase()
+      .replace(/_([a-z0-9])/g, (_, ch: string) => ch.toUpperCase());
+    if (camel !== trimmed) {
+      aliases.push(camel);
+    }
+  }
+  return aliases;
 }
 
 export function rankSearchHits<T extends RankedSearchHit>(hits: T[], userMessage?: string): T[] {
   const terms = userMessage ? queryTerms(userMessage) : [];
   return [...hits].sort(
-    (a, b) => rankHit(b, terms) - rankHit(a, terms) || (b.score ?? 0) - (a.score ?? 0)
+    (a, b) =>
+      rankHit(b, terms, userMessage) - rankHit(a, terms, userMessage) ||
+      (b.score ?? 0) - (a.score ?? 0)
   );
 }
 
@@ -170,14 +254,28 @@ export function pickTopSearchHit<T extends RankedSearchHit>(
   return rankSearchHits(hits, userMessage)[0];
 }
 
-export function pickSearchHitsToRead<T extends RankedSearchHit>(
+export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: string }>(
   hits: T[],
   max = 2,
   userMessage?: string
 ): T[] {
   const ranked = rankSearchHits(hits, userMessage);
+  const keys = userMessage ? namedSymbolKeys(userMessage) : [];
+  // Named symbol in the ask → only keep hits that actually mention it. Empty is
+  // better than reading a UI form that merely shares the word "auth".
+  let pool =
+    keys.length > 0
+      ? ranked.filter((hit) => hitMentionsNamedSymbol(hit, userMessage!))
+      : ranked;
+  // Prefer declaration sites over call sites when the user named a symbol.
+  if (keys.length > 0 && userMessage) {
+    const decls = pool.filter((hit) => contentLooksLikeDeclaration(hit.content ?? "", userMessage));
+    if (decls.length > 0) {
+      pool = [...decls, ...pool.filter((hit) => !decls.includes(hit))];
+    }
+  }
   const picked: T[] = [];
-  for (const hit of ranked) {
+  for (const hit of pool) {
     if (picked.some((p) => p.fileName === hit.fileName)) {
       continue;
     }
@@ -219,7 +317,7 @@ export function pickSymbolHitsToRead<T extends RankedSymbolHit>(
   const ident = normalizeSymbol(extractAgentSearchQuery(userMessage));
   const terms = queryTerms(userMessage);
   const scored = symbols
-    .map((symbol) => ({ symbol, score: symbolNameScore(symbol, ident, terms) }))
+    .map((symbol) => ({ symbol, score: symbolNameScore(symbol, ident, terms, userMessage) }))
     .filter((entry) => entry.score > 0 && !shouldSkipEvidencePath(entry.symbol.file, userMessage))
     .sort((a, b) => b.score - a.score);
 
@@ -236,22 +334,137 @@ export function pickSymbolHitsToRead<T extends RankedSymbolHit>(
   return picked;
 }
 
-function symbolNameScore(symbol: RankedSymbolHit, ident: string, terms: string[]): number {
-  const name = normalizeSymbol(symbol.displayName ?? symbol.symbol ?? "");
+function symbolNameScore(
+  symbol: RankedSymbolHit,
+  ident: string,
+  terms: string[],
+  userMessage: string
+): number {
+  const raw = (symbol.displayName ?? symbol.symbol ?? "").trim();
+  const name = normalizeSymbol(raw);
   if (!name) {
     return 0;
   }
-  if (ident && name === ident) {
-    return 100;
+  const formNorms = namedSymbolForms(userMessage).map(normalizeSymbol).filter(Boolean);
+  // Named symbol hunts: only exact identifier match (requireAuth ↔ require_auth).
+  // Substring matching is banned — requireauthentication contains requireauth and
+  // stole change hunts onto contract tests.
+  if (formNorms.length > 0) {
+    return formNorms.includes(name) ? 100 : 0;
   }
-  if (ident && (name.startsWith(ident) || name.endsWith(ident))) {
-    return 80;
-  }
-  if (ident && (name.includes(ident) || ident.includes(name))) {
-    return 60;
+  // Role / prose asks (no camelCase symbol): soft term overlap is OK.
+  if (ident.length >= 6) {
+    for (const term of terms) {
+      if (term.length >= 4 && name === term) {
+        return 85;
+      }
+    }
   }
   const matched = terms.filter((term) => name.includes(term)).length;
-  return matched > 0 ? Math.min(50, matched * 20) : 0;
+  return matched > 0 ? Math.min(40, matched * 15) : 0;
+}
+
+/**
+ * camelCase / snake_case token the user likely meant as a code symbol.
+ * Plain words like "logging" are not specific enough to filter hits.
+ */
+export function isSpecificCodeIdentifier(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length < 4 || /\s/.test(trimmed)) {
+    return false;
+  }
+  return (
+    /_/.test(trimmed) ||
+    /[a-z][A-Z]/.test(trimmed) ||
+    /^[A-Z][a-z]+[A-Z]/.test(trimmed) ||
+    /^[A-Z][a-z]{2,}$/.test(trimmed)
+  );
+}
+
+/** True when the user named a specific identifier (requireAuth), not a broad ask. */
+export function queryHasNamedSymbol(userMessage: string): boolean {
+  return namedSymbolKeys(userMessage).length > 0;
+}
+
+/** Normalized keys for the symbol the user named + casing aliases. */
+export function namedSymbolKeys(userMessage: string): string[] {
+  const primary = extractAgentSearchQuery(userMessage);
+  if (!isSpecificCodeIdentifier(primary)) {
+    return [];
+  }
+  const keys = new Set<string>([normalizeSymbol(primary)]);
+  for (const alias of identifierSearchAliases(primary)) {
+    const norm = normalizeSymbol(alias);
+    if (norm.length >= 4) {
+      keys.add(norm);
+    }
+  }
+  return [...keys];
+}
+
+/**
+ * True when `text` contains the named symbol as a whole identifier token.
+ * Substring-of-stripped-blob matching is wrong: `require_authentication`
+ * contains `requireauth` after normalization and stole definition hunts.
+ */
+export function textMentionsNamedSymbol(text: string, userMessage: string): boolean {
+  const forms = namedSymbolForms(userMessage);
+  if (!forms.length) {
+    return true;
+  }
+  return forms.some((form) => textHasIdentifierToken(text, form));
+}
+
+function hitMentionsNamedSymbol(
+  hit: { fileName: string; content?: string },
+  userMessage: string
+): boolean {
+  return textMentionsNamedSymbol(`${hit.fileName}\n${hit.content ?? ""}`, userMessage);
+}
+
+/** Identifier spellings the user likely meant (requireAuth, require_auth, …). */
+function namedSymbolForms(userMessage: string): string[] {
+  const primary = extractAgentSearchQuery(userMessage);
+  if (!isSpecificCodeIdentifier(primary)) {
+    return [];
+  }
+  const forms = new Set<string>([primary]);
+  for (const alias of identifierSearchAliases(primary)) {
+    if (alias.length >= 4) {
+      forms.add(alias);
+    }
+  }
+  return [...forms];
+}
+
+function textHasIdentifierToken(text: string, form: string): boolean {
+  const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_])${escaped}([^A-Za-z0-9_]|$)`, "i").test(text);
+}
+
+function contentLooksLikeDeclaration(content: string, userMessage: string): boolean {
+  const forms = namedSymbolForms(userMessage);
+  if (!forms.length || !content) {
+    return false;
+  }
+  for (const form of forms) {
+    const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (
+      new RegExp(
+        `\\b(async\\s+)?(def|function|class|const|let|var|fn|fun|func)\\s+${escaped}\\b`
+      ).test(content)
+    ) {
+      return true;
+    }
+    if (new RegExp(`\\b${escaped}\\s*[=:]\\s*(async\\s*)?(function|\\()`).test(content)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function userAskedAboutTests(userMessage: string): boolean {
+  return /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(userMessage);
 }
 
 function normalizeSymbol(value: string): string {
@@ -268,12 +481,25 @@ export function selectChatEvidencePaths(paths: string[], userQuery: string, max 
   return pickSearchHitsToRead(hits, max, userQuery).map((hit) => hit.fileName);
 }
 
-function rankHit(hit: RankedSearchHit, terms: string[]): number {
+function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): number {
   let rank = hit.score ?? 0;
   const path = normalizePath(hit.fileName);
   for (const term of terms) {
     if (path.includes(term)) {
       rank += 3;
+    }
+  }
+  // Exact path token for the symbol (require_auth.py) beats a weak "auth"
+  // substring match — and must not fire on require_authentication filenames.
+  if (userMessage) {
+    for (const form of namedSymbolForms(userMessage)) {
+      if (pathHasIdentifierToken(hit.fileName, form)) {
+        rank += 14;
+        break;
+      }
+    }
+    if (contentLooksLikeDeclaration((hit as { content?: string }).content ?? "", userMessage)) {
+      rank += 20;
     }
   }
   if (isBarrelPath(hit.fileName)) {
@@ -282,7 +508,21 @@ function rankHit(hit: RankedSearchHit, terms: string[]): number {
   if (isGeneratedOrVendorPath(hit.fileName)) {
     rank -= 6;
   }
+  if (
+    userMessage &&
+    namedSymbolKeys(userMessage).length > 0 &&
+    isTestPath(hit.fileName) &&
+    !userAskedAboutTests(userMessage)
+  ) {
+    rank -= 12;
+  }
   return rank;
+}
+
+function pathHasIdentifierToken(fileName: string, form: string): boolean {
+  const tokens = fileName.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const want = normalizeSymbol(form);
+  return tokens.some((token) => normalizeSymbol(token) === want);
 }
 
 /** Lowercased words from the question, with camelCase and snake_case split apart. */

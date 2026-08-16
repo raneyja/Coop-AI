@@ -413,12 +413,6 @@
           "minimum": 0,
           "description": "Minutes away from CoopAI before the sidebar opens on a fresh thread instead of restoring the last one. Prior threads stay in the thread list. Set to 0 to always restore the last thread."
         },
-        "coopAI.chat.agentMode": {
-          "type": "string",
-          "enum": ["off", "auto", "on"],
-          "default": "off",
-          "markdownDescription": "Read-only repo hunt loop for plain chat. **off** (default) is today’s chat. **on** lets Coop search/read the indexed Use-repo when the question is a repo hunt — not Trace, `/edit`, or “explain this.” **auto** only for clear repo-hunt phrasing; never because context was empty."
-        },
         "coopAI.projectInstructions.enabled": {
           "type": "boolean",
           "default": true,

@@ -132,7 +132,7 @@ async function run(): Promise<void> {
       repoId: "acme/demo"
     });
 
-    assert.ok(result.steps.length >= 1 && result.steps.length <= 2);
+    assert.ok(result.steps.length >= 1 && result.steps.length <= 3);
     assert.equal(
       result.steps.every((step) => step.tool === "search_code"),
       true
@@ -199,6 +199,40 @@ async function run(): Promise<void> {
     assert.equal(round >= 2, true);
   });
 
+  await test("locate with planTurn uses the LLM loop (same conversation)", async () => {
+    let planCalls = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend(),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => ({
+        path: rel,
+        content: "export function verifyToken() {}"
+      })
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is verifyToken defined?",
+        repoId: "acme/demo",
+        action: "locate"
+      },
+      {
+        planTurn: async () => {
+          planCalls += 1;
+          if (planCalls === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "verifyToken" } });
+          }
+          if (planCalls === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: "src/auth.ts" } });
+          }
+          return JSON.stringify({ done: true });
+        }
+      }
+    );
+    assert.ok(planCalls >= 2);
+    assert.ok(result.steps.some((s) => s.tool === "search_code"));
+    assert.ok(result.steps.some((s) => s.tool === "read_file"));
+  });
+
   await test("sanitizes full-question search queries to a short identifier", async () => {
     let seenQuery: string | undefined;
     const orchestrator = createAgentOrchestrator({
@@ -234,6 +268,52 @@ async function run(): Promise<void> {
     assert.equal(seenQuery, "requireAuth");
     assert.equal(result.steps[0]?.summary.includes(question), false);
     assert.equal(result.steps[1]?.summary.includes("authentication/middleware.py"), true);
+  });
+
+  await test("change hunt skips auth UI that never mentions requireAuth", async () => {
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/space/components/account/auth-forms/auth-root.tsx",
+              lineNumber: 10,
+              content: "export function AuthRoot() { return null }",
+              score: 0.99
+            },
+            {
+              fileName: "apps/api/plane/authentication/middleware.py",
+              lineNumber: 40,
+              content: "def require_auth(request):",
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel.includes("middleware")) {
+          return { path: rel, content: "def require_auth(request):\n  return True\n" };
+        }
+        return { path: rel, content: "export function AuthRoot() { return null }\n" };
+      }
+    });
+    const result = await orchestrator.run({
+      message: "add logging around requireAuth",
+      repoId: "acme/demo",
+      action: "change"
+    });
+    assert.equal(reads.includes("apps/api/plane/authentication/middleware.py"), true);
+    assert.equal(
+      (result.context?.read_file as { files?: Array<{ path: string }> } | undefined)?.files?.[0]
+        ?.path,
+      "apps/api/plane/authentication/middleware.py"
+    );
   });
 
   await test("reads the declaration line, not the top of the file", async () => {
@@ -341,7 +421,7 @@ async function run(): Promise<void> {
               {
                 fileName: "server/auth/middleware.py",
                 lineNumber: 12,
-                content: "class AuthenticationMiddleware:",
+                content: "def require_auth():\nclass AuthenticationMiddleware:",
                 score: 1
               }
             ],
@@ -352,7 +432,7 @@ async function run(): Promise<void> {
       resolveAbsolutePath: () => undefined,
       readRemoteFile: async ({ path: rel }) => {
         readPaths.push(rel);
-        return { path: rel, content: "class AuthenticationMiddleware:\n  pass\n" };
+        return { path: rel, content: "def require_auth():\n  pass\nclass AuthenticationMiddleware:\n  pass\n" };
       }
     });
     const question = "Where is requireAuth or authentication middleware defined in this repo?";
@@ -460,6 +540,82 @@ async function run(): Promise<void> {
     );
     assert.equal(result.steps.length, 8);
     assert.equal(calls, 8);
+  });
+
+  await test("wrong first hit forces a second read before done (dogfood)", async () => {
+    const uiPath = "web/components/auth/login-form.tsx";
+    const apiPath = "server/auth/middleware.py";
+    const reads: string[] = [];
+    let round = 0;
+    let answerAfterReads = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: uiPath,
+              lineNumber: 10,
+              content: "export function LoginForm() { return null }",
+              score: 0.99
+            },
+            {
+              fileName: apiPath,
+              lineNumber: 40,
+              content: "def require_auth(request):",
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel.includes("middleware")) {
+          return { path: rel, content: "def require_auth(request):\n  return True\n" };
+        }
+        return { path: rel, content: "export function LoginForm() { return null }\n" };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is requireAuth defined in this repo?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: uiPath } });
+          }
+          if (round === 3) {
+            return JSON.stringify({ done: true });
+          }
+          if (round === 4) {
+            return JSON.stringify({ tool: "read_file", args: { path: apiPath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          answerAfterReads = reads.length;
+          return "require_auth is defined in server/auth/middleware.py";
+        }
+      }
+    );
+    assert.ok(round >= 5, `done after the UI read must be rejected; rounds=${round}`);
+    assert.equal(reads.includes(uiPath), true);
+    assert.equal(reads.includes(apiPath), true);
+    assert.ok(answerAfterReads >= 2, "answer must wait until a second read");
+    assert.match(result.answer ?? "", /middleware\.py/);
+    const readSteps = result.steps.filter((s) => s.tool === "read_file");
+    assert.ok(readSteps.length >= 2, `expected ≥2 reads, got ${readSteps.length}`);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

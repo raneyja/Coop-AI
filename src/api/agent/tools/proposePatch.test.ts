@@ -40,7 +40,6 @@ test("a change request reaches the agent loop and asks for a patch", () => {
   const action = agentTurnAction({
     query: q,
     hasQuickAction: false,
-    agentModeSetting: "on",
     intentPlan: planChatIntentFromRules({ message: q, connectedTools: [] })
   });
   assert.equal(action, "change", "change requests must reach the loop so a patch can be proposed");

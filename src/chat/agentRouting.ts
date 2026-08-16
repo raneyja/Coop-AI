@@ -1,8 +1,5 @@
-import type { ContextFetchResult } from "../context/requestBatcher";
 import type { ChatIntentPlan } from "./intentPlanner/types";
 import { classifyRepoCodeIntent, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
-
-export type AgentModeSetting = "off" | "auto" | "on";
 
 /**
  * Whether answering needs the repository's own code.
@@ -15,39 +12,15 @@ export function isRepoInvestigationQuery(query: string): boolean {
 }
 
 /**
- * Permission from the setting only. `on` does not mean every turn loops —
- * {@link shouldRunAgentToolLoop} still requires a repo hunt + planner allow.
- */
-export function shouldUseAgentMode(options: {
-  query: string;
-  hasQuickAction: boolean;
-  agentModeSetting: AgentModeSetting;
-  contextBundle?: ContextFetchResult[];
-}): boolean {
-  if (options.agentModeSetting === "off") {
-    return false;
-  }
-  if (options.hasQuickAction) {
-    return false;
-  }
-  if (options.agentModeSetting === "on") {
-    return true;
-  }
-  // auto: never because the bundle was empty (that was too eager).
-  return isRepoInvestigationQuery(options.query);
-}
-
-/**
  * Whether this turn may run the LLM repo-tool loop.
  * Intent planner wins: explain / workflow / named-tool-only stays prefetch chat.
+ * Agent is always on for locate / understand / change — there is no user toggle.
  */
 export function shouldRunAgentToolLoop(options: {
   query: string;
   hasQuickAction: boolean;
-  agentModeSetting: AgentModeSetting;
   intentPlan?: ChatIntentPlan;
   isEditTurn?: boolean;
-  contextBundle?: ContextFetchResult[];
 }): boolean {
   return agentTurnAction(options) !== "none";
 }
@@ -61,15 +34,13 @@ export function shouldRunAgentToolLoop(options: {
 export function agentTurnAction(options: {
   query: string;
   hasQuickAction: boolean;
-  agentModeSetting: AgentModeSetting;
   intentPlan?: ChatIntentPlan;
   isEditTurn?: boolean;
-  contextBundle?: ContextFetchResult[];
 }): RepoCodeAction {
   if (options.isEditTurn) {
     return "none";
   }
-  if (!shouldUseAgentMode(options)) {
+  if (options.hasQuickAction) {
     return "none";
   }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
@@ -96,15 +67,9 @@ export function plannerAllowsAgentRepoLoop(
 }
 
 /**
- * When Agent is on/auto and the ask is a repo hunt, do not steal the turn
- * with Blast/Owner chips. Just answer must still be able to run the loop.
+ * When the ask is a repo hunt, do not steal the turn with Blast/Owner chips.
+ * Just answer must still be able to run the loop.
  */
-export function shouldSuppressSuggestChipsForAgentHunt(options: {
-  query: string;
-  agentModeSetting: AgentModeSetting;
-}): boolean {
-  if (options.agentModeSetting === "off") {
-    return false;
-  }
+export function shouldSuppressSuggestChipsForAgentHunt(options: { query: string }): boolean {
   return isRepoInvestigationQuery(options.query);
 }

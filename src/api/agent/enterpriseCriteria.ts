@@ -33,7 +33,7 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G1",
     family: "Scope",
-    pass: "Locate / understand / change questions run the agent when mode is on",
+    pass: "Locate / understand / change questions always run the agent (no user toggle)",
     fail: "Only keyword-hunt wording loops; show-me / explain-the-X / change asks fall through",
     evidence: "automated"
   },
@@ -47,8 +47,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G3",
     family: "Scope",
-    pass: "agentMode off → zero agent loops on any question",
-    fail: "Default or off still hunts",
+    pass: "No AgentMode Settings control; hunts always loop",
+    fail: "User-facing on/off still exists, or hunts require a toggle",
     evidence: "automated"
   },
   {
@@ -68,8 +68,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G6",
     family: "Scope",
-    pass: "Settings label is AgentMode with no subtext",
-    fail: "Long marketing title or explanatory subtext under the toggle",
+    pass: "Settings has no AgentMode checkbox",
+    fail: "AgentMode toggle still shown",
     evidence: "source"
   },
   {
@@ -188,8 +188,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "J-G6",
     family: "Join",
-    pass: "Defaults: agentMode off; NES off",
-    fail: "Silent agent or silent NES",
+    pass: "Defaults: Agent hunts always on (no toggle); NES off",
+    fail: "AgentMode setting still exists, or NES on by default",
     evidence: "source"
   },
 

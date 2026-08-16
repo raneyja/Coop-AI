@@ -52,8 +52,7 @@ function integrationNames(prefs: Preferences): string {
 
 export function modelHubSubtitle(prefs: Preferences): string {
   return assignedModelsHubSubtitle({
-    autocompleteEnabled: prefs.autocompleteEnabled,
-    agentMode: prefs.agentMode
+    autocompleteEnabled: prefs.autocompleteEnabled
   });
 }
 

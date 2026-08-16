@@ -1,6 +1,6 @@
 /**
- * Honesty gates — fail if we claim the agent is dogfood-ready but Jon cannot
- * turn it on in Coop Settings, or the hunt still cites live collab.
+ * Honesty gates — fail if we claim Agent just works but Settings still has a
+ * toggle, or the hunt still cites live collab.
  */
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -38,49 +38,41 @@ function readRepo(...parts: string[]): string {
   return fs.readFileSync(path.join(__dirname, "../../..", ...parts), "utf8");
 }
 
-test("H-G1 Coop Settings owns the Agent switch (not only vscode Settings)", () => {
+test("H-G1 Settings has no AgentMode on/off control", () => {
   const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
-  const agentRow = ui.match(
-    /<SettingsCheckboxRow\s+title="AgentMode"[\s\S]*?\/>/
-  )?.[0];
-  assert.ok(agentRow, "AgentMode checkbox row missing");
-  assert.doesNotMatch(agentRow!, /\bdescription=/);
-  assert.match(ui, /checked=\{draft\.agentMode === "on"\}/);
-  assert.match(ui, /agentMode: draft\.agentMode/);
+  assert.doesNotMatch(ui, /title="AgentMode"/);
+  assert.doesNotMatch(ui, /draft\.agentMode/);
   assert.ok(HONESTY_GATE_IDS.includes("H-G1"));
 });
 
-test("H-G2 Save writes chat.agentMode; send reads it live; settings:update does not drop it", () => {
+test("H-G2 send does not read a user agentMode setting", () => {
   const client = readRepo("src/chat/SecureApiClient.ts");
-  assert.match(client, /agentMode: readAgentModeSetting\(\)/);
-  assert.match(client, /\["chat\.agentMode"/);
+  assert.doesNotMatch(client, /readAgentModeSetting/);
+  assert.doesNotMatch(client, /chat\.agentMode/);
 
   const session = readRepo("src/chat/CoopChatSession.ts");
-  assert.match(session, /agentModeSetting: readAgentModeSetting\(\)/);
+  assert.doesNotMatch(session, /readAgentModeSetting/);
+  assert.doesNotMatch(session, /agentModeSetting/);
   assert.match(session, /const \{ autocompleteEnabled, \.\.\.rest \} = message\.payload/);
-  assert.doesNotMatch(session, /const \{ autocompleteEnabled,\s*agentMode/);
 
   const types = readRepo("src/chat/types.ts");
-  assert.match(types, /agentMode: "off" \| "auto" \| "on"/);
+  assert.doesNotMatch(types, /agentMode:/);
 });
 
-test("H-G3 default is still off — dogfood without turning it on must be today’s chat", () => {
+test("H-G3 no coopAI.chat.agentMode contribution; hunts are always on", () => {
   const pkg = JSON.parse(readRepo("package.json")) as {
     contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
   };
-  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default, "off");
+  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"], undefined);
 
   const settingsView = readRepo("src/webview/SettingsView.tsx");
-  assert.match(settingsView, /agentMode: "off"/);
+  assert.doesNotMatch(settingsView, /agentMode:/);
 
   const session = readRepo("src/chat/CoopChatSession.ts");
-  assert.match(session, /agentMode: "off"/);
-
-  const config = readRepo("src/config/agentModeConfig.ts");
-  assert.match(config, /get<string>\("agentMode", "off"\)/);
+  assert.doesNotMatch(session, /agentMode:/);
 });
 
-test("H-G4 dogfood hunt loops only when Agent is on (real planner, not empty plan)", () => {
+test("H-G4 dogfood hunt always loops (real planner, not empty plan)", () => {
   const plan = planChatIntentFromRules({
     message: DOGFOOD_HUNT_QUESTION,
     connectedTools: []
@@ -89,19 +81,9 @@ test("H-G4 dogfood hunt loops only when Agent is on (real planner, not empty pla
     shouldRunAgentToolLoop({
       query: DOGFOOD_HUNT_QUESTION,
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: plan
     }),
     true
-  );
-  assert.equal(
-    shouldRunAgentToolLoop({
-      query: DOGFOOD_HUNT_QUESTION,
-      hasQuickAction: false,
-      agentModeSetting: "off",
-      intentPlan: plan
-    }),
-    false
   );
 });
 
@@ -129,10 +111,11 @@ test("H-G6 ranking prefers a path matching the question and drops structural noi
   );
 });
 
-test("H-G7 loop posts activity; UI shows Searched/Read (silent normal chat is a fail)", () => {
+test("H-G7 loop posts activity from the agent-owned answer path", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
   assert.match(session, /type: "agent:activity"/);
-  assert.match(session, /enrichWithAgentToolsIfEnabled/);
+  assert.match(session, /runAgentOwnedTurn/);
+  assert.match(session, /streamAgentAnswer/);
 
   const activity = agentStepsToActivity([
     { index: 0, tool: "search_code", summary: `search_code: ${DOGFOOD_HUNT_SEARCH_QUERY}`, completed: true },
@@ -155,7 +138,7 @@ test("H-G8 no Agent toggle in Workflows header or composer (UX-G9)", () => {
   assert.doesNotMatch(workflows, /agentMode/);
 });
 
-test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt when Agent is on", () => {
+test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
   assert.match(session, /shouldSuppressSuggestChipsForAgentHunt/);
   assert.match(session, /emptyChatIntentPlan\(message\)/);
@@ -164,18 +147,16 @@ test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt when Agent
     shouldRunAgentToolLoop({
       query: DOGFOOD_HUNT_QUESTION,
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: emptyChatIntentPlan(DOGFOOD_HUNT_QUESTION)
     }),
     true
   );
 });
 
-test("H-G10 dogfood instructions name Coop Settings Model & chat, not only the vscode key", () => {
-  const plan = readRepo("docs/agent-ship-loop-build-plan.md");
-  assert.match(plan, /AgentMode/);
-  assert.match(plan, /Model & chat/);
-  assert.match(plan, /Coop Settings/);
+test("H-G10 docs do not tell the user to enable AgentMode", () => {
+  const arch = readRepo("docs/llm-prompt-architecture.md");
+  assert.match(arch, /always on|no user toggle|no Agent setting/i);
+  assert.doesNotMatch(arch, /defaults to \*\*off\*\*/);
 });
 
 test("H-G11 retrieval is one rule for every ask — no repo names, no layer special cases", () => {
@@ -184,11 +165,17 @@ test("H-G11 retrieval is one rule for every ask — no repo names, no layer spec
     assert.doesNotMatch(source, repoSpecific);
   }
 
-  // A backend-sounding ask ranks the API path first but must not delete the UI path:
-  // dropping a whole class of files is how we lost the real answer.
-  const backend = selectChatEvidencePaths([UI_PATH, API_PATH], DOGFOOD_HUNT_QUESTION, 3);
-  assert.equal(backend[0], API_PATH);
-  assert.equal(backend.includes(UI_PATH), true);
+  const named = selectChatEvidencePaths([UI_PATH, API_PATH], DOGFOOD_HUNT_QUESTION, 3);
+  assert.equal(named[0], API_PATH);
+  assert.equal(named.includes(UI_PATH), false);
+
+  const broad = selectChatEvidencePaths(
+    [UI_PATH, API_PATH],
+    "How does authentication work across the codebase?",
+    3
+  );
+  assert.equal(broad.includes(UI_PATH), true);
+  assert.equal(broad.includes(API_PATH), true);
 
   const ui = selectChatEvidencePaths(
     [API_PATH, UI_PATH],
@@ -205,10 +192,12 @@ test("H-G12 hot path merges agent patch before Apply card (not orphan helpers)",
   assert.match(session, /handlePatchComplete/);
 });
 
-test("H-G13 synthesis sees validated propose_patch text", () => {
+test("H-G13 agent-owned answer still bridges propose_patch to Apply", () => {
+  const session = readRepo("src/chat/CoopChatSession.ts");
+  assert.match(session, /runAgentOwnedTurn/);
+  assert.match(session, /mergeAnswerWithAgentPatch/);
   const prompts = readRepo("src/prompts/systemPrompts.ts");
   assert.match(prompts, /agent_proposed_patch/);
-  assert.match(prompts, /extractAgentProposedPatch/);
 });
 
 console.log(`\nhonesty.gates: ${passed}/${passed + failed} tests passed`);

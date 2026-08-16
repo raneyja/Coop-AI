@@ -304,8 +304,7 @@ function ModelDetail({
   onClearChat
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({
-    autocompleteEnabled: prefs.autocompleteEnabled,
-    agentMode: prefs.agentMode ?? "off"
+    autocompleteEnabled: prefs.autocompleteEnabled
   });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -314,11 +313,10 @@ function ModelDetail({
   useEffect(() => {
     if (!dirty) {
       setDraft({
-        autocompleteEnabled: prefs.autocompleteEnabled,
-        agentMode: prefs.agentMode ?? "off"
+        autocompleteEnabled: prefs.autocompleteEnabled
       });
     }
-  }, [prefs.autocompleteEnabled, prefs.agentMode, dirty]);
+  }, [prefs.autocompleteEnabled, dirty]);
 
   useEffect(
     () => () => {
@@ -337,8 +335,7 @@ function ModelDetail({
 
   const handleSave = () => {
     onUpdate({
-      autocompleteEnabled: draft.autocompleteEnabled,
-      agentMode: draft.agentMode
+      autocompleteEnabled: draft.autocompleteEnabled
     });
     setDirty(false);
     setSaved(true);
@@ -366,12 +363,6 @@ function ModelDetail({
           title="Enable inline autocomplete"
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
-        />
-
-        <SettingsCheckboxRow
-          title="AgentMode"
-          checked={draft.agentMode === "on"}
-          onChange={(checked) => update({ agentMode: checked ? "on" : "off" })}
         />
 
         <div className="coop-settings-actions">
@@ -869,8 +860,7 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
-            autocompleteEnabled: prefs.autocompleteEnabled,
-            agentMode: prefs.agentMode
+            autocompleteEnabled: prefs.autocompleteEnabled
           })}
           onClick={() => onNavigate("model")}
         />

@@ -13,9 +13,14 @@ export function extractAgentProposedPatchText(bundle: unknown): string | undefin
     if (!entry || typeof entry !== "object") {
       continue;
     }
-    const patch = (entry as { data?: { agentTools?: { propose_patch?: { patchText?: unknown } } } })
-      .data?.agentTools?.propose_patch;
+    const patch = (entry as {
+      data?: { agentTools?: { propose_patch?: { ok?: unknown; patchText?: unknown } } };
+    }).data?.agentTools?.propose_patch;
     if (!patch || typeof patch !== "object") {
+      continue;
+    }
+    // Rejected / unanchored proposals must never reach the Patch card.
+    if (patch.ok === false) {
       continue;
     }
     const text = typeof patch.patchText === "string" ? patch.patchText.trim() : "";
@@ -26,14 +31,31 @@ export function extractAgentProposedPatchText(bundle: unknown): string | undefin
   return undefined;
 }
 
-/** Prefer an already-emitted answer patch; otherwise append the agent one. */
+/**
+ * Prefer the tool-validated agent patch over anything the synthesizer invented.
+ * Dogfood miss: model patched auth-forms while propose_patch had (or should have
+ * had) the real middleware — Apply showed SEARCH not found.
+ */
 export function mergeAnswerWithAgentPatch(content: string, patchText: string | undefined): string {
   if (!patchText?.trim()) {
     return content;
   }
-  if (/<<<<<<< SEARCH/.test(content)) {
-    return content;
-  }
-  const body = content.trimEnd();
-  return body.length > 0 ? `${body}\n\n${patchText.trim()}` : patchText.trim();
+  const agent = patchText.trim();
+  const prose = stripEmittedPatchBlocks(content).trimEnd();
+  return prose.length > 0 ? `${prose}\n\n${agent}` : agent;
+}
+
+/** Remove File:/patch fences and bare SEARCH/REPLACE blocks from model prose. */
+export function stripEmittedPatchBlocks(content: string): string {
+  let text = content;
+  text = text.replace(
+    /(?:^|\n)File:\s*[^\n]+\n+```(?:patch)?\n[\s\S]*?<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE[\s\S]*?```/gi,
+    "\n"
+  );
+  text = text.replace(
+    /```(?:patch)?\n[\s\S]*?<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE[\s\S]*?```/gi,
+    "\n"
+  );
+  text = text.replace(/<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE/gi, "\n");
+  return text.replace(/\n{3,}/g, "\n\n");
 }
