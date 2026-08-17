@@ -95,6 +95,33 @@ export function IntegrationResultRow({
   );
 }
 
+/** One search hit with an Open-in-native-app control when a URL exists. */
+export function IntegrationNativeOpenRow({
+  label,
+  preview,
+  url,
+  openLabel
+}: {
+  label?: string;
+  preview: string;
+  url?: string;
+  openLabel: string;
+}): React.ReactElement {
+  const { onOpenLink } = useChatLinks();
+  return (
+    <IntegrationResultRow
+      label={label}
+      action={
+        url ? (
+          <ChatActionLink kind="external" label={openLabel} onClick={() => onOpenLink?.(url)} />
+        ) : undefined
+      }
+    >
+      <p className="coop-result-text">{preview}</p>
+    </IntegrationResultRow>
+  );
+}
+
 export function IntegrationResultBadge({
   children,
   tone = "default"

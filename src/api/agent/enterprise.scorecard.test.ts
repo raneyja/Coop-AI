@@ -404,6 +404,18 @@ async function main(): Promise<void> {
     }
   }
 
+  {
+    const session = readRepo("src/chat/CoopChatSession.ts");
+    const start = session.indexOf("private shouldRunAgentOwnedTurn");
+    const end = session.indexOf("private async runAgentOwnedTurn");
+    const fn = start >= 0 && end > start ? session.slice(start, end) : "";
+    if (fn && !/integrationProvider/.test(fn)) {
+      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named");
+    } else {
+      fail("H-G14", "Honesty", "integrationProvider still steals the hunt");
+    }
+  }
+
   // —— Enterprise ——
   {
     const readFile = readRepo("src/api/agent/tools/readFile.ts");

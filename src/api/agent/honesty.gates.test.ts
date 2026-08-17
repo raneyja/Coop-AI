@@ -196,6 +196,15 @@ test("H-G12 hot path merges agent patch before Apply card (not orphan helpers)",
   assert.match(session, /handlePatchComplete/);
 });
 
+test("H-G14 hunt+Slack is not stolen by a named integrationProvider", () => {
+  const session = readRepo("src/chat/CoopChatSession.ts");
+  const start = session.indexOf("private shouldRunAgentOwnedTurn");
+  const end = session.indexOf("private async runAgentOwnedTurn");
+  assert.ok(start >= 0 && end > start, "shouldRunAgentOwnedTurn must exist");
+  const fn = session.slice(start, end);
+  assert.doesNotMatch(fn, /integrationProvider/);
+});
+
 test("H-G13 agent-owned answer still bridges propose_patch to Apply", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
   assert.match(session, /runAgentOwnedTurn/);

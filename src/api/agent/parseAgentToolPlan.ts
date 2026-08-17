@@ -118,8 +118,9 @@ export function buildAgentToolPlanPrompt(input: {
     integrationTools.length > 0
       ? [
           `Integration tools on this turn only: ${integrationTools.join(", ")}.`,
-          "Use them when code evidence reveals a ticket key, thread topic, or doc name — pass a short focused query.",
-          "Do not call integrations that are not listed. Prefetch may already have first-pass results."
+          "Hunt the repo first (search_code / read_file). After a matching read, call the listed integration tool with a short focused query (the symbol or a ticket key) — not the whole question.",
+          "Do not {\"done\":true} after Slack/Jira alone when the user also asked where code lives.",
+          "Do not call integrations that are not listed."
         ]
       : [
           "Do not call Slack, Jira, or any integration tool this turn — none are on the allowlist."
@@ -167,7 +168,10 @@ export function buildAgentAnswerPrompt(input: {
     "Write the user-facing answer now from the tool results in this conversation.",
     `Question: ${input.message}`,
     "Cite real paths with citation fences (numeric startLine:endLine:path).",
+    "Citation line numbers must be the N| prefixes from read_file (the real file lines), not 1-based offsets in the snippet.",
+    "If Slack/Jira/docs results include permalink or htmlUrl, include that URL as a markdown link so the user can open the native app.",
     "If you never read a file that mentions a named symbol, say in 1–2 sentences that the index returned no usable match. Do not invent a path. Do not answer from a related UI/test/collab file. Do not use a **Your question** heading. Do not restate the user's ask.",
+    "When Slack/Jira ran, summarize those hits after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
     "Do not emit tool JSON.",
     change
   ].join("\n");

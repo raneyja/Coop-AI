@@ -70,7 +70,8 @@ import {
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import {
   IntegrationResultCollapsible,
-  IntegrationResultText
+  IntegrationResultText,
+  IntegrationNativeOpenRow
 } from "./components/IntegrationResultCard";
 import { EvidenceFileSourcePreview } from "./components/EvidenceFileSourcePreview";
 import { useChatLinks } from "./components/ChatLinkContext";
@@ -1557,13 +1558,17 @@ function IntegrationSearchResults({
         return <IntegrationResultText muted>No matching Jira issues.</IntegrationResultText>;
       }
       return (
-        <ul className="space-y-1">
-          {issues.slice(0, 15).map((issue) => (
-            <li key={issue.key} className="coop-result-text">
-              <strong>{issue.key}</strong> ({issue.status}): {issue.summary}
-            </li>
+        <div className="space-y-2">
+          {issues.slice(0, 8).map((issue) => (
+            <IntegrationNativeOpenRow
+              key={issue.key}
+              label={issue.key}
+              preview={`${issue.status}: ${issue.summary}`}
+              url={issue.htmlUrl}
+              openLabel="Open in Jira"
+            />
           ))}
-        </ul>
+        </div>
       );
     }
     case "slack": {
@@ -1572,14 +1577,17 @@ function IntegrationSearchResults({
         return <IntegrationResultText muted>No matching Slack messages.</IntegrationResultText>;
       }
       return (
-        <ul className="space-y-2">
-          {messages.slice(0, 10).map((message, index) => (
-            <li key={index} className="coop-result-text">
-              {message.channelName ? `#${message.channelName}` : "Slack"} · {message.userName ?? "unknown"}:{" "}
-              {message.text.slice(0, 240)}
-            </li>
+        <div className="space-y-2">
+          {messages.slice(0, 8).map((message, index) => (
+            <IntegrationNativeOpenRow
+              key={index}
+              label={message.channelName ? `#${message.channelName}` : "Slack"}
+              preview={`${message.userName ?? "unknown"}: ${message.text.slice(0, 240)}`}
+              url={message.permalink}
+              openLabel="Open in Slack"
+            />
           ))}
-        </ul>
+        </div>
       );
     }
     case "teams": {
@@ -1603,14 +1611,16 @@ function IntegrationSearchResults({
         return <IntegrationResultText muted>No matching Confluence pages.</IntegrationResultText>;
       }
       return (
-        <ul className="space-y-1">
-          {pages.slice(0, 15).map((page) => (
-            <li key={page.id} className="coop-result-text">
-              {page.title}
-              {page.excerpt ? ` — ${page.excerpt.slice(0, 100)}` : ""}
-            </li>
+        <div className="space-y-1">
+          {pages.slice(0, 8).map((page) => (
+            <IntegrationNativeOpenRow
+              key={page.id}
+              preview={page.excerpt ? `${page.title} — ${page.excerpt.slice(0, 100)}` : page.title}
+              url={page.htmlUrl}
+              openLabel="Open in Confluence"
+            />
           ))}
-        </ul>
+        </div>
       );
     }
     case "notion": {
@@ -1619,13 +1629,16 @@ function IntegrationSearchResults({
         return <IntegrationResultText muted>No matching Notion pages.</IntegrationResultText>;
       }
       return (
-        <ul className="space-y-1">
-          {pages.slice(0, 15).map((page) => (
-            <li key={page.id} className="coop-result-text">
-              {page.title}
-            </li>
+        <div className="space-y-1">
+          {pages.slice(0, 8).map((page) => (
+            <IntegrationNativeOpenRow
+              key={page.id}
+              preview={page.title}
+              url={page.url}
+              openLabel="Open in Notion"
+            />
           ))}
-        </ul>
+        </div>
       );
     }
     case "google-docs": {
@@ -1634,13 +1647,16 @@ function IntegrationSearchResults({
         return <IntegrationResultText muted>No matching Google Docs.</IntegrationResultText>;
       }
       return (
-        <ul className="space-y-1">
-          {documents.slice(0, 15).map((doc) => (
-            <li key={doc.id} className="coop-result-text">
-              {doc.title}
-            </li>
+        <div className="space-y-1">
+          {documents.slice(0, 8).map((doc) => (
+            <IntegrationNativeOpenRow
+              key={doc.id}
+              preview={doc.title}
+              url={doc.url}
+              openLabel="Open in Docs"
+            />
           ))}
-        </ul>
+        </div>
       );
     }
   }

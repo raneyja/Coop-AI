@@ -98,6 +98,11 @@ export function buildRepoJql(owner: string | undefined, repo: string | undefined
   return `${repoClause} ORDER BY updated DESC`;
 }
 
+/** True when a Jira search may merge the unfocused repo-wide ticket dump. */
+export function shouldMergeRepoWideJiraHits(options: { hasFocusJql: boolean }): boolean {
+  return !options.hasFocusJql;
+}
+
 /** Focus terms for Jira text search (path stem, basename, caller extras). */
 export function buildJiraFocusTerms(options: {
   activeFile?: string;
@@ -397,24 +402,15 @@ export async function fetchJiraSearchContext(options: {
     }
   }
 
-  // Fail open: if focus search is thin, merge repo-wide hits then rank.
-  const FOCUS_HIT_FLOOR = 3;
-  if (repoJql && (!focusJql || textSearchCount < FOCUS_HIT_FLOOR)) {
+  // Repo-wide dump only when the user named no file/symbol/focus.
+  // Compound "requireAuth + Jira" must not fail-open into 20 unrelated tickets.
+  if (shouldMergeRepoWideJiraHits({ hasFocusJql: Boolean(focusJql) }) && repoJql) {
     try {
       const repoHits = await client.searchIssues(repoJql, limit);
-      if (!focusJql) {
-        textSearchCount = repoHits.length;
-        usedJql = repoJql;
-      } else if (repoHits.length > 0 && textSearchCount < FOCUS_HIT_FLOOR) {
-        usedJql = focusJql;
-      }
+      textSearchCount = repoHits.length;
+      usedJql = repoJql;
       for (const issue of repoHits) {
         issuesByKey.set(issue.key, issue);
-      }
-      if (!focusJql) {
-        /* counted above */
-      } else if (repoHits.length > 0) {
-        textSearchCount = Math.max(textSearchCount, 1);
       }
     } catch (error) {
       if (!searchError) {

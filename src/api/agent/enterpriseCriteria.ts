@@ -169,6 +169,13 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
     fail: "Model never sees the validated patch",
     evidence: "automated"
   },
+  {
+    id: "H-G14",
+    family: "Honesty",
+    pass: "Hunt + Slack/Jira still runs the agent loop (named integration does not steal locate)",
+    fail: "integrationProvider skips the hunt so the answer invents a path or dumps tickets",
+    evidence: "source"
+  },
 
   // —— Join (automated subset) ——
   {

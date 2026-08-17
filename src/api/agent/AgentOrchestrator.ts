@@ -18,6 +18,7 @@ import type { AgentToolContext } from "./agentToolContext";
 import { parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
   fallbackAgentSearchQueries,
+  namedSymbolKeys,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
@@ -32,6 +33,7 @@ import {
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
 import {
+  agentToolForIntegrationProvider,
   isAgentIntegrationTool
 } from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
@@ -402,6 +404,62 @@ export class AgentOrchestrator {
     );
   }
 
+  /**
+   * If the model hunted but never called allowlisted Slack/Jira, fetch them
+   * with a focused query so compound asks still get both halves.
+   */
+  private async fillAllowlistedIntegrations(
+    query: string,
+    result: AgentSessionResult,
+    options: AgentRunOptions,
+    conversation?: AgentConversationMessage[]
+  ): Promise<AgentConversationMessage[] | undefined> {
+    if (!this.runSearchIntegration || this.runAllowedIntegrations.length === 0) {
+      return conversation;
+    }
+    const context: AgentSessionContext = { ...(result.context ?? {}) };
+    const steps = [...result.steps];
+    const messages = conversation ? [...conversation] : undefined;
+    const focused =
+      namedSymbolKeys(query)[0] ?? sanitizeAgentSearchQuery(query, query);
+    let calls = steps.filter((step) => isAgentIntegrationTool(step.tool)).length;
+    for (const provider of this.runAllowedIntegrations) {
+      if (calls >= MAX_INTEGRATION_TOOL_CALLS) {
+        break;
+      }
+      const tool = agentToolForIntegrationProvider(provider);
+      if (!tool || context[tool]) {
+        continue;
+      }
+      let rawResult: string;
+      try {
+        rawResult = await this.executeTool(tool, { query: focused });
+      } catch {
+        continue;
+      }
+      calls += 1;
+      this.mergeContext(context, tool, rawResult);
+      const step = {
+        index: steps.length,
+        tool,
+        summary: this.summarize(tool, { query: focused }, query),
+        completed: true
+      };
+      steps.push(step);
+      options.onStep?.(step, [...steps]);
+      if (messages) {
+        messages.push({
+          role: "assistant",
+          content: JSON.stringify({ tool, args: { query: focused } })
+        });
+        messages.push({ role: "user", content: rawResult });
+      }
+    }
+    result.context = context;
+    result.steps = steps;
+    return messages ?? conversation;
+  }
+
   private async finishWithAnswer(
     result: AgentSessionResult,
     query: string,
@@ -411,9 +469,27 @@ export class AgentOrchestrator {
     conversation?: AgentConversationMessage[],
     matchingRead = false
   ): Promise<AgentSessionResult> {
+    const history =
+      conversation && conversation.length > 0
+        ? conversation
+        : this.conversationFromContext(query, result);
+    const filledHistory = await this.fillAllowlistedIntegrations(
+      query,
+      result,
+      options,
+      history
+    );
     const needsGrounding =
       queryHasNamedSymbol(query) || queryRoleHints(query).length > 0;
-    if (needsGrounding && !matchingRead) {
+    const hasIntegrationHits = this.contextHasIntegrationHits(result.context);
+    if (needsGrounding && !matchingRead && hasIntegrationHits && filledHistory) {
+      filledHistory.push({
+        role: "user",
+        content:
+          "You did not read a file that mentions the named symbol. Do not invent a path. Summarize Slack/Jira/docs results honestly, and say the definition was not found in the index."
+      });
+    }
+    if (needsGrounding && !matchingRead && !hasIntegrationHits) {
       return {
         ...result,
         answer: INDEX_HUNT_MISS,
@@ -426,10 +502,6 @@ export class AgentOrchestrator {
     if (options.signal?.aborted) {
       return { ...result, context: result.steps.length ? result.context : undefined };
     }
-    const history =
-      conversation && conversation.length > 0
-        ? conversation
-        : this.conversationFromContext(query, result);
     if (result.answer?.trim()) {
       return { ...result, context: result.steps.length ? result.context : undefined };
     }
@@ -437,7 +509,7 @@ export class AgentOrchestrator {
       const answer = await options.streamAnswer({
         message: query,
         repoId,
-        conversation: history,
+        conversation: filledHistory ?? history,
         action
       });
       return {
@@ -457,8 +529,9 @@ export class AgentOrchestrator {
     const messages: AgentConversationMessage[] = [{ role: "user", content: query }];
     for (const step of result.steps) {
       messages.push({ role: "assistant", content: JSON.stringify({ tool: step.tool }) });
-      const payload =
-        step.tool === "search_code"
+      const payload = isAgentIntegrationTool(step.tool)
+        ? result.context?.[step.tool]
+        : step.tool === "search_code"
           ? result.context?.search_code
           : step.tool === "read_file"
             ? result.context?.read_file
@@ -473,6 +546,32 @@ export class AgentOrchestrator {
       });
     }
     return messages;
+  }
+
+  private contextHasIntegrationHits(context: AgentSessionContext | undefined): boolean {
+    if (!context) {
+      return false;
+    }
+    for (const tool of [
+      "search_slack",
+      "search_jira",
+      "search_teams",
+      "search_notion",
+      "search_confluence",
+      "search_google_docs"
+    ] as const) {
+      const payload = context[tool];
+      if (!payload) {
+        continue;
+      }
+      for (const key of ["messages", "issues", "pages", "documents"] as const) {
+        const value = payload[key];
+        if (Array.isArray(value) && value.length > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private judgeReadResult(

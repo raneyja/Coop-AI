@@ -7,6 +7,7 @@ import {
   collectJiraKeysFromText,
   rankJiraIssuesForFocus,
   shouldFetchJiraContext,
+  shouldMergeRepoWideJiraHits,
   wantsJiraContext,
   wantsOpenTickets,
   wantsRepoLinkedJiraDiscovery
@@ -189,6 +190,11 @@ test("shouldFetchJiraContext respects jira-only allowlist on blast-radius", () =
     intent: { context: { queryText: "impact + jira" } }
   } as ContextFetchRequest;
   assert.equal(shouldFetchJiraContext(request), true);
+});
+
+test("focused Jira asks do not fail-open to a repo-wide dump", () => {
+  assert.equal(shouldMergeRepoWideJiraHits({ hasFocusJql: true }), false);
+  assert.equal(shouldMergeRepoWideJiraHits({ hasFocusJql: false }), true);
 });
 
 const total = passed + failed;

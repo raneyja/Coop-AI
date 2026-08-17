@@ -243,6 +243,10 @@ import {
   type DualRepoComparePlan
 } from "../context/dualRepoCompare";
 import { isQuickActionId, type QuickActionId } from "../webview/types";
+import {
+  applyGroundedCitations,
+  citationPathsInMarkdown
+} from "../webview/lib/groundCodeCitation";
 import type { IntegrationChatProvider } from "./types";
 import {
   applyPromptTemplate,
@@ -1126,11 +1130,20 @@ export class CoopChatSession {
     }
   }
 
-  private finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): void {
-    turn.history.push(finalMessage);
+  private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
+    let message = finalMessage;
+    try {
+      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content);
+      if (groundedContent !== finalMessage.content) {
+        message = { ...finalMessage, content: groundedContent };
+      }
+    } catch {
+      // Fail open — never drop the turn if cite grounding cannot read the file.
+    }
+    turn.history.push(message);
     if (this.isViewingThread(turn.threadId)) {
-      this.chatHistory.push(finalMessage);
-      this.post({ type: "chat:complete", payload: { message: finalMessage, threadId: turn.threadId } });
+      this.chatHistory.push(message);
+      this.post({ type: "chat:complete", payload: { message, threadId: turn.threadId } });
       this.postChatHistory();
       this.sessionCostUsd = turn.sessionCostUsd;
       this.persistActiveThread();
@@ -1139,6 +1152,53 @@ export class CoopChatSession {
     }
     this.threadRuns.complete(turn);
     this.pushThreadsList();
+  }
+
+  private async groundAssistantCitationFences(content: string): Promise<string> {
+    const paths = citationPathsInMarkdown(content);
+    if (paths.length === 0) {
+      return content;
+    }
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    const provider =
+      this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
+    if (!owner || !repo) {
+      return content;
+    }
+    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+    if (!repoId) {
+      return content;
+    }
+    const target = {
+      repoId,
+      owner,
+      repo,
+      provider,
+      branch: this.currentContext.branch ?? this.preferences.branch
+    };
+    const workspace = this.indexedRepoWorkspace();
+    const files = new Map<string, string>();
+    const timeoutMs = 2_500;
+    await Promise.all(
+      paths.map(async (path) => {
+        const normalized = path.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+        try {
+          const evidence = await Promise.race([
+            workspace.readFile(target, normalized),
+            new Promise<undefined>((resolve) => {
+              setTimeout(() => resolve(undefined), timeoutMs);
+            })
+          ]);
+          if (evidence?.content) {
+            files.set(normalized, evidence.content);
+          }
+        } catch {
+          // Fail open for this path.
+        }
+      })
+    );
+    return applyGroundedCitations(content, files);
   }
 
   private pushThreadsList(): void {
@@ -3532,7 +3592,7 @@ export class CoopChatSession {
       return;
     }
     this.clearIntentFeedback(turn.threadId);
-    this.finishTurnAssistantMessage(turn, {
+    void this.finishTurnAssistantMessage(turn, {
       role: "assistant",
       content: this.conversationalAckReply(query),
       timestamp: Date.now()
@@ -3643,7 +3703,7 @@ export class CoopChatSession {
       repo,
       queryText: query,
       activeFile: file,
-      limit: 12
+      limit: 5
     };
     switch (provider) {
       case "slack":
@@ -3665,7 +3725,7 @@ export class CoopChatSession {
           secrets,
           owner,
           repo,
-          limit: 12,
+          limit: 5,
           extraTerms: [query],
           integrationScope: notionScope
         });
@@ -3674,7 +3734,7 @@ export class CoopChatSession {
           secrets,
           owner,
           repo,
-          limit: 12,
+          limit: 5,
           extraTerms: [query],
           integrationScope: atlassianScope
         });
@@ -3745,14 +3805,15 @@ export class CoopChatSession {
     quickAction: string | undefined,
     options:
       | {
-          integrationProvider?: IntegrationChatProvider;
           composerMode?: ComposerMode;
           fetchIntegrations?: IntegrationChatProvider[];
         }
       | undefined,
     _message: string
   ): boolean {
-    if (quickAction || options?.composerMode === "edit" || options?.integrationProvider) {
+    // Hunt wins over a named Slack/Jira primary-source steal. Slack-only
+    // (action none) still skips the loop.
+    if (quickAction || options?.composerMode === "edit") {
       return false;
     }
     if (this.turnAgentAction === "none") {
@@ -3878,13 +3939,25 @@ export class CoopChatSession {
       }
 
       const contextBundle = [
-        {
+        promoteAgentIntegrationSearches({
           requestId: "agent-owned",
           type: "chat_context" as const,
           fetchedAt: new Date(),
           data: { agentTools: agentResult.context, agentSteps: agentResult.steps }
-        }
+        })
       ];
+      turn.contextBundle = contextBundle;
+      if (this.isViewingThread(turn.threadId)) {
+        this.lastContextBundle = contextBundle;
+      }
+      if (allowedIntegrations.length > 0) {
+        await this.postEvidenceCardsFromBundle(
+          undefined,
+          allowedIntegrations.length === 1 ? allowedIntegrations[0] : undefined,
+          turn,
+          allowedIntegrations
+        );
+      }
       const agentPatch = extractAgentProposedPatchText(contextBundle);
       let contentForPatchCard = mergeAnswerWithAgentPatch(
         (agentResult.answer ?? full).trim(),
@@ -3936,7 +4009,7 @@ export class CoopChatSession {
           });
         }
       }
-      this.finishTurnAssistantMessage(turn, finalMessage);
+      await this.finishTurnAssistantMessage(turn, finalMessage);
     } catch (error) {
       if (isCancelled()) {
         return;
@@ -6287,7 +6360,7 @@ export class CoopChatSession {
           return;
         }
         this.clearIntentFeedback(turn.threadId);
-        this.finishTurnAssistantMessage(turn, cached as ChatMessage);
+        await this.finishTurnAssistantMessage(turn, cached as ChatMessage);
         return;
       }
     }
@@ -6424,7 +6497,7 @@ export class CoopChatSession {
             content: responseContent,
             timestamp: Date.now()
           };
-          this.finishTurnAssistantMessage(turn, finalMessage);
+          await this.finishTurnAssistantMessage(turn, finalMessage);
           return;
         }
         if (!hasUnderstandRepoEntryBodies(summaryRecord)) {
@@ -6459,7 +6532,7 @@ export class CoopChatSession {
             content: responseContent,
             timestamp: Date.now()
           };
-          this.finishTurnAssistantMessage(turn, finalMessage);
+          await this.finishTurnAssistantMessage(turn, finalMessage);
           return;
         }
       }
@@ -6491,7 +6564,7 @@ export class CoopChatSession {
           content: responseContent,
           timestamp: Date.now()
         };
-        this.finishTurnAssistantMessage(turn, finalMessage);
+        await this.finishTurnAssistantMessage(turn, finalMessage);
         return;
       }
 
@@ -7015,7 +7088,7 @@ export class CoopChatSession {
       if (result.usage) {
         turn.sessionCostUsd += result.usage.estimatedCostUsd;
       }
-      this.finishTurnAssistantMessage(turn, finalMessage);
+      await this.finishTurnAssistantMessage(turn, finalMessage);
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
       }

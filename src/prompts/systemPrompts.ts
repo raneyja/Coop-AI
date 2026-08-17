@@ -95,6 +95,7 @@ Rules:
 - Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
 - Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
 - Prefer one tight patch on the selection over "helpful" drive-by cleanups outside it.
+- To add a comment or line above existing code: SEARCH is the existing line(s) only. REPLACE is the new line(s) followed by that same SEARCH text **once**. Never paste the SEARCH block twice inside REPLACE.
 
 ## Completeness (required)
 - Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
