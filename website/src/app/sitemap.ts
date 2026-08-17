@@ -3,11 +3,20 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { siteConfig } from "@/lib/site.config";
 
-const HIGH_PRIORITY_PATHS = new Set(["/", "/product", "/enterprise", "/pricing", "/integrations", "/manual"]);
+const HIGH_PRIORITY_PATHS = new Set([
+  "/",
+  "/product",
+  "/how-it-works",
+  "/enterprise",
+  "/pricing",
+  "/integrations",
+  "/manual"
+]);
 
 const STATIC_PATHS = [
   "/",
   "/product",
+  "/how-it-works",
   "/enterprise",
   "/integrations",
   "/pricing",
@@ -24,6 +33,7 @@ const STATIC_PATHS = [
 const STATIC_LAST_MODIFIED: Partial<Record<(typeof STATIC_PATHS)[number], string>> = {
   "/": "2026-07-06",
   "/product": "2026-07-06",
+  "/how-it-works": "2026-08-17",
   "/enterprise": "2026-07-06",
   "/integrations": "2026-07-06",
   "/pricing": "2026-07-06",

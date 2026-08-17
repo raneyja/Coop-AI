@@ -25,6 +25,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/how-it-works" className="text-sm text-coop-muted hover:text-gray-900">
+                  How it works
+                </Link>
+              </li>
+              <li>
                 <Link href="/integrations" className="text-sm text-coop-muted hover:text-gray-900">
                   Integrations
                 </Link>
