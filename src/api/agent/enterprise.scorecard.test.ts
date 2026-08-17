@@ -110,11 +110,17 @@ async function main(): Promise<void> {
   }
 
   {
-    const q = "Where is requireAuth defined in this repo?";
-    if (!route(q, "off").loops) {
-      pass("S-G3", "Scope", "agentMode off → no loop");
+    const pkg = JSON.parse(readRepo("package.json")) as {
+      contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
+    };
+    const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
+    if (
+      pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default === "on" &&
+      !/title="AgentMode"/.test(ui)
+    ) {
+      pass("S-G3", "Scope", "default on; no Settings opt-in toggle");
     } else {
-      fail("S-G3", "Scope", "off still loops");
+      fail("S-G3", "Scope", "default still off or AgentMode toggle still present");
     }
   }
 
@@ -149,11 +155,10 @@ async function main(): Promise<void> {
 
   {
     const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
-    const agentRow = ui.match(/<SettingsCheckboxRow\s+title="AgentMode"[\s\S]*?\/>/)?.[0] ?? "";
-    if (/title="AgentMode"/.test(agentRow) && !/\bdescription=/.test(agentRow)) {
-      pass("S-G6", "Scope", "Settings label is AgentMode with no subtext");
+    if (!/title="AgentMode"/.test(ui) && !/agentMode: draft\.agentMode/.test(ui)) {
+      pass("S-G6", "Scope", "no AgentMode checkbox in Coop Settings");
     } else {
-      fail("S-G6", "Scope", "Settings label/subtext drifted");
+      fail("S-G6", "Scope", "AgentMode opt-in toggle still in Settings");
     }
   }
 
@@ -164,6 +169,22 @@ async function main(): Promise<void> {
       pass("S-G7", "Scope", "noRepoSpecificRules covers ranking + scope");
     } else {
       fail("S-G7", "Scope", "guard incomplete");
+    }
+  }
+
+  {
+    const q = "Where is requireAuth defined, and what did Slack say about the auth change?";
+    const plan = planChatIntentFromRules({ message: q, connectedTools: ["slack"] });
+    const loops = shouldRunAgentToolLoop({
+      query: q,
+      hasQuickAction: false,
+      agentModeSetting: "on",
+      intentPlan: plan
+    });
+    if (loops && plan.tools.includes("slack") && plan.mode === "tools-only") {
+      pass("S-G8", "Scope", "hunt + Slack: loop + Slack allowlist");
+    } else {
+      fail("S-G8", "Scope", `loops=${loops} tools=${plan.tools.join(",")} mode=${plan.mode}`);
     }
   }
 

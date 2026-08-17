@@ -138,7 +138,8 @@ export function assignedModelsHubSubtitle(options: {
   agentMode?: "off" | "auto" | "on";
 }): string {
   const autocomplete = options.autocompleteEnabled ? "Autocomplete on" : "Autocomplete off";
-  const agent = options.agentMode === "on" ? "Agent on" : "Agent off";
+  // Agent is product-default on; only an explicit kill-switch shows Off.
+  const agent = options.agentMode === "off" ? "Agent off" : "Agent on";
   return `Assigned models · ${autocomplete} · ${agent}`;
 }
 

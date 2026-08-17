@@ -91,7 +91,7 @@ const DEFAULT_PREFS: Preferences = {
   maxTokens: 2000,
   llmEnabled: true,
   autocompleteEnabled: true,
-  agentMode: "off",
+  agentMode: "on",
   useCachedResponses: true,
   includeSelection: true,
   includeActiveFile: true,

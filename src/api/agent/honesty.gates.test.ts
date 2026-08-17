@@ -38,19 +38,14 @@ function readRepo(...parts: string[]): string {
   return fs.readFileSync(path.join(__dirname, "../../..", ...parts), "utf8");
 }
 
-test("H-G1 Coop Settings owns the Agent switch (not only vscode Settings)", () => {
+test("H-G1 Agent has no Coop Settings opt-in toggle (always on)", () => {
   const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
-  const agentRow = ui.match(
-    /<SettingsCheckboxRow\s+title="AgentMode"[\s\S]*?\/>/
-  )?.[0];
-  assert.ok(agentRow, "AgentMode checkbox row missing");
-  assert.doesNotMatch(agentRow!, /\bdescription=/);
-  assert.match(ui, /checked=\{draft\.agentMode === "on"\}/);
-  assert.match(ui, /agentMode: draft\.agentMode/);
+  assert.doesNotMatch(ui, /title="AgentMode"/);
+  assert.doesNotMatch(ui, /agentMode: draft\.agentMode/);
   assert.ok(HONESTY_GATE_IDS.includes("H-G1"));
 });
 
-test("H-G2 Save writes chat.agentMode; send reads it live; settings:update does not drop it", () => {
+test("H-G2 send reads agentMode live; settings:update does not drop it", () => {
   const client = readRepo("src/chat/SecureApiClient.ts");
   assert.match(client, /agentMode: readAgentModeSetting\(\)/);
   assert.match(client, /\["chat\.agentMode"/);
@@ -64,23 +59,23 @@ test("H-G2 Save writes chat.agentMode; send reads it live; settings:update does 
   assert.match(types, /agentMode: "off" \| "auto" \| "on"/);
 });
 
-test("H-G3 default is still off — dogfood without turning it on must be today’s chat", () => {
+test("H-G3 product default is on — locate/change without a Settings flip", () => {
   const pkg = JSON.parse(readRepo("package.json")) as {
     contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
   };
-  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default, "off");
+  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default, "on");
 
   const settingsView = readRepo("src/webview/SettingsView.tsx");
-  assert.match(settingsView, /agentMode: "off"/);
+  assert.match(settingsView, /agentMode: "on"/);
 
   const session = readRepo("src/chat/CoopChatSession.ts");
-  assert.match(session, /agentMode: "off"/);
+  assert.match(session, /agentMode: "on"/);
 
   const config = readRepo("src/config/agentModeConfig.ts");
-  assert.match(config, /get<string>\("agentMode", "off"\)/);
+  assert.match(config, /get<string>\("agentMode", "on"\)/);
 });
 
-test("H-G4 dogfood hunt loops only when Agent is on (real planner, not empty plan)", () => {
+test("H-G4 dogfood hunt loops by default; kill-switch off still blocks", () => {
   const plan = planChatIntentFromRules({
     message: DOGFOOD_HUNT_QUESTION,
     connectedTools: []
@@ -171,11 +166,10 @@ test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt when Agent
   );
 });
 
-test("H-G10 dogfood instructions name Coop Settings Model & chat, not only the vscode key", () => {
+test("H-G10 dogfood instructions say agent is on by default (no Settings flip)", () => {
   const plan = readRepo("docs/agent-ship-loop-build-plan.md");
-  assert.match(plan, /AgentMode/);
-  assert.match(plan, /Model & chat/);
-  assert.match(plan, /Coop Settings/);
+  assert.match(plan, /agentMode.*\bon\b|default.*\bon\b.*agent|Agent is (?:always )?on/i);
+  assert.match(plan, /Model & chat|Coop Settings/);
 });
 
 test("H-G11 retrieval is one rule for every ask — no repo names, no layer special cases", () => {

@@ -15,8 +15,10 @@ export function isRepoInvestigationQuery(query: string): boolean {
 }
 
 /**
- * Permission from the setting only. `on` does not mean every turn loops —
- * {@link shouldRunAgentToolLoop} still requires a repo hunt + planner allow.
+ * Permission from the setting only. Product default is **on**.
+ * `on` does not mean every turn loops — {@link shouldRunAgentToolLoop} still
+ * requires a repo hunt + planner allow (workflows / explain / Slack-only stay out).
+ * Compound hunt + Slack is allowed: tools-only with a repo hunt still loops.
  */
 export function shouldUseAgentMode(options: {
   query: string;

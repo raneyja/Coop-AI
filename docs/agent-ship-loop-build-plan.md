@@ -57,7 +57,7 @@ This is the evaluation you run. Agents cannot mark a wave done without it. Every
 1. **Terminal** — from repo root: `npm run lint && npm run test:agent-ship:a`  
    **Success:** both exit 0. Any FAIL = A is not done.
 
-2. **Extension UI** — Coop Settings → **Preferences** → **Model & chat** → check **AgentMode** → **Save model settings**. Default must still have been **off** before you changed it. Backing key is `coopAI.chat.agentMode`.
+2. **Extension UI** — Agent is **on by default** (no Coop Settings toggle). Confirm Model & chat hub shows **Agent on**. Kill switch only via VS Code `coopAI.chat.agentMode`.
 
 3. **Extension UI** — Remote workspace → Use-repo = indexed GitHub repo, **no local clone**. Ask: *Where is auth middleware enforced and what calls it?*  
    **Success:** activity shows **≥2 model-chosen** search/read steps; answer cites **real paths from that repo**; you are not stuck on “Preparing answer.”
@@ -68,10 +68,10 @@ This is the evaluation you run. Agents cannot mark a wave done without it. Every
    - Ask a Use-repo question while Coop-AI is the open folder. **Success:** cites the Use-repo, not Coop-AI files.
 
 5. **Feel freeze (same session) — this week’s chat must still feel like this week’s chat**  
-   - Leave `agentMode` **off**. Ask *Explain this function* (or any local explain). **Success:** Sources (if any) sit above the answer; **no** agent tool-step list; answer starts like today.  
-   - `agentMode` **on**. Ask *What’s in Slack about this?* (no repo hunt). **Success:** Slack is fetched if the planner named it; you do **not** get a stack of search/read rows.  
-   - `agentMode` **auto**. Ask a short explain. **Success:** loop does **not** start (auto is conservative; empty context is not a reason to agent).
-   - With `agentMode` **on**, after a successful repo hunt, send **Thanks** then **Explain this function**. **Success:** neither follow-up shows a tool-step list (every turn re-plans).
+   - Ask *Explain this function* (or any local explain). **Success:** Sources (if any) sit above the answer; **no** agent tool-step list; answer starts like today.  
+   - Ask *What’s in Slack about this?* (no repo hunt). **Success:** Slack is fetched if the planner named it; you do **not** get a stack of search/read rows.  
+   - Ask *Where is requireAuth, and what did Slack say about the auth change?* **Success:** agent hunts **and** Slack is on the allowlist for the same turn.  
+   - After a successful repo hunt, send **Thanks** then **Explain this function**. **Success:** neither follow-up shows a tool-step list (every turn re-plans).
    - Run `/edit` or a Workflows chip with `agentMode` on. **Success:** existing edit/workflow path, not the agent loop.
    - Confirm Settings still owns Agent mode — **nothing new** in the Workflows header.
 
@@ -100,7 +100,7 @@ Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as
 | S9 | Extension UI | Turn NES **on**. Tab-accept once | A next-edit ghost appears at a predicted place | Nothing, or autocomplete CAR/latency tanked |
 | S10 | File | [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) | Every Wave 2 track + Join has notes | Empty or “it compiled” |
 | S11 | Terminal | `npm run test:chat-intent` | This week’s planner still green | Agent work undid named-tool / explain-only routing |
-| S12 | Extension UI | `agentMode` **off**. Local explain. | No tool-step list; Sources still above the answer; empty chrome still skipped | Eight search/read rows on a normal ask |
+| S12 | Extension UI | Local explain (agent still on by default). | No tool-step list; Sources still above the answer; empty chrome still skipped | Eight search/read rows on a normal ask |
 | S13 | Extension UI | Create PR | Dialog is the existing Coop modal family; Patch card still Apply / Reject plus one quiet **Create pull request** | New overlay look, or a fat extra button row |
 | S14 | Extension UI | Plain chat with remote AGENTS.md | Answer follows it; **no** new banner/chip every turn | Instructions advertised as chrome |
 
@@ -114,9 +114,9 @@ Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as
 |---------|--------|----------------------|
 | Chat / quick actions | Prefetch evidence → one LLM answer; structured cite/Sources | Keep as-is for Trace/Owner/Blast/Gaps |
 | Intent planner (this week) | Named tools only; local explain = no tools; workflows stay workflows; `none` plan = no activity chrome | Agent loop **obeys** this plan — does not spray every tool |
-| Agent mode (`coopAI.chat.agentMode`) | Deterministic `search` → `read` prefetch; default **off**; `auto` is too eager today (keywords or empty bundle) | **5b:** LLM chooses **allowlisted repo tools** only when the turn is a repo hunt |
+| Agent mode (`coopAI.chat.agentMode`) | **Product default on** — locate / understand / change (and hunt + Slack compounds). No Coop Settings toggle; `off` is a VS Code kill switch only | Done for Wave 1 routing; dogfood S1–S14 still required |
 | `/edit` | SEARCH/REPLACE → Apply into open buffer / local disk | Multi-file apply on **remote Use-repo** without clone |
-| Integrations | Parallel fetch before answer (~15s soft budget) | On-demand tool calls inside agent jobs |
+| Integrations | Parallel fetch before answer (~15s soft budget) | Compound hunt + Slack: agent loop + Slack allowlist on the same turn |
 | Indexed repos | Map + on-demand bodies; Zero-Clone reads (`read_file` already remote-only) | Index stays read map; **code host** becomes write target |
 | Ship | No create-branch / commit / open-PR | Patch card → confirmed PR |
 | Instructions | Local disk `AGENTS.md` / `.cursor/rules` | Always-on from **indexed remote** + light visible memory |
@@ -132,11 +132,11 @@ Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as
 2. **Index = read map; code host = write target** — do not invent a durable working tree in the index.
 3. **Q&A ≠ agent job** — Trace / Owner / Understand Repo stay prefetch + soft 15s gather. Agent loop gets a **separate, visible** progress budget.
 4. **Cite / edit / anonymous** — explaining repo code = citation fences; changes = patch blocks; never lang-fence dumps of repo code meant for Apply.
-5. **Opt-in → dogfood → default** — same ladder as autocomplete. Default `agentMode` stays **off** until a later product decision. NES default **off**.
+5. **Agent is on** — locate / understand / change run the loop by default. No Coop Settings opt-in. NES default **off**. Kill switch: VS Code `coopAI.chat.agentMode: off` only.
 6. **Fail open** — invalid tool JSON / tool errors → degrade to best answer or clear error; never hang “Preparing answer,” never silent wrong apply, never silent push.
 7. **Boris bar** — wired hot path, graph-grounded when claimed, close the loop, tested, honest scope.
 8. **Notes or it didn’t happen** — a stage with no log entry in `docs/agent-ship-loop-notes.md` is Fail.
-9. **UX freeze** — this week’s look and routing stay. New power lives behind opt-in and existing chrome. A new layout, banner, or “search everything” loop is Fail.
+9. **UX freeze** — this week’s look and routing stay. New power lives behind existing chrome. A new layout, banner, or “search everything” loop is Fail.
 
 ---
 
@@ -159,7 +159,7 @@ This week’s product already decides **why the user asked** before it fetches. 
 
 | If we get sloppy | What it undoes | Gate | Pass | Fail |
 |------------------|----------------|------|------|------|
-| Agent loop on by default, or `auto` that’s too eager | This week’s plain-chat feel. Answers get slower and noisier. | **UX-G1** | Default `agentMode` remains **off**. `auto` does **not** start the loop for local explain, short asks, or “context bundle is empty.” | Default on; or `auto` fires because the bundle was empty / the user said “where” in a 20-character question |
+| Agent loop on by default for locate/change | Wrong turns get slower | **UX-G1** | Default `agentMode` is **on**. Loop still requires a **repo hunt** (not local explain, not Slack-only, not workflows). Kill switch `off` still blocks. | Default off; or every thank-you / Slack-only ask hunts |
 | Eight tool-step rows on every reply | Sources-on-top, skip-empty-chrome | **UX-G2** | Loop runs only when the planner says this turn is a **repo hunt** and `agentMode` is **on**. Integrations stay on the planner allowlist. After the answer starts, activity **collapses** (≤3 visible steps, rest folded; not a permanent stack above Sources). | Every turn searches every tool; 8 rows sit above the answer on explain/Slack/Trace |
 | New Confirm / Create PR overlay that doesn’t match existing dialogs | The Coop look | **UX-G3** | Confirm uses `coop-prompt-modal` (same family as Prompt Library). Escape and backdrop dismiss. | VS Code validation box, full-screen black overlay, raw `vscode-button-*` |
 | Fat new button row on Patch cards | Apply / Reject surface | **UX-G4** | Same card. Apply / Reject unchanged. **One** quiet `coop-text-btn`: Create pull request (after Apply). | Extra primary row, duplicate Apply, or a second card chrome |
@@ -275,7 +275,7 @@ Intent planner (unchanged — this week)
 
 | Phase | Name | Wave | Default after that wave |
 |-------|------|------|-------------------------|
-| **A** | Foundation + LLM tool loop (read-only) | 1 | `agentMode` still **off** / opt-in |
+| **A** | Foundation + LLM tool loop (read-only) | 1 | `agentMode` **on** by default |
 | **B** | `propose_patch` + multi-file remote apply | 2 | Edit/agent opt-in |
 | **C** | Branch / PR handoff (GitHub first) | 2 | Explicit button; never silent |
 | **D** | Always-on instructions + light memory | 2 | On for indexed Use-repo (capped) |
@@ -311,7 +311,7 @@ Laws (non-negotiable):
 - Cite/edit/anonymous from CURSOR_STYLE_OUTPUT_CONTRACT — patches for edits, citations for existing repo code.
 - Quick actions stay prefetch reports — do not force Trace/Owner through the agent tool loop.
 - Intent planner wins: do not fetch tools the planner did not allowlist. Local explain and workflow turns never enter the LLM agent loop.
-- UX freeze (UX-G1..G6): default agentMode off; auto is conservative; no 8-row tool lists on normal chat; Patch card stays Apply/Reject plus one quiet Create PR; confirm uses coop-prompt-modal; NES default off; AGENTS.md is silent (system prompt), not a banner.
+- UX freeze (UX-G1..G6): default agentMode on for locate/change; Slack-only and explain stay out; no 8-row tool lists on normal chat; Patch card stays Apply/Reject plus one quiet Create PR; confirm uses coop-prompt-modal; NES default off; AGENTS.md is silent (system prompt), not a banner.
 - Opt-in only: do not flip coopAI.chat.agentMode or NES default to on.
 - Follow file ownership in docs/agent-ship-loop-build-plan.md. Do not edit another track’s files.
 - Every stage: automated gates + pressure tests + an entry in docs/agent-ship-loop-notes.md.
@@ -821,7 +821,7 @@ Notes + plan status. Stop.
 | J-G3 | `npm run test:agent-ship` and `test:agent-ship:pressure` green | Missing scripts or red |
 | J-G4 | Quick actions still prefetch; soft 15s character unchanged | Trace/Owner feel like agent jobs |
 | J-G5 | Notes complete for A–E + Join; scorecard filled below | “Looks good” with empty log |
-| J-G6 | Defaults: `agentMode` off, NES off, PR still a button | Silent agent or silent push |
+| J-G6 | Defaults: `agentMode` on, NES off, PR still a button | Agent default off, silent NES, or silent push |
 | J-G7 | **UX-G1..G12** all Pass on the merged tree; `npm run test:chat-intent` green | Planner, sticky-thread, or chrome regressions |
 | J-G8 | S12–S14 Pass (explain has no tool list; PR modal matches Coop; no AGENTS.md banner) | This week’s feel is gone |
 
@@ -874,7 +874,7 @@ Stop.
 
 | Control | Default |
 |---------|---------|
-| `agentMode` default | `off` |
+| `agentMode` default | `on` |
 | Max tool rounds | 8 (`DEFAULT_MAX_STEPS`) |
 | Agent wall clock | 90s (not the 15s Q&A gather) |
 | Max files read per job | 10 |

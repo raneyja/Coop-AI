@@ -416,8 +416,8 @@
         "coopAI.chat.agentMode": {
           "type": "string",
           "enum": ["off", "auto", "on"],
-          "default": "off",
-          "markdownDescription": "Read-only repo hunt loop for plain chat. **off** (default) is today’s chat. **on** lets Coop search/read the indexed Use-repo when the question is a repo hunt — not Trace, `/edit`, or “explain this.” **auto** only for clear repo-hunt phrasing; never because context was empty."
+          "default": "on",
+          "markdownDescription": "Repo hunt loop for plain chat (product default **on**). Runs for locate / understand / change on the indexed Use-repo, including compound hunt + Slack asks. **off** is an emergency kill switch only (not exposed in Coop Settings). Does not run for Trace, `/edit`, or local “explain this.”"
         },
         "coopAI.projectInstructions.enabled": {
           "type": "boolean",

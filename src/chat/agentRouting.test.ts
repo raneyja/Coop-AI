@@ -136,6 +136,27 @@ test("shouldRunAgentToolLoop is false for local explain even when on (A-P8)", ()
   );
 });
 
+test("shouldRunAgentToolLoop is true for hunt + Slack compound ask (S-G8)", () => {
+  const query = "Where is requireAuth defined, and what did Slack say about the auth change?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["slack"],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      agentModeSetting: "on",
+      intentPlan: plan
+    }),
+    true
+  );
+});
+
 test("shouldRunAgentToolLoop is false for Slack-named ask without a repo hunt (A-P9)", () => {
   const plan: ChatIntentPlan = {
     mode: "tools-only",

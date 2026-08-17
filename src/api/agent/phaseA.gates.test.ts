@@ -39,7 +39,30 @@ test("A-G4 / A-G7 Trace/workflow does not enter the loop even when on", () => {
   );
 });
 
-test("A-G7 Slack-named ask does not run search_code", () => {
+test("A-G1 repo hunt with agentMode on is allowed", () => {
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "Where is auth middleware enforced and what calls it?",
+      hasQuickAction: false,
+      agentModeSetting: "on",
+      intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
+    }),
+    true
+  );
+});
+
+test("A-G6 / UX-G1 product default is on for repo hunts", () => {
+  assert.equal(
+    shouldUseAgentMode({
+      query: "Where is auth middleware enforced and what calls it?",
+      hasQuickAction: false,
+      agentModeSetting: "on"
+    }),
+    true
+  );
+});
+
+test("A-G7 Slack-only stays out; hunt + Slack loops", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "What's in Slack about this login bug?",
@@ -55,21 +78,26 @@ test("A-G7 Slack-named ask does not run search_code", () => {
     }),
     false
   );
-});
-
-test("A-G1 repo hunt with agentMode on is allowed", () => {
+  const huntSlack = "Where is requireAuth defined, and what did Slack say about the auth change?";
   assert.equal(
     shouldRunAgentToolLoop({
-      query: "Where is auth middleware enforced and what calls it?",
+      query: huntSlack,
       hasQuickAction: false,
       agentModeSetting: "on",
-      intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
+      intentPlan: {
+        mode: "tools-only",
+        tools: ["slack"],
+        confidence: "high",
+        focus: huntSlack,
+        execution: "none",
+        codeIntent: { action: "locate", confidence: "high", reason: "test" }
+      }
     }),
     true
   );
 });
 
-test("A-G6 / UX-G1 default off does not loop", () => {
+test("kill-switch off still blocks the loop", () => {
   assert.equal(
     shouldUseAgentMode({
       query: "Where is auth middleware enforced and what calls it?",

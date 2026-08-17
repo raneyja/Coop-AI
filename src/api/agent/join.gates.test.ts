@@ -73,17 +73,17 @@ test("J-G4 quick actions never enter the agent tool loop", () => {
   }
 });
 
-test("J-G6 defaults stay off (agent + NES)", () => {
+test("J-G6 agent default on; NES stays off", () => {
   const pkg = JSON.parse(readRepo("package.json")) as {
     contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
   };
-  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default, "off");
+  assert.equal(pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default, "on");
 
   const nesKey = "coopAI.autocomplete.nextEditSuggestions";
   assert.equal(pkg.contributes.configuration.properties[nesKey]?.default, false);
 
   const settingsView = readRepo("src/webview/SettingsView.tsx");
-  assert.match(settingsView, /agentMode: "off"/);
+  assert.match(settingsView, /agentMode: "on"/);
 });
 
 test("J-G7 chat-intent script exists for UX freeze regression", () => {

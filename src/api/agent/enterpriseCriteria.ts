@@ -47,9 +47,9 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G3",
     family: "Scope",
-    pass: "agentMode off → zero agent loops on any question",
-    fail: "Default or off still hunts",
-    evidence: "automated"
+    pass: "Product default agentMode is on; locate/change loop without a Settings toggle",
+    fail: "Default still off or Coop Settings still exposes an AgentMode opt-in",
+    evidence: "source"
   },
   {
     id: "S-G4",
@@ -68,8 +68,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G6",
     family: "Scope",
-    pass: "Settings label is AgentMode with no subtext",
-    fail: "Long marketing title or explanatory subtext under the toggle",
+    pass: "No AgentMode checkbox in Coop Settings (agent is always on)",
+    fail: "Settings still shows an AgentMode opt-in toggle",
     evidence: "source"
   },
   {
@@ -77,6 +77,13 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
     family: "Scope",
     pass: "No repo-/framework-specific path rules in ranking or scope code",
     fail: "Hardcoded product folders or frameworks in retrieval",
+    evidence: "automated"
+  },
+  {
+    id: "S-G8",
+    family: "Scope",
+    pass: "Compound hunt + Slack: agent loops and Slack stays on the planner allowlist",
+    fail: "Hunt+Slack drops the loop or drops Slack",
     evidence: "automated"
   },
 
@@ -188,8 +195,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "J-G6",
     family: "Join",
-    pass: "Defaults: agentMode off; NES off",
-    fail: "Silent agent or silent NES",
+    pass: "Defaults: agentMode on; NES off",
+    fail: "Agent default off, or silent NES",
     evidence: "source"
   },
 
