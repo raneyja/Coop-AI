@@ -423,14 +423,18 @@ import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds, shouldSkipQuickA
 import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
-import { shouldFetchJiraContext } from "../context/jiraContext";
-import { shouldFetchNotionContext } from "../context/notionContext";
-import { shouldFetchSlackContext } from "../context/slackContext";
+import { shouldFetchJiraContext, fetchJiraSearchContext } from "../context/jiraContext";
+import { shouldFetchNotionContext, fetchNotionSearchContext } from "../context/notionContext";
+import { shouldFetchSlackContext, fetchSlackSearchContext } from "../context/slackContext";
+import { fetchTeamsSearchContext } from "../context/teamsContext";
+import { fetchConfluenceSearchContext } from "../context/confluenceContext";
+import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
 import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForAgentHunt } from "./agentRouting";
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
+import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
 import {
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
@@ -3561,7 +3565,8 @@ export class CoopChatSession {
       repoId: input.repoId,
       round: input.round,
       priorSummaries: input.priorSteps.map((step) => step.summary),
-      lastToolResult: input.lastToolResult
+      lastToolResult: input.lastToolResult,
+      allowedIntegrations: input.allowedIntegrations
     });
     let full = "";
     try {
@@ -3587,6 +3592,101 @@ export class CoopChatSession {
       return "";
     }
     return full;
+  }
+
+  /**
+   * Mid-loop allowlisted integration search — focused query from the model
+   * (e.g. a ticket key found in code), not the full user question.
+   */
+  private async searchIntegrationForAgent(
+    provider: IntegrationChatProvider,
+    query: string,
+    file?: string
+  ): Promise<Record<string, unknown>> {
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    const secrets = this.options.integrationSecrets;
+    const gathering = this.contextGatheringOptions();
+    let slackScope: ResolvedIntegrationScope | undefined;
+    let atlassianScope: ResolvedIntegrationScope | undefined;
+    let notionScope: ResolvedIntegrationScope | undefined;
+    let googleDocsScope: ResolvedIntegrationScope | undefined;
+    if (!isCoopDevMode()) {
+      const scoped: ScopedIntegrationProvider | undefined =
+        provider === "slack"
+          ? "slack"
+          : provider === "jira" || provider === "confluence"
+            ? "atlassian"
+            : provider === "notion"
+              ? "notion"
+              : provider === "google-docs"
+                ? "google-docs"
+                : undefined;
+      if (scoped) {
+        try {
+          const resolved = await this.options.api.getIntegrationScope(
+            this.preferences.apiBaseUrl,
+            scoped
+          );
+          if (scoped === "slack") slackScope = resolved;
+          if (scoped === "atlassian") atlassianScope = resolved;
+          if (scoped === "notion") notionScope = resolved;
+          if (scoped === "google-docs") googleDocsScope = resolved;
+        } catch {
+          /* scope optional when API unavailable */
+        }
+      }
+    }
+    const base = {
+      secrets,
+      owner,
+      repo,
+      queryText: query,
+      activeFile: file,
+      limit: 12
+    };
+    switch (provider) {
+      case "slack":
+        return fetchSlackSearchContext({
+          ...base,
+          integrationScope: slackScope
+        });
+      case "jira":
+        return fetchJiraSearchContext({
+          ...base,
+          codeHostRouter: this.options.codeHostRouter,
+          codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
+          integrationScope: atlassianScope
+        });
+      case "teams":
+        return fetchTeamsSearchContext(base);
+      case "notion":
+        return fetchNotionSearchContext({
+          secrets,
+          owner,
+          repo,
+          limit: 12,
+          extraTerms: [query],
+          integrationScope: notionScope
+        });
+      case "confluence":
+        return fetchConfluenceSearchContext({
+          secrets,
+          owner,
+          repo,
+          limit: 12,
+          extraTerms: [query],
+          integrationScope: atlassianScope
+        });
+      case "google-docs":
+        return fetchGoogleDocsSearchContext({
+          ...base,
+          extraTerms: [query],
+          integrationScope: googleDocsScope
+        });
+      default:
+        return { error: `Unsupported integration: ${provider}` };
+    }
   }
 
   private async streamAgentAnswer(
@@ -3733,6 +3833,9 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
+      const allowedIntegrations = (this.turnIntentPlan?.tools ?? []).filter(
+        (tool): tool is IntegrationChatProvider => Boolean(tool)
+      );
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -3744,6 +3847,9 @@ export class CoopChatSession {
           signal,
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
+          allowedIntegrations,
+          searchIntegration: (input) =>
+            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file),
           planTurn: (input) => this.planAgentToolTurn(input, runtimeModel),
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
@@ -3883,7 +3989,7 @@ export class CoopChatSession {
         ? undefined
         : request.params.file;
     const gathering = this.contextGatheringOptions();
-    return mergeIntegrationChatContext({
+    const enriched = await mergeIntegrationChatContext({
       result,
       request,
       secrets: this.options.integrationSecrets,
@@ -3920,6 +4026,9 @@ export class CoopChatSession {
             ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
             : undefined
     });
+    // Mid-loop agent searches land in agentTools; re-promote after prefetch so
+    // focused ticket/thread hits win over (or fill) the first-pass bundle keys.
+    return promoteAgentIntegrationSearches(enriched);
   }
 
   /** Append a real tool line to the activity checklist (Slack, Jira, …). */

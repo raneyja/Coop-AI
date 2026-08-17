@@ -1,6 +1,8 @@
 # Agent ship loop — stage notes
 
 **Required log** for [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).  
+**Jon’s dogfood checklist:** [agent-dogfood.md](./agent-dogfood.md).
+
 A stage with no entry here is **FAIL**, even if tests are green.
 
 Every Wave 1 and Join entry must also record **UX-G1..G12** (intent-first routing, no sticky agent thread, slash/Workflows still win, no new header control, same Use-repo, existing errors, one Patch card). `npm run test:chat-intent` belongs in the commands list.
@@ -23,6 +25,26 @@ Copy this block. Do not edit older entries except to fix a factual error.
 ---
 
 ## Enterprise scorecard (strict Pass / Fail)
+
+### 2026-08-17 — Allowlisted mid-loop integration tools — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-allowlist-midloop-d4f5`
+- **Commands run:** `npm run lint`; `npx tsx src/api/agent/integrationMidLoop.test.ts`; phaseA gates
+- **Gate IDs:** S-G8b — PASS. Mid-loop `search_jira` / `search_slack` / etc. only when on planner allowlist; capped at 3 calls; results promote to `jiraSearch` / `slackSearch` for synthesis.
+- **What we tried:** Prefetch stays first-pass; agent may follow a ticket key / thread topic discovered in code with a focused query.
+- **What Jon re-runs:** Ask *Where is requireAuth, and check Jira for related tickets?* Success = Searched/Read, then optional Searched Jira for a key, answer cites both.
+
+### 2026-08-17 — Agent always on + hunt/Slack compound — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-always-on-d4f5`
+- **Commands run:** `npm run lint`; `npx tsx src/chat/agentRouting.test.ts`; phaseA/honesty/join gates; `npx tsx src/api/agent/enterprise.scorecard.test.ts`
+- **Gate IDs:** S-G1..G8, H-G1..H-G4/H-G10, J-G6 — PASS. Product law: agent default **on**; no Coop Settings toggle; Slack-only still out; hunt+Slack loops.
+- **What we tried:**
+  - `coopAI.chat.agentMode` default → `on`; Settings AgentMode checkbox removed.
+  - Hub subtitle treats missing/undefined as Agent on; kill switch `off` still honored in routing.
+  - Locked S-G8: compound locate + Slack keeps the agent loop and Slack on the planner allowlist.
+- **What broke / what we skipped:** Live Extension Host dogfood of hunt+Slack still for Jon.
+- **What Jon re-runs:** Extension UI — ask a locate question (no Settings flip). Then a hunt+Slack compound ask. Success = Searched/Read activity + Slack evidence on the same turn.
 
 ### 2026-08-14 — Enterprise readiness before Extension Host dogfood — PASS (automated)
 

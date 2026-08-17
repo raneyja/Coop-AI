@@ -1,4 +1,11 @@
 import type { AgentToolName } from "./agentTypes";
+import type { IntegrationChatProvider } from "../../chat/types";
+import {
+  agentToolForIntegrationProvider,
+  isAgentIntegrationTool,
+  providerForAgentIntegrationTool,
+  type AgentIntegrationToolName
+} from "./integrationTools";
 
 const REPO_TOOLS = new Set<AgentToolName>([
   "search_code",
@@ -28,15 +35,34 @@ function extractJsonObject(text: string): string {
   return text.slice(start, end + 1);
 }
 
-function isRepoTool(value: unknown): value is AgentToolName {
-  return typeof value === "string" && REPO_TOOLS.has(value as AgentToolName);
+function isAllowedTool(
+  value: unknown,
+  allowedIntegrations: IntegrationChatProvider[] | undefined
+): value is AgentToolName {
+  if (typeof value !== "string") {
+    return false;
+  }
+  if (REPO_TOOLS.has(value as AgentToolName)) {
+    return true;
+  }
+  if (!isAgentIntegrationTool(value)) {
+    return false;
+  }
+  const allowed = new Set(allowedIntegrations ?? []);
+  if (allowed.size === 0) {
+    return false;
+  }
+  return allowed.has(providerForAgentIntegrationTool(value));
 }
 
 /**
- * Parse one model-chosen repo tool call. Fail-open: garbage → invalid (caller synthesizes).
- * Integrations (Slack/Jira/…) are never valid here — planner allowlist owns those.
+ * Parse one model-chosen tool call. Fail-open: garbage → invalid.
+ * Integration tools are valid only when on this turn's planner allowlist.
  */
-export function parseAgentToolPlan(raw: string): ParsedAgentToolPlan {
+export function parseAgentToolPlan(
+  raw: string,
+  options?: { allowedIntegrations?: IntegrationChatProvider[] }
+): ParsedAgentToolPlan {
   const text = extractJsonObject(stripFence(raw));
   if (!text) {
     return { kind: "invalid" };
@@ -54,7 +80,7 @@ export function parseAgentToolPlan(raw: string): ParsedAgentToolPlan {
   if (obj.done === true || obj.tool === null) {
     return { kind: "done" };
   }
-  if (!isRepoTool(obj.tool)) {
+  if (!isAllowedTool(obj.tool, options?.allowedIntegrations)) {
     return { kind: "invalid" };
   }
   const args =
@@ -70,22 +96,48 @@ export function buildAgentToolPlanPrompt(input: {
   round: number;
   priorSummaries: string[];
   lastToolResult?: string;
+  allowedIntegrations?: IntegrationChatProvider[];
 }): string {
   const prior =
     input.priorSummaries.length > 0
       ? input.priorSummaries.map((line, i) => `${i + 1}. ${line}`).join("\n")
       : "(none)";
   const last = input.lastToolResult?.slice(0, 8000) ?? "(none)";
+  const integrationTools = (input.allowedIntegrations ?? [])
+    .map((provider) => agentToolForIntegrationProvider(provider))
+    .filter((tool): tool is AgentIntegrationToolName => Boolean(tool));
+  const allowedList = [
+    "search_code",
+    "read_file",
+    "list_directory",
+    "git_blame",
+    "propose_patch",
+    ...integrationTools
+  ].join(", ");
+  const integrationRules =
+    integrationTools.length > 0
+      ? [
+          `Integration tools on this turn only: ${integrationTools.join(", ")}.`,
+          "Use them when code evidence reveals a ticket key, thread topic, or doc name — pass a short focused query.",
+          "Do not call integrations that are not listed. Prefetch may already have first-pass results."
+        ]
+      : [
+          "Do not call Slack, Jira, or any integration tool this turn — none are on the allowlist."
+        ];
   return [
     "You are Coop Agent on this Use-repo. This is one conversation: you pick tools, see results, then a later turn in this same conversation answers the user.",
     "Reply with JSON only this turn — not the user-facing answer.",
     `Use-repo: ${input.repoId}`,
     `Question: ${input.message}`,
     `Round: ${input.round + 1}`,
-    "Allowed tools: search_code, read_file, list_directory, git_blame, propose_patch.",
+    `Allowed tools: ${allowedList}.`,
     'Call: {"tool":"search_code","args":{"query":"..."}}',
+    integrationTools.length
+      ? `Or: {"tool":"${integrationTools[0]}","args":{"query":"PROJ-123"}}`
+      : undefined,
     'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
-    "Do not call Slack, Jira, or any integration. Do not invent file paths.",
+    ...integrationRules,
+    "Do not invent file paths.",
     "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
     "Prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
     "If camelCase misses, retry snake_case (requireAuth → require_auth) or a nearby synonym — never stop after one empty search.",
@@ -97,7 +149,9 @@ export function buildAgentToolPlanPrompt(input: {
     prior,
     "Last tool result (truncated):",
     last
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
 /** Same conversation, after tools: write the user-visible answer. */

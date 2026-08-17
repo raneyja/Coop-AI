@@ -1,9 +1,17 @@
+import type { IntegrationChatProvider } from "../../chat/types";
+
 export type AgentToolName =
   | "read_file"
   | "search_code"
   | "list_directory"
   | "git_blame"
-  | "propose_patch";
+  | "propose_patch"
+  | "search_slack"
+  | "search_jira"
+  | "search_teams"
+  | "search_notion"
+  | "search_confluence"
+  | "search_google_docs";
 
 export type AgentStep = {
   index: number;
@@ -25,6 +33,8 @@ export type AgentPlanTurnInput = {
   priorSteps: AgentStep[];
   lastToolResult?: string;
   conversation: AgentConversationMessage[];
+  /** Planner allowlist for this turn — mid-loop may only call these. */
+  allowedIntegrations?: IntegrationChatProvider[];
 };
 
 /**
@@ -63,6 +73,12 @@ export type AgentSessionContext = {
   git_blame?: Record<string, unknown>;
   /** SEARCH/REPLACE text for the Patch card — never auto-applied. */
   propose_patch?: Record<string, unknown>;
+  search_slack?: Record<string, unknown>;
+  search_jira?: Record<string, unknown>;
+  search_teams?: Record<string, unknown>;
+  search_notion?: Record<string, unknown>;
+  search_confluence?: Record<string, unknown>;
+  search_google_docs?: Record<string, unknown>;
 };
 
 export type AgentSessionResult = {

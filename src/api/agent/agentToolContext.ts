@@ -1,4 +1,5 @@
 import type { IndexBackend } from "../../indexing/indexBackend";
+import type { IntegrationChatProvider } from "../../chat/types";
 import type { BlameData } from "../codeHosts/types";
 
 export type AgentDirectoryListing = {
@@ -25,4 +26,14 @@ export type AgentToolContext = {
     path: string;
     repoId?: string;
   }) => Promise<{ path: string; content: string } | undefined>;
+  /**
+   * Mid-loop integration search. Only providers on {@link allowedIntegrations}
+   * (or the per-run allowlist) may be called.
+   */
+  searchIntegration?: (options: {
+    provider: IntegrationChatProvider;
+    query: string;
+  }) => Promise<Record<string, unknown>>;
+  /** Planner allowlist for this session/run — empty means no integration tools. */
+  allowedIntegrations?: IntegrationChatProvider[];
 };

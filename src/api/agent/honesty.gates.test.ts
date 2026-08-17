@@ -157,6 +157,10 @@ test("H-G10 docs do not tell the user to enable AgentMode", () => {
   const arch = readRepo("docs/llm-prompt-architecture.md");
   assert.match(arch, /always on|no user toggle|no Agent setting/i);
   assert.doesNotMatch(arch, /defaults to \*\*off\*\*/);
+
+  const dogfood = readRepo("docs/agent-dogfood.md");
+  assert.match(dogfood, /no Coop Settings toggle|No Coop Settings toggle/i);
+  assert.match(dogfood, /search_jira|mid-loop|Jira/i);
 });
 
 test("H-G11 retrieval is one rule for every ask — no repo names, no layer special cases", () => {

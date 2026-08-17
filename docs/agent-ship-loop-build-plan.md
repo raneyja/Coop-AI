@@ -1,6 +1,6 @@
 # Agent → Apply → PR ship loop — editor build plan
 
-**Updated:** 2026-08-16 — Product decision: Agent is **always on** for locate / understand / change. There is no user `agentMode` toggle. Agent turns are one model conversation (tools then the streamed answer), not gather-then-synthesis. Do not follow the Wave 1 default-off / gather-bolt-on UX freeze below as current product law.
+**Updated:** 2026-08-17 — Agent is **always on** (no Settings toggle). Hunt-quality fixes + allowlisted mid-loop Slack/Jira. Dogfood → [agent-dogfood.md](./agent-dogfood.md). Do not follow the Wave 1 default-off / gather-bolt-on UX freeze below as current product law.
 
 **Created:** 2026-08-13  
 **Updated:** 2026-08-13 — Wave 1 = A only; Wave 2 = B + C + D + E in parallel; Wave 3 = join + production eval. **Historical UX freeze** (default-off, Settings toggle) is superseded by the 2026-08-16 always-on decision. Tools / Zero-Clone / Apply constraints in this doc still apply.  
@@ -11,6 +11,7 @@
 
 | Doc | Role |
 |-----|------|
+| [**agent-dogfood.md**](./agent-dogfood.md) | Extension Host dogfood (always-on + mid-loop Slack/Jira) |
 | [AGENTS.md](../AGENTS.md) § Boris bar | Ship quality bar |
 | [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) | **Required** stage log (every stage writes here) |
 | [codegen-cody-replacement-plan.md](./codegen-cody-replacement-plan.md) | Prior codegen phases 0–5 (**complete**); this plan continues at **5b** |

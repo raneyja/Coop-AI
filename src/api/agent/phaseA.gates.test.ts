@@ -96,6 +96,50 @@ test("parseAgentToolPlan rejects Slack as a repo tool (UX-G2)", () => {
   assert.equal(parsed.kind, "invalid");
 });
 
+test("A-G7 Slack-only stays out; hunt + Slack loops", () => {
+  const huntSlack = "Where is requireAuth defined, and what did Slack say about the auth change?";
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "What's in Slack about this login bug?",
+      hasQuickAction: false,
+      intentPlan: {
+        mode: "tools-only",
+        tools: ["slack"],
+        confidence: "high",
+        focus: "What's in Slack about this login bug?",
+        execution: "none"
+      }
+    }),
+    false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: huntSlack,
+      hasQuickAction: false,
+      intentPlan: {
+        mode: "tools-only",
+        tools: ["slack"],
+        confidence: "high",
+        focus: huntSlack,
+        execution: "none",
+        codeIntent: { action: "locate", confidence: "high", reason: "test" }
+      }
+    }),
+    true
+  );
+});
+
+test("parseAgentToolPlan accepts search_jira when Jira is allowlisted", () => {
+  const parsed = parseAgentToolPlan(
+    JSON.stringify({ tool: "search_jira", args: { query: "PROJ-123" } }),
+    { allowedIntegrations: ["jira"] }
+  );
+  assert.equal(parsed.kind, "call");
+  if (parsed.kind === "call") {
+    assert.equal(parsed.tool, "search_jira");
+  }
+});
+
 test("parseAgentToolPlan accepts search_code JSON", () => {
   const parsed = parseAgentToolPlan('{"tool":"search_code","args":{"query":"auth"}}');
   assert.equal(parsed.kind, "call");

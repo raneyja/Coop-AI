@@ -79,6 +79,13 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
     fail: "Hardcoded product folders or frameworks in retrieval",
     evidence: "automated"
   },
+  {
+    id: "S-G8",
+    family: "Scope",
+    pass: "Compound hunt + Slack/Jira: agent loops; allowlisted mid-loop search_* tools; Slack-only stays out",
+    fail: "Hunt+Slack drops the loop, or mid-loop can call tools off the allowlist",
+    evidence: "automated"
+  },
 
   // —— Retrieval ——
   {

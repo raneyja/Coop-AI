@@ -170,6 +170,21 @@ async function main(): Promise<void> {
     }
   }
 
+  {
+    const q = "Where is requireAuth defined, and what did Slack say about the auth change?";
+    const plan = planChatIntentFromRules({ message: q, connectedTools: ["slack"] });
+    const loops = shouldRunAgentToolLoop({
+      query: q,
+      hasQuickAction: false,
+      intentPlan: plan
+    });
+    if (loops && plan.tools.includes("slack") && plan.mode === "tools-only") {
+      pass("S-G8", "Scope", "hunt + Slack: loop + Slack allowlist");
+    } else {
+      fail("S-G8", "Scope", `loops=${loops} tools=${plan.tools.join(",")} mode=${plan.mode}`);
+    }
+  }
+
   // —— R-G* Retrieval (strict 100% on a representative hunt) ——
   {
     const orchestrator = createAgentOrchestrator({

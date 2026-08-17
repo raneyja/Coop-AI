@@ -96,7 +96,8 @@ export const SCOPE_GATE_IDS = [
   "S-G4",
   "S-G5",
   "S-G6",
-  "S-G7"
+  "S-G7",
+  "S-G8"
 ] as const;
 
 /**

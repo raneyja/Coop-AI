@@ -3,6 +3,7 @@ import {
   AGENT_MAX_FILES_READ,
   AGENT_MAX_TOOL_ROUNDS
 } from "../../config/agentJobBudget";
+import type { IntegrationChatProvider } from "../../chat/types";
 import type {
   AgentConversationMessage,
   AgentPlanTurnFn,
@@ -29,6 +30,10 @@ import {
   textMentionsQueryRoles
 } from "./searchQuery";
 import { createAgentToolRegistry } from "./tools/registry";
+import { handleIntegrationSearch } from "./tools/integrationSearch";
+import {
+  isAgentIntegrationTool
+} from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
 
 export { pickTopSearchHit };
@@ -41,6 +46,8 @@ const MAX_SEARCH_ATTEMPTS = 3;
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
   "I could not find an indexed file that matches that symbol or role (tried casing aliases). I will not guess a path. Confirm the name, or open the file and use /edit.";
+/** Cap mid-loop integration calls so the model cannot spray. */
+const MAX_INTEGRATION_TOOL_CALLS = 3;
 
 type SearchHit = {
   fileName: string;
@@ -93,6 +100,13 @@ export type AgentRunOptions = {
   signal?: AbortSignal;
   startedAt?: number;
   wallMs?: number;
+  /** Planner allowlist — mid-loop may only call these integration tools. */
+  allowedIntegrations?: IntegrationChatProvider[];
+  /** Live integration search for allowlisted mid-loop tools. */
+  searchIntegration?: (options: {
+    provider: IntegrationChatProvider;
+    query: string;
+  }) => Promise<Record<string, unknown>>;
 };
 
 /**
@@ -100,16 +114,30 @@ export type AgentRunOptions = {
  *
  * Live path: one model conversation (`planTurn`) chooses tools, sees results,
  * then `streamAnswer` writes the user-visible answer. There is no user toggle.
+ * Allowlisted integrations may be called mid-loop when discovered.
  * Deterministic search→read is only the no-planTurn fallback (tests / fail-open).
  */
 export class AgentOrchestrator {
   private readonly registry;
+  private runAllowedIntegrations: IntegrationChatProvider[] = [];
+  private runSearchIntegration?: AgentRunOptions["searchIntegration"];
 
   public constructor(private readonly ctx: AgentToolContext) {
     this.registry = createAgentToolRegistry(ctx);
   }
 
   public async executeTool(tool: AgentToolName, args: Record<string, unknown>): Promise<string> {
+    if (isAgentIntegrationTool(tool)) {
+      return handleIntegrationSearch(
+        {
+          ...this.ctx,
+          allowedIntegrations: this.runAllowedIntegrations,
+          searchIntegration: this.runSearchIntegration ?? this.ctx.searchIntegration
+        },
+        tool,
+        args
+      );
+    }
     const handler = this.registry[tool];
     if (!handler) {
       throw new Error(`Tool not implemented: ${tool}`);
@@ -131,11 +159,18 @@ export class AgentOrchestrator {
       return { steps: [], context: undefined };
     }
 
-    const action = request.action ?? "none";
-    if (options?.planTurn) {
-      return this.runOwnedLoop(repoId, query, maxSteps, action, options);
+    this.runAllowedIntegrations = options?.allowedIntegrations ?? [];
+    this.runSearchIntegration = options?.searchIntegration;
+    try {
+      const action = request.action ?? "none";
+      if (options?.planTurn) {
+        return await this.runOwnedLoop(repoId, query, maxSteps, action, options);
+      }
+      return await this.runDeterministic(repoId, query, maxSteps, options);
+    } finally {
+      this.runAllowedIntegrations = [];
+      this.runSearchIntegration = undefined;
     }
-    return this.runDeterministic(repoId, query, maxSteps, options);
   }
 
   /**
@@ -160,8 +195,10 @@ export class AgentOrchestrator {
     const startedAt = options.startedAt ?? Date.now();
     const wallMs = options.wallMs ?? AGENT_JOB_WALL_MS;
     let filesRead = 0;
+    let integrationCalls = 0;
     let lastToolResult: string | undefined;
     let matchingRead = false;
+    const allowedIntegrations = options.allowedIntegrations ?? [];
 
     const canAnswerNow = (): boolean => {
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
@@ -186,7 +223,8 @@ export class AgentOrchestrator {
           round,
           priorSteps: [...steps],
           lastToolResult,
-          conversation: [...conversation]
+          conversation: [...conversation],
+          allowedIntegrations
         });
       } catch {
         if (steps.length === 0) {
@@ -206,7 +244,7 @@ export class AgentOrchestrator {
         break;
       }
 
-      const plan = parseAgentToolPlan(raw);
+      const plan = parseAgentToolPlan(raw, { allowedIntegrations });
       if (plan.kind === "invalid") {
         if (steps.length === 0) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options);
@@ -282,6 +320,12 @@ export class AgentOrchestrator {
           break;
         }
         filesRead += 1;
+      }
+      if (isAgentIntegrationTool(plan.tool)) {
+        if (integrationCalls >= MAX_INTEGRATION_TOOL_CALLS) {
+          break;
+        }
+        integrationCalls += 1;
       }
 
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query);
@@ -683,6 +727,10 @@ export class AgentOrchestrator {
       context.propose_patch = parsed;
       return;
     }
+    if (isAgentIntegrationTool(tool)) {
+      context[tool] = parsed;
+      return;
+    }
     context.git_blame = parsed;
   }
 
@@ -702,6 +750,10 @@ export class AgentOrchestrator {
     if (tool === "propose_patch") {
       const files = Array.isArray(args.files) ? args.files.length : 0;
       return files > 0 ? `propose_patch: ${files} file${files === 1 ? "" : "s"}` : "propose_patch";
+    }
+    if (isAgentIntegrationTool(tool)) {
+      const q = typeof args.query === "string" ? args.query : query;
+      return `${tool}: ${truncateSummary(q)}`;
     }
     const path = typeof args.path === "string" ? args.path : "";
     return `git_blame: ${path}`;
