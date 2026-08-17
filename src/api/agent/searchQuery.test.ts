@@ -10,10 +10,12 @@ import {
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
+  queryRoleHints,
   sanitizeAgentSearchQuery,
   selectChatEvidencePaths,
   shouldSkipEvidencePath,
-  textMentionsNamedSymbol
+  textMentionsNamedSymbol,
+  textMentionsQueryRoles
 } from "./searchQuery";
 
 let passed = 0;
@@ -169,6 +171,29 @@ test("drops auth UI hits that never mention requireAuth", () => {
   assert.equal(picked.length, 0);
 });
 
+test("role-noun hunts keep middleware hits and drop collab auth", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "collab/session/auth.ts",
+        lineNumber: 8,
+        score: 0.99,
+        content: "export async function onAuthenticate() { return true }"
+      },
+      {
+        fileName: "server/http/middleware.py",
+        lineNumber: 12,
+        score: 0.2,
+        content: "def auth_middleware(get_response):"
+      }
+    ],
+    8,
+    "Where is auth middleware enforced and what calls it?"
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "server/http/middleware.py");
+});
+
 test("does not treat require_authentication filenames as requireAuth", () => {
   const ask = "add logging around requireAuth";
   assert.equal(
@@ -303,6 +328,32 @@ test("isGeneratedOrVendorPath", () => {
   assert.equal(isGeneratedOrVendorPath("dist/app.js"), true);
   assert.equal(isGeneratedOrVendorPath("pnpm-lock.yaml"), true);
   assert.equal(isGeneratedOrVendorPath("src/server/auth.ts"), false);
+});
+
+test("queryRoleHints extracts middleware from a locate ask", () => {
+  assert.deepEqual(
+    queryRoleHints("Where is auth middleware enforced and what calls it?"),
+    ["middleware"]
+  );
+  assert.deepEqual(queryRoleHints("Where is requireAuth defined?"), []);
+});
+
+test("textMentionsQueryRoles requires the role in the file or path", () => {
+  const ask = "Where is auth middleware enforced and what calls it?";
+  assert.equal(
+    textMentionsQueryRoles(
+      "collab/session/auth.ts\nexport async function onAuthenticate() { return true }",
+      ask
+    ),
+    false
+  );
+  assert.equal(
+    textMentionsQueryRoles(
+      "server/http/middleware.py\ndef auth_middleware(get_response):\n  return get_response",
+      ask
+    ),
+    true
+  );
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

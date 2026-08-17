@@ -25,9 +25,27 @@ function isFocusLossDiskLinkWarning(warning: string | undefined): boolean {
   return Boolean(warning?.includes(DISK_LINK_WARNING));
 }
 
-function applyIncomingFileMeta(merged: RepoContext, incoming: RepoContext): void {
+function applyIncomingFileMeta(
+  merged: RepoContext,
+  incoming: RepoContext,
+  existing: RepoContext
+): void {
   if ("selectedLines" in incoming) {
-    merged.selectedLines = incoming.selectedLines;
+    const incomingHasRange =
+      Array.isArray(incoming.selectedLines) && incoming.selectedLines.length === 2;
+    const sameFile =
+      Boolean(merged.file?.trim()) &&
+      merged.file?.replace(/\\/g, "/").replace(/^\.?\//, "") ===
+        existing.file?.replace(/\\/g, "/").replace(/^\.?\//, "");
+    if (incomingHasRange) {
+      merged.selectedLines = incoming.selectedLines;
+    } else if (sameFile && existing.selectedLines?.length === 2) {
+      // Webview click clears the editor selection before send — keep the last range
+      // on this file so explain / /edit still see what the user highlighted.
+      merged.selectedLines = existing.selectedLines;
+    } else {
+      merged.selectedLines = incoming.selectedLines;
+    }
   }
   if ("selectedSymbol" in incoming) {
     merged.selectedSymbol = incoming.selectedSymbol;
@@ -122,7 +140,7 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
   if (incoming.file?.trim()) {
     merged.file = incoming.file.trim();
     merged.scope = "file";
-    applyIncomingFileMeta(merged, incoming);
+    applyIncomingFileMeta(merged, incoming, existing);
 
     if (isOsAbsoluteDiskPath(incoming.file) || incoming.fileSource === "external") {
       // Downloads / Cmd+O — always L; never inherit a prior "remote" stamp.

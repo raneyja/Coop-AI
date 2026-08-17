@@ -84,7 +84,7 @@ export function buildAgentToolPlanPrompt(input: {
     `Round: ${input.round + 1}`,
     "Allowed tools: search_code, read_file, list_directory, git_blame, propose_patch.",
     'Call: {"tool":"search_code","args":{"query":"..."}}',
-    'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias).',
+    'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
     "Do not call Slack, Jira, or any integration. Do not invent file paths.",
     "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
     "Prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
@@ -113,7 +113,7 @@ export function buildAgentAnswerPrompt(input: {
     "Write the user-facing answer now from the tool results in this conversation.",
     `Question: ${input.message}`,
     "Cite real paths with citation fences (numeric startLine:endLine:path).",
-    "If you never read a file that mentions a named symbol, say the index returned no usable match — do not invent a path or answer from a related UI/test file.",
+    "If you never read a file that mentions a named symbol, say in 1–2 sentences that the index returned no usable match. Do not invent a path. Do not answer from a related UI/test/collab file. Do not use a **Your question** heading. Do not restate the user's ask.",
     "Do not emit tool JSON.",
     change
   ].join("\n");

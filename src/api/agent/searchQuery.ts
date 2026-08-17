@@ -56,6 +56,18 @@ export {
 const ROLE_NOUN =
   /\b([a-z][a-z0-9]+\s+(?:middleware|service|controller|provider|handler|adapter|repository|resolver|guard|interceptor|client|store|queue|worker|migration|schema))\b/i;
 
+/** Specific enough that a read must mention them — not generic “service/api”. */
+const ROLE_HINTS = [
+  "middleware",
+  "controller",
+  "handler",
+  "adapter",
+  "resolver",
+  "guard",
+  "interceptor",
+  "validator"
+] as const;
+
 export type RankedSearchHit = {
   fileName: string;
   lineNumber: number;
@@ -267,6 +279,14 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     keys.length > 0
       ? ranked.filter((hit) => hitMentionsNamedSymbol(hit, userMessage!))
       : ranked;
+  if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
+    const roleHits = pool.filter((hit) =>
+      textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, userMessage)
+    );
+    if (roleHits.length > 0) {
+      pool = roleHits;
+    }
+  }
   // Prefer declaration sites over call sites when the user named a symbol.
   if (keys.length > 0 && userMessage) {
     const decls = pool.filter((hit) => contentLooksLikeDeclaration(hit.content ?? "", userMessage));
@@ -413,6 +433,25 @@ export function textMentionsNamedSymbol(text: string, userMessage: string): bool
     return true;
   }
   return forms.some((form) => textHasIdentifierToken(text, form));
+}
+
+/** Role nouns the user named (middleware, handler, …). */
+export function queryRoleHints(userMessage: string): string[] {
+  const lower = userMessage.toLowerCase();
+  return ROLE_HINTS.filter((role) => new RegExp(`\\b${role}s?\\b`).test(lower));
+}
+
+/**
+ * When the user named a role (auth *middleware*), the file/path must mention
+ * that role. Otherwise collab `onAuthenticate` steals HTTP middleware hunts.
+ */
+export function textMentionsQueryRoles(text: string, userMessage: string): boolean {
+  const hints = queryRoleHints(userMessage);
+  if (!hints.length) {
+    return true;
+  }
+  const blob = text.toLowerCase();
+  return hints.some((role) => blob.includes(role));
 }
 
 function hitMentionsNamedSymbol(

@@ -234,11 +234,11 @@ async function run(): Promise<void> {
   });
 
   await test("sanitizes full-question search queries to a short identifier", async () => {
-    let seenQuery: string | undefined;
+    const seen: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({
         search: async (_repoId, pattern) => {
-          seenQuery = pattern;
+          seen.push(pattern);
           return {
             source: "zoekt",
             stale: false,
@@ -265,7 +265,8 @@ async function run(): Promise<void> {
     });
     const question = "Where is requireAuth or authentication middleware defined in this repo?";
     const result = await orchestrator.run({ message: question, repoId: "acme/demo" });
-    assert.equal(seenQuery, "requireAuth");
+    assert.ok(seen.includes("requireAuth"), `expected requireAuth, got ${seen.join(",")}`);
+    assert.equal(seen.includes(question), false);
     assert.equal(result.steps[0]?.summary.includes(question), false);
     assert.equal(result.steps[1]?.summary.includes("authentication/middleware.py"), true);
   });
@@ -616,6 +617,109 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /middleware\.py/);
     const readSteps = result.steps.filter((s) => s.tool === "read_file");
     assert.ok(readSteps.length >= 2, `expected ≥2 reads, got ${readSteps.length}`);
+  });
+
+  await test("empty hunt does not stream a Your question restatement", async () => {
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is requireAuth defined in this repo?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } }),
+        streamAnswer: async () => {
+          streamed += 1;
+          return "**Your question**\nWhere is requireAuth defined in this repo?";
+        }
+      }
+    );
+    assert.equal(streamed, 0, "must not call the answer model on an empty hunt");
+    assert.match(result.answer ?? "", /will not guess a path/i);
+    assert.doesNotMatch(result.answer ?? "", /Your question/);
+  });
+
+  await test("role-noun hunt rejects a collab auth read that never says middleware", async () => {
+    const collabPath = "collab/session/auth.ts";
+    const middlewarePath = "server/http/middleware.py";
+    const reads: string[] = [];
+    let round = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: collabPath,
+              lineNumber: 8,
+              content: "export async function onAuthenticate() { return true }",
+              score: 0.99
+            },
+            {
+              fileName: middlewarePath,
+              lineNumber: 12,
+              content: "def auth_middleware(get_response):",
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel.includes("middleware")) {
+          return {
+            path: rel,
+            content: "def auth_middleware(get_response):\n  return get_response\n"
+          };
+        }
+        return {
+          path: rel,
+          content: "export async function onAuthenticate(token) { return token; }\n"
+        };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "auth" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: collabPath } });
+          }
+          if (round === 3) {
+            return JSON.stringify({ done: true });
+          }
+          if (round === 4) {
+            return JSON.stringify({ tool: "read_file", args: { path: middlewarePath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "auth_middleware is defined in server/http/middleware.py"
+      }
+    );
+    assert.ok(round >= 5, `done after the collab read must be rejected; rounds=${round}`);
+    assert.equal(reads.includes(collabPath), true);
+    assert.equal(reads.includes(middlewarePath), true);
+    assert.match(result.answer ?? "", /middleware\.py/);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

@@ -440,7 +440,7 @@ import {
   shouldBypassAdvisoryGroundingForEdit,
   shouldTrackEditRequest
 } from "./editSendRouting";
-import type { RepoCodeAction } from "./repoCodeIntent";
+import { isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -3514,6 +3514,27 @@ export class CoopChatSession {
     return result;
   }
 
+  private conversationalAckReply(message: string): string {
+    const trimmed = message.trim().toLowerCase();
+    if (/^(?:thanks|thank\s+you|ty)\b/.test(trimmed)) {
+      return "You're welcome.";
+    }
+    return "Sounds good.";
+  }
+
+  /** Short ack — no file attach, no hunt, no "Preparing answer". */
+  private runConversationalAckTurn(turn: ChatTurn, query: string): void {
+    if (!this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
+    this.clearIntentFeedback(turn.threadId);
+    this.finishTurnAssistantMessage(turn, {
+      role: "assistant",
+      content: this.conversationalAckReply(query),
+      timestamp: Date.now()
+    });
+  }
+
   private conversationToHistory(
     conversation: AgentConversationMessage[]
   ): Array<{ role: "user" | "assistant"; content: string; timestamp: number }> {
@@ -3599,12 +3620,18 @@ export class CoopChatSession {
         enableThinking: true
       },
       (chunk) => {
+        if (signal?.aborted) {
+          return;
+        }
         full += chunk;
         onChunk(chunk);
       },
       this.preferences.apiBaseUrl,
       signal,
       (thinkingChunk) => {
+        if (signal?.aborted) {
+          return;
+        }
         this.postForThread(this.activeThreadId(), {
           type: "chat:thinking-delta",
           payload: { chunk: thinkingChunk, threadId: this.activeThreadId() }
@@ -3680,6 +3707,9 @@ export class CoopChatSession {
       minVisibleMs: 0,
       isCancelled,
       onChunk: (chunk) => {
+        if (isCancelled()) {
+          return;
+        }
         if (!clearedIntentForOutput) {
           clearedIntentForOutput = true;
           clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
@@ -4559,6 +4589,21 @@ export class CoopChatSession {
       }
     }
 
+    const conversationalAck =
+      !quickAction &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      !options?.composerMode &&
+      isConversationalChat(message);
+    if (conversationalAck) {
+      options = {
+        ...options,
+        skipChatIntentPlanner: true,
+        skipQuickActionSuggest: true,
+        intentPlan: emptyChatIntentPlan(message)
+      };
+    }
+
     // Chat Intent Planner (plain chat): pick workflow + connected tools before chips/edit.
     // Slash and explicit integrationProvider remain the override.
     if (
@@ -4764,6 +4809,7 @@ export class CoopChatSession {
     }
     const structureIntent = !quickAction && needsRepoTreeOverview(message);
     this.pendingChatLocalFiles =
+      conversationalAck ||
       structureIntent ||
       Boolean(this.pendingDualRepoCompare) ||
       shouldSkipOpenFileAttach({
@@ -4907,6 +4953,11 @@ export class CoopChatSession {
     turn.startedAt = this.chatTurnStartedAt;
     this.turnStreamAbort = turn.streamAbort.signal;
     this.pushThreadsList();
+
+    if (conversationalAck) {
+      this.runConversationalAckTurn(turn, message);
+      return;
+    }
 
     const fetchIntegrations = options?.fetchIntegrations;
     const prefetchIntentEvent = intentQuickAction
@@ -5961,10 +6012,16 @@ export class CoopChatSession {
   }
 
   private selectedCodeSnippet(maxLength = 4000): string | undefined {
-    const editor =
-      pickLocalEditorForContext(this.currentContext.file) ??
-      pickEditorForContext(this.currentContext.file) ??
-      vscode.window.activeTextEditor;
+    const wanted = this.currentContext.file?.trim();
+    const remoteFirst =
+      this.currentContext.fileSource === "remote" || Boolean(this.remoteProvenanceFile);
+    const editor = remoteFirst
+      ? pickRemoteEditorForContext(wanted) ??
+        pickLocalEditorForContext(wanted) ??
+        pickEditorForContext(wanted)
+      : pickLocalEditorForContext(wanted) ??
+        pickEditorForContext(wanted) ??
+        vscode.window.activeTextEditor;
     if (editor && !editor.selection.isEmpty) {
       return editor.document.getText(editor.selection).slice(0, maxLength);
     }
@@ -5972,7 +6029,6 @@ export class CoopChatSession {
     if (!lines || lines.length !== 2) {
       return undefined;
     }
-    const wanted = this.currentContext.file?.trim();
     const fromPending = this.pendingChatLocalFiles?.files.find((file) =>
       wanted ? pathsReferToSameFile(file.path, wanted) : true
     );

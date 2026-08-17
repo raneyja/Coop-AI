@@ -21,10 +21,12 @@ import {
   pickSymbolHitsToRead,
   pickTopSearchHit,
   queryHasNamedSymbol,
+  queryRoleHints,
   rankSearchHits,
   sanitizeAgentSearchQuery,
   shouldSkipEvidencePath,
-  textMentionsNamedSymbol
+  textMentionsNamedSymbol,
+  textMentionsQueryRoles
 } from "./searchQuery";
 import { createAgentToolRegistry } from "./tools/registry";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
@@ -37,6 +39,8 @@ const READ_LINE_PADDING = 25;
 const MAX_SEARCH_ATTEMPTS = 3;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
+const INDEX_HUNT_MISS =
+  "I could not find an indexed file that matches that symbol or role (tried casing aliases). I will not guess a path. Confirm the name, or open the file and use /edit.";
 
 type SearchHit = {
   fileName: string;
@@ -160,10 +164,10 @@ export class AgentOrchestrator {
     let matchingRead = false;
 
     const canAnswerNow = (): boolean => {
-      if (!queryHasNamedSymbol(query)) {
-        return steps.length > 0;
+      if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
+        return matchingRead;
       }
-      return matchingRead;
+      return steps.length > 0;
     };
 
     for (let round = 0; round < maxSteps; round++) {
@@ -187,7 +191,17 @@ export class AgentOrchestrator {
       } catch {
         if (steps.length === 0) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options);
-          return this.finishWithAnswer(fallback, query, repoId, action, options);
+          return this.finishWithAnswer(
+            fallback,
+            query,
+            repoId,
+            action,
+            options,
+            undefined,
+            Boolean(
+              (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
+            )
+          );
         }
         break;
       }
@@ -196,7 +210,17 @@ export class AgentOrchestrator {
       if (plan.kind === "invalid") {
         if (steps.length === 0) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options);
-          return this.finishWithAnswer(fallback, query, repoId, action, options);
+          return this.finishWithAnswer(
+            fallback,
+            query,
+            repoId,
+            action,
+            options,
+            undefined,
+            Boolean(
+              (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
+            )
+          );
         }
         if (canAnswerNow() && looksLikeProseAnswer(raw)) {
           return this.finishWithAnswer(
@@ -205,13 +229,14 @@ export class AgentOrchestrator {
             repoId,
             action,
             options,
-            conversation
+            conversation,
+            true
           );
         }
         lastToolResult = JSON.stringify({
           error: canAnswerNow()
             ? 'Reply {"done":true} so the next turn can answer the user, or call another repo tool.'
-            : "Reply with a tool JSON call. You have not read a file that mentions the named symbol — do not answer yet."
+            : "Reply with a tool JSON call. You have not read a file that mentions the named symbol or role — do not answer yet."
         });
         conversation.push({ role: "assistant", content: raw.slice(0, 2000) });
         conversation.push({ role: "user", content: lastToolResult });
@@ -222,7 +247,7 @@ export class AgentOrchestrator {
         if (!canAnswerNow()) {
           lastToolResult = JSON.stringify({
             error:
-              "Do not finish yet. You have not read a file whose body mentions the named symbol. Call search_code or read_file on a different path — do not answer from a related UI, test, or form."
+              "Do not finish yet. You have not read a file whose body mentions the named symbol or the role the user named (e.g. middleware). Call search_code or read_file on a different path — do not answer from a related UI, test, or form."
           });
           conversation.push({ role: "assistant", content: '{"done":true}' });
           conversation.push({ role: "user", content: lastToolResult });
@@ -238,10 +263,10 @@ export class AgentOrchestrator {
           });
           continue;
         }
-        if (queryHasNamedSymbol(query) && !matchingRead) {
+        if ((queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) && !matchingRead) {
           lastToolResult = JSON.stringify({
             error:
-              "Do not propose_patch until you have read a file that mentions the named symbol. Search/read again."
+              "Do not propose_patch until you have read a file that mentions the named symbol or role. Search/read again."
           });
           conversation.push({
             role: "assistant",
@@ -322,7 +347,15 @@ export class AgentOrchestrator {
       }
     }
 
-    return this.finishWithAnswer({ steps, context }, query, repoId, action, options, conversation);
+    return this.finishWithAnswer(
+      { steps, context },
+      query,
+      repoId,
+      action,
+      options,
+      conversation,
+      matchingRead
+    );
   }
 
   private async finishWithAnswer(
@@ -331,8 +364,18 @@ export class AgentOrchestrator {
     repoId: string,
     action: NonNullable<AgentSessionRequest["action"]>,
     options: AgentRunOptions,
-    conversation?: AgentConversationMessage[]
+    conversation?: AgentConversationMessage[],
+    matchingRead = false
   ): Promise<AgentSessionResult> {
+    const needsGrounding =
+      queryHasNamedSymbol(query) || queryRoleHints(query).length > 0;
+    if (needsGrounding && !matchingRead) {
+      return {
+        ...result,
+        answer: INDEX_HUNT_MISS,
+        context: result.steps.length ? result.context : undefined
+      };
+    }
     if (!options.streamAnswer) {
       return { ...result, context: result.steps.length ? result.context : undefined };
     }
@@ -393,7 +436,9 @@ export class AgentOrchestrator {
     query: string,
     args: Record<string, unknown>
   ): { raw: string; matchesSymbol: boolean } {
-    if (!queryHasNamedSymbol(query)) {
+    const needsNamed = queryHasNamedSymbol(query);
+    const needsRole = !needsNamed && queryRoleHints(query).length > 0;
+    if (!needsNamed && !needsRole) {
       return { raw, matchesSymbol: true };
     }
     try {
@@ -401,14 +446,18 @@ export class AgentOrchestrator {
       const path = typeof args.path === "string" ? args.path : parsed.path ?? "";
       const body = (parsed.files ?? []).map((file) => `${file.path}\n${file.content}`).join("\n");
       const blob = `${path}\n${body}`;
-      if (textMentionsNamedSymbol(blob, query)) {
+      const matches = needsNamed
+        ? textMentionsNamedSymbol(blob, query)
+        : textMentionsQueryRoles(blob, query);
+      if (matches) {
         return { raw, matchesSymbol: true };
       }
       return {
         raw: JSON.stringify({
           ...parsed,
-          skipNote:
-            "This file does not mention the named symbol. Search or read a different path before answering. Do not treat this as the definition."
+          skipNote: needsNamed
+            ? "This file does not mention the named symbol. Search or read a different path before answering. Do not treat this as the definition."
+            : "This file does not mention the role the user named (e.g. middleware). Search or read a different path — do not treat websocket/session auth as HTTP middleware."
         }),
         matchesSymbol: false
       };
@@ -475,7 +524,12 @@ export class AgentOrchestrator {
         .map((file) => `${file.path}\n${file.content}`)
         .join("\n");
       const blob = `${hit.fileName}\n${hit.content ?? ""}\n${body}`;
-      if (!textMentionsNamedSymbol(blob, query)) {
+      const namedOk = !queryHasNamedSymbol(query) || textMentionsNamedSymbol(blob, query);
+      const roleOk =
+        queryHasNamedSymbol(query) ||
+        queryRoleHints(query).length === 0 ||
+        textMentionsQueryRoles(blob, query);
+      if (!namedOk || !roleOk) {
         emit({
           index: steps.length,
           tool: "read_file",

@@ -80,6 +80,53 @@ async function run(): Promise<void> {
     assert.equal(parsed.hits[0]?.fileName, "src/auth.ts");
   });
 
+  await test("search_code follows camelCase aliases to snake_case hits", async () => {
+    const seen: string[] = [];
+    const registry = createAgentToolRegistry({
+      indexBackend: mockIndexBackend({
+        search: async (_repoId, pattern) => {
+          seen.push(pattern);
+          if (pattern === "require_auth") {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: "server/auth/middleware.py",
+                  lineNumber: 40,
+                  content: "def require_auth(request):",
+                  score: 0.9
+                }
+              ],
+              symbols: [
+                {
+                  file: "server/auth/middleware.py",
+                  line: 40,
+                  character: 0,
+                  symbol: "require_auth",
+                  kind: "function",
+                  displayName: "require_auth"
+                }
+              ]
+            };
+          }
+          return { source: "zoekt", stale: false, hits: [], symbols: [] };
+        }
+      }),
+      resolveAbsolutePath: () => undefined
+    });
+    const raw = await registry.search_code!({ query: "requireAuth", repoId: "acme/demo" });
+    const parsed = JSON.parse(raw) as {
+      hits: Array<{ fileName: string; content: string }>;
+      queriesTried: string[];
+    };
+    assert.ok(seen.includes("requireAuth"));
+    assert.ok(seen.includes("require_auth"));
+    assert.ok(parsed.queriesTried.includes("require_auth"));
+    assert.equal(parsed.hits[0]?.fileName, "server/auth/middleware.py");
+    assert.match(parsed.hits[0]?.content ?? "", /require_auth/);
+  });
+
   await test("search_code reports when index is disabled for repo", async () => {
     const registry = createAgentToolRegistry({
       indexBackend: mockIndexBackend({

@@ -1,8 +1,34 @@
+import type { LocalSearchResult, ScipSymbol, ZoektSearchHit } from "../../../indexing/types";
+import { identifierSearchAliases } from "../searchQuery";
 import type { AgentToolContext } from "../agentToolContext";
 import { requireStringArg } from "./toolArgs";
 
 function formatCitation(repoId: string, fileName: string, lineNumber: number): string {
   return `${repoId}:${fileName}:${lineNumber}`;
+}
+
+function mergeSearchResults(parts: LocalSearchResult[]): LocalSearchResult {
+  const hits: ZoektSearchHit[] = [];
+  const symbols: ScipSymbol[] = [];
+  for (const part of parts) {
+    for (const hit of part.hits) {
+      if (!hits.some((seen) => seen.fileName === hit.fileName && seen.lineNumber === hit.lineNumber)) {
+        hits.push(hit);
+      }
+    }
+    for (const symbol of part.symbols) {
+      if (!symbols.some((seen) => seen.file === symbol.file && seen.line === symbol.line && seen.symbol === symbol.symbol)) {
+        symbols.push(symbol);
+      }
+    }
+  }
+  const first = parts[0];
+  return {
+    source: first?.source ?? "zoekt",
+    stale: parts.some((part) => part.stale),
+    hits,
+    symbols
+  };
 }
 
 export async function handleSearchCode(
@@ -25,10 +51,19 @@ export async function handleSearchCode(
     });
   }
 
-  const result = await ctx.indexBackend.search(repoId, query);
+  const queries = [query, ...identifierSearchAliases(query)].filter(
+    (candidate, index, all) => all.findIndex((seen) => seen.toLowerCase() === candidate.toLowerCase()) === index
+  );
+  const parts: LocalSearchResult[] = [];
+  for (const pattern of queries) {
+    parts.push(await ctx.indexBackend.search(repoId, pattern));
+  }
+  const result = mergeSearchResults(parts);
+
   return JSON.stringify({
     repoId,
     query,
+    queriesTried: queries,
     source: result.source,
     stale: result.stale,
     sampleNote:
