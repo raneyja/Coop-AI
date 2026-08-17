@@ -24,6 +24,18 @@ Copy this block. Do not edit older entries except to fix a factual error.
 
 ## Enterprise scorecard (strict Pass / Fail)
 
+### 2026-08-17 — Agent always on + hunt/Slack compound — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-always-on-d4f5`
+- **Commands run:** `npm run lint`; `npx tsx src/chat/agentRouting.test.ts`; phaseA/honesty/join gates; `npx tsx src/api/agent/enterprise.scorecard.test.ts`
+- **Gate IDs:** S-G1..G8, H-G1..H-G4/H-G10, J-G6 — PASS. Product law: agent default **on**; no Coop Settings toggle; Slack-only still out; hunt+Slack loops.
+- **What we tried:**
+  - `coopAI.chat.agentMode` default → `on`; Settings AgentMode checkbox removed.
+  - Hub subtitle treats missing/undefined as Agent on; kill switch `off` still honored in routing.
+  - Locked S-G8: compound locate + Slack keeps the agent loop and Slack on the planner allowlist.
+- **What broke / what we skipped:** Live Extension Host dogfood of hunt+Slack still for Jon.
+- **What Jon re-runs:** Extension UI — ask a locate question (no Settings flip). Then a hunt+Slack compound ask. Success = Searched/Read activity + Slack evidence on the same turn.
+
 ### 2026-08-14 — Enterprise readiness before Extension Host dogfood — PASS (automated)
 
 - **Owner:** editor / enterprise gate
