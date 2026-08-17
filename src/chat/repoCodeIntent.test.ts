@@ -3,7 +3,7 @@
  * go. Run it to see coverage as a number rather than a claim.
  */
 import assert from "node:assert/strict";
-import { classifyRepoCodeIntent, type RepoCodeAction } from "./repoCodeIntent";
+import { classifyRepoCodeIntent, isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
 
 type Case = { q: string; expect: RepoCodeAction };
 
@@ -76,3 +76,8 @@ for (const failure of failures) {
 console.log(`\nrepoCodeIntent: ${passed}/${CASES.length} routed correctly`);
 
 assert.equal(failures.length, 0, "routing eval regressed");
+
+assert.equal(isConversationalChat("Thanks"), true);
+assert.equal(isConversationalChat("ok thanks that worked"), true);
+assert.equal(isConversationalChat("Explain this function"), false);
+assert.equal(isConversationalChat("ok now add logging around requireAuth"), false);

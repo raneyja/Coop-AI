@@ -860,8 +860,7 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
-            autocompleteEnabled: prefs.autocompleteEnabled,
-            agentMode: prefs.agentMode
+            autocompleteEnabled: prefs.autocompleteEnabled
           })}
           onClick={() => onNavigate("model")}
         />

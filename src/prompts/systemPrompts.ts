@@ -6,7 +6,7 @@ import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
 import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
 import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
-import { GENERAL_CHAT_EVIDENCE_RULES, SOURCES_FOOTER_OUTPUT_RULE } from "./evidenceSynthesis";
+import { GENERAL_CHAT_EVIDENCE_RULES, SOURCES_FOOTER_OUTPUT_RULE, AGENT_REPO_HUNT_RULES } from "./evidenceSynthesis";
 import { USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE } from "../chat/paperclipAttachments";
 import {
   extractDualRepoCompareEvidence,
@@ -95,6 +95,7 @@ Rules:
 - Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
 - Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
 - Prefer one tight patch on the selection over "helpful" drive-by cleanups outside it.
+- To add a comment or line above existing code: SEARCH is the existing line(s) only. REPLACE is the new line(s) followed by that same SEARCH text **once**. Never paste the SEARCH block twice inside REPLACE.
 
 ## Completeness (required)
 - Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
@@ -424,7 +425,9 @@ When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structu
 When \`<repo_package_structure>\` is attached, list the concrete package/app paths from that block (e.g. apps/remix, packages/signing). Do not answer with only workspace globs like \`apps/*\` / \`packages/*\` when concrete names are present. Workspace globs in that block are informational — expand from the listed paths.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
 
-${GENERAL_CHAT_EVIDENCE_RULES}`;
+${GENERAL_CHAT_EVIDENCE_RULES}
+
+${AGENT_REPO_HUNT_RULES}`;
 
 export const GENERAL_CHAT_SYSTEM = withOutputContract(GENERAL_CHAT_BODY, "chat");
 
@@ -1692,6 +1695,8 @@ type AgentSearchSummary = {
   query?: string;
   repoId?: string;
   hits: AgentSearchHit[];
+  exhaustedQueries?: string[];
+  skipNote?: string;
 };
 
 function extractAgentFileSnippets(bundle: unknown): ManifestSnippet[] {
@@ -1734,13 +1739,20 @@ function extractAgentSearchSummary(bundle: unknown): AgentSearchSummary | undefi
       continue;
     }
     const hits = Array.isArray(search.hits) ? (search.hits as AgentSearchHit[]) : [];
-    if (!hits.length && !search.query) {
+    const exhaustedQueries = Array.isArray(search.exhaustedQueries)
+      ? (search.exhaustedQueries as unknown[]).filter((q): q is string => typeof q === "string")
+      : undefined;
+    const skipNote = typeof search.skipNote === "string" ? search.skipNote : undefined;
+    const query = typeof search.query === "string" ? search.query : undefined;
+    if (!hits.length && !query && !exhaustedQueries?.length && !skipNote) {
       continue;
     }
     return {
-      query: typeof search.query === "string" ? search.query : undefined,
+      query,
       repoId: typeof search.repoId === "string" ? search.repoId : undefined,
-      hits: hits.slice(0, 8)
+      hits: hits.slice(0, 8),
+      exhaustedQueries,
+      skipNote
     };
   }
   return undefined;
@@ -1754,11 +1766,26 @@ function formatAgentSearchForLlm(summary: AgentSearchSummary): string[] {
   if (summary.repoId) {
     lines.push(`repo: ${summary.repoId}`);
   }
-  lines.push("Top indexed hits from search_code (agent loop step 1):");
-  for (const hit of summary.hits) {
-    const citation = hit.citation ?? `${hit.fileName}:${hit.lineNumber}`;
-    const snippet = hit.content ? ` — ${hit.content.trim().slice(0, 120)}` : "";
-    lines.push(`- ${citation}${snippet}`);
+  if (summary.hits.length > 0) {
+    lines.push("Top indexed hits from search_code:");
+    for (const hit of summary.hits) {
+      const citation = hit.citation ?? `${hit.fileName}:${hit.lineNumber}`;
+      const snippet = hit.content ? ` — ${hit.content.trim().slice(0, 120)}` : "";
+      lines.push(`- ${citation}${snippet}`);
+    }
+  } else {
+    lines.push("No usable indexed hits from search_code.");
+  }
+  if (summary.exhaustedQueries?.length) {
+    lines.push(`exhaustedQueries: ${summary.exhaustedQueries.map((q) => JSON.stringify(q)).join(", ")}`);
+  }
+  if (summary.skipNote) {
+    lines.push(`skipNote: ${summary.skipNote}`);
+  }
+  if (!summary.hits.length) {
+    lines.push(
+      "Honesty: index miss for the terms tried — do not invent paths, do not claim the symbol is absent from the repo, do not restate the user's question as the answer."
+    );
   }
   lines.push("</agent_search>");
   return lines;

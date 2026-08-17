@@ -24,7 +24,6 @@ export type Preferences = {
   maxTokens: number;
   llmEnabled: boolean;
   autocompleteEnabled: boolean;
-  agentMode: "off" | "auto" | "on";
   useCachedResponses: boolean;
   includeSelection: boolean;
   includeActiveFile: boolean;

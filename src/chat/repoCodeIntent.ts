@@ -25,6 +25,16 @@ const NONE: RepoCodeIntent = { action: "none", confidence: "low", reason: "no re
 const CONVERSATIONAL =
   /^(?:thanks|thank\s+you|ty|ok|okay|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)\b/i;
 
+/**
+ * True when the whole message is small talk ("Thanks"), not "ok now add logging".
+ * Prefix-only matching would steal real change asks that start with "ok".
+ */
+export function isConversationalChat(message: string): boolean {
+  return /^(?:thanks|thank\s+you|ty|ok(?:ay)?|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)(?:\s+thanks?)?(?:\s+that(?:'s|\s+is)?\s+worked)?[.!?]*$/i.test(
+    message.trim()
+  );
+}
+
 /** "explain this function" — the open buffer, not the repository. */
 const LOCAL_SCOPE =
   /\bthis\s+(function|method|class|file|code|selection|snippet|line|block|component)\b/i;

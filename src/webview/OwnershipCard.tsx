@@ -24,6 +24,7 @@ import {
 import {
   IntegrationResultBadge,
   IntegrationResultCollapsible,
+  IntegrationNativeOpenRow,
   IntegrationResultRow,
   IntegrationResultSection,
   IntegrationResultText
@@ -292,14 +293,17 @@ export function OwnershipCard({
                 {slackSearch!.error ? (
                   <IntegrationResultText muted>{slackSearch!.error}</IntegrationResultText>
                 ) : hasSlackDiscussionEvidence ? (
-                  <ul className="space-y-2">
+                  <div className="space-y-2">
                     {slackSearch!.messages!.slice(0, 8).map((message, index) => (
-                      <li key={index} className="coop-result-text">
-                        {message.channelName ? `#${message.channelName}` : "Slack"} ·{" "}
-                        {message.userName ?? "unknown"}: {message.text.slice(0, 200)}
-                      </li>
+                      <IntegrationNativeOpenRow
+                        key={index}
+                        label={message.channelName ? `#${message.channelName}` : "Slack"}
+                        preview={`${message.userName ?? "unknown"}: ${message.text.slice(0, 200)}`}
+                        url={message.permalink}
+                        openLabel="Open in Slack"
+                      />
                     ))}
-                  </ul>
+                  </div>
                 ) : (
                   <IntegrationResultText muted>No matching Slack discussions.</IntegrationResultText>
                 )}

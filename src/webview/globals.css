@@ -1634,33 +1634,89 @@
     color: var(--vscode-editor-foreground);
   }
 
+  /* Editor-like syntax colors. Do not use debug/symbolIcon vars — they often equal foreground. */
   .coop-chat-code-token--comment {
-    color: var(--vscode-editorLineNumber-foreground, #6a9955);
+    color: #6a9955;
   }
 
   .coop-chat-code-token--string {
-    color: var(
-      --vscode-symbolIcon-stringForeground,
-      var(--vscode-debugTokenExpression-string, #a31515)
-    );
+    color: #ce9178;
   }
 
   .coop-chat-code-token--number {
-    color: var(
-      --vscode-symbolIcon-numberForeground,
-      var(--vscode-debugTokenExpression-number, #098658)
-    );
+    color: #b5cea8;
   }
 
   .coop-chat-code-token--keyword {
-    color: var(
-      --vscode-symbolIcon-keywordForeground,
-      var(--vscode-debugTokenExpression-name, #0000ff)
-    );
+    color: #569cd6;
+  }
+
+  .coop-chat-code-token--type {
+    color: #4ec9b0;
+  }
+
+  .coop-chat-code-token--function {
+    color: #dcdcaa;
   }
 
   .coop-chat-code-token--property {
-    color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-foreground));
+    color: #9cdcfe;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--comment {
+    color: #008000;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--string {
+    color: #a31515;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--number {
+    color: #098658;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--keyword {
+    color: #0000ff;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--type {
+    color: #267f99;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--function {
+    color: #795e26;
+  }
+
+  [data-theme="light"] .coop-chat-code-token--property {
+    color: #001080;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--comment {
+    color: #7ca668;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--string {
+    color: #f9ee98;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--number {
+    color: #b5cea8;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--keyword {
+    color: #569cd6;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--type {
+    color: #4ec9b0;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--function {
+    color: #dcdcaa;
+  }
+
+  [data-theme="high-contrast"] .coop-chat-code-token--property {
+    color: #9cdcfe;
   }
 
   .coop-patch-diff-stack {
@@ -1679,11 +1735,16 @@
     @apply px-0;
   }
 
-  .coop-patch-file {
+  .coop-patch-file,
+  .coop-chat-citation {
     @apply overflow-hidden rounded-md border;
     border-color: var(--coop-border);
     background: var(--vscode-editor-background, var(--coop-panel-canvas));
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+  }
+
+  .coop-chat-citation {
+    @apply my-2;
   }
 
   .coop-patch-file-header {
@@ -1697,8 +1758,20 @@
   }
 
   .coop-patch-file-path {
-    @apply truncate font-medium;
+    @apply min-w-0 flex-1 truncate text-left font-medium;
     color: var(--vscode-textLink-foreground);
+  }
+
+  button.coop-patch-file-path {
+    @apply cursor-pointer;
+    font: inherit;
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+
+  button.coop-patch-file-path:hover {
+    color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
   }
 
   .coop-patch-file-body {
@@ -1812,91 +1885,49 @@
     color: var(--vscode-diffEditor-insertedTextBackground, #73c991);
   }
 
-  .coop-chat-citation {
-    @apply my-2 overflow-hidden rounded-md border;
-    border-color: color-mix(in srgb, var(--coop-pill-border) 70%, var(--vscode-textLink-foreground) 30%);
-    border-left-width: 3px;
-    background: color-mix(
-      in srgb,
-      var(--vscode-textCodeBlock-background, var(--vscode-editor-background)) 93%,
-      var(--vscode-textLink-foreground) 7%
-    );
-  }
-
-  .coop-chat-citation-toolbar {
-    @apply flex items-center justify-between gap-2 border-b px-2.5 py-1.5;
-    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
-    background: color-mix(
-      in srgb,
-      var(--vscode-textCodeBlock-background, var(--vscode-editor-background)) 82%,
-      var(--coop-panel-canvas) 18%
-    );
-  }
-
-  .coop-chat-citation-path {
-    @apply min-w-0 flex-1 cursor-pointer text-left text-[11px] font-medium transition-colors duration-150;
-    color: var(--vscode-textLink-foreground);
-    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
-    word-break: break-all;
-  }
-
-  .coop-chat-citation-path:hover {
-    text-decoration: underline;
-  }
-
   .coop-chat-citation-body {
-    @apply flex min-w-0 overflow-x-auto;
-    background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
-    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
-  }
-
-  .coop-chat-citation-gutters {
-    @apply flex shrink-0 select-none flex-col border-r py-2 pl-2 pr-1.5 text-right text-[10px] leading-[1.45];
-    border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
-    color: var(--vscode-editorLineNumber-foreground, var(--coop-panel-muted));
-  }
-
-  .coop-chat-citation-gutter {
-    @apply block;
-  }
-
-  .coop-chat-citation-pre {
-    @apply m-0 min-w-0 flex-1 overflow-x-auto px-2.5 py-2 text-xs leading-[1.45];
-  }
-
-  .coop-chat-citation-pre code {
-    @apply block whitespace-pre;
+    @apply m-0 overflow-x-auto px-0 py-1 text-[11px] leading-5;
+    background: transparent;
     color: var(--vscode-editor-foreground);
+  }
+
+  .coop-chat-citation-body--plain {
+    @apply px-2.5;
+  }
+
+  .coop-chat-citation-text {
+    @apply pr-2 min-w-0;
+  }
+
+  .coop-chat-citation-line {
+    @apply grid whitespace-pre;
+    grid-template-columns: 3rem 1fr;
+  }
+
+  .coop-chat-citation-body--plain .coop-chat-citation-line {
+    grid-template-columns: 1fr;
   }
 
   /* Legacy header class kept for admin/website mirrors during transition */
   .coop-chat-citation-header {
-    @apply block w-full cursor-pointer border-b px-2.5 py-1.5 text-left text-[11px] font-medium transition-colors duration-150;
+    @apply block w-full border-b px-2.5 py-1.5 text-left text-[11px] font-medium;
     border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
     color: var(--vscode-textLink-foreground);
     background: color-mix(
       in srgb,
-      var(--vscode-textCodeBlock-background, var(--vscode-editor-background)) 82%,
-      var(--coop-panel-canvas) 18%
+      var(--vscode-editor-background, var(--coop-panel-canvas)) 88%,
+      var(--coop-panel-canvas) 12%
     );
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
     word-break: break-all;
   }
 
-  .coop-chat-citation-header:hover {
-    background: color-mix(in srgb, var(--vscode-list-hoverBackground, var(--coop-panel-canvas)) 60%, transparent);
-  }
-
   .coop-chat-citation-block {
-    @apply m-0 rounded-none border-0;
-  }
-
-  .coop-chat-citation-block .coop-chat-code-header {
-    @apply py-1;
+    @apply m-0 rounded-none border-0 bg-transparent;
   }
 
   .coop-chat-citation-block pre {
-    @apply pt-2;
+    @apply m-0 overflow-x-auto px-0 py-1 text-[11px] leading-5;
   }
 
   .coop-chat-prose {
@@ -3343,4 +3374,49 @@
       transition: none;
     }
   }
+}
+
+/* Unlayered so syntax colors beat @layer components (patch text inherits editor foreground). */
+.coop-chat-citation .coop-chat-code-token--comment {
+  color: #6a9955;
+}
+.coop-chat-citation .coop-chat-code-token--string {
+  color: #ce9178;
+}
+.coop-chat-citation .coop-chat-code-token--number {
+  color: #b5cea8;
+}
+.coop-chat-citation .coop-chat-code-token--keyword {
+  color: #569cd6;
+}
+.coop-chat-citation .coop-chat-code-token--type {
+  color: #4ec9b0;
+}
+.coop-chat-citation .coop-chat-code-token--function {
+  color: #dcdcaa;
+}
+.coop-chat-citation .coop-chat-code-token--property {
+  color: #9cdcfe;
+}
+
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--comment {
+  color: #008000;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--string {
+  color: #a31515;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--number {
+  color: #098658;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--keyword {
+  color: #0000ff;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--type {
+  color: #267f99;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--function {
+  color: #795e26;
+}
+[data-theme="light"] .coop-chat-citation .coop-chat-code-token--property {
+  color: #001080;
 }

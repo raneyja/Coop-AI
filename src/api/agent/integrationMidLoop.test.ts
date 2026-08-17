@@ -137,6 +137,64 @@ async function main(): Promise<void> {
     assert.doesNotMatch(prompt, /search_slack/);
   });
 
+  await test("after a matching hunt, allowlisted Jira is fetched if the model skipped it", async () => {
+    const calls: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: {
+        async search() {
+          return {
+            hits: [
+              {
+                fileName: "src/auth/middleware.ts",
+                lineNumber: 12,
+                content: "export function requireAuth() {}",
+                score: 1
+              }
+            ],
+            symbols: []
+          };
+        }
+      } as unknown as IndexBackend,
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path }) => ({
+        path,
+        content: "export function requireAuth() {\n  return true;\n}\n"
+      })
+    });
+    const result = await orchestrator.run(
+      { message: "Where is requireAuth, and check Jira for related tickets?", repoId: "acme/demo", maxSteps: 6 },
+      {
+        allowedIntegrations: ["jira"],
+        searchIntegration: async ({ query }) => {
+          calls.push(query);
+          return { source: "jira-search", issues: [{ key: "AUTH-1", summary: "Auth middleware" }] };
+        },
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
+          }
+          if (round === 1) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: "src/auth/middleware.ts" }
+            });
+          }
+          return JSON.stringify({ done: true });
+        }
+      }
+    );
+    assert.ok(
+      calls.some((q) => q.toLowerCase().includes("requireauth")),
+      `expected auto Jira query, got ${calls.join(",")}`
+    );
+    assert.ok(result.steps.some((s) => s.tool === "search_jira"));
+    assert.equal(
+      (result.context?.search_jira as { issues?: Array<{ key: string }> } | undefined)?.issues?.[0]
+        ?.key,
+      "AUTH-1"
+    );
+  });
+
   console.log(`\nintegrationMidLoop: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);

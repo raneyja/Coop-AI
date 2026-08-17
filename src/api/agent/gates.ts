@@ -82,7 +82,8 @@ export const HONESTY_GATE_IDS = [
   "H-G10",
   "H-G11",
   "H-G12",
-  "H-G13"
+  "H-G13",
+  "H-G14"
 ] as const;
 
 /**

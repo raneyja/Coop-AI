@@ -50,20 +50,18 @@ function readRepo(...parts: string[]): string {
   return fs.readFileSync(path.join(__dirname, "../../..", ...parts), "utf8");
 }
 
-function route(q: string, mode: "on" | "off" = "on") {
+function route(q: string) {
   const plan = planChatIntentFromRules({ message: q, connectedTools: [] });
   return {
     plan,
     action: agentTurnAction({
       query: q,
       hasQuickAction: false,
-      agentModeSetting: mode,
       intentPlan: plan
     }),
     loops: shouldRunAgentToolLoop({
       query: q,
       hasQuickAction: false,
-      agentModeSetting: mode,
       intentPlan: plan
     })
   };
@@ -87,7 +85,7 @@ async function main(): Promise<void> {
       return !r.loops || r.action !== c.action;
     });
     if (misses.length === 0) {
-      pass("S-G1", "Scope", "locate/understand/change all loop when on");
+      pass("S-G1", "Scope", "locate/understand/change all loop");
     } else {
       fail("S-G1", "Scope", misses.map((m) => m.q).join(" | "));
     }
@@ -110,17 +108,17 @@ async function main(): Promise<void> {
   }
 
   {
-    const pkg = JSON.parse(readRepo("package.json")) as {
-      contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
-    };
     const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
+    const pkg = JSON.parse(readRepo("package.json")) as {
+      contributes: { configuration: { properties: Record<string, unknown> } };
+    };
     if (
-      pkg.contributes.configuration.properties["coopAI.chat.agentMode"]?.default === "on" &&
-      !/title="AgentMode"/.test(ui)
+      !/title="AgentMode"/.test(ui) &&
+      pkg.contributes.configuration.properties["coopAI.chat.agentMode"] === undefined
     ) {
-      pass("S-G3", "Scope", "default on; no Settings opt-in toggle");
+      pass("S-G3", "Scope", "no AgentMode setting; hunts always on");
     } else {
-      fail("S-G3", "Scope", "default still off or AgentMode toggle still present");
+      fail("S-G3", "Scope", "AgentMode toggle or vscode key still present");
     }
   }
 
@@ -155,10 +153,10 @@ async function main(): Promise<void> {
 
   {
     const ui = readRepo("src/webview/components/settings/SettingsDetailViews.tsx");
-    if (!/title="AgentMode"/.test(ui) && !/agentMode: draft\.agentMode/.test(ui)) {
-      pass("S-G6", "Scope", "no AgentMode checkbox in Coop Settings");
+    if (!/title="AgentMode"/.test(ui) && !/draft\.agentMode/.test(ui)) {
+      pass("S-G6", "Scope", "Settings has no AgentMode control");
     } else {
-      fail("S-G6", "Scope", "AgentMode opt-in toggle still in Settings");
+      fail("S-G6", "Scope", "AgentMode checkbox still in Settings");
     }
   }
 
@@ -178,7 +176,6 @@ async function main(): Promise<void> {
     const loops = shouldRunAgentToolLoop({
       query: q,
       hasQuickAction: false,
-      agentModeSetting: "on",
       intentPlan: plan
     });
     if (loops && plan.tools.includes("slack") && plan.mode === "tools-only") {
@@ -285,7 +282,12 @@ async function main(): Promise<void> {
     });
     let round = 0;
     const result = await orchestrator.run(
-      { message: "Add optional flag to requireAuth", repoId: GOLDEN_REPO_ID, maxSteps: 6 },
+      {
+        message: "Add optional flag to requireAuth",
+        repoId: GOLDEN_REPO_ID,
+        maxSteps: 6,
+        action: "change"
+      },
       {
         planTurn: async () => {
           round += 1;
@@ -293,26 +295,27 @@ async function main(): Promise<void> {
             return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
           }
           if (round === 2) {
-            return JSON.stringify({
-              tool: "read_file",
-              args: { path: target, startLine: 1, endLine: 400 }
-            });
+            return JSON.stringify({ tool: "read_file", args: { path: target } });
           }
-          if (round === 3) {
-            return JSON.stringify({
-              tool: "propose_patch",
-              args: { files: [{ path: target, search: searchLine, replace: replaceLine }] }
-            });
-          }
-          return JSON.stringify({ done: true });
+          return JSON.stringify({
+            tool: "propose_patch",
+            args: { files: [{ path: target, search: searchLine, replace: replaceLine }] }
+          });
         }
       }
     );
     const proposed = result.context?.propose_patch as { ok?: boolean; patchText?: string } | undefined;
-    if (proposed?.ok && proposed.patchText && /<<<<<<< SEARCH/.test(proposed.patchText)) {
+    if (
+      proposed?.ok &&
+      proposed.patchText &&
+      /<<<<<<< SEARCH/.test(proposed.patchText) &&
+      result.steps.some((s) => s.tool === "search_code") &&
+      result.steps.some((s) => s.tool === "read_file") &&
+      round >= 3
+    ) {
       pass("PB-G2", "PatchBridge", "search→read→propose_patch yields patchText");
     } else {
-      fail("PB-G2", "PatchBridge", JSON.stringify(proposed));
+      fail("PB-G2", "PatchBridge", JSON.stringify({ proposed, round, steps: result.steps }));
     }
 
     const bad = JSON.parse(
@@ -398,6 +401,18 @@ async function main(): Promise<void> {
       pass("H-G13", "Honesty", "synthesis includes agent_proposed_patch");
     } else {
       fail("H-G13", "Honesty", "prompt missing patch block");
+    }
+  }
+
+  {
+    const session = readRepo("src/chat/CoopChatSession.ts");
+    const start = session.indexOf("private shouldRunAgentOwnedTurn");
+    const end = session.indexOf("private async runAgentOwnedTurn");
+    const fn = start >= 0 && end > start ? session.slice(start, end) : "";
+    if (fn && !/integrationProvider/.test(fn)) {
+      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named");
+    } else {
+      fail("H-G14", "Honesty", "integrationProvider still steals the hunt");
     }
   }
 

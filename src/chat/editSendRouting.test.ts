@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
   EDIT_NO_TARGET_FILE_ERROR,
+  EDIT_NO_TARGET_WITHOUT_AGENT_ERROR,
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
   isConcreteFileEditAsk,
+  resolveChangeSendRouting,
   resolveEditEditorSnapPreference,
   resolveEditTrackingMessage,
   shouldBypassAdvisoryGroundingForEdit,
@@ -128,9 +130,60 @@ test("resolveEditEditorSnapPreference prefers remote tabs for /edit (Zero-Clone)
   );
 });
 
+test("resolveChangeSendRouting: no file + Agent can hunt → agent-change (not hard error)", () => {
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: false,
+      concreteEditAsk: true,
+      hasEditTarget: false,
+      agentCanOwnChange: true
+    }),
+    { kind: "agent-change" }
+  );
+});
+
+test("resolveChangeSendRouting: no file + cannot hunt → reject with hunt hint", () => {
+  const decision = resolveChangeSendRouting({
+    explicitEdit: false,
+    concreteEditAsk: true,
+    hasEditTarget: false,
+    agentCanOwnChange: false
+  });
+  assert.equal(decision.kind, "reject-no-target");
+  if (decision.kind === "reject-no-target") {
+    assert.match(decision.message, /find the code and propose a patch/i);
+  }
+});
+
+test("resolveChangeSendRouting: file in scope → anchored-edit", () => {
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: false,
+      concreteEditAsk: true,
+      hasEditTarget: true,
+      agentCanOwnChange: true
+    }),
+    { kind: "anchored-edit" }
+  );
+});
+
+test("resolveChangeSendRouting: explicit /edit without file still rejects", () => {
+  const decision = resolveChangeSendRouting({
+    explicitEdit: true,
+    concreteEditAsk: false,
+    hasEditTarget: false,
+    agentCanOwnChange: true
+  });
+  assert.equal(decision.kind, "reject-no-target");
+  if (decision.kind === "reject-no-target") {
+    assert.match(decision.message, /Open a file/i);
+  }
+});
+
 test("edit error copy stays actionable (no silent ask demotion)", () => {
   assert.match(EDIT_NO_TARGET_FILE_ERROR, /Open a file/i);
   assert.match(EDIT_NO_TARGET_FILE_ERROR, /\/edit/);
+  assert.match(EDIT_NO_TARGET_WITHOUT_AGENT_ERROR, /propose a patch/i);
   assert.match(EDIT_UNREADABLE_FILE_ERROR, /Could not read/i);
   assert.match(EDIT_UNREADABLE_FILE_ERROR, /remote file/i);
 });

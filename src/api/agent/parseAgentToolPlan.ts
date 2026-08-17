@@ -102,7 +102,7 @@ export function buildAgentToolPlanPrompt(input: {
     input.priorSummaries.length > 0
       ? input.priorSummaries.map((line, i) => `${i + 1}. ${line}`).join("\n")
       : "(none)";
-  const last = input.lastToolResult?.slice(0, 4000) ?? "(none)";
+  const last = input.lastToolResult?.slice(0, 8000) ?? "(none)";
   const integrationTools = (input.allowedIntegrations ?? [])
     .map((provider) => agentToolForIntegrationProvider(provider))
     .filter((tool): tool is AgentIntegrationToolName => Boolean(tool));
@@ -118,14 +118,16 @@ export function buildAgentToolPlanPrompt(input: {
     integrationTools.length > 0
       ? [
           `Integration tools on this turn only: ${integrationTools.join(", ")}.`,
-          "Use them when code evidence reveals a ticket key, thread topic, or doc name — pass a short focused query.",
-          "Do not call integrations that are not listed. Prefetch may already have first-pass results."
+          "Hunt the repo first (search_code / read_file). After a matching read, call the listed integration tool with a short focused query (the symbol or a ticket key) — not the whole question.",
+          "Do not {\"done\":true} after Slack/Jira alone when the user also asked where code lives.",
+          "Do not call integrations that are not listed."
         ]
       : [
           "Do not call Slack, Jira, or any integration tool this turn — none are on the allowlist."
         ];
   return [
-    "You pick the next tool for Coop. Reply with JSON only.",
+    "You are Coop Agent on this Use-repo. This is one conversation: you pick tools, see results, then a later turn in this same conversation answers the user.",
+    "Reply with JSON only this turn — not the user-facing answer.",
     `Use-repo: ${input.repoId}`,
     `Question: ${input.message}`,
     `Round: ${input.round + 1}`,
@@ -134,14 +136,16 @@ export function buildAgentToolPlanPrompt(input: {
     integrationTools.length
       ? `Or: {"tool":"${integrationTools[0]}","args":{"query":"PROJ-123"}}`
       : undefined,
-    'Or finish: {"done":true}',
+    'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
     ...integrationRules,
     "Do not invent file paths.",
     "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
     "Prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
+    "If camelCase misses, retry snake_case (requireAuth → require_auth) or a nearby synonym — never stop after one empty search.",
+    "Never reply {\"done\":true} after an empty search_code, a skipNote, or a read whose body does not mention the named symbol. Search or read a different path instead.",
     "Never read barrel index.ts, build output, or vendored code — they re-export, they do not define.",
-    "If the hits do not answer the question, search again with a different term instead of reading a weak hit.",
-    "propose_patch emits File: + SEARCH/REPLACE only — it does not apply. Use it only when the user asked to change code, then {\"done\":true}. Hunt/explain questions must not propose patches.",
+    "If the first hit is a related UI, test, or form that does not define the symbol, do not treat it as the answer — search/read again.",
+    "propose_patch emits File: + SEARCH/REPLACE only — it does not apply. Use it only when the user asked to change code, and only on a file you already read that mentions the symbol. Hunt/explain questions must not propose patches.",
     "Prior steps:",
     prior,
     "Last tool result (truncated):",
@@ -149,4 +153,26 @@ export function buildAgentToolPlanPrompt(input: {
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
+}
+
+/** Same conversation, after tools: write the user-visible answer. */
+export function buildAgentAnswerPrompt(input: {
+  message: string;
+  action?: "locate" | "understand" | "change" | "none";
+}): string {
+  const change =
+    input.action === "change"
+      ? "If propose_patch succeeded, briefly explain the change. The Apply card will show the patch — do not invent a different SEARCH/REPLACE. If no patch was accepted, say so and do not dump a guessed File: block."
+      : "Do not emit SEARCH/REPLACE or propose a patch. Hunt/explain only.";
+  return [
+    "Write the user-facing answer now from the tool results in this conversation.",
+    `Question: ${input.message}`,
+    "Cite real paths with citation fences (numeric startLine:endLine:path).",
+    "Citation line numbers must be the N| prefixes from read_file (the real file lines), not 1-based offsets in the snippet.",
+    "If Slack/Jira/docs results include permalink or htmlUrl, include that URL as a markdown link so the user can open the native app.",
+    "If you never read a file that mentions a named symbol, say in 1–2 sentences that the index returned no usable match. Do not invent a path. Do not answer from a related UI/test/collab file. Do not use a **Your question** heading. Do not restate the user's ask.",
+    "When Slack/Jira ran, summarize those hits after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
+    "Do not emit tool JSON.",
+    change
+  ].join("\n");
 }

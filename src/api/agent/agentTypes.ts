@@ -20,26 +20,52 @@ export type AgentStep = {
   completed: boolean;
 };
 
+/** One turn in the agent conversation (tool JSON or tool result). */
+export type AgentConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type AgentPlanTurnInput = {
   message: string;
   repoId: string;
   round: number;
   priorSteps: AgentStep[];
   lastToolResult?: string;
+  conversation: AgentConversationMessage[];
   /** Planner allowlist for this turn — mid-loop may only call these. */
   allowedIntegrations?: IntegrationChatProvider[];
 };
 
-/** Cheap model turn that returns JSON: {tool, args} or {done:true}. */
+/**
+ * Same-conversation turn that picks the next repo tool.
+ * Returns JSON: {tool, args} or {done:true}.
+ */
 export type AgentPlanTurnFn = (input: AgentPlanTurnInput) => Promise<string>;
+
+export type AgentStreamAnswerInput = {
+  message: string;
+  repoId: string;
+  conversation: AgentConversationMessage[];
+  action?: "locate" | "understand" | "change" | "none";
+};
+
+/** Same conversation, next turn: stream the user-visible answer. */
+export type AgentStreamAnswerFn = (input: AgentStreamAnswerInput) => Promise<string>;
 
 export type AgentSessionRequest = {
   message: string;
   repoId?: string;
   maxSteps?: number;
+  /**
+   * What the turn is for. Locate / understand / change all run the same
+   * conversation: tools then the user-visible answer. Deterministic hunt is
+   * only the no-planTurn fallback (tests / fail-open).
+   */
+  action?: "locate" | "understand" | "change" | "none";
 };
 
-/** Tool payloads collected during a run — injected into chat context for the final LLM turn. */
+/** Tool payloads collected during a run — used for the Apply-card bridge. */
 export type AgentSessionContext = {
   search_code?: Record<string, unknown>;
   read_file?: Record<string, unknown>;
@@ -57,7 +83,7 @@ export type AgentSessionContext = {
 
 export type AgentSessionResult = {
   steps: AgentStep[];
-  /** Reserved for a future synthesized answer when the loop terminates without chat. */
+  /** User-visible answer from the same conversation (when streamAnswer ran). */
   answer?: string;
   context?: AgentSessionContext;
 };

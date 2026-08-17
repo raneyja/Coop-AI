@@ -1,8 +1,8 @@
 # Agent dogfood — Extension Host checklist
 
-**Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/home/ubuntu/.cursor/projects/workspace/canvases/agent-dogfood.canvas.tsx)** (instructions + Pass/Fail + answer boxes).
+**Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/agent-dogfood.canvas.tsx)** (instructions + Pass/Fail + answer boxes).
 
-This markdown is the backup / git copy. Prefer the canvas tomorrow.
+This markdown is the backup / git copy. Prefer the canvas.
 
 **Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) (full S1–S15), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) (log results).
 
@@ -12,7 +12,7 @@ This markdown is the backup / git copy. Prefer the canvas tomorrow.
 
 | Check | Detail |
 |-------|--------|
-| Branch | `main` (includes always-on agent + allowlisted mid-loop tools) |
+| Branch | Combined test branch with always-on hunts, hunt-quality fixes, and allowlisted mid-loop tools |
 | Fixture | Extension Development Host |
 | Use-repo | Deep-Indexed **GitHub** repo you do **not** have cloned |
 | Open folder | Coop-AI may be open — answers must still come from Use-repo |
@@ -32,11 +32,10 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 
 | Law | Expect |
 |-----|--------|
-| Agent is **on** | No Coop Settings toggle. Model & chat hub shows **Agent on**. |
+| Agent is **on** | No Coop Settings toggle. Hunts run without you flipping anything. |
 | Locate / change | Repo hunts run the tool loop automatically. |
 | Prefetch + mid-loop | Named Slack/Jira/… prefetch first; agent may call **only allowlisted** `search_jira` / `search_slack` / … mid-loop (max 3) when it finds a ticket key / topic. |
 | Still out of the loop | Trace / Owner / Blast / Gaps / Understand, `/edit`, local “explain this”, Slack-only (no repo hunt), Thanks. |
-| Kill switch | VS Code only: `coopAI.chat.agentMode: off` — not in Coop Settings. |
 | NES | Still **default off**. |
 | PR | Still an explicit **Create pull request** button after Apply. |
 
@@ -47,10 +46,9 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 ### 1. Extension UI — Agent is on (no flip)
 
 1. Coop Settings → Preferences → **Model & chat**.  
-2. Confirm hub subtitle shows **Agent on**.  
-3. Confirm there is **no** AgentMode checkbox.
+2. Confirm there is **no** AgentMode checkbox.
 
-**Success:** Agent on without you changing anything.
+**Success:** Hunts can run without you changing anything.
 
 ---
 
@@ -151,7 +149,6 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 | Terminal red | Fix or stop; do not dogfood |
 | No indexed remote Use-repo | Deep-Index a GitHub repo first |
 | Slack/Jira not connected | Skip T7/T8; still run hunt-only rows |
-| Need to kill agent | VS Code User settings → `coopAI.chat.agentMode`: `off` (not Coop Settings) |
 
 ---
 

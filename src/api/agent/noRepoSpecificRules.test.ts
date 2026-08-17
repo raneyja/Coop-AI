@@ -86,9 +86,18 @@ const UNIVERSAL_PATH_WORDS = new Set([
   "jsx",
   "mjs",
   "cjs",
+  "mts",
+  "cts",
   "css",
   "py",
-  "g"
+  "g",
+  // Test trees (isTestPath) — universal across languages/layouts
+  "test",
+  "tests",
+  "testing",
+  "test_",
+  "spec",
+  "specs"
 ]);
 
 /**
@@ -201,6 +210,7 @@ test("noise classification lives in one module, not copied per caller", () => {
   const owner = readRepo(NOISE_MODULE);
   assert.match(owner, /export function isBarrelPath/);
   assert.match(owner, /export function isGeneratedOrVendorPath/);
+  assert.match(owner, /export function isTestPath/);
 
   for (const relative of ["src/chat/CoopChatSession.ts", "src/indexing/lightningSearch.ts"]) {
     assert.doesNotMatch(

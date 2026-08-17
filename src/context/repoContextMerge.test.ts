@@ -235,6 +235,20 @@ async function run(): Promise<void> {
     assert.equal(merged.repo, "coop-ai");
   });
 
+  await test("mergeRepoContext keeps selectedLines when same file snap has empty selection", () => {
+    const merged = mergeRepoContext(
+      { file: "src/models/state.py", selectedLines: [79, 101], fileSource: "remote" },
+      {
+        file: "src/models/state.py",
+        fileSource: "remote",
+        languageId: "python",
+        selectedLines: undefined
+      }
+    );
+    assert.equal(merged.file, "src/models/state.py");
+    assert.deepEqual(merged.selectedLines, [79, 101]);
+  });
+
   const total = passed + failed;
   console.log(`\nrepoContextMerge: ${passed}/${total} tests passed`);
   if (failed > 0) {

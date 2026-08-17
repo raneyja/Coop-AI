@@ -4,7 +4,8 @@ import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
 import {
   extractAgentProposedPatchText,
-  mergeAnswerWithAgentPatch
+  mergeAnswerWithAgentPatch,
+  stripEmittedPatchBlocks
 } from "./agentProposedPatch";
 import {
   applyPendingPatch,
@@ -242,6 +243,10 @@ import {
   type DualRepoComparePlan
 } from "../context/dualRepoCompare";
 import { isQuickActionId, type QuickActionId } from "../webview/types";
+import {
+  applyGroundedCitations,
+  citationPathsInMarkdown
+} from "../webview/lib/groundCodeCitation";
 import type { IntegrationChatProvider } from "./types";
 import {
   applyPromptTemplate,
@@ -429,20 +434,21 @@ import { fetchTeamsSearchContext } from "../context/teamsContext";
 import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
-import { readAgentModeSetting } from "../config/agentModeConfig";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
-import { shouldRunAgentToolLoop, shouldSuppressSuggestChipsForAgentHunt } from "./agentRouting";
-import { buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
+import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForAgentHunt } from "./agentRouting";
+import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
+import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
 import {
-  EDIT_NO_TARGET_FILE_ERROR,
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
   isConcreteFileEditAsk,
+  resolveChangeSendRouting,
   resolveEditEditorSnapPreference,
   shouldBypassAdvisoryGroundingForEdit,
   shouldTrackEditRequest
 } from "./editSendRouting";
+import { isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -528,8 +534,8 @@ export class CoopChatSession {
   /** Abort in-flight hybrid intent-suggest model call (user Stop). */
   private intentSuggestAbort?: AbortController;
   /**
-   * Phase A: intent plan for the in-flight send. Every turn re-plans (UX-G7).
-   * Agent loop reads this — do not treat agentMode as a sticky thread.
+   * Intent plan for the in-flight send. Every turn re-plans (UX-G7).
+   * Agent is not a sticky thread — only this turn's hunt/explain/change.
    */
   private turnIntentPlan?: ChatIntentPlan;
   private turnStreamAbort?: AbortSignal;
@@ -556,6 +562,8 @@ export class CoopChatSession {
   private pendingDualRepoCompare?: DualRepoComparePlan;
   /** Set during /edit sends so semantic retrieval uses the edit gate. */
   private pendingCodeEditIntent = false;
+  /** Agent action for this turn (set during gather; drives model + patch path). */
+  private turnAgentAction: RepoCodeAction = "none";
   private readonly threadStore?: ChatThreadStore;
 
   public constructor(
@@ -577,7 +585,6 @@ export class CoopChatSession {
       maxTokens: 2000,
       llmEnabled: true,
       autocompleteEnabled: true,
-      agentMode: "on",
       useCachedResponses: true,
       includeSelection: true,
       includeActiveFile: true,
@@ -1123,11 +1130,20 @@ export class CoopChatSession {
     }
   }
 
-  private finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): void {
-    turn.history.push(finalMessage);
+  private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
+    let message = finalMessage;
+    try {
+      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content);
+      if (groundedContent !== finalMessage.content) {
+        message = { ...finalMessage, content: groundedContent };
+      }
+    } catch {
+      // Fail open — never drop the turn if cite grounding cannot read the file.
+    }
+    turn.history.push(message);
     if (this.isViewingThread(turn.threadId)) {
-      this.chatHistory.push(finalMessage);
-      this.post({ type: "chat:complete", payload: { message: finalMessage, threadId: turn.threadId } });
+      this.chatHistory.push(message);
+      this.post({ type: "chat:complete", payload: { message, threadId: turn.threadId } });
       this.postChatHistory();
       this.sessionCostUsd = turn.sessionCostUsd;
       this.persistActiveThread();
@@ -1136,6 +1152,53 @@ export class CoopChatSession {
     }
     this.threadRuns.complete(turn);
     this.pushThreadsList();
+  }
+
+  private async groundAssistantCitationFences(content: string): Promise<string> {
+    const paths = citationPathsInMarkdown(content);
+    if (paths.length === 0) {
+      return content;
+    }
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    const provider =
+      this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
+    if (!owner || !repo) {
+      return content;
+    }
+    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+    if (!repoId) {
+      return content;
+    }
+    const target = {
+      repoId,
+      owner,
+      repo,
+      provider,
+      branch: this.currentContext.branch ?? this.preferences.branch
+    };
+    const workspace = this.indexedRepoWorkspace();
+    const files = new Map<string, string>();
+    const timeoutMs = 2_500;
+    await Promise.all(
+      paths.map(async (path) => {
+        const normalized = path.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+        try {
+          const evidence = await Promise.race([
+            workspace.readFile(target, normalized),
+            new Promise<undefined>((resolve) => {
+              setTimeout(() => resolve(undefined), timeoutMs);
+            })
+          ]);
+          if (evidence?.content) {
+            files.set(normalized, evidence.content);
+          }
+        } catch {
+          // Fail open for this path.
+        }
+      })
+    );
+    return applyGroundedCitations(content, files);
   }
 
   private pushThreadsList(): void {
@@ -3503,179 +3566,60 @@ export class CoopChatSession {
     return this.enrichWithAgentToolsIfEnabled(request, enriched);
   }
 
+  /**
+   * Gather bolt-on is bypassed. Locate / understand / change run as an
+   * agent-owned answer (`runAgentOwnedTurn`) — not tools stuffed into XML
+   * for a second synthesis model.
+   */
   private async enrichWithAgentToolsIfEnabled(
-    request: ContextFetchRequest,
+    _request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
-    if (
-      request.type !== "chat_context" ||
-      request.params.quickAction ||
-      this.pendingDualRepoCompare ||
-      this.pendingCodeEditIntent
-    ) {
-      return result;
+    return result;
+  }
+
+  private conversationalAckReply(message: string): string {
+    const trimmed = message.trim().toLowerCase();
+    if (/^(?:thanks|thank\s+you|ty)\b/.test(trimmed)) {
+      return "You're welcome.";
     }
+    return "Sounds good.";
+  }
 
-    const query = request.intent.context?.queryText;
-    if (!query?.trim()) {
-      return result;
+  /** Short ack — no file attach, no hunt, no "Preparing answer". */
+  private runConversationalAckTurn(turn: ChatTurn, query: string): void {
+    if (!this.threadRuns.isStreamActive(turn)) {
+      return;
     }
+    this.clearIntentFeedback(turn.threadId);
+    void this.finishTurnAssistantMessage(turn, {
+      role: "assistant",
+      content: this.conversationalAckReply(query),
+      timestamp: Date.now()
+    });
+  }
 
-    if (
-      !shouldRunAgentToolLoop({
-        query,
-        hasQuickAction: Boolean(request.params.quickAction),
-        agentModeSetting: readAgentModeSetting(),
-        intentPlan: this.turnIntentPlan,
-        isEditTurn: this.pendingCodeEditIntent,
-        contextBundle: [result]
-      })
-    ) {
-      return result;
-    }
-
-    const repoId = request.params.repoId;
-    if (!repoId) {
-      return result;
-    }
-
-    const allowedIntegrations = (this.turnIntentPlan?.tools ?? []).filter(
-      (tool): tool is IntegrationChatProvider => Boolean(tool)
-    );
-
-    try {
-      const agentResult = await this.options.agentOrchestrator.run(
-        {
-          message: query,
-          repoId,
-          maxSteps: AGENT_MAX_TOOL_ROUNDS
-        },
-        {
-          signal: this.turnStreamAbort,
-          wallMs: AGENT_JOB_WALL_MS,
-          allowedIntegrations,
-          searchIntegration: (input) => this.searchIntegrationForAgent(input.provider, input.query, request),
-          planTurn: (input) => this.planAgentToolTurn(input),
-          onStep: (_step, steps) => {
-            this.postForThread(this.activeThreadId(), {
-              type: "agent:activity",
-              payload: {
-                threadId: this.activeThreadId(),
-                steps: steps.map((entry) => ({
-                  index: entry.index,
-                  tool: entry.tool,
-                  summary: entry.summary,
-                  completed: entry.completed
-                }))
-              }
-            });
-          }
-        }
-      );
-      if (!agentResult.context) {
-        return result;
-      }
-
-      const baseData =
-        typeof result.data === "object" && result.data !== null
-          ? (result.data as Record<string, unknown>)
-          : {};
-
-      return promoteAgentIntegrationSearches({
-        ...result,
-        data: {
-          ...baseData,
-          agentTools: agentResult.context,
-          agentSteps: agentResult.steps
-        }
-      });
-    } catch {
-      return result;
-    }
+  private conversationToHistory(
+    conversation: AgentConversationMessage[]
+  ): Array<{ role: "user" | "assistant"; content: string; timestamp: number }> {
+    const now = Date.now();
+    return conversation.map((entry, index) => ({
+      role: entry.role,
+      content: entry.content,
+      timestamp: now - (conversation.length - index) * 1000
+    }));
   }
 
   /**
-   * Mid-loop allowlisted integration search — focused query from the model
-   * (e.g. a ticket key found in code), not the full user question.
+   * Same-conversation tool pick. JSON only. Fail-open: empty string → orchestrator fallback.
    */
-  private async searchIntegrationForAgent(
-    provider: IntegrationChatProvider,
-    query: string,
-    request: ContextFetchRequest
-  ): Promise<Record<string, unknown>> {
-    const owner = request.params.owner ?? this.currentContext.owner ?? this.preferences.owner;
-    const repo = request.params.repo ?? this.currentContext.repo ?? this.preferences.repo;
-    const secrets = this.options.integrationSecrets;
-    const integrationScopes = await this.resolveIntegrationScopes(request);
-    const gathering = this.contextGatheringOptions();
-    const base = {
-      secrets,
-      owner,
-      repo,
-      queryText: query,
-      activeFile: request.params.file,
-      limit: 12
-    };
-    switch (provider) {
-      case "slack":
-        return fetchSlackSearchContext({
-          ...base,
-          integrationScope: integrationScopes?.slack
-        });
-      case "jira":
-        return fetchJiraSearchContext({
-          ...base,
-          codeHostRouter: this.options.codeHostRouter,
-          codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
-          integrationScope: integrationScopes?.atlassian
-        });
-      case "teams":
-        return fetchTeamsSearchContext(base);
-      case "notion":
-        return fetchNotionSearchContext({
-          secrets,
-          owner,
-          repo,
-          limit: 12,
-          extraTerms: [query],
-          integrationScope: integrationScopes?.notion
-        });
-      case "confluence":
-        return fetchConfluenceSearchContext({
-          secrets,
-          owner,
-          repo,
-          limit: 12,
-          extraTerms: [query],
-          integrationScope: integrationScopes?.atlassian
-        });
-      case "google-docs":
-        return fetchGoogleDocsSearchContext({
-          ...base,
-          extraTerms: [query],
-          integrationScope: integrationScopes?.["google-docs"]
-        });
-      default:
-        return { error: `Unsupported integration: ${provider}` };
-    }
-  }
-
-  /**
-   * Cheap JSON turn that picks the next read-only repo tool.
-   * Fail-open: empty string → orchestrator falls back or stops.
-   */
-  private async planAgentToolTurn(input: {
-    message: string;
-    repoId: string;
-    round: number;
-    priorSteps: Array<{ summary: string }>;
-    lastToolResult?: string;
-    allowedIntegrations?: IntegrationChatProvider[];
-  }): Promise<string> {
+  private async planAgentToolTurn(
+    input: AgentPlanTurnInput,
+    runtime: { model: string; provider: import("./types").LlmProviderPreference }
+  ): Promise<string> {
     if (this.turnStreamAbort?.aborted) {
       return JSON.stringify({ done: true });
     }
-    const assignment = getFeatureModelAssignment("intentSuggest");
     const prompt = buildAgentToolPlanPrompt({
       message: input.message,
       repoId: input.repoId,
@@ -3690,12 +3634,12 @@ export class CoopChatSession {
         {
           message: prompt,
           context: {},
-          history: [],
-          model: assignment.model,
-          provider: assignment.provider,
-          useCase: "intent_suggest",
+          history: this.conversationToHistory(input.conversation),
+          model: runtime.model,
+          provider: runtime.provider,
+          useCase: "chat",
           temperature: 0,
-          maxTokens: 400,
+          maxTokens: 600,
           enableThinking: false
         },
         (chunk) => {
@@ -3708,6 +3652,394 @@ export class CoopChatSession {
       return "";
     }
     return full;
+  }
+
+  /**
+   * Mid-loop allowlisted integration search — focused query from the model
+   * (e.g. a ticket key found in code), not the full user question.
+   */
+  private async searchIntegrationForAgent(
+    provider: IntegrationChatProvider,
+    query: string,
+    file?: string
+  ): Promise<Record<string, unknown>> {
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    const secrets = this.options.integrationSecrets;
+    const gathering = this.contextGatheringOptions();
+    let slackScope: ResolvedIntegrationScope | undefined;
+    let atlassianScope: ResolvedIntegrationScope | undefined;
+    let notionScope: ResolvedIntegrationScope | undefined;
+    let googleDocsScope: ResolvedIntegrationScope | undefined;
+    if (!isCoopDevMode()) {
+      const scoped: ScopedIntegrationProvider | undefined =
+        provider === "slack"
+          ? "slack"
+          : provider === "jira" || provider === "confluence"
+            ? "atlassian"
+            : provider === "notion"
+              ? "notion"
+              : provider === "google-docs"
+                ? "google-docs"
+                : undefined;
+      if (scoped) {
+        try {
+          const resolved = await this.options.api.getIntegrationScope(
+            this.preferences.apiBaseUrl,
+            scoped
+          );
+          if (scoped === "slack") slackScope = resolved;
+          if (scoped === "atlassian") atlassianScope = resolved;
+          if (scoped === "notion") notionScope = resolved;
+          if (scoped === "google-docs") googleDocsScope = resolved;
+        } catch {
+          /* scope optional when API unavailable */
+        }
+      }
+    }
+    const base = {
+      secrets,
+      owner,
+      repo,
+      queryText: query,
+      activeFile: file,
+      limit: 5
+    };
+    switch (provider) {
+      case "slack":
+        return fetchSlackSearchContext({
+          ...base,
+          integrationScope: slackScope
+        });
+      case "jira":
+        return fetchJiraSearchContext({
+          ...base,
+          codeHostRouter: this.options.codeHostRouter,
+          codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
+          integrationScope: atlassianScope
+        });
+      case "teams":
+        return fetchTeamsSearchContext(base);
+      case "notion":
+        return fetchNotionSearchContext({
+          secrets,
+          owner,
+          repo,
+          limit: 5,
+          extraTerms: [query],
+          integrationScope: notionScope
+        });
+      case "confluence":
+        return fetchConfluenceSearchContext({
+          secrets,
+          owner,
+          repo,
+          limit: 5,
+          extraTerms: [query],
+          integrationScope: atlassianScope
+        });
+      case "google-docs":
+        return fetchGoogleDocsSearchContext({
+          ...base,
+          extraTerms: [query],
+          integrationScope: googleDocsScope
+        });
+      default:
+        return { error: `Unsupported integration: ${provider}` };
+    }
+  }
+
+  private async streamAgentAnswer(
+    input: AgentStreamAnswerInput,
+    runtime: { model: string; provider: import("./types").LlmProviderPreference },
+    useCase: "chat" | "code_edit",
+    onChunk: (chunk: string) => void,
+    signal?: AbortSignal
+  ): Promise<string> {
+    const prompt = buildAgentAnswerPrompt({
+      message: input.message,
+      action: input.action
+    });
+    const projectInstructionsBlock = await this.buildProjectInstructionsBlock();
+    const message = projectInstructionsBlock ? `${projectInstructionsBlock}\n\n${prompt}` : prompt;
+    let full = "";
+    const result = await this.options.api.streamChat(
+      {
+        message,
+        context: {
+          owner: this.currentContext.owner,
+          repo: this.currentContext.repo,
+          branch: this.currentContext.branch
+        },
+        history: this.conversationToHistory(input.conversation),
+        model: runtime.model,
+        provider: runtime.provider,
+        useCase,
+        temperature: this.preferences.temperature,
+        maxTokens: this.preferences.maxTokens,
+        enableThinking: true
+      },
+      (chunk) => {
+        if (signal?.aborted) {
+          return;
+        }
+        full += chunk;
+        onChunk(chunk);
+      },
+      this.preferences.apiBaseUrl,
+      signal,
+      (thinkingChunk) => {
+        if (signal?.aborted) {
+          return;
+        }
+        this.postForThread(this.activeThreadId(), {
+          type: "chat:thinking-delta",
+          payload: { chunk: thinkingChunk, threadId: this.activeThreadId() }
+        });
+      }
+    );
+    return result.message.content || full;
+  }
+
+  private shouldRunAgentOwnedTurn(
+    quickAction: string | undefined,
+    options:
+      | {
+          composerMode?: ComposerMode;
+          fetchIntegrations?: IntegrationChatProvider[];
+        }
+      | undefined,
+    _message: string
+  ): boolean {
+    // Hunt wins over a named Slack/Jira primary-source steal. Slack-only
+    // (action none) still skips the loop.
+    if (quickAction || options?.composerMode === "edit") {
+      return false;
+    }
+    if (this.turnAgentAction === "none") {
+      return false;
+    }
+    const repoId = buildRepoId(this.preferences, this.currentContext);
+    return Boolean(repoId) && !repoId.includes("unknown/unknown");
+  }
+
+  /**
+   * Locate / understand / change: the agent conversation is the answer.
+   * Skips gather stuffing and the separate XML synthesis path.
+   */
+  private async runAgentOwnedTurn(turn: ChatTurn, query: string): Promise<void> {
+    const signal = turn.streamAbort.signal;
+    const isCancelled = () => !this.threadRuns.isStreamActive(turn);
+    const repoId = buildRepoId(this.preferences, turn.context);
+    const action = this.turnAgentAction;
+    const chatUseCase = action === "change" ? "code_edit" : "chat";
+    const runtimeModel =
+      action === "change"
+        ? resolveRuntimeModelForUseCase("code_edit", {
+            devMode: this.preferences.devMode,
+            llmProvider: this.preferences.llmProvider,
+            model: this.preferences.model
+          })
+        : (() => {
+            const editAssignment = getFeatureModelAssignment("edit");
+            return { provider: editAssignment.provider, model: editAssignment.model };
+          })();
+
+    const synthesisMessages = this.withSelectionFocusActivity(
+      appendThinkingProcessingTerms(
+        [],
+        `agent-${turn.streamGeneration}-${Date.now()}`,
+        8
+      ),
+      turn.context
+    );
+    this.postIntentFeedbackForThread(turn.threadId, {
+      status: "loading",
+      intent: UserIntent.MANUAL_CHAT_SUBMIT,
+      title: "Preparing answer",
+      message: synthesisMessages[0],
+      activityMessages: synthesisMessages
+    });
+
+    let full = "";
+    let clearedIntentForOutput = false;
+    const outputGate = createChatOutputGate({
+      startedAt: turn.startedAt,
+      minVisibleMs: 0,
+      isCancelled,
+      onChunk: (chunk) => {
+        if (isCancelled()) {
+          return;
+        }
+        if (!clearedIntentForOutput) {
+          clearedIntentForOutput = true;
+          clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
+          turn.clearResponseDeadline = () => undefined;
+          this.clearIntentFeedback(turn.threadId);
+        }
+        full += chunk;
+        this.threadRuns.appendPartial(turn, chunk);
+        this.postForThread(turn.threadId, {
+          type: "chat:delta",
+          payload: { chunk, threadId: turn.threadId }
+        });
+      }
+    });
+
+    try {
+      const quotaBlocked = await abortablePromise(this.blockIfFreeQuotaExhausted(), signal);
+      if (quotaBlocked) {
+        return;
+      }
+      clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
+      turn.clearResponseDeadline = () => undefined;
+
+      const allowedIntegrations = (this.turnIntentPlan?.tools ?? []).filter(
+        (tool): tool is IntegrationChatProvider => Boolean(tool)
+      );
+      const agentResult = await this.options.agentOrchestrator.run(
+        {
+          message: query,
+          repoId,
+          maxSteps: AGENT_MAX_TOOL_ROUNDS,
+          action
+        },
+        {
+          signal,
+          wallMs: AGENT_JOB_WALL_MS,
+          startedAt: turn.startedAt,
+          allowedIntegrations,
+          searchIntegration: (input) =>
+            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file),
+          planTurn: (input) => this.planAgentToolTurn(input, runtimeModel),
+          streamAnswer: (input) =>
+            this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
+              outputGate.push(chunk);
+            }, signal),
+          onStep: (_step, steps) => {
+            this.postForThread(turn.threadId, {
+              type: "agent:activity",
+              payload: {
+                threadId: turn.threadId,
+                steps: steps.map((entry) => ({
+                  index: entry.index,
+                  tool: entry.tool,
+                  summary: entry.summary,
+                  completed: entry.completed
+                }))
+              }
+            });
+          }
+        }
+      );
+
+      await outputGate.waitUntilOpen();
+      if (isCancelled()) {
+        return;
+      }
+
+      const contextBundle = [
+        promoteAgentIntegrationSearches({
+          requestId: "agent-owned",
+          type: "chat_context" as const,
+          fetchedAt: new Date(),
+          data: { agentTools: agentResult.context, agentSteps: agentResult.steps }
+        })
+      ];
+      turn.contextBundle = contextBundle;
+      if (this.isViewingThread(turn.threadId)) {
+        this.lastContextBundle = contextBundle;
+      }
+      if (allowedIntegrations.length > 0) {
+        await this.postEvidenceCardsFromBundle(
+          undefined,
+          allowedIntegrations.length === 1 ? allowedIntegrations[0] : undefined,
+          turn,
+          allowedIntegrations
+        );
+      }
+      const agentPatch = extractAgentProposedPatchText(contextBundle);
+      let contentForPatchCard = mergeAnswerWithAgentPatch(
+        (agentResult.answer ?? full).trim(),
+        agentPatch
+      );
+      if (action === "change" && !agentPatch) {
+        const files = (agentResult.context?.read_file as { files?: unknown[] } | undefined)?.files;
+        const hasAgentFiles = Array.isArray(files) && files.length > 0;
+        if (!hasAgentFiles) {
+          contentForPatchCard =
+            "I could not find an indexed definition for that symbol (tried casing aliases). I will not invent a UI file to patch. Confirm the symbol name, or open the target file and use /edit.";
+        } else {
+          const prose = stripEmittedPatchBlocks(contentForPatchCard).trim();
+          contentForPatchCard =
+            prose.length > 0
+              ? `${prose}\n\nI found related code but could not produce an apply-able patch anchored to those lines. Open the target file and use /edit, or try a more specific path.`
+              : "I found related code but could not produce an apply-able patch. Open the target file and use /edit, or try a more specific path.";
+        }
+      }
+      if (!contentForPatchCard.trim()) {
+        contentForPatchCard =
+          "I could not finish that hunt from the index. Try a more specific symbol or path.";
+      }
+
+      const finalMessage: ChatMessage = {
+        role: "assistant",
+        content: contentForPatchCard,
+        timestamp: Date.now(),
+        ...(turn.pendingEvidenceArtifactId
+          ? { relatedArtifactId: turn.pendingEvidenceArtifactId }
+          : {})
+      };
+      turn.pendingEvidenceArtifactId = undefined;
+      if (this.isViewingThread(turn.threadId)) {
+        this.pendingEvidenceArtifactId = undefined;
+      }
+      this.clearIntentFeedback(turn.threadId);
+      if (this.isViewingThread(turn.threadId)) {
+        if (action === "change" || chatUseCase === "code_edit") {
+          await handlePatchComplete(finalMessage.content, {
+            messageTimestamp: finalMessage.timestamp,
+            publish: (state) => this.postPatchUpdate(state)
+          });
+        } else {
+          await handlePatchComplete(finalMessage.content, {
+            messageTimestamp: finalMessage.timestamp,
+            publish: (state) => this.postPatchUpdate(state),
+            ignoreParseFailure: true
+          });
+        }
+      }
+      await this.finishTurnAssistantMessage(turn, finalMessage);
+    } catch (error) {
+      if (isCancelled()) {
+        return;
+      }
+      this.threadRuns.markError(turn);
+      this.pushThreadsList();
+      if (error instanceof ChatQuotaExceededError) {
+        this.postForThread(turn.threadId, {
+          type: "chat:quota-exceeded",
+          payload: {
+            resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+            upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+            timezone: this.preferences.timezone,
+            retryAfterMs: error.retryAfterMs
+          }
+        });
+        return;
+      }
+      const message = formatUserFacingNetworkError(error);
+      this.postForThread(turn.threadId, {
+        type: "chat:error",
+        payload: { message, threadId: turn.threadId }
+      });
+    } finally {
+      if (this.isViewingThread(turn.threadId)) {
+        this.pendingChatLocalFiles = undefined;
+        this.pendingCodeEditIntent = false;
+        this.turnAgentAction = "none";
+      }
+    }
   }
 
   private async enrichChatContextWithIntegrations(
@@ -4439,6 +4771,21 @@ export class CoopChatSession {
       }
     }
 
+    const conversationalAck =
+      !quickAction &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      !options?.composerMode &&
+      isConversationalChat(message);
+    if (conversationalAck) {
+      options = {
+        ...options,
+        skipChatIntentPlanner: true,
+        skipQuickActionSuggest: true,
+        intentPlan: emptyChatIntentPlan(message)
+      };
+    }
+
     // Chat Intent Planner (plain chat): pick workflow + connected tools before chips/edit.
     // Slash and explicit integrationProvider remain the override.
     if (
@@ -4471,8 +4818,7 @@ export class CoopChatSession {
       if (decision.kind === "confirm-workflow") {
         if (
           shouldSuppressSuggestChipsForAgentHunt({
-            query: message,
-            agentModeSetting: readAgentModeSetting()
+            query: message
           })
         ) {
           this.turnIntentPlan = emptyChatIntentPlan(message);
@@ -4513,8 +4859,7 @@ export class CoopChatSession {
         if (offer) {
           if (
             shouldSuppressSuggestChipsForAgentHunt({
-              query: message,
-              agentModeSetting: readAgentModeSetting()
+              query: message
             })
           ) {
             this.turnIntentPlan = emptyChatIntentPlan(message);
@@ -4531,38 +4876,50 @@ export class CoopChatSession {
       }
     }
 
-    // Concrete "change this file" asks in plain chat must use the /edit Apply path —
-    // soft prompt guidance alone still yields Copy-only language fences.
-    if (
+    // Change asks: anchored /edit when a file is in scope; otherwise Agent hunts
+    // → propose_patch. Do not hard-error when the agent can own the change.
+    const concreteEditAsk =
       !quickAction &&
       !options?.composerMode &&
       !options?.sourceHint &&
       !options?.integrationProvider &&
-      isConcreteFileEditAsk(message)
-    ) {
-      options = { ...options, composerMode: "edit" };
-    }
+      isConcreteFileEditAsk(message);
+    const explicitEdit = options?.composerMode === "edit";
+    const mayNeedEditSnap = explicitEdit || concreteEditAsk;
 
     this.snapEditorContextBeforeSend({
-      allowLocalFileForEdit: options?.composerMode === "edit",
-      preferRemoteForEdit: options?.composerMode === "edit"
+      allowLocalFileForEdit: mayNeedEditSnap,
+      preferRemoteForEdit: mayNeedEditSnap
     });
 
-    // /edit requires an anchored file. Never demote to ask — that yields Summary /
-    // status narratives (e.g. PENDING→OPEN) with no apply-able patch.
-    if (
-      !quickAction &&
-      options?.composerMode === "edit" &&
-      !hasEditTargetInScope({
+    if (!quickAction && (explicitEdit || concreteEditAsk)) {
+      const hasTarget = hasEditTargetInScope({
         file: this.currentContext.file,
-        mentionCount: options.mentions?.length ?? 0
-      })
-    ) {
-      this.post({
-        type: "chat:error",
-        payload: { message: EDIT_NO_TARGET_FILE_ERROR }
+        mentionCount: options?.mentions?.length ?? 0
       });
-      return;
+      const agentCanOwnChange = shouldRunAgentToolLoop({
+        query: message,
+        hasQuickAction: false,
+        intentPlan: this.turnIntentPlan,
+        isEditTurn: false
+      });
+      const changeRouting = resolveChangeSendRouting({
+        explicitEdit,
+        concreteEditAsk,
+        hasEditTarget: hasTarget,
+        agentCanOwnChange
+      });
+      if (changeRouting.kind === "reject-no-target") {
+        this.post({
+          type: "chat:error",
+          payload: { message: changeRouting.message }
+        });
+        return;
+      }
+      if (changeRouting.kind === "anchored-edit") {
+        options = { ...options, composerMode: "edit" };
+      }
+      // agent-change / none: leave composerMode unset so the agent loop can run.
     }
 
     if (options?.mentions?.length) {
@@ -4634,6 +4991,7 @@ export class CoopChatSession {
     }
     const structureIntent = !quickAction && needsRepoTreeOverview(message);
     this.pendingChatLocalFiles =
+      conversationalAck ||
       structureIntent ||
       Boolean(this.pendingDualRepoCompare) ||
       shouldSkipOpenFileAttach({
@@ -4778,6 +5136,11 @@ export class CoopChatSession {
     this.turnStreamAbort = turn.streamAbort.signal;
     this.pushThreadsList();
 
+    if (conversationalAck) {
+      this.runConversationalAckTurn(turn, message);
+      return;
+    }
+
     const fetchIntegrations = options?.fetchIntegrations;
     const prefetchIntentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(
@@ -4878,6 +5241,16 @@ export class CoopChatSession {
         });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
+    this.turnAgentAction = agentTurnAction({
+      query: message,
+      hasQuickAction: Boolean(quickAction),
+      intentPlan: this.turnIntentPlan,
+      isEditTurn: options?.composerMode === "edit"
+    });
+    if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
+      await this.runAgentOwnedTurn(turn, message);
+      return;
+    }
     try {
       await abortablePromise(this.runIntentFetch(intentEvent, { turn }), turn.streamAbort.signal);
     } catch (error) {
@@ -5821,10 +6194,16 @@ export class CoopChatSession {
   }
 
   private selectedCodeSnippet(maxLength = 4000): string | undefined {
-    const editor =
-      pickLocalEditorForContext(this.currentContext.file) ??
-      pickEditorForContext(this.currentContext.file) ??
-      vscode.window.activeTextEditor;
+    const wanted = this.currentContext.file?.trim();
+    const remoteFirst =
+      this.currentContext.fileSource === "remote" || Boolean(this.remoteProvenanceFile);
+    const editor = remoteFirst
+      ? pickRemoteEditorForContext(wanted) ??
+        pickLocalEditorForContext(wanted) ??
+        pickEditorForContext(wanted)
+      : pickLocalEditorForContext(wanted) ??
+        pickEditorForContext(wanted) ??
+        vscode.window.activeTextEditor;
     if (editor && !editor.selection.isEmpty) {
       return editor.document.getText(editor.selection).slice(0, maxLength);
     }
@@ -5832,7 +6211,6 @@ export class CoopChatSession {
     if (!lines || lines.length !== 2) {
       return undefined;
     }
-    const wanted = this.currentContext.file?.trim();
     const fromPending = this.pendingChatLocalFiles?.files.find((file) =>
       wanted ? pathsReferToSameFile(file.path, wanted) : true
     );
@@ -5923,16 +6301,42 @@ export class CoopChatSession {
     const minResponseVisibleMs = 0;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
-    const chatUseCase = resolveChatUseCase(
+    let chatUseCase = resolveChatUseCase(
       effectiveQuickAction,
       integrationProvider,
       options?.composerMode
     );
-    const runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
+    let runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
       devMode: this.preferences.devMode,
       llmProvider: this.preferences.llmProvider,
       model: this.preferences.model
     });
+    // Agent coding loop: mutation uses code_edit prompt + edit model; locate/understand
+    // keep chat prompt but use the edit-tier model (not chat mini).
+    if (
+      !options?.composerMode &&
+      !effectiveQuickAction &&
+      !integrationProvider &&
+      !this.preferences.devMode
+    ) {
+      if (this.turnAgentAction === "change") {
+        chatUseCase = "code_edit";
+        runtimeModel = resolveRuntimeModelForUseCase("code_edit", {
+          devMode: this.preferences.devMode,
+          llmProvider: this.preferences.llmProvider,
+          model: this.preferences.model
+        });
+      } else if (
+        this.turnAgentAction === "locate" ||
+        this.turnAgentAction === "understand"
+      ) {
+        const editAssignment = getFeatureModelAssignment("edit");
+        runtimeModel = {
+          provider: editAssignment.provider,
+          model: editAssignment.model
+        };
+      }
+    }
     const cacheKey = JSON.stringify({
       content,
       attachments,
@@ -5956,7 +6360,7 @@ export class CoopChatSession {
           return;
         }
         this.clearIntentFeedback(turn.threadId);
-        this.finishTurnAssistantMessage(turn, cached as ChatMessage);
+        await this.finishTurnAssistantMessage(turn, cached as ChatMessage);
         return;
       }
     }
@@ -6093,7 +6497,7 @@ export class CoopChatSession {
             content: responseContent,
             timestamp: Date.now()
           };
-          this.finishTurnAssistantMessage(turn, finalMessage);
+          await this.finishTurnAssistantMessage(turn, finalMessage);
           return;
         }
         if (!hasUnderstandRepoEntryBodies(summaryRecord)) {
@@ -6128,7 +6532,7 @@ export class CoopChatSession {
             content: responseContent,
             timestamp: Date.now()
           };
-          this.finishTurnAssistantMessage(turn, finalMessage);
+          await this.finishTurnAssistantMessage(turn, finalMessage);
           return;
         }
       }
@@ -6160,7 +6564,7 @@ export class CoopChatSession {
           content: responseContent,
           timestamp: Date.now()
         };
-        this.finishTurnAssistantMessage(turn, finalMessage);
+        await this.finishTurnAssistantMessage(turn, finalMessage);
         return;
       }
 
@@ -6630,11 +7034,29 @@ export class CoopChatSession {
         statusTransition: statusTransitionEvidence
       });
       // Agent propose_patch stores SEARCH/REPLACE in context, not in the model
-      // stream. Merge it so Apply still appears when the model forgets to echo it.
-      const contentForPatchCard = mergeAnswerWithAgentPatch(
-        enrichedContent,
-        extractAgentProposedPatchText(contextBundle)
-      );
+      // stream. Prefer the tool-validated patch. If change hunt produced no ok
+      // patch, strip invented SEARCH blocks so Apply never shows SEARCH not found
+      // on a random UI file.
+      const agentPatch = extractAgentProposedPatchText(contextBundle);
+      let contentForPatchCard = mergeAnswerWithAgentPatch(enrichedContent, agentPatch);
+      if (this.turnAgentAction === "change" && !agentPatch) {
+        const hasAgentFiles = contextBundle.some((entry) => {
+          const files = (entry as { data?: { agentTools?: { read_file?: { files?: unknown[] } } } })
+            ?.data?.agentTools?.read_file?.files;
+          return Array.isArray(files) && files.length > 0;
+        });
+        if (!hasAgentFiles) {
+          // Do not keep a model story about AuthRoot when the hunt never read a match.
+          contentForPatchCard =
+            "I could not find an indexed definition for that symbol (tried casing aliases). I will not invent a UI file to patch. Confirm the symbol name, or open the target file and use /edit.";
+        } else {
+          const prose = stripEmittedPatchBlocks(contentForPatchCard).trim();
+          contentForPatchCard =
+            prose.length > 0
+              ? `${prose}\n\nI found related code but could not produce an apply-able patch anchored to those lines. Open the target file and use /edit, or try a more specific path.`
+              : "I found related code but could not produce an apply-able patch. Open the target file and use /edit, or try a more specific path.";
+        }
+      }
       const finalMessage: ChatMessage = {
         ...result.message,
         content: contentForPatchCard,
@@ -6648,7 +7070,7 @@ export class CoopChatSession {
       }
       this.clearIntentFeedback(turn.threadId);
       if (this.isViewingThread(turn.threadId)) {
-        if (options?.composerMode === "edit") {
+        if (options?.composerMode === "edit" || chatUseCase === "code_edit") {
           // Publish the Patch card before chat:complete so the webview never paints raw fences first.
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
@@ -6666,7 +7088,7 @@ export class CoopChatSession {
       if (result.usage) {
         turn.sessionCostUsd += result.usage.estimatedCostUsd;
       }
-      this.finishTurnAssistantMessage(turn, finalMessage);
+      await this.finishTurnAssistantMessage(turn, finalMessage);
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
       }
@@ -6715,6 +7137,7 @@ export class CoopChatSession {
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;
+        this.turnAgentAction = "none";
       }
     }
   }

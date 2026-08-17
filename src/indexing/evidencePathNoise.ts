@@ -27,6 +27,20 @@ export function isGeneratedOrVendorPath(fileName: string): boolean {
   );
 }
 
+/**
+ * Unit/contract/spec trees. Fine as evidence for "how is this tested", but for
+ * "where is X defined / add logging around X" they steal the definition site.
+ */
+export function isTestPath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /(^|\/)(tests?|__tests__|spec|specs|testing)\//.test(n) ||
+    /(^|\/)test_[^/]+\.(py|ts|tsx|js|jsx|mjs|cjs)$/.test(n) ||
+    /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/.test(n) ||
+    /(^|\/)[^/]+_test\.(py|go)$/.test(n)
+  );
+}
+
 export function normalizePath(fileName: string): string {
   return fileName.replace(/\\/g, "/").toLowerCase();
 }

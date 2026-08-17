@@ -40,7 +40,6 @@ test("a change request reaches the agent loop and asks for a patch", () => {
   const action = agentTurnAction({
     query: q,
     hasQuickAction: false,
-    agentModeSetting: "on",
     intentPlan: planChatIntentFromRules({ message: q, connectedTools: [] })
   });
   assert.equal(action, "change", "change requests must reach the loop so a patch can be proposed");
@@ -77,6 +76,38 @@ test("a SEARCH block that is not in the file is rejected before the user can App
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /not found in/i);
+});
+
+test("REPLACE that duplicates SEARCH is rejected", async () => {
+  const result = JSON.parse(
+    await handleProposePatch(ctx(), {
+      files: [
+        {
+          path: FILE,
+          search: "export function requireAuth(req, res, next) {",
+          replace:
+            "export function requireAuth(req, res, next) {\n  // comment\nexport function requireAuth(req, res, next) {"
+        }
+      ]
+    })
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /duplicates the SEARCH/i);
+});
+
+test("line-number prefixes from read_file are stripped before matching", async () => {
+  const result = JSON.parse(
+    await handleProposePatch(ctx(), {
+      files: [
+        {
+          path: FILE,
+          search: "3|export function requireAuth(req, res, next) {",
+          replace: "// gate every request\nexport function requireAuth(req, res, next) {"
+        }
+      ]
+    })
+  );
+  assert.equal(result.ok, true, result.error);
 });
 
 test("indentation drift is accepted because Apply matches it fuzzily", async () => {

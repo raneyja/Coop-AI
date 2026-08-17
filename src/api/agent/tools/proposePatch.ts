@@ -8,6 +8,7 @@ import {
 } from "../../../edit/patchParser";
 import { findAllSearchMatches } from "../../../edit/patchContent";
 import type { AgentToolContext } from "../agentToolContext";
+import { stripReadLinePrefixes } from "./readFile";
 
 type ProposedHunk = {
   search: string;
@@ -156,8 +157,8 @@ function collectHunks(
 function hunkFromPair(
   row: Record<string, unknown>
 ): { ok: true; hunk: ProposedHunk } | { ok: false; error: string } {
-  const search = typeof row.search === "string" ? row.search : undefined;
-  const replace = typeof row.replace === "string" ? row.replace : undefined;
+  const search = typeof row.search === "string" ? stripReadLinePrefixes(row.search) : undefined;
+  const replace = typeof row.replace === "string" ? stripReadLinePrefixes(row.replace) : undefined;
   if (search === undefined || replace === undefined) {
     return {
       ok: false,
@@ -167,7 +168,31 @@ function hunkFromPair(
   if (!search.length) {
     return { ok: false, error: "Malformed SEARCH/REPLACE: search block is empty" };
   }
+  if (search.trim().length >= 12 && countOccurrences(replace, search.trim()) > 1) {
+    return {
+      ok: false,
+      error:
+        "REPLACE duplicates the SEARCH block. To add a comment above a line, SEARCH is the existing line once; REPLACE is the comment plus that line once."
+    };
+  }
   return { ok: true, hunk: { search, replace } };
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (!needle) {
+    return 0;
+  }
+  let count = 0;
+  let from = 0;
+  while (from <= haystack.length) {
+    const index = haystack.indexOf(needle, from);
+    if (index < 0) {
+      break;
+    }
+    count += 1;
+    from = index + needle.length;
+  }
+  return count;
 }
 
 function formatProposedPatches(files: ProposedFile[]): string {

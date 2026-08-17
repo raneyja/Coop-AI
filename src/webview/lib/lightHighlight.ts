@@ -1,4 +1,12 @@
-export type HighlightTokenKind = "plain" | "comment" | "string" | "number" | "keyword" | "property";
+export type HighlightTokenKind =
+  | "plain"
+  | "comment"
+  | "string"
+  | "number"
+  | "keyword"
+  | "type"
+  | "function"
+  | "property";
 
 export type HighlightToken = {
   text: string;
@@ -99,6 +107,18 @@ const PYTHON_KEYWORDS = [
 ] as const;
 
 const JSON_KEYWORDS = ["true", "false", "null"] as const;
+
+/** TypeScript/JS primitives that Dark+ tints as types, not default text. */
+const TS_PRIMITIVE_TYPES = [
+  "string",
+  "number",
+  "boolean",
+  "any",
+  "never",
+  "unknown",
+  "bigint",
+  "symbol"
+] as const;
 
 /** Shared keywords across Go / Rust / Java / C-family / Ruby / PHP / Kotlin / Swift / Scala. */
 const C_LIKE_KEYWORDS = [
@@ -257,7 +277,7 @@ function normalizeFamily(language?: string): HighlightFamily {
 function tokenizeWithRegex(
   source: string,
   matcher: RegExp,
-  classify: (token: string) => HighlightTokenKind
+  classify: (token: string, start: number, source: string) => HighlightTokenKind
 ): HighlightToken[] {
   const tokens: HighlightToken[] = [];
   let lastIndex = 0;
@@ -270,7 +290,7 @@ function tokenizeWithRegex(
     if (start > lastIndex) {
       tokens.push({ text: source.slice(lastIndex, start), kind: "plain" });
     }
-    tokens.push({ text: value, kind: classify(value) });
+    tokens.push({ text: value, kind: classify(value, start, source) });
     lastIndex = end;
   }
 
@@ -284,10 +304,16 @@ function tokenizeWithRegex(
 function highlightWithKeywords(
   code: string,
   keywords: readonly string[],
-  style: "slash" | "hash"
+  style: "slash" | "hash",
+  primitiveTypes: readonly string[] = []
 ): HighlightToken[] {
   const keywordSet = new Set(keywords);
+  const typeSet = new Set(primitiveTypes);
   const keywordPattern = keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const typePattern =
+    primitiveTypes.length > 0
+      ? primitiveTypes.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+      : "";
   const commentParts =
     style === "slash"
       ? [String.raw`\/\/.*$`, String.raw`\/\*[\s\S]*?\*\/`]
@@ -299,11 +325,15 @@ function highlightWithKeywords(
       String.raw`'(?:\\.|[^'\\])*'`,
       "`(?:\\\\.|[^`\\\\])*`",
       String.raw`\b(?:${keywordPattern})\b`,
-      String.raw`\b\d+(?:\.\d+)?\b`
+      ...(typePattern ? [String.raw`\b(?:${typePattern})\b`] : []),
+      String.raw`\b\d+(?:\.\d+)?\b`,
+      String.raw`\b[A-Z][A-Za-z0-9_]*\b`,
+      String.raw`\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\()`,
+      String.raw`(?<=\.)[A-Za-z_][A-Za-z0-9_]*`
     ].join("|"),
     "gm"
   );
-  return tokenizeWithRegex(code, matcher, (token) => {
+  return tokenizeWithRegex(code, matcher, (token, start, source) => {
     if (token.startsWith("//") || token.startsWith("/*") || token.startsWith("#")) {
       return "comment";
     }
@@ -313,10 +343,19 @@ function highlightWithKeywords(
     if (keywordSet.has(token)) {
       return "keyword";
     }
+    if (typeSet.has(token)) {
+      return "type";
+    }
     if (/^\d/.test(token)) {
       return "number";
     }
-    return "plain";
+    if (start > 0 && source[start - 1] === ".") {
+      return "property";
+    }
+    if (/^[A-Z]/.test(token)) {
+      return "type";
+    }
+    return "function";
   });
 }
 
@@ -328,7 +367,7 @@ export function lightHighlight(code: string, language?: string): HighlightToken[
   const family = normalizeFamily(language);
 
   if (family === "javascript") {
-    return highlightWithKeywords(code, JS_KEYWORDS, "slash");
+    return highlightWithKeywords(code, JS_KEYWORDS, "slash", TS_PRIMITIVE_TYPES);
   }
   if (family === "python") {
     return highlightWithKeywords(code, PYTHON_KEYWORDS, "hash");
@@ -343,11 +382,10 @@ export function lightHighlight(code: string, language?: string): HighlightToken[
     const keywordSet = new Set(JSON_KEYWORDS);
     const matcher =
       /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/gm;
-    return tokenizeWithRegex(code, matcher, (token) => {
+    return tokenizeWithRegex(code, matcher, (token, start, source) => {
       if (token.startsWith('"') && token.endsWith('"')) {
-        // Keys matched with (?=\s*:) and values are both quoted — treat as string;
-        // property tint when followed by colon is approximate via property class unused here.
-        return "string";
+        const after = source.slice(start + token.length);
+        return /^\s*:/.test(after) ? "property" : "string";
       }
       if (keywordSet.has(token as (typeof JSON_KEYWORDS)[number])) {
         return "keyword";

@@ -124,13 +124,11 @@ function routeFor(q: string) {
   const action = agentTurnAction({
     query: q,
     hasQuickAction: false,
-    agentModeSetting: "on",
     intentPlan: plan
   });
   const loops = shouldRunAgentToolLoop({
     query: q,
     hasQuickAction: false,
-    agentModeSetting: "on",
     intentPlan: plan
   });
   return { plan, action, loops };
@@ -152,16 +150,15 @@ async function main(): Promise<void> {
     assert.equal(misses.length, 0, misses.join("\n"));
   });
 
-  await test("agent off never loops even on a clear hunt", () => {
+  await test("hunts always loop — there is no agent off switch", () => {
     const q = "Where is requireAuth defined in this repo?";
     assert.equal(
       shouldRunAgentToolLoop({
         query: q,
         hasQuickAction: false,
-        agentModeSetting: "off",
         intentPlan: planChatIntentFromRules({ message: q, connectedTools: [] })
       }),
-      false
+      true
     );
   });
 
@@ -224,7 +221,8 @@ async function main(): Promise<void> {
       {
         message: "Add an optional flag to requireAuth in the auth middleware",
         repoId: GOLDEN_REPO_ID,
-        maxSteps: 6
+        maxSteps: 6,
+        action: "change"
       },
       {
         planTurn: async () => {
@@ -233,20 +231,14 @@ async function main(): Promise<void> {
             return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
           }
           if (round === 2) {
-            return JSON.stringify({
-              tool: "read_file",
-              args: { path: target, startLine: 1, endLine: 400 }
-            });
+            return JSON.stringify({ tool: "read_file", args: { path: target } });
           }
-          if (round === 3) {
-            return JSON.stringify({
-              tool: "propose_patch",
-              args: {
-                files: [{ path: target, search: searchLine, replace: replaceLine }]
-              }
-            });
-          }
-          return JSON.stringify({ done: true });
+          return JSON.stringify({
+            tool: "propose_patch",
+            args: {
+              files: [{ path: target, search: searchLine, replace: replaceLine }]
+            }
+          });
         }
       }
     );
@@ -254,6 +246,12 @@ async function main(): Promise<void> {
     assert.ok(result.steps.some((s) => s.tool === "search_code"), "change must search first");
     assert.ok(result.steps.some((s) => s.tool === "read_file"), "change must read before patching");
     assert.ok(result.steps.some((s) => s.tool === "propose_patch"), "change must call propose_patch");
+    assert.ok(round >= 3, "same conversation hunts then patches");
+    assert.ok(
+      result.steps.findIndex((s) => s.tool === "search_code") <
+        result.steps.findIndex((s) => s.tool === "propose_patch"),
+      "search before propose_patch"
+    );
 
     const proposed = result.context?.propose_patch as
       | { ok?: boolean; patchText?: string; applied?: boolean }

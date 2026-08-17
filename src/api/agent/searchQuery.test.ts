@@ -3,14 +3,19 @@ import { DOGFOOD_HUNT_QUESTION, DOGFOOD_HUNT_SEARCH_QUERY } from "./dogfoodContr
 import {
   extractAgentSearchQuery,
   fallbackAgentSearchQueries,
+  identifierSearchAliases,
+  indexQueryForRetrieval,
   isBarrelPath,
   isGeneratedOrVendorPath,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
+  queryRoleHints,
   sanitizeAgentSearchQuery,
   selectChatEvidencePaths,
-  shouldSkipEvidencePath
+  shouldSkipEvidencePath,
+  textMentionsNamedSymbol,
+  textMentionsQueryRoles
 } from "./searchQuery";
 
 let passed = 0;
@@ -60,10 +65,24 @@ test("sanitize keeps a short model-chosen identifier", () => {
 test("fallback queries broaden from symbol to plain words", () => {
   const queries = fallbackAgentSearchQueries(DOGFOOD_HUNT_QUESTION);
   assert.equal(queries[0], "requireAuth");
+  assert.equal(queries.includes("require_auth"), true, "must try snake_case alias for Python/Go repos");
   assert.equal(queries.includes("authentication middleware"), true);
   assert.equal(
     queries.every((q) => q.split(/\s+/).length <= 4),
     true
+  );
+});
+
+test("identifier aliases bridge camelCase and snake_case", () => {
+  assert.deepEqual(identifierSearchAliases("requireAuth"), ["require_auth"]);
+  assert.deepEqual(identifierSearchAliases("require_auth"), ["requireAuth"]);
+  assert.deepEqual(identifierSearchAliases("middleware"), []);
+});
+
+test("index retrieval OR-covers both casings", () => {
+  assert.equal(
+    indexQueryForRetrieval(DOGFOOD_HUNT_QUESTION),
+    "requireAuth or require_auth"
   );
 });
 
@@ -106,11 +125,151 @@ test("pickSearchHitsToRead skips build output and vendored code", () => {
 test("does not drop a UI path just because the question sounds backend", () => {
   const picked = selectChatEvidencePaths(
     ["web/components/auth/login-form.tsx", "server/auth/middleware.py"],
-    DOGFOOD_HUNT_QUESTION,
+    "How does authentication work across the codebase?",
     3
   );
   assert.equal(picked.includes("web/components/auth/login-form.tsx"), true);
-  assert.equal(picked[0], "server/auth/middleware.py");
+  assert.equal(picked.includes("server/auth/middleware.py"), true);
+});
+
+test("exact symbol path beats a weak auth UI path for requireAuth asks", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/space/components/account/auth-forms/auth-root.tsx",
+        lineNumber: 1,
+        score: 0.99,
+        content: "export function AuthRoot() { const searchParams = useSearchParams(); }"
+      },
+      {
+        fileName: "apps/api/plane/authentication/middleware.py",
+        lineNumber: 12,
+        score: 0.4,
+        content: "def require_auth(request):"
+      }
+    ],
+    2,
+    "add logging around requireAuth"
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "apps/api/plane/authentication/middleware.py");
+});
+
+test("drops auth UI hits that never mention requireAuth", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/space/components/account/auth-forms/auth-root.tsx",
+        lineNumber: 1,
+        score: 0.99,
+        content: "export function AuthRoot() {}"
+      }
+    ],
+    2,
+    "add logging around requireAuth"
+  );
+  assert.equal(picked.length, 0);
+});
+
+test("role-noun hunts keep middleware hits and drop collab auth", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "collab/session/auth.ts",
+        lineNumber: 8,
+        score: 0.99,
+        content: "export async function onAuthenticate() { return true }"
+      },
+      {
+        fileName: "server/http/middleware.py",
+        lineNumber: 12,
+        score: 0.2,
+        content: "def auth_middleware(get_response):"
+      }
+    ],
+    8,
+    "Where is auth middleware enforced and what calls it?"
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "server/http/middleware.py");
+});
+
+test("does not treat require_authentication filenames as requireAuth", () => {
+  const ask = "add logging around requireAuth";
+  assert.equal(
+    textMentionsNamedSymbol(
+      "apps/api/plane/tests/contract/app/test_api_token.py\ndef test_all_endpoints_require_authentication():",
+      ask
+    ),
+    false
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/plane/tests/contract/app/test_api_token.py",
+        lineNumber: 40,
+        score: 0.99,
+        content: "def test_all_endpoints_require_authentication():\n    assert True"
+      },
+      {
+        fileName: "apps/api/plane/authentication/middleware.py",
+        lineNumber: 12,
+        score: 0.4,
+        content: "def require_auth(request):\n    pass"
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "apps/api/plane/authentication/middleware.py");
+});
+
+test("symbol index rejects require_authentication as a requireAuth match", () => {
+  const ask = "add logging around requireAuth";
+  const picked = pickSymbolHitsToRead(
+    [
+      {
+        file: "apps/api/plane/tests/contract/app/test_api_token.py",
+        line: 40,
+        displayName: "test_all_endpoints_require_authentication",
+        kind: "function"
+      },
+      {
+        file: "apps/api/plane/utils/auth.py",
+        line: 88,
+        displayName: "RequireAuthentication",
+        kind: "class"
+      },
+      {
+        file: "apps/api/plane/authentication/middleware.py",
+        line: 12,
+        displayName: "require_auth",
+        kind: "function"
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.file, "apps/api/plane/authentication/middleware.py");
+});
+
+test("skips test paths for named-symbol hunts unless the user asked about tests", () => {
+  assert.equal(
+    shouldSkipEvidencePath(
+      "apps/api/plane/tests/contract/app/test_api_token.py",
+      "add logging around requireAuth"
+    ),
+    true
+  );
+  assert.equal(
+    shouldSkipEvidencePath(
+      "apps/api/plane/tests/contract/app/test_api_token.py",
+      "which contract test covers requireAuth"
+    ),
+    false
+  );
 });
 
 test("keeps a barrel when the user named that exact file", () => {
@@ -169,6 +328,32 @@ test("isGeneratedOrVendorPath", () => {
   assert.equal(isGeneratedOrVendorPath("dist/app.js"), true);
   assert.equal(isGeneratedOrVendorPath("pnpm-lock.yaml"), true);
   assert.equal(isGeneratedOrVendorPath("src/server/auth.ts"), false);
+});
+
+test("queryRoleHints extracts middleware from a locate ask", () => {
+  assert.deepEqual(
+    queryRoleHints("Where is auth middleware enforced and what calls it?"),
+    ["middleware"]
+  );
+  assert.deepEqual(queryRoleHints("Where is requireAuth defined?"), []);
+});
+
+test("textMentionsQueryRoles requires the role in the file or path", () => {
+  const ask = "Where is auth middleware enforced and what calls it?";
+  assert.equal(
+    textMentionsQueryRoles(
+      "collab/session/auth.ts\nexport async function onAuthenticate() { return true }",
+      ask
+    ),
+    false
+  );
+  assert.equal(
+    textMentionsQueryRoles(
+      "server/http/middleware.py\ndef auth_middleware(get_response):\n  return get_response",
+      ask
+    ),
+    true
+  );
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

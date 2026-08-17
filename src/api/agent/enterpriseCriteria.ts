@@ -33,7 +33,7 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G1",
     family: "Scope",
-    pass: "Locate / understand / change questions run the agent when mode is on",
+    pass: "Locate / understand / change questions always run the agent (no user toggle)",
     fail: "Only keyword-hunt wording loops; show-me / explain-the-X / change asks fall through",
     evidence: "automated"
   },
@@ -47,9 +47,9 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G3",
     family: "Scope",
-    pass: "Product default agentMode is on; locate/change loop without a Settings toggle",
-    fail: "Default still off or Coop Settings still exposes an AgentMode opt-in",
-    evidence: "source"
+    pass: "No AgentMode Settings control; hunts always loop",
+    fail: "User-facing on/off still exists, or hunts require a toggle",
+    evidence: "automated"
   },
   {
     id: "S-G4",
@@ -68,8 +68,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G6",
     family: "Scope",
-    pass: "No AgentMode checkbox in Coop Settings (agent is always on)",
-    fail: "Settings still shows an AgentMode opt-in toggle",
+    pass: "Settings has no AgentMode checkbox",
+    fail: "AgentMode toggle still shown",
     evidence: "source"
   },
   {
@@ -169,6 +169,13 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
     fail: "Model never sees the validated patch",
     evidence: "automated"
   },
+  {
+    id: "H-G14",
+    family: "Honesty",
+    pass: "Hunt + Slack/Jira still runs the agent loop (named integration does not steal locate)",
+    fail: "integrationProvider skips the hunt so the answer invents a path or dumps tickets",
+    evidence: "source"
+  },
 
   // —— Join (automated subset) ——
   {
@@ -195,8 +202,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "J-G6",
     family: "Join",
-    pass: "Defaults: agentMode on; NES off",
-    fail: "Agent default off, or silent NES",
+    pass: "Defaults: Agent hunts always on (no toggle); NES off",
+    fail: "AgentMode setting still exists, or NES on by default",
     evidence: "source"
   },
 

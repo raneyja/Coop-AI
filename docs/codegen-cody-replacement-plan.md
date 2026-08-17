@@ -15,7 +15,7 @@
 | **4** | Autocomplete trust (symbol filter, dogfood gates) | `completionFilter.ts`, `coopAutocompleteProvider.ts` |
 | **5** | Agent tools (opt-in) | `src/api/agent/*` |
 
-**Phase 5 status (2026-07-09):** `search_code` (indexBackend) and `read_file` (localFileContext) ship in `createAgentToolRegistry`. Opt-in via `coopAI.chat.agentMode` (`on` runs a deterministic `search_code` → `read_file` loop in `AgentOrchestrator.run()` and injects results into chat context). **Deferred:** LLM-driven tool selection and multi-step parsing beyond the interim 2-step loop.
+**Phase 5 status (2026-08-16):** `search_code` / `read_file` / `list_directory` / `git_blame` / `propose_patch` ship in `createAgentToolRegistry`. Locate / understand / change are **always on** (no `coopAI.chat.agentMode` toggle): one model conversation chooses tools, sees results, and streams the answer. Trace / Slack / `/edit` stay on their current paths. **Apply:** `propose_patch` → existing Patch card (never silent writes).
 
 ## Phase workflow (each agent)
 
@@ -86,12 +86,12 @@ Phase 2 can parallel with late Phase 1 if no merge conflicts. Phase 3 depends on
 | **P1** | ✅ | Fuzzy SEARCH, `retryLastPatch` / `rejectPatch`, `edit.patch_rejected` |
 | **P2** | ✅ | `codeEditIntent` + selection supplement; collection scope on semantic search |
 | **P3** | ✅ | Index-ready discovery toast → **Enable autocomplete** (workspace) |
-| **P4** | ✅ | Deterministic `search_code` → `read_file` agent loop (opt-in `agentMode: on`) |
+| **P4** | ✅ | Agent-owned locate/understand/change loop (always on for hunts; no user toggle) |
 | **P5** | ✅ | 250ms inline graph + 1–2 line snippets; `collectionId` on `graphSearch` |
 
 **UI rule unchanged:** no ChatPanel layout changes.
 
-**Still honest / deferred:** `auto` is conservative (repo-hunt phrasing only; never empty-bundle). LLM-driven multi-step tool selection ships behind `coopAI.chat.agentMode` **off** by default. Dogfood CAR ≥25% / apply-rate gates are tracked in admin analytics but not enforced in CI.
+**Still honest / deferred:** NES default **off**. Dogfood CAR ≥25% / apply-rate gates are tracked in admin analytics but not enforced in CI. Trace / Slack / Jira / `/edit` stay off the agent conversation.
 
 **Next program:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) — Wave 1 = Phase 5b read-only tool loop (A). Wave 2 = B apply, C PR, D instructions, E NES **in parallel**. Wave 3 = join + production eval scorecard. Editor build; pass/fail + pressure tests + notes log.
 

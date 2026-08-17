@@ -509,16 +509,19 @@ Defaults: temperature `0.5`, max tokens `2000`. Inline completion uses `0.15` / 
 
 ---
 
-## Agent loop (Phase 5)
+## Agent loop (always on for repo hunts)
 
-Plain chat uses single-shot evidence fetch by default. `coopAI.chat.agentMode` defaults to **off** (today’s chat). When **on**, and the Chat Intent Planner says the turn is a **repo hunt**, `AgentOrchestrator.run()` may call a cheap model to choose `search_code` / `read_file` / `list_directory` / `git_blame` in a loop, then the chat model synthesizes. Invalid tool JSON fails open (deterministic search→read fallback or stop). Default remains **off**. Trace / `/edit` / local explain never enter this loop.
+There is **no** `coopAI.chat.agentMode` user toggle. When routing says the turn is locate / understand / change, Coop runs **one model conversation**: choose repo tools → see tool results in the same conversation → stream the user-visible answer.
 
-`read_file` fetches through `IndexedRepoWorkspace.readFile` (code host / index) — Zero-Clone; it does not prefer a local clone.
+- **Tools:** `search_code`, `read_file`, `list_directory`, `git_blame`, and (for change) `propose_patch` → existing Patch Apply card. No silent writes. Zero-Clone only (`IndexedRepoWorkspace` / codehost).
+- **Wrong file:** a read whose body does not mention the named symbol cannot finish the turn — another search/read is required first.
+- **Budgets:** Agent turns use `AGENT_JOB_WALL_MS` (not the ~15s Q&A gather). User Stop still cancels. No latency timeout bubble.
+- Trace / Workflows / named Slack/Jira / anchored `/edit` stay on their current prefetch paths.
 
-**Shipped (Wave 1 / 5b read-only):** LLM tool-use loop, planner-first routing, opt-in setting, unit/gate tests. Build plan: [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).
+`read_file` is Zero-Clone (`IndexedRepoWorkspace` / code host only).
 
-**Still deferred:** `propose_patch`, GitHub PR handoff, always-on remote AGENTS.md, NES.
+**Shipped:** one-conversation tool loop as the answer path, `propose_patch` + Apply bridge, GitHub Create PR (post-Apply), NES (opt-in, default off). Roadmap: [agent-rebuild-roadmap.md](./agent-rebuild-roadmap.md). Build plan: [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).
 
 ---
 
-*Last updated to reflect the ChatProse output contract and Cursor-style response renderer (2026).*
+*Last updated for agent-owned answer path (always on for hunts; no gather-then-synthesis split) — 2026-08-16.*
