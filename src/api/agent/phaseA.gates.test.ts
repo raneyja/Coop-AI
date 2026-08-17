@@ -108,9 +108,19 @@ test("kill-switch off still blocks the loop", () => {
   );
 });
 
-test("parseAgentToolPlan rejects Slack as a repo tool (UX-G2)", () => {
-  const parsed = parseAgentToolPlan(JSON.stringify({ tool: "slack_search", args: {} }));
+test("parseAgentToolPlan rejects Slack when not on allowlist (UX-G2)", () => {
+  const parsed = parseAgentToolPlan(JSON.stringify({ tool: "search_slack", args: { query: "auth" } }));
   assert.equal(parsed.kind, "invalid");
+});
+
+test("parseAgentToolPlan accepts search_jira when Jira is allowlisted", () => {
+  const parsed = parseAgentToolPlan(JSON.stringify({ tool: "search_jira", args: { query: "PROJ-123" } }), {
+    allowedIntegrations: ["jira"]
+  });
+  assert.equal(parsed.kind, "call");
+  if (parsed.kind === "call") {
+    assert.equal(parsed.tool, "search_jira");
+  }
 });
 
 test("parseAgentToolPlan accepts search_code JSON", () => {

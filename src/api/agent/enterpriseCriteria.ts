@@ -82,8 +82,8 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G8",
     family: "Scope",
-    pass: "Compound hunt + Slack: agent loops and Slack stays on the planner allowlist",
-    fail: "Hunt+Slack drops the loop or drops Slack",
+    pass: "Compound hunt + Slack/Jira: agent loops; allowlisted mid-loop search_* tools; Slack-only stays out",
+    fail: "Hunt+Slack drops the loop, or mid-loop can call tools off the allowlist",
     evidence: "automated"
   },
 

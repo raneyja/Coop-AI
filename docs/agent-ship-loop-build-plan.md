@@ -116,7 +116,7 @@ Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as
 | Intent planner (this week) | Named tools only; local explain = no tools; workflows stay workflows; `none` plan = no activity chrome | Agent loop **obeys** this plan — does not spray every tool |
 | Agent mode (`coopAI.chat.agentMode`) | **Product default on** — locate / understand / change (and hunt + Slack compounds). No Coop Settings toggle; `off` is a VS Code kill switch only | Done for Wave 1 routing; dogfood S1–S14 still required |
 | `/edit` | SEARCH/REPLACE → Apply into open buffer / local disk | Multi-file apply on **remote Use-repo** without clone |
-| Integrations | Parallel fetch before answer (~15s soft budget) | Compound hunt + Slack: agent loop + Slack allowlist on the same turn |
+| Integrations | Parallel fetch before answer (~15s soft budget); **allowlisted mid-loop** `search_jira` / `search_slack` / … when evidence reveals a key | Done for allowlisted follow-up; not a free bag of every connected tool |
 | Indexed repos | Map + on-demand bodies; Zero-Clone reads (`read_file` already remote-only) | Index stays read map; **code host** becomes write target |
 | Ship | No create-branch / commit / open-PR | Patch card → confirmed PR |
 | Instructions | Local disk `AGENTS.md` / `.cursor/rules` | Always-on from **indexed remote** + light visible memory |

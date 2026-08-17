@@ -3,6 +3,7 @@ import {
   AGENT_MAX_FILES_READ,
   AGENT_MAX_TOOL_ROUNDS
 } from "../../config/agentJobBudget";
+import type { IntegrationChatProvider } from "../../chat/types";
 import type {
   AgentPlanTurnFn,
   AgentSessionContext,
@@ -22,6 +23,10 @@ import {
   sanitizeAgentSearchQuery
 } from "./searchQuery";
 import { createAgentToolRegistry } from "./tools/registry";
+import { handleIntegrationSearch } from "./tools/integrationSearch";
+import {
+  isAgentIntegrationTool
+} from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
 
 export { pickTopSearchHit };
@@ -32,6 +37,8 @@ const READ_LINE_PADDING = 25;
 const MAX_SEARCH_ATTEMPTS = 2;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
+/** Cap mid-loop integration calls so the model cannot spray. */
+const MAX_INTEGRATION_TOOL_CALLS = 3;
 
 type SearchHit = {
   fileName: string;
@@ -81,21 +88,42 @@ export type AgentRunOptions = {
   signal?: AbortSignal;
   startedAt?: number;
   wallMs?: number;
+  /** Planner allowlist — mid-loop may only call these integration tools. */
+  allowedIntegrations?: IntegrationChatProvider[];
+  /** Live integration search for allowlisted mid-loop tools. */
+  searchIntegration?: (options: {
+    provider: IntegrationChatProvider;
+    query: string;
+  }) => Promise<Record<string, unknown>>;
 };
 
 /**
- * Read-only agent loop (opt-in via `coopAI.chat.agentMode`).
+ * Agent loop for locate / understand / change (product default on).
  * LLM-chosen tools when `planTurn` is provided; otherwise deterministic
  * `search_code` → `read_file` (or `list_directory` for structure asks).
+ * Allowlisted integrations may be called mid-loop when discovered.
  */
 export class AgentOrchestrator {
   private readonly registry;
+  private runAllowedIntegrations: IntegrationChatProvider[] = [];
+  private runSearchIntegration?: AgentRunOptions["searchIntegration"];
 
   public constructor(private readonly ctx: AgentToolContext) {
     this.registry = createAgentToolRegistry(ctx);
   }
 
   public async executeTool(tool: AgentToolName, args: Record<string, unknown>): Promise<string> {
+    if (isAgentIntegrationTool(tool)) {
+      return handleIntegrationSearch(
+        {
+          ...this.ctx,
+          allowedIntegrations: this.runAllowedIntegrations,
+          searchIntegration: this.runSearchIntegration ?? this.ctx.searchIntegration
+        },
+        tool,
+        args
+      );
+    }
     const handler = this.registry[tool];
     if (!handler) {
       throw new Error(`Tool not implemented: ${tool}`);
@@ -117,10 +145,17 @@ export class AgentOrchestrator {
       return { steps: [], context: undefined };
     }
 
-    if (options?.planTurn) {
-      return this.runLlmLoop(request, repoId, query, maxSteps, options);
+    this.runAllowedIntegrations = options?.allowedIntegrations ?? [];
+    this.runSearchIntegration = options?.searchIntegration;
+    try {
+      if (options?.planTurn) {
+        return await this.runLlmLoop(request, repoId, query, maxSteps, options);
+      }
+      return await this.runDeterministic(repoId, query, maxSteps, options);
+    } finally {
+      this.runAllowedIntegrations = [];
+      this.runSearchIntegration = undefined;
     }
-    return this.runDeterministic(repoId, query, maxSteps, options);
   }
 
   private async runLlmLoop(
@@ -144,7 +179,9 @@ export class AgentOrchestrator {
     }
 
     let filesRead = 0;
+    let integrationCalls = 0;
     let lastToolResult: string | undefined;
+    const allowedIntegrations = options.allowedIntegrations ?? [];
 
     for (let round = 0; round < maxSteps; round++) {
       if (options.signal?.aborted) {
@@ -161,7 +198,8 @@ export class AgentOrchestrator {
           repoId,
           round,
           priorSteps: [...steps],
-          lastToolResult
+          lastToolResult,
+          allowedIntegrations
         });
       } catch {
         if (steps.length === 0) {
@@ -170,7 +208,7 @@ export class AgentOrchestrator {
         break;
       }
 
-      const plan = parseAgentToolPlan(raw);
+      const plan = parseAgentToolPlan(raw, { allowedIntegrations });
       if (plan.kind === "invalid") {
         if (steps.length === 0) {
           return this.runDeterministic(repoId, query, maxSteps, options);
@@ -185,6 +223,12 @@ export class AgentOrchestrator {
           break;
         }
         filesRead += 1;
+      }
+      if (isAgentIntegrationTool(plan.tool)) {
+        if (integrationCalls >= MAX_INTEGRATION_TOOL_CALLS) {
+          break;
+        }
+        integrationCalls += 1;
       }
 
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query);
@@ -379,6 +423,10 @@ export class AgentOrchestrator {
       context.propose_patch = parsed;
       return;
     }
+    if (isAgentIntegrationTool(tool)) {
+      context[tool] = parsed;
+      return;
+    }
     context.git_blame = parsed;
   }
 
@@ -398,6 +446,10 @@ export class AgentOrchestrator {
     if (tool === "propose_patch") {
       const files = Array.isArray(args.files) ? args.files.length : 0;
       return files > 0 ? `propose_patch: ${files} file${files === 1 ? "" : "s"}` : "propose_patch";
+    }
+    if (isAgentIntegrationTool(tool)) {
+      const q = typeof args.query === "string" ? args.query : query;
+      return `${tool}: ${truncateSummary(q)}`;
     }
     const path = typeof args.path === "string" ? args.path : "";
     return `git_blame: ${path}`;

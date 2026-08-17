@@ -323,5 +323,23 @@ function humanizeAgentSummary(tool: string, summary: string): string {
   if (tool === "git_blame") {
     return trimmed.replace(/^git_blame:\s*/i, "Traced blame for ");
   }
+  if (tool.startsWith("search_")) {
+    const label =
+      tool === "search_slack"
+        ? "Slack"
+        : tool === "search_jira"
+          ? "Jira"
+          : tool === "search_teams"
+            ? "Teams"
+            : tool === "search_notion"
+              ? "Notion"
+              : tool === "search_confluence"
+                ? "Confluence"
+                : tool === "search_google_docs"
+                  ? "Google Docs"
+                  : tool.replace(/^search_/, "");
+    const q = trimmed.replace(new RegExp(`^${tool}:\\s*`, "i"), "");
+    return q ? `Searched ${label} for \`${q}\`` : `Searched ${label}`;
+  }
   return trimmed || tool;
 }

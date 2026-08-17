@@ -24,6 +24,14 @@ Copy this block. Do not edit older entries except to fix a factual error.
 
 ## Enterprise scorecard (strict Pass / Fail)
 
+### 2026-08-17 — Allowlisted mid-loop integration tools — PASS (automated)
+
+- **Owner:** editor / `cursor/agent-allowlist-midloop-d4f5`
+- **Commands run:** `npm run lint`; `npx tsx src/api/agent/integrationMidLoop.test.ts`; phaseA gates
+- **Gate IDs:** S-G8b — PASS. Mid-loop `search_jira` / `search_slack` / etc. only when on planner allowlist; capped at 3 calls; results promote to `jiraSearch` / `slackSearch` for synthesis.
+- **What we tried:** Prefetch stays first-pass; agent may follow a ticket key / thread topic discovered in code with a focused query.
+- **What Jon re-runs:** Ask *Where is requireAuth, and check Jira for related tickets?* Success = Searched/Read, then optional Searched Jira for a key, answer cites both.
+
 ### 2026-08-17 — Agent always on + hunt/Slack compound — PASS (automated)
 
 - **Owner:** editor / `cursor/agent-always-on-d4f5`
