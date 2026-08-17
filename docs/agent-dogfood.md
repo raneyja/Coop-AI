@@ -1,10 +1,10 @@
 # Agent dogfood — Extension Host checklist
 
-**For:** Jon  
-**Date to run:** tomorrow (after `main` pull)  
-**Goal:** Prove always-on agent + hunt/integrations + Apply → PR feel production-ready.
+**Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/home/ubuntu/.cursor/projects/workspace/canvases/agent-dogfood.canvas.tsx)** (instructions + Pass/Fail + answer boxes).
 
-**Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) (full S1–S14), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) (log results).
+This markdown is the backup / git copy. Prefer the canvas tomorrow.
+
+**Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) (full S1–S15), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) (log results).
 
 ---
 
