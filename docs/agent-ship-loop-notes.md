@@ -1,6 +1,8 @@
 # Agent ship loop — stage notes
 
 **Required log** for [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).  
+**Jon’s dogfood checklist:** [agent-dogfood.md](./agent-dogfood.md).
+
 A stage with no entry here is **FAIL**, even if tests are green.
 
 Every Wave 1 and Join entry must also record **UX-G1..G12** (intent-first routing, no sticky agent thread, slash/Workflows still win, no new header control, same Use-repo, existing errors, one Patch card). `npm run test:chat-intent` belongs in the commands list.

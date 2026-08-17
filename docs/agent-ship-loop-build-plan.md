@@ -1,7 +1,7 @@
 # Agent → Apply → PR ship loop — editor build plan
 
 **Created:** 2026-08-13  
-**Updated:** 2026-08-13 — Wave 1 = A only; Wave 2 = B + C + D + E in parallel; Wave 3 = join + production eval. **UX freeze:** intent-first routing; do not undo this week’s chat look/feel.  
+**Updated:** 2026-08-17 — Agent **default on**; allowlisted mid-loop Slack/Jira/…; dogfood checklist → [agent-dogfood.md](./agent-dogfood.md).  
 **How to use this:** Build in **Cursor editor** (Composer / local Agent), not Cloud Agents.  
 **Talk track (unchanged lead):** Enterprise readiness + deep stack context. Agent/PR is the *closer* — context becomes a reviewed change — not a Copilot-replacement pitch.
 
@@ -9,10 +9,11 @@
 
 | Doc | Role |
 |-----|------|
+| [**agent-dogfood.md**](./agent-dogfood.md) | **Jon’s Extension Host dogfood** (run tomorrow) |
 | [AGENTS.md](../AGENTS.md) § Boris bar | Ship quality bar |
 | [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) | **Required** stage log (every stage writes here) |
 | [codegen-cody-replacement-plan.md](./codegen-cody-replacement-plan.md) | Prior codegen phases 0–5 (**complete**); this plan continues at **5b** |
-| [llm-prompt-architecture.md](./llm-prompt-architecture.md) § Agent loop | Honesty: prefetch until A ships the LLM loop |
+| [llm-prompt-architecture.md](./llm-prompt-architecture.md) § Agent loop | Honesty: prefetch + allowlisted mid-loop |
 | [engineering/chat-intent-planner-gates.md](./engineering/chat-intent-planner-gates.md) | Pass/fail gate style to copy |
 | [autocomplete-acceptance.md](./autocomplete-acceptance.md) | Rollout ladder + NES latency/CAR bar |
 | [code-host-capability-matrix.md](./code-host-capability-matrix.md) | Write APIs must be host-honest |
@@ -46,7 +47,9 @@ Former **A0 is not a separate phase.** It is **A Stage 0**. Same wave, same bran
 
 ## Your test process (when we return)
 
-This is the evaluation you run. Agents cannot mark a wave done without it. Every step names **where** (Terminal / Extension UI / Browser) and **success**.
+**Primary checklist for Jon:** [agent-dogfood.md](./agent-dogfood.md) (always-on agent + mid-loop integrations + Apply/PR).
+
+This section remains the long-form eval. Agents cannot mark a wave done without it. Every step names **where** (Terminal / Extension UI / Browser) and **success**.
 
 **Fixture (all waves):** Extension Development Host. Use-repo = a **Deep-Indexed GitHub repo you do not have cloned**. Coop-AI may be the open VS Code folder — that must **not** be the answer source.
 
@@ -59,7 +62,7 @@ This is the evaluation you run. Agents cannot mark a wave done without it. Every
 
 2. **Extension UI** — Agent is **on by default** (no Coop Settings toggle). Confirm Model & chat hub shows **Agent on**. Kill switch only via VS Code `coopAI.chat.agentMode`.
 
-3. **Extension UI** — Remote workspace → Use-repo = indexed GitHub repo, **no local clone**. Ask: *Where is auth middleware enforced and what calls it?*  
+3. **Extension UI** — Remote workspace → Use-repo = indexed GitHub repo, **no local clone**. Ask: *Where is requireAuth or authentication middleware defined in this repo?*  
    **Success:** activity shows **≥2 model-chosen** search/read steps; answer cites **real paths from that repo**; you are not stuck on “Preparing answer.”
 
 4. **Pressure (same session)**  
@@ -70,10 +73,11 @@ This is the evaluation you run. Agents cannot mark a wave done without it. Every
 5. **Feel freeze (same session) — this week’s chat must still feel like this week’s chat**  
    - Ask *Explain this function* (or any local explain). **Success:** Sources (if any) sit above the answer; **no** agent tool-step list; answer starts like today.  
    - Ask *What’s in Slack about this?* (no repo hunt). **Success:** Slack is fetched if the planner named it; you do **not** get a stack of search/read rows.  
-   - Ask *Where is requireAuth, and what did Slack say about the auth change?* **Success:** agent hunts **and** Slack is on the allowlist for the same turn.  
-   - After a successful repo hunt, send **Thanks** then **Explain this function**. **Success:** neither follow-up shows a tool-step list (every turn re-plans).
-   - Run `/edit` or a Workflows chip with `agentMode` on. **Success:** existing edit/workflow path, not the agent loop.
-   - Confirm Settings still owns Agent mode — **nothing new** in the Workflows header.
+   - Ask *Where is requireAuth, and what did Slack say about the auth change?* **Success:** agent hunts **and** Slack is on the allowlist; optional mid-loop **Searched Slack for \`…\`**.  
+   - Ask *Where is requireAuth, and check Jira for related tickets?* **Success:** same pattern for Jira (prefetch + optional mid-loop `search_jira`).  
+   - After a successful repo hunt, send **Thanks** then **Explain this function**. **Success:** neither follow-up shows a tool-step list (every turn re-plans).  
+   - Run `/edit` or a Workflows chip. **Success:** existing edit/workflow path, not the agent loop.  
+   - Confirm **no** Agent toggle in Workflows header or composer (Settings hub only shows status).
 
 6. **Terminal** — `npm run test:chat-intent`  
    **Success:** exits 0 (this week’s planner gates still hold).
@@ -85,7 +89,7 @@ If any of 1–7 fails, Wave 2 does not start.
 
 ### After Wave 2 + Wave 3 (B–E + join) — production-grade scorecard
 
-Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as production.
+Run **in this order** (or use [agent-dogfood.md](./agent-dogfood.md)). One FAIL = that row is Fail; do not demo the full loop as production.
 
 | # | Surface | What you do | Pass | Fail |
 |---|---------|-------------|------|------|
@@ -103,8 +107,9 @@ Run **in this order**. One FAIL = that row is Fail; do not demo the full loop as
 | S12 | Extension UI | Local explain (agent still on by default). | No tool-step list; Sources still above the answer; empty chrome still skipped | Eight search/read rows on a normal ask |
 | S13 | Extension UI | Create PR | Dialog is the existing Coop modal family; Patch card still Apply / Reject plus one quiet **Create pull request** | New overlay look, or a fat extra button row |
 | S14 | Extension UI | Plain chat with remote AGENTS.md | Answer follows it; **no** new banner/chip every turn | Instructions advertised as chrome |
+| S15 | Extension UI | Hunt + Slack / Jira compound asks | Repo hunt + integration evidence same turn; mid-loop only for allowlisted tools | Spray of off-allowlist tools, or hunt dropped |
 
-**Production-grade means:** S1–S14 all Pass, Boris B1–B6 Pass, **UX-G1..G6 Pass**, defaults still **off** for agent mode and NES, PR button still **explicit**.
+**Production-grade means:** S1–S15 all Pass, Boris B1–B6 Pass, **UX-G1..G6 Pass**, agent default **on**, NES default **off**, PR button still **explicit**.
 
 ---
 
@@ -864,9 +869,10 @@ Stop.
 | S9 NES opt-in | | |
 | S10 notes complete | | |
 | S11 test:chat-intent | | |
-| S12 explain / agentMode off: no tool-step list | | |
+| S12 explain (agent on): no tool-step list | | |
 | S13 Create PR modal + quiet button | | |
 | S14 AGENTS.md silent (no banner) | | |
+| S15 hunt + Slack/Jira (+ mid-loop) | | |
 
 ---
 
@@ -879,7 +885,7 @@ Stop.
 | Agent wall clock | 90s (not the 15s Q&A gather) |
 | Max files read per job | 10 |
 | Max patch files per job | 5 |
-| Integrations | Planner allowlist only (prefetch). Agent registry stays repo tools. |
+| Integrations | Planner allowlist: prefetch + mid-loop `search_*` (max 3) |
 | Metering | `usage_events`; tag `use_case=agent_loop` / `pr_handoff` |
 
 ---
@@ -902,12 +908,12 @@ Stop.
 
 | Stage | Gate | Action |
 |-------|------|--------|
-| 0 | A+B Pass internally + you signed S1–S4 | Setting opt-in (`off` default) |
-| 1 | Dogfood: apply success, no Zero-Clone violations, cost caps hold | Allowlist orgs |
-| 2 | Stable for ≥2 weeks | Consider richer `auto` heuristics |
-| 3 | Explicit product decision | Only then consider broader default |
+| 0 | Automated ship gates green + always-on on `main` | **Now** — agent default **on** for locate/change |
+| 1 | Jon dogfood: [agent-dogfood.md](./agent-dogfood.md) all Pass | Allowlist orgs / wider dogfood |
+| 2 | Stable for ≥2 weeks | Tune mid-loop / cost caps |
+| 3 | Explicit product decision | Broader surfaces only if needed |
 
-PR handoff (C) stays an **explicit button** even if agent defaults expand.
+PR handoff (C) stays an **explicit button** even with agent default on.
 
 ---
 
@@ -916,9 +922,9 @@ PR handoff (C) stays an **explicit button** even if agent defaults expand.
 - [ ] A Stages 0–4 Pass; Wave 1 notes complete; **UX-G1/UX-G2** Pass  
 - [ ] B, C, D, E each: stages 0–4 Pass (C solo may use fixtures); **UX-G3..G6** Pass on the owning track  
 - [ ] Join J-G1..G8 Pass  
-- [ ] **You** ran S1–S14; all Pass  
+- [ ] **You** ran [agent-dogfood.md](./agent-dogfood.md) / S1–S15; all Pass  
 - [ ] `npm run test:chat-intent` green on the merged tree  
-- [ ] Remote-only demo: ask → **allowlisted** tools → multi-file apply → PR  
+- [ ] Remote-only demo: ask → **allowlisted** tools (prefetch + mid-loop) → multi-file apply → PR  
 - [ ] Quick actions, Workflows, Sources-above-answer unchanged in look and latency  
 - [ ] Docs honest; no Copilot-parity oversell  
 - [ ] Cost caps + usage tagging live  

@@ -169,7 +169,12 @@ test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt when Agent
 test("H-G10 dogfood instructions say agent is on by default (no Settings flip)", () => {
   const plan = readRepo("docs/agent-ship-loop-build-plan.md");
   assert.match(plan, /agentMode.*\bon\b|default.*\bon\b.*agent|Agent is (?:always )?on/i);
-  assert.match(plan, /Model & chat|Coop Settings/);
+  assert.match(plan, /Model & chat|Coop Settings|agent-dogfood/);
+
+  const dogfood = readRepo("docs/agent-dogfood.md");
+  assert.match(dogfood, /Agent is \*\*on\*\*|Agent on/i);
+  assert.match(dogfood, /no Coop Settings toggle|No Coop Settings toggle/i);
+  assert.match(dogfood, /search_jira|mid-loop|Jira/i);
 });
 
 test("H-G11 retrieval is one rule for every ask — no repo names, no layer special cases", () => {
