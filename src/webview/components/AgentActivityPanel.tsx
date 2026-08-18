@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentFileChip, AgentTodoItem, AgentToolRow } from "../agentActivity";
+import { summarizeAgentExploration } from "../agentActivity";
 import { splitNarrativeLabelParts } from "../agentNarrative";
 
 type AgentActivityPanelProps = {
@@ -132,6 +133,55 @@ function Chevron({ open }: { open: boolean }): React.ReactElement {
   );
 }
 
+function TodoList({ items }: { items: AgentTodoItem[] }): React.ReactElement {
+  return (
+    <ul className="coop-agent-todo-list">
+      {items.map((todo) => (
+        <li
+          key={todo.id}
+          className={`coop-agent-todo coop-agent-todo--${todo.status}`}
+          data-status={todo.status}
+        >
+          <TodoGlyph status={todo.status} />
+          <RichLabel text={todo.content} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CollapsibleTerm({
+  label,
+  open,
+  live,
+  onToggle,
+  children
+}: {
+  label: string;
+  open: boolean;
+  live?: boolean;
+  onToggle: () => void;
+  children?: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="coop-agent-explore">
+      <button
+        type="button"
+        className="coop-agent-thinking-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="coop-agent-thinking-title">
+          {label}
+          {live ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
+        </span>
+        <Chevron open={open} />
+      </button>
+      {open ? children : null}
+    </div>
+  );
+}
+
 /** Cursor-like activity panel: todos, thinking, tool/file summary. */
 export function AgentActivityPanel({
   todos,
@@ -144,13 +194,42 @@ export function AgentActivityPanel({
 }: AgentActivityPanelProps): React.ReactElement | null {
   const trimmedThinking = thinkingText?.trim() ?? "";
   const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [exploredOpen, setExploredOpen] = useState(false);
+  const [exploringOpen, setExploringOpen] = useState(true);
   const [filesOpen, setFilesOpen] = useState(false);
+  const exploredTouchedRef = useRef(false);
+  const exploration = useMemo(() => summarizeAgentExploration(tools), [tools]);
 
   useEffect(() => {
     setThinkingOpen(thinkingStreaming || Boolean(trimmedThinking));
   }, [thinkingStreaming, trimmedThinking]);
 
-  const visibleTodos = useMemo(() => {
+  useEffect(() => {
+    if (exploredTouchedRef.current) {
+      return;
+    }
+    // While tools are the only activity, keep the list open so new work is visible.
+    // Once Thinking is up, collapse to the summary — click to reopen, like Cursor.
+    if (exploration?.exploring) {
+      setExploredOpen(false);
+      return;
+    }
+    setExploredOpen(Boolean(exploration?.explored) && !trimmedThinking);
+  }, [exploration?.explored, exploration?.exploring, trimmedThinking]);
+
+  const exploredTodos = useMemo(
+    () => todos.filter((todo) => todo.status === "completed"),
+    [todos]
+  );
+  const exploringTodos = useMemo(
+    () => todos.filter((todo) => todo.status === "in_progress"),
+    [todos]
+  );
+
+  const statusTodos = useMemo(() => {
+    if (exploration) {
+      return [];
+    }
     // Keep the list focused: show completed + current + a couple upcoming.
     const activeIndex = todos.findIndex((todo) => todo.status === "in_progress");
     if (activeIndex < 0) {
@@ -158,12 +237,16 @@ export function AgentActivityPanel({
     }
     const start = Math.max(0, activeIndex - 2);
     return todos.slice(start, Math.min(todos.length, activeIndex + 4));
-  }, [todos]);
+  }, [todos, exploration]);
 
   const fileCount = files.length;
-  const hasTools = tools.length > 0;
+  const showFilesToolbar = !exploration && fileCount > 0;
   const hasAnything =
-    visibleTodos.length > 0 || trimmedThinking || Boolean(fallbackStatus) || hasTools || fileCount > 0;
+    Boolean(exploration?.explored || exploration?.exploring) ||
+    statusTodos.length > 0 ||
+    trimmedThinking ||
+    Boolean(fallbackStatus) ||
+    showFilesToolbar;
 
   if (!hasAnything) {
     return null;
@@ -172,22 +255,37 @@ export function AgentActivityPanel({
   return (
     <article className="chat-message chat-message--agent-activity" aria-label="Agent activity">
       <div className="chat-message-inner chat-message-inner--agent-activity">
-        {visibleTodos.length ? (
-          <ul className="coop-agent-todo-list">
-            {visibleTodos.map((todo) => (
-              <li
-                key={todo.id}
-                className={`coop-agent-todo coop-agent-todo--${todo.status}`}
-                data-status={todo.status}
-              >
-                <TodoGlyph status={todo.status} />
-                <RichLabel text={todo.content} />
-              </li>
-            ))}
-          </ul>
+        {exploration?.explored && exploredTodos.length ? (
+          <CollapsibleTerm
+            label={exploration.explored}
+            open={exploredOpen}
+            onToggle={() => {
+              exploredTouchedRef.current = true;
+              setExploredOpen((value) => !value);
+            }}
+          >
+            <div className="coop-agent-explore-body">
+              <TodoList items={exploredTodos} />
+            </div>
+          </CollapsibleTerm>
         ) : null}
 
-        {!visibleTodos.length && fallbackStatus ? (
+        {exploration?.exploring && exploringTodos.length ? (
+          <CollapsibleTerm
+            label={exploration.exploring}
+            open={exploringOpen}
+            live
+            onToggle={() => setExploringOpen((value) => !value)}
+          >
+            <div className="coop-agent-explore-body">
+              <TodoList items={exploringTodos} />
+            </div>
+          </CollapsibleTerm>
+        ) : null}
+
+        {!exploration && statusTodos.length ? <TodoList items={statusTodos} /> : null}
+
+        {!exploration && !statusTodos.length && fallbackStatus ? (
           <p className="coop-agent-fallback-status">{fallbackStatus}</p>
         ) : null}
 
@@ -209,10 +307,10 @@ export function AgentActivityPanel({
           </div>
         ) : null}
 
-        {fileCount > 0 || onStop ? (
+        {showFilesToolbar || onStop ? (
           <div className="coop-agent-toolbar">
             <div className="coop-agent-toolbar-left">
-              {fileCount > 0 ? (
+              {showFilesToolbar ? (
                 <button
                   type="button"
                   className="coop-agent-files-toggle"
@@ -234,7 +332,7 @@ export function AgentActivityPanel({
           </div>
         ) : null}
 
-        {filesOpen && fileCount > 0 ? (
+        {filesOpen && showFilesToolbar ? (
           <ul className="coop-agent-file-list">
             {files.map((file) => (
               <li key={`${file.action}:${file.path}`} className="coop-agent-file-row">

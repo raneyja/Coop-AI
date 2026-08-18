@@ -15,6 +15,3 @@ export const AGENT_MAX_TOOL_ROUNDS = 8;
 
 /** Max read_file executions per job. */
 export const AGENT_MAX_FILES_READ = 10;
-
-/** Compact activity: extra steps fold behind this cap. */
-export const AGENT_MAX_VISIBLE_ACTIVITY_STEPS = 3;

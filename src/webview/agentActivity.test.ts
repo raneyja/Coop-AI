@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   agentStepsToActivity,
   extractFileChipsFromLabels,
+  summarizeAgentExploration,
   toolRowsFromTodos,
   type AgentTodoItem
 } from "./agentActivity";
@@ -34,7 +35,7 @@ test("extractFileChipsFromLabels picks backtick paths", () => {
   assert.ok(chips.some((chip) => chip.path === "foo/bar.ts"));
 });
 
-test("agentStepsToActivity caps visible steps at 3 (UX-G2)", () => {
+test("agentStepsToActivity keeps every tool row (no leftover-steps count)", () => {
   const activity = agentStepsToActivity(
     Array.from({ length: 8 }, (_, index) => ({
       index,
@@ -43,6 +44,27 @@ test("agentStepsToActivity caps visible steps at 3 (UX-G2)", () => {
       completed: true
     }))
   );
-  assert.equal(activity.tools.length, 3);
-  assert.equal(activity.todos.some((todo) => todo.content.includes("5 more")), true);
+  assert.equal(activity.tools.length, 8);
+  assert.equal(activity.todos.length, 8);
+  assert.equal(
+    activity.todos.some((todo) => /more step/.test(todo.content)),
+    false
+  );
+});
+
+test("summarizeAgentExploration uses Explored / Exploring, not remaining steps", () => {
+  const activity = agentStepsToActivity([
+    { index: 0, tool: "search_code", summary: "search_code: a", completed: true },
+    { index: 1, tool: "search_code", summary: "search_code: b", completed: true },
+    { index: 2, tool: "read_file", summary: "read_file: auth.ts", completed: true },
+    { index: 3, tool: "read_file", summary: "read_file: session.ts", completed: false }
+  ]);
+  const summary = summarizeAgentExploration(activity.tools);
+  assert.equal(summary?.explored, "Explored 1 file, 2 searches");
+  assert.equal(summary?.exploring, "Exploring 1 file");
+  assert.equal(summary?.explored?.includes("more"), false);
+});
+
+test("summarizeAgentExploration is null without real tools", () => {
+  assert.equal(summarizeAgentExploration([]), null);
 });

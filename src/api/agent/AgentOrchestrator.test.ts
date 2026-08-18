@@ -383,7 +383,7 @@ async function run(): Promise<void> {
     const result = await orchestrator.run({ message: "where is the auth adapter?", repoId: "acme/demo" });
     const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
     const lines = (readFile.files?.[0]?.content ?? "").split("\n");
-    assert.equal(lines[0], "line 1");
+    assert.equal(lines[0], "1|line 1");
     assert.ok(lines.length > 26 && lines.length <= 120);
   });
 

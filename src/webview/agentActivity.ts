@@ -16,8 +16,6 @@ import type { IntentFeedbackState, JobProgressState } from "./types";
 
 /** Keep the checklist short so timed reveal stays feelable during long jobs. */
 const MAX_ACTIVITY_TODOS = 5;
-/** UX-G2: extra agent tool steps fold; Sources stay above the answer. */
-const MAX_VISIBLE_AGENT_STEPS = 3;
 
 export type AgentTodoStatus = "pending" | "in_progress" | "completed";
 
@@ -266,24 +264,61 @@ export function mergeAgentActivity(
   };
 }
 
+export type AgentExplorationSummary = {
+  explored?: string;
+  exploring?: string;
+};
+
+/** Cursor-style tally: finished work vs current work — never “N more steps remaining.” */
+export function summarizeAgentExploration(tools: AgentToolRow[]): AgentExplorationSummary | null {
+  if (!tools.length) {
+    return null;
+  }
+  const explored = phraseForTools(
+    "Explored",
+    tools.filter((tool) => tool.status === "done")
+  );
+  const exploring = phraseForTools(
+    "Exploring",
+    tools.filter((tool) => tool.status === "active")
+  );
+  if (!explored && !exploring) {
+    return null;
+  }
+  return { explored, exploring };
+}
+
+function phraseForTools(verb: "Explored" | "Exploring", tools: AgentToolRow[]): string | undefined {
+  if (!tools.length) {
+    return undefined;
+  }
+  const searches = tools.filter((tool) => tool.kind === "search").length;
+  const files = tools.filter((tool) => tool.kind === "read" || tool.kind === "explore").length;
+  const parts: string[] = [];
+  if (files > 0) {
+    parts.push(`${files} ${files === 1 ? "file" : "files"}`);
+  }
+  if (searches > 0) {
+    parts.push(`${searches} ${searches === 1 ? "search" : "searches"}`);
+  }
+  if (!parts.length) {
+    const n = tools.length;
+    parts.push(`${n} ${n === 1 ? "action" : "actions"}`);
+  }
+  return `${verb} ${parts.join(", ")}`;
+}
+
 export function agentStepsToActivity(
   steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>
 ): AgentActivityState {
-  const extra = Math.max(0, steps.length - MAX_VISIBLE_AGENT_STEPS);
-  const visible = extra > 0 ? steps.slice(0, MAX_VISIBLE_AGENT_STEPS) : steps;
-  const todos: AgentTodoItem[] = visible.map((step) => ({
+  // Keep every real tool row. The panel folds them behind Explored / Exploring;
+  // do not cap to the first three or invent a growing “N more steps” leftover.
+  const todos: AgentTodoItem[] = steps.map((step) => ({
     id: `agent-${step.index}-${step.tool}`,
     content: humanizeAgentSummary(step.tool, step.summary),
     status: step.completed ? "completed" : "in_progress"
   }));
-  if (extra > 0) {
-    todos.push({
-      id: "agent-more",
-      content: `${extra} more step${extra === 1 ? "" : "s"}`,
-      status: "pending"
-    });
-  }
-  const tools: AgentToolRow[] = visible.map((step) => ({
+  const tools: AgentToolRow[] = steps.map((step) => ({
     id: `agent-tool-${step.index}`,
     kind: toolKindFromName(step.tool),
     label: humanizeAgentSummary(step.tool, step.summary),

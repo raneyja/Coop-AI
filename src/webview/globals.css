@@ -1353,6 +1353,16 @@
     color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
   }
 
+  .coop-agent-explore {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .coop-agent-explore-body {
+    @apply pl-3;
+    max-height: 16rem;
+    overflow-y: auto;
+  }
+
   .coop-agent-thinking {
     @apply flex flex-col gap-1.5 border-l py-0.5 pl-3;
     border-color: color-mix(in srgb, var(--coop-panel-muted) 40%, transparent);
