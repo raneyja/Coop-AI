@@ -1,10 +1,21 @@
 # Agent dogfood — Extension Host checklist
 
-**Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/agent-dogfood.canvas.tsx)** (instructions + Pass/Fail + answer boxes).
+**Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/agent-dogfood.canvas.tsx)**.
 
 This markdown is the backup / git copy. Prefer the canvas.
 
 **Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) (full S1–S15), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) (log results).
+
+---
+
+## Fixture map — do not mix
+
+| Use-repo | What’s actually there | Run | Do not run |
+|----------|----------------------|-----|------------|
+| **plane** (indexed, not cloned) | Django `APIKeyAuthentication` in `apps/api/plane/api/middleware/api_authentication.py` | Locate, Stop, `/edit` | Slack or Jira — nothing is seeded for Plane |
+| **raneyja/Coop-AI** | `requireAuth` in `src/server/authMiddleware.ts`. Slack `#epd` + Jira **COOP-101** (peel auth into coop-backend) | Hunt+Slack, Hunt+Jira, Slack-only | Zero-Clone proof — this folder is already open |
+
+`requireAuth` is a Coop name. Slack and Jira seeds are Coop-only. Asking those on Plane is a bad test, not a product miss.
 
 ---
 
@@ -14,9 +25,8 @@ This markdown is the backup / git copy. Prefer the canvas.
 |-------|--------|
 | Branch | Combined test branch with always-on hunts, hunt-quality fixes, and allowlisted mid-loop tools |
 | Fixture | Extension Development Host |
-| Use-repo | Deep-Indexed **GitHub** repo you do **not** have cloned |
-| Open folder | Coop-AI may be open — answers must still come from Use-repo |
-| Slack / Jira | Connected in Coop for the compound tests (skip those rows if not) |
+| Open folder | Coop-AI may be open — Plane answers must still come from plane |
+| Slack / Jira | Connected for Block B only (skip those rows if not) |
 
 **Terminal (once):** from repo root
 
@@ -41,104 +51,90 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 
 ---
 
-## Do this now (happy path)
+## Block A — plane (not cloned)
 
-### 1. Extension UI — Agent is on (no flip)
+### 1. Extension UI — Locate a real Plane symbol
 
-1. Coop Settings → Preferences → **Model & chat**.  
-2. Confirm there is **no** AgentMode checkbox.
-
-**Success:** Hunts can run without you changing anything.
-
----
-
-### 2. Extension UI — Locate hunt (always on)
-
-1. Remote workspace → Use-repo = indexed GitHub repo (no local clone).  
-2. Ask: *Where is requireAuth or authentication middleware defined in this repo?*
+1. Remote workspace → Use-repo = **plane** (In use). Do not clone it.  
+2. Close every editor tab.  
+3. Ask: *Where is APIKeyAuthentication defined in this repo?*
 
 **Success:**
-- Activity shows Searched / Read (compact, ≤3 visible steps).  
-- Answer cites **real paths from that Use-repo**.  
-- Not stuck on “Preparing answer.”  
-- Not citing Coop-AI’s open folder.
+- Activity shows Searched / Read.  
+- Answer cites a real plane path such as `apps/api/plane/api/middleware/api_authentication.py`.  
+- Jump-to-file lands on `APIKeyAuthentication`.  
+- Not Coop-AI. Not live collab / Hocuspocus.
 
 ---
 
-### 3. Extension UI — Change → Apply → PR
+### 2. Extension UI — Stop mid-hunt
 
-1. Close every editor tab.  
-2. Ask a concrete change on the Use-repo (or `/edit` two remote files).  
-3. **Apply** the Patch card → **Undo** once.  
-4. Apply again → quiet **Create pull request** → confirm modal.  
-5. Repeat once with **Cancel** on the modal.
+Same ask as test 1. Click **Stop** while Preparing answer or streaming.
+
+**Success:** Turn cancels. Stopped. No latency timeout bubble.
+
+---
+
+### 3. Extension UI — `/edit` on a Plane file
+
+1. Open `apps/api/plane/db/models/state.py` (or the file locate just cited).  
+2. Select a function. Confirm the chat chip shows that file and line range.  
+3. Ask: */edit add a one-line comment above the selected function.*
+
+**Success:** Patch is on the open plane file. Comment sits above the selection. Original line is not pasted twice.
+
+---
+
+## Block B — Coop-AI (Slack / Jira seeded)
+
+**Switch first:** Remote workspace → Use-repo = **raneyja/Coop-AI**. Success = In use.
+
+### 4. Extension UI — Hunt + Slack (COOP-101)
+
+**Requires Slack connected.**
+
+Ask: *Where is requireAuth defined, and what did Slack say about COOP-101?*
 
 **Success:**
-- Apply works without “open the file first.”  
-- Undo restores.  
-- Confirm → GitHub PR URL in the extension.  
-- Cancel → nothing created on GitHub.  
-- Dialog looks like existing Coop modals (not a new overlay).
+- Hunt found `src/server/authMiddleware.ts` (real requireAuth).  
+- Slack on the **same** turn mentions peeling auth into coop-backend / COOP-101.  
+- **Open in Slack** opens the native message.
 
 ---
 
-### 4. Extension UI — Hunt + Slack / Jira (same turn)
+### 5. Extension UI — Hunt + Jira (COOP-101)
 
-**Requires connected Slack and/or Jira.**
+**Requires Jira connected.**
 
-1. Ask: *Where is requireAuth defined, and what did Slack say about the auth change?*  
-2. Ask: *Where is requireAuth defined, and check Jira for related tickets?*
+Ask: *Where is requireAuth defined, and check Jira for COOP-101?*
 
 **Success:**
-- Agent hunts the repo (Searched / Read).  
-- Slack and/or Jira evidence appears on the **same** turn.  
-- Optional: activity shows **Searched Slack/Jira for \`…\`** (mid-loop focused query after a key/topic shows up in code).  
-- Slack-only ask (*What’s in Slack about this?*) still has **no** repo search/read stack.
+- Hunt found the real requireAuth file.  
+- Jira shows **COOP-101** (extract auth / coop-backend) — not a 20-ticket dump.  
+- **Open in Jira** works.
 
 ---
 
-### 5. Extension UI — Feel freeze (must still feel like Coop)
+### 6. Extension UI — Slack-only (COOP-101)
 
-| Ask / action | Success |
-|--------------|---------|
-| *Explain this function* (local) | No agent tool-step list; Sources above answer if any |
-| Trace Decision (Workflows) | Does **not** enter the agent loop |
-| After a hunt: *Thanks* then *Explain this function* | No tool-step list (every turn re-plans) |
-| `/edit` or a Workflows chip | Existing path, not the agent loop |
-| Remote Use-repo with root `AGENTS.md` | Answer follows it; **no** new banner every turn |
-| NES left **off** | Ghost text feels like today |
+Ask: *What's in Slack about COOP-101?*
+
+**Success:** Slack fetch about COOP-101. **No** Searched / Read repo stack. Hits have Open in Slack.
 
 ---
 
-### 6. Pressure (same session)
-
-| Action | Success |
-|--------|---------|
-| **Stop** mid-answer | Turn cancels; no latency timeout bubble |
-| Use-repo ask while Coop-AI folder is open | Cites Use-repo, not Coop-AI disk |
-| Start Create PR → Cancel | Nothing on GitHub |
-
----
-
-## Scorecard (fill tomorrow)
+## Scorecard
 
 | ID | Result | What you saw |
 |----|--------|--------------|
-| T1 Terminal green | | |
-| T2 Agent on, no Settings toggle | | |
-| T3 Locate hunt | | |
-| T4 Apply + Undo | | |
-| T5 Create PR confirm | | |
-| T6 Create PR cancel | | |
-| T7 Hunt + Slack | | |
-| T8 Hunt + Jira (incl. mid-loop if it fires) | | |
-| T9 Slack-only (no hunt chrome) | | |
-| T10 Explain / Thanks / Trace feel freeze | | |
-| T11 Zero-Clone (not Coop-AI disk) | | |
-| T12 Remote AGENTS.md silent | | |
-| T13 NES still default off | | |
+| S1 Locate APIKeyAuthentication on plane | | |
+| S2 Stop on plane | | |
+| S3 /edit on a plane file | | |
+| S4 Hunt + Slack (Coop-AI, COOP-101) | | |
+| S5 Hunt + Jira (Coop-AI, COOP-101) | | |
+| S6 Slack-only (Coop-AI, COOP-101) | | |
 
-**Ship claim:** all rows Pass. One Fail = do not demo as production.
+**Ship claim:** all rows Pass (or Skip only if that tool is disconnected). One Fail = do not demo as production.
 
 ---
 
@@ -147,12 +143,12 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 | Blocker | What to do |
 |---------|------------|
 | Terminal red | Fix or stop; do not dogfood |
-| No indexed remote Use-repo | Deep-Index a GitHub repo first |
-| Slack/Jira not connected | Skip T7/T8; still run hunt-only rows |
+| No indexed plane | Deep-Index plane first (Block A) |
+| Slack/Jira not connected | Skip S4–S6; still run Block A |
 
 ---
 
 ## After dogfood
 
-1. **File** — paste Pass/Fail into the table above (or into [agent-ship-loop-notes.md](./agent-ship-loop-notes.md)).  
-2. Note any wrong citations, missing mid-loop, or chrome regressions with the exact ask you used.
+1. Paste Pass/Fail into the canvas (preferred) or the table above.  
+2. Note wrong citations or missing Open in Slack/Jira with the exact ask you used.
