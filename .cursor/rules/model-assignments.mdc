@@ -20,6 +20,7 @@ Production users **do not** pick LLM provider or model. Coop assigns models per 
 | Autocomplete | Mistral | codestral-latest |
 | Intent suggest (chip classifier) | OpenAI | gpt-4o-mini |
 | Sources expand preview | OpenAI | gpt-4o-mini |
+| PR notes | OpenAI | gpt-4o-mini |
 
 ## Required wiring (all must stay connected)
 

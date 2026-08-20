@@ -11,6 +11,7 @@ import {
   GITHUB_PR_REJECTED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   githubTokenHasWriteScopes,
+  githubWriteBlockedByCollaboratorPush,
   normalizeWriteFiles,
   sanitizeBranchName,
   validateCreatePullRequestInput
@@ -748,12 +749,13 @@ export class GitHubClient implements CodeHostClient {
     if (!response.ok) {
       throw this.writePermissionError(response.status);
     }
-    const scopeOk = githubTokenHasWriteScopes(response.headers.get("x-oauth-scopes"));
+    const scopesHeader = response.headers.get("x-oauth-scopes");
+    const scopeOk = githubTokenHasWriteScopes(scopesHeader);
     if (scopeOk === false) {
       throw this.writePermissionError(403);
     }
     const repo = (await response.json()) as { permissions?: { push?: boolean } };
-    if (repo.permissions && repo.permissions.push === false) {
+    if (githubWriteBlockedByCollaboratorPush(scopesHeader, repo.permissions?.push)) {
       throw this.writePermissionError(403);
     }
   }

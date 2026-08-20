@@ -6,10 +6,8 @@ import {
   PHASE_C_FIXTURE_FILES,
   PHASE_C_FIXTURE_REPO,
   PR_HANDOFF_AUDIT_ACTION,
-  evaluateCreatePullRequest,
-  pullRequestWriteNotYetMessage
+  evaluateCreatePullRequest
 } from "./pullRequestWrite";
-import { CodeHostError } from "./types";
 
 const originalFetch = globalThis.fetch;
 let passed = 0;
@@ -111,43 +109,77 @@ await test("C-G3 audit event name for PR handoff", () => {
   assert.equal(PR_HANDOFF_AUDIT_ACTION, "repo.pull.create");
 });
 
-await test("C-G4 GitLab / Bitbucket are explicit not yet — never call GitHub", async () => {
+await test("C-G4 GitLab and Bitbucket create a PR/MR on their own APIs — never GitHub", async () => {
   const requested: string[] = [];
-  globalThis.fetch = (async (input: string | URL) => {
-    requested.push(String(input));
-    return new Response("{}", { status: 200 });
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    requested.push(`${method} ${url}`);
+    if (url.includes("api.github.com") || url.includes("github.com/")) {
+      return new Response(JSON.stringify({ message: "must not call GitHub" }), { status: 500 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 File Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      return new Response(JSON.stringify({ id: "gl-commit" }), { status: 201 });
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ iid: 7, web_url: "https://gitlab.com/acme/plane/-/merge_requests/7" }),
+        { status: 201 }
+      );
+    }
+    if (url.includes("/repositories/acme/plane/refs/branches/main") && method === "GET") {
+      return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
+    }
+    if (url.endsWith("/repositories/acme/plane/src") && method === "POST") {
+      return new Response(JSON.stringify({ hash: "bb-commit" }), { status: 201 });
+    }
+    if (url.endsWith("/repositories/acme/plane/pullrequests") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          id: 9,
+          links: { html: { href: "https://bitbucket.org/acme/plane/pull-requests/9" } }
+        }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
   }) as typeof fetch;
   try {
-    await assert.rejects(
-      () =>
-        new GitLabClient({ token: "glpat" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+    const gitlab = await new GitLabClient({ token: "glpat" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+      { branch: "coop/patch", title: "Fixture patch", body: "AI notes", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(gitlab.number, 7);
+    assert.equal(gitlab.htmlUrl, "https://gitlab.com/acme/plane/-/merge_requests/7");
+    assert.equal(gitlab.commitSha, "gl-commit");
+
+    const bitbucket = await new BitbucketClient({ token: "bb" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+      { branch: "coop/patch", title: "Fixture patch", body: "AI notes", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(bitbucket.number, 9);
+    assert.equal(bitbucket.htmlUrl, "https://bitbucket.org/acme/plane/pull-requests/9");
+    assert.equal(bitbucket.commitSha, "bb-commit");
+
+    assert.equal(requested.some((entry) => entry.includes("api.github.com") || entry.includes("github.com/")), false);
+    assert.equal(
+      evaluateCreatePullRequest(
+        {
+          provider: "gitlab",
           branch: "coop/patch",
-          title: "nope",
+          title: "Fixture",
           files: PHASE_C_FIXTURE_FILES
-        }),
-      (error: unknown) =>
-        error instanceof CodeHostError &&
-        error.code === "unsupported" &&
-        error.message === pullRequestWriteNotYetMessage("gitlab")
+        },
+        "confirm"
+      ).action,
+      "create"
     );
-    await assert.rejects(
-      () =>
-        new BitbucketClient({ token: "bb" }).createPullFromFiles(
-          { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
-          { branch: "coop/patch", title: "nope", files: PHASE_C_FIXTURE_FILES }
-        ),
-      (error: unknown) =>
-        error instanceof CodeHostError &&
-        error.code === "unsupported" &&
-        error.message === pullRequestWriteNotYetMessage("bitbucket")
-    );
-    assert.equal(requested.length, 0);
-    assert.equal(evaluateCreatePullRequest({
-      provider: "gitlab",
-      branch: "coop/patch",
-      title: "Fixture",
-      files: PHASE_C_FIXTURE_FILES
-    }, "confirm").action, "nothing");
   } finally {
     globalThis.fetch = originalFetch;
   }

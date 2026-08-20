@@ -264,8 +264,8 @@ export interface CodeHostClient {
     coords: RepoCoordinates
   ): Promise<{ fileCount: number; truncated: boolean }>;
   /**
-   * Zero-Clone write: create a branch + commit + PR from file contents (not a local git push).
-   * GitHub is implemented. GitLab / Bitbucket must throw `unsupported` ("not yet") — never call GitHub APIs.
+   * Zero-Clone write: create a branch + commit + PR/MR from file contents (not a local git push).
+   * GitHub, GitLab, and Bitbucket are implemented. Never call another host's API.
    */
   createPullFromFiles(coords: RepoCoordinates, input: CreatePullRequestInput): Promise<CreatePullRequestResult>;
 }

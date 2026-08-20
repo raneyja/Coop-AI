@@ -30,7 +30,7 @@ export class GitLabAppService {
       redirect_uri: redirectUri,
       response_type: "code",
       state,
-      scope: "api read_repository"
+      scope: "api write_repository"
     });
     return `${this.options.gitlabBaseUrl}/oauth/authorize?${params.toString()}`;
   }

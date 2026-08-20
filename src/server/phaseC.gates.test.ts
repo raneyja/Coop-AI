@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
-import { CodeHostError, type CreatePullRequestResult, type RepoCoordinates } from "../api/codeHosts/types";
+import { CodeHostError, type CreatePullRequestResult } from "../api/codeHosts/types";
 import {
   GITHUB_WRITE_PERMISSION_MESSAGE,
   PHASE_C_FIXTURE_FILES,
   PR_HANDOFF_AUDIT_ACTION,
-  pullRequestWriteNotYetMessage,
   resetPullCreateLocks
 } from "../api/codeHosts/pullRequestWrite";
 import { handleOrgApiRequest, type OrgApiDeps } from "./orgApi";
@@ -171,15 +170,13 @@ void (async () => {
   assert.equal(empty.statusCode, 400, "C-P5 empty file list blocked at API");
 
   const gitlab = await request(
-    baseDeps(async (coords: RepoCoordinates) => {
-      throw new CodeHostError(pullRequestWriteNotYetMessage(coords.provider), "unsupported", 501, coords.provider);
-    }),
+    baseDeps(async () => created),
     "POST",
     "/v1/orgs/repos/gitlab%3Aacme%2Fplane/pulls",
     fixtureBody
   );
-  assert.equal(gitlab.statusCode, 501, "C-G4 / C-P4 GitLab is not yet");
-  assert.match(String(gitlab.json.error), /not yet available for GitLab/);
+  assert.equal(gitlab.statusCode, 201, "C-G4 GitLab Create PR uses the same write path");
+  assert.equal(gitlab.json.number, created.number);
 
   const deniedAudit: Array<{ action: string; metadata?: Record<string, unknown> }> = [];
   const denied = await request(

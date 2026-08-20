@@ -7,6 +7,7 @@ import {
   PHASE_C_FIXTURE_REPO,
   createConfirmSubmitGuard,
   evaluateCreatePullRequest,
+  githubWriteBlockedByCollaboratorPush,
   resetPullCreateLocks,
   validateCreatePullRequestInput,
   withPullCreateLock
@@ -34,7 +35,7 @@ function test(name: string, fn: () => void | Promise<void>): Promise<void> {
 type RecordedCall = { method: string; url: string };
 
 function installGithubMock(options?: {
-  scopes?: string;
+  scopes?: string | null;
   push?: boolean;
   failPulls?: boolean;
   statusOnRepo?: number;
@@ -48,14 +49,15 @@ function installGithubMock(options?: {
       if (options?.statusOnRepo) {
         return new Response(JSON.stringify({ message: "Forbidden" }), { status: options.statusOnRepo });
       }
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (options?.scopes !== null) {
+        headers["x-oauth-scopes"] = options?.scopes ?? "repo";
+      }
       return new Response(
         JSON.stringify({ default_branch: "main", permissions: { push: options?.push ?? true } }),
         {
           status: 200,
-          headers: {
-            "content-type": "application/json",
-            "x-oauth-scopes": options?.scopes ?? "repo"
-          }
+          headers
         }
       );
     }
@@ -112,6 +114,23 @@ await test("C-P1 missing contents/pull_requests → permission error, nothing cr
       0,
       "no write calls after a permission failure"
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitHub App tokens are not blocked by collaborator push=false", async () => {
+  assert.equal(githubWriteBlockedByCollaboratorPush(undefined, false), false);
+  assert.equal(githubWriteBlockedByCollaboratorPush("repo", false), true);
+  const { calls } = installGithubMock({ scopes: null, push: false });
+  try {
+    const result = await new GitHubClient({ token: "ghs_installation" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+      branch: "coop/patch",
+      title: "Fixture",
+      files: PHASE_C_FIXTURE_FILES
+    });
+    assert.equal(result.htmlUrl, "https://github.com/acme/plane/pull/7");
+    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -183,7 +202,7 @@ await test("C-P3 API 422 → error, no half-branch claimed as success", async ()
   }
 });
 
-await test("C-P4 GitLab Use-repo → Not yet", () => {
+await test("C-P4 GitLab confirm is allowed", () => {
   const result = evaluateCreatePullRequest(
     {
       provider: "gitlab",
@@ -193,7 +212,7 @@ await test("C-P4 GitLab Use-repo → Not yet", () => {
     },
     "confirm"
   );
-  assert.deepEqual(result, { action: "nothing", reason: "not_yet" });
+  assert.equal(result.action, "create");
 });
 
 await test("C-P5 empty file list blocked", () => {

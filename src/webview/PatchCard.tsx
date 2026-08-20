@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { CodeHostProviderPreference, PatchCardState, PatchPreviewHunk } from "../chat/types";
 import { PatchDiffView } from "./PatchDiffView";
 import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
@@ -15,6 +15,7 @@ import {
   defaultPrBranchName,
   defaultPrTitle,
   filesWithContent,
+  type CreatePullRequestCreated,
   type CreatePullRequestDraft
 } from "./createPullRequestConfirm";
 
@@ -36,6 +37,13 @@ type PatchCardProps = {
     proposalId: string | null
   ) => void;
   onCreatePullRequest?: (draft: CreatePullRequestDraft) => void | Promise<void>;
+  onRequestPrNotes?: () => void;
+  onOpenPrLink?: (url: string) => void;
+  onClearPrResult?: () => void;
+  prNotesLoading?: boolean;
+  generatedPrNotes?: string;
+  prCreated?: CreatePullRequestCreated;
+  prCreateError?: string;
 };
 
 function pendingEditCount(state: PatchCardState): number {
@@ -107,13 +115,35 @@ export function PatchCard({
   onRejectHunk,
   onToggleMatchLocation,
   onSelectSharedProposal,
-  onCreatePullRequest
+  onCreatePullRequest,
+  onRequestPrNotes,
+  onOpenPrLink,
+  onClearPrResult,
+  prNotesLoading,
+  generatedPrNotes,
+  prCreated,
+  prCreateError
 }: PatchCardProps): React.ReactElement | null {
   const [prModalOpen, setPrModalOpen] = useState(false);
   const [prSubmitting, setPrSubmitting] = useState(false);
   const [prError, setPrError] = useState<string | undefined>();
   const submitGuard = useMemo(() => createConfirmSubmitGuard(), []);
   const prFiles = filesWithContent(state.prFiles);
+
+  useEffect(() => {
+    if (!prCreated?.htmlUrl) {
+      return;
+    }
+    setPrSubmitting(false);
+  }, [prCreated?.htmlUrl]);
+
+  useEffect(() => {
+    if (!prCreateError) {
+      return;
+    }
+    setPrSubmitting(false);
+    setPrError(prCreateError);
+  }, [prCreateError]);
 
   if (!shouldRenderPatchCard(state)) {
     return null;
@@ -262,7 +292,9 @@ export function PatchCard({
             <CreatePullRequestButton
               onClick={() => {
                 setPrError(undefined);
+                onClearPrResult?.();
                 setPrModalOpen(true);
+                onRequestPrNotes?.();
               }}
             />
           ) : null}
@@ -281,9 +313,14 @@ export function PatchCard({
         files={prFiles}
         submitting={prSubmitting}
         error={prError}
+        notesLoading={prNotesLoading}
+        generatedNotes={generatedPrNotes}
+        created={prCreated}
+        onOpenLink={onOpenPrLink}
         onClose={() => {
           if (!prSubmitting) {
             setPrModalOpen(false);
+            onClearPrResult?.();
           }
         }}
         onConfirm={(draft) => {
@@ -292,10 +329,8 @@ export function PatchCard({
             setPrError(undefined);
             try {
               await onCreatePullRequest?.({ ...draft, base: defaultBranch, provider: codeHostProvider });
-              setPrModalOpen(false);
             } catch (error) {
               setPrError(error instanceof Error ? error.message : "Could not create the pull request.");
-            } finally {
               setPrSubmitting(false);
             }
           });

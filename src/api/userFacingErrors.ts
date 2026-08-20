@@ -119,6 +119,9 @@ export function formatCoopApiError(
   if (serverMessage) {
     return serverMessage;
   }
+  if (errorCode && (/\s/.test(errorCode) || errorCode.length > 48)) {
+    return errorCode;
+  }
   if (status === 503) {
     return "Coop service is unavailable. Contact your administrator.";
   }

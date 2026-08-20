@@ -663,6 +663,14 @@ export type WebviewInbound =
         files: Array<{ path: string; content: string }>;
       };
     }
+  | {
+      type: "patch:summarize-pr";
+      payload: {
+        messageTimestamp?: number;
+        title: string;
+        diff: string;
+      };
+    }
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }
@@ -755,6 +763,23 @@ export type WebviewOutbound =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload }
+  | {
+      type: "patch:pr-notes";
+      payload: { messageTimestamp?: number; notes?: string };
+    }
+  | {
+      type: "patch:pr-created";
+      payload: {
+        messageTimestamp?: number;
+        htmlUrl: string;
+        number: number;
+        provider?: CodeHostProviderPreference;
+      };
+    }
+  | {
+      type: "patch:pr-error";
+      payload: { messageTimestamp?: number; error: string };
+    }
   | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }

@@ -736,6 +736,13 @@ test("buildUserMessageWithContext renders live tree overview", () => {
   assert.ok(message.includes("files: package.json, README.md"));
 });
 
+test("pr_summary use case is short notes without the chat output contract", () => {
+  const prompt = systemPromptForUseCase("pr_summary");
+  assert.ok(prompt.includes("pull request notes"));
+  assert.equal(prompt.includes(AUDIENCE_MARKER), false);
+  assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
+});
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nsystemPrompts: ${passed}/${total} tests passed`);

@@ -13,7 +13,7 @@ export type CodeHostRateLimitProvider = CodeHostProvider;
 export type HttpRequestOptions = {
   method?: string;
   headers?: Record<string, string>;
-  body?: string;
+  body?: string | FormData;
   timeoutMs?: number;
 };
 

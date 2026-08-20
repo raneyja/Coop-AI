@@ -1,14 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { CodeHostProviderPreference } from "../../chat/types";
+import { ChatActionLink } from "./ChatActionLink";
 import { CoopPanelHeader } from "./CoopPanelHeader";
 import {
+  CREATE_PR_DONE_LABEL,
   CREATE_PR_MODAL_CLASSES,
   CREATE_PR_NOT_YET_LABEL,
+  CREATE_PR_SUCCESS_TITLE,
   CREATE_PULL_REQUEST_BUTTON_LABEL,
+  PR_NOTES_AI_GENERATED_LABEL,
+  type CreatePullRequestCreated,
   type CreatePullRequestDraft,
   type CreatePullRequestFile,
   evaluateCreatePullRequest,
-  isPullRequestWriteSupported
+  isPullRequestWriteSupported,
+  openPullRequestOnHostLabel,
+  pullRequestCreatedCopy
 } from "../createPullRequestConfirm";
 
 export type CreatePullRequestModalProps = {
@@ -19,8 +26,12 @@ export type CreatePullRequestModalProps = {
   files: CreatePullRequestFile[];
   submitting?: boolean;
   error?: string;
+  notesLoading?: boolean;
+  generatedNotes?: string;
+  created?: CreatePullRequestCreated;
   onClose: () => void;
   onConfirm: (draft: CreatePullRequestDraft) => void;
+  onOpenLink?: (url: string) => void;
 };
 
 export function CreatePullRequestModal({
@@ -31,11 +42,17 @@ export function CreatePullRequestModal({
   files,
   submitting = false,
   error,
+  notesLoading = false,
+  generatedNotes,
+  created,
   onClose,
-  onConfirm
+  onConfirm,
+  onOpenLink
 }: CreatePullRequestModalProps): React.ReactElement | null {
   const [branch, setBranch] = useState(initialBranch);
   const [title, setTitle] = useState(initialTitle);
+  const [notes, setNotes] = useState("");
+  const notesEdited = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -43,28 +60,44 @@ export function CreatePullRequestModal({
     }
     setBranch(initialBranch);
     setTitle(initialTitle);
+    notesEdited.current = false;
+    setNotes(generatedNotes ?? "");
   }, [open, initialBranch, initialTitle]);
+
+  useEffect(() => {
+    if (!open || notesEdited.current || !generatedNotes?.trim()) {
+      return;
+    }
+    setNotes(generatedNotes);
+  }, [open, generatedNotes]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !submitting) {
         onClose();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, submitting]);
 
   if (!open) {
     return null;
   }
 
   const supported = isPullRequestWriteSupported(provider);
-  const draft: CreatePullRequestDraft = { provider, branch, title, files };
+  const draft: CreatePullRequestDraft = {
+    provider,
+    branch,
+    title,
+    body: notes.trim() || undefined,
+    files
+  };
   const canConfirm = evaluateCreatePullRequest(draft, "confirm").action === "create" && !submitting;
+  const createdProvider = created?.provider ?? provider;
 
   const handleConfirm = () => {
     const result = evaluateCreatePullRequest(draft, "confirm");
@@ -74,11 +107,17 @@ export function CreatePullRequestModal({
     onConfirm(result.payload);
   };
 
+  const handleBackdropClick = () => {
+    if (!submitting) {
+      onClose();
+    }
+  };
+
   return (
     <div
       className={CREATE_PR_MODAL_CLASSES.backdrop}
       role="presentation"
-      onClick={onClose}
+      onClick={handleBackdropClick}
     >
       <div
         className={CREATE_PR_MODAL_CLASSES.dialog}
@@ -91,12 +130,30 @@ export function CreatePullRequestModal({
           variant="modal"
           titleElement="h2"
           titleId={CREATE_PR_MODAL_CLASSES.titleId}
-          title="Create pull request"
-          onClose={onClose}
-          closeAriaLabel="Cancel"
+          title={created ? CREATE_PR_SUCCESS_TITLE : "Create pull request"}
+          onClose={submitting ? () => undefined : onClose}
+          closeAriaLabel={created ? CREATE_PR_DONE_LABEL : "Cancel"}
         />
         <div className="coop-prompt-modal-body">
-          {!supported ? (
+          {created ? (
+            <>
+              <p className="coop-prompt-modal-muted mb-2">{pullRequestCreatedCopy(createdProvider)}</p>
+              {onOpenLink ? (
+                <p className="coop-prompt-modal-section">
+                  <ChatActionLink
+                    kind="external"
+                    className="break-all"
+                    label={created.htmlUrl}
+                    onClick={() => onOpenLink(created.htmlUrl)}
+                  />
+                </p>
+              ) : (
+                <p className="coop-prompt-modal-note" role="status">
+                  {created.htmlUrl}
+                </p>
+              )}
+            </>
+          ) : !supported ? (
             <p className="coop-prompt-modal-note" role="status">
               {CREATE_PR_NOT_YET_LABEL}: creating pull requests from Coop is not yet available for{" "}
               {provider === "bitbucket" ? "Bitbucket" : "GitLab"}.
@@ -104,7 +161,7 @@ export function CreatePullRequestModal({
           ) : (
             <>
               <p className="coop-prompt-modal-muted mb-2">
-                Confirm the branch and title. Cancel, Escape, or the backdrop creates nothing on the host.
+                Confirm the branch, title, and notes. Cancel, Escape, or the backdrop creates nothing on the host.
               </p>
               <label className="coop-prompt-modal-section">
                 <span className="coop-prompt-modal-section-title">Branch</span>
@@ -126,6 +183,24 @@ export function CreatePullRequestModal({
                   autoComplete="off"
                 />
               </label>
+              <label className="coop-prompt-modal-section">
+                <span className="coop-prompt-modal-section-title">
+                  Notes <span className="coop-prompt-modal-muted">{PR_NOTES_AI_GENERATED_LABEL}</span>
+                </span>
+                <textarea
+                  className="coop-prompt-modal-textarea"
+                  value={notes}
+                  onChange={(event) => {
+                    notesEdited.current = true;
+                    setNotes(event.target.value);
+                  }}
+                  aria-label="Pull request notes"
+                  placeholder={
+                    notesLoading ? "Generating summary…" : "Optional. Shown on the pull request."
+                  }
+                  rows={4}
+                />
+              </label>
               <div className="coop-prompt-modal-section">
                 <p className="coop-prompt-modal-section-title">Files</p>
                 {files.length === 0 ? (
@@ -144,26 +219,45 @@ export function CreatePullRequestModal({
               </div>
             </>
           )}
-          {error ? (
+          {!created && error ? (
             <p className="coop-prompt-modal-note" role="alert">
               {error}
             </p>
           ) : null}
         </div>
         <footer className="coop-prompt-modal-footer coop-prompt-modal-inset coop-prompt-modal-inset--bottom">
-          <button type="button" className="coop-text-btn" onClick={onClose} disabled={submitting}>
-            Cancel
-          </button>
-          {supported ? (
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onClick={handleConfirm}
-              disabled={!canConfirm}
-            >
-              {submitting ? "Creating…" : CREATE_PULL_REQUEST_BUTTON_LABEL}
-            </button>
-          ) : null}
+          {created ? (
+            <>
+              {onOpenLink ? (
+                <button
+                  type="button"
+                  className="coop-text-btn"
+                  onClick={() => onOpenLink(created.htmlUrl)}
+                >
+                  {openPullRequestOnHostLabel(createdProvider)}
+                </button>
+              ) : null}
+              <button type="button" className="coop-settings-action-btn" onClick={onClose}>
+                {CREATE_PR_DONE_LABEL}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="coop-text-btn" onClick={onClose} disabled={submitting}>
+                Cancel
+              </button>
+              {supported ? (
+                <button
+                  type="button"
+                  className="coop-settings-action-btn"
+                  onClick={handleConfirm}
+                  disabled={!canConfirm}
+                >
+                  {submitting ? "Creating…" : CREATE_PULL_REQUEST_BUTTON_LABEL}
+                </button>
+              ) : null}
+            </>
+          )}
         </footer>
       </div>
     </div>

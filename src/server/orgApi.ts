@@ -1155,11 +1155,16 @@ async function handleCreateRepoPull(
     return;
   }
 
-  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
-    orgStore: deps.orgStore,
-    connector: getConnector(target.provider),
-    allowPatFallback: deps.serverConfig.devMode
-  });
+  const token = await resolveCodeHostTokenForOrg(
+    auth.orgId,
+    target.provider,
+    {
+      orgStore: deps.orgStore,
+      connector: getConnector(target.provider),
+      allowPatFallback: deps.serverConfig.devMode
+    },
+    { forceRefresh: true }
+  );
   if (!token) {
     writeJson(response, 401, {
       error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`

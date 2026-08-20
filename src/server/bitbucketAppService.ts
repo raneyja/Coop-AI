@@ -38,7 +38,7 @@ export class BitbucketAppService {
       response_type: "code",
       // Bitbucket Cloud honors consumer permissions; scope is still required so
       // under-permissioned consumers fail loudly at authorize time.
-      scope: "repository account pullrequest",
+      scope: "repository:write account pullrequest:write",
       state
     });
     return `${BITBUCKET_OAUTH_BASE}/authorize?${params.toString()}`;

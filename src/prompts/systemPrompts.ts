@@ -483,6 +483,14 @@ Rules:
 - Do not invent facts missing from the source text.
 - Reply with ONLY the overview text.`;
 
+export const PR_SUMMARY_SYSTEM = `You write pull request notes for a software engineer.
+Summarize the applied code change so a reviewer understands what changed and why.
+Rules:
+- 2–4 short sentences, or a short paragraph plus up to 4 bullets.
+- Name the files that changed. Describe the behavior change, not a line-by-line dump.
+- Do not invent tickets, reviewers, tests, or motivation that is not in the diff.
+- No markdown headings. Reply with ONLY the notes text.`;
+
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
   decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
@@ -494,7 +502,8 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   code_edit: CODE_EDIT_SYSTEM,
   inline_completion: INLINE_COMPLETION_PROMPT,
   intent_suggest: INTENT_SUGGEST_SYSTEM,
-  evidence_preview: EVIDENCE_PREVIEW_SYSTEM
+  evidence_preview: EVIDENCE_PREVIEW_SYSTEM,
+  pr_summary: PR_SUMMARY_SYSTEM
 };
 
 /**
@@ -526,6 +535,8 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
       return INTENT_SUGGEST_SYSTEM;
     case "evidence_preview":
       return EVIDENCE_PREVIEW_SYSTEM;
+    case "pr_summary":
+      return PR_SUMMARY_SYSTEM;
   }
 }
 

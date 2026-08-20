@@ -11,21 +11,39 @@ import {
 export const PR_HANDOFF_AUDIT_ACTION = "repo.pull.create";
 
 export const GITHUB_PR_WRITE_SCOPES = ["contents", "pull_requests"] as const;
+export const GITLAB_PR_WRITE_SCOPES = ["api", "write_repository"] as const;
+export const BITBUCKET_PR_WRITE_SCOPES = ["repository:write", "account", "pullrequest:write"] as const;
 
 export const GITHUB_WRITE_PERMISSION_MESSAGE =
-  "This GitHub token is missing contents or pull_requests permission. Grant both, then try again. Nothing was created.";
+  "Coop cannot create a pull request on this GitHub repo. Grant Contents and Pull requests write on the GitHub App, accept the update, then try again. Nothing was created.";
+
+export const GITLAB_WRITE_PERMISSION_MESSAGE =
+  "This GitLab token cannot create merge requests. Reconnect GitLab in Coop with api and write_repository access, then try again. Nothing was created.";
+
+export const BITBUCKET_WRITE_PERMISSION_MESSAGE =
+  "This Bitbucket token cannot create pull requests. Reconnect Bitbucket in Coop with repository:write and pullrequest:write, then try again. Nothing was created.";
 
 export const GITHUB_PR_REJECTED_MESSAGE =
   "GitHub rejected this pull request (422). No pull request was created.";
 
-export function pullRequestWriteNotYetMessage(provider: CodeHostProvider): string {
+export const GITLAB_PR_REJECTED_MESSAGE =
+  "GitLab rejected this merge request. No merge request was created.";
+
+export const BITBUCKET_PR_REJECTED_MESSAGE =
+  "Bitbucket rejected this pull request. No pull request was created.";
+
+export function writePermissionMessage(provider: CodeHostProvider): string {
   if (provider === "gitlab") {
-    return "Creating pull requests from Coop is not yet available for GitLab.";
+    return GITLAB_WRITE_PERMISSION_MESSAGE;
   }
   if (provider === "bitbucket") {
-    return "Creating pull requests from Coop is not yet available for Bitbucket.";
+    return BITBUCKET_WRITE_PERMISSION_MESSAGE;
   }
-  return "Creating pull requests from Coop is not yet available for this host.";
+  return GITHUB_WRITE_PERMISSION_MESSAGE;
+}
+
+export function pullRequestWriteNotYetMessage(provider: CodeHostProvider): string {
+  return `Creating pull requests from Coop is not yet available for ${provider}.`;
 }
 
 export function throwPullRequestWriteNotYet(provider: CodeHostProvider): never {
@@ -67,7 +85,7 @@ export function normalizeWriteFiles(files: PullRequestWriteFile[] | undefined): 
 }
 
 export function isPullRequestWriteSupported(provider?: CodeHostProvider): boolean {
-  return !provider || provider === "github";
+  return !provider || provider === "github" || provider === "gitlab" || provider === "bitbucket";
 }
 
 export type CreatePullRequestDecision = "confirm" | "cancel" | "dismiss";
@@ -108,6 +126,7 @@ export function evaluateCreatePullRequest(
       ...input,
       branch: sanitizeBranchName(input.branch) ?? input.branch.trim(),
       title: input.title.trim(),
+      body: input.body?.trim() || undefined,
       files
     }
   };
@@ -142,6 +161,18 @@ export function githubTokenHasWriteScopes(oauthScopesHeader: string | null | und
   const hasPulls =
     hasRepo || scopes.has("pull_request") || scopes.has("pull_requests") || scopes.has("pull_requests:write");
   return hasContents && hasPulls;
+}
+
+/**
+ * Collaborator `permissions.push` is a user-token signal.
+ * GitHub App installation tokens often report push=false even with Contents write.
+ * Only trust it when classic OAuth scopes already look sufficient.
+ */
+export function githubWriteBlockedByCollaboratorPush(
+  oauthScopesHeader: string | null | undefined,
+  push: boolean | undefined
+): boolean {
+  return githubTokenHasWriteScopes(oauthScopesHeader) === true && push === false;
 }
 
 const inflightCreates = new Map<string, Promise<CreatePullRequestResult>>();

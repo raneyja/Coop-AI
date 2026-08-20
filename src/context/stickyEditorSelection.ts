@@ -39,17 +39,47 @@ export function selectedLinesFromEditorSelection(
 }
 
 /**
+ * Matches `vscode.TextEditorSelectionChangeKind` without importing vscode.
+ * Undefined kind is focus-loss / unknown — not a user dismiss.
+ */
+export const EDITOR_SELECTION_CHANGE_KIND = {
+  Keyboard: 1,
+  Mouse: 2,
+  Command: 3
+} as const;
+
+/** Mouse or keyboard emptied the range in the editor — drop the chip. */
+export function isUserClearedEditorSelection(
+  kind: number | undefined,
+  selectionIsEmpty: boolean
+): boolean {
+  if (!selectionIsEmpty) {
+    return false;
+  }
+  return (
+    kind === EDITOR_SELECTION_CHANGE_KIND.Keyboard ||
+    kind === EDITOR_SELECTION_CHANGE_KIND.Mouse
+  );
+}
+
+/**
  * Keep the last real highlight when Chat steals focus (empty caret, same file).
- * A new non-empty range replaces it. A different file clears it.
+ * A mouse/keyboard unhighlight clears it. A new non-empty range replaces it.
+ * A different file clears it.
  */
 export function resolveStickySelectedLines(options: {
   existingFile?: string;
   existingLines?: LineRange;
   incomingFile?: string;
   incomingLines?: LineRange;
+  /** True when the user dismissed the highlight in the editor (not Chat focus steal). */
+  userClearedSelection?: boolean;
 }): LineRange | undefined {
   if (isLineRange(options.incomingLines)) {
     return options.incomingLines;
+  }
+  if (options.userClearedSelection) {
+    return undefined;
   }
   if (!isLineRange(options.existingLines)) {
     return undefined;

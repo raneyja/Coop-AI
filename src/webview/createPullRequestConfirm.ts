@@ -9,6 +9,9 @@ import {
 export const CREATE_PULL_REQUEST_BUTTON_LABEL = "Create pull request";
 export const CREATE_PULL_REQUEST_BUTTON_CLASS = "coop-text-btn";
 export const CREATE_PR_NOT_YET_LABEL = "Not yet";
+export const PR_NOTES_AI_GENERATED_LABEL = "(AI Generated)";
+export const CREATE_PR_SUCCESS_TITLE = "Pull request created";
+export const CREATE_PR_DONE_LABEL = "Done";
 
 export const CREATE_PR_MODAL_CLASSES = {
   backdrop: "coop-prompt-modal-backdrop",
@@ -29,6 +32,51 @@ export type CreatePullRequestDraft = {
   base?: string;
   files: CreatePullRequestFile[];
 };
+
+export type CreatePullRequestCreated = {
+  htmlUrl: string;
+  number: number;
+  provider?: CodeHostProviderPreference;
+};
+
+export function pullRequestHostLabel(provider?: CodeHostProviderPreference): string {
+  if (provider === "gitlab") {
+    return "GitLab";
+  }
+  if (provider === "bitbucket") {
+    return "Bitbucket";
+  }
+  return "GitHub";
+}
+
+export function pullRequestCreatedCopy(provider?: CodeHostProviderPreference): string {
+  return `Opened on ${pullRequestHostLabel(provider)}.`;
+}
+
+export function openPullRequestOnHostLabel(provider?: CodeHostProviderPreference): string {
+  return `Open on ${pullRequestHostLabel(provider)}`;
+}
+
+export function createdPullRequestFromResult(
+  result:
+    | CreatePullRequestCreated
+    | { error: string }
+    | undefined
+): CreatePullRequestCreated | undefined {
+  if (result && "htmlUrl" in result && result.htmlUrl) {
+    return result;
+  }
+  return undefined;
+}
+
+export function prCreateErrorFromResult(
+  result: CreatePullRequestCreated | { error: string } | undefined
+): string | undefined {
+  if (result && "error" in result) {
+    return result.error;
+  }
+  return undefined;
+}
 
 export type { CreatePullRequestDecision, CreatePullRequestEvaluation } from "../api/codeHosts/pullRequestWrite";
 export { createConfirmSubmitGuard, isPullRequestWriteSupported };

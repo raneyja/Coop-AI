@@ -24,7 +24,7 @@ import {
   undoLastPatchWithState
 } from "../edit/patchActions";
 import { setLastEditUserMessage, getPatchRecord } from "../edit/patchSession";
-import { pullRequestWriteNotYetMessage } from "../api/codeHosts/pullRequestWrite";
+import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import {
@@ -164,7 +164,11 @@ import {
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
-import { repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
+import {
+  coordinatesFromRepoId,
+  repoIdFromCoordinates,
+  type RepoCoordinates
+} from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { resolveEffectiveQuickAction } from "./effectiveQuickAction";
 import {
@@ -289,6 +293,7 @@ import {
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
 import {
+  isUserClearedEditorSelection,
   resolveStickySelectedLines,
   selectedLineRangesEqual,
   selectedLinesFromEditorSelection,
@@ -800,11 +805,19 @@ export class CoopChatSession {
     await this.pushSettingsState();
   }
 
-  public refreshEditorContext(editor: vscode.TextEditor | undefined): void {
+  public refreshEditorContext(
+    editor: vscode.TextEditor | undefined,
+    options?: { selectionChangeKind?: vscode.TextEditorSelectionChangeKind }
+  ): void {
     // Highlight must stamp even while remote-open suppress is active, and even
     // when Chat has stolen focus (activeTextEditor is undefined).
     const effective = this.resolveEditorForContextRefresh(editor);
-    this.stampLiveEditorSelection(editor, effective);
+    this.stampLiveEditorSelection(editor, effective, {
+      userClearedSelection: isUserClearedEditorSelection(
+        options?.selectionChangeKind,
+        Boolean(editor?.selection.isEmpty)
+      )
+    });
 
     if (!this.allowPassiveEditorSnap) {
       return;
@@ -850,21 +863,26 @@ export class CoopChatSession {
   /**
    * Record the live highlight immediately. Clicking Chat collapses the caret
    * before the 1s selection debounce fires — that must not drop L56–61.
+   * A mouse/keyboard unhighlight in the editor must clear the chip.
    */
   private stampLiveEditorSelection(
     eventEditor: vscode.TextEditor | undefined,
-    resolvedEditor: vscode.TextEditor | undefined
+    resolvedEditor: vscode.TextEditor | undefined,
+    options?: { userClearedSelection?: boolean }
   ): void {
     if (!this.allowPassiveEditorSnap && !this.currentContext.file?.trim()) {
       return;
     }
-    const liveFromOpenTabs = this.currentContext.file?.trim()
-      ? this.liveSelectedLinesFromOpenEditors(this.currentContext.file)
-      : undefined;
-    const live =
-      liveFromOpenTabs ??
-      selectedLinesFromEditorSelection(eventEditor?.selection) ??
-      selectedLinesFromEditorSelection(resolvedEditor?.selection);
+    const userClearedSelection = options?.userClearedSelection === true;
+    const liveFromOpenTabs =
+      userClearedSelection || !this.currentContext.file?.trim()
+        ? undefined
+        : this.liveSelectedLinesFromOpenEditors(this.currentContext.file);
+    const live = userClearedSelection
+      ? undefined
+      : liveFromOpenTabs ??
+        selectedLinesFromEditorSelection(eventEditor?.selection) ??
+        selectedLinesFromEditorSelection(resolvedEditor?.selection);
     const liveFile =
       (eventEditor && resolveEditorFile(eventEditor).file) ||
       (resolvedEditor && resolveEditorFile(resolvedEditor).file) ||
@@ -873,7 +891,8 @@ export class CoopChatSession {
       existingFile: this.currentContext.file,
       existingLines: this.currentContext.selectedLines,
       incomingFile: liveFile,
-      incomingLines: live
+      incomingLines: live,
+      userClearedSelection
     });
     if (selectedLineRangesEqual(nextLines, this.currentContext.selectedLines)) {
       return;
@@ -2340,6 +2359,9 @@ export class CoopChatSession {
         return;
       case "patch:create-pr":
         await this.handleCreatePullRequest(message.payload);
+        return;
+      case "patch:summarize-pr":
+        await this.handleSummarizePrNotes(message.payload);
         return;
       case "ownership:copy-draft":
         await vscode.env.clipboard.writeText(message.payload.text);
@@ -4525,15 +4547,16 @@ export class CoopChatSession {
     base?: string;
     files: Array<{ path: string; content: string }>;
   }): Promise<void> {
-    const provider = payload.provider ?? this.currentContext.provider ?? this.preferences.defaultCodeHost;
-    if (provider && provider !== "github") {
-      void vscode.window.showErrorMessage(pullRequestWriteNotYetMessage(provider));
-      return;
-    }
+    const fail = (error: string): void => {
+      this.post({
+        type: "patch:pr-error",
+        payload: { messageTimestamp: payload.messageTimestamp, error }
+      });
+    };
 
     const repoId = payload.repoId?.trim() || this.currentUseRepoId();
     if (!repoId) {
-      void vscode.window.showErrorMessage("Pick a Use-repo before creating a pull request.");
+      fail("Pick a Use-repo before creating a pull request.");
       return;
     }
 
@@ -4541,7 +4564,7 @@ export class CoopChatSession {
     const fromPayload = (payload.files ?? []).filter((file) => file.path && file.content);
     const files = fromPayload.length > 0 ? fromPayload : (record?.card.prFiles ?? []);
     if (!files.length) {
-      void vscode.window.showErrorMessage("Apply the patch first, then create a pull request.");
+      fail("Apply the patch first, then create a pull request.");
       return;
     }
 
@@ -4553,19 +4576,63 @@ export class CoopChatSession {
         base: payload.base,
         files
       });
-      const open = "Open pull request";
-      const choice = await vscode.window.showInformationMessage(
-        `Pull request created: ${result.htmlUrl}`,
-        open
-      );
-      if (choice === open) {
-        void vscode.env.openExternal(vscode.Uri.parse(result.htmlUrl));
+      if (!result.htmlUrl?.trim()) {
+        fail("Created, but the host did not return a link.");
+        return;
       }
+      this.post({
+        type: "patch:pr-created",
+        payload: {
+          messageTimestamp: payload.messageTimestamp,
+          htmlUrl: result.htmlUrl,
+          number: result.number,
+          provider: payload.provider ?? coordinatesFromRepoId(repoId)?.provider
+        }
+      });
     } catch (error) {
-      void vscode.window.showErrorMessage(
-        error instanceof Error ? error.message : "Could not create the pull request."
-      );
+      fail(error instanceof Error ? error.message : "Could not create the pull request.");
     }
+  }
+
+  private async handleSummarizePrNotes(payload: {
+    messageTimestamp?: number;
+    title: string;
+    diff: string;
+  }): Promise<void> {
+    const complete: PrNotesCompleteFn = async (params) => {
+      let full = "";
+      await this.options.api.streamChat(
+        {
+          message: params.message,
+          context: {},
+          history: [],
+          model: params.model,
+          provider: params.provider,
+          useCase: "pr_summary",
+          temperature: params.temperature,
+          maxTokens: params.maxTokens,
+          enableThinking: false
+        },
+        (chunk) => {
+          full += chunk;
+        },
+        this.preferences.apiBaseUrl,
+        params.signal
+      );
+      return full;
+    };
+    const notes = await summarizePrNotes({
+      title: payload.title,
+      diff: payload.diff,
+      complete
+    });
+    this.post({
+      type: "patch:pr-notes",
+      payload: {
+        messageTimestamp: payload.messageTimestamp,
+        notes
+      }
+    });
   }
 
   private conflictInputFromResults(event: IntentEvent, results: ContextFetchResult[]): ConflictDetectionInput {

@@ -64,15 +64,19 @@ For org-wide installation (recommended for hosted Coop):
 
 Local testing: use `http://localhost:8787/v1/github/app/callback` for Setup URL instead.
 
-### 2. Browser — Repository permissions (Read-only only)
+### 2. Browser — Repository permissions
+
+Create PR needs write. Indexing and Trace only need read.
 
 | Permission | Access |
 |------------|--------|
-| **Contents** | Read-only |
+| **Contents** | **Read and write** |
 | **Metadata** | Read-only |
-| **Pull requests** | Read-only |
+| **Pull requests** | **Read and write** |
 | **Issues** | Read-only |
 | Everything else | **No access** |
+
+After you change Contents or Pull requests, GitHub asks each org install to **accept the new permissions**. Until that is accepted, Create pull request fails with a permission error.
 
 **Organization permissions** and **Account permissions** — leave **all** at **No access**.
 
@@ -165,6 +169,7 @@ Org-wide testing flow: [github-org-testing.md](./github-org-testing.md).
 | “Sign in to Coop first” | Save org API key under **Account** (extension) or sign in to admin portal |
 | Connect opens browser but callback fails | Setup URL must exactly match GitHub App settings (`/v1/github/app/callback`) |
 | Still see PAT field | Workspace `coopAI.devMode` is still `true` — disable under **Workspace** settings |
+| Create pull request → permission error | GitHub App Contents/Pull requests are still read-only, or the org has not accepted the write update. **Browser** — [github.com/settings/apps/coopai-for-vs-code](https://github.com/settings/apps/coopai-for-vs-code) → **Permissions & events** → Contents **Read and write**, Pull requests **Read and write** → Save. Then **Browser** — `github.com/organizations/YOUR-ORG/settings/installations` → CoopAI → **Review request** / **Accept** → retry Create pull request. |
 
 ### Collaborators and teams ≠ GitHub App access
 

@@ -15,10 +15,18 @@ import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/Proj
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
+import { compactPatchDiffForPrNotes } from "./prNotesDiff";
+import { createdPullRequestFromResult, defaultPrTitle, prCreateErrorFromResult } from "./createPullRequestConfirm";
 import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
-import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
+import type {
+  ChatHistoryPayload,
+  CodeHostProviderPreference,
+  GithubRepoOption,
+  PatchCardState,
+  PatchCardsUpdatePayload
+} from "../chat/types";
 import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
 import { inlineArtifactsFromHistory, patchCardsFromHistoryPayload } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
@@ -147,6 +155,17 @@ type InboundMessage =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload | PatchCardState }
+  | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string } }
+  | {
+      type: "patch:pr-created";
+      payload: {
+        messageTimestamp?: number;
+        htmlUrl: string;
+        number: number;
+        provider?: CodeHostProviderPreference;
+      };
+    }
+  | { type: "patch:pr-error"; payload: { messageTimestamp?: number; error: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | {
@@ -370,6 +389,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
   const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
+  const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<
+    Record<number, { text?: string; loading?: boolean }>
+  >({});
+  const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<
+    Record<
+      number,
+      | { htmlUrl: string; number: number; provider?: CodeHostProviderPreference }
+      | { error: string }
+    >
+  >({});
   const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
@@ -763,6 +792,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             codeHostProvider={context.provider}
             defaultBranch={context.branch}
             onCreatePullRequest={(draft) => {
+              if (typeof messageTimestamp === "number") {
+                setPrCreateByTimestamp((current) => {
+                  const next = { ...current };
+                  delete next[messageTimestamp];
+                  return next;
+                });
+              }
               const repoId =
                 context.owner && context.repo
                   ? `${draft.provider ?? context.provider ?? "github"}:${context.owner}/${context.repo}`
@@ -781,6 +817,54 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 }
               });
             }}
+            onOpenPrLink={handleOpenLink}
+            onClearPrResult={() => {
+              if (typeof messageTimestamp !== "number") {
+                return;
+              }
+              setPrCreateByTimestamp((current) => {
+                const next = { ...current };
+                delete next[messageTimestamp];
+                return next;
+              });
+            }}
+            prCreated={
+              typeof messageTimestamp === "number"
+                ? createdPullRequestFromResult(prCreateByTimestamp[messageTimestamp])
+                : undefined
+            }
+            prCreateError={
+              typeof messageTimestamp === "number"
+                ? prCreateErrorFromResult(prCreateByTimestamp[messageTimestamp])
+                : undefined
+            }
+            onRequestPrNotes={() => {
+              if (typeof messageTimestamp !== "number") {
+                return;
+              }
+              setPrNotesByTimestamp((current) => ({
+                ...current,
+                [messageTimestamp]: { ...current[messageTimestamp], loading: true }
+              }));
+              post({
+                type: "patch:summarize-pr",
+                payload: {
+                  messageTimestamp,
+                  title: defaultPrTitle(card.prFiles?.map((file) => file.path) ?? []),
+                  diff: compactPatchDiffForPrNotes(card.files)
+                }
+              });
+            }}
+            prNotesLoading={
+              typeof messageTimestamp === "number"
+                ? Boolean(prNotesByTimestamp[messageTimestamp]?.loading)
+                : false
+            }
+            generatedPrNotes={
+              typeof messageTimestamp === "number"
+                ? prNotesByTimestamp[messageTimestamp]?.text
+                : undefined
+            }
           />
         );
       }
@@ -795,7 +879,19 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       );
       return elements;
     },
-    [context.branch, context.file, context.owner, context.provider, context.repo, patchCards, post, suppressedPatchTimestamps]
+    [
+      context.branch,
+      context.file,
+      context.owner,
+      context.provider,
+      context.repo,
+      handleOpenLink,
+      patchCards,
+      post,
+      prCreateByTimestamp,
+      prNotesByTimestamp,
+      suppressedPatchTimestamps
+    ]
   );
 
   const handleCopyEvidenceText = useCallback(
@@ -996,6 +1092,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             setPatchCards([]);
             setSuppressedPatchTimestamps([]);
           }
+          setPrCreateByTimestamp({});
           setChatHistorySynced(true);
           // Do not clear isStreaming on mid-turn history echoes. Only clear when
           // the thread is emptied (new/clear chat without a stream-resume).
@@ -1025,6 +1122,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             return next;
           });
           resetEphemeralChatState();
+          setPrCreateByTimestamp({});
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
@@ -1246,6 +1344,43 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               });
             }
           }
+          break;
+        }
+        case "patch:pr-notes": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number") {
+            break;
+          }
+          setPrNotesByTimestamp((current) => ({
+            ...current,
+            [timestamp]: { text: message.payload.notes, loading: false }
+          }));
+          break;
+        }
+        case "patch:pr-created": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number" || !message.payload.htmlUrl) {
+            break;
+          }
+          setPrCreateByTimestamp((current) => ({
+            ...current,
+            [timestamp]: {
+              htmlUrl: message.payload.htmlUrl,
+              number: message.payload.number,
+              provider: message.payload.provider
+            }
+          }));
+          break;
+        }
+        case "patch:pr-error": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number" || !message.payload.error) {
+            break;
+          }
+          setPrCreateByTimestamp((current) => ({
+            ...current,
+            [timestamp]: { error: message.payload.error }
+          }));
           break;
         }
         case "degradation:notification":

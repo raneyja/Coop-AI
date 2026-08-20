@@ -34,7 +34,8 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
   const instructionsBlock =
     request.useCase !== "inline_completion" &&
     request.useCase !== "intent_suggest" &&
-    request.useCase !== "evidence_preview"
+    request.useCase !== "evidence_preview" &&
+    request.useCase !== "pr_summary"
       ? buildProjectInstructionsSystemBlock((request.context?.projectInstructions?.length ?? 0) > 0)
       : "";
   return `${basePrompt}${instructionsBlock}`;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadGitLabAppConfig } from "./gitlabAppConfig";
+import { GitLabAppService } from "./gitlabAppService";
 
 test("loadGitLabAppConfig returns undefined when env missing", () => {
   assert.equal(loadGitLabAppConfig({}), undefined);
@@ -30,4 +31,17 @@ test("loadGitLabAppConfig respects GITLAB_BASE_URL", () => {
   });
   assert.ok(config);
   assert.equal(config.gitlabBaseUrl, "https://gitlab.example.com");
+});
+
+test("GitLabAppService authorize URL requests write scopes for merge requests", () => {
+  const service = new GitLabAppService({
+    clientId: "gl-id",
+    clientSecret: "gl-secret",
+    gitlabBaseUrl: "https://gitlab.com",
+    stateSecret: "test-state-secret-at-least-32-chars!!"
+  });
+  const url = service.buildAuthorizeUrl("https://api.example.com/v1/gitlab/app/callback", "org-1");
+  const parsed = new URL(url);
+  assert.match(parsed.searchParams.get("scope") ?? "", /api/);
+  assert.match(parsed.searchParams.get("scope") ?? "", /write_repository/);
 });

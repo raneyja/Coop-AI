@@ -17,7 +17,8 @@ export type UseCase =
   | "code_edit"
   | "inline_completion"
   | "intent_suggest"
-  | "evidence_preview";
+  | "evidence_preview"
+  | "pr_summary";
 
 export type FinishReason = "stop" | "length" | "error" | "cancelled";
 

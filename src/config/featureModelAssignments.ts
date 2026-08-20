@@ -15,7 +15,8 @@ export type CoopFeatureId =
   | "edit"
   | "autocomplete"
   | "intentSuggest"
-  | "evidencePreview";
+  | "evidencePreview"
+  | "prSummary";
 
 export type FeatureModelAssignment = {
   feature: CoopFeatureId;
@@ -59,6 +60,12 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
   {
     feature: "evidencePreview",
     label: "Sources expand preview",
+    provider: "openai",
+    model: "gpt-4o-mini"
+  },
+  {
+    feature: "prSummary",
+    label: "PR notes",
     provider: "openai",
     model: "gpt-4o-mini"
   }
@@ -152,6 +159,9 @@ export function resolveFeatureFromUseCase(useCase: UseCase): CoopFeatureId {
   }
   if (useCase === "evidence_preview") {
     return "evidencePreview";
+  }
+  if (useCase === "pr_summary") {
+    return "prSummary";
   }
   if (useCase === "chat") {
     return "chat";

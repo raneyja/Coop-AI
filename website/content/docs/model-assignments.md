@@ -22,9 +22,10 @@ CoopAI assigns an LLM per feature in production. You do not pick provider or mod
 | **Autocomplete** (inline ghost text) | Mistral | Codestral | `completionRouter.ts` → FIM when available |
 | **Intent suggest** (quick-action chips when phrase match is weak) | OpenAI | GPT-4o mini | Same (`intent_suggest` use case) |
 | **Sources expand preview** (short AI overview for expanded source cards) | OpenAI | GPT-4o mini | Same (`evidence_preview` use case) |
+| **PR notes** (Create pull request summary) | OpenAI | GPT-4o mini | Same (`pr_summary` use case) |
 | **Embeddings** (Deep-Index semantic search) | OpenAI | text-embedding-3-small | Backend only — not shown in settings |
 
-Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment regardless of which model you might have used in an older install. Intent suggest runs for everyone when the local phrase classifier is unsure — it never auto-runs a quick action (chips confirm first). Sources expand previews use a short AI overview when the body is long; expanded panels never dump full commit/PR/thread text — use the outbound link for the full record.
+Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment regardless of which model you might have used in an older install. Intent suggest runs for everyone when the local phrase classifier is unsure — it never auto-runs a quick action (chips confirm first). Sources expand previews use a short AI overview when the body is long; expanded panels never dump full commit/PR/thread text — use the outbound link for the full record. Create pull request **Notes** use the same cheap OpenAI mini model and are labeled **(AI Generated)** — you can edit them before submit.
 
 ## Settings UI — Model & chat
 

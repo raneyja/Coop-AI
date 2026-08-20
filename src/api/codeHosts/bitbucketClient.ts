@@ -1,6 +1,12 @@
 import { RateLimitTracker } from "../rateLimitTracker";
 import { codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
-import { throwPullRequestWriteNotYet } from "./pullRequestWrite";
+import {
+  BITBUCKET_PR_REJECTED_MESSAGE,
+  normalizeWriteFiles,
+  sanitizeBranchName,
+  validateCreatePullRequestInput,
+  writePermissionMessage
+} from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
@@ -562,10 +568,94 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async createPullFromFiles(
-    _coords: RepoCoordinates,
-    _input: CreatePullRequestInput
+    coords: RepoCoordinates,
+    input: CreatePullRequestInput
   ): Promise<CreatePullRequestResult> {
-    throwPullRequestWriteNotYet(this.provider);
+    const files = normalizeWriteFiles(input.files);
+    const branch = sanitizeBranchName(input.branch);
+    const title = input.title.trim();
+    const validationError = validateCreatePullRequestInput({ ...input, branch: branch ?? "", title, files });
+    if (validationError || !branch) {
+      throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
+    }
+
+    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
+    try {
+      const baseRef = await codeHostRequestJson<{ target?: { hash?: string } }>(
+        `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(base)}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      const parent = baseRef.target?.hash?.trim();
+      if (!parent) {
+        throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
+      }
+
+      const form = new FormData();
+      form.append("message", title);
+      form.append("branch", branch);
+      form.append("parents", parent);
+      for (const file of files) {
+        form.append(file.path, file.content);
+      }
+
+      const commit = await codeHostRequestJson<{ hash: string }>(`${this.repoUrl(coords)}/src`, {
+        method: "POST",
+        headers: this.headers,
+        body: form,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+
+      const pull = await this.writeJson<{ id: number; links?: { html?: { href?: string } } }>(
+        `${this.repoUrl(coords)}/pullrequests`,
+        {
+          title,
+          description: input.body ?? "",
+          source: { branch: { name: branch } },
+          destination: { branch: { name: base } }
+        }
+      );
+      return {
+        number: pull.id,
+        htmlUrl: pull.links?.html?.href ?? "",
+        branch,
+        commitSha: commit.hash,
+        title
+      };
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      if (error instanceof CodeHostError && (error.status === 400 || error.status === 409)) {
+        throw new CodeHostError(BITBUCKET_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
+      }
+      throw error;
+    }
+  }
+
+  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+    try {
+      return await codeHostRequestJson<T>(url, {
+        method: "POST",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      throw error;
+    }
+  }
+
+  private writePermissionError(status: number): CodeHostError {
+    return new CodeHostError(writePermissionMessage(this.provider), "auth", status === 401 ? 401 : 403, this.provider);
   }
 
   public async listIssues(

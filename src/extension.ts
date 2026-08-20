@@ -663,7 +663,9 @@ export function activate(context: vscode.ExtensionContext): void {
       coopSessionRegistry.getActive()?.refreshEditorContext(editor);
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
-      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor);
+      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor, {
+        selectionChangeKind: event.kind
+      });
     }),
     vscode.workspace.onDidCloseTextDocument(() => {
       for (const session of coopSessionRegistry.getAll()) {

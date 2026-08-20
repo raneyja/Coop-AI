@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  EDITOR_SELECTION_CHANGE_KIND,
+  isUserClearedEditorSelection,
   resolveStickySelectedLines,
   selectedLineRangesEqual,
   selectedLinesFromEditorSelection
@@ -77,6 +79,25 @@ test("sticky replaces the range when the user highlights a new block", () => {
     incomingLines: [80, 90]
   });
   assert.deepEqual(next, [80, 90]);
+});
+
+test("sticky clears when the user unhighlights in the editor", () => {
+  const next = resolveStickySelectedLines({
+    existingFile: "apps/api/plane/db/models/state.py",
+    existingLines: [56, 61],
+    incomingFile: "apps/api/plane/db/models/state.py",
+    incomingLines: undefined,
+    userClearedSelection: true
+  });
+  assert.equal(next, undefined);
+});
+
+test("isUserClearedEditorSelection is mouse/keyboard empty only", () => {
+  assert.equal(isUserClearedEditorSelection(EDITOR_SELECTION_CHANGE_KIND.Mouse, true), true);
+  assert.equal(isUserClearedEditorSelection(EDITOR_SELECTION_CHANGE_KIND.Keyboard, true), true);
+  assert.equal(isUserClearedEditorSelection(EDITOR_SELECTION_CHANGE_KIND.Command, true), false);
+  assert.equal(isUserClearedEditorSelection(undefined, true), false);
+  assert.equal(isUserClearedEditorSelection(EDITOR_SELECTION_CHANGE_KIND.Mouse, false), false);
 });
 
 test("sticky clears when the open file changes", () => {

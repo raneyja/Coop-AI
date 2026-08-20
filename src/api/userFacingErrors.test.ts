@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { formatCoopApiError } from "./userFacingErrors";
+import { GITHUB_WRITE_PERMISSION_MESSAGE } from "./codeHosts/pullRequestWrite";
 
 void (async () => {
   const repoLimit = formatCoopApiError(403, {
@@ -26,6 +27,11 @@ void (async () => {
     message: "Your organization requires SSO sign-in. Use Sign in with SSO."
   });
   assert.match(ssoRequired, /SSO sign-in/i);
+
+  const githubWrite = formatCoopApiError(403, {
+    error: GITHUB_WRITE_PERMISSION_MESSAGE
+  });
+  assert.match(githubWrite, /Contents and Pull requests write/i);
 
   console.log("userFacingErrors: 1/1 tests passed");
 })();

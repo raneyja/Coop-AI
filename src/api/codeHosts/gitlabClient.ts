@@ -6,7 +6,13 @@ import {
   paginatedCodeHostFetch,
   parseLinkNext
 } from "./codeHostHttp";
-import { throwPullRequestWriteNotYet } from "./pullRequestWrite";
+import {
+  GITLAB_PR_REJECTED_MESSAGE,
+  normalizeWriteFiles,
+  sanitizeBranchName,
+  validateCreatePullRequestInput,
+  writePermissionMessage
+} from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
@@ -460,10 +466,104 @@ export class GitLabClient implements CodeHostClient {
   }
 
   public async createPullFromFiles(
-    _coords: RepoCoordinates,
-    _input: CreatePullRequestInput
+    coords: RepoCoordinates,
+    input: CreatePullRequestInput
   ): Promise<CreatePullRequestResult> {
-    throwPullRequestWriteNotYet(this.provider);
+    const files = normalizeWriteFiles(input.files);
+    const branch = sanitizeBranchName(input.branch);
+    const title = input.title.trim();
+    const validationError = validateCreatePullRequestInput({ ...input, branch: branch ?? "", title, files });
+    if (validationError || !branch) {
+      throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
+    }
+
+    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
+    const projectId = await this.projectId(coords);
+    const actions: Array<{ action: "create" | "update"; file_path: string; content: string }> = [];
+    for (const file of files) {
+      const exists = await this.fileExistsOnRef(projectId, file.path, base);
+      actions.push({
+        action: exists ? "update" : "create",
+        file_path: file.path,
+        content: file.content
+      });
+    }
+
+    try {
+      const commit = await this.writeJson<{ id: string }>(
+        `${this.apiBase}/projects/${projectId}/repository/commits`,
+        {
+          branch,
+          start_branch: base,
+          commit_message: title,
+          actions
+        }
+      );
+      const mergeRequest = await this.writeJson<{ iid: number; web_url: string }>(
+        `${this.apiBase}/projects/${projectId}/merge_requests`,
+        {
+          source_branch: branch,
+          target_branch: base,
+          title,
+          description: input.body ?? ""
+        }
+      );
+      return {
+        number: mergeRequest.iid,
+        htmlUrl: mergeRequest.web_url,
+        branch,
+        commitSha: commit.id,
+        title
+      };
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      if (error instanceof CodeHostError && (error.status === 409 || error.status === 400)) {
+        throw new CodeHostError(GITLAB_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
+      }
+      throw error;
+    }
+  }
+
+  private async fileExistsOnRef(projectId: string, filePath: string, ref: string): Promise<boolean> {
+    try {
+      await codeHostRequestJson<{ file_path: string }>(
+        `${this.apiBase}/projects/${projectId}/repository/files/${encodeURIComponent(normalizePath(filePath))}?ref=${encodeURIComponent(ref)}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+    try {
+      return await codeHostRequestJson<T>(url, {
+        method: "POST",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writePermissionError(error.status);
+      }
+      throw error;
+    }
+  }
+
+  private writePermissionError(status: number): CodeHostError {
+    return new CodeHostError(writePermissionMessage(this.provider), "auth", status === 401 ? 401 : 403, this.provider);
   }
 
   public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {

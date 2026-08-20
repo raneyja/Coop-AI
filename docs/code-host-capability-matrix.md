@@ -19,7 +19,7 @@
 | Inbound webhooks | Yes | Yes | Yes | `POST /webhooks/{provider}` |
 | Remote open without clone (VFS) | Yes | **No** | **No** | GitHub RemoteHub only — clone/index for GL/BB |
 | GitHub App estate sync | Yes | N/A | N/A | App-install model is GitHub-specific |
-| Create branch + PR from file contents | Yes | **Not yet** | **Not yet** | Wave 2 C; confirm required; Zero-Clone API writes |
+| Create branch + PR from file contents | Yes | Yes | Yes | Confirm required; Zero-Clone API writes; AI notes go on the PR/MR body |
 
 ## Operator env (Connect unlock)
 
