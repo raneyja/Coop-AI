@@ -17,6 +17,17 @@ This markdown is the backup / git copy. Prefer the canvas.
 
 `requireAuth` is a Coop name. Slack and Jira seeds are Coop-only. Asking those on Plane is a bad test, not a product miss.
 
+### Repo vs file
+
+| Test | Needs | File |
+|------|-------|------|
+| 1 Locate on plane | **Repo only** | None — close every tab |
+| 2 Stop mid-hunt | **Repo only** | None — close every tab |
+| 3 `/edit` comment | **Repo + file** | `apps/api/plane/db/models/state.py` — select a function |
+| 4 Hunt + Slack | **Repo only** | None — close every tab |
+| 5 Hunt + Jira | **Repo only** | None — close every tab |
+| 6 Slack-only | **Repo only** | None — close every tab |
+
 ---
 
 ## Before you start
@@ -55,6 +66,8 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 
 ### 1. Extension UI — Locate a real Plane symbol
 
+**Repo only — close every tab.** No file chip.
+
 1. Remote workspace → Use-repo = **plane** (In use). Do not clone it.  
 2. Close every editor tab.  
 3. Ask: *Where is APIKeyAuthentication defined in this repo?*
@@ -69,7 +82,7 @@ npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && n
 
 ### 2. Extension UI — Stop mid-hunt
 
-Same ask as test 1. Click **Stop** while Preparing answer or streaming.
+**Repo only — close every tab.** Same ask as test 1. Click **Stop** while Preparing answer or streaming.
 
 **Success:** Turn cancels. Stopped. No latency timeout bubble.
 
@@ -77,21 +90,23 @@ Same ask as test 1. Click **Stop** while Preparing answer or streaming.
 
 ### 3. Extension UI — `/edit` on a Plane file
 
-1. Open `apps/api/plane/db/models/state.py` (or the file locate just cited).  
-2. Select a function. Confirm the chat chip shows that file and line range.  
+**Repo + file.** Open `apps/api/plane/db/models/state.py`.
+
+1. Open `apps/api/plane/db/models/state.py` from Remote workspace (not a local clone).  
+2. Select a function. Confirm the chat chip shows `state.py` and the line range.  
 3. Ask: */edit add a one-line comment above the selected function.*
 
-**Success:** Patch is on the open plane file. Comment sits above the selection. Original line is not pasted twice.
+**Success:** Patch is on `apps/api/plane/db/models/state.py`. Comment sits above the selection. Original line is not pasted twice.
 
 ---
 
 ## Block B — Coop-AI (Slack / Jira seeded)
 
-**Switch first:** Remote workspace → Use-repo = **raneyja/Coop-AI**. Success = In use.
+**Switch first:** Remote workspace → Use-repo = **raneyja/Coop-AI**. Success = In use. **Close every editor tab** — tests 4–6 are repo-only.
 
 ### 4. Extension UI — Hunt + Slack (COOP-101)
 
-**Requires Slack connected.**
+**Repo only — close every tab.** Requires Slack connected.
 
 Ask: *Where is requireAuth defined, and what did Slack say about COOP-101?*
 
@@ -104,7 +119,7 @@ Ask: *Where is requireAuth defined, and what did Slack say about COOP-101?*
 
 ### 5. Extension UI — Hunt + Jira (COOP-101)
 
-**Requires Jira connected.**
+**Repo only — close every tab.** Requires Jira connected.
 
 Ask: *Where is requireAuth defined, and check Jira for COOP-101?*
 
@@ -117,7 +132,7 @@ Ask: *Where is requireAuth defined, and check Jira for COOP-101?*
 
 ### 6. Extension UI — Slack-only (COOP-101)
 
-Ask: *What's in Slack about COOP-101?*
+**Repo only — close every tab.** Ask: *What's in Slack about COOP-101?*
 
 **Success:** Slack fetch about COOP-101. **No** Searched / Read repo stack. Hits have Open in Slack.
 

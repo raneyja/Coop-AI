@@ -2,6 +2,7 @@ import type { TextEditor } from "vscode";
 import type { RepoContext, UserPreferences } from "../chat/types";
 import { resolveEditorFile, type EditorFileSource } from "./editorFileContext";
 import { isOsAbsoluteDiskPath } from "./outsideWorkspaceFile";
+import { selectedLinesFromEditorSelection } from "./stickyEditorSelection";
 
 export type ActiveEditorIdentity = {
   file?: string;
@@ -56,10 +57,7 @@ export function resolveActiveEditorIdentity(
   }
 
   if (prefs.includeSelection) {
-    const selection = editor.selection;
-    identity.selectedLines = selection.isEmpty
-      ? undefined
-      : [selection.start.line + 1, selection.end.line + 1];
+    identity.selectedLines = selectedLinesFromEditorSelection(editor.selection);
   }
 
   return identity;

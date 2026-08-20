@@ -77,6 +77,101 @@ async function main(): Promise<void> {
     assert.deepEqual(published[0]?.suppressedMessageTimestamps, [7]);
   });
 
+  await test("snaps paraphrased SEARCH onto highlighted lines using attached file bytes", async () => {
+    const fileBody = [
+      "class State:",
+      "    id = 1",
+      "",
+      "    def __str__(self):",
+      "        return self.name",
+      "    x = 2"
+    ].join("\n");
+    const content = [
+      "File: `apps/api/plane/db/models/state.py`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },",
+      "=======",
+      "    # Represents the In Progress state",
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 813,
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [4, 5],
+      fileContents: { "apps/api/plane/db/models/state.py": fileBody },
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const hunk = result?.files[0]?.hunks[0];
+    assert.equal(hunk?.matchStatus, "matched");
+    const joined = (hunk?.lines ?? []).map((line) => line.text).join("\n");
+    assert.ok(joined.includes("def __str__(self):"));
+    assert.equal(joined.includes('"name": "In Progress"'), false);
+  });
+
+  await test("preview matches when highlight IS the SEARCH block and file bytes use a path alias", async () => {
+    const fileBody = [
+      "DEFAULT_STATES = [",
+      "    {",
+      '        "name": "Backlog",',
+      "    },",
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },",
+      "]"
+    ].join("\n");
+    const search = [
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },"
+    ].join("\n");
+    const content = [
+      "File: `apps/api/plane/db/models/state.py`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      search,
+      "=======",
+      "    # State representing an ongoing task",
+      search,
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 820,
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [5, 10],
+      fileContents: { "plane/apps/api/plane/db/models/state.py": fileBody },
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const hunk = result?.files[0]?.hunks[0];
+    assert.equal(hunk?.matchStatus, "matched");
+    const joined = (hunk?.lines ?? []).map((line) => line.text).join("\n");
+    assert.ok(joined.includes('"name": "In Progress"'));
+    assert.ok(joined.includes("# State representing an ongoing task"));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

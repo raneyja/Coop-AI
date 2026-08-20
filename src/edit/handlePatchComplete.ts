@@ -12,6 +12,9 @@ import {
   setLastPatchMessageTimestamp,
   upsertPatchRecord
 } from "./patchSession";
+import { collectOpenPatchFileBytes } from "./patchTarget";
+import { lookupPatchFileContent } from "./patchFileContents";
+import { snapPatchSetToSelection, type LineRange } from "./snapPatchToSelection";
 
 function patchReadyLabel(patches: ParsedPatchSet): string {
   const fileCount = countUniqueFiles(patches);
@@ -45,7 +48,22 @@ export type HandlePatchCompleteOptions = {
    * this unset so parse failures still surface.
    */
   ignoreParseFailure?: boolean;
+  /** Highlighted 1-based inclusive range — SEARCH is snapped to these bytes. */
+  selectedLines?: LineRange;
+  /** Open file chip path so we only retarget hunks on that file. */
+  file?: string;
+  /** Exact highlighted text, used when the live buffer cannot be read. */
+  selectionText?: string;
+  /** File bodies already loaded for this turn (pending attach / open tab). */
+  fileContents?: Readonly<Record<string, string>>;
 };
+
+function lookupAttachedFileContent(
+  relativePath: string,
+  fileContents: Readonly<Record<string, string>> | undefined
+): string | undefined {
+  return lookupPatchFileContent(relativePath, fileContents);
+}
 
 export async function handlePatchComplete(
   content: string,
@@ -85,19 +103,31 @@ export async function handlePatchComplete(
   setLastPatchApplyError(undefined);
   setLastPatchMessageTimestamp(options.messageTimestamp);
 
-  const fileCount = countUniqueFiles(parsed.patches);
-  const hunkCount = countHunks(parsed.patches);
+  const patches = snapPatchSetToSelection(parsed.patches, {
+    selectedLines: options.selectedLines,
+    preferredFile: options.file,
+    selectionText: options.selectionText,
+    readContent: (relativePath) =>
+      lookupAttachedFileContent(relativePath, options.fileContents) ??
+      collectOpenPatchFileBytes(relativePath)
+  });
+
+  const fileCount = countUniqueFiles(patches);
+  const hunkCount = countHunks(patches);
   void vscode.commands.executeCommand("setContext", "coopAI.patchPending", true);
   emitPatchEvent("edit.patch_parsed", { fileCount, hunkCount });
 
-  const pending = buildPatchCardState(parsed.patches, {
+  const pending = buildPatchCardState(patches, {
     status: "pending",
-    messageTimestamp: options.messageTimestamp
+    messageTimestamp: options.messageTimestamp,
+    fileContents: options.fileContents
   });
   const pendingWithSuppress = withSuppressionRegistry({ ...pending, suppressMarkdown: true });
 
   if (options.messageTimestamp !== undefined) {
-    upsertPatchRecord(options.messageTimestamp, parsed.patches, pendingWithSuppress);
+    upsertPatchRecord(options.messageTimestamp, patches, pendingWithSuppress, {
+      fileContents: options.fileContents ? { ...options.fileContents } : undefined
+    });
   }
 
   if (options.publish) {
@@ -107,7 +137,7 @@ export async function handlePatchComplete(
       activeMessageTimestamp: options.messageTimestamp
     });
   } else {
-    showPatchReadyNotification(parsed.patches);
+    showPatchReadyNotification(patches);
   }
 
   return pendingWithSuppress;

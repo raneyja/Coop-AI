@@ -11,6 +11,7 @@ import type {
 import { findAllSearchMatches, findSearchMatch, type SearchMatchHit } from "./patchContent";
 import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
+import { lookupPatchFileContent } from "./patchFileContents";
 import { resolveEditablePatchTarget } from "./patchTarget";
 
 const CONTEXT_LINES = 2;
@@ -47,8 +48,9 @@ function splitLines(text: string): string[] {
 }
 
 function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<string, string>>): string {
-  if (overrides && relativePath in overrides) {
-    return overrides[relativePath] ?? "";
+  const captured = lookupPatchFileContent(relativePath, overrides);
+  if (captured) {
+    return captured;
   }
   const target = resolveEditablePatchTarget(relativePath);
   return target?.readText() ?? "";

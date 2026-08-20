@@ -90,7 +90,7 @@ Rules:
 - Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
 
 ## Editor selection (required when present)
-- When \`<editor_selection>\` is attached, that is the user's highlighted code. Treat it as the primary edit target.
+- When \`<editor_selection>\` is attached, that is the user's highlighted code. Treat it as the primary edit target. Do **not** pick a different function or block from the same file.
 - If the user asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
 - Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
 - Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
@@ -437,7 +437,7 @@ TASK: Produce minimal, correct patches that fully implement the user's request u
 
 RULES:
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
-- When \`<editor_selection>\` is present, that highlighted block is the edit target. For "rewrite / shorten / replace / make more efficient the highlighted lines", SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- When \`<editor_selection>\` is present, that highlighted block is the edit target. Do **not** pick a different function from the same file. For "rewrite / shorten / replace / make more efficient the highlighted lines", SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
 - Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
@@ -626,6 +626,9 @@ export function emitEditorSelectionBlock(
     );
   }
   lines.push("</editor_selection>");
+  lines.push(
+    `Edit target: only the highlighted lines ${start}-${end}${options.file?.trim() ? ` in ${options.file.trim()}` : ""}. Do not substitute a different function from the same file.`
+  );
   if (snippet) {
     lines.push(
       "Edit directive: For rewrite/replace/efficiency asks about the highlight, SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). Do not paraphrase from earlier chat."

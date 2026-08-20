@@ -266,6 +266,23 @@ test("withContextChipLine upgrades a bare /edit history line with selection", ()
   );
 });
 
+test("withContextChipLine stamps /edit comment ask with L56–61 on state.py", () => {
+  const stamped = withContextChipLine(
+    "/edit add a one-line comment above the selected function.",
+    {
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [56, 61],
+      owner: "coop-ai",
+      repo: "plane",
+      branch: "preview"
+    }
+  );
+  assert.equal(
+    stamped,
+    "/edit add a one-line comment above the selected function.\nfile: apps/api/plane/db/models/state.py · selection: L56–61 · repo: coop-ai/plane · branch: preview"
+  );
+});
+
 test("plainChatHistoryContent can omit chips when includeContextChips is false", () => {
   const history = plainChatHistoryContent("Tell me more", [], {
     includeContextChips: false,

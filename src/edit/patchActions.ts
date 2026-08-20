@@ -421,11 +421,13 @@ async function applyPendingPatchHunks(
   const preview = buildPatchCardState(record.patches, {
     status: "pending",
     messageTimestamp: timestamp,
-    previousFiles: record.card.files
+    previousFiles: record.card.files,
+    fileContents: record.fileContents
   });
 
   const result = await applyPatchesToWorkspace(subset, {
-    matchIndicesByFileHunk: selections.matchIndicesByFileHunk
+    matchIndicesByFileHunk: selections.matchIndicesByFileHunk,
+    fileContents: record.fileContents
   });
   if (!result.ok) {
     setLastPatchApplyError(result.error);
@@ -581,7 +583,8 @@ export async function undoLastPatchWithState(
 
   const pending = buildPatchCardState(record.patches, {
     status: "pending",
-    messageTimestamp: timestamp
+    messageTimestamp: timestamp,
+    fileContents: record.fileContents
   });
   const review: PatchCardState =
     record.card.files.length > 0

@@ -343,6 +343,37 @@ test("formatChatMessageWithLocalFiles includes editor_selection for highlighted 
   assert.ok(message.includes("def get_api_token"));
   assert.ok(message.includes("Edit directive:"));
   assert.ok(message.includes("character-for-character"));
+  assert.ok(message.includes("Do not substitute a different function"));
+});
+
+test("formatChatMessageWithLocalFiles keeps L56–61 even when the full file is attached", () => {
+  const rows = Array.from({ length: 90 }, (_, i) => {
+    const line = i + 1;
+    if (line === 56) return "    def validate_name(self):";
+    if (line >= 57 && line <= 61) return `        # selected body ${line}`;
+    if (line === 80) return "    def get_queryset(self):";
+    return `# filler ${line}`;
+  });
+  const message = formatChatMessageWithLocalFiles({
+    message: "/edit add a one-line comment above the selected function.",
+    file: "apps/api/plane/db/models/state.py",
+    selectedLines: [56, 61],
+    files: [
+      {
+        path: "apps/api/plane/db/models/state.py",
+        content: rows.join("\n")
+      }
+    ]
+  });
+
+  assert.ok(message.includes('<editor_selection path="apps/api/plane/db/models/state.py" lines="56-61">'));
+  assert.ok(message.includes("def validate_name(self):"));
+  assert.ok(message.includes("Do not substitute a different function"));
+  const selectionBlock = message.slice(
+    message.indexOf("<editor_selection"),
+    message.indexOf("</editor_selection>")
+  );
+  assert.equal(selectionBlock.includes("def get_queryset"), false);
 });
 
 test("buildUserMessageWithContext renders local_files from context bundle", () => {

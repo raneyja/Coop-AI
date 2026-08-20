@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ParsedPatchSet } from "./patchParser";
 import { applyHunksToContent } from "./patchContent";
+import { lookupPatchFileContent } from "./patchFileContents";
 import {
   ensureEditablePatchTarget,
   undoSnapshotPathForUri,
@@ -30,6 +31,8 @@ export type ApplyPatchesOptions = {
   matchIndicesByFileHunk?: Readonly<Record<string, readonly number[]>>;
   repo?: EnsurePatchTargetOptions["repo"];
   openRemoteFile?: EnsurePatchTargetOptions["openRemoteFile"];
+  /** Captured full-file bytes when the live tab cannot be read. */
+  fileContents?: Readonly<Record<string, string>>;
 };
 
 function fileHunkKey(relativePath: string, hunkIndex: number): string {
@@ -72,7 +75,9 @@ export async function applyPatchesToWorkspace(
       usedRemoteEditor = true;
     }
 
-    const originalContent = target.readText();
+    const live = target.readText();
+    const captured = lookupPatchFileContent(filePatch.relativePath, options?.fileContents);
+    const originalContent = live?.trim() ? live : captured;
     if (originalContent === undefined) {
       return { ok: false, error: `Could not read file: ${filePatch.relativePath}`, file: filePatch.relativePath };
     }

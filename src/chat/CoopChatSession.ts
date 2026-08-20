@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
+import { collectOpenPatchFileBytes } from "../edit/patchTarget";
+import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
 import {
   extractAgentProposedPatchText,
   mergeAnswerWithAgentPatch,
@@ -282,6 +284,12 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import {
+  resolveStickySelectedLines,
+  selectedLineRangesEqual,
+  selectedLinesFromEditorSelection,
+  type LineRange
+} from "../context/stickyEditorSelection";
 import {
   dropForeignActiveFileEvidence,
   shouldIsolateActiveFileForQuickAction,
@@ -789,6 +797,11 @@ export class CoopChatSession {
   }
 
   public refreshEditorContext(editor: vscode.TextEditor | undefined): void {
+    // Highlight must stamp even while remote-open suppress is active, and even
+    // when Chat has stolen focus (activeTextEditor is undefined).
+    const effective = this.resolveEditorForContextRefresh(editor);
+    this.stampLiveEditorSelection(editor, effective);
+
     if (!this.allowPassiveEditorSnap) {
       return;
     }
@@ -797,7 +810,6 @@ export class CoopChatSession {
     }
     // Coop sidebar / settings webview steals focus → activeTextEditor is often undefined
     // while Downloads / Cmd+O tabs remain visible. Never chip from an empty editor alone.
-    const effective = this.resolveEditorForContextRefresh(editor);
     if (!effective) {
       // File closed / Welcome only — drop the chip when the preferred path is gone.
       // Explorer mid-open is protected by editorContextSuppressedUntil above.
@@ -829,6 +841,68 @@ export class CoopChatSession {
     });
 
     void this.intentDebouncer.debounce(event, (debounced) => this.handleEditorIntent(debounced));
+  }
+
+  /**
+   * Record the live highlight immediately. Clicking Chat collapses the caret
+   * before the 1s selection debounce fires — that must not drop L56–61.
+   */
+  private stampLiveEditorSelection(
+    eventEditor: vscode.TextEditor | undefined,
+    resolvedEditor: vscode.TextEditor | undefined
+  ): void {
+    if (!this.allowPassiveEditorSnap && !this.currentContext.file?.trim()) {
+      return;
+    }
+    const liveFromOpenTabs = this.currentContext.file?.trim()
+      ? this.liveSelectedLinesFromOpenEditors(this.currentContext.file)
+      : undefined;
+    const live =
+      liveFromOpenTabs ??
+      selectedLinesFromEditorSelection(eventEditor?.selection) ??
+      selectedLinesFromEditorSelection(resolvedEditor?.selection);
+    const liveFile =
+      (eventEditor && resolveEditorFile(eventEditor).file) ||
+      (resolvedEditor && resolveEditorFile(resolvedEditor).file) ||
+      this.currentContext.file;
+    const nextLines = resolveStickySelectedLines({
+      existingFile: this.currentContext.file,
+      existingLines: this.currentContext.selectedLines,
+      incomingFile: liveFile,
+      incomingLines: live
+    });
+    if (selectedLineRangesEqual(nextLines, this.currentContext.selectedLines)) {
+      return;
+    }
+    this.currentContext = {
+      ...this.currentContext,
+      selectedLines: nextLines
+    };
+    this.postContext();
+  }
+
+  /** Prefer a still-highlighted visible tab over the unfocused active editor. */
+  private liveSelectedLinesFromOpenEditors(preferredPath?: string): LineRange | undefined {
+    const seen = new Set<vscode.TextEditor>();
+    const editors: vscode.TextEditor[] = [];
+    for (const editor of [vscode.window.activeTextEditor, ...vscode.window.visibleTextEditors]) {
+      if (!editor || seen.has(editor)) {
+        continue;
+      }
+      seen.add(editor);
+      editors.push(editor);
+    }
+    for (const editor of editors) {
+      const resolved = resolveEditorFile(editor);
+      if (preferredPath?.trim() && resolved.file && !isSameRepoFilePath(resolved.file, preferredPath)) {
+        continue;
+      }
+      const lines = selectedLinesFromEditorSelection(editor.selection);
+      if (lines) {
+        return lines;
+      }
+    }
+    return undefined;
   }
 
   /** Tab close / visible-editors change — clear chip if the chipped file is gone. */
@@ -3996,16 +4070,19 @@ export class CoopChatSession {
       }
       this.clearIntentFeedback(turn.threadId);
       if (this.isViewingThread(turn.threadId)) {
+        await this.ensureEditAnchorFile(turn);
         if (action === "change" || chatUseCase === "code_edit") {
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
-            publish: (state) => this.postPatchUpdate(state)
+            publish: (state) => this.postPatchUpdate(state),
+            ...this.patchCompleteContext(turn)
           });
         } else {
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
             publish: (state) => this.postPatchUpdate(state),
-            ignoreParseFailure: true
+            ignoreParseFailure: true,
+            ...this.patchCompleteContext(turn)
           });
         }
       }
@@ -4279,6 +4356,152 @@ export class CoopChatSession {
 
   public postPatchUpdate(payload: PatchCardsUpdatePayload): void {
     this.post({ type: "patch:update", payload });
+  }
+
+  private attachEditAnchor(turn: ChatTurn): void {
+    turn.editAnchor = this.captureEditAnchor(turn);
+    turn.editAnchorLoad = this.loadEditAnchorFile(turn);
+  }
+
+  private captureEditAnchor(turn: ChatTurn): NonNullable<ChatTurn["editAnchor"]> {
+    const file = turn.context.file ?? this.currentContext.file;
+    const selectedLines = turn.context.selectedLines ?? this.currentContext.selectedLines;
+    const fileContents: Record<string, string> = {};
+    for (const snippet of this.pendingChatLocalFiles?.files ?? []) {
+      if (snippet.path?.trim() && snippet.content) {
+        indexPatchFileContent(snippet.path, snippet.content, fileContents);
+      }
+    }
+    const wanted = file?.trim();
+    if (wanted) {
+      const fromDocs = collectOpenPatchFileBytes(wanted);
+      if (fromDocs?.trim()) {
+        indexPatchFileContent(wanted, fromDocs, fileContents);
+      }
+    }
+    const body = wanted ? lookupPatchFileContent(wanted, fileContents) : undefined;
+    const fromFile =
+      body && selectedLines ? selectionTextFromContent(body, selectedLines, 8000) : undefined;
+    return {
+      file,
+      selectedLines,
+      selectionText: fromFile || this.selectedCodeSnippet(8000) || undefined,
+      fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined
+    };
+  }
+
+  private stampEditAnchorFile(turn: ChatTurn, file: string, body: string): void {
+    const fileContents = { ...(turn.editAnchor?.fileContents ?? {}) };
+    indexPatchFileContent(file, body, fileContents);
+    const selectedLines = turn.editAnchor?.selectedLines ?? turn.context.selectedLines;
+    const fromFile =
+      selectedLines ? selectionTextFromContent(body, selectedLines, 8000) : undefined;
+    turn.editAnchor = {
+      ...turn.editAnchor,
+      file: turn.editAnchor?.file ?? file,
+      selectedLines,
+      selectionText: fromFile || turn.editAnchor?.selectionText,
+      fileContents
+    };
+  }
+
+  private async ensureEditAnchorFile(turn: ChatTurn): Promise<void> {
+    if (turn.editAnchorLoad) {
+      await turn.editAnchorLoad;
+    }
+    const file = turn.editAnchor?.file ?? turn.context.file;
+    if (file?.trim() && lookupPatchFileContent(file, turn.editAnchor?.fileContents)?.trim()) {
+      return;
+    }
+    await this.loadEditAnchorFile(turn);
+  }
+
+  private async loadEditAnchorFile(turn: ChatTurn): Promise<void> {
+    const file = turn.editAnchor?.file ?? turn.context.file;
+    if (!file?.trim()) {
+      return;
+    }
+    const existing = lookupPatchFileContent(file, turn.editAnchor?.fileContents);
+    if (existing?.trim()) {
+      return;
+    }
+    const fromDocs = collectOpenPatchFileBytes(file);
+    if (fromDocs?.trim()) {
+      this.stampEditAnchorFile(turn, file, fromDocs);
+      return;
+    }
+    const owner = turn.context.owner ?? this.preferences.owner;
+    const repo = turn.context.repo ?? this.preferences.repo;
+    const provider =
+      turn.context.provider ?? this.preferences.defaultCodeHost ?? "github";
+    if (!owner?.trim() || !repo?.trim()) {
+      return;
+    }
+    const repoId = buildRepoId(this.preferences, {
+      owner,
+      repo,
+      provider
+    });
+    try {
+      const evidence = await Promise.race([
+        this.indexedRepoWorkspace().readFile(
+          {
+            repoId,
+            owner,
+            repo,
+            provider,
+            branch: turn.context.branch ?? this.preferences.branch
+          },
+          file
+        ),
+        new Promise<undefined>((resolve) => {
+          setTimeout(() => resolve(undefined), 4000);
+        })
+      ]);
+      if (evidence?.content?.trim()) {
+        this.stampEditAnchorFile(turn, file, evidence.content);
+      }
+    } catch {
+      // Preview can still snap from selectionText if GitHub is slow.
+    }
+  }
+
+  /** Highlight + file bytes for /edit snap — do not depend on VFS resolve at card time. */
+  private patchCompleteContext(turn: ChatTurn): {
+    selectedLines?: [number, number];
+    file?: string;
+    selectionText?: string;
+    fileContents?: Record<string, string>;
+  } {
+    const file = turn.editAnchor?.file ?? turn.context.file ?? this.currentContext.file;
+    const selectedLines =
+      turn.editAnchor?.selectedLines ?? turn.context.selectedLines ?? this.currentContext.selectedLines;
+    const fileContents: Record<string, string> = { ...(turn.editAnchor?.fileContents ?? {}) };
+    for (const snippet of this.pendingChatLocalFiles?.files ?? []) {
+      if (snippet.path?.trim() && snippet.content) {
+        indexPatchFileContent(snippet.path, snippet.content, fileContents);
+      }
+    }
+    const wanted = file?.trim();
+    if (wanted) {
+      const fromDocs = collectOpenPatchFileBytes(wanted);
+      if (fromDocs?.trim()) {
+        indexPatchFileContent(wanted, fromDocs, fileContents);
+      }
+    }
+    const attachedBody = wanted ? lookupPatchFileContent(wanted, fileContents) : undefined;
+    const fromFile =
+      attachedBody && selectedLines
+        ? selectionTextFromContent(attachedBody, selectedLines, 8000)
+        : undefined;
+    const selectionText =
+      fromFile || turn.editAnchor?.selectionText || this.selectedCodeSnippet(8000);
+    return {
+      selectedLines,
+      file,
+      selectionText: selectionText || undefined,
+      fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined
+    };
   }
 
   private pushPatchState(): void {
@@ -5131,6 +5354,7 @@ export class CoopChatSession {
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
+    this.attachEditAnchor(turn);
     // Align turn clock with chat timing helper (soft gather budgets use startedAt).
     turn.startedAt = this.chatTurnStartedAt;
     this.turnStreamAbort = turn.streamAbort.signal;
@@ -6207,9 +6431,17 @@ export class CoopChatSession {
     if (editor && !editor.selection.isEmpty) {
       return editor.document.getText(editor.selection).slice(0, maxLength);
     }
-    const lines = this.currentContext.selectedLines;
+    const lines =
+      this.currentContext.selectedLines ??
+      this.liveSelectedLinesFromOpenEditors(wanted);
     if (!lines || lines.length !== 2) {
       return undefined;
+    }
+    if (editor) {
+      const sliced = selectionTextFromContent(editor.document.getText(), lines, maxLength);
+      if (sliced) {
+        return sliced;
+      }
     }
     const fromPending = this.pendingChatLocalFiles?.files.find((file) =>
       wanted ? pathsReferToSameFile(file.path, wanted) : true
@@ -6286,6 +6518,9 @@ export class CoopChatSession {
         pendingMentions: options?.mentions,
         codeEditIntent: options?.composerMode === "edit"
       });
+    if (!turn.editAnchor) {
+      this.attachEditAnchor(turn);
+    }
     const turnContext = turn.context;
     // Sticky [blast-radius] in history must not override tools-only / integration turns.
     const suppressInheritedQuickAction =
@@ -7070,18 +7305,21 @@ export class CoopChatSession {
       }
       this.clearIntentFeedback(turn.threadId);
       if (this.isViewingThread(turn.threadId)) {
+        await this.ensureEditAnchorFile(turn);
         if (options?.composerMode === "edit" || chatUseCase === "code_edit") {
           // Publish the Patch card before chat:complete so the webview never paints raw fences first.
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
-            publish: (state) => this.postPatchUpdate(state)
+            publish: (state) => this.postPatchUpdate(state),
+            ...this.patchCompleteContext(turn)
           });
         } else if (chatUseCase === "chat") {
           // Plain chat may emit File:/SEARCH-REPLACE when recommending inserts — elevate to Apply.
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
             publish: (state) => this.postPatchUpdate(state),
-            ignoreParseFailure: true
+            ignoreParseFailure: true,
+            ...this.patchCompleteContext(turn)
           });
         }
       }
@@ -9001,12 +9239,35 @@ export class CoopChatSession {
             pickEditorForContext(preferredPath)
           : pickLocalEditorForContext(preferredPath) ?? pickEditorForContext(preferredPath);
     if (!editor) {
+      const liveLines = this.liveSelectedLinesFromOpenEditors(preferredPath);
+      const nextLines = resolveStickySelectedLines({
+        existingFile: this.currentContext.file,
+        existingLines: this.currentContext.selectedLines,
+        incomingFile: this.currentContext.file,
+        incomingLines: liveLines
+      });
+      if (!selectedLineRangesEqual(nextLines, this.currentContext.selectedLines)) {
+        this.currentContext = { ...this.currentContext, selectedLines: nextLines };
+        this.postContext();
+      }
       return;
     }
     this.currentContext = mergeRepoContext(
       this.currentContext,
       repoContextFromEditor(editor, chatPrefs, this.currentContext)
     );
+    const liveLines =
+      selectedLinesFromEditorSelection(editor.selection) ??
+      this.liveSelectedLinesFromOpenEditors(this.currentContext.file);
+    this.currentContext = {
+      ...this.currentContext,
+      selectedLines: resolveStickySelectedLines({
+        existingFile: this.currentContext.file,
+        existingLines: this.currentContext.selectedLines,
+        incomingFile: this.currentContext.file,
+        incomingLines: liveLines
+      })
+    };
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     if (
       this.currentContext.file &&

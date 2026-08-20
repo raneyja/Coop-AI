@@ -52,11 +52,16 @@ export function documentMatchesPatchPath(doc: vscode.TextDocument, relativePath:
 
   const parsed = parseGithubVfsUri(doc.uri.toString());
   if (parsed?.file) {
-    return pathsReferToSameFile(parsed.file, normalized);
+    if (pathsReferToSameFile(parsed.file, normalized)) {
+      return true;
+    }
   }
 
-  const pathPart = doc.uri.path.replace(/^\/+/, "");
-  return pathsReferToSameFile(pathPart, normalized);
+  const pathPart = doc.uri.path.replace(/^\/+/, "").split("?")[0] ?? "";
+  if (pathPart && (pathsReferToSameFile(pathPart, normalized) || pathPart.endsWith(`/${normalized}`))) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -197,4 +202,22 @@ export function uriFromUndoSnapshotPath(absolutePath: string): vscode.Uri {
 
 export function undoSnapshotPathForUri(uri: vscode.Uri): string {
   return uri.scheme === "file" ? uri.fsPath : uri.toString();
+}
+
+/** Read bytes from any open tab (including hidden GitHub VFS docs), not only the visible editor. */
+export function collectOpenPatchFileBytes(relativePath: string): string | undefined {
+  const normalized = toRepositoryRelativePath(relativePath);
+  if (!normalized) {
+    return undefined;
+  }
+  for (const doc of vscode.workspace.textDocuments) {
+    if (!documentMatchesPatchPath(doc, normalized)) {
+      continue;
+    }
+    const text = doc.getText();
+    if (text.trim()) {
+      return text;
+    }
+  }
+  return resolveEditablePatchTarget(normalized)?.readText();
 }

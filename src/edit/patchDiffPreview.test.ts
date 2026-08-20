@@ -239,6 +239,37 @@ test("pairs ambiguous hunks that hit the same spans even when SEARCH text differ
   assert.deepEqual(state.files[0]?.hunks[1]?.resolvedMatchIndices, [1]);
 });
 
+test("buildPatchCardState matches SEARCH using an aliased fileContents key", () => {
+  const body = [
+    "    {",
+    '        "name": "In Progress",',
+    '        "color": "#F59E0B",',
+    "        \"sequence\": 35000,",
+    "        \"group\": StateGroup.STARTED.value,",
+    "    },"
+  ].join("\n");
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search: body,
+              replace: `    # ongoing\n${body}`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "plane/apps/api/plane/db/models/state.py": `${body}\n` }
+    }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+});
+
 console.log(`\npatchDiffPreview: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

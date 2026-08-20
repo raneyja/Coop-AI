@@ -38,6 +38,19 @@ export type ChatTurn = {
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent: boolean;
+  /**
+   * Highlight + full file bytes captured at send. Preview/Apply must not depend
+   * on the live editor after Chat steals focus.
+   */
+  editAnchor?: ChatTurnEditAnchor;
+  editAnchorLoad?: Promise<void>;
+};
+
+export type ChatTurnEditAnchor = {
+  file?: string;
+  selectedLines?: [number, number];
+  selectionText?: string;
+  fileContents?: Record<string, string>;
 };
 
 export type BeginChatTurnInput = {

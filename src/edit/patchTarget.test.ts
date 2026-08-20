@@ -43,6 +43,16 @@ test("documentMatchesPatchPath matches github vfs URIs", () => {
   assert.equal(documentMatchesPatchPath(doc, "apps/api/plane/other.py"), false);
 });
 
+test("documentMatchesPatchPath matches github vfs URIs with ref query", () => {
+  const doc = fakeDoc(
+    "vscode-vfs://github/coop-ai/plane/apps/api/plane/db/models/state.py?ref=preview"
+  );
+  assert.equal(
+    documentMatchesPatchPath(doc, "apps/api/plane/db/models/state.py"),
+    true
+  );
+});
+
 test("undo snapshot round-trips remote URIs", () => {
   const uri = vscode.Uri.parse(
     "vscode-vfs://github/CoopAI-Corp/plane/apps/api/plane/app/serializers/project.py"
