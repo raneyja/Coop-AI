@@ -21,7 +21,14 @@ import {
   undoPatchApplication,
   type FileUndoSnapshot
 } from "./patchApplier";
-import { resolveEditablePatchTarget } from "./patchTarget";
+import { applyHunksToContent } from "./patchContent";
+import { lookupPatchFileContent } from "./patchFileContents";
+import {
+  findOpenDocumentForPatchFile,
+  resolveEditablePatchTarget,
+  uriFromUndoSnapshotPath
+} from "./patchTarget";
+import { pathsReferToSameFile } from "../context/githubVfsUri";
 import {
   getPatchRecord,
   listPatchCards,
@@ -195,7 +202,10 @@ function mergeUndoSnapshots(
   return [...byPath.values()];
 }
 
-function finalizeCardAfterHunkUpdate(card: PatchCardState): PatchCardState {
+function finalizeCardAfterHunkUpdate(
+  card: PatchCardState,
+  extras?: { appliedFiles?: Array<{ path: string; content: string }> }
+): PatchCardState {
   const status = deriveCardStatusFromHunks(card);
   const next: PatchCardState = {
     ...card,
@@ -215,17 +225,18 @@ function finalizeCardAfterHunkUpdate(card: PatchCardState): PatchCardState {
     error: undefined,
     suppressMarkdown: true
   };
-  return withCreatePrState(next);
+  return withCreatePrState(next, extras?.appliedFiles);
 }
 
 /** After Apply, attach live buffer contents so Create PR can commit without a clone. */
 export function collectAppliedPrFiles(card: PatchCardState): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
+  const record = getPatchRecord(card.messageTimestamp);
   for (const file of card.files) {
     if (!file.hunks.some((hunk) => hunk.status === "applied")) {
       continue;
     }
-    const content = resolveEditablePatchTarget(file.relativePath)?.readText();
+    const content = readAppliedFileContent(file.relativePath, record);
     if (typeof content === "string" && content.length > 0) {
       files.push({ path: file.relativePath, content });
     }
@@ -233,11 +244,68 @@ export function collectAppliedPrFiles(card: PatchCardState): Array<{ path: strin
   return files;
 }
 
-function withCreatePrState(card: PatchCardState): PatchCardState {
+function readAppliedFileContent(
+  relativePath: string,
+  record: ReturnType<typeof getPatchRecord>
+): string | undefined {
+  const live = resolveEditablePatchTarget(relativePath)?.readText();
+  if (live?.trim()) {
+    return live;
+  }
+
+  const captured = lookupPatchFileContent(relativePath, record?.fileContents);
+  const filePatch = record?.patches.files.find((entry) =>
+    pathsReferToSameFile(entry.relativePath, relativePath)
+  );
+  const fromOpen = findOpenDocumentForPatchFile(relativePath, {
+    capturedContent: captured,
+    search: filePatch?.hunks[0]?.search
+  })?.getText();
+  if (fromOpen?.trim()) {
+    return fromOpen;
+  }
+
+  for (const snap of record?.undo ?? []) {
+    if (!pathsReferToSameFile(snap.relativePath, relativePath)) {
+      continue;
+    }
+    const uri = uriFromUndoSnapshotPath(snap.absolutePath);
+    const doc = vscode.workspace.textDocuments.find(
+      (open) =>
+        open.uri.toString() === uri.toString() ||
+        open.uri.toString() === snap.absolutePath ||
+        (uri.scheme === "untitled" &&
+          open.uri.scheme === "untitled" &&
+          open.uri.path.replace(/^\/+/, "") === uri.path.replace(/^\/+/, ""))
+    );
+    if (doc?.getText().trim()) {
+      return doc.getText();
+    }
+  }
+
+  const original =
+    captured ??
+    record?.undo?.find((snap) => pathsReferToSameFile(snap.relativePath, relativePath))?.originalContent;
+  if (original && filePatch?.hunks.length) {
+    const applied = applyHunksToContent(original, filePatch.hunks);
+    if (applied.ok && applied.content.trim()) {
+      return applied.content;
+    }
+  }
+  return undefined;
+}
+
+function withCreatePrState(
+  card: PatchCardState,
+  appliedFiles?: Array<{ path: string; content: string }>
+): PatchCardState {
   if (card.status !== "applied") {
     return { ...card, canCreatePr: false, prFiles: undefined };
   }
-  const prFiles = collectAppliedPrFiles(card);
+  const fromApply = (appliedFiles ?? []).filter(
+    (file) => file.path.trim() && file.content.length > 0
+  );
+  const prFiles = fromApply.length > 0 ? fromApply : collectAppliedPrFiles(card);
   return { ...card, prFiles, canCreatePr: prFiles.length > 0 };
 }
 
@@ -452,7 +520,7 @@ async function applyPendingPatchHunks(
   for (const hunkId of hunkIds) {
     nextCard = setHunkStatusOnCard(nextCard, hunkId, "applied");
   }
-  nextCard = finalizeCardAfterHunkUpdate(nextCard);
+  nextCard = finalizeCardAfterHunkUpdate(nextCard, { appliedFiles: result.appliedFiles });
 
   if (pendingHunkIds(nextCard).length === 0) {
     void vscode.commands.executeCommand("setContext", "coopAI.patchPending", false);

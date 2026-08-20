@@ -115,6 +115,15 @@ test("B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr", () => {
     showCreatePullRequestButton({ ...pending, status: "applied", canCreatePr: true }),
     true
   );
+  assert.equal(
+    showCreatePullRequestButton({
+      ...pending,
+      status: "applied",
+      canCreatePr: false,
+      prFiles: [{ path: "src/example.ts", content: "new\n" }]
+    }),
+    true
+  );
 });
 
 console.log(`\nPatchCard helpers: ${passed} passed, ${failed} failed`);

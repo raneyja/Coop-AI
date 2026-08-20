@@ -159,7 +159,7 @@ export function PatchCard({
 
   const reviewCopy =
     state.status === "applied"
-      ? "Changes are in your workspace. Undo restores the files and brings back Apply / Reject."
+      ? "Changes are in your workspace. Create a pull request, or Undo to restore Apply / Reject."
       : state.status === "rejected"
         ? "Rejected patches stay in this thread. Undo returns Apply / Reject without regenerating."
         : state.status === "failed"
@@ -327,7 +327,13 @@ export function shouldRenderPatchCard(state: PatchCardState | undefined): boolea
 
 /** UX-G4: one quiet Create PR after Apply — not on the pending Apply/Reject row. */
 export function showCreatePullRequestButton(state: PatchCardState): boolean {
-  return state.status === "applied" && state.canCreatePr === true;
+  if (state.status !== "applied") {
+    return false;
+  }
+  if (state.canCreatePr === true) {
+    return true;
+  }
+  return (state.prFiles ?? []).some((file) => file.path.trim() && file.content.length > 0);
 }
 
 export function findPatchCardForMessage(

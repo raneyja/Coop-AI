@@ -21,7 +21,13 @@ export type FileUndoSnapshot = {
 };
 
 export type ApplyPatchesResult =
-  | { ok: true; undo: FileUndoSnapshot[]; filesChanged: number; usedRemoteEditor: boolean }
+  | {
+      ok: true;
+      undo: FileUndoSnapshot[];
+      filesChanged: number;
+      usedRemoteEditor: boolean;
+      appliedFiles: Array<{ path: string; content: string }>;
+    }
   | { ok: false; error: string; file?: string };
 
 export type ApplyPatchesOptions = {
@@ -130,6 +136,10 @@ export async function applyPatchesToWorkspace(
     ok: true,
     filesChanged: planned.length,
     usedRemoteEditor,
+    appliedFiles: planned.map((item) => ({
+      path: item.relativePath,
+      content: item.nextContent
+    })),
     undo: planned.map((item) => ({
       absolutePath: undoSnapshotPathForUri(item.uri),
       relativePath: item.relativePath,

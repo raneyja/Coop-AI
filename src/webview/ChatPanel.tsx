@@ -20,7 +20,7 @@ import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
 import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
 import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
-import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
+import { inlineArtifactsFromHistory, patchCardsFromHistoryPayload } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
   ACTIVITY_PHASE_MS,
@@ -984,8 +984,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           const historyArtifacts = Array.isArray(payload)
             ? []
             : inlineArtifactsFromHistory(payload.artifacts);
+          const historyPatches = Array.isArray(payload)
+            ? undefined
+            : patchCardsFromHistoryPayload(payload);
           setMessages(historyMessages);
           setInlineArtifacts(historyArtifacts);
+          if (historyPatches) {
+            setPatchCards(historyPatches.cards);
+            setSuppressedPatchTimestamps(historyPatches.suppressed);
+          } else if (historyMessages.length === 0) {
+            setPatchCards([]);
+            setSuppressedPatchTimestamps([]);
+          }
           setChatHistorySynced(true);
           // Do not clear isStreaming on mid-turn history echoes. Only clear when
           // the thread is emptied (new/clear chat without a stream-resume).

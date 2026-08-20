@@ -12,7 +12,7 @@ import { applyPatchesToWorkspace, undoPatchApplication } from "./patchApplier";
 import { handlePatchComplete } from "./handlePatchComplete";
 import { parsePatchResponse } from "./patchParser";
 import { emitPatchEvent, setPatchEventHandler } from "./patchEvents";
-import { rejectPendingPatchWithState, undoLastPatchWithState } from "./patchActions";
+import { collectAppliedPrFiles, rejectPendingPatchWithState, undoLastPatchWithState } from "./patchActions";
 import { buildPatchCardState, setHunkStatusOnCard, deriveCardStatusFromHunks } from "./patchDiffPreview";
 import { getPatchRecord, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
 import { ensureEditablePatchTarget } from "./patchTarget";
@@ -219,12 +219,36 @@ async function main(): Promise<void> {
         return;
       }
       assert.equal(result.filesChanged, 2);
+      assert.equal(result.appliedFiles.length, 2);
+      assert.equal(result.appliedFiles.find((file) => file.path === "src/a.ts")?.content, "ALPHA\n");
       const docs = vscode.workspace.textDocuments as unknown as MutableDoc[];
       assert.equal(docs.some((doc) => doc.getText() === "ALPHA\n"), true);
       assert.equal(docs.some((doc) => doc.getText() === "BETA\n"), true);
     } finally {
       restore();
     }
+  });
+
+  await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) {
+      return;
+    }
+    const fileContents = { "src/a.ts": "alpha\n", "src/b.ts": "beta\n" };
+    let card: PatchCardState = buildPatchCardState(parsed.patches, {
+      status: "pending",
+      messageTimestamp: 902,
+      fileContents
+    });
+    card = setHunkStatusOnCard(card, "hunk-0", "applied");
+    card = setHunkStatusOnCard(card, "hunk-1", "applied");
+    upsertPatchRecord(902, parsed.patches, { ...card, status: "applied" }, { fileContents });
+    const files = collectAppliedPrFiles({ ...card, status: "applied", messageTimestamp: 902 });
+    assert.equal(files.length, 2);
+    assert.equal(files.find((file) => file.path === "src/a.ts")?.content, "ALPHA\n");
+    assert.equal(files.find((file) => file.path === "src/b.ts")?.content, "BETA\n");
   });
 
   await test("B-G3 reject leaves buffers unchanged and restages via undo", async () => {

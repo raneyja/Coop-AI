@@ -2,6 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
+import {
+  hydratePatchCardsFromHistory,
+  patchCardsForMessages
+} from "../edit/hydratePatchCardsFromHistory";
 import { collectOpenPatchFileBytes } from "../edit/patchTarget";
 import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
 import {
@@ -1031,7 +1035,10 @@ export class CoopChatSession {
     this.remoteProvenanceFile = undefined;
     this.resetChatState();
     this.clearFileFieldsFromContext();
-    this.post({ type: "chat:history", payload: { messages: [], artifacts: [] } });
+    this.post({
+      type: "chat:history",
+      payload: { messages: [], artifacts: [], patchCards: [], suppressedMessageTimestamps: [] }
+    });
     this.postContext();
   }
 
@@ -6055,9 +6062,16 @@ export class CoopChatSession {
   }
 
   private postChatHistory(): void {
+    hydratePatchCardsFromHistory(this.chatHistory);
+    const patchSnapshot = patchCardsForMessages(this.chatHistory);
     this.post({
       type: "chat:history",
-      payload: { messages: this.chatHistory, artifacts: this.threadArtifacts }
+      payload: {
+        messages: this.chatHistory,
+        artifacts: this.threadArtifacts,
+        patchCards: patchSnapshot.cards,
+        suppressedMessageTimestamps: patchSnapshot.suppressedMessageTimestamps
+      }
     });
   }
 

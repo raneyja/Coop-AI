@@ -127,6 +127,9 @@ export type ChatPersistedArtifact = {
 export type ChatHistoryPayload = {
   messages: ChatMessage[];
   artifacts: ChatPersistedArtifact[];
+  /** Restored with the thread so /edit chrome is not lost on reopen. */
+  patchCards?: PatchCardState[];
+  suppressedMessageTimestamps?: number[];
 };
 
 export type PatchDiffLineKind = "context" | "remove" | "add";
