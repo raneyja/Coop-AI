@@ -8,6 +8,8 @@ import { parseGithubVfsUri, pathsReferToSameFile, isRemoteTabAbsolutePath } from
 import { resolveLocalAbsolutePath } from "../context/localFileResolver";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import { openRemoteFileInEditor } from "../workspace/repoEditorOpener";
+import { findAllSearchMatches } from "./patchContent";
+import { lookupPatchFileContent } from "./patchFileContents";
 import {
   githubRemoteOpenFailedMessage,
   missingPatchTargetMessage,
@@ -34,7 +36,86 @@ export type OpenRemotePatchFile = (params: {
 export type EnsurePatchTargetOptions = {
   repo?: PatchSessionRepo;
   openRemoteFile?: OpenRemotePatchFile;
+  /** Captured full-file bytes from /edit send (Zero-Clone untitled buffers have no path). */
+  fileContents?: Readonly<Record<string, string>>;
+  /** First SEARCH block — used to find an untitled API tab of the same file. */
+  search?: string;
 };
+
+export function languageIdForPatchPath(relativePath: string): string | undefined {
+  const ext = relativePath.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "py") {
+    return "python";
+  }
+  if (ext === "ts") {
+    return "typescript";
+  }
+  if (ext === "tsx") {
+    return "typescriptreact";
+  }
+  if (ext === "js") {
+    return "javascript";
+  }
+  if (ext === "jsx") {
+    return "javascriptreact";
+  }
+  if (ext === "json") {
+    return "json";
+  }
+  if (ext === "md") {
+    return "markdown";
+  }
+  return undefined;
+}
+
+function normalizeCompareText(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\n$/, "");
+}
+
+function targetFromDocument(doc: vscode.TextDocument): EditablePatchTarget {
+  return {
+    uri: doc.uri,
+    readText: () => doc.getText()
+  };
+}
+
+/**
+ * Untitled API tabs (no GitHub Repositories) have no repo path on the URI.
+ * Match by exact captured bytes, then by a unique SEARCH hit.
+ */
+export function findOpenDocumentForPatchFile(
+  relativePath: string,
+  options?: { capturedContent?: string; search?: string }
+): vscode.TextDocument | undefined {
+  const normalized = toRepositoryRelativePath(relativePath);
+  const captured = options?.capturedContent
+    ? normalizeCompareText(options.capturedContent)
+    : undefined;
+  let contentMatch: vscode.TextDocument | undefined;
+  let searchMatch: vscode.TextDocument | undefined;
+  let searchHits = 0;
+  for (const doc of vscode.workspace.textDocuments) {
+    if (normalized && documentMatchesPatchPath(doc, normalized)) {
+      return doc;
+    }
+    const text = normalizeCompareText(doc.getText());
+    if (captured && text === captured) {
+      contentMatch = doc;
+    }
+    const search = options?.search?.trim();
+    if (search && findAllSearchMatches(doc.getText(), search).length > 0) {
+      searchHits += 1;
+      searchMatch = doc;
+    }
+  }
+  if (contentMatch) {
+    return contentMatch;
+  }
+  if (searchHits === 1) {
+    return searchMatch;
+  }
+  return undefined;
+}
 
 export function documentMatchesPatchPath(doc: vscode.TextDocument, relativePath: string): boolean {
   const normalized = toRepositoryRelativePath(relativePath);
@@ -141,60 +222,90 @@ export async function ensureEditablePatchTarget(
     return { ok: true, target: existing, usedRemoteOpen: false };
   }
 
+  const captured = lookupPatchFileContent(relativePath, options?.fileContents);
+  const openDoc = findOpenDocumentForPatchFile(relativePath, {
+    capturedContent: captured,
+    search: options?.search
+  });
+  if (openDoc) {
+    return { ok: true, target: targetFromDocument(openDoc), usedRemoteOpen: false };
+  }
+
   const repo = options?.repo ?? readPatchApplyRepoFromConfig();
   if (!repo) {
+    if (captured?.trim()) {
+      return openCapturedAsUntitled(relativePath, captured);
+    }
     return { ok: false, error: missingPatchTargetMessage(relativePath) };
   }
 
   const provider = repo.provider ?? "github";
-  if (provider !== "github") {
+  if (provider === "github") {
+    const opener: OpenRemotePatchFile =
+      options?.openRemoteFile ??
+      ((params) =>
+        openRemoteFileInEditor({
+          owner: params.owner,
+          repo: params.repo,
+          filePath: params.filePath,
+          provider: "github",
+          branch: params.branch,
+          preserveSidebarFocus: true,
+          allowLocalClone: false
+        }));
+
+    let opened = false;
+    try {
+      opened = await opener({
+        owner: repo.owner,
+        repo: repo.repo,
+        filePath: relativePath,
+        provider: "github",
+        branch: repo.branch,
+        preserveSidebarFocus: true,
+        allowLocalClone: false
+      });
+    } catch {
+      opened = false;
+    }
+
+    if (opened) {
+      const after = resolveEditablePatchTarget(relativePath);
+      if (after) {
+        return { ok: true, target: after, usedRemoteOpen: true };
+      }
+    }
+  } else if (!captured?.trim()) {
     return { ok: false, error: remoteOpenUnsupportedMessage(relativePath, provider) };
   }
 
-  const opener: OpenRemotePatchFile =
-    options?.openRemoteFile ??
-    ((params) =>
-      openRemoteFileInEditor({
-        owner: params.owner,
-        repo: params.repo,
-        filePath: params.filePath,
-        provider: "github",
-        branch: params.branch,
-        preserveSidebarFocus: true,
-        allowLocalClone: false
-      }));
-
-  let opened = false;
-  try {
-    opened = await opener({
-      owner: repo.owner,
-      repo: repo.repo,
-      filePath: relativePath,
-      provider: "github",
-      branch: repo.branch,
-      preserveSidebarFocus: true,
-      allowLocalClone: false
-    });
-  } catch {
-    opened = false;
+  if (captured?.trim()) {
+    return openCapturedAsUntitled(relativePath, captured);
   }
 
-  if (!opened) {
-    return { ok: false, error: githubRemoteOpenFailedMessage(relativePath) };
+  if (provider !== "github") {
+    return { ok: false, error: remoteOpenUnsupportedMessage(relativePath, provider) };
   }
+  return { ok: false, error: githubRemoteOpenFailedMessage(relativePath) };
+}
 
-  const after = resolveEditablePatchTarget(relativePath);
-  if (!after) {
-    return {
-      ok: false,
-      error: `Opened ${relativePath} but could not read it. Try Apply again.`
-    };
-  }
-  return { ok: true, target: after, usedRemoteOpen: true };
+async function openCapturedAsUntitled(
+  relativePath: string,
+  captured: string
+): Promise<{ ok: true; target: EditablePatchTarget; usedRemoteOpen: boolean }> {
+  const doc = await vscode.workspace.openTextDocument({
+    content: captured,
+    language: languageIdForPatchPath(relativePath)
+  });
+  await vscode.window.showTextDocument(doc, {
+    preview: false,
+    preserveFocus: true
+  });
+  return { ok: true, target: targetFromDocument(doc), usedRemoteOpen: true };
 }
 
 export function uriFromUndoSnapshotPath(absolutePath: string): vscode.Uri {
-  if (isRemoteTabAbsolutePath(absolutePath)) {
+  if (isRemoteTabAbsolutePath(absolutePath) || /^untitled:/i.test(absolutePath)) {
     return vscode.Uri.parse(absolutePath);
   }
   return vscode.Uri.file(absolutePath);

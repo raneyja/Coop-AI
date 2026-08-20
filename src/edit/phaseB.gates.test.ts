@@ -198,6 +198,35 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("B-G2 Apply uses captured bytes when GitHub Repositories is missing", async () => {
+    const restore = installApplyEditMutation();
+    try {
+      const patches = parsePatchResponse(TWO_FILE_PATCH);
+      assert.equal(patches.ok, true);
+      if (!patches.ok) {
+        return;
+      }
+      const result = await applyPatchesToWorkspace(patches.patches, {
+        repo: GITHUB_REPO,
+        openRemoteFile: async () => false,
+        fileContents: {
+          "src/a.ts": "alpha\n",
+          "src/b.ts": "beta\n"
+        }
+      });
+      assert.equal(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.equal(result.filesChanged, 2);
+      const docs = vscode.workspace.textDocuments as unknown as MutableDoc[];
+      assert.equal(docs.some((doc) => doc.getText() === "ALPHA\n"), true);
+      assert.equal(docs.some((doc) => doc.getText() === "BETA\n"), true);
+    } finally {
+      restore();
+    }
+  });
+
   await test("B-G3 reject leaves buffers unchanged and restages via undo", async () => {
     const parsed = parsePatchResponse(TWO_FILE_PATCH);
     assert.equal(parsed.ok, true);

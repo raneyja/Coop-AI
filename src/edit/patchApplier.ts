@@ -4,6 +4,7 @@ import { applyHunksToContent } from "./patchContent";
 import { lookupPatchFileContent } from "./patchFileContents";
 import {
   ensureEditablePatchTarget,
+  languageIdForPatchPath,
   undoSnapshotPathForUri,
   uriFromUndoSnapshotPath,
   type EnsurePatchTargetOptions
@@ -60,7 +61,9 @@ export async function applyPatchesToWorkspace(
   for (const filePatch of patches.files) {
     const resolved = await ensureEditablePatchTarget(filePatch.relativePath, {
       repo: options?.repo,
-      openRemoteFile: options?.openRemoteFile
+      openRemoteFile: options?.openRemoteFile,
+      fileContents: options?.fileContents,
+      search: filePatch.hunks[0]?.search
     });
     if (!resolved.ok) {
       return {
@@ -144,9 +147,8 @@ export async function undoPatchApplication(
 
   const edits = new vscode.WorkspaceEdit();
   for (const snapshot of undo) {
-    const uri = uriFromUndoSnapshotPath(snapshot.absolutePath);
-    const document = await vscode.workspace.openTextDocument(uri);
-    edits.replace(uri, fullDocumentRange(document), snapshot.originalContent);
+    const document = await openDocumentForUndo(snapshot);
+    edits.replace(document.uri, fullDocumentRange(document), snapshot.originalContent);
   }
 
   const success = await vscode.workspace.applyEdit(edits);
@@ -155,4 +157,27 @@ export async function undoPatchApplication(
   }
 
   return { ok: true };
+}
+
+async function openDocumentForUndo(snapshot: FileUndoSnapshot): Promise<vscode.TextDocument> {
+  const uri = uriFromUndoSnapshotPath(snapshot.absolutePath);
+  const open = vscode.workspace.textDocuments.find(
+    (doc) =>
+      doc.uri.toString() === uri.toString() ||
+      doc.uri.toString() === snapshot.absolutePath ||
+      (uri.scheme === "untitled" &&
+        doc.uri.scheme === "untitled" &&
+        doc.uri.path.replace(/^\/+/, "") === uri.path.replace(/^\/+/, ""))
+  );
+  if (open) {
+    return open;
+  }
+  try {
+    return await vscode.workspace.openTextDocument(uri);
+  } catch {
+    return vscode.workspace.openTextDocument({
+      content: snapshot.originalContent,
+      language: languageIdForPatchPath(snapshot.relativePath)
+    });
+  }
 }

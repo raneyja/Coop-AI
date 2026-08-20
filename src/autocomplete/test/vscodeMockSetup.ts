@@ -134,8 +134,18 @@ const vscodeMock = {
         const fsPath = value.replace(/^file:\/\//, "");
         return { fsPath, scheme: "file", path: fsPath, toString: () => value };
       }
-      const scheme = value.includes("://") ? value.slice(0, value.indexOf("://")) : "file";
-      let pathPart = value.includes("://") ? value.slice(value.indexOf("://") + 3) : value;
+      const windowsPath = /^[a-zA-Z]:[\\/]/.test(value);
+      const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(value);
+      const scheme = value.includes("://")
+        ? value.slice(0, value.indexOf("://"))
+        : !windowsPath && schemeMatch
+          ? schemeMatch[1]
+          : "file";
+      let pathPart = value.includes("://")
+        ? value.slice(value.indexOf("://") + 3)
+        : scheme !== "file" && schemeMatch
+          ? value.slice(schemeMatch[0].length)
+          : value;
       if (scheme === "vscode-vfs" && pathPart.startsWith("github/")) {
         pathPart = `/${pathPart}`;
       } else if (!pathPart.startsWith("/")) {
@@ -199,7 +209,37 @@ const vscodeMock = {
       const path = typeof uri === "string" ? uri : (uri.fsPath ?? "");
       return path.replace(/^\/workspace\/?/, "");
     },
-    openTextDocument: async (uri: { toString?: () => string; fsPath?: string }) => {
+    openTextDocument: async (
+      uriOrOptions:
+        | { toString?: () => string; fsPath?: string }
+        | { content?: string; language?: string }
+    ) => {
+      if (uriOrOptions && "content" in uriOrOptions && typeof uriOrOptions.content === "string") {
+        const id = `Untitled-${vscodeMock.workspace.textDocuments.length + 1}`;
+        const content = uriOrOptions.content;
+        const uri = {
+          scheme: "untitled",
+          path: `/${id}`,
+          fsPath: "",
+          toString: () => `untitled:${id}`
+        };
+        const lines = content.split(/\n/);
+        let text = content;
+        const doc = {
+          uri,
+          getText: () => text,
+          setText: (next: string) => {
+            text = next;
+          },
+          get lineCount() {
+            return Math.max(1, text.split(/\n/).length);
+          },
+          lineAt: (n: number) => ({ text: text.split(/\n/)[n] ?? "" })
+        };
+        (vscodeMock.workspace.textDocuments as unknown[]).push(doc);
+        return doc;
+      }
+      const uri = uriOrOptions as { toString?: () => string; fsPath?: string };
       const key = uri.toString?.() ?? uri.fsPath ?? "";
       const docs = vscodeMock.workspace.textDocuments as Array<{
         uri: { toString: () => string; fsPath?: string };
@@ -242,7 +282,11 @@ const vscodeMock = {
     activeTextEditor: undefined as unknown,
     showInformationMessage: async () => mockInformationMessageChoice,
     showWarningMessage: async () => undefined,
-    showErrorMessage: async () => undefined
+    showErrorMessage: async () => undefined,
+    showTextDocument: async (document: { uri?: unknown }) => ({
+      document,
+      viewColumn: 1
+    })
   },
   languages: {
     registerInlineCompletionItemProvider: () => ({ dispose: () => undefined })
