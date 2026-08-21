@@ -1,9 +1,9 @@
 ---
 title: GitHub
-description: Connect GitHub for repo indexing, PR history, and CODEOWNERS.
+description: Connect GitHub for repo indexing, PR history, CODEOWNERS, and Create pull request.
 section: integrations
 order: 3
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-08-21"
 ---
 
 In production, GitHub connects through the browser — not a pasted PAT in VS Code.
@@ -49,7 +49,10 @@ If the App is on your org but Coop shows not connected, click **Connect (GitHub 
 - Webhook-driven repo indexing (push, PR events)
 - CODEOWNERS and blame for **Find Owner**
 - PR and commit history for **Trace Decision**
+- **Create pull request** from an applied `/edit` patch (Contents and Pull requests **write**)
 - Symbol graph and dependency analysis (Deep-Index / Lightning Mode — all plans)
+
+To open a PR from VS Code after Apply, see [Create pull request](/docs/create-pull-request). The GitHub App needs **Contents** and **Pull requests** set to **Read and write**. After Coop requests write, a GitHub org owner must **Accept** the permission update on the installation — until then, Create pull request returns a permission error.
 
 ## GitHub App vs OAuth
 
@@ -88,6 +91,7 @@ Suggested scopes: `repo`, `read:org`.
 | "Sign in to Coop first" | Sign in under **Settings → Account** (Google, email, or **Sign in with SSO** for Enterprise) |
 | Callback fails | Setup URL must match `https://api.coop-ai.dev/v1/github/app/callback` |
 | Still see PAT field | Disable `coopAI.devMode` for production |
+| Create pull request → permission error | Contents / Pull requests are still read-only, or the org has not accepted the write update. **Browser** — GitHub org → **Settings → GitHub Apps** → CoopAI → **Review request** / **Accept**. Then retry in the extension. Full steps: [Create pull request](/docs/create-pull-request). |
 
 ## Coop sign-in vs GitHub
 

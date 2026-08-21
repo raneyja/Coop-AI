@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-08-21"
 ---
 
 ## General
@@ -14,7 +14,7 @@ CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and do
 
 ### How is CoopAI different from GitHub Copilot or Cursor?
 
-CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff. Nothing rewrites the tree on its own.
+CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from the applied patch. Nothing rewrites the tree or creates a PR on its own.
 
 ### Is my code used to train models?
 
@@ -82,6 +82,10 @@ That is the **active file context chip** — which file Coop is using for chat. 
 ### Can I share prompts with my team?
 
 Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Library](/manual#prompt-library).
+
+### Can I create a pull request from Coop?
+
+Yes. After you **Apply** an `/edit` patch, click **Create pull request** on the patch card. Confirm the branch, title, and notes — nothing is created on GitHub (or GitLab / Bitbucket) until you submit. **Cancel**, Escape, or the backdrop creates nothing. You need **Use repo** selected and write access on the code host. See [Create pull request](/docs/create-pull-request).
 
 ## Enterprise SSO
 

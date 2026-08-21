@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-08-21"
 ---
 
 ## Extension
@@ -31,6 +31,7 @@ lastUpdated: "2026-07-23"
 | **Model & chat** | Four assigned models, no provider picker |
 | **Autocomplete** | Ghost text on type → **Tab** accepts |
 | **/edit** | Patch notification with **Apply** / **Undo** |
+| **Create pull request** | After Apply, confirm modal → host URL |
 | **Quick action** | Structured answer with repo/integration context |
 | **Plain chat** | Grounded reply in composer |
 
@@ -48,6 +49,18 @@ lastUpdated: "2026-07-23"
 | **Workspace kept autocomplete off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
+
+## Create pull request
+
+| Problem | Fix |
+| --- | --- |
+| **No Create pull request button** | Apply the `/edit` patch first — the button is on **Patch applied**, not on the pending Apply / Reject row |
+| **Pick a Use-repo before creating a pull request** | Click **Use repo** on the repository in the Remote workspace picker |
+| **Permission / cannot create** | GitHub App needs Contents and Pull requests **write**, and the org must accept the update. See [Create pull request](/docs/create-pull-request) and [GitHub](/docs/github) |
+| **GitHub rejected this pull request (422)** | A PR may already exist for this branch — change **Branch** in the modal and retry |
+| **Cancel / Escape** | Safe — nothing is created on the host |
+
+Full guide: [Create pull request](/docs/create-pull-request).
 
 ## Admin portal
 

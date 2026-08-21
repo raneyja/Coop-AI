@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-08-21"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -192,4 +192,4 @@ Enterprise customers should keep dev mode **off** in workspace settings.
 | **CoopAI: Understand Repo** | Run Understand Repo — requires **Use repo** first (blocked if a file chip is active) |
 | **CoopAI: Trace Decision** | Run Trace Decision (file required) |
 
-See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).
+See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. After `/edit` Apply, see [Create pull request](/docs/create-pull-request). For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).

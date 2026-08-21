@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
-lastUpdated: "2026-08-12"
+lastUpdated: "2026-08-21"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
@@ -324,7 +324,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`) |
+| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, **Create pull request** is on the patch card |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -361,6 +361,8 @@ Coop assigns a model per feature — you do **not** pick provider or model on Pr
 | **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
 | **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5.1 |
 | **Autocomplete** | Mistral Codestral |
+
+Create pull request **Notes** use **OpenAI GPT-4o mini** and are labeled **(AI Generated)** — you can edit them before submit. They are not a settings row.
 
 Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
 
@@ -422,6 +424,48 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 Full guide: [Edit mode](/docs/edit-mode).
 
 **Completion-only routing** — Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat.
+
+## Create a pull request
+
+After you **Apply** an `/edit` patch, Coop can open a pull request on GitHub, GitLab, or Bitbucket without leaving VS Code. You confirm the branch, title, and notes first — **Cancel**, Escape, or the backdrop creates nothing on the host.
+
+There is no `/pr` command. **Create pull request** appears on the **Patch applied** card after Apply.
+
+<!-- figures lg -->
+![Create pull request — confirm branch, title, and AI-generated notes after applying an /edit patch](/screenshots/docs/extension-create-pull-request.png)
+<!-- /figures -->
+
+### How to open a PR
+
+1. **Extension UI** — Click **Use repo** on the repository in the Remote workspace picker.
+2. **Extension UI** — Run `/edit <instruction>`, then **Apply** the patch.
+3. **Extension UI** — Click **Create pull request** on the patch card.
+4. Confirm **Branch** (default `coop/patch`), **Title**, and **Notes (AI Generated)**. Edit anything you want.
+5. Click **Create pull request**. Success: the modal shows **Pull request created** and a host URL — click **Open on GitHub** (or GitLab / Bitbucket).
+
+| Step | Surface | Action |
+| --- | --- | --- |
+| Use repo | **Extension UI** — Remote workspace picker | Select the repository → **Use repo** |
+| Apply | **Extension UI** — patch card | **Apply** after `/edit` |
+| Open modal | **Extension UI** — patch card | **Create pull request** (only after Apply) |
+| Submit | **Extension UI** — modal | Confirm fields → **Create pull request** |
+| Cancel | **Extension UI** — modal | **Cancel**, Escape, or backdrop — no PR |
+| Open | **Browser** | **Open on GitHub** from the success modal |
+
+### What you confirm
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| **Branch** | `coop/patch` | Created from the repo’s primary branch. Rename it if that branch already has an open PR. |
+| **Title** | `Update path/to/file` | One file uses the path; several files use `Update N files`. |
+| **Notes (AI Generated)** | Short summary of the diff | Optional. Drafted by **GPT-4o mini**. Edit or clear before submit. |
+| **Files** | Paths from the applied patch | What Coop commits on the host. |
+
+Coop writes the files to GitHub through your org’s GitHub App — not a local `git push`. The App needs **Contents** and **Pull requests** write, and the GitHub org must **Accept** that permission update.
+
+**Undo** on the patch card restores editor files. It does **not** close the PR or delete the branch.
+
+Full guide: [Create pull request](/docs/create-pull-request).
 
 ## Quick Actions
 
@@ -755,6 +799,7 @@ In **production mode**, org admins connect code hosts and collaboration tools on
 Ask your admin if:
 
 - Quick actions return "integration not connected"
+- **Create pull request** returns a permission error (GitHub App write not accepted)
 - You need a teammate invited or more than 3 Deep-Indexed repos (upgrade to Pro)
 - Teammates need invites or seat assignments
 
@@ -777,6 +822,8 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **`saml_validation_failed`** | Check IdP cert expiry, clock skew, Entity ID / ACS URL match — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
 | **SP URLs empty in admin** | Operator: set `COOP_PUBLIC_BASE_URL` on API server and restart — not a user/extension setting |
 | **Missing email in SAML assertion** | IdP admin: map `email` attribute or use email-format NameID — [Single Sign On (SSO)](/docs/sso#idp-requirements) |
+| **Create pull request missing** | Apply the `/edit` patch first — the button is on **Patch applied**, not on the pending Apply / Reject row. Click **Use repo** first. |
+| **Create pull request permission error** | Ask admin: GitHub App needs Contents and Pull requests **write**, and the org must **Accept** the update. See [Create pull request](/docs/create-pull-request) |
 | **Autocomplete turned off unexpectedly** | Preference persists globally — re-enable via header **Autocomplete** toggle or **Settings → Preferences → Model & chat → Enable inline autocomplete**. Remove stale `coopAI.autocomplete.enabled: false` from workspace `.vscode/settings.json` if present |
 
 ## Support

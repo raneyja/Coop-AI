@@ -3,7 +3,7 @@ title: Model assignments
 description: How CoopAI routes chat, quick actions, edit mode, and autocomplete to assigned models.
 section: extension
 order: 2
-lastUpdated: "2026-07-29"
+lastUpdated: "2026-08-21"
 ---
 
 CoopAI assigns an LLM per feature in production. You do not pick provider or model on Developer or Pro — Coop routes each use case to the model below. **Custom model selection is an Enterprise capability (coming soon).**
@@ -60,5 +60,6 @@ See [Extension settings](/docs/extension-settings) for the full settings hub.
 ## Next steps
 
 - [Inline autocomplete](/docs/autocomplete) — default on, global persistence, turn off intentionally
-- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1 |
+- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1
+- [Create pull request](/docs/create-pull-request) — notes use GPT-4o mini
 - [Plans & billing](/docs/plans-billing) — seat-based Pro pricing

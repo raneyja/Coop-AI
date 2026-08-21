@@ -3,7 +3,7 @@ title: Connect integrations
 description: Org admin checklist for connecting GitHub, Slack, Jira, and other tools.
 section: integrations
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-08-21"
 ---
 
 In **production mode** (`coopAI.devMode: false`), integration tokens live on the Coop server — not in VS Code. Org admins connect once for the whole organization in the [admin portal](https://admin.coop-ai.dev).
@@ -47,7 +47,7 @@ Admins with owner/admin role can also connect from **Extension UI → Settings �
 
 | Tool | Coop features powered |
 | --- | --- |
-| **GitHub / GitLab / Bitbucket** | Repo indexing, PR history, CODEOWNERS, blame |
+| **GitHub / GitLab / Bitbucket** | Repo indexing, PR history, CODEOWNERS, blame, [Create pull request](/docs/create-pull-request) from an applied `/edit` patch |
 | **Slack** | Trace Decision, Knowledge Gaps with thread context |
 | **Jira** | Ticket-linked decision archaeology |
 | **Confluence / Notion / Google Docs** | Documentation cross-reference in answers |
