@@ -39,9 +39,9 @@ export async function codeHostRequestJson<T>(
   }
 ): Promise<T> {
   const response = await codeHostRequest(url, options);
-  if (!response.ok) {
-    throw mapHttpError(response, options.provider);
-  }
+    if (!response.ok) {
+      throw await mapHttpError(response, options.provider);
+    }
   return (await response.json()) as T;
 }
 
@@ -106,7 +106,7 @@ export async function paginatedCodeHostFetch<T>(options: PaginatedFetchOptions<T
       timeoutMs: options.timeoutMs
     });
     if (!response.ok) {
-      throw mapHttpError(response, options.provider);
+      throw await mapHttpError(response, options.provider);
     }
     const payload = (await response.json()) as unknown;
     items.push(...options.mapPage(payload));
@@ -159,9 +159,13 @@ async function readJsonErrorMessage(response: Response): Promise<string | undefi
     if (!text.trim()) {
       return undefined;
     }
-    const parsed = JSON.parse(text) as { message?: unknown };
+    const parsed = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } };
     if (typeof parsed.message === "string" && parsed.message.trim()) {
       return parsed.message.trim();
+    }
+    const nested = parsed.error?.message;
+    if (typeof nested === "string" && nested.trim()) {
+      return nested.trim();
     }
   } catch {
     return undefined;
@@ -169,7 +173,7 @@ async function readJsonErrorMessage(response: Response): Promise<string | undefi
   return undefined;
 }
 
-function mapHttpError(response: Response, provider: CodeHostProvider): CodeHostError {
+async function mapHttpError(response: Response, provider: CodeHostProvider): Promise<CodeHostError> {
   if (response.status === 401 || response.status === 403) {
     return new CodeHostError("Authentication failed. Update your token in settings.", "auth", response.status, provider);
   }
@@ -179,7 +183,13 @@ function mapHttpError(response: Response, provider: CodeHostProvider): CodeHostE
   if (response.status === 404) {
     return new CodeHostError("Resource not found.", "not_found", response.status, provider);
   }
-  return new CodeHostError(`Request failed (${response.status}).`, "network", response.status, provider);
+  const detail = await readJsonErrorMessage(response);
+  return new CodeHostError(
+    detail ? `Request failed (${response.status}). ${detail}` : `Request failed (${response.status}).`,
+    "network",
+    response.status,
+    provider
+  );
 }
 
 function headersToRecord(headers: Headers): Record<string, string> {

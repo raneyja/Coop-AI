@@ -587,18 +587,7 @@ export class BitbucketClient implements CodeHostClient {
     await this.assertWriteGrant(coords);
 
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
-    const baseRef = await codeHostRequestJson<{ target?: { hash?: string } }>(
-      `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(base)}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-    const parent = baseRef.target?.hash?.trim();
-    if (!parent) {
-      throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
-    }
+    const parent = await this.resolveSrcParent(coords, branch, base);
 
     try {
       const form = new FormData();
@@ -606,7 +595,7 @@ export class BitbucketClient implements CodeHostClient {
       form.append("branch", branch);
       form.append("parents", parent);
       for (const file of files) {
-        form.append(file.path, file.content);
+        appendBitbucketSrcFile(form, file);
       }
 
       const commit = await codeHostRequestJson<{ hash: string }>(`${this.repoUrl(coords)}/src`, {
@@ -638,7 +627,7 @@ export class BitbucketClient implements CodeHostClient {
         throw this.writeFailure(error);
       }
       if (error instanceof CodeHostError && (error.status === 400 || error.status === 409)) {
-        throw new CodeHostError(BITBUCKET_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
+        throw this.rejectedPullError(error);
       }
       throw error;
     }
@@ -712,6 +701,46 @@ export class BitbucketClient implements CodeHostClient {
       }
       throw error;
     }
+  }
+
+  private rejectedPullError(error: CodeHostError): CodeHostError {
+    const extra = error.message.replace(/^Request failed \(\d+\)\.?\s*/i, "").trim();
+    return new CodeHostError(
+      extra ? `${BITBUCKET_PR_REJECTED_MESSAGE} ${extra}` : BITBUCKET_PR_REJECTED_MESSAGE,
+      "network",
+      error.status,
+      this.provider
+    );
+  }
+
+  private async resolveSrcParent(coords: RepoCoordinates, branch: string, base: string): Promise<string> {
+    const baseSha = await this.branchHeadSha(coords, base);
+    if (!baseSha) {
+      throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
+    }
+    if (branch === base) {
+      return baseSha;
+    }
+    try {
+      return (await this.branchHeadSha(coords, branch)) ?? baseSha;
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return baseSha;
+      }
+      throw error;
+    }
+  }
+
+  private async branchHeadSha(coords: RepoCoordinates, branch: string): Promise<string | undefined> {
+    const data = await codeHostRequestJson<{ target?: { hash?: string } }>(
+      `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(branch)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return data.target?.hash?.trim() || undefined;
   }
 
   private writePermissionError(status: number): CodeHostError {
@@ -835,6 +864,17 @@ function mapBitbucketCommit(commit: BitbucketCommit): CommitInfo {
     message: commit.message ?? "",
     htmlUrl: commit.links?.html?.href
   };
+}
+
+/**
+ * Bitbucket only treats multipart parts with a filename as file uploads.
+ * A string field is metadata, so the commit has no file changes and the PR
+ * is rejected as empty.
+ */
+function appendBitbucketSrcFile(form: FormData, file: { path: string; content: string }): void {
+  const repoPath = file.path.replace(/^\/+/, "");
+  const filename = repoPath.split("/").pop() || repoPath;
+  form.append(`/${repoPath}`, new Blob([file.content], { type: "text/plain; charset=utf-8" }), filename);
 }
 
 function normalizePath(value: string): string {

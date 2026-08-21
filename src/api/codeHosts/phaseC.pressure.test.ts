@@ -8,6 +8,7 @@ import {
   GITHUB_WRITE_PERMISSION_MESSAGE,
   GITLAB_WRITE_PERMISSION_MESSAGE,
   BITBUCKET_WRITE_PERMISSION_MESSAGE,
+  BITBUCKET_PR_REJECTED_MESSAGE,
   PHASE_C_FIXTURE_FILES,
   PHASE_C_FIXTURE_REPO,
   bitbucketScopesAllowPullWrite,
@@ -201,10 +202,20 @@ await test("Bitbucket GET accepted-scopes (read) must not block a write token", 
         headers: { "content-type": "application/json", "x-accepted-oauth-scopes": "repository" }
       });
     }
-    if (url.includes("/refs/branches/main") && method === "GET") {
+    if (url.includes("/refs/branches/") && method === "GET") {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify({ error: { message: "Not found" } }), { status: 404 });
+      }
       return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
     }
     if (url.endsWith("/repositories/acme/plane/src") && method === "POST") {
+      const body = init?.body;
+      if (body instanceof FormData) {
+        const uploaded = body.get("/apps/api/auth.ts") ?? body.get("apps/api/auth.ts");
+        if (!(uploaded instanceof Blob)) {
+          return new Response(JSON.stringify({ error: { message: "files must be uploads" } }), { status: 400 });
+        }
+      }
       return new Response(JSON.stringify({ hash: "bb-commit" }), { status: 201 });
     }
     if (url.endsWith("/repositories/acme/plane/pullrequests") && method === "POST") {
@@ -225,6 +236,47 @@ await test("Bitbucket GET accepted-scopes (read) must not block a write token", 
     );
     assert.equal(result.number, 9);
     assert.ok(requested.some((entry) => entry.startsWith("POST ") && entry.endsWith("/src")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("Bitbucket 400 surfaces the host's reason, not a bare rejection", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && /\/repositories\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ slug: "plane" }), { status: 200 });
+    }
+    if (url.includes("/refs/branches/") && method === "GET") {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify({ error: { message: "Not found" } }), { status: 404 });
+      }
+      return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
+    }
+    if (url.endsWith("/src") && method === "POST") {
+      return new Response(JSON.stringify({ hash: "bb-commit" }), { status: 201 });
+    }
+    if (url.endsWith("/pullrequests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ type: "error", error: { message: "There are no changes to be pulled." } }),
+        { status: 400 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        new BitbucketClient({ token: "bb" }).createPullFromFiles(
+          { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+          { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+        ),
+      (error: unknown) =>
+        error instanceof CodeHostError &&
+        error.message.startsWith(BITBUCKET_PR_REJECTED_MESSAGE) &&
+        error.message.includes("There are no changes to be pulled.")
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

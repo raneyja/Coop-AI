@@ -139,7 +139,10 @@ await test("C-G4 GitLab and Bitbucket create a PR/MR on their own APIs — never
         { status: 201 }
       );
     }
-    if (url.includes("/repositories/acme/plane/refs/branches/main") && method === "GET") {
+    if (url.includes("/refs/branches/") && method === "GET") {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify({ error: { message: "Not found" } }), { status: 404 });
+      }
       return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
     }
     if (url.endsWith("/repositories/acme/plane/src") && method === "POST") {
