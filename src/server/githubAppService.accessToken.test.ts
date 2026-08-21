@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { GitHubAppService } from "./githubAppService";
+import { GitHubAppService, parseGithubAppInstallationList } from "./githubAppService";
 
 function appService(): GitHubAppService {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -94,4 +94,30 @@ test("unscoped installation token mint still works for indexing paths", async ()
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("GitHub lists App installations as a raw array", () => {
+  const parsed = parseGithubAppInstallationList([
+    { id: 144638755, account: { login: "CoopAI-Corp", type: "Organization" } },
+    { id: 111, account: { login: "raneyja", type: "User" } }
+  ]);
+  assert.deepEqual(parsed, [
+    { id: 144638755, accountLogin: "CoopAI-Corp", accountType: "Organization" },
+    { id: 111, accountLogin: "raneyja", accountType: "User" }
+  ]);
+});
+
+test("wrapped { installations } payloads still parse", () => {
+  const parsed = parseGithubAppInstallationList({
+    installations: [{ id: 1, account: { login: "acme", type: "Organization" } }]
+  });
+  assert.equal(parsed[0]?.accountLogin, "acme");
+});
+
+test("the old parser shape (missing installations key) is not treated as zero installs", () => {
+  assert.equal(parseGithubAppInstallationList({ total_count: 2 }).length, 0);
+  assert.equal(
+    parseGithubAppInstallationList([{ id: 1, account: { login: "raneyja", type: "User" } }]).length,
+    1
+  );
 });

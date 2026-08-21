@@ -309,23 +309,8 @@ export class GitHubAppService {
         throw new Error(`GitHub list app installations failed (${response.status}): ${body}`);
       }
 
-      const data = (await response.json()) as {
-        installations?: Array<{
-          id?: number;
-          account?: { login?: string; type?: string };
-        }>;
-      };
-      const batch = data.installations ?? [];
-      for (const row of batch) {
-        if (!row.id || !row.account?.login || !row.account?.type) {
-          continue;
-        }
-        installations.push({
-          id: row.id,
-          accountLogin: row.account.login,
-          accountType: row.account.type
-        });
-      }
+      const batch = parseGithubAppInstallationList(await response.json());
+      installations.push(...batch);
 
       if (batch.length < 100) {
         break;
@@ -362,6 +347,35 @@ export class GitHubAppService {
       .update(`${orgId}:${issuedAt}`)
       .digest("hex");
   }
+}
+
+/**
+ * GitHub GET /app/installations returns a JSON array, not `{ installations: [...] }`.
+ * Treat both shapes so a parser bug cannot hide every other install of the App.
+ */
+export function parseGithubAppInstallationList(
+  payload: unknown
+): Array<{ id: number; accountLogin: string; accountType: string }> {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object" && Array.isArray((payload as { installations?: unknown }).installations)
+      ? ((payload as { installations: unknown[] }).installations)
+      : [];
+  const installations: Array<{ id: number; accountLogin: string; accountType: string }> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+    const record = row as { id?: unknown; account?: { login?: unknown; type?: unknown } };
+    const id = typeof record.id === "number" ? record.id : Number(record.id);
+    const accountLogin = typeof record.account?.login === "string" ? record.account.login : "";
+    const accountType = typeof record.account?.type === "string" ? record.account.type : "";
+    if (!Number.isFinite(id) || id <= 0 || !accountLogin || !accountType) {
+      continue;
+    }
+    installations.push({ id, accountLogin, accountType });
+  }
+  return installations;
 }
 
 function base64UrlJson(value: Record<string, unknown>): string {

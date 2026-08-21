@@ -122,42 +122,63 @@ export async function inspectGithubPullWrite(
 
 async function inspectAppInstallation(
   options: InspectGithubPullWriteOptions,
-  installationId: number
+  storedInstallationId: number
 ): Promise<GithubPullWriteInspection> {
-  const attempt = await options.githubApp!.tryCreatePullWriteAccessToken(installationId);
-  if (attempt.ok) {
-    return finishAppInstallation(options, installationId, attempt);
+  const storedAttempt = await options.githubApp!.tryCreatePullWriteAccessToken(storedInstallationId);
+  if (storedAttempt.ok) {
+    const stored = await finishAppInstallation(options, storedInstallationId, storedAttempt, {
+      persist: true
+    });
+    if (stored.ok) {
+      return stored;
+    }
   }
 
-  // The stored installation cannot write. An account can hold several installations
-  // of the same App, so an approval may have landed on a different one.
-  const alternate = await findWritableInstallation(options, installationId);
-  if (alternate) {
-    return { ...alternate, switchedFromInstallationId: installationId };
+  const alternate = await findWritableInstallation(options, storedInstallationId);
+  if (alternate?.ok) {
+    return { ...alternate, switchedFromInstallationId: storedInstallationId };
+  }
+  if (alternate && !alternate.ok) {
+    return alternate;
   }
 
-  const identity = await describeInstallation(options, installationId);
+  const identity = await describeInstallation(options, storedInstallationId);
+  if (!storedAttempt.ok) {
+    return {
+      ok: false,
+      reason: "app_permissions_not_accepted",
+      message: githubInstallationAcceptMessage({
+        accountLogin: identity?.accountLogin,
+        installationId: storedInstallationId,
+        installationUrl: identity?.htmlUrl
+      }),
+      tokenKind: "github_app",
+      installationId: storedInstallationId,
+      accountLogin: identity?.accountLogin,
+      installationUrl: identity?.htmlUrl,
+      grantedPermissions: storedAttempt.permissions ?? identity?.permissions,
+      githubDetail: storedAttempt.githubMessage
+    };
+  }
+
   return {
     ok: false,
-    reason: "app_permissions_not_accepted",
-    message: githubInstallationAcceptMessage({
-      accountLogin: identity?.accountLogin,
-      installationId,
-      installationUrl: identity?.htmlUrl
-    }),
+    reason: "repo_not_in_installation",
+    message: githubRepoNotInInstallationMessage(options.owner, options.repo),
     tokenKind: "github_app",
-    installationId,
+    installationId: storedInstallationId,
     accountLogin: identity?.accountLogin,
     installationUrl: identity?.htmlUrl,
-    grantedPermissions: attempt.permissions ?? identity?.permissions,
-    githubDetail: attempt.githubMessage
+    grantedPermissions: storedAttempt.permissions,
+    githubDetail: undefined
   };
 }
 
 async function finishAppInstallation(
   options: InspectGithubPullWriteOptions,
   installationId: number,
-  attempt: { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> }
+  attempt: { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> },
+  persist: { persist: boolean }
 ): Promise<GithubPullWriteInspection> {
   const probe = await probeRepository(options.owner, options.repo, attempt.token);
   if (probe.status !== "ok") {
@@ -175,13 +196,15 @@ async function finishAppInstallation(
     };
   }
 
-  await options.orgStore.upsertCodeHostInstallation(
-    options.orgId,
-    "github",
-    installationId,
-    attempt.token,
-    attempt.expiresAt
-  );
+  if (persist.persist) {
+    await options.orgStore.upsertCodeHostInstallation(
+      options.orgId,
+      "github",
+      installationId,
+      attempt.token,
+      attempt.expiresAt
+    );
+  }
 
   const identity = await describeInstallation(options, installationId);
   return {
@@ -197,7 +220,11 @@ async function finishAppInstallation(
   };
 }
 
-/** Find another installation of this App that can both write and see this repo. */
+/**
+ * Use an installation that can write this repo. Prefer the GitHub account that
+ * owns the repo so a company install is not used for a personal repo.
+ * Never overwrite the org's stored installation with a different one.
+ */
 async function findWritableInstallation(
   options: InspectGithubPullWriteOptions,
   skipInstallationId: number
@@ -206,16 +233,24 @@ async function findWritableInstallation(
   if (!app?.listAppInstallations) {
     return undefined;
   }
-  let installations: Array<{ id: number }>;
+  let installations: Array<{ id: number; accountLogin: string; accountType: string }>;
   try {
     installations = await app.listAppInstallations();
   } catch {
     return undefined;
   }
-  for (const candidate of installations) {
-    if (candidate.id === skipInstallationId) {
-      continue;
-    }
+
+  const ownerLc = options.owner.toLowerCase();
+  const ranked = installations
+    .filter((row) => row.id !== skipInstallationId)
+    .sort((a, b) => {
+      const aMatch = a.accountLogin.toLowerCase() === ownerLc ? 0 : 1;
+      const bMatch = b.accountLogin.toLowerCase() === ownerLc ? 0 : 1;
+      return aMatch - bMatch;
+    });
+
+  let ownerRefusal: GithubPullWriteInspection | undefined;
+  for (const candidate of ranked) {
     let attempt: Awaited<ReturnType<typeof app.tryCreatePullWriteAccessToken>>;
     try {
       attempt = await app.tryCreatePullWriteAccessToken(candidate.id);
@@ -223,14 +258,32 @@ async function findWritableInstallation(
       continue;
     }
     if (!attempt.ok) {
+      if (candidate.accountLogin.toLowerCase() === ownerLc && !ownerRefusal) {
+        const identity = await describeInstallation(options, candidate.id);
+        ownerRefusal = {
+          ok: false,
+          reason: "app_permissions_not_accepted",
+          message: githubInstallationAcceptMessage({
+            accountLogin: identity?.accountLogin ?? candidate.accountLogin,
+            installationId: candidate.id,
+            installationUrl: identity?.htmlUrl
+          }),
+          tokenKind: "github_app",
+          installationId: candidate.id,
+          accountLogin: identity?.accountLogin ?? candidate.accountLogin,
+          installationUrl: identity?.htmlUrl,
+          grantedPermissions: attempt.permissions ?? identity?.permissions,
+          githubDetail: attempt.githubMessage
+        };
+      }
       continue;
     }
-    const resolved = await finishAppInstallation(options, candidate.id, attempt);
+    const resolved = await finishAppInstallation(options, candidate.id, attempt, { persist: false });
     if (resolved.ok) {
       return resolved;
     }
   }
-  return undefined;
+  return ownerRefusal;
 }
 
 async function describeInstallation(

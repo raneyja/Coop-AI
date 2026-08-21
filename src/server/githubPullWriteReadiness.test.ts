@@ -80,8 +80,24 @@ function appService(
   return {
     tryCreatePullWriteAccessToken: async (installationId: number) =>
       typeof attempt === "function" ? attempt(installationId) : attempt,
-    getInstallation: async (installationId: number) =>
-      identity ? ({ id: installationId, ...identity } as never) : undefined,
+    getInstallation: async (installationId: number) => {
+      const listed = (installations ?? []).find((row) => row.id === installationId);
+      const accountLogin = listed?.accountLogin ?? identity?.accountLogin;
+      if (!accountLogin) {
+        return identity ? ({ id: installationId, ...identity } as never) : undefined;
+      }
+      const htmlUrl =
+        identity?.htmlUrl ??
+        (listed?.accountType === "Organization"
+          ? `https://github.com/organizations/${accountLogin}/settings/installations/${installationId}`
+          : `https://github.com/settings/installations/${installationId}`);
+      return {
+        id: installationId,
+        accountLogin,
+        htmlUrl,
+        permissions: identity?.permissions
+      } as never;
+    },
     listAppInstallations: async () => installations ?? []
   } as AppService;
 }
@@ -163,12 +179,96 @@ test("approval landed on a different installation of the same App — Coop switc
     assert.equal(readiness.installationId, OTHER_ID);
     assert.equal(readiness.switchedFromInstallationId, APP_INSTALLATION_ID);
     assert.equal(readiness.token, "ghs_other");
-    assert.deepEqual(upserts, [{ installationId: OTHER_ID, token: "ghs_other" }]);
+    assert.equal(upserts.length, 0, "must not replace the org GitHub App with a personal install");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
+test("company install cannot see a personal repo — use the owner's install instead", async () => {
+  const CORP_ID = 144638755;
+  const PERSONAL_ID = 111;
+  const { store, upserts } = mockStore({ installationId: CORP_ID });
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    if (!/\/repos\/raneyja\/Coop-AI$/.test(String(input))) {
+      return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+    }
+    const auth = String(
+      init?.headers instanceof Headers
+        ? init.headers.get("authorization")
+        : (init?.headers as Record<string, string> | undefined)?.Authorization ??
+          (init?.headers as Record<string, string> | undefined)?.authorization ??
+          ""
+    );
+    const status = auth.includes("ghs_corp") ? 404 : 200;
+    if (status !== 200) {
+      return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+    }
+    return new Response(JSON.stringify({ default_branch: "main" }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        (installationId) =>
+          installationId === PERSONAL_ID
+            ? {
+                ok: true,
+                token: "ghs_personal",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              }
+            : {
+                ok: true,
+                token: "ghs_corp",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              },
+        undefined,
+        [
+          { id: CORP_ID, accountLogin: "CoopAI-Corp", accountType: "Organization" },
+          { id: PERSONAL_ID, accountLogin: "raneyja", accountType: "User" }
+        ]
+      )
+    });
+    assert.equal(readiness.ok, true);
+    assert.equal(readiness.installationId, PERSONAL_ID);
+    assert.equal(readiness.switchedFromInstallationId, CORP_ID);
+    assert.equal(upserts.length, 0, "keep the company install for catalog; only borrow it for this PR");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("when the stored install is the company, a missing owner approval names raneyja not the company", async () => {
+  const CORP_ID = 144638755;
+  const PERSONAL_ID = 111;
+  const { store } = mockStore({ installationId: CORP_ID });
+  mockRepoFetch({ scopes: null });
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        () => ({
+          ok: false,
+          githubMessage: "The level of access for permissions requested are not granted to this installation."
+        }),
+        undefined,
+        [
+          { id: CORP_ID, accountLogin: "CoopAI-Corp", accountType: "Organization" },
+          { id: PERSONAL_ID, accountLogin: "raneyja", accountType: "User" }
+        ]
+      )
+    });
+    assert.equal(readiness.ok, false);
+    assert.equal(readiness.installationId, PERSONAL_ID);
+    assert.equal(readiness.accountLogin, "raneyja");
+    assert.match(readiness.message, /raneyja/);
+    assert.doesNotMatch(readiness.message, /CoopAI-Corp/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 test("a second installation that cannot see the repo is not used as a fix", async () => {
   const OTHER_ID = 987654;
   const { store, upserts } = mockStore({ installationId: APP_INSTALLATION_ID });
