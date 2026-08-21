@@ -31,6 +31,33 @@ export type PaginatedFetchOptions<T> = {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_FILE_BYTES = 1_024 * 1_024;
 
+export async function codeHostRequestOk(
+  url: string,
+  options: HttpRequestOptions & {
+    provider: CodeHostProvider;
+    rateLimitTracker?: RateLimitTracker;
+  }
+): Promise<Response> {
+  const response = await codeHostRequest(url, options);
+  if (!response.ok) {
+    throw await mapHttpError(response, options.provider);
+  }
+  return response;
+}
+
+/** Empty 201 bodies (Bitbucket src commit) must not throw SyntaxError. */
+export async function parseResponseJson<T>(response: Response): Promise<T | undefined> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function codeHostRequestJson<T>(
   url: string,
   options: HttpRequestOptions & {
@@ -38,11 +65,17 @@ export async function codeHostRequestJson<T>(
     rateLimitTracker?: RateLimitTracker;
   }
 ): Promise<T> {
-  const response = await codeHostRequest(url, options);
-    if (!response.ok) {
-      throw await mapHttpError(response, options.provider);
-    }
-  return (await response.json()) as T;
+  const response = await codeHostRequestOk(url, options);
+  const parsed = await parseResponseJson<T>(response);
+  if (parsed === undefined) {
+    throw new CodeHostError(
+      "The code host returned an empty response.",
+      "network",
+      response.status,
+      options.provider
+    );
+  }
+  return parsed;
 }
 
 export async function codeHostRequest(

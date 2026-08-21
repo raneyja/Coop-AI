@@ -241,6 +241,91 @@ await test("Bitbucket GET accepted-scopes (read) must not block a write token", 
   }
 });
 
+await test("Bitbucket src 201 with empty JSON uses the Location commit id", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && /\/repositories\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ slug: "plane" }), { status: 200 });
+    }
+    if (url.includes("/refs/branches/") && method === "GET") {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify({ error: { message: "Not found" } }), { status: 404 });
+      }
+      return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
+    }
+    if (url.endsWith("/repositories/acme/plane/src") && method === "POST") {
+      return new Response("", {
+        status: 201,
+        headers: {
+          location: "https://api.bitbucket.org/2.0/repositories/acme/plane/commit/aabbccddeeff0011"
+        }
+      });
+    }
+    if (url.endsWith("/repositories/acme/plane/pullrequests") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          id: 11,
+          links: { html: { href: "https://bitbucket.org/acme/plane/pull-requests/11" } }
+        }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new BitbucketClient({ token: "bb" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 11);
+    assert.equal(result.commitSha, "aabbccddeeff0011");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("Bitbucket src no-changes still opens a PR on the existing branch", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && /\/repositories\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ slug: "plane" }), { status: 200 });
+    }
+    if (url.includes("/refs/branches/") && method === "GET") {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify({ target: { hash: "already-committed" } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
+    }
+    if (url.endsWith("/src") && method === "POST") {
+      return new Response(JSON.stringify({ error: { message: "There are no changes to be committed." } }), {
+        status: 400
+      });
+    }
+    if (url.endsWith("/pullrequests") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          id: 12,
+          links: { html: { href: "https://bitbucket.org/acme/plane/pull-requests/12" } }
+        }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new BitbucketClient({ token: "bb" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 12);
+    assert.equal(result.commitSha, "already-committed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 await test("Bitbucket 400 surfaces the host's reason, not a bare rejection", async () => {
   globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
     const url = String(input);

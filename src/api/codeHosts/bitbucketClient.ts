@@ -1,5 +1,12 @@
 import { RateLimitTracker } from "../rateLimitTracker";
-import { codeHostRequest, codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
+import {
+  codeHostRequest,
+  codeHostRequestJson,
+  codeHostRequestOk,
+  decodeContent,
+  linesFromText,
+  paginatedCodeHostFetch
+} from "./codeHostHttp";
 import {
   BITBUCKET_PR_REJECTED_MESSAGE,
   BITBUCKET_PR_WRITE_FAILED_MESSAGE,
@@ -598,13 +605,7 @@ export class BitbucketClient implements CodeHostClient {
         appendBitbucketSrcFile(form, file);
       }
 
-      const commit = await codeHostRequestJson<{ hash: string }>(`${this.repoUrl(coords)}/src`, {
-        method: "POST",
-        headers: this.headers,
-        body: form,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      });
+      const commitSha = await this.commitSrcFiles(coords, { form, branch });
 
       const pull = await this.writeJson<{ id: number; links?: { html?: { href?: string } } }>(
         `${this.repoUrl(coords)}/pullrequests`,
@@ -619,7 +620,7 @@ export class BitbucketClient implements CodeHostClient {
         number: pull.id,
         htmlUrl: pull.links?.html?.href ?? "",
         branch,
-        commitSha: commit.hash,
+        commitSha,
         title
       };
     } catch (error) {
@@ -684,6 +685,45 @@ export class BitbucketClient implements CodeHostClient {
       authStatus,
       this.provider
     );
+  }
+
+  /**
+   * POST /src often returns 201 with an empty body and a Location header.
+   * Parsing that as JSON threw "Unexpected end of JSON input" after a successful commit.
+   */
+  private async commitSrcFiles(
+    coords: RepoCoordinates,
+    options: { form: FormData; branch: string }
+  ): Promise<string> {
+    try {
+      const response = await codeHostRequestOk(`${this.repoUrl(coords)}/src`, {
+        method: "POST",
+        headers: this.headers,
+        body: options.form,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      const hash =
+        commitHashFromBitbucketSrcResponse(response, await response.text()) ??
+        (await this.branchHeadSha(coords, options.branch));
+      if (!hash) {
+        throw new CodeHostError(
+          "Bitbucket accepted the commit but did not return a commit id.",
+          "network",
+          502,
+          this.provider
+        );
+      }
+      return hash;
+    } catch (error) {
+      if (error instanceof CodeHostError && isBitbucketNoChangesError(error)) {
+        const existing = await this.branchHeadSha(coords, options.branch);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 
   private async writeJson<T>(url: string, body: unknown): Promise<T> {
@@ -875,6 +915,40 @@ function appendBitbucketSrcFile(form: FormData, file: { path: string; content: s
   const repoPath = file.path.replace(/^\/+/, "");
   const filename = repoPath.split("/").pop() || repoPath;
   form.append(`/${repoPath}`, new Blob([file.content], { type: "text/plain; charset=utf-8" }), filename);
+}
+
+export function hashFromBitbucketCommitUrl(value: string): string | undefined {
+  const match = /\/commits?\/([a-fA-F0-9]{7,40})(?:\/|$|\?|#)/i.exec(value);
+  return match?.[1];
+}
+
+export function commitHashFromBitbucketSrcResponse(response: Response, bodyText: string): string | undefined {
+  const fromLocation = hashFromBitbucketCommitUrl(response.headers.get("location") ?? "");
+  if (fromLocation) {
+    return fromLocation;
+  }
+  if (!bodyText.trim()) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(bodyText) as { hash?: unknown; target?: { hash?: unknown } };
+    if (typeof parsed.hash === "string" && parsed.hash.trim()) {
+      return parsed.hash.trim();
+    }
+    if (typeof parsed.target?.hash === "string" && parsed.target.hash.trim()) {
+      return parsed.target.hash.trim();
+    }
+  } catch {
+    return hashFromBitbucketCommitUrl(bodyText);
+  }
+  return undefined;
+}
+
+function isBitbucketNoChangesError(error: CodeHostError): boolean {
+  if (error.status !== 400 && error.status !== 409) {
+    return false;
+  }
+  return /no changes/i.test(error.message);
 }
 
 function normalizePath(value: string): string {
