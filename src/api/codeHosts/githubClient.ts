@@ -11,7 +11,6 @@ import {
   GITHUB_PR_REJECTED_MESSAGE,
   GITHUB_PR_WRITE_FAILED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
-  githubAppInstallationHasPullWrite,
   githubTokenHasWriteScopes,
   normalizeWriteFiles,
   sanitizeBranchName,
@@ -48,8 +47,6 @@ type GitHubClientOptions = {
 export class GitHubClient implements CodeHostClient {
   public readonly provider = "github" as const;
   private readonly headers: Record<string, string>;
-  /** Set during createPullFromFiles when GET /installation reports Contents + Pull requests write. */
-  private githubAppPullWriteGranted: boolean | undefined;
 
   public constructor(private readonly options: GitHubClientOptions) {
     this.headers = {
@@ -655,38 +652,19 @@ export class GitHubClient implements CodeHostClient {
       throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
     }
 
-    this.githubAppPullWriteGranted = undefined;
-    await this.assertWritePermissions(coords);
+    await this.assertClassicOAuthWriteScopesIfPresent(coords);
 
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
-    const baseRef = await codeHostRequestJson<{ object: { sha: string } }>(
-      `${this.repoUrl(coords)}/git/ref/heads/${encodeURIComponent(base)}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-    const baseCommit = await codeHostRequestJson<{ tree: { sha: string } }>(
-      `${this.repoUrl(coords)}/git/commits/${baseRef.object.sha}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-
-    const blobShas: Array<{ path: string; sha: string }> = [];
+    let commitSha = "";
     for (const file of files) {
-      blobShas.push({ path: file.path, sha: await this.createBlob(coords, file.content) });
+      commitSha = await this.putContentsFile(coords, {
+        path: file.path,
+        content: file.content,
+        branch,
+        base,
+        message: title
+      });
     }
-    const treeSha = await this.createTree(coords, baseCommit.tree.sha, blobShas);
-    const commitSha = await this.createCommit(coords, {
-      message: title,
-      treeSha,
-      parentSha: baseRef.object.sha
-    });
-    await this.createRef(coords, branch, commitSha);
     try {
       const pull = await this.createPull(coords, {
         title,
@@ -736,18 +714,12 @@ export class GitHubClient implements CodeHostClient {
     return { filePaths, truncated: Boolean(tree.truncated) };
   }
 
-  private async assertWritePermissions(coords: RepoCoordinates): Promise<void> {
-    const appGrant = await this.readGithubAppWriteGrant();
-    if (appGrant === "insufficient") {
-      this.githubAppPullWriteGranted = false;
-      throw this.writePermissionError(403);
-    }
-    if (appGrant === "sufficient") {
-      this.githubAppPullWriteGranted = true;
-      return;
-    }
-
-    this.githubAppPullWriteGranted = undefined;
+  /**
+   * Classic OAuth tokens advertise scopes on GET /repos. GitHub App installation
+   * tokens omit that header — do not treat a missing header (or GET /installation)
+   * as “Accept the App update.” Write failures use GitHub’s own 403 body.
+   */
+  private async assertClassicOAuthWriteScopesIfPresent(coords: RepoCoordinates): Promise<void> {
     let response: Response;
     try {
       response = await codeHostRequest(this.repoUrl(coords), {
@@ -755,47 +727,90 @@ export class GitHubClient implements CodeHostClient {
         provider: this.provider,
         rateLimitTracker: this.options.rateLimitTracker
       });
-    } catch (error) {
-      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
-      }
-      throw error;
+    } catch {
+      return;
     }
     if (!response.ok) {
-      throw this.writePermissionError(response.status);
+      return;
     }
     const scopeOk = githubTokenHasWriteScopes(response.headers.get("x-oauth-scopes"));
+    await response.json().catch(() => undefined);
     if (scopeOk === false) {
       throw this.writePermissionError(403);
     }
-    await response.json().catch(() => undefined);
   }
 
-  private async readGithubAppWriteGrant(): Promise<"sufficient" | "insufficient" | "unknown"> {
+  private contentsUrl(coords: RepoCoordinates, filePath: string): string {
+    return `${this.repoUrl(coords)}/contents/${pathSegments(filePath)}`;
+  }
+
+  private async readContentSha(
+    coords: RepoCoordinates,
+    filePath: string,
+    ref: string
+  ): Promise<string | undefined> {
     try {
-      const response = await codeHostRequest(`${GITHUB_API}/installation`, {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      });
-      if (!response.ok) {
-        return "unknown";
+      const data = await codeHostRequestJson<{ sha?: string }>(
+        `${this.contentsUrl(coords, filePath)}?ref=${encodeURIComponent(ref)}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      return typeof data.sha === "string" && data.sha.trim() ? data.sha : undefined;
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return undefined;
       }
-      const payload = (await response.json()) as { permissions?: Record<string, string> };
-      return githubAppInstallationHasPullWrite(payload.permissions) ? "sufficient" : "insufficient";
-    } catch {
-      return "unknown";
+      throw error;
     }
+  }
+
+  private async putContentsFile(
+    coords: RepoCoordinates,
+    input: { path: string; content: string; branch: string; base: string; message: string }
+  ): Promise<string> {
+    const sha =
+      (await this.readContentSha(coords, input.path, input.branch)) ??
+      (input.branch !== input.base ? await this.readContentSha(coords, input.path, input.base) : undefined);
+    const data = await this.writeJson<{ commit?: { sha?: string } }>(
+      this.contentsUrl(coords, input.path),
+      {
+        message: input.message,
+        content: Buffer.from(input.content, "utf8").toString("base64"),
+        branch: input.branch,
+        ...(sha ? { sha } : {})
+      },
+      "PUT"
+    );
+    const commitSha = data.commit?.sha?.trim();
+    if (!commitSha) {
+      throw new CodeHostError("GitHub did not return a commit SHA.", "network", 502, this.provider);
+    }
+    return commitSha;
   }
 
   private writePermissionError(status: number): CodeHostError {
     return new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
   }
 
-  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+  private writeFailureError(error: CodeHostError): CodeHostError {
+    const extra = error.message
+      .replace("Authentication failed. Update your token in settings.", "")
+      .trim();
+    return new CodeHostError(
+      extra ? `${GITHUB_PR_WRITE_FAILED_MESSAGE} ${extra}` : GITHUB_PR_WRITE_FAILED_MESSAGE,
+      "auth",
+      error.status === 401 ? 401 : 403,
+      this.provider
+    );
+  }
+
+  private async writeJson<T>(url: string, body: unknown, method = "POST"): Promise<T> {
     try {
       return await codeHostRequestJson<T>(url, {
-        method: "POST",
+        method,
         headers: { ...this.headers, "Content-Type": "application/json" },
         body: JSON.stringify(body),
         provider: this.provider,
@@ -803,13 +818,7 @@ export class GitHubClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        if (this.githubAppPullWriteGranted === true) {
-          throw new CodeHostError(GITHUB_PR_WRITE_FAILED_MESSAGE, "auth", error.status, this.provider);
-        }
-        throw this.writePermissionError(error.status);
-      }
-      if (error instanceof CodeHostError && error.status === 422) {
-        throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+        throw this.writeFailureError(error);
       }
       throw error;
     }

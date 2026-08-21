@@ -30,6 +30,7 @@ import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "
 import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
+import { githubOAuthSyntheticInstallationId, isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import { CollectionStore } from "./collectionStore";
 import { normalizeIdentityDirectory } from "../identity/identityDirectory";
 import { mergeSelfIdentityHints } from "../identity/identityAutoSeed";
@@ -51,7 +52,6 @@ import {
 } from "./resolveAccessibleRepos";
 import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
 import type { GitHubAppService } from "./githubAppService";
-import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
 import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } from "../api/codeHosts/types";
 import { loadGitLabAppConfig, gitlabApiBaseUrl } from "./gitlabAppConfig";
 import { runCatalogSyncForProvider, CatalogSyncError, codeHostDisplayName } from "./catalogSyncService";
@@ -1128,6 +1128,37 @@ async function handleStoreGithubCredential(
   }
 }
 
+async function resolveTokenForCreatePull(
+  orgId: string,
+  provider: CodeHostProvider,
+  deps: OrgApiDeps
+): Promise<string | undefined> {
+  if (provider === "github" && deps.githubApp && deps.orgStore) {
+    const installation = await deps.orgStore.getCodeHostInstallation(orgId, "github");
+    if (installation && !isGithubOAuthInstallation(orgId, installation.installationId)) {
+      const minted = await deps.githubApp.createPullWriteAccessToken(installation.installationId);
+      await deps.orgStore.upsertCodeHostInstallation(
+        orgId,
+        "github",
+        installation.installationId,
+        minted.token,
+        minted.expiresAt
+      );
+      return minted.token;
+    }
+  }
+  return resolveCodeHostTokenForOrg(
+    orgId,
+    provider,
+    {
+      orgStore: deps.orgStore!,
+      connector: getConnector(provider),
+      allowPatFallback: deps.serverConfig.devMode
+    },
+    { forceRefresh: true }
+  );
+}
+
 async function handleCreateRepoPull(
   repoId: string,
   parsed: ParsedRequest,
@@ -1155,16 +1186,18 @@ async function handleCreateRepoPull(
     return;
   }
 
-  const token = await resolveCodeHostTokenForOrg(
-    auth.orgId,
-    target.provider,
-    {
-      orgStore: deps.orgStore,
-      connector: getConnector(target.provider),
-      allowPatFallback: deps.serverConfig.devMode
-    },
-    { forceRefresh: true }
-  );
+  let token: string | undefined;
+  try {
+    token = await resolveTokenForCreatePull(auth.orgId, target.provider, deps);
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to create pull request";
+    writeJson(response, 502, { error: message });
+    return;
+  }
   if (!token) {
     writeJson(response, 401, {
       error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`

@@ -80,7 +80,7 @@ export async function codeHostRequest(
       }
       options.rateLimitTracker?.updateFromHeaders(options.provider, headersToRecord(result.headers));
       if (result.status === 401 || result.status === 403) {
-        throw new CodeHostError("Authentication failed. Update your token in settings.", "auth", result.status, options.provider);
+        throw await authErrorFromResponse(result, options.provider);
       }
       if (result.status === 429) {
         throw new CodeHostError("Rate limit exceeded. Requests will retry shortly.", "rate_limit", result.status, options.provider);
@@ -145,6 +145,28 @@ export function decodeContent(
 export function linesFromText(text: string): Array<{ number: number; text: string }> {
   const parts = text.split(/\r?\n/);
   return parts.map((line, index) => ({ number: index + 1, text: line }));
+}
+
+async function authErrorFromResponse(response: Response, provider: CodeHostProvider): Promise<CodeHostError> {
+  const detail = await readJsonErrorMessage(response);
+  const base = "Authentication failed. Update your token in settings.";
+  return new CodeHostError(detail ? `${base} ${detail}` : base, "auth", response.status, provider);
+}
+
+async function readJsonErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    if (!text.trim()) {
+      return undefined;
+    }
+    const parsed = JSON.parse(text) as { message?: unknown };
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 function mapHttpError(response: Response, provider: CodeHostProvider): CodeHostError {

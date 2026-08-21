@@ -41,23 +41,14 @@ function installGithubMock(options?: { failPulls?: boolean }): { calls: Recorded
         headers: { "content-type": "application/json", "x-oauth-scopes": "repo" }
       });
     }
-    if (method === "GET" && url.includes("/git/ref/heads/")) {
-      return new Response(JSON.stringify({ object: { sha: "base-commit" } }), { status: 200 });
+    if (method === "GET" && url.includes("/contents/")) {
+      return new Response(JSON.stringify({ sha: "file-sha", type: "file" }), { status: 200 });
     }
-    if (method === "GET" && url.includes("/git/commits/")) {
-      return new Response(JSON.stringify({ tree: { sha: "base-tree" } }), { status: 200 });
-    }
-    if (method === "POST" && url.endsWith("/git/blobs")) {
-      return new Response(JSON.stringify({ sha: `blob-${calls.length}` }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/trees")) {
-      return new Response(JSON.stringify({ sha: "new-tree" }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/commits")) {
-      return new Response(JSON.stringify({ sha: "new-commit" }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/refs")) {
-      return new Response(JSON.stringify({ ref: "refs/heads/coop/patch" }), { status: 201 });
+    if (method === "PUT" && url.includes("/contents/")) {
+      return new Response(
+        JSON.stringify({ commit: { sha: "new-commit" }, content: { sha: "new-file-sha" } }),
+        { status: 201 }
+      );
     }
     if (method === "POST" && url.endsWith("/pulls")) {
       if (options?.failPulls) {
@@ -86,8 +77,7 @@ await test("C-G1 confirmed fixture files create branch + commit + PR URL", async
     assert.equal(result.htmlUrl, "https://github.com/acme/plane/pull/42");
     assert.equal(result.branch, "coop/patch");
     assert.equal(result.commitSha, "new-commit");
-    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/git/refs")));
-    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/git/commits")));
+    assert.ok(calls.some((call) => call.method === "PUT" && call.url.includes("/contents/")));
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   } finally {
     globalThis.fetch = originalFetch;

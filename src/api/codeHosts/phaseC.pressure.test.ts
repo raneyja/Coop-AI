@@ -3,6 +3,7 @@ import { GitHubClient } from "./githubClient";
 import { GitLabClient } from "./gitlabClient";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
+  GITHUB_PR_WRITE_FAILED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   GITLAB_WRITE_PERMISSION_MESSAGE,
   PHASE_C_FIXTURE_FILES,
@@ -43,32 +44,14 @@ function installGithubMock(options?: {
   scopes?: string | null;
   push?: boolean;
   failPulls?: boolean;
+  failContents?: boolean;
   statusOnRepo?: number;
-  installation?: "read" | "write";
 }): { calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     calls.push({ method, url });
-    if (method === "GET" && /api\.github\.com\/installation$/.test(url)) {
-      if (options?.installation === "read") {
-        return new Response(
-          JSON.stringify({
-            permissions: { contents: "read", metadata: "read", pull_requests: "read" }
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
-      if (options?.installation === "write") {
-        return new Response(
-          JSON.stringify({
-            permissions: { contents: "write", metadata: "read", pull_requests: "write" }
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
-    }
     if (method === "GET" && /\/repos\/acme\/plane$/.test(url)) {
       if (options?.statusOnRepo) {
         return new Response(JSON.stringify({ message: "Forbidden" }), { status: options.statusOnRepo });
@@ -85,23 +68,19 @@ function installGithubMock(options?: {
         }
       );
     }
-    if (method === "GET" && url.includes("/git/ref/heads/")) {
-      return new Response(JSON.stringify({ object: { sha: "base-commit" } }), { status: 200 });
+    if (method === "GET" && url.includes("/contents/")) {
+      return new Response(JSON.stringify({ sha: "file-sha", type: "file" }), { status: 200 });
     }
-    if (method === "GET" && url.includes("/git/commits/")) {
-      return new Response(JSON.stringify({ tree: { sha: "base-tree" } }), { status: 200 });
-    }
-    if (method === "POST" && url.endsWith("/git/blobs")) {
-      return new Response(JSON.stringify({ sha: `blob-${calls.length}` }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/trees")) {
-      return new Response(JSON.stringify({ sha: "new-tree" }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/commits")) {
-      return new Response(JSON.stringify({ sha: "new-commit" }), { status: 201 });
-    }
-    if (method === "POST" && url.endsWith("/git/refs")) {
-      return new Response(JSON.stringify({ ref: "refs/heads/coop/patch" }), { status: 201 });
+    if (method === "PUT" && url.includes("/contents/")) {
+      if (options?.failContents) {
+        return new Response(JSON.stringify({ message: "Resource not accessible by integration" }), {
+          status: 403
+        });
+      }
+      return new Response(
+        JSON.stringify({ commit: { sha: "new-commit" }, content: { sha: "new-file-sha" } }),
+        { status: 201 }
+      );
     }
     if (method === "POST" && url.endsWith("/pulls")) {
       if (options?.failPulls) {
@@ -134,7 +113,7 @@ await test("C-P1 missing contents/pull_requests → permission error, nothing cr
         error.message === GITHUB_WRITE_PERMISSION_MESSAGE
     );
     assert.equal(
-      calls.filter((call) => call.method === "POST").length,
+      calls.filter((call) => call.method === "POST" || call.method === "PUT").length,
       0,
       "no write calls after a permission failure"
     );
@@ -146,7 +125,7 @@ await test("C-P1 missing contents/pull_requests → permission error, nothing cr
 await test("GitHub App tokens are not blocked by collaborator push=false", async () => {
   assert.equal(githubWriteBlockedByCollaboratorPush(undefined, false), false);
   assert.equal(githubWriteBlockedByCollaboratorPush("repo", false), true);
-  const { calls } = installGithubMock({ scopes: null, push: false, installation: "write" });
+  const { calls } = installGithubMock({ scopes: null, push: false });
   try {
     const result = await new GitHubClient({ token: "ghs_installation" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
       branch: "coop/patch",
@@ -154,26 +133,29 @@ await test("GitHub App tokens are not blocked by collaborator push=false", async
       files: PHASE_C_FIXTURE_FILES
     });
     assert.equal(result.htmlUrl, "https://github.com/acme/plane/pull/7");
+    assert.ok(calls.some((call) => call.method === "PUT" && call.url.includes("/contents/")));
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-await test("GitHub App installation with Contents read blocks before any write", async () => {
-  const { calls } = installGithubMock({ scopes: null, installation: "read" });
+await test("GitHub Contents 403 surfaces GitHub's refusal, not Accept copy", async () => {
+  const { calls } = installGithubMock({ scopes: null, failContents: true });
   try {
     await assert.rejects(
       () =>
-        new GitHubClient({ token: "ghs_readonly" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+        new GitHubClient({ token: "ghs_installation" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
           branch: "coop/patch",
           title: "Fixture",
           files: PHASE_C_FIXTURE_FILES
         }),
       (error: unknown) =>
-        error instanceof CodeHostError && error.message === GITHUB_WRITE_PERMISSION_MESSAGE
+        error instanceof CodeHostError &&
+        error.message.startsWith(GITHUB_PR_WRITE_FAILED_MESSAGE) &&
+        error.message.includes("Resource not accessible by integration")
     );
-    assert.equal(calls.filter((call) => call.method === "POST").length, 0);
+    assert.equal(calls.filter((call) => call.method === "POST" && call.url.endsWith("/pulls")).length, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -273,7 +255,7 @@ await test("C-P3 API 422 → error, no half-branch claimed as success", async ()
         error.status === 422 &&
         error.message === GITHUB_PR_REJECTED_MESSAGE
     );
-    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/git/refs")));
+    assert.ok(calls.some((call) => call.method === "PUT" && call.url.includes("/contents/")));
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   } finally {
     globalThis.fetch = originalFetch;

@@ -1,10 +1,21 @@
 import { createHmac, createSign, timingSafeEqual } from "node:crypto";
+import { CodeHostError } from "../api/codeHosts/types";
+import {
+  GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubAppInstallationHasPullWrite
+} from "../api/codeHosts/pullRequestWrite";
 
 const GITHUB_API = "https://api.github.com";
+
+export const GITHUB_APP_PULL_WRITE_PERMISSIONS = {
+  contents: "write",
+  pull_requests: "write"
+} as const;
 
 export type InstallationTokenResponse = {
   token: string;
   expiresAt: Date;
+  permissions?: Record<string, string>;
 };
 
 export type GitHubAppServiceOptions = {
@@ -47,29 +58,60 @@ export class GitHubAppService {
     return `${orgId}.${issuedAt}.${signature}`;
   }
 
-  public async createInstallationAccessToken(installationId: number): Promise<InstallationTokenResponse> {
+  public async createInstallationAccessToken(
+    installationId: number,
+    options?: { permissions?: Record<string, "read" | "write"> }
+  ): Promise<InstallationTokenResponse> {
     const jwt = this.createAppJwt();
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${jwt}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "coop-ai-backend"
+    };
+    const body = options?.permissions ? JSON.stringify({ permissions: options.permissions }) : undefined;
+    if (body) {
+      headers["Content-Type"] = "application/json";
+    }
     const response = await fetch(`${GITHUB_API}/app/installations/${installationId}/access_tokens`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "coop-ai-backend"
-      }
+      headers,
+      body
     });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GitHub installation token exchange failed (${response.status}): ${body}`);
+    if (response.status === 422 && options?.permissions) {
+      throw new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", 403, "github");
     }
-    const data = (await response.json()) as { token?: string; expires_at?: string };
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`GitHub installation token exchange failed (${response.status}): ${errorBody}`);
+    }
+    const data = (await response.json()) as {
+      token?: string;
+      expires_at?: string;
+      permissions?: Record<string, string>;
+    };
     if (!data.token || !data.expires_at) {
       throw new Error("GitHub installation token response missing fields");
     }
     return {
       token: data.token,
-      expiresAt: new Date(data.expires_at)
+      expiresAt: new Date(data.expires_at),
+      permissions: data.permissions
     };
+  }
+
+  /**
+   * Mint an installation token that GitHub has explicitly granted Contents + Pull
+   * requests write. 422 here is the real “Accept the App update” signal.
+   */
+  public async createPullWriteAccessToken(installationId: number): Promise<InstallationTokenResponse> {
+    const minted = await this.createInstallationAccessToken(installationId, {
+      permissions: { ...GITHUB_APP_PULL_WRITE_PERMISSIONS }
+    });
+    if (minted.permissions && !githubAppInstallationHasPullWrite(minted.permissions)) {
+      throw new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", 403, "github");
+    }
+    return minted;
   }
 
   /** Paginate GET /installation/repositories — returns normalized github:owner/repo ids. */
