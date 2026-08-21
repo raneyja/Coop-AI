@@ -635,7 +635,7 @@ export class BitbucketClient implements CodeHostClient {
       };
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writeFailure(error.status);
+        throw this.writeFailure(error);
       }
       if (error instanceof CodeHostError && (error.status === 400 || error.status === 409)) {
         throw new CodeHostError(BITBUCKET_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
@@ -667,7 +667,9 @@ export class BitbucketClient implements CodeHostClient {
       if (!response.ok) {
         return "unknown";
       }
-      const header = response.headers.get("x-oauth-scopes") ?? response.headers.get("x-accepted-oauth-scopes");
+      // Only trust x-oauth-scopes (what the token has). x-accepted-oauth-scopes is
+      // what THIS GET requires — usually `repository` — and must not fail a write.
+      const header = response.headers.get("x-oauth-scopes");
       if (!header?.trim()) {
         return "unknown";
       }
@@ -677,11 +679,22 @@ export class BitbucketClient implements CodeHostClient {
     }
   }
 
-  private writeFailure(status: number): CodeHostError {
-    if (this.bitbucketPullWriteGranted === true) {
-      return new CodeHostError(BITBUCKET_PR_WRITE_FAILED_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
+  private writeFailure(error: CodeHostError | number): CodeHostError {
+    const status = typeof error === "number" ? error : error.status;
+    const authStatus = status === 401 ? 401 : 403;
+    if (this.bitbucketPullWriteGranted === false) {
+      return this.writePermissionError(authStatus);
     }
-    return this.writePermissionError(status);
+    const extra =
+      typeof error === "number"
+        ? ""
+        : error.message.replace("Authentication failed. Update your token in settings.", "").trim();
+    return new CodeHostError(
+      extra ? `${BITBUCKET_PR_WRITE_FAILED_MESSAGE} ${extra}` : BITBUCKET_PR_WRITE_FAILED_MESSAGE,
+      "auth",
+      authStatus,
+      this.provider
+    );
   }
 
   private async writeJson<T>(url: string, body: unknown): Promise<T> {
@@ -695,7 +708,7 @@ export class BitbucketClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writeFailure(error.status);
+        throw this.writeFailure(error);
       }
       throw error;
     }

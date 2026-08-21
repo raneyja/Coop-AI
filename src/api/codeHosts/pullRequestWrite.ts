@@ -224,7 +224,12 @@ export function gitlabScopesAllowPullWrite(scopes: Set<string>): boolean {
 }
 
 export function bitbucketScopesAllowPullWrite(scopes: Set<string>): boolean {
-  return scopes.has("repository:write") && scopes.has("pullrequest:write");
+  // Classic OAuth: pullrequest:write implies repository:write.
+  if (scopes.has("pullrequest:write")) {
+    return true;
+  }
+  // Forge / API tokens list scopes independently (write:pullrequest does not imply write:repository).
+  return scopes.has("write:pullrequest:bitbucket") && scopes.has("write:repository:bitbucket");
 }
 
 /**

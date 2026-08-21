@@ -41,6 +41,18 @@ function installGithubMock(options?: { failPulls?: boolean }): { calls: Recorded
         headers: { "content-type": "application/json", "x-oauth-scopes": "repo" }
       });
     }
+    if (method === "GET" && url.includes("/git/matching-refs/")) {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify([{ ref: "refs/heads/main", object: { sha: "base-sha" } }]),
+        { status: 200 }
+      );
+    }
+    if (method === "POST" && url.endsWith("/git/refs")) {
+      return new Response(JSON.stringify({ ref: "refs/heads/coop/patch" }), { status: 201 });
+    }
     if (method === "GET" && url.includes("/contents/")) {
       return new Response(JSON.stringify({ sha: "file-sha", type: "file" }), { status: 200 });
     }
@@ -77,8 +89,12 @@ await test("C-G1 confirmed fixture files create branch + commit + PR URL", async
     assert.equal(result.htmlUrl, "https://github.com/acme/plane/pull/42");
     assert.equal(result.branch, "coop/patch");
     assert.equal(result.commitSha, "new-commit");
+    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/git/refs")));
     assert.ok(calls.some((call) => call.method === "PUT" && call.url.includes("/contents/")));
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
+    const refIndex = calls.findIndex((call) => call.method === "POST" && call.url.endsWith("/git/refs"));
+    const putIndex = calls.findIndex((call) => call.method === "PUT" && call.url.includes("/contents/"));
+    assert.ok(refIndex >= 0 && putIndex > refIndex, "GitHub must create coop/patch before writing files");
   } finally {
     globalThis.fetch = originalFetch;
   }

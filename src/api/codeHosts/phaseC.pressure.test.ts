@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { GitHubClient } from "./githubClient";
 import { GitLabClient } from "./gitlabClient";
+import { BitbucketClient } from "./bitbucketClient";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
   GITHUB_PR_WRITE_FAILED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   GITLAB_WRITE_PERMISSION_MESSAGE,
+  BITBUCKET_WRITE_PERMISSION_MESSAGE,
   PHASE_C_FIXTURE_FILES,
   PHASE_C_FIXTURE_REPO,
   bitbucketScopesAllowPullWrite,
@@ -67,6 +69,18 @@ function installGithubMock(options?: {
           headers
         }
       );
+    }
+    if (method === "GET" && url.includes("/git/matching-refs/")) {
+      if (url.includes("coop")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify([{ ref: "refs/heads/main", object: { sha: "base-sha" } }]),
+        { status: 200 }
+      );
+    }
+    if (method === "POST" && url.endsWith("/git/refs")) {
+      return new Response(JSON.stringify({ ref: "refs/heads/coop/patch" }), { status: 201 });
     }
     if (method === "GET" && url.includes("/contents/")) {
       return new Response(JSON.stringify({ sha: "file-sha", type: "file" }), { status: 200 });
@@ -168,6 +182,81 @@ await test("GitLab and Bitbucket grant checks match write scopes", () => {
   assert.equal(gitlabScopesAllowPullWrite(new Set(["api", "write_repository"])), true);
   assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write"])), false);
   assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write", "pullrequest:write"])), true);
+  assert.equal(bitbucketScopesAllowPullWrite(new Set(["pullrequest:write"])), true);
+  assert.equal(
+    bitbucketScopesAllowPullWrite(new Set(["write:repository:bitbucket", "write:pullrequest:bitbucket"])),
+    true
+  );
+});
+
+await test("Bitbucket GET accepted-scopes (read) must not block a write token", async () => {
+  const requested: string[] = [];
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    requested.push(`${method} ${url}`);
+    if (method === "GET" && /\/repositories\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ slug: "plane" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-accepted-oauth-scopes": "repository" }
+      });
+    }
+    if (url.includes("/refs/branches/main") && method === "GET") {
+      return new Response(JSON.stringify({ target: { hash: "parent-sha" } }), { status: 200 });
+    }
+    if (url.endsWith("/repositories/acme/plane/src") && method === "POST") {
+      return new Response(JSON.stringify({ hash: "bb-commit" }), { status: 201 });
+    }
+    if (url.endsWith("/repositories/acme/plane/pullrequests") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          id: 9,
+          links: { html: { href: "https://bitbucket.org/acme/plane/pull-requests/9" } }
+        }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new BitbucketClient({ token: "bb" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 9);
+    assert.ok(requested.some((entry) => entry.startsWith("POST ") && entry.endsWith("/src")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("Bitbucket token with only repository read still blocks before writes", async () => {
+  const requested: string[] = [];
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    requested.push(url);
+    if (/\/repositories\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ slug: "plane" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-oauth-scopes": "account repository" }
+      });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        new BitbucketClient({ token: "bb" }).createPullFromFiles(
+          { ...PHASE_C_FIXTURE_REPO, provider: "bitbucket" },
+          { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+        ),
+      (error: unknown) =>
+        error instanceof CodeHostError && error.message === BITBUCKET_WRITE_PERMISSION_MESSAGE
+    );
+    assert.equal(requested.some((url) => url.endsWith("/src")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 await test("GitLab token/info without write_repository blocks before commits", async () => {
@@ -191,6 +280,57 @@ await test("GitLab token/info without write_repository blocks before commits", a
         error instanceof CodeHostError && error.message === GITLAB_WRITE_PERMISSION_MESSAGE
     );
     assert.equal(requested.some((url) => url.includes("/repository/commits")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitHub creates coop/patch from the base branch before writing files", async () => {
+  const { calls } = installGithubMock();
+  try {
+    await new GitHubClient({ token: "ghs_installation" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+      branch: "coop/patch",
+      title: "Fixture",
+      files: PHASE_C_FIXTURE_FILES
+    });
+    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/git/refs")));
+    const refIndex = calls.findIndex((call) => call.method === "POST" && call.url.endsWith("/git/refs"));
+    const putIndex = calls.findIndex((call) => call.method === "PUT" && call.url.includes("/contents/"));
+    assert.ok(putIndex > refIndex);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitHub missing base branch is not a generic Resource not found", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "GET" && /\/repos\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ default_branch: "main" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-oauth-scopes": "repo" }
+      });
+    }
+    if (method === "GET" && url.includes("/git/matching-refs/")) {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        new GitHubClient({ token: "ghs_test" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+          branch: "coop/patch",
+          title: "Fixture",
+          files: PHASE_C_FIXTURE_FILES
+        }),
+      (error: unknown) =>
+        error instanceof CodeHostError &&
+        error.code === "not_found" &&
+        error.message.includes("base branch main") &&
+        !error.message.startsWith("Resource not found.")
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
