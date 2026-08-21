@@ -17,11 +17,20 @@ export const BITBUCKET_PR_WRITE_SCOPES = ["repository:write", "account", "pullre
 export const GITHUB_WRITE_PERMISSION_MESSAGE =
   "Coop cannot create a pull request on this GitHub repo. Grant Contents and Pull requests write on the GitHub App, accept the update, then try again. Nothing was created.";
 
+export const GITHUB_PR_WRITE_FAILED_MESSAGE =
+  "GitHub refused to create this pull request. Nothing was created.";
+
 export const GITLAB_WRITE_PERMISSION_MESSAGE =
   "This GitLab token cannot create merge requests. Reconnect GitLab in Coop with api and write_repository access, then try again. Nothing was created.";
 
+export const GITLAB_PR_WRITE_FAILED_MESSAGE =
+  "GitLab refused to create this merge request. Nothing was created.";
+
 export const BITBUCKET_WRITE_PERMISSION_MESSAGE =
   "This Bitbucket token cannot create pull requests. Reconnect Bitbucket in Coop with repository:write and pullrequest:write, then try again. Nothing was created.";
+
+export const BITBUCKET_PR_WRITE_FAILED_MESSAGE =
+  "Bitbucket refused to create this pull request. Nothing was created.";
 
 export const GITHUB_PR_REJECTED_MESSAGE =
   "GitHub rejected this pull request (422). No pull request was created.";
@@ -150,17 +159,42 @@ export function githubTokenHasWriteScopes(oauthScopesHeader: string | null | und
   if (!oauthScopesHeader || !oauthScopesHeader.trim()) {
     return undefined;
   }
-  const scopes = new Set(
-    oauthScopesHeader
-      .split(",")
-      .map((scope) => scope.trim().toLowerCase())
-      .filter(Boolean)
-  );
+  const scopes = parseOAuthScopeSet(oauthScopesHeader);
   const hasRepo = scopes.has("repo") || scopes.has("public_repo");
   const hasContents = hasRepo || scopes.has("contents") || scopes.has("contents:write");
   const hasPulls =
     hasRepo || scopes.has("pull_request") || scopes.has("pull_requests") || scopes.has("pull_requests:write");
   return hasContents && hasPulls;
+}
+
+export function parseOAuthScopeSet(raw: string | string[] | null | undefined): Set<string> {
+  const parts = Array.isArray(raw)
+    ? raw
+    : (raw ?? "")
+        .split(/[,\s]+/)
+        .map((scope) => scope.trim())
+        .filter(Boolean);
+  return new Set(parts.map((scope) => scope.toLowerCase()));
+}
+
+/** GitHub App installation tokens report Contents / Pull requests on GET /installation. */
+export function githubAppInstallationHasPullWrite(
+  permissions: Record<string, string> | undefined
+): boolean {
+  if (!permissions) {
+    return false;
+  }
+  const contents = (permissions.contents ?? "").toLowerCase();
+  const pulls = (permissions.pull_requests ?? permissions.pull_request ?? "").toLowerCase();
+  return contents === "write" && pulls === "write";
+}
+
+export function gitlabScopesAllowPullWrite(scopes: Set<string>): boolean {
+  return scopes.has("api") && scopes.has("write_repository");
+}
+
+export function bitbucketScopesAllowPullWrite(scopes: Set<string>): boolean {
+  return scopes.has("repository:write") && scopes.has("pullrequest:write");
 }
 
 /**

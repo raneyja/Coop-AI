@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { GitHubClient } from "./githubClient";
+import { GitLabClient } from "./gitlabClient";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
+  GITLAB_WRITE_PERMISSION_MESSAGE,
   PHASE_C_FIXTURE_FILES,
   PHASE_C_FIXTURE_REPO,
+  bitbucketScopesAllowPullWrite,
   createConfirmSubmitGuard,
   evaluateCreatePullRequest,
+  githubAppInstallationHasPullWrite,
   githubWriteBlockedByCollaboratorPush,
+  gitlabScopesAllowPullWrite,
   resetPullCreateLocks,
   validateCreatePullRequestInput,
   withPullCreateLock
@@ -39,12 +44,31 @@ function installGithubMock(options?: {
   push?: boolean;
   failPulls?: boolean;
   statusOnRepo?: number;
+  installation?: "read" | "write";
 }): { calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     calls.push({ method, url });
+    if (method === "GET" && /api\.github\.com\/installation$/.test(url)) {
+      if (options?.installation === "read") {
+        return new Response(
+          JSON.stringify({
+            permissions: { contents: "read", metadata: "read", pull_requests: "read" }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (options?.installation === "write") {
+        return new Response(
+          JSON.stringify({
+            permissions: { contents: "write", metadata: "read", pull_requests: "write" }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
     if (method === "GET" && /\/repos\/acme\/plane$/.test(url)) {
       if (options?.statusOnRepo) {
         return new Response(JSON.stringify({ message: "Forbidden" }), { status: options.statusOnRepo });
@@ -122,7 +146,7 @@ await test("C-P1 missing contents/pull_requests → permission error, nothing cr
 await test("GitHub App tokens are not blocked by collaborator push=false", async () => {
   assert.equal(githubWriteBlockedByCollaboratorPush(undefined, false), false);
   assert.equal(githubWriteBlockedByCollaboratorPush("repo", false), true);
-  const { calls } = installGithubMock({ scopes: null, push: false });
+  const { calls } = installGithubMock({ scopes: null, push: false, installation: "write" });
   try {
     const result = await new GitHubClient({ token: "ghs_installation" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
       branch: "coop/patch",
@@ -131,6 +155,60 @@ await test("GitHub App tokens are not blocked by collaborator push=false", async
     });
     assert.equal(result.htmlUrl, "https://github.com/acme/plane/pull/7");
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitHub App installation with Contents read blocks before any write", async () => {
+  const { calls } = installGithubMock({ scopes: null, installation: "read" });
+  try {
+    await assert.rejects(
+      () =>
+        new GitHubClient({ token: "ghs_readonly" }).createPullFromFiles(PHASE_C_FIXTURE_REPO, {
+          branch: "coop/patch",
+          title: "Fixture",
+          files: PHASE_C_FIXTURE_FILES
+        }),
+      (error: unknown) =>
+        error instanceof CodeHostError && error.message === GITHUB_WRITE_PERMISSION_MESSAGE
+    );
+    assert.equal(calls.filter((call) => call.method === "POST").length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab and Bitbucket grant checks match write scopes", () => {
+  assert.equal(githubAppInstallationHasPullWrite({ contents: "read", pull_requests: "read" }), false);
+  assert.equal(githubAppInstallationHasPullWrite({ contents: "write", pull_requests: "write" }), true);
+  assert.equal(gitlabScopesAllowPullWrite(new Set(["api"])), false);
+  assert.equal(gitlabScopesAllowPullWrite(new Set(["api", "write_repository"])), true);
+  assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write"])), false);
+  assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write", "pullrequest:write"])), true);
+});
+
+await test("GitLab token/info without write_repository blocks before commits", async () => {
+  const requested: string[] = [];
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    requested.push(url);
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["read_api"] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        new GitLabClient({ token: "glpat" }).createPullFromFiles(
+          { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+          { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+        ),
+      (error: unknown) =>
+        error instanceof CodeHostError && error.message === GITLAB_WRITE_PERMISSION_MESSAGE
+    );
+    assert.equal(requested.some((url) => url.includes("/repository/commits")), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

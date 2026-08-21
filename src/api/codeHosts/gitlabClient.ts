@@ -8,7 +8,10 @@ import {
 } from "./codeHostHttp";
 import {
   GITLAB_PR_REJECTED_MESSAGE,
+  GITLAB_PR_WRITE_FAILED_MESSAGE,
+  gitlabScopesAllowPullWrite,
   normalizeWriteFiles,
+  parseOAuthScopeSet,
   sanitizeBranchName,
   validateCreatePullRequestInput,
   writePermissionMessage
@@ -49,6 +52,7 @@ export class GitLabClient implements CodeHostClient {
   public readonly provider = "gitlab" as const;
   private readonly apiBase: string;
   private readonly headers: Record<string, string>;
+  private gitlabPullWriteGranted: boolean | undefined;
 
   public constructor(private readonly options: GitLabClientOptions) {
     this.apiBase = (options.baseUrl ?? DEFAULT_GITLAB_API).replace(/\/$/, "");
@@ -477,6 +481,9 @@ export class GitLabClient implements CodeHostClient {
       throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
     }
 
+    this.gitlabPullWriteGranted = undefined;
+    await this.assertWriteGrant();
+
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
     const projectId = await this.projectId(coords);
     const actions: Array<{ action: "create" | "update"; file_path: string; content: string }> = [];
@@ -517,7 +524,7 @@ export class GitLabClient implements CodeHostClient {
       };
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
+        throw this.writeFailure(error.status);
       }
       if (error instanceof CodeHostError && (error.status === 409 || error.status === 400)) {
         throw new CodeHostError(GITLAB_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
@@ -556,10 +563,42 @@ export class GitLabClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
+        throw this.writeFailure(error.status);
       }
       throw error;
     }
+  }
+
+  private async assertWriteGrant(): Promise<void> {
+    const grant = await this.readGitlabWriteGrant();
+    if (grant === "insufficient") {
+      this.gitlabPullWriteGranted = false;
+      throw this.writePermissionError(403);
+    }
+    if (grant === "sufficient") {
+      this.gitlabPullWriteGranted = true;
+    }
+  }
+
+  private async readGitlabWriteGrant(): Promise<"sufficient" | "insufficient" | "unknown"> {
+    try {
+      const origin = this.apiBase.replace(/\/api\/v4\/?$/, "");
+      const payload = await codeHostRequestJson<{ scope?: string | string[] }>(`${origin}/oauth/token/info`, {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      return gitlabScopesAllowPullWrite(parseOAuthScopeSet(payload.scope)) ? "sufficient" : "insufficient";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  private writeFailure(status: number): CodeHostError {
+    if (this.gitlabPullWriteGranted === true) {
+      return new CodeHostError(GITLAB_PR_WRITE_FAILED_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
+    }
+    return this.writePermissionError(status);
   }
 
   private writePermissionError(status: number): CodeHostError {

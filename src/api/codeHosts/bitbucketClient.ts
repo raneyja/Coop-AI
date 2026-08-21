@@ -1,8 +1,11 @@
 import { RateLimitTracker } from "../rateLimitTracker";
-import { codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
+import { codeHostRequest, codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
 import {
   BITBUCKET_PR_REJECTED_MESSAGE,
+  BITBUCKET_PR_WRITE_FAILED_MESSAGE,
+  bitbucketScopesAllowPullWrite,
   normalizeWriteFiles,
+  parseOAuthScopeSet,
   sanitizeBranchName,
   validateCreatePullRequestInput,
   writePermissionMessage
@@ -38,6 +41,7 @@ type BitbucketClientOptions = {
 export class BitbucketClient implements CodeHostClient {
   public readonly provider = "bitbucket" as const;
   private readonly headers: Record<string, string>;
+  private bitbucketPullWriteGranted: boolean | undefined;
 
   public constructor(private readonly options: BitbucketClientOptions) {
     if (options.token) {
@@ -579,21 +583,24 @@ export class BitbucketClient implements CodeHostClient {
       throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
     }
 
-    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
-    try {
-      const baseRef = await codeHostRequestJson<{ target?: { hash?: string } }>(
-        `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(base)}`,
-        {
-          headers: this.headers,
-          provider: this.provider,
-          rateLimitTracker: this.options.rateLimitTracker
-        }
-      );
-      const parent = baseRef.target?.hash?.trim();
-      if (!parent) {
-        throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
-      }
+    this.bitbucketPullWriteGranted = undefined;
+    await this.assertWriteGrant(coords);
 
+    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
+    const baseRef = await codeHostRequestJson<{ target?: { hash?: string } }>(
+      `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(base)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const parent = baseRef.target?.hash?.trim();
+    if (!parent) {
+      throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
+    }
+
+    try {
       const form = new FormData();
       form.append("message", title);
       form.append("branch", branch);
@@ -628,13 +635,53 @@ export class BitbucketClient implements CodeHostClient {
       };
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
+        throw this.writeFailure(error.status);
       }
       if (error instanceof CodeHostError && (error.status === 400 || error.status === 409)) {
         throw new CodeHostError(BITBUCKET_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
       }
       throw error;
     }
+  }
+
+  private async assertWriteGrant(coords: RepoCoordinates): Promise<void> {
+    const grant = await this.readBitbucketWriteGrant(coords);
+    if (grant === "insufficient") {
+      this.bitbucketPullWriteGranted = false;
+      throw this.writePermissionError(403);
+    }
+    if (grant === "sufficient") {
+      this.bitbucketPullWriteGranted = true;
+    }
+  }
+
+  private async readBitbucketWriteGrant(
+    coords: RepoCoordinates
+  ): Promise<"sufficient" | "insufficient" | "unknown"> {
+    try {
+      const response = await codeHostRequest(this.repoUrl(coords), {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      if (!response.ok) {
+        return "unknown";
+      }
+      const header = response.headers.get("x-oauth-scopes") ?? response.headers.get("x-accepted-oauth-scopes");
+      if (!header?.trim()) {
+        return "unknown";
+      }
+      return bitbucketScopesAllowPullWrite(parseOAuthScopeSet(header)) ? "sufficient" : "insufficient";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  private writeFailure(status: number): CodeHostError {
+    if (this.bitbucketPullWriteGranted === true) {
+      return new CodeHostError(BITBUCKET_PR_WRITE_FAILED_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
+    }
+    return this.writePermissionError(status);
   }
 
   private async writeJson<T>(url: string, body: unknown): Promise<T> {
@@ -648,7 +695,7 @@ export class BitbucketClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
+        throw this.writeFailure(error.status);
       }
       throw error;
     }

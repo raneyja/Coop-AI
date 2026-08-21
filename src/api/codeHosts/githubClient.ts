@@ -9,9 +9,10 @@ import {
 } from "./codeHostHttp";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
+  GITHUB_PR_WRITE_FAILED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubAppInstallationHasPullWrite,
   githubTokenHasWriteScopes,
-  githubWriteBlockedByCollaboratorPush,
   normalizeWriteFiles,
   sanitizeBranchName,
   validateCreatePullRequestInput
@@ -47,6 +48,8 @@ type GitHubClientOptions = {
 export class GitHubClient implements CodeHostClient {
   public readonly provider = "github" as const;
   private readonly headers: Record<string, string>;
+  /** Set during createPullFromFiles when GET /installation reports Contents + Pull requests write. */
+  private githubAppPullWriteGranted: boolean | undefined;
 
   public constructor(private readonly options: GitHubClientOptions) {
     this.headers = {
@@ -652,6 +655,7 @@ export class GitHubClient implements CodeHostClient {
       throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
     }
 
+    this.githubAppPullWriteGranted = undefined;
     await this.assertWritePermissions(coords);
 
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
@@ -733,6 +737,17 @@ export class GitHubClient implements CodeHostClient {
   }
 
   private async assertWritePermissions(coords: RepoCoordinates): Promise<void> {
+    const appGrant = await this.readGithubAppWriteGrant();
+    if (appGrant === "insufficient") {
+      this.githubAppPullWriteGranted = false;
+      throw this.writePermissionError(403);
+    }
+    if (appGrant === "sufficient") {
+      this.githubAppPullWriteGranted = true;
+      return;
+    }
+
+    this.githubAppPullWriteGranted = undefined;
     let response: Response;
     try {
       response = await codeHostRequest(this.repoUrl(coords), {
@@ -749,14 +764,27 @@ export class GitHubClient implements CodeHostClient {
     if (!response.ok) {
       throw this.writePermissionError(response.status);
     }
-    const scopesHeader = response.headers.get("x-oauth-scopes");
-    const scopeOk = githubTokenHasWriteScopes(scopesHeader);
+    const scopeOk = githubTokenHasWriteScopes(response.headers.get("x-oauth-scopes"));
     if (scopeOk === false) {
       throw this.writePermissionError(403);
     }
-    const repo = (await response.json()) as { permissions?: { push?: boolean } };
-    if (githubWriteBlockedByCollaboratorPush(scopesHeader, repo.permissions?.push)) {
-      throw this.writePermissionError(403);
+    await response.json().catch(() => undefined);
+  }
+
+  private async readGithubAppWriteGrant(): Promise<"sufficient" | "insufficient" | "unknown"> {
+    try {
+      const response = await codeHostRequest(`${GITHUB_API}/installation`, {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      if (!response.ok) {
+        return "unknown";
+      }
+      const payload = (await response.json()) as { permissions?: Record<string, string> };
+      return githubAppInstallationHasPullWrite(payload.permissions) ? "sufficient" : "insufficient";
+    } catch {
+      return "unknown";
     }
   }
 
@@ -775,6 +803,9 @@ export class GitHubClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        if (this.githubAppPullWriteGranted === true) {
+          throw new CodeHostError(GITHUB_PR_WRITE_FAILED_MESSAGE, "auth", error.status, this.provider);
+        }
         throw this.writePermissionError(error.status);
       }
       if (error instanceof CodeHostError && error.status === 422) {
