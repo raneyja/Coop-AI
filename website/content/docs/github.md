@@ -49,10 +49,10 @@ If the App is on your org but Coop shows not connected, click **Connect (GitHub 
 - Webhook-driven repo indexing (push, PR events)
 - CODEOWNERS and blame for **Find Owner**
 - PR and commit history for **Trace Decision**
-- **Create pull request** from an applied `/edit` patch — uses this same App connection
+- **Create pull request** from an applied `/edit` patch
 - Symbol graph and dependency analysis (Deep-Index / Lightning Mode — all plans)
 
-To open a PR from VS Code after Apply, see [Create pull request](/docs/create-pull-request). No extra token or App setup — if GitHub is **Connected** here, Create pull request uses that connection.
+To open a PR from VS Code after Apply, see [Create pull request](/docs/create-pull-request). It uses this GitHub connection.
 
 ## GitHub App vs OAuth
 
@@ -91,7 +91,6 @@ Suggested scopes: `repo`, `read:org`.
 | "Sign in to Coop first" | Sign in under **Settings → Account** (Google, email, or **Sign in with SSO** for Enterprise) |
 | Callback fails | Setup URL must match `https://api.coop-ai.dev/v1/github/app/callback` |
 | Still see PAT field | Disable `coopAI.devMode` for production |
-| Create pull request → permission error | Confirm **Integrations** shows **Connected**. If the repo is missing from **Indexing**, reconnect GitHub and select it during install. Do not create a PAT. |
 
 ## Coop sign-in vs GitHub
 

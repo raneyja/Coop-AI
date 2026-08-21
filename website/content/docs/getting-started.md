@@ -129,7 +129,7 @@ After sign-in, confirm the hot path:
 | **Model & chat** | **Settings → Preferences → Model & chat** — four assigned models (Chat, Quick actions, /edit, Autocomplete), no provider picker |
 | **Autocomplete** | Sidebar **Autocomplete On** → type in `.ts` → ghost text → **Tab** accepts |
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
-| **Create pull request** | After Apply, **Create pull request** → confirm branch / title / notes → host URL in the modal |
+| **Create pull request** | After Apply, **Create pull request** → confirm branch, title, and notes → a link to the PR |
 | **Quick action (file)** | `/trace` on a selection → structured answer with sources |
 | **Understand Repo** | **Use repo** on the repository → **Workflows → Understand Repo** or `/understand` → repo-wide overview |
 | **Plain chat** | Composer question → grounded reply (GPT-5 mini) |

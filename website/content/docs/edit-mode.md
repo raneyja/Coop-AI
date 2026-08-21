@@ -80,7 +80,7 @@ flowchart LR
 3. **Review** — A VS Code notification shows **Patch ready — N file(s) (M edits)** with **Apply** and **Reject**. Dismissing the notification (X) keeps the patch pending — run **CoopAI: Apply Patch** later.
 4. **Apply** — Click **Apply** or run **CoopAI: Apply Patch** (`coopAI.applyPatch`). Changed files are written in the workspace. SEARCH blocks tolerate minor whitespace drift (indent/trim) when an exact match is not found.
 5. **Undo** — After apply, the success notification includes **Undo**, or run **CoopAI: Undo Last Patch** (`coopAI.undoLastPatch`).
-6. **Create a pull request** — After Apply, the patch card shows **Create pull request**. Confirm branch, title, and notes — nothing is created on the host until you submit. See [Create pull request](/docs/create-pull-request).
+6. **Create a pull request** — After Apply, the patch card shows **Create pull request**. Confirm branch, title, and notes — nothing is created on GitHub until you submit. See [Create pull request](/docs/create-pull-request).
 7. **Retry** — If apply fails, click **Retry** on the error notification or run **CoopAI: Retry Last Patch** (`coopAI.retryLastPatch`). Coop re-opens the pending patch or sends a follow-up `/edit` turn asking the model to fix SEARCH blocks.
 
 If parsing fails, no patch is staged — check the chat response for valid patch formatting.
@@ -122,7 +122,7 @@ Multi-file edits include multiple `File:` sections. Each file can have multiple 
 | **CoopAI: Reject Patch** | Command Palette (`coopAI.rejectPatch`) |
 | **CoopAI: Retry Last Patch** | Command Palette (`coopAI.retryLastPatch`) — re-show pending patch or regenerate after apply failure |
 
-**Success:** Notification shows `Applied patch to N file(s).` with an **Undo** action. The patch card then shows **Create pull request** — [open a PR on the host](/docs/create-pull-request) without leaving VS Code.
+**Success:** Notification shows `Applied patch to N file(s).` with an **Undo** action. The patch card then shows **Create pull request** — [open a pull request](/docs/create-pull-request) without leaving VS Code.
 
 ### Undo
 
@@ -169,7 +169,7 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 
 ## Next steps
 
-- [Create pull request](/docs/create-pull-request) — open a GitHub PR from the applied patch
+- [Create pull request](/docs/create-pull-request) — open a pull request from the applied patch
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions (on by default)
 - [Extension settings](/docs/extension-settings)
 - [Owner's Manual — Edit selection](/manual#inline-complete-and-edit-selection)

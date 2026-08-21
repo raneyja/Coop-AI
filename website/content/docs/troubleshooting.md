@@ -31,7 +31,7 @@ lastUpdated: "2026-08-21"
 | **Model & chat** | Four assigned models, no provider picker |
 | **Autocomplete** | Ghost text on type → **Tab** accepts |
 | **/edit** | Patch notification with **Apply** / **Undo** |
-| **Create pull request** | After Apply, confirm modal → host URL |
+| **Create pull request** | After Apply, confirm → a link to the PR |
 | **Quick action** | Structured answer with repo/integration context |
 | **Plain chat** | Grounded reply in composer |
 
@@ -49,18 +49,6 @@ lastUpdated: "2026-08-21"
 | **Workspace kept autocomplete off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
-
-## Create pull request
-
-| Problem | Fix |
-| --- | --- |
-| **No Create pull request button** | Apply the `/edit` patch first — the button is on **Patch applied**, not on the pending Apply / Reject row |
-| **Pick a Use-repo before creating a pull request** | Click **Use repo** on the repository in the Remote workspace picker |
-| **Permission / cannot create** | Ask your admin to confirm **Integrations** shows **Connected**. Do not create a personal token. See [Create pull request](/docs/create-pull-request) |
-| **GitHub rejected this pull request (422)** | GitHub refused the request — often because a PR already exists for this branch. Change **Branch** in the modal and retry |
-| **Cancel / Escape** | Safe — nothing is created on the host |
-
-Full guide: [Create pull request](/docs/create-pull-request).
 
 ## Admin portal
 
