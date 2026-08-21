@@ -20,6 +20,17 @@ export const GITHUB_WRITE_PERMISSION_MESSAGE =
 export const GITHUB_PR_WRITE_FAILED_MESSAGE =
   "GitHub refused to create this pull request. Nothing was created.";
 
+export const GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE =
+  "Coop is connected to GitHub with a personal token that cannot write. Reconnect GitHub in Coop settings, then try again. Nothing was created.";
+
+export const GITHUB_NOT_CONNECTED_MESSAGE =
+  "GitHub is not connected for this organization. Install the CoopAI GitHub App from Coop settings, then try again. Nothing was created.";
+
+/** The App is installed but this repo is outside its Repository access list. */
+export function githubRepoNotInInstallationMessage(owner: string, repo: string): string {
+  return `The CoopAI GitHub App cannot see ${owner}/${repo}. Add this repository under the App's Repository access, then try again. Nothing was created.`;
+}
+
 export const GITLAB_WRITE_PERMISSION_MESSAGE =
   "This GitLab token cannot create merge requests. Reconnect GitLab in Coop with api and write_repository access, then try again. Nothing was created.";
 

@@ -418,6 +418,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         const jobStats = jobs.monitor.getStats(jobs.queue);
         writeJson(response, 200, {
           ok: true,
+          commit: deployedCommitSha(),
           cache: {
             backend: config.cache.backend,
             repos: cache.listRepoIds().length
@@ -1051,6 +1052,16 @@ function normalizeHeaders(headers: IncomingMessage["headers"]): Record<string, s
     normalized[key.toLowerCase()] = Array.isArray(value) ? value[0] : value;
   }
   return normalized;
+}
+
+/** Lets an operator confirm which build answered, instead of guessing at deploy timing. */
+function deployedCommitSha(): string {
+  const raw =
+    process.env.COOP_BUILD_SHA ??
+    process.env.RAILWAY_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    "";
+  return raw.trim().slice(0, 12) || "unknown";
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

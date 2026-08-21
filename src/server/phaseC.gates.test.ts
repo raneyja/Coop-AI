@@ -124,8 +124,23 @@ const fixtureBody = {
   files: PHASE_C_FIXTURE_FILES
 };
 
+/** Readiness probe runs before create; keep it offline and permissive in route tests. */
+function installReadinessMock(): void {
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    if (/\/repos\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ default_branch: "main" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-oauth-scopes": "repo" }
+      });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+}
+
 void (async () => {
   resetPullCreateLocks();
+  installReadinessMock();
 
   const created: CreatePullRequestResult = {
     number: 42,
@@ -218,6 +233,21 @@ void (async () => {
       fixtureBody
     );
     assert.equal(injected.statusCode, 201);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  installReadinessMock();
+  try {
+    const check = await request(
+      baseDeps(async () => created),
+      "GET",
+      "/v1/orgs/repos/github%3Aacme%2Fplane/pull-write-check"
+    );
+    assert.equal(check.statusCode, 200, "pull-write-check answers without creating anything");
+    assert.equal(check.json.ok, true);
+    assert.equal(check.json.reason, "ready");
+    assert.equal(check.json.token, undefined, "diagnostic never returns a token");
   } finally {
     globalThis.fetch = originalFetch;
   }

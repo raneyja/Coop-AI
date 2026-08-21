@@ -1,9 +1,5 @@
 import { createHmac, createSign, timingSafeEqual } from "node:crypto";
-import { CodeHostError } from "../api/codeHosts/types";
-import {
-  GITHUB_WRITE_PERMISSION_MESSAGE,
-  githubAppInstallationHasPullWrite
-} from "../api/codeHosts/pullRequestWrite";
+import { githubAppInstallationHasPullWrite } from "../api/codeHosts/pullRequestWrite";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -17,6 +13,28 @@ export type InstallationTokenResponse = {
   expiresAt: Date;
   permissions?: Record<string, string>;
 };
+
+export type PullWriteTokenAttempt =
+  | { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> }
+  | { ok: false; githubMessage?: string; permissions?: Record<string, string> };
+
+/** GitHub 422 on a scoped token mint: the installation has not accepted these permissions. */
+class PullWritePermissionRefused extends Error {
+  public constructor(public readonly githubMessage?: string) {
+    super(githubMessage ?? "GitHub refused the requested installation permissions");
+    this.name = "PullWritePermissionRefused";
+  }
+}
+
+async function readGithubMessage(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    const parsed = JSON.parse(text) as { message?: unknown };
+    return typeof parsed.message === "string" && parsed.message.trim() ? parsed.message.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export type GitHubAppServiceOptions = {
   appId: string;
@@ -79,7 +97,7 @@ export class GitHubAppService {
       body
     });
     if (response.status === 422 && options?.permissions) {
-      throw new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", 403, "github");
+      throw new PullWritePermissionRefused(await readGithubMessage(response));
     }
     if (!response.ok) {
       const errorBody = await response.text();
@@ -101,17 +119,32 @@ export class GitHubAppService {
   }
 
   /**
-   * Mint an installation token that GitHub has explicitly granted Contents + Pull
-   * requests write. 422 here is the real “Accept the App update” signal.
+   * Ask GitHub for a token scoped to Contents + Pull requests write. GitHub answers
+   * 422 when the installation has not accepted those permissions, which is the only
+   * trustworthy “Accept the App update” signal.
    */
-  public async createPullWriteAccessToken(installationId: number): Promise<InstallationTokenResponse> {
-    const minted = await this.createInstallationAccessToken(installationId, {
-      permissions: { ...GITHUB_APP_PULL_WRITE_PERMISSIONS }
-    });
-    if (minted.permissions && !githubAppInstallationHasPullWrite(minted.permissions)) {
-      throw new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", 403, "github");
+  public async tryCreatePullWriteAccessToken(
+    installationId: number
+  ): Promise<PullWriteTokenAttempt> {
+    let minted: InstallationTokenResponse;
+    try {
+      minted = await this.createInstallationAccessToken(installationId, {
+        permissions: { ...GITHUB_APP_PULL_WRITE_PERMISSIONS }
+      });
+    } catch (error) {
+      if (error instanceof PullWritePermissionRefused) {
+        return { ok: false, githubMessage: error.githubMessage };
+      }
+      throw error;
     }
-    return minted;
+    if (minted.permissions && !githubAppInstallationHasPullWrite(minted.permissions)) {
+      return {
+        ok: false,
+        githubMessage: `Installation ${installationId} granted contents=${minted.permissions.contents ?? "none"}, pull_requests=${minted.permissions.pull_requests ?? "none"}.`,
+        permissions: minted.permissions
+      };
+    }
+    return { ok: true, token: minted.token, expiresAt: minted.expiresAt, permissions: minted.permissions };
   }
 
   /** Paginate GET /installation/repositories — returns normalized github:owner/repo ids. */

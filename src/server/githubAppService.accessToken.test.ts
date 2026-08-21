@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { CodeHostError } from "../api/codeHosts/types";
-import { GITHUB_WRITE_PERMISSION_MESSAGE } from "../api/codeHosts/pullRequestWrite";
 import { GitHubAppService } from "./githubAppService";
 
 function appService(): GitHubAppService {
@@ -14,7 +12,7 @@ function appService(): GitHubAppService {
   });
 }
 
-test("createPullWriteAccessToken asks GitHub for Contents and Pull requests write", async () => {
+test("tryCreatePullWriteAccessToken asks GitHub for Contents and Pull requests write", async () => {
   const originalFetch = globalThis.fetch;
   let posted = "";
   globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
@@ -29,8 +27,9 @@ test("createPullWriteAccessToken asks GitHub for Contents and Pull requests writ
     );
   }) as typeof fetch;
   try {
-    const minted = await appService().createPullWriteAccessToken(99);
-    assert.equal(minted.token, "ghs_write");
+    const attempt = await appService().tryCreatePullWriteAccessToken(99);
+    assert.equal(attempt.ok, true);
+    assert.equal(attempt.ok && attempt.token, "ghs_write");
     const body = JSON.parse(posted) as { permissions?: Record<string, string> };
     assert.equal(body.permissions?.contents, "write");
     assert.equal(body.permissions?.pull_requests, "write");
@@ -39,7 +38,7 @@ test("createPullWriteAccessToken asks GitHub for Contents and Pull requests writ
   }
 });
 
-test("createPullWriteAccessToken 422 is the Accept-the-update error", async () => {
+test("tryCreatePullWriteAccessToken 422 returns GitHub's refusal instead of throwing", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
     new Response(
@@ -47,11 +46,51 @@ test("createPullWriteAccessToken 422 is the Accept-the-update error", async () =
       { status: 422 }
     )) as typeof fetch;
   try {
-    await assert.rejects(
-      () => appService().createPullWriteAccessToken(99),
-      (error: unknown) =>
-        error instanceof CodeHostError && error.message === GITHUB_WRITE_PERMISSION_MESSAGE
+    const attempt = await appService().tryCreatePullWriteAccessToken(99);
+    assert.equal(attempt.ok, false);
+    assert.match(
+      (!attempt.ok && attempt.githubMessage) || "",
+      /not granted to this installation/
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a token minted with less than write is reported as not ok", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        token: "ghs_read",
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        permissions: { contents: "read", pull_requests: "read" }
+      }),
+      { status: 201 }
+    )) as typeof fetch;
+  try {
+    const attempt = await appService().tryCreatePullWriteAccessToken(7);
+    assert.equal(attempt.ok, false);
+    assert.match((!attempt.ok && attempt.githubMessage) || "", /contents=read/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("unscoped installation token mint still works for indexing paths", async () => {
+  const originalFetch = globalThis.fetch;
+  let body: string | undefined;
+  globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+    body = init?.body === undefined ? undefined : String(init.body);
+    return new Response(
+      JSON.stringify({ token: "ghs_plain", expires_at: new Date(Date.now() + 3_600_000).toISOString() }),
+      { status: 201 }
+    );
+  }) as typeof fetch;
+  try {
+    const minted = await appService().createInstallationAccessToken(5);
+    assert.equal(minted.token, "ghs_plain");
+    assert.equal(body, undefined, "no permissions body when none requested");
   } finally {
     globalThis.fetch = originalFetch;
   }
