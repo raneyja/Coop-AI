@@ -2,7 +2,7 @@ import { codeHostRequest } from "../api/codeHosts/codeHostHttp";
 import {
   GITHUB_NOT_CONNECTED_MESSAGE,
   GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE,
-  GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubInstallationAcceptMessage,
   githubRepoNotInInstallationMessage,
   githubTokenHasWriteScopes
 } from "../api/codeHosts/pullRequestWrite";
@@ -29,7 +29,13 @@ export type GithubPullWriteReadiness = {
   message: string;
   tokenKind: GithubTokenKind;
   installationId?: number;
+  /** The account that owns the installation Coop is using. */
+  accountLogin?: string;
+  /** Exact page where the pending permission request must be approved. */
+  installationUrl?: string;
   grantedPermissions?: Record<string, string>;
+  /** Set when Coop switched to a different installation of the same App that does have write. */
+  switchedFromInstallationId?: number;
   /** GitHub's own wording, when GitHub gave one. */
   githubDetail?: string;
 };
@@ -44,7 +50,10 @@ export type InspectGithubPullWriteOptions = {
   owner: string;
   repo: string;
   orgStore: Pick<OrgStore, "getCodeHostInstallation" | "getInstallationToken" | "upsertCodeHostInstallation" | "getCredential">;
-  githubApp?: Pick<GitHubAppService, "tryCreatePullWriteAccessToken">;
+  githubApp?: Pick<
+    GitHubAppService,
+    "tryCreatePullWriteAccessToken" | "getInstallation" | "listAppInstallations"
+  >;
   allowPatFallback?: boolean;
 };
 
@@ -116,15 +125,53 @@ async function inspectAppInstallation(
   installationId: number
 ): Promise<GithubPullWriteInspection> {
   const attempt = await options.githubApp!.tryCreatePullWriteAccessToken(installationId);
-  if (!attempt.ok) {
+  if (attempt.ok) {
+    return finishAppInstallation(options, installationId, attempt);
+  }
+
+  // The stored installation cannot write. An account can hold several installations
+  // of the same App, so an approval may have landed on a different one.
+  const alternate = await findWritableInstallation(options, installationId);
+  if (alternate) {
+    return { ...alternate, switchedFromInstallationId: installationId };
+  }
+
+  const identity = await describeInstallation(options, installationId);
+  return {
+    ok: false,
+    reason: "app_permissions_not_accepted",
+    message: githubInstallationAcceptMessage({
+      accountLogin: identity?.accountLogin,
+      installationId,
+      installationUrl: identity?.htmlUrl
+    }),
+    tokenKind: "github_app",
+    installationId,
+    accountLogin: identity?.accountLogin,
+    installationUrl: identity?.htmlUrl,
+    grantedPermissions: attempt.permissions ?? identity?.permissions,
+    githubDetail: attempt.githubMessage
+  };
+}
+
+async function finishAppInstallation(
+  options: InspectGithubPullWriteOptions,
+  installationId: number,
+  attempt: { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> }
+): Promise<GithubPullWriteInspection> {
+  const probe = await probeRepository(options.owner, options.repo, attempt.token);
+  if (probe.status !== "ok") {
+    const identity = await describeInstallation(options, installationId);
     return {
       ok: false,
-      reason: "app_permissions_not_accepted",
-      message: GITHUB_WRITE_PERMISSION_MESSAGE,
+      reason: "repo_not_in_installation",
+      message: githubRepoNotInInstallationMessage(options.owner, options.repo),
       tokenKind: "github_app",
       installationId,
+      accountLogin: identity?.accountLogin,
+      installationUrl: identity?.htmlUrl,
       grantedPermissions: attempt.permissions,
-      githubDetail: attempt.githubMessage
+      githubDetail: probe.githubDetail
     };
   }
 
@@ -136,28 +183,78 @@ async function inspectAppInstallation(
     attempt.expiresAt
   );
 
-  const probe = await probeRepository(options.owner, options.repo, attempt.token);
-  if (probe.status !== "ok") {
-    return {
-      ok: false,
-      reason: "repo_not_in_installation",
-      message: githubRepoNotInInstallationMessage(options.owner, options.repo),
-      tokenKind: "github_app",
-      installationId,
-      grantedPermissions: attempt.permissions,
-      githubDetail: probe.githubDetail
-    };
-  }
-
+  const identity = await describeInstallation(options, installationId);
   return {
     ok: true,
     reason: "ready",
     message: "GitHub can create pull requests.",
     tokenKind: "github_app",
     installationId,
+    accountLogin: identity?.accountLogin,
+    installationUrl: identity?.htmlUrl,
     grantedPermissions: attempt.permissions,
     token: attempt.token
   };
+}
+
+/** Find another installation of this App that can both write and see this repo. */
+async function findWritableInstallation(
+  options: InspectGithubPullWriteOptions,
+  skipInstallationId: number
+): Promise<GithubPullWriteInspection | undefined> {
+  const app = options.githubApp;
+  if (!app?.listAppInstallations) {
+    return undefined;
+  }
+  let installations: Array<{ id: number }>;
+  try {
+    installations = await app.listAppInstallations();
+  } catch {
+    return undefined;
+  }
+  for (const candidate of installations) {
+    if (candidate.id === skipInstallationId) {
+      continue;
+    }
+    let attempt: Awaited<ReturnType<typeof app.tryCreatePullWriteAccessToken>>;
+    try {
+      attempt = await app.tryCreatePullWriteAccessToken(candidate.id);
+    } catch {
+      continue;
+    }
+    if (!attempt.ok) {
+      continue;
+    }
+    const resolved = await finishAppInstallation(options, candidate.id, attempt);
+    if (resolved.ok) {
+      return resolved;
+    }
+  }
+  return undefined;
+}
+
+async function describeInstallation(
+  options: InspectGithubPullWriteOptions,
+  installationId: number
+): Promise<
+  { accountLogin?: string; htmlUrl?: string; permissions?: Record<string, string> } | undefined
+> {
+  if (!options.githubApp?.getInstallation) {
+    return undefined;
+  }
+  try {
+    const installation = await options.githubApp.getInstallation(installationId);
+    if (!installation) {
+      return undefined;
+    }
+    return {
+      accountLogin: installation.accountLogin,
+      htmlUrl: installation.htmlUrl,
+      permissions: installation.permissions
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 type RepoProbe = {

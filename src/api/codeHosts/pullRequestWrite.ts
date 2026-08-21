@@ -26,6 +26,25 @@ export const GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE =
 export const GITHUB_NOT_CONNECTED_MESSAGE =
   "GitHub is not connected for this organization. Install the CoopAI GitHub App from Coop settings, then try again. Nothing was created.";
 
+/**
+ * Points at the one installation that must approve, because "go to your
+ * installations" is useless when an account has more than one.
+ */
+export function githubInstallationAcceptMessage(installation: {
+  accountLogin?: string;
+  installationId?: number;
+  installationUrl?: string;
+}): string {
+  const who = installation.accountLogin ? ` on ${installation.accountLogin}` : "";
+  const where =
+    installation.installationUrl ??
+    (installation.installationId
+      ? `https://github.com/settings/installations/${installation.installationId}`
+      : undefined);
+  const open = where ? ` Open ${where} and approve the pending request.` : "";
+  return `The CoopAI GitHub App installation${who} has not approved Contents and Pull requests write access.${open} Nothing was created.`;
+}
+
 /** The App is installed but this repo is outside its Repository access list. */
 export function githubRepoNotInInstallationMessage(owner: string, repo: string): string {
   return `The CoopAI GitHub App cannot see ${owner}/${repo}. Add this repository under the App's Repository access, then try again. Nothing was created.`;

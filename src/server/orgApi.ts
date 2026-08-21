@@ -1220,7 +1220,10 @@ async function handleRepoPullWriteCheck(
       message: readiness.message,
       tokenKind: readiness.tokenKind,
       installationId: readiness.installationId,
+      accountLogin: readiness.accountLogin,
+      installationUrl: readiness.installationUrl,
       grantedPermissions: readiness.grantedPermissions,
+      switchedFromInstallationId: readiness.switchedFromInstallationId,
       githubDetail: readiness.githubDetail
     });
   } catch (error) {

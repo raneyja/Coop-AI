@@ -232,9 +232,18 @@ export class GitHubAppService {
     return catalog;
   }
 
-  public async getInstallation(
-    installationId: number
-  ): Promise<{ id: number; htmlUrl?: string; suspendedAt?: string | null; accountLogin?: string; accountType?: string } | undefined> {
+  public async getInstallation(installationId: number): Promise<
+    | {
+        id: number;
+        htmlUrl?: string;
+        suspendedAt?: string | null;
+        accountLogin?: string;
+        accountType?: string;
+        permissions?: Record<string, string>;
+        repositorySelection?: string;
+      }
+    | undefined
+  > {
     const jwt = this.createAppJwt();
     const response = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
       headers: {
@@ -256,6 +265,8 @@ export class GitHubAppService {
       html_url?: string;
       suspended_at?: string | null;
       account?: { login?: string; type?: string };
+      permissions?: Record<string, string>;
+      repository_selection?: string;
     };
     if (!data.id) {
       return undefined;
@@ -265,7 +276,9 @@ export class GitHubAppService {
       htmlUrl: data.html_url,
       suspendedAt: data.suspended_at ?? null,
       accountLogin: data.account?.login,
-      accountType: data.account?.type
+      accountType: data.account?.type,
+      permissions: data.permissions,
+      repositorySelection: data.repository_selection
     };
   }
 

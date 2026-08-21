@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   GITHUB_NOT_CONNECTED_MESSAGE,
   GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE,
-  GITHUB_WRITE_PERMISSION_MESSAGE
+  GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubInstallationAcceptMessage
 } from "../api/codeHosts/pullRequestWrite";
 import { inspectGithubPullWrite, type InspectGithubPullWriteOptions } from "./githubPullWriteReadiness";
 import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
@@ -68,10 +69,21 @@ function mockRepoFetch(options: { status?: number; scopes?: string | null }): vo
   }) as typeof fetch;
 }
 
-function appService(attempt: Awaited<ReturnType<NonNullable<InspectGithubPullWriteOptions["githubApp"]>["tryCreatePullWriteAccessToken"]>>) {
+type AppService = NonNullable<InspectGithubPullWriteOptions["githubApp"]>;
+type Attempt = Awaited<ReturnType<AppService["tryCreatePullWriteAccessToken"]>>;
+
+function appService(
+  attempt: Attempt | ((installationId: number) => Attempt),
+  identity?: { accountLogin?: string; htmlUrl?: string; permissions?: Record<string, string> },
+  installations?: Array<{ id: number; accountLogin: string; accountType: string }>
+): AppService {
   return {
-    tryCreatePullWriteAccessToken: async () => attempt
-  } as NonNullable<InspectGithubPullWriteOptions["githubApp"]>;
+    tryCreatePullWriteAccessToken: async (installationId: number) =>
+      typeof attempt === "function" ? attempt(installationId) : attempt,
+    getInstallation: async (installationId: number) =>
+      identity ? ({ id: installationId, ...identity } as never) : undefined,
+    listAppInstallations: async () => installations ?? []
+  } as AppService;
 }
 
 function inspect(
@@ -85,27 +97,112 @@ function inspect(
   });
 }
 
-test("App installation that never accepted write reports the Accept reason with GitHub's wording", async () => {
+test("App installation that never accepted write names the account and approval page", async () => {
   const { store } = mockStore({ installationId: APP_INSTALLATION_ID });
   mockRepoFetch({ scopes: null });
   try {
     const readiness = await inspect({
       orgStore: store,
-      githubApp: appService({
-        ok: false,
-        githubMessage: "The permissions requested are not granted to this installation."
-      })
+      githubApp: appService(
+        {
+          ok: false,
+          githubMessage: "The level of access for permissions requested are not granted to this installation."
+        },
+        {
+          accountLogin: "raneyja",
+          htmlUrl: `https://github.com/settings/installations/${APP_INSTALLATION_ID}`
+        }
+      )
     });
     assert.equal(readiness.ok, false);
     assert.equal(readiness.reason, "app_permissions_not_accepted");
-    assert.equal(readiness.message, GITHUB_WRITE_PERMISSION_MESSAGE);
     assert.equal(readiness.tokenKind, "github_app");
     assert.equal(readiness.installationId, APP_INSTALLATION_ID);
+    assert.equal(readiness.accountLogin, "raneyja");
+    assert.match(readiness.message, /raneyja/, "message names the account that must approve");
+    assert.match(
+      readiness.message,
+      new RegExp(`settings/installations/${APP_INSTALLATION_ID}`),
+      "message links the exact installation page"
+    );
+    assert.notEqual(
+      readiness.message,
+      GITHUB_WRITE_PERMISSION_MESSAGE,
+      "no longer the generic sentence"
+    );
     assert.match(readiness.githubDetail ?? "", /not granted to this installation/);
     assert.equal(readiness.token, undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("approval landed on a different installation of the same App — Coop switches to it", async () => {
+  const OTHER_ID = 987654;
+  const { store, upserts } = mockStore({ installationId: APP_INSTALLATION_ID });
+  mockRepoFetch({ scopes: null });
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        (installationId) =>
+          installationId === OTHER_ID
+            ? {
+                ok: true,
+                token: "ghs_other",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              }
+            : { ok: false, githubMessage: "not granted to this installation" },
+        { accountLogin: "raneyja" },
+        [{ id: OTHER_ID, accountLogin: "raneyja", accountType: "User" }]
+      )
+    });
+    assert.equal(readiness.ok, true);
+    assert.equal(readiness.reason, "ready");
+    assert.equal(readiness.installationId, OTHER_ID);
+    assert.equal(readiness.switchedFromInstallationId, APP_INSTALLATION_ID);
+    assert.equal(readiness.token, "ghs_other");
+    assert.deepEqual(upserts, [{ installationId: OTHER_ID, token: "ghs_other" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a second installation that cannot see the repo is not used as a fix", async () => {
+  const OTHER_ID = 987654;
+  const { store, upserts } = mockStore({ installationId: APP_INSTALLATION_ID });
+  mockRepoFetch({ status: 404 });
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        (installationId) =>
+          installationId === OTHER_ID
+            ? {
+                ok: true,
+                token: "ghs_other",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              }
+            : { ok: false, githubMessage: "not granted to this installation" },
+        { accountLogin: "raneyja" },
+        [{ id: OTHER_ID, accountLogin: "raneyja", accountType: "User" }]
+      )
+    });
+    assert.equal(readiness.ok, false);
+    assert.equal(readiness.reason, "app_permissions_not_accepted");
+    assert.equal(readiness.installationId, APP_INSTALLATION_ID);
+    assert.equal(upserts.length, 0, "never repoints the org at an installation that cannot see the repo");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("accept message degrades to the installation id when GitHub gives no html_url", () => {
+  const message = githubInstallationAcceptMessage({ installationId: 42 });
+  assert.match(message, /settings\/installations\/42/);
+  assert.match(githubInstallationAcceptMessage({}), /Nothing was created\./);
 });
 
 test("App installation with write access is ready and persists the minted token", async () => {
@@ -162,7 +259,8 @@ test("mint that silently downgrades to contents=read is still an Accept problem"
         ok: false,
         githubMessage: "Installation 1 granted contents=read, pull_requests=read.",
         permissions: { contents: "read", pull_requests: "read" }
-      })
+      }),
+      allowPatFallback: false
     });
     assert.equal(readiness.reason, "app_permissions_not_accepted");
     assert.deepEqual(readiness.grantedPermissions, { contents: "read", pull_requests: "read" });
