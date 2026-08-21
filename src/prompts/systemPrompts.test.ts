@@ -137,7 +137,7 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes("edit mode"));
   assert.ok(prompt.includes("## Completeness (required)"));
   assert.ok(prompt.includes("## Editor selection (required when present)"));
-  assert.ok(prompt.includes("fully implement"));
+  assert.ok(prompt.includes("a request to rewrite"));
   assert.ok(prompt.includes("exact copy of the entire"));
   assert.ok(prompt.includes("PENDING/OPEN"));
   assert.equal(prompt.includes("Uniform response template"), false);
@@ -342,6 +342,7 @@ test("formatChatMessageWithLocalFiles includes editor_selection for highlighted 
   assert.ok(message.includes("class APIKeyAuthentication:"));
   assert.ok(message.includes("def get_api_token"));
   assert.ok(message.includes("Edit directive:"));
+  assert.ok(message.includes("explicitly asked to rewrite"));
   assert.ok(message.includes("character-for-character"));
   assert.ok(message.includes("Do not substitute a different function"));
 });
@@ -369,6 +370,8 @@ test("formatChatMessageWithLocalFiles keeps L56–61 even when the full file is 
   assert.ok(message.includes('<editor_selection path="apps/api/plane/db/models/state.py" lines="56-61">'));
   assert.ok(message.includes("def validate_name(self):"));
   assert.ok(message.includes("Do not substitute a different function"));
+  assert.ok(message.includes("Comment-only"));
+  assert.equal(message.includes("explicitly asked to rewrite"), false);
   const selectionBlock = message.slice(
     message.indexOf("<editor_selection"),
     message.indexOf("</editor_selection>")

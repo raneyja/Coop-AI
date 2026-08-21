@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { applyHunkToContent } from "./patchContent";
 import {
+  coerceCommentOnlyHunk,
   extractInsertedPrefix,
   selectionTextFromFile,
   snapHunkToSelection,
@@ -161,6 +162,63 @@ test("snapPatchSetToSelection only retargets the highlighted file", () => {
     }
   );
   assert.equal(snapped.files[0]?.hunks[0]?.search.includes("__str__"), true);
+});
+
+const CONSTRUCTOR_SELECTION = [
+  "  public constructor(",
+  "    private readonly extensionUri: vscode.Uri,",
+  "    private readonly extensionContext: vscode.ExtensionContext,",
+  "    api: SecureApiClient,",
+  "    services: CoopRuntimeServices",
+  "  ) {"
+].join("\n");
+
+const CONSTRUCTOR_REWRITE = [
+  "  public constructor(",
+  "    private readonly extensionUri: vscode.Uri,",
+  "    private readonly extensionContext: vscode.ExtensionContext,",
+  "    private readonly api: SecureApiClient,",
+  "    private readonly services: CoopRuntimeServices",
+  "  ) {",
+  "    this.session = new CoopChatSession({",
+  "      extensionUri,"
+].join("\n");
+
+test("comment-only coerce keeps a comment and the original selection", () => {
+  const coerced = coerceCommentOnlyHunk(
+    {
+      search: CONSTRUCTOR_SELECTION,
+      replace: `  // Constructs the Coop sidebar.\n${CONSTRUCTOR_SELECTION}`
+    },
+    CONSTRUCTOR_SELECTION
+  );
+  assert.ok(coerced);
+  assert.equal(coerced?.search, CONSTRUCTOR_SELECTION);
+  assert.equal(
+    coerced?.replace,
+    `  // Constructs the Coop sidebar.\n${CONSTRUCTOR_SELECTION}`
+  );
+});
+
+test("comment-only coerce drops a signature rewrite with no comment", () => {
+  const coerced = coerceCommentOnlyHunk(
+    { search: CONSTRUCTOR_SELECTION, replace: CONSTRUCTOR_REWRITE },
+    CONSTRUCTOR_SELECTION
+  );
+  assert.equal(coerced, undefined);
+});
+
+test("comment-only snap rejects a constructor rewrite onto the highlight", () => {
+  const snapped = snapHunkToSelection({
+    selectionText: CONSTRUCTOR_SELECTION,
+    selectedLines: [29, 34],
+    commentOnly: true,
+    hunk: {
+      search: CONSTRUCTOR_SELECTION.replace("  ) {", "  )"),
+      replace: CONSTRUCTOR_REWRITE
+    }
+  });
+  assert.equal(snapped, undefined);
 });
 
 const total = passed + failed;

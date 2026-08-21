@@ -6,7 +6,11 @@ import {
   hydratePatchCardsFromHistory,
   patchCardsForMessages
 } from "../edit/hydratePatchCardsFromHistory";
-import { collectOpenPatchFileBytes } from "../edit/patchTarget";
+import {
+  collectOpenPatchFileBytes,
+  languageIdForPatchPath,
+  rememberRemotePatchBuffer
+} from "../edit/patchTarget";
 import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
 import {
   extractAgentProposedPatchText,
@@ -465,6 +469,7 @@ import {
   shouldBypassAdvisoryGroundingForEdit,
   shouldTrackEditRequest
 } from "./editSendRouting";
+import { isCommentOnlyEditAsk } from "./editAskKind";
 import { isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
 
 export type CoopChatSessionOptions = {
@@ -2670,18 +2675,9 @@ export class CoopChatSession {
         branch
       });
       const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
-      const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-      const language =
-        ext === "ts" || ext === "tsx"
-          ? "typescript"
-          : ext === "js" || ext === "jsx"
-            ? "javascript"
-            : ext === "json"
-              ? "json"
-              : ext === "md"
-                ? "markdown"
-                : undefined;
+      const language = languageIdForPatchPath(filePath);
       const doc = await vscode.workspace.openTextDocument({ content: text, language });
+      rememberRemotePatchBuffer(filePath, doc.uri, text);
       const editor = await vscode.window.showTextDocument(doc, options?.reviewOpen
         ? {
             viewColumn: vscode.ViewColumn.Beside,
@@ -4504,6 +4500,7 @@ export class CoopChatSession {
     file?: string;
     selectionText?: string;
     fileContents?: Record<string, string>;
+    commentOnly?: boolean;
   } {
     const file = turn.editAnchor?.file ?? turn.context.file ?? this.currentContext.file;
     const selectedLines =
@@ -4528,11 +4525,17 @@ export class CoopChatSession {
         : undefined;
     const selectionText =
       fromFile || turn.editAnchor?.selectionText || this.selectedCodeSnippet(8000);
+    const userMessages = turn.history
+      .filter((entry) => entry.role === "user")
+      .map((entry) => entry.content);
     return {
       selectedLines,
       file,
       selectionText: selectionText || undefined,
-      fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined
+      fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined,
+      commentOnly: isCommentOnlyEditAsk(turn.modelMessage, {
+        priorUserMessages: userMessages.slice(0, -1)
+      })
     };
   }
 

@@ -1,5 +1,6 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
+import { resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
 import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
@@ -90,8 +91,12 @@ Rules:
 - Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
 
 ## Editor selection (required when present)
-- When \`<editor_selection>\` is attached, that is the user's highlighted code. Treat it as the primary edit target. Do **not** pick a different function or block from the same file.
-- If the user asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
+- \`/edit\` names the target (this highlight / file / repo). It is **not** a request to rewrite, improve, or complete the code.
+- When \`<editor_selection>\` is attached, that is the patch target. Do **not** pick a different function or block from the same file.
+- Do **exactly** the user's words. Never add drive-by cleanups (private/readonly, extra parameters, reformatting, signature rewrites) unless they asked for that change.
+- If the user asks to add, leave, or write a comment, JSDoc, docstring, or a summary of what the highlighted code does: that is **comment-only**. SEARCH is an exact copy of the selection. REPLACE is the comment line(s) followed by that same SEARCH text **unchanged**. Do not modify any existing token.
+- A follow-up like "just make it one sentence" after a comment ask still means: change only the comment. Do not rewrite the code.
+- **Only** if the user explicitly asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
 - Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
 - Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
 - Prefer one tight patch on the selection over "helpful" drive-by cleanups outside it.
@@ -99,6 +104,7 @@ Rules:
 
 ## Completeness (required)
 - Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
+- Do **not** expand the request. If they asked for a comment, do not also "fix" the constructor or nearby code.
 - If you introduce a helper, symbol, or extracted function, also emit the call-site / wire-up hunks so the new code is used (unless the user asked only to define it).
 - Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
@@ -433,11 +439,15 @@ export const GENERAL_CHAT_SYSTEM = withOutputContract(GENERAL_CHAT_BODY, "chat")
 
 const CODE_EDIT_BODY = `You are CoopAI in edit mode — a code generation assistant inside the user's editor.
 
-TASK: Produce minimal, correct patches that fully implement the user's request using the search-replace block format below.
+TASK: Produce a patch that does exactly what the user asked, against the current file or highlight. \`/edit\` only names that target — it is not a rewrite, cleanup, or "improve this code" request.
 
 RULES:
+- The user's words are the spec. Implement that ask and nothing else.
+- Never add drive-by cleanups (private/readonly, extra refactors, signature rewrites) unless they asked.
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
-- When \`<editor_selection>\` is present, that highlighted block is the edit target. Do **not** pick a different function from the same file. For "rewrite / shorten / replace / make more efficient the highlighted lines", SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- When \`<editor_selection>\` is present, that highlighted block is the patch target. Do **not** pick a different function from the same file.
+- Rewrite, shorten, replace, or make the highlighted lines more efficient **only** when the user explicitly asks for that. Then SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- Comment / summary-of-what-it-does asks: SEARCH is the selection copied exactly; REPLACE is one comment (or JSDoc) followed by that same SEARCH text unchanged. Do not modify any existing line.
 - Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
@@ -613,6 +623,16 @@ function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
   lines.push("</local_files>");
 }
 
+export function selectionEditDirective(kind: EditAskKind): string {
+  if (kind === "comment") {
+    return "Edit directive: Comment-only. /edit named this highlight as the target — not a rewrite. SEARCH is an exact copy of the <editor_selection> body. REPLACE is one comment (or JSDoc) line, then that same SEARCH text unchanged. Do not add private/readonly, do not change parameter lists, types, or any existing line.";
+  }
+  if (kind === "rewrite") {
+    return "Edit directive: The user explicitly asked to rewrite/replace/shorten the highlight. SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). REPLACE is the new version of that whole block. Do not paraphrase from earlier chat.";
+  }
+  return "Edit directive: /edit named this highlight as the patch target — not a license to rewrite or improve it. Do exactly the user's request. Do not add private/readonly, extra refactors, or signature changes unless they asked.";
+}
+
 /** Highlighted editor range — primary /edit target when the user refers to "this" / selection. */
 export function emitEditorSelectionBlock(
   lines: string[],
@@ -620,6 +640,7 @@ export function emitEditorSelectionBlock(
     selectedLines?: [number, number];
     selectionText?: string;
     file?: string;
+    userMessage?: string;
   }
 ): void {
   if (!options.selectedLines || options.selectedLines.length !== 2) {
@@ -640,11 +661,7 @@ export function emitEditorSelectionBlock(
   lines.push(
     `Edit target: only the highlighted lines ${start}-${end}${options.file?.trim() ? ` in ${options.file.trim()}` : ""}. Do not substitute a different function from the same file.`
   );
-  if (snippet) {
-    lines.push(
-      "Edit directive: For rewrite/replace/efficiency asks about the highlight, SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). Do not paraphrase from earlier chat."
-    );
-  }
+  lines.push(selectionEditDirective(resolveEditAskKind(options.userMessage ?? "")));
 }
 
 /** Slice line-numbered content for a 1-based inclusive selection range. */
@@ -716,7 +733,8 @@ export function formatChatMessageWithLocalFiles(options: {
   emitEditorSelectionBlock(lines, {
     selectedLines: options.selectedLines,
     selectionText: resolveSelectionTextForAttach(options),
-    file: options.file
+    file: options.file,
+    userMessage: options.message
   });
   emitLocalFilesBlock(lines, options.files);
   lines.push("</attached_context>", "", options.message.trim());
@@ -891,7 +909,8 @@ export function buildUserMessageWithContext(
       files: localSnippets,
       file: context?.file
     }),
-    file: context?.file
+    file: context?.file,
+    userMessage: message
   });
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));

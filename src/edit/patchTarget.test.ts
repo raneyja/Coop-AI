@@ -2,9 +2,12 @@ import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import {
+  clearRemotePatchBuffersForTests,
+  collectOpenPatchFileBytes,
   documentMatchesPatchPath,
   ensureEditablePatchTarget,
   findOpenDocumentForPatchFile,
+  rememberRemotePatchBuffer,
   undoSnapshotPathForUri,
   uriFromUndoSnapshotPath
 } from "./patchTarget";
@@ -107,6 +110,40 @@ async function main(): Promise<void> {
     }
     assert.equal(result.target.readText(), body);
     assert.equal(result.target.uri.scheme, "untitled");
+  });
+
+  await test("collectOpenPatchFileBytes reads a remembered untitled API buffer", () => {
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+    const body = [
+      "class StateGroup(models.TextChoices):",
+      '    BACKLOG = "backlog", "Backlog"',
+      '    TRIAGE = "triage", "Triage"'
+    ].join("\n");
+    const untitled = fakeDoc("untitled:Untitled-2", body);
+    (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+    rememberRemotePatchBuffer("apps/api/plane/db/models/state.py", untitled.uri, body);
+    assert.equal(
+      collectOpenPatchFileBytes("apps/api/plane/db/models/state.py"),
+      body
+    );
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+  });
+
+  await test("collectOpenPatchFileBytes finds an untitled tab by unique SEARCH", () => {
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+    const body = "class StateGroup(models.TextChoices):\n    BACKLOG = \"backlog\", \"Backlog\"\n";
+    const untitled = fakeDoc("untitled:Untitled-3", body);
+    (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+    assert.equal(
+      collectOpenPatchFileBytes("apps/api/plane/db/models/state.py", {
+        search: "class StateGroup(models.TextChoices):"
+      }),
+      body
+    );
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
   });
 
   console.log(`\npatchTarget: ${passed} passed, ${failed} failed`);

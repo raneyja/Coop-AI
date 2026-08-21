@@ -117,6 +117,43 @@ export function findOpenDocumentForPatchFile(
   return undefined;
 }
 
+const rememberedRemoteBuffers = new Map<string, { uriString: string; content: string }>();
+
+function normalizeBufferKey(relativePath: string): string {
+  return (toRepositoryRelativePath(relativePath) ?? relativePath).replace(/\\/g, "/").replace(/^\.?\//, "");
+}
+
+function rememberedRemoteEntry(relativePath: string): { uriString: string; content: string } | undefined {
+  const key = normalizeBufferKey(relativePath);
+  const direct = rememberedRemoteBuffers.get(key);
+  if (direct) {
+    return direct;
+  }
+  for (const [stored, value] of rememberedRemoteBuffers) {
+    if (pathsReferToSameFile(stored, key)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/** Bitbucket/GitLab Zero-Clone tabs are untitled — remember path → buffer at open. */
+export function rememberRemotePatchBuffer(relativePath: string, uri: vscode.Uri, content: string): void {
+  const key = normalizeBufferKey(relativePath);
+  if (!key || !content.trim()) {
+    return;
+  }
+  rememberedRemoteBuffers.set(key, { uriString: uri.toString(), content });
+}
+
+export function clearRemotePatchBuffersForTests(): void {
+  rememberedRemoteBuffers.clear();
+}
+
+function liveDocumentForUriString(uriString: string): vscode.TextDocument | undefined {
+  return vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uriString);
+}
+
 export function documentMatchesPatchPath(doc: vscode.TextDocument, relativePath: string): boolean {
   const normalized = toRepositoryRelativePath(relativePath);
   if (!normalized) {
@@ -174,6 +211,14 @@ export function resolveEditablePatchTarget(relativePath: string): EditablePatchT
       uri: doc.uri,
       readText: () => doc.getText()
     };
+  }
+
+  const remembered = rememberedRemoteEntry(normalized);
+  if (remembered) {
+    const live = liveDocumentForUriString(remembered.uriString);
+    if (live) {
+      return targetFromDocument(live);
+    }
   }
 
   const absolutePath = resolveLocalAbsolutePath(normalized);
@@ -316,7 +361,10 @@ export function undoSnapshotPathForUri(uri: vscode.Uri): string {
 }
 
 /** Read bytes from any open tab (including hidden GitHub VFS docs), not only the visible editor. */
-export function collectOpenPatchFileBytes(relativePath: string): string | undefined {
+export function collectOpenPatchFileBytes(
+  relativePath: string,
+  options?: { search?: string }
+): string | undefined {
   const normalized = toRepositoryRelativePath(relativePath);
   if (!normalized) {
     return undefined;
@@ -330,5 +378,27 @@ export function collectOpenPatchFileBytes(relativePath: string): string | undefi
       return text;
     }
   }
+
+  const remembered = rememberedRemoteEntry(normalized);
+  if (remembered) {
+    const live = liveDocumentForUriString(remembered.uriString);
+    const liveText = live?.getText();
+    if (liveText?.trim()) {
+      return liveText;
+    }
+  }
+
+  const openDoc = findOpenDocumentForPatchFile(normalized, {
+    capturedContent: remembered?.content,
+    search: options?.search
+  });
+  if (openDoc?.getText().trim()) {
+    return openDoc.getText();
+  }
+
+  if (remembered?.content.trim()) {
+    return remembered.content;
+  }
+
   return resolveEditablePatchTarget(normalized)?.readText();
 }

@@ -1,7 +1,9 @@
 import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
+import * as vscode from "vscode";
 import { buildPatchCardState } from "./patchDiffPreview";
 import type { ParsedPatchSet } from "./patchParser";
+import { clearRemotePatchBuffersForTests } from "./patchTarget";
 
 let passed = 0;
 let failed = 0;
@@ -268,6 +270,80 @@ test("buildPatchCardState matches SEARCH using an aliased fileContents key", () 
     }
   );
   assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+});
+
+const STATE_GROUP = [
+  "class StateGroup(models.TextChoices):",
+  '    BACKLOG = "backlog", "Backlog"',
+  '    UNSTARTED = "unstarted", "Unstarted"',
+  '    STARTED = "started", "Started"',
+  '    COMPLETED = "completed", "Completed"',
+  '    CANCELLED = "cancelled", "Cancelled"',
+  '    TRIAGE = "triage", "Triage"'
+].join("\n");
+
+function fakeUntitledDoc(uriString: string, text: string): vscode.TextDocument {
+  const uri = vscode.Uri.parse(uriString);
+  return {
+    uri,
+    getText: () => text,
+    lineCount: Math.max(1, text.split("\n").length),
+    lineAt: (n: number) => ({ text: text.split("\n")[n] ?? "" })
+  } as unknown as vscode.TextDocument;
+}
+
+test("buildPatchCardState matches SEARCH in an untitled Zero-Clone tab without fileContents", () => {
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+  clearRemotePatchBuffersForTests();
+  const untitled = fakeUntitledDoc(
+    "untitled:Untitled-1",
+    `from django.db import models\n\n${STATE_GROUP}\n`
+  );
+  (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search: STATE_GROUP,
+              replace: `class StateGroup(models.TextChoices):\n    """Workflow state choices, not US state definitions."""\n    BACKLOG = "backlog", "Backlog"`
+            }
+          ]
+        }
+      ]
+    },
+    { status: "pending" }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+});
+
+test("buildPatchCardState prefers the live untitled tab over stale captured bytes", () => {
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+  clearRemotePatchBuffersForTests();
+  const untitled = fakeUntitledDoc(
+    "untitled:Untitled-2",
+    `from django.db import models\n\n${STATE_GROUP}\n`
+  );
+  (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [{ search: STATE_GROUP, replace: `${STATE_GROUP}\n` }]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "apps/api/plane/db/models/state.py": "unrelated captured bytes\n" }
+    }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
 });
 
 console.log(`\npatchDiffPreview: ${passed} passed, ${failed} failed`);

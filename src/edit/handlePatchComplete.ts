@@ -14,7 +14,11 @@ import {
 } from "./patchSession";
 import { collectOpenPatchFileBytes } from "./patchTarget";
 import { lookupPatchFileContent } from "./patchFileContents";
-import { snapPatchSetToSelection, type LineRange } from "./snapPatchToSelection";
+import {
+  COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+  snapPatchSetToSelection,
+  type LineRange
+} from "./snapPatchToSelection";
 
 function patchReadyLabel(patches: ParsedPatchSet): string {
   const fileCount = countUniqueFiles(patches);
@@ -56,6 +60,8 @@ export type HandlePatchCompleteOptions = {
   selectionText?: string;
   /** File bodies already loaded for this turn (pending attach / open tab). */
   fileContents?: Readonly<Record<string, string>>;
+  /** User asked for a comment/summary only — do not apply signature rewrites. */
+  commentOnly?: boolean;
 };
 
 function lookupAttachedFileContent(
@@ -107,10 +113,33 @@ export async function handlePatchComplete(
     selectedLines: options.selectedLines,
     preferredFile: options.file,
     selectionText: options.selectionText,
+    commentOnly: options.commentOnly,
     readContent: (relativePath) =>
       lookupAttachedFileContent(relativePath, options.fileContents) ??
       collectOpenPatchFileBytes(relativePath)
   });
+
+  if (options.commentOnly && countHunks(patches) === 0) {
+    setLastAssistantPatchContent(content);
+    setLastPatchApplyError(COMMENT_ONLY_REWRITE_REJECTED_ERROR);
+    setLastPatchMessageTimestamp(options.messageTimestamp);
+    emitPatchEvent("edit.patch_failed", { phase: "comment_only", error: COMMENT_ONLY_REWRITE_REJECTED_ERROR });
+    const failed: PatchCardState = {
+      status: "failed",
+      messageTimestamp: options.messageTimestamp,
+      fileCount: 0,
+      hunkCount: 0,
+      files: [],
+      error: COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+      suppressMarkdown: true
+    };
+    options.publish?.({
+      cards: [],
+      activeMessageTimestamp: options.messageTimestamp,
+      suppressedMessageTimestamps: options.messageTimestamp ? [options.messageTimestamp] : []
+    });
+    return failed;
+  }
 
   const fileCount = countUniqueFiles(patches);
   const hunkCount = countHunks(patches);

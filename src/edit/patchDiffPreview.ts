@@ -12,7 +12,7 @@ import { findAllSearchMatches, findSearchMatch, type SearchMatchHit } from "./pa
 import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
 import { lookupPatchFileContent } from "./patchFileContents";
-import { resolveEditablePatchTarget } from "./patchTarget";
+import { collectOpenPatchFileBytes } from "./patchTarget";
 
 const CONTEXT_LINES = 2;
 
@@ -47,13 +47,16 @@ function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
-function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<string, string>>): string {
-  const captured = lookupPatchFileContent(relativePath, overrides);
-  if (captured) {
-    return captured;
+function readWorkspaceFile(
+  relativePath: string,
+  overrides?: Readonly<Record<string, string>>,
+  search?: string
+): string {
+  const live = collectOpenPatchFileBytes(relativePath, { search });
+  if (live?.trim()) {
+    return live;
   }
-  const target = resolveEditablePatchTarget(relativePath);
-  return target?.readText() ?? "";
+  return lookupPatchFileContent(relativePath, overrides) ?? "";
 }
 
 function lineIndexAtOffset(content: string, offset: number): number {
@@ -397,7 +400,11 @@ export function buildPatchCardState(
   let hunkCounter = 0;
 
   for (const filePatch of patches.files) {
-    const content = readWorkspaceFile(filePatch.relativePath, options.fileContents);
+    const content = readWorkspaceFile(
+      filePatch.relativePath,
+      options.fileContents,
+      filePatch.hunks[0]?.search
+    );
     const rawPreviews: PatchPreviewHunk[] = [];
 
     for (const hunk of filePatch.hunks) {

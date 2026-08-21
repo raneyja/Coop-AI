@@ -1,7 +1,9 @@
 import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
+import * as vscode from "vscode";
 import { handlePatchComplete } from "./handlePatchComplete";
 import { listPatchCards, resetPatchSessionForTests } from "./patchSession";
+import { clearRemotePatchBuffersForTests } from "./patchTarget";
 
 let passed = 0;
 let failed = 0;
@@ -170,6 +172,109 @@ async function main(): Promise<void> {
     const joined = (hunk?.lines ?? []).map((line) => line.text).join("\n");
     assert.ok(joined.includes('"name": "In Progress"'));
     assert.ok(joined.includes("# State representing an ongoing task"));
+  });
+
+  await test("comment-only ask rejects a constructor rewrite with no comment", async () => {
+    const fileBody = [
+      "export class CoopSidebarProvider {",
+      "  public readonly session: CoopChatSession;",
+      "",
+      "  public constructor(",
+      "    private readonly extensionUri: vscode.Uri,",
+      "    private readonly extensionContext: vscode.ExtensionContext,",
+      "    api: SecureApiClient,",
+      "    services: CoopRuntimeServices",
+      "  ) {",
+      "    this.session = new CoopChatSession({",
+      "      extensionUri",
+      "    });",
+      "  }",
+      "}"
+    ].join("\n");
+    const content = [
+      "File: `src/CoopSidebarProvider.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "  public constructor(",
+      "    private readonly extensionUri: vscode.Uri,",
+      "    private readonly extensionContext: vscode.ExtensionContext,",
+      "    api: SecureApiClient,",
+      "    services: CoopRuntimeServices",
+      "  )",
+      "=======",
+      "  public constructor(",
+      "    private readonly extensionUri: vscode.Uri,",
+      "    private readonly extensionContext: vscode.ExtensionContext,",
+      "    private readonly api: SecureApiClient,",
+      "    private readonly services: CoopRuntimeServices",
+      "  ) {",
+      "    this.session = new CoopChatSession({",
+      "      extensionUri,",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 114,
+      file: "src/CoopSidebarProvider.ts",
+      selectedLines: [4, 9],
+      fileContents: { "src/CoopSidebarProvider.ts": fileBody },
+      commentOnly: true,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "failed");
+    assert.match(result?.error ?? "", /comment only/i);
+  });
+
+  await test("preview matches highlighted StateGroup in an untitled Bitbucket tab", async () => {
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+    const classBody = [
+      "class StateGroup(models.TextChoices):",
+      '    BACKLOG = "backlog", "Backlog"',
+      '    UNSTARTED = "unstarted", "Unstarted"',
+      '    STARTED = "started", "Started"',
+      '    COMPLETED = "completed", "Completed"',
+      '    CANCELLED = "cancelled", "Cancelled"',
+      '    TRIAGE = "triage", "Triage"'
+    ].join("\n");
+    const fileBody = `from django.db import models\n\n${classBody}\n`;
+    const untitled = {
+      uri: vscode.Uri.parse("untitled:Untitled-1"),
+      getText: () => fileBody,
+      lineCount: fileBody.split("\n").length,
+      lineAt: (n: number) => ({ text: fileBody.split("\n")[n] ?? "" })
+    } as unknown as vscode.TextDocument;
+    (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+    const content = [
+      "File: `apps/api/plane/db/models/state.py`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      classBody,
+      "=======",
+      "class StateGroup(models.TextChoices):",
+      '    """Workflow state choices, not US state definitions."""',
+      '    BACKLOG = "backlog", "Backlog"',
+      '    UNSTARTED = "unstarted", "Unstarted"',
+      '    STARTED = "started", "Started"',
+      '    COMPLETED = "completed", "Completed"',
+      '    CANCELLED = "cancelled", "Cancelled"',
+      '    TRIAGE = "triage", "Triage"',
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 148,
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [3, 9],
+      selectionText: classBody,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    assert.equal(result?.files[0]?.hunks[0]?.matchStatus, "matched");
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

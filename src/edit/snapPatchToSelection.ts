@@ -95,7 +95,46 @@ function indentCommentToSelection(comment: string, selectedText: string): string
     .join("\n");
 }
 
-function retargetOntoSelection(hunk: PatchHunk, selectedText: string): PatchHunk {
+function extractLeadingCommentPrefix(replace: string): string | undefined {
+  const prefix = firstCommentPrefix(replace);
+  if (!prefix) {
+    return undefined;
+  }
+  const lines = splitLines(prefix).filter((line) => line.trim().length > 0);
+  if (lines.length === 0 || lines.some((line) => !looksLikeCommentLine(line))) {
+    return undefined;
+  }
+  return prefix;
+}
+
+/**
+ * Comment-only asks: keep an inserted comment, drop signature/body rewrites.
+ * Returns undefined when the hunk would change existing code with no comment.
+ */
+export function coerceCommentOnlyHunk(
+  hunk: PatchHunk,
+  selectedText: string
+): PatchHunk | undefined {
+  const prefix =
+    extractInsertedPrefix(hunk.replace, hunk.search) ?? extractLeadingCommentPrefix(hunk.replace);
+  if (prefix !== undefined && splitLines(prefix).some((line) => looksLikeCommentLine(line))) {
+    const comment = indentCommentToSelection(prefix, selectedText);
+    return {
+      search: selectedText,
+      replace: `${comment}\n${selectedText}`
+    };
+  }
+  return undefined;
+}
+
+function retargetOntoSelection(
+  hunk: PatchHunk,
+  selectedText: string,
+  commentOnly?: boolean
+): PatchHunk | undefined {
+  if (commentOnly) {
+    return coerceCommentOnlyHunk(hunk, selectedText);
+  }
   const prefix = extractInsertedPrefix(hunk.replace, hunk.search);
   if (prefix !== undefined) {
     const comment = indentCommentToSelection(prefix, selectedText);
@@ -122,7 +161,8 @@ export function snapHunkToSelection(options: {
   selectionText?: string;
   hunk: PatchHunk;
   selectedLines?: LineRange;
-}): PatchHunk {
+  commentOnly?: boolean;
+}): PatchHunk | undefined {
   const selectedLines = options.selectedLines;
   const selectedText =
     (options.content && selectedLines
@@ -131,7 +171,19 @@ export function snapHunkToSelection(options: {
     options.selectionText?.trimEnd() ||
     "";
   if (!selectedText.trim()) {
-    return options.hunk;
+    return options.commentOnly ? coerceCommentOnlyHunk(options.hunk, options.hunk.search) : options.hunk;
+  }
+  if (options.commentOnly) {
+    if (options.content && selectedLines) {
+      const matches = findAllSearchMatches(options.content, options.hunk.search);
+      const inside = matches.filter((hit) => rangesOverlap(hitLineRange(options.content!, hit), selectedLines));
+      if (inside.length > 0) {
+        return coerceCommentOnlyHunk(options.hunk, selectedText);
+      }
+    } else if (options.hunk.search === selectedText) {
+      return coerceCommentOnlyHunk(options.hunk, selectedText);
+    }
+    return retargetOntoSelection(options.hunk, selectedText, true);
   }
   if (options.content && selectedLines) {
     const matches = findAllSearchMatches(options.content, options.hunk.search);
@@ -159,47 +211,54 @@ function lookupFileContent(
   return undefined;
 }
 
+export const COMMENT_ONLY_REWRITE_REJECTED_ERROR =
+  "This edit asked for a comment only, but the patch rewrote the code. Nothing was changed. Ask again to add a comment above the highlighted lines — do not change the code.";
+
 export function snapPatchSetToSelection(
   patches: ParsedPatchSet,
   options: {
     selectedLines?: LineRange;
     preferredFile?: string;
     selectionText?: string;
+    commentOnly?: boolean;
     readContent: (relativePath: string) => string | undefined;
   }
 ): ParsedPatchSet {
-  if (!options.selectedLines && !options.selectionText?.trim()) {
+  if (!options.selectedLines && !options.selectionText?.trim() && !options.commentOnly) {
     return patches;
   }
-      const preferred = options.preferredFile?.replace(/\\/g, "/").replace(/^\.?\//, "");
+  const preferred = options.preferredFile?.replace(/\\/g, "/").replace(/^\.?\//, "");
   const onlyFile = patches.files.length === 1;
   return {
-    files: patches.files.map((file) => {
-      const path = file.relativePath.replace(/\\/g, "/").replace(/^\.?\//, "");
-      if (
-        !onlyFile &&
-        preferred &&
-        path !== preferred &&
-        !path.endsWith(`/${preferred}`) &&
-        !preferred.endsWith(`/${path}`)
-      ) {
-        return file;
-      }
-      const content = lookupFileContent(file.relativePath, options.readContent);
-      if (!content && !options.selectionText?.trim()) {
-        return file;
-      }
-      return {
-        relativePath: file.relativePath,
-        hunks: file.hunks.map((hunk) =>
-          snapHunkToSelection({
-            content,
-            selectionText: options.selectionText,
-            hunk,
-            selectedLines: options.selectedLines
-          })
-        )
-      };
-    })
+    files: patches.files
+      .map((file) => {
+        const path = file.relativePath.replace(/\\/g, "/").replace(/^\.?\//, "");
+        if (
+          !onlyFile &&
+          preferred &&
+          path !== preferred &&
+          !path.endsWith(`/${preferred}`) &&
+          !preferred.endsWith(`/${path}`)
+        ) {
+          return file;
+        }
+        const content = lookupFileContent(file.relativePath, options.readContent);
+        if (!content && !options.selectionText?.trim() && !options.commentOnly) {
+          return file;
+        }
+        const hunks = file.hunks
+          .map((hunk) =>
+            snapHunkToSelection({
+              content,
+              selectionText: options.selectionText,
+              hunk,
+              selectedLines: options.selectedLines,
+              commentOnly: options.commentOnly
+            })
+          )
+          .filter((hunk): hunk is NonNullable<typeof hunk> => Boolean(hunk));
+        return { relativePath: file.relativePath, hunks };
+      })
+      .filter((file) => file.hunks.length > 0)
   };
 }
