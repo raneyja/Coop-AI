@@ -56,8 +56,8 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 | --- | --- |
 | **No Create pull request button** | Apply the `/edit` patch first — the button is on **Patch applied**, not on the pending Apply / Reject row |
 | **Pick a Use-repo before creating a pull request** | Click **Use repo** on the repository in the Remote workspace picker |
-| **Permission / cannot create** | GitHub App needs Contents and Pull requests **write**, and the org must accept the update. See [Create pull request](/docs/create-pull-request) and [GitHub](/docs/github) |
-| **GitHub rejected this pull request (422)** | A PR may already exist for this branch — change **Branch** in the modal and retry |
+| **Permission / cannot create** | Ask your admin to confirm **Integrations** shows **Connected**. Do not create a personal token. See [Create pull request](/docs/create-pull-request) |
+| **GitHub rejected this pull request (422)** | GitHub refused the request — often because a PR already exists for this branch. Change **Branch** in the modal and retry |
 | **Cancel / Escape** | Safe — nothing is created on the host |
 
 Full guide: [Create pull request](/docs/create-pull-request).

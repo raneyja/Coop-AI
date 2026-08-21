@@ -456,12 +456,12 @@ There is no `/pr` command. **Create pull request** appears on the **Patch applie
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| **Branch** | `coop/patch` | Created from the repo’s primary branch. Rename it if that branch already has an open PR. |
+| **Branch** | `coop/patch` | Created from the branch Coop is using for this repo. Rename it if that branch already has an open PR. |
 | **Title** | `Update path/to/file` | One file uses the path; several files use `Update N files`. |
 | **Notes (AI Generated)** | Short summary of the diff | Optional. Drafted by **GPT-4o mini**. Edit or clear before submit. |
 | **Files** | Paths from the applied patch | What Coop commits on the host. |
 
-Coop writes the files to GitHub through your org’s GitHub App — not a local `git push`. The App needs **Contents** and **Pull requests** write, and the GitHub org must **Accept** that permission update.
+Coop writes the files through the GitHub (or GitLab / Bitbucket) connection your org admin already made in the admin portal — not a local `git push`, and not a token you create.
 
 **Undo** on the patch card restores editor files. It does **not** close the PR or delete the branch.
 
@@ -799,7 +799,7 @@ In **production mode**, org admins connect code hosts and collaboration tools on
 Ask your admin if:
 
 - Quick actions return "integration not connected"
-- **Create pull request** returns a permission error (GitHub App write not accepted)
+- **Create pull request** returns a permission error (GitHub / GitLab / Bitbucket not connected)
 - You need a teammate invited or more than 3 Deep-Indexed repos (upgrade to Pro)
 - Teammates need invites or seat assignments
 
@@ -823,7 +823,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **SP URLs empty in admin** | Operator: set `COOP_PUBLIC_BASE_URL` on API server and restart — not a user/extension setting |
 | **Missing email in SAML assertion** | IdP admin: map `email` attribute or use email-format NameID — [Single Sign On (SSO)](/docs/sso#idp-requirements) |
 | **Create pull request missing** | Apply the `/edit` patch first — the button is on **Patch applied**, not on the pending Apply / Reject row. Click **Use repo** first. |
-| **Create pull request permission error** | Ask admin: GitHub App needs Contents and Pull requests **write**, and the org must **Accept** the update. See [Create pull request](/docs/create-pull-request) |
+| **Create pull request permission error** | Ask admin to confirm **Integrations** shows **Connected**. Do not create a personal token. See [Create pull request](/docs/create-pull-request) |
 | **Autocomplete turned off unexpectedly** | Preference persists globally — re-enable via header **Autocomplete** toggle or **Settings → Preferences → Model & chat → Enable inline autocomplete**. Remove stale `coopAI.autocomplete.enabled: false` from workspace `.vscode/settings.json` if present |
 
 ## Support

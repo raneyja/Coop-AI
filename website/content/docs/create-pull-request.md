@@ -21,8 +21,8 @@ This is the last step of the edit loop: describe a change → review the diff �
 | Open a PR from Coop | Keep the change local |
 | --- | --- |
 | The patch is applied and you want a reviewable PR on the host | You are still iterating — **Undo** and run `/edit` again |
-| The repo is selected with **Use repo** and GitHub (or GitLab / Bitbucket) is connected | You only needed the edit in the editor |
-| You want Coop to draft a title and notes from the diff | You will commit yourself from a local clone |
+| The repo is selected with **Use repo** and your org’s GitHub (or GitLab / Bitbucket) is **Connected** | You only needed the edit in the editor |
+| You want Coop to draft a title and notes from the diff | You will open the PR yourself outside Coop |
 
 There is no `/pr` slash command. **Create pull request** appears on the **Patch applied** card after Apply.
 
@@ -30,7 +30,7 @@ There is no `/pr` slash command. **Create pull request** appears on the **Patch 
 
 1. **Extension UI** — Sign in under **Settings → Account**.
 2. **Extension UI** — Click **Use repo** on the repository in the Remote workspace picker (same as [Understand Repo](/manual#understand-repo)). Settings → Workspace owner/repo alone is not enough.
-3. **Admin portal** — GitHub (or GitLab / Bitbucket) connected for your org. For GitHub App installs, Contents and Pull requests must be **Read and write**, and the org must have **accepted** that permission update. See [GitHub](/docs/github).
+3. **Admin portal** — GitHub (or GitLab / Bitbucket) already **Connected** for your org — the same connection used for indexing. You do not create a token or change App permissions. If it is not connected, ask your admin. See [GitHub](/docs/github).
 4. **Extension UI** — Run `/edit`, then **Apply** the patch. The Create pull request button only appears after Apply.
 
 **Success:** The patch card says **Patch applied** and **Create pull request** is visible on that card.
@@ -71,9 +71,9 @@ Branch names may use letters, numbers, `.`, `_`, `-`, and `/`. No spaces. Max 20
 
 ## What happens on the host
 
-Coop writes through your connected GitHub App (or GitLab / Bitbucket token) — not a local `git push` from a clone.
+Coop writes through the code host your org admin already connected — not a local `git push`, and not a personal token in VS Code.
 
-1. Create (or reuse) the **Branch** from the repo’s primary branch (Settings → Workspace **Primary branch**, or the Use-repo default).
+1. Create (or reuse) the **Branch** from the branch Coop is using for this repo (**Use repo** / Workspace). That branch is also the PR base.
 2. Commit each listed file with the pull request title as the commit message.
 3. Open a pull request from that branch into the primary branch.
 4. Return the host URL in the modal.
@@ -84,19 +84,15 @@ Nothing is created if you cancel, if files are empty, or if the host rejects the
 
 ## Code hosts
 
-| Host | What Coop opens | Write access required |
-| --- | --- | --- |
-| **GitHub** | Pull request | GitHub App: **Contents** and **Pull requests** → **Read and write**. After Coop requests write, a GitHub org owner must **Review request / Accept** on the installation. |
-| **GitLab** | Merge request | Token with `api` and `write_repository` |
-| **Bitbucket** | Pull request | Token with `repository:write` and `pullrequest:write` |
+Create pull request uses the **same** GitHub, GitLab, or Bitbucket connection your org admin already made in the [admin portal](https://admin.coop-ai.dev/integrations). You do not create a token, paste a PAT, or change App permissions to open a PR.
 
-**GitHub App (production):** if Create pull request returns a permission error, the App is still read-only or the org has not accepted the write update.
+| Host | What Coop opens |
+| --- | --- |
+| **GitHub** | Pull request |
+| **GitLab** | Merge request (same **Create pull request** button) |
+| **Bitbucket** | Pull request |
 
-1. **Browser** — GitHub org → **Settings → GitHub Apps** (or `github.com/organizations/YOUR-ORG/settings/installations`) → **CoopAI for VS Code**.
-2. **Accept** the pending Contents / Pull requests write request, or **Configure** → confirm the repo is in **Repository access**.
-3. **Extension UI** — retry **Create pull request**.
-
-Full GitHub connect steps: [GitHub](/docs/github).
+If the host is not connected yet, your admin clicks **Connect** on that card — the same flow as indexing. Developers do not connect a code host in VS Code in production. See [GitHub](/docs/github).
 
 ## After the PR is open
 
@@ -113,9 +109,9 @@ To open a second PR from a later `/edit`, apply that patch and click **Create pu
 | **No Create pull request button** | Apply the patch first. The button only appears on **Patch applied**, not on the pending Apply / Reject row. |
 | **Pick a Use-repo before creating a pull request** | Click **Use repo** on the repository in the Remote workspace picker, then retry. |
 | **Apply the patch first, then create a pull request** | Click **Apply** on the patch card so Coop has file contents to commit. |
-| **Permission / cannot create** | GitHub App needs Contents and Pull requests **write**, and the org must accept the update. Ask your admin — see [GitHub](/docs/github). |
-| **GitHub rejected this pull request (422)** | A PR may already exist for this branch. Change **Branch** in the modal and retry. |
-| **GitHub could not find the repository or branch** | Confirm **Use repo** matches a repo the App can see. Add the repo under the App’s **Repository access**. |
+| **Permission / cannot create** | Ask your admin to confirm **Integrations** shows **Connected** for this host. Do not create a personal token. See [GitHub](/docs/github). |
+| **GitHub rejected this pull request (422)** | GitHub refused the request — often because a PR already exists for this branch. Change **Branch** in the modal and retry. |
+| **GitHub could not find the repository or branch** | Confirm **Use repo** matches a repo your admin indexed. Ask them to include it when they connected GitHub. |
 | **Notes empty or still “Generating summary…”** | Notes are optional. You can submit without them, or wait a few seconds and edit the draft. |
 | **Cancel created nothing** | Expected — **Cancel**, Escape, or the backdrop does not create a branch, commit, or PR. |
 
@@ -124,5 +120,5 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 ## Next steps
 
 - [Edit mode](/docs/edit-mode) — generate and apply patches
-- [GitHub](/docs/github) — App install and write permissions
+- [GitHub](/docs/github) — admin Connect in the portal
 - [Owner's Manual — Create a pull request](/manual#create-a-pull-request)

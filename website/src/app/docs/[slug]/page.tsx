@@ -39,7 +39,7 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   ],
   "create-pull-request": [
     { href: "/docs/edit-mode", label: "Edit mode — generate and apply patches" },
-    { href: "/docs/github", label: "GitHub App permissions for write" },
+    { href: "/docs/github", label: "Connect GitHub in the admin portal" },
     { href: "/manual#create-a-pull-request", label: "Owner's Manual — Create a pull request" }
   ],
   "github": [

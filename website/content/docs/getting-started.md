@@ -153,6 +153,6 @@ See [Plans & billing](/docs/plans-billing) for details.
 - [Model assignments](/docs/model-assignments) — per-feature models and settings UI
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions
 - [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
-- [Create pull request](/docs/create-pull-request) — open a GitHub PR after Apply
+- [Create pull request](/docs/create-pull-request) — open a PR after Apply
 - [Extension settings](/docs/extension-settings) — workspace, tools, preferences
 - [Owner's Manual](/manual) — daily use, quick actions, prompt library

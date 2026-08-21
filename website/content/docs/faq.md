@@ -85,7 +85,7 @@ Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Li
 
 ### Can I create a pull request from Coop?
 
-Yes. After you **Apply** an `/edit` patch, click **Create pull request** on the patch card. Confirm the branch, title, and notes — nothing is created on GitHub (or GitLab / Bitbucket) until you submit. **Cancel**, Escape, or the backdrop creates nothing. You need **Use repo** selected and write access on the code host. See [Create pull request](/docs/create-pull-request).
+Yes. After you **Apply** an `/edit` patch, click **Create pull request** on the patch card. Confirm the branch, title, and notes — nothing is created on GitHub (or GitLab / Bitbucket) until you submit. **Cancel**, Escape, or the backdrop creates nothing. You need **Use repo** selected, and your org’s code host already **Connected** in the admin portal (same connection as indexing). See [Create pull request](/docs/create-pull-request).
 
 ## Enterprise SSO
 
