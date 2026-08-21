@@ -280,7 +280,7 @@ import {
   savePinnedPromptIds,
   updatePinnedPromptIds
 } from "../prompts/pinnedPrompts";
-import { ChatThreadStore } from "./chatThreadStore";
+import { ChatThreadStore, isDraftChatThread } from "./chatThreadStore";
 import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
 import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
@@ -786,6 +786,9 @@ export class CoopChatSession {
       return;
     }
     const thread = this.threadStore.getActiveThread();
+    if (isDraftChatThread(thread)) {
+      return;
+    }
     void syncThreadToBackend(thread, this.threadSyncOptions());
   }
 
