@@ -486,9 +486,11 @@ export class GitLabClient implements CodeHostClient {
 
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
     const projectId = await this.projectId(coords);
+    const existingBranch = await this.readBranchHead(projectId, branch);
+    const fileRef = existingBranch ? branch : base;
     const actions: Array<{ action: "create" | "update"; file_path: string; content: string }> = [];
     for (const file of files) {
-      const exists = await this.fileExistsOnRef(projectId, file.path, base);
+      const exists = await this.fileExistsOnRef(projectId, file.path, fileRef);
       actions.push({
         action: exists ? "update" : "create",
         file_path: file.path,
@@ -496,16 +498,25 @@ export class GitLabClient implements CodeHostClient {
       });
     }
 
+    let commitSha: string;
     try {
-      const commit = await this.writeJson<{ id: string }>(
-        `${this.apiBase}/projects/${projectId}/repository/commits`,
-        {
-          branch,
-          start_branch: base,
-          commit_message: title,
-          actions
-        }
-      );
+      commitSha = await this.commitFiles(projectId, {
+        branch,
+        startBranch: existingBranch ? undefined : base,
+        title,
+        actions
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writeFailure(error.status);
+      }
+      if (error instanceof CodeHostError && (error.status === 409 || error.status === 400)) {
+        throw this.rejectedPullError(error);
+      }
+      throw error;
+    }
+
+    try {
       const mergeRequest = await this.writeJson<{ iid: number; web_url: string }>(
         `${this.apiBase}/projects/${projectId}/merge_requests`,
         {
@@ -519,18 +530,129 @@ export class GitLabClient implements CodeHostClient {
         number: mergeRequest.iid,
         htmlUrl: mergeRequest.web_url,
         branch,
-        commitSha: commit.id,
+        commitSha,
         title
       };
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
         throw this.writeFailure(error.status);
       }
+      if (error instanceof CodeHostError && (error.status === 409 || isGitlabMergeRequestExistsError(error))) {
+        const existing = await this.findOpenMergeRequest(projectId, branch, base);
+        if (existing) {
+          return {
+            number: existing.iid,
+            htmlUrl: existing.web_url,
+            branch,
+            commitSha,
+            title
+          };
+        }
+      }
       if (error instanceof CodeHostError && (error.status === 409 || error.status === 400)) {
-        throw new CodeHostError(GITLAB_PR_REJECTED_MESSAGE, "network", error.status, this.provider);
+        throw this.rejectedPullError(error);
       }
       throw error;
     }
+  }
+
+  private async commitFiles(
+    projectId: string,
+    options: {
+      branch: string;
+      startBranch?: string;
+      title: string;
+      actions: Array<{ action: "create" | "update"; file_path: string; content: string }>;
+    }
+  ): Promise<string> {
+    const body: Record<string, unknown> = {
+      branch: options.branch,
+      commit_message: options.title,
+      actions: options.actions
+    };
+    if (options.startBranch) {
+      body.start_branch = options.startBranch;
+    }
+    try {
+      const commit = await this.writeJson<{ id: string }>(
+        `${this.apiBase}/projects/${projectId}/repository/commits`,
+        body
+      );
+      return commit.id;
+    } catch (error) {
+      if (error instanceof CodeHostError && isGitlabBranchExistsError(error) && options.startBranch) {
+        return this.commitFiles(projectId, { ...options, startBranch: undefined });
+      }
+      if (error instanceof CodeHostError && isGitlabNoChangesError(error)) {
+        const existing = await this.readBranchHead(projectId, options.branch);
+        if (existing) {
+          return existing.sha;
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async readBranchHead(
+    projectId: string,
+    branch: string
+  ): Promise<{ name: string; sha: string } | undefined> {
+    try {
+      const row = await codeHostRequestJson<{ name?: string; commit?: { id?: string } }>(
+        `${this.apiBase}/projects/${projectId}/repository/branches/${encodeURIComponent(branch)}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      const sha = row.commit?.id?.trim();
+      if (!sha) {
+        return undefined;
+      }
+      return { name: row.name ?? branch, sha };
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  private async findOpenMergeRequest(
+    projectId: string,
+    sourceBranch: string,
+    targetBranch: string
+  ): Promise<{ iid: number; web_url: string } | undefined> {
+    const params = new URLSearchParams({
+      source_branch: sourceBranch,
+      target_branch: targetBranch,
+      state: "opened",
+      per_page: "1"
+    });
+    const mrs = await codeHostRequestJson<Array<{ iid?: number; web_url?: string }>>(
+      `${this.apiBase}/projects/${projectId}/merge_requests?${params.toString()}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    ).catch(() => []);
+    const first = Array.isArray(mrs) ? mrs[0] : undefined;
+    if (!first?.iid || !first.web_url) {
+      return undefined;
+    }
+    return { iid: first.iid, web_url: first.web_url };
+  }
+
+  private rejectedPullError(error: CodeHostError): CodeHostError {
+    const extra = error.message.replace(/^Request failed \(\d+\)\.?\s*/i, "").trim();
+    return new CodeHostError(
+      extra ? `${GITLAB_PR_REJECTED_MESSAGE} ${extra}` : GITLAB_PR_REJECTED_MESSAGE,
+      "network",
+      error.status,
+      this.provider
+    );
   }
 
   private async fileExistsOnRef(projectId: string, filePath: string, ref: string): Promise<boolean> {
@@ -583,12 +705,19 @@ export class GitLabClient implements CodeHostClient {
   private async readGitlabWriteGrant(): Promise<"sufficient" | "insufficient" | "unknown"> {
     try {
       const origin = this.apiBase.replace(/\/api\/v4\/?$/, "");
-      const payload = await codeHostRequestJson<{ scope?: string | string[] }>(`${origin}/oauth/token/info`, {
+      const payload = await codeHostRequestJson<{
+        scope?: string | string[];
+        scopes?: string | string[];
+      }>(`${origin}/oauth/token/info`, {
         headers: this.headers,
         provider: this.provider,
         rateLimitTracker: this.options.rateLimitTracker
       });
-      return gitlabScopesAllowPullWrite(parseOAuthScopeSet(payload.scope)) ? "sufficient" : "insufficient";
+      const scopes = parseOAuthScopeSet(payload.scope ?? payload.scopes);
+      if (scopes.size === 0) {
+        return "unknown";
+      }
+      return gitlabScopesAllowPullWrite(scopes) ? "sufficient" : "insufficient";
     } catch {
       return "unknown";
     }
@@ -714,4 +843,22 @@ function mapGitLabCommit(commit: GitLabCommit): CommitInfo {
 
 function normalizePath(value: string): string {
   return value.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function isGitlabBranchExistsError(error: CodeHostError): boolean {
+  if (error.status !== 400 && error.status !== 409) {
+    return false;
+  }
+  return /branch .*(already exists|exists)|already exists.*branch|could not create branch/i.test(error.message);
+}
+
+function isGitlabNoChangesError(error: CodeHostError): boolean {
+  if (error.status !== 400 && error.status !== 409) {
+    return false;
+  }
+  return /no changes|nothing to commit|any changes to commit|did not change|identical/i.test(error.message);
+}
+
+function isGitlabMergeRequestExistsError(error: CodeHostError): boolean {
+  return /another open merge request|merge request already exists/i.test(error.message);
 }

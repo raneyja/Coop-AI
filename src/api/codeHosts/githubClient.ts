@@ -9,7 +9,7 @@ import {
 } from "./codeHostHttp";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
-  GITHUB_PR_WRITE_FAILED_MESSAGE,
+  explainPullCreateFailure,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   githubTokenHasWriteScopes,
   normalizeWriteFiles,
@@ -897,11 +897,8 @@ export class GitHubClient implements CodeHostClient {
   }
 
   private writeFailureError(error: CodeHostError): CodeHostError {
-    const extra = error.message
-      .replace("Authentication failed. Update your token in settings.", "")
-      .trim();
     return new CodeHostError(
-      extra ? `${GITHUB_PR_WRITE_FAILED_MESSAGE} ${extra}` : GITHUB_PR_WRITE_FAILED_MESSAGE,
+      explainPullCreateFailure("github", error.message),
       "auth",
       error.status === 401 ? 401 : 403,
       this.provider

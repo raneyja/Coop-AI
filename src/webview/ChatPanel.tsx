@@ -835,7 +835,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             }
             prCreateError={
               typeof messageTimestamp === "number"
-                ? prCreateErrorFromResult(prCreateByTimestamp[messageTimestamp])
+                ? prCreateErrorFromResult(prCreateByTimestamp[messageTimestamp], context.provider)
                 : undefined
             }
             onRequestPrNotes={() => {

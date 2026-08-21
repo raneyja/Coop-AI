@@ -2486,6 +2486,11 @@
     );
   }
 
+  .coop-notice--error .coop-notice-title,
+  .coop-notice--error .coop-notice-body {
+    color: var(--vscode-errorForeground, var(--vscode-inputValidation-errorForeground, #f87171));
+  }
+
   .coop-notice-title {
     @apply text-[12px] font-medium;
     color: var(--coop-panel-foreground);

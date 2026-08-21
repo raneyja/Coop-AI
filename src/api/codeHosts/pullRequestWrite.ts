@@ -11,20 +11,23 @@ import {
 export const PR_HANDOFF_AUDIT_ACTION = "repo.pull.create";
 
 export const GITHUB_PR_WRITE_SCOPES = ["contents", "pull_requests"] as const;
-export const GITLAB_PR_WRITE_SCOPES = ["api", "write_repository"] as const;
+/** REST create-commit + merge-request needs `api`. `write_repository` is Git-over-HTTP only. */
+export const GITLAB_PR_WRITE_SCOPES = ["api"] as const;
 export const BITBUCKET_PR_WRITE_SCOPES = ["repository:write", "account", "pullrequest:write"] as const;
 
 export const GITHUB_WRITE_PERMISSION_MESSAGE =
-  "Coop cannot create a pull request on this GitHub repo. Grant Contents and Pull requests write on the GitHub App, accept the update, then try again. Nothing was created.";
+  "GitHub blocked this. The Coop GitHub App needs Contents and Pull requests write on this repo. An admin must grant those, accept the update on GitHub, then try again. Nothing was created.";
 
-export const GITHUB_PR_WRITE_FAILED_MESSAGE =
-  "GitHub refused to create this pull request. Nothing was created.";
+export const GITHUB_APP_CANNOT_WRITE_REPO_MESSAGE =
+  "GitHub blocked this. Coop's GitHub App is not allowed to write in this repository. That usually means a different GitHub org, or this repo isn't on the App's access list. An admin needs to add the repo and grant Contents and Pull requests write. Nothing was created.";
+
+export const GITHUB_PR_WRITE_FAILED_MESSAGE = GITHUB_APP_CANNOT_WRITE_REPO_MESSAGE;
 
 export const GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE =
-  "Coop is connected to GitHub with a personal token that cannot write. Reconnect GitHub in Coop settings, then try again. Nothing was created.";
+  "GitHub blocked this. Coop is using a personal GitHub token that cannot write. Reconnect GitHub in Coop settings, then try again. Nothing was created.";
 
 export const GITHUB_NOT_CONNECTED_MESSAGE =
-  "GitHub is not connected for this organization. Install the CoopAI GitHub App from Coop settings, then try again. Nothing was created.";
+  "GitHub blocked this. GitHub is not connected for this organization. Install the Coop GitHub App from Coop settings, then try again. Nothing was created.";
 
 /**
  * Points at the one installation that must approve, because "go to your
@@ -42,34 +45,134 @@ export function githubInstallationAcceptMessage(installation: {
       ? `https://github.com/settings/installations/${installation.installationId}`
       : undefined);
   const open = where ? ` Open ${where} and approve the pending request.` : "";
-  return `The CoopAI GitHub App installation${who} has not approved Contents and Pull requests write access.${open} Nothing was created.`;
+  return `GitHub blocked this. The Coop GitHub App${who} has not approved Contents and Pull requests write.${open} Nothing was created.`;
 }
 
 /** The App is installed but this repo is outside its Repository access list. */
 export function githubRepoNotInInstallationMessage(owner: string, repo: string): string {
-  return `The CoopAI GitHub App cannot see ${owner}/${repo}. Add this repository under the App's Repository access, then try again. Nothing was created.`;
+  return `GitHub blocked this. The Coop GitHub App cannot see ${owner}/${repo}. An admin needs to add this repository under the App's Repository access. Nothing was created.`;
 }
 
 export const GITLAB_WRITE_PERMISSION_MESSAGE =
-  "This GitLab token cannot create merge requests. Reconnect GitLab in Coop with api and write_repository access, then try again. Nothing was created.";
+  "GitLab blocked this. Coop does not have permission to create a merge request. Reconnect GitLab in Coop settings with api access, then try again. Nothing was created.";
 
-export const GITLAB_PR_WRITE_FAILED_MESSAGE =
-  "GitLab refused to create this merge request. Nothing was created.";
+export const GITLAB_PR_WRITE_FAILED_MESSAGE = GITLAB_WRITE_PERMISSION_MESSAGE;
 
 export const BITBUCKET_WRITE_PERMISSION_MESSAGE =
-  "This Bitbucket token cannot create pull requests. Reconnect Bitbucket in Coop with repository:write and pullrequest:write, then try again. Nothing was created.";
+  "Bitbucket blocked this. Coop does not have permission to create a pull request. Reconnect Bitbucket in Coop settings with repository:write and pullrequest:write, then try again. Nothing was created.";
 
-export const BITBUCKET_PR_WRITE_FAILED_MESSAGE =
-  "Bitbucket refused to create this pull request. Nothing was created.";
+export const BITBUCKET_PR_WRITE_FAILED_MESSAGE = BITBUCKET_WRITE_PERMISSION_MESSAGE;
 
 export const GITHUB_PR_REJECTED_MESSAGE =
-  "GitHub rejected this pull request (422). No pull request was created.";
+  "GitHub didn't open a pull request. A PR may already exist for this branch — change the branch name and try again.";
 
 export const GITLAB_PR_REJECTED_MESSAGE =
-  "GitLab rejected this merge request. No merge request was created.";
+  "GitLab didn't open a merge request. This branch may already have one, or there were no file changes. Try a different branch name.";
 
 export const BITBUCKET_PR_REJECTED_MESSAGE =
-  "Bitbucket rejected this pull request. No pull request was created.";
+  "Bitbucket didn't open a pull request. This branch may already have one, or there were no file changes. Try a different branch name.";
+
+const ALREADY_HUMAN_PULL_CREATE =
+  /^(GitHub|GitLab|Bitbucket) blocked this\.|^(GitHub|GitLab|Bitbucket) didn't open/i;
+
+/**
+ * Turn host jargon into a reason a user can act on. Safe to run twice.
+ */
+export function explainPullCreateFailure(
+  provider: CodeHostProvider | undefined,
+  raw: string
+): string {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "The host blocked this pull request. Nothing was created.";
+  }
+  if (ALREADY_HUMAN_PULL_CREATE.test(text) && !/resource not accessible by integration/i.test(text)) {
+    return text;
+  }
+  const host = provider ?? inferPullCreateProvider(text);
+
+  if (/unexpected end of json/i.test(text) || /empty response from the code host/i.test(text)) {
+    return "The host saved the commit but sent an empty reply. Try Create pull request again. Nothing extra was created on this attempt.";
+  }
+
+  if (host === "github") {
+    if (
+      /resource not accessible by integration/i.test(text) ||
+      /not accessible by integration/i.test(text) ||
+      /github refused to create/i.test(text) ||
+      /authentication failed/i.test(text) ||
+      /\b403\b|\b401\b/.test(text)
+    ) {
+      return GITHUB_APP_CANNOT_WRITE_REPO_MESSAGE;
+    }
+    if (
+      /validation failed|\(422\)|already exists/i.test(text) ||
+      /rejected this pull request \(422\)/i.test(text)
+    ) {
+      return GITHUB_PR_REJECTED_MESSAGE;
+    }
+    if (/resource not found/i.test(text)) {
+      return "GitHub blocked this. It could not find the repository or branch. Check Use-repo and the branch name. Nothing was created.";
+    }
+    return text;
+  }
+
+  if (host === "gitlab") {
+    if (
+      /gitlab refused to create|\b403\b|\b401\b|insufficient|forbidden|unauthorized|permission|authentication failed/i.test(
+        text
+      )
+    ) {
+      return GITLAB_WRITE_PERMISSION_MESSAGE;
+    }
+    if (/didn't open a merge request|blocked this/i.test(text)) {
+      return text;
+    }
+    const extra = text
+      .replace(/^GitLab refused to create this merge request\.\s*/i, "")
+      .replace(/^Request failed \(\d+\)\.\s*/i, "")
+      .replace(/^Authentication failed\. Update your token in settings\.\s*/i, "")
+      .trim();
+    if (extra && extra.length < 180 && !/unexpected end of json/i.test(extra)) {
+      return `GitLab didn't open a merge request. ${extra}`;
+    }
+    return GITLAB_PR_REJECTED_MESSAGE;
+  }
+
+  if (host === "bitbucket") {
+    if (
+      /bitbucket refused to create|\b403\b|\b401\b|insufficient|forbidden|unauthorized|permission|oauth|authentication failed/i.test(
+        text
+      )
+    ) {
+      return BITBUCKET_WRITE_PERMISSION_MESSAGE;
+    }
+    const extra = text
+      .replace(/^Bitbucket refused to create this pull request\.\s*/i, "")
+      .replace(/^Request failed \(\d+\)\.\s*/i, "")
+      .replace(/^Authentication failed\. Update your token in settings\.\s*/i, "")
+      .trim();
+    if (extra && extra.length < 180 && !/unexpected end of json/i.test(extra)) {
+      return `Bitbucket didn't open a pull request. ${extra}`;
+    }
+    return BITBUCKET_PR_REJECTED_MESSAGE;
+  }
+
+  return text;
+}
+
+function inferPullCreateProvider(text: string): CodeHostProvider | undefined {
+  if (/gitlab/i.test(text)) {
+    return "gitlab";
+  }
+  if (/bitbucket/i.test(text)) {
+    return "bitbucket";
+  }
+  if (/github/i.test(text) || /integration/i.test(text)) {
+    return "github";
+  }
+  return undefined;
+}
 
 export function writePermissionMessage(provider: CodeHostProvider): string {
   if (provider === "gitlab") {
@@ -220,7 +323,9 @@ export function githubAppInstallationHasPullWrite(
 }
 
 export function gitlabScopesAllowPullWrite(scopes: Set<string>): boolean {
-  return scopes.has("api") && scopes.has("write_repository");
+  // `api` is complete REST read/write (commits + merge requests).
+  // `write_repository` authenticates Git-over-HTTP only — not the API.
+  return scopes.has("api");
 }
 
 export function bitbucketScopesAllowPullWrite(scopes: Set<string>): boolean {

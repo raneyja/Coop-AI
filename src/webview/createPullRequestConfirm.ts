@@ -2,6 +2,7 @@ import type { CodeHostProviderPreference } from "../chat/types";
 import {
   createConfirmSubmitGuard,
   evaluateCreatePullRequest as evaluateCreatePullRequestCore,
+  explainPullCreateFailure,
   isPullRequestWriteSupported,
   normalizeWriteFiles
 } from "../api/codeHosts/pullRequestWrite";
@@ -70,10 +71,11 @@ export function createdPullRequestFromResult(
 }
 
 export function prCreateErrorFromResult(
-  result: CreatePullRequestCreated | { error: string } | undefined
+  result: CreatePullRequestCreated | { error: string } | undefined,
+  provider?: CodeHostProviderPreference
 ): string | undefined {
   if (result && "error" in result) {
-    return result.error;
+    return explainPullCreateFailure(provider, result.error);
   }
   return undefined;
 }

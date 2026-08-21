@@ -16,6 +16,10 @@ import {
   pullRequestCreatedCopy,
   pullRequestHostLabel
 } from "./createPullRequestConfirm";
+import {
+  GITHUB_APP_CANNOT_WRITE_REPO_MESSAGE,
+  GITLAB_WRITE_PERMISSION_MESSAGE
+} from "../api/codeHosts/pullRequestWrite";
 
 let passed = 0;
 let failed = 0;
@@ -137,6 +141,17 @@ await test("created result is only a host URL, never an error payload", () => {
   assert.equal(
     prCreateErrorFromResult({ error: "GitHub App needs Contents and Pull requests write." }),
     "GitHub App needs Contents and Pull requests write."
+  );
+  assert.equal(
+    prCreateErrorFromResult(
+      { error: "GitHub refused to create this pull request. Nothing was created. Resource not accessible by integration" },
+      "github"
+    ),
+    GITHUB_APP_CANNOT_WRITE_REPO_MESSAGE
+  );
+  assert.equal(
+    prCreateErrorFromResult({ error: "GitLab refused to create this merge request. Nothing was created." }, "gitlab"),
+    GITLAB_WRITE_PERMISSION_MESSAGE
   );
   assert.equal(createdPullRequestFromResult({ error: "failed" }), undefined);
 });

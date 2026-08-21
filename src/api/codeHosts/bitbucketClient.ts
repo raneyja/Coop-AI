@@ -10,6 +10,7 @@ import {
 import {
   BITBUCKET_PR_REJECTED_MESSAGE,
   BITBUCKET_PR_WRITE_FAILED_MESSAGE,
+  explainPullCreateFailure,
   bitbucketScopesAllowPullWrite,
   normalizeWriteFiles,
   parseOAuthScopeSet,
@@ -677,10 +678,10 @@ export class BitbucketClient implements CodeHostClient {
     }
     const extra =
       typeof error === "number"
-        ? ""
-        : error.message.replace("Authentication failed. Update your token in settings.", "").trim();
+        ? BITBUCKET_PR_WRITE_FAILED_MESSAGE
+        : error.message;
     return new CodeHostError(
-      extra ? `${BITBUCKET_PR_WRITE_FAILED_MESSAGE} ${extra}` : BITBUCKET_PR_WRITE_FAILED_MESSAGE,
+      explainPullCreateFailure("bitbucket", extra),
       "auth",
       authStatus,
       this.provider

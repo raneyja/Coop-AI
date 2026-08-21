@@ -7,6 +7,7 @@ import {
   GITHUB_PR_WRITE_FAILED_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   GITLAB_WRITE_PERMISSION_MESSAGE,
+  GITLAB_PR_REJECTED_MESSAGE,
   BITBUCKET_WRITE_PERMISSION_MESSAGE,
   BITBUCKET_PR_REJECTED_MESSAGE,
   PHASE_C_FIXTURE_FILES,
@@ -155,7 +156,7 @@ await test("GitHub App tokens are not blocked by collaborator push=false", async
   }
 });
 
-await test("GitHub Contents 403 surfaces GitHub's refusal, not Accept copy", async () => {
+await test("GitHub Contents 403 explains App cannot write this repo", async () => {
   const { calls } = installGithubMock({ scopes: null, failContents: true });
   try {
     await assert.rejects(
@@ -167,8 +168,8 @@ await test("GitHub Contents 403 surfaces GitHub's refusal, not Accept copy", asy
         }),
       (error: unknown) =>
         error instanceof CodeHostError &&
-        error.message.startsWith(GITHUB_PR_WRITE_FAILED_MESSAGE) &&
-        error.message.includes("Resource not accessible by integration")
+        error.message === GITHUB_PR_WRITE_FAILED_MESSAGE &&
+        !error.message.includes("Resource not accessible by integration")
     );
     assert.equal(calls.filter((call) => call.method === "POST" && call.url.endsWith("/pulls")).length, 0);
   } finally {
@@ -179,8 +180,10 @@ await test("GitHub Contents 403 surfaces GitHub's refusal, not Accept copy", asy
 await test("GitLab and Bitbucket grant checks match write scopes", () => {
   assert.equal(githubAppInstallationHasPullWrite({ contents: "read", pull_requests: "read" }), false);
   assert.equal(githubAppInstallationHasPullWrite({ contents: "write", pull_requests: "write" }), true);
-  assert.equal(gitlabScopesAllowPullWrite(new Set(["api"])), false);
+  assert.equal(gitlabScopesAllowPullWrite(new Set(["api"])), true);
   assert.equal(gitlabScopesAllowPullWrite(new Set(["api", "write_repository"])), true);
+  assert.equal(gitlabScopesAllowPullWrite(new Set(["write_repository"])), false);
+  assert.equal(gitlabScopesAllowPullWrite(new Set(["read_api"])), false);
   assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write"])), false);
   assert.equal(bitbucketScopesAllowPullWrite(new Set(["repository:write", "pullrequest:write"])), true);
   assert.equal(bitbucketScopesAllowPullWrite(new Set(["pullrequest:write"])), true);
@@ -396,7 +399,7 @@ await test("Bitbucket token with only repository read still blocks before writes
   }
 });
 
-await test("GitLab token/info without write_repository blocks before commits", async () => {
+await test("GitLab token/info without api blocks before commits", async () => {
   const requested: string[] = [];
   globalThis.fetch = (async (input: string | URL) => {
     const url = String(input);
@@ -417,6 +420,217 @@ await test("GitLab token/info without write_repository blocks before commits", a
         error instanceof CodeHostError && error.message === GITLAB_WRITE_PERMISSION_MESSAGE
     );
     assert.equal(requested.some((url) => url.includes("/repository/commits")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab token/info with api only does not require write_repository", async () => {
+  const requested: string[] = [];
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    requested.push(`${method} ${url}`);
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["api"] }), { status: 200 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 File Not Found" }), { status: 404 });
+    }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 Branch Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      return new Response(JSON.stringify({ id: "gl-commit" }), { status: 201 });
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ iid: 7, web_url: "https://gitlab.com/acme/plane/-/merge_requests/7" }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new GitLabClient({ token: "glpat" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 7);
+    assert.equal(result.htmlUrl, "https://gitlab.com/acme/plane/-/merge_requests/7");
+    assert.equal(requested.some((entry) => entry.includes("/repository/commits")), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab commits onto an existing coop/patch instead of recreating it", async () => {
+  let commitBody: { start_branch?: string; branch?: string } | undefined;
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["api"] }), { status: 200 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ name: "coop/patch", commit: { id: "already-committed" } }), {
+        status: 200
+      });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ file_path: "apps/api/auth.ts" }), { status: 200 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      commitBody = JSON.parse(String(init?.body ?? "{}")) as { start_branch?: string; branch?: string };
+      return new Response(JSON.stringify({ id: "gl-commit-2" }), { status: 201 });
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ iid: 8, web_url: "https://gitlab.com/acme/plane/-/merge_requests/8" }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new GitLabClient({ token: "glpat" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 8);
+    assert.equal(result.commitSha, "gl-commit-2");
+    assert.equal(commitBody?.branch, "coop/patch");
+    assert.equal(commitBody?.start_branch, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab no-changes on an existing branch still opens a merge request", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["api"] }), { status: 200 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ name: "coop/patch", commit: { id: "already-committed" } }), {
+        status: 200
+      });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ file_path: "apps/api/auth.ts" }), { status: 200 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      return new Response(JSON.stringify({ message: "You don't have any changes to commit." }), { status: 400 });
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ iid: 9, web_url: "https://gitlab.com/acme/plane/-/merge_requests/9" }),
+        { status: 201 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new GitLabClient({ token: "glpat" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 9);
+    assert.equal(result.commitSha, "already-committed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab existing merge request is returned instead of a generic rejection", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["api"] }), { status: 200 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 Branch Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 File Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      return new Response(JSON.stringify({ id: "gl-commit" }), { status: 201 });
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "POST") {
+      return new Response(
+        JSON.stringify({ message: ["Another open merge request already exists for this source branch: !7"] }),
+        { status: 409 }
+      );
+    }
+    if (url.includes("/projects/99/merge_requests") && method === "GET") {
+      return new Response(
+        JSON.stringify([{ iid: 7, web_url: "https://gitlab.com/acme/plane/-/merge_requests/7" }]),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify({ message: "unexpected", url }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await new GitLabClient({ token: "glpat" }).createPullFromFiles(
+      { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+      { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+    );
+    assert.equal(result.number, 7);
+    assert.equal(result.htmlUrl, "https://gitlab.com/acme/plane/-/merge_requests/7");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test("GitLab 400 surfaces the host's reason, not a bare rejection", async () => {
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/oauth/token/info")) {
+      return new Response(JSON.stringify({ scope: ["api"] }), { status: 200 });
+    }
+    if (url.includes("gitlab.com/api/v4/projects/acme%2Fplane") && method === "GET" && !url.includes("/repository/")) {
+      return new Response(JSON.stringify({ id: 99 }), { status: 200 });
+    }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 Branch Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/files/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 File Not Found" }), { status: 404 });
+    }
+    if (url.includes("/projects/99/repository/commits") && method === "POST") {
+      return new Response(JSON.stringify({ message: "A file with this name already exists" }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        new GitLabClient({ token: "glpat" }).createPullFromFiles(
+          { ...PHASE_C_FIXTURE_REPO, provider: "gitlab" },
+          { branch: "coop/patch", title: "Fixture", files: PHASE_C_FIXTURE_FILES }
+        ),
+      (error: unknown) =>
+        error instanceof CodeHostError &&
+        error.message.startsWith(GITLAB_PR_REJECTED_MESSAGE) &&
+        error.message.includes("A file with this name already exists")
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

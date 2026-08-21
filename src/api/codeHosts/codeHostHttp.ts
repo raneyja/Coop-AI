@@ -192,16 +192,35 @@ async function readJsonErrorMessage(response: Response): Promise<string | undefi
     if (!text.trim()) {
       return undefined;
     }
-    const parsed = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } };
-    if (typeof parsed.message === "string" && parsed.message.trim()) {
-      return parsed.message.trim();
-    }
-    const nested = parsed.error?.message;
-    if (typeof nested === "string" && nested.trim()) {
-      return nested.trim();
-    }
+    const parsed = JSON.parse(text) as { message?: unknown; error?: unknown };
+    return flattenHostErrorText(parsed.message) ?? flattenHostErrorText(parsed.error);
   } catch {
     return undefined;
+  }
+}
+
+/** GitLab often returns `message` as a string array; Bitbucket nests `error.message`. */
+function flattenHostErrorText(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((entry) => flattenHostErrorText(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return parts.length ? parts.join(" ") : undefined;
+  }
+  if (value && typeof value === "object") {
+    if ("message" in value) {
+      const nested = flattenHostErrorText((value as { message?: unknown }).message);
+      if (nested) {
+        return nested;
+      }
+    }
+    const parts = Object.values(value)
+      .map((entry) => flattenHostErrorText(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return parts.length ? parts.join(" ") : undefined;
   }
   return undefined;
 }

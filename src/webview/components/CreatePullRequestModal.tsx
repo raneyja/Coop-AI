@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { CodeHostProviderPreference } from "../../chat/types";
+import { explainPullCreateFailure } from "../../api/codeHosts/pullRequestWrite";
 import { ChatActionLink } from "./ChatActionLink";
+import { CoopNotice } from "./CoopNotice";
 import { CoopPanelHeader } from "./CoopPanelHeader";
 import {
   CREATE_PR_DONE_LABEL,
@@ -220,9 +222,12 @@ export function CreatePullRequestModal({
             </>
           )}
           {!created && error ? (
-            <p className="coop-prompt-modal-note" role="alert">
-              {error}
-            </p>
+            <CoopNotice
+              tone="error"
+              compact
+              className="mt-2"
+              message={explainPullCreateFailure(provider, error)}
+            />
           ) : null}
         </div>
         <footer className="coop-prompt-modal-footer coop-prompt-modal-inset coop-prompt-modal-inset--bottom">

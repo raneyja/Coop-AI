@@ -130,6 +130,9 @@ await test("C-G4 GitLab and Bitbucket create a PR/MR on their own APIs — never
     if (url.includes("/projects/99/repository/files/") && method === "GET") {
       return new Response(JSON.stringify({ message: "404 File Not Found" }), { status: 404 });
     }
+    if (url.includes("/repository/branches/") && method === "GET") {
+      return new Response(JSON.stringify({ message: "404 Branch Not Found" }), { status: 404 });
+    }
     if (url.includes("/projects/99/repository/commits") && method === "POST") {
       return new Response(JSON.stringify({ id: "gl-commit" }), { status: 201 });
     }
