@@ -199,4 +199,4 @@ Direct API usage: [API reference — Inline completion](/docs/api-reference#inli
 - [Extension settings](/docs/extension-settings)
 - [Getting started](/docs/getting-started)
 - [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
-- [Create pull request](/docs/create-pull-request) — open a PR after Apply
+- [Create pull request](/docs/create-pull-request) — open a PR from the patch card or by asking in chat

@@ -34,7 +34,7 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
     { href: "/docs/troubleshooting", label: "Troubleshooting" }
   ],
   "edit-mode": [
-    { href: "/docs/create-pull-request", label: "Create a pull request from an applied patch" },
+    { href: "/docs/create-pull-request", label: "Create a pull request from chat or the patch card" },
     { href: "/manual#create-a-pull-request", label: "Owner's Manual — Create a pull request" }
   ],
   "create-pull-request": [

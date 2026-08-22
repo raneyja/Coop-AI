@@ -129,7 +129,7 @@ After sign-in, confirm the hot path:
 | **Model & chat** | **Settings → Preferences → Model & chat** — four assigned models (Chat, Quick actions, /edit, Autocomplete), no provider picker |
 | **Autocomplete** | Sidebar **Autocomplete On** → type in `.ts` → ghost text → **Tab** accepts |
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
-| **Create pull request** | After Apply, **Create pull request** → confirm branch, title, and notes → a link to the PR |
+| **Create pull request** | After Apply, click **Create pull request** or type **Create a PR** in chat → confirm branch, title, and notes → a link to the PR |
 | **Quick action (file)** | `/trace` on a selection → structured answer with sources |
 | **Understand Repo** | **Use repo** on the repository → **Workflows → Understand Repo** or `/understand` → repo-wide overview |
 | **Plain chat** | Composer question → grounded reply (GPT-5 mini) |
@@ -153,6 +153,6 @@ See [Plans & billing](/docs/plans-billing) for details.
 - [Model assignments](/docs/model-assignments) — per-feature models and settings UI
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions
 - [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
-- [Create pull request](/docs/create-pull-request) — open a PR after Apply
+- [Create pull request](/docs/create-pull-request) — open a PR from the patch card or by asking in chat
 - [Extension settings](/docs/extension-settings) — workspace, tools, preferences
 - [Owner's Manual](/manual) — daily use, quick actions, prompt library

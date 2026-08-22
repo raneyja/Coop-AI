@@ -31,7 +31,7 @@ lastUpdated: "2026-08-21"
 | **Model & chat** | Four assigned models, no provider picker |
 | **Autocomplete** | Ghost text on type → **Tab** accepts |
 | **/edit** | Patch notification with **Apply** / **Undo** |
-| **Create pull request** | After Apply, confirm → a link to the PR |
+| **Create pull request** | After Apply, click **Create pull request** or type **Create a PR** → confirm → a link to the PR |
 | **Quick action** | Structured answer with repo/integration context |
 | **Plain chat** | Grounded reply in composer |
 

@@ -1,9 +1,9 @@
 ---
 title: Create pull request
-description: Open a pull request from an applied /edit patch — confirm branch, title, and notes in VS Code.
+description: Open a pull request from applied /edit patches — from the patch card or by asking in chat.
 section: extension
 order: 5
-lastUpdated: "2026-08-21"
+lastUpdated: "2026-08-22"
 ---
 
 <!-- figures lg -->
@@ -12,9 +12,18 @@ lastUpdated: "2026-08-21"
 
 After you **Apply** an `/edit`, you can open a pull request for your team without leaving VS Code.
 
-Confirm the branch, title, and notes, then submit. Cancel, Escape, or clicking away creates nothing.
+Two ways — both open the same confirm step (branch, title, notes). Cancel, Escape, or clicking away creates nothing.
+
+| Way | What goes in the PR |
+| --- | --- |
+| **Create pull request** on a patch card | That Apply only |
+| Type **Create a PR** in chat | **Every** `/edit` you Applied in this thread |
+
+There is no `/pr` slash command. Chat understands everyday wording — “create a pull request”, “create a pr of all the work I just applied”.
 
 ## Open a pull request
+
+### From the patch card
 
 1. Select the repository with **Use repo**.
 2. Send `/edit <instruction>` (or `/patch`, `/fix`) and click **Apply**.
@@ -22,7 +31,15 @@ Confirm the branch, title, and notes, then submit. Cancel, Escape, or clicking a
 4. Review **Branch**, **Title**, and **Notes**. Edit anything you want.
 5. Click **Create pull request**. Coop shows a link — open it to see the PR.
 
-There is no `/pr` command. After Apply, click **Create pull request** on that patch card, or type **Create a PR** in chat. Chat picks up **every** `/edit` you Applied in this thread — not only the last one. Both open the same confirm step.
+### From chat
+
+1. Select the repository with **Use repo**.
+2. Apply one or more `/edit`s in the same thread.
+3. Type **Create a PR** (or “create a pull request of all the work I just applied”).
+4. Review **Branch**, **Title**, and **Notes**. Notes cover every Apply in the thread.
+5. Click **Create pull request**. Coop shows a link — open it to see the PR.
+
+Chat ships **applied** `/edit`s only — not text you typed in the file. Apply first, then ask.
 
 ## Branch, title, and notes
 
@@ -33,7 +50,7 @@ Coop fills these in from the change. You can edit all of them.
 | **Branch** | `coop/patch` | The branch for this change. Choose a new name if you already opened a PR from `coop/patch`. |
 | **Title** | `Update path/to/file` | The pull request title. Several files become `Update N files`. |
 | **Notes (AI Generated)** | Short summary of the diff | The pull request description. Optional — edit, replace, or clear. |
-| **Files** | The files from every Apply in this thread (chat) or that card (button) | What goes into the PR |
+| **Files** | That card (button) or every Apply in this thread (chat) | What goes into the PR |
 
 Notes are drafted for you and labeled **(AI Generated)** so reviewers can tell. They describe the diff only — not tickets or tests you didn’t mention. The model is **OpenAI GPT-4o mini** ([model assignments](/docs/model-assignments)).
 

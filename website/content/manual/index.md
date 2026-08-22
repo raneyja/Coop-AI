@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
-lastUpdated: "2026-08-21"
+lastUpdated: "2026-08-22"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
@@ -324,7 +324,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, **Create pull request** is on the patch card |
+| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, click **Create pull request** on the card, or type **Create a PR** in chat |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -429,9 +429,12 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 After you **Apply** an `/edit`, you can open a pull request for your team without leaving VS Code.
 
-Confirm the branch, title, and notes, then submit. Cancel, Escape, or clicking away creates nothing.
+Two ways — both open the same confirm step. Cancel, Escape, or clicking away creates nothing.
 
-There is no `/pr` command. After Apply, click **Create pull request** on that card, or type **Create a PR** in chat. Chat includes every `/edit` you Applied in this thread.
+- Click **Create pull request** on a patch card — that Apply only.
+- Type **Create a PR** in chat (or “create a pull request of all the work I just applied”) — **every** `/edit` you Applied in this thread.
+
+There is no `/pr` slash command.
 
 <!-- figures lg -->
 ![Create pull request — confirm branch, title, and AI-generated notes after applying an /edit patch](/screenshots/docs/extension-create-pull-request.png)
@@ -440,8 +443,8 @@ There is no `/pr` command. After Apply, click **Create pull request** on that ca
 ### Open a pull request
 
 1. Select the repository with **Use repo**.
-2. Send `/edit <instruction>` and click **Apply**.
-3. Click **Create pull request**.
+2. Send `/edit <instruction>` and click **Apply**. Repeat for more changes in the same thread if you want.
+3. Click **Create pull request** on a card, **or** type **Create a PR** in chat.
 4. Review **Branch** (default `coop/patch`), **Title**, and **Notes (AI Generated)**. Edit anything you want.
 5. Click **Create pull request**. Coop shows a link — open it to see the PR.
 
@@ -450,7 +453,7 @@ There is no `/pr` command. After Apply, click **Create pull request** on that ca
 | **Branch** | `coop/patch` |
 | **Title** | `Update path/to/file` (or `Update N files`) |
 | **Notes (AI Generated)** | A short summary you can edit or clear |
-| **Files** | The files you just applied |
+| **Files** | That card (button) or every Apply in this thread (chat) |
 
 **Undo** restores the editor. It does not close the PR.
 
