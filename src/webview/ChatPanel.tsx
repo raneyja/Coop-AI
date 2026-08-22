@@ -17,6 +17,7 @@ import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
 import { compactPatchDiffForPrNotes } from "./prNotesDiff";
 import { createdPullRequestFromResult, defaultPrTitle, prCreateErrorFromResult } from "./createPullRequestConfirm";
+import { mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
 import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
@@ -155,6 +156,10 @@ type InboundMessage =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload | PatchCardState }
+  | {
+      type: "patch:open-create-pr";
+      payload: { messageTimestamp: number; files?: Array<{ path: string; content: string }> };
+    }
   | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string } }
   | {
       type: "patch:pr-created";
@@ -391,6 +396,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
   const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<
     Record<number, { text?: string; loading?: boolean }>
+  >({});
+  const [openCreatePrTimestamp, setOpenCreatePrTimestamp] = useState<number | undefined>();
+  const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<
+    Record<number, Array<{ path: string; content: string }>>
   >({});
   const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<
     Record<
@@ -827,6 +836,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 delete next[messageTimestamp];
                 return next;
               });
+              setCreatePrFilesByTimestamp((current) => {
+                if (!(messageTimestamp in current)) {
+                  return current;
+                }
+                const next = { ...current };
+                delete next[messageTimestamp];
+                return next;
+              });
             }}
             prCreated={
               typeof messageTimestamp === "number"
@@ -842,6 +859,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               if (typeof messageTimestamp !== "number") {
                 return;
               }
+              const override = createPrFilesByTimestamp[messageTimestamp];
+              const titlePaths = (override ?? card.prFiles)?.map((file) => file.path) ?? [];
+              const preview = override ? mergeAppliedPrPreviewFiles(patchCards) : card.files;
               setPrNotesByTimestamp((current) => ({
                 ...current,
                 [messageTimestamp]: { ...current[messageTimestamp], loading: true }
@@ -850,10 +870,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 type: "patch:summarize-pr",
                 payload: {
                   messageTimestamp,
-                  title: defaultPrTitle(card.prFiles?.map((file) => file.path) ?? []),
-                  diff: compactPatchDiffForPrNotes(card.files)
+                  title: defaultPrTitle(titlePaths),
+                  diff: compactPatchDiffForPrNotes(preview)
                 }
               });
+            }}
+            createPrFilesOverride={
+              typeof messageTimestamp === "number"
+                ? createPrFilesByTimestamp[messageTimestamp]
+                : undefined
+            }
+            openCreatePrRequested={
+              typeof messageTimestamp === "number" && openCreatePrTimestamp === messageTimestamp
+            }
+            onOpenCreatePrConsumed={() => {
+              if (typeof messageTimestamp === "number" && openCreatePrTimestamp === messageTimestamp) {
+                setOpenCreatePrTimestamp(undefined);
+              }
             }}
             prNotesLoading={
               typeof messageTimestamp === "number"
@@ -885,7 +918,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       context.owner,
       context.provider,
       context.repo,
+      createPrFilesByTimestamp,
       handleOpenLink,
+      openCreatePrTimestamp,
       patchCards,
       post,
       prCreateByTimestamp,
@@ -1344,6 +1379,20 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               });
             }
           }
+          break;
+        }
+        case "patch:open-create-pr": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number") {
+            break;
+          }
+          const files = (message.payload.files ?? []).filter(
+            (file) => file.path.trim() && file.content.length > 0
+          );
+          if (files.length > 0) {
+            setCreatePrFilesByTimestamp((current) => ({ ...current, [timestamp]: files }));
+          }
+          setOpenCreatePrTimestamp(timestamp);
           break;
         }
         case "patch:pr-notes": {

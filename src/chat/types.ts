@@ -764,6 +764,14 @@ export type WebviewOutbound =
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload }
   | {
+      /** Open the existing Create PR confirm modal for applied patches in this thread. */
+      type: "patch:open-create-pr";
+      payload: {
+        messageTimestamp: number;
+        files?: Array<{ path: string; content: string }>;
+      };
+    }
+  | {
       type: "patch:pr-notes";
       payload: { messageTimestamp?: number; notes?: string };
     }

@@ -16,7 +16,8 @@ import {
   defaultPrTitle,
   filesWithContent,
   type CreatePullRequestCreated,
-  type CreatePullRequestDraft
+  type CreatePullRequestDraft,
+  type CreatePullRequestFile
 } from "./createPullRequestConfirm";
 
 type PatchCardProps = {
@@ -44,6 +45,11 @@ type PatchCardProps = {
   generatedPrNotes?: string;
   prCreated?: CreatePullRequestCreated;
   prCreateError?: string;
+  /** Host asked to open the same confirm modal as the Create pull request button. */
+  openCreatePrRequested?: boolean;
+  onOpenCreatePrConsumed?: () => void;
+  /** Thread-level Create a PR — every Applied /edit, not only this card. */
+  createPrFilesOverride?: CreatePullRequestFile[];
 };
 
 function pendingEditCount(state: PatchCardState): number {
@@ -122,13 +128,17 @@ export function PatchCard({
   prNotesLoading,
   generatedPrNotes,
   prCreated,
-  prCreateError
+  prCreateError,
+  openCreatePrRequested,
+  onOpenCreatePrConsumed,
+  createPrFilesOverride
 }: PatchCardProps): React.ReactElement | null {
   const [prModalOpen, setPrModalOpen] = useState(false);
   const [prSubmitting, setPrSubmitting] = useState(false);
   const [prError, setPrError] = useState<string | undefined>();
+  const [modalFiles, setModalFiles] = useState<CreatePullRequestFile[] | undefined>();
   const submitGuard = useMemo(() => createConfirmSubmitGuard(), []);
-  const prFiles = filesWithContent(state.prFiles);
+  const prFiles = filesWithContent(modalFiles ?? state.prFiles);
 
   useEffect(() => {
     if (!prCreated?.htmlUrl) {
@@ -136,6 +146,22 @@ export function PatchCard({
     }
     setPrSubmitting(false);
   }, [prCreated?.htmlUrl]);
+
+  useEffect(() => {
+    if (!openCreatePrRequested) {
+      return;
+    }
+    if (!showCreatePullRequestButton(state)) {
+      onOpenCreatePrConsumed?.();
+      return;
+    }
+    setPrError(undefined);
+    onClearPrResult?.();
+    setModalFiles(createPrFilesOverride);
+    setPrModalOpen(true);
+    onRequestPrNotes?.();
+    onOpenCreatePrConsumed?.();
+  }, [openCreatePrRequested]);
 
   useEffect(() => {
     if (!prCreateError) {
@@ -293,6 +319,7 @@ export function PatchCard({
               onClick={() => {
                 setPrError(undefined);
                 onClearPrResult?.();
+                setModalFiles(undefined);
                 setPrModalOpen(true);
                 onRequestPrNotes?.();
               }}
@@ -320,6 +347,7 @@ export function PatchCard({
         onClose={() => {
           if (!prSubmitting) {
             setPrModalOpen(false);
+            setModalFiles(undefined);
             onClearPrResult?.();
           }
         }}

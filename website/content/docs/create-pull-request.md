@@ -22,7 +22,7 @@ Confirm the branch, title, and notes, then submit. Cancel, Escape, or clicking a
 4. Review **Branch**, **Title**, and **Notes**. Edit anything you want.
 5. Click **Create pull request**. Coop shows a link — open it to see the PR.
 
-There is no `/pr` command. The button appears after Apply.
+There is no `/pr` command. After Apply, click **Create pull request** on that patch card, or type **Create a PR** in chat. Chat picks up **every** `/edit` you Applied in this thread — not only the last one. Both open the same confirm step.
 
 ## Branch, title, and notes
 
@@ -33,7 +33,7 @@ Coop fills these in from the change. You can edit all of them.
 | **Branch** | `coop/patch` | The branch for this change. Choose a new name if you already opened a PR from `coop/patch`. |
 | **Title** | `Update path/to/file` | The pull request title. Several files become `Update N files`. |
 | **Notes (AI Generated)** | Short summary of the diff | The pull request description. Optional — edit, replace, or clear. |
-| **Files** | The files you just applied | What goes into the PR |
+| **Files** | The files from every Apply in this thread (chat) or that card (button) | What goes into the PR |
 
 Notes are drafted for you and labeled **(AI Generated)** so reviewers can tell. They describe the diff only — not tickets or tests you didn’t mention. The model is **OpenAI GPT-4o mini** ([model assignments](/docs/model-assignments)).
 
@@ -43,7 +43,7 @@ Notes are drafted for you and labeled **(AI Generated)** so reviewers can tell. 
 - Keep chatting in the same thread. Opening a PR does not undo the edit.
 - **Undo** on the patch card restores the editor. It does not close the PR.
 
-For a later change, apply the next `/edit` and create another pull request. If `coop/patch` is already in review, change **Branch** so the new work gets its own PR.
+Apply as many `/edit`s as you want in the same thread, then type **Create a PR**. One pull request includes all of them. If `coop/patch` is already in review, change **Branch** so the new work gets its own PR.
 
 ## GitHub, GitLab, and Bitbucket
 

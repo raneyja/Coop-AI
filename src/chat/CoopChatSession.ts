@@ -27,7 +27,7 @@ import {
   setPendingSharedMatchProposal,
   undoLastPatchWithState
 } from "../edit/patchActions";
-import { setLastEditUserMessage, getPatchRecord } from "../edit/patchSession";
+import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/patchSession";
 import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
@@ -469,6 +469,11 @@ import {
   shouldBypassAdvisoryGroundingForEdit,
   shouldTrackEditRequest
 } from "./editSendRouting";
+import {
+  createPrChatReply,
+  isCreatePullRequestAsk,
+  resolveCreatePrChatRouting
+} from "./createPrChatRouting";
 import { isCommentOnlyEditAsk } from "./editAskKind";
 import { isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
 
@@ -5068,10 +5073,34 @@ export class CoopChatSession {
     // button-driven quick actions or already-routed integration prompts.
     if (!quickAction && !options?.sourceHint) {
       const parsed = parseSlashCommand(message);
+      // /edit create a PR … is a ship command, not another patch.
+      if (
+        parsed?.def.name === "edit" &&
+        isCreatePullRequestAsk(parsed.args || parsed.focus || message)
+      ) {
+        await this.handleCreatePrChatAsk(
+          parsed.args || parsed.focus || message,
+          attachments,
+          options?.mentions
+        );
+        return;
+      }
       if (parsed) {
         await this.routeSlashCommand(parsed, attachments, options?.mentions);
         return;
       }
+    }
+
+    // "Create a PR" / "create a pull request of all the work I just applied"
+    // opens the existing confirm modal. Do not send this to the model.
+    if (
+      !quickAction &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      isCreatePullRequestAsk(message)
+    ) {
+      await this.handleCreatePrChatAsk(message, attachments, options?.mentions);
+      return;
     }
 
     const conversationalAck =
@@ -5604,6 +5633,68 @@ export class CoopChatSession {
       intentPlan: options?.intentPlan,
       fetchIntegrations
     });
+  }
+
+  private async handleCreatePrChatAsk(
+    message: string,
+    attachments?: ChatImageAttachment[],
+    mentions?: ChatFileMention[]
+  ): Promise<void> {
+    const mentionRefs = this.quickActionMentionRefs(mentions);
+    const historyContent = plainChatHistoryContent(message, mentionRefs, {
+      context: this.currentContext,
+      includeContextChips: true
+    });
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: historyContent,
+      timestamp: Date.now(),
+      attachments: attachments?.length ? attachments : undefined
+    };
+    this.chatHistory.push(userMessage);
+    if (this.chatHistory.length === 1) {
+      this.setThreadTitle(
+        summarizeThreadTitle({
+          content: historyContent || attachments?.[0]?.name || "File attachment",
+          context: this.currentContext
+        })
+      );
+    }
+    this.postChatHistory();
+    this.persistActiveThread();
+    this.chatTurnStartedAt = Date.now();
+    this.clearIntentFeedback();
+
+    const threadTimestamps = new Set(this.chatHistory.map((entry) => entry.timestamp));
+    const routing = resolveCreatePrChatRouting({
+      asked: true,
+      hasUseRepo: Boolean(this.currentUseRepoId()),
+      cards: listPatchCards().filter(
+        (card) =>
+          typeof card.messageTimestamp === "number" && threadTimestamps.has(card.messageTimestamp)
+      )
+    });
+    if (routing.kind === "open-confirm") {
+      this.post({
+        type: "patch:open-create-pr",
+        payload: { messageTimestamp: routing.messageTimestamp, files: routing.files }
+      });
+    }
+
+    const responseContent = createPrChatReply(routing);
+    if (!responseContent) {
+      return;
+    }
+    await delayUntilMinResponseVisible(this.chatTurnStartedAt);
+    const finalMessage: ChatMessage = {
+      role: "assistant",
+      content: responseContent,
+      timestamp: Date.now()
+    };
+    this.chatHistory.push(finalMessage);
+    this.post({ type: "chat:complete", payload: { message: finalMessage } });
+    this.postChatHistory();
+    this.persistActiveThread();
   }
 
   private async completeMissingIntentClarification(

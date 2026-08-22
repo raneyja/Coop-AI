@@ -431,7 +431,7 @@ After you **Apply** an `/edit`, you can open a pull request for your team withou
 
 Confirm the branch, title, and notes, then submit. Cancel, Escape, or clicking away creates nothing.
 
-There is no `/pr` command. **Create pull request** appears on **Patch applied** after Apply.
+There is no `/pr` command. After Apply, click **Create pull request** on that card, or type **Create a PR** in chat. Chat includes every `/edit` you Applied in this thread.
 
 <!-- figures lg -->
 ![Create pull request — confirm branch, title, and AI-generated notes after applying an /edit patch](/screenshots/docs/extension-create-pull-request.png)

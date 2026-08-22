@@ -33,6 +33,8 @@ test("J-G1 Apply session wires Create PR (canCreatePr + patch:create-pr handler)
   const session = readRepo("src/chat/CoopChatSession.ts");
   assert.match(session, /patch:create-pr/);
   assert.match(session, /patch:pr-created/);
+  assert.match(session, /patch:open-create-pr/);
+  assert.match(session, /isCreatePullRequestAsk/);
 
   const actions = readRepo("src/edit/patchActions.ts");
   assert.match(actions, /canCreatePr:\s*prFiles\.length\s*>\s*0/);
