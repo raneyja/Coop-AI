@@ -296,7 +296,7 @@ function emailShell(options: { title: string; body: string }): string {
       ${options.body}
     </div>
     <p style="margin:24px 0 0;font-size:12px;color:#57606a;text-align:center;">
-      Didn't request this? Contact <a href="mailto:hello@coop-ai.dev" style="color:#0969da;">hello@coop-ai.dev</a>
+      Didn't request this? Contact <a href="mailto:support@coop-ai.dev" style="color:#0969da;">support@coop-ai.dev</a>
     </p>
   </div>
 </body>

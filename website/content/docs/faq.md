@@ -32,7 +32,7 @@ Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google D
 
 ### Do you offer Enterprise self-hosting?
 
-Yes. Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev). See [Enterprise deployment](/docs/enterprise-deployment).
+Yes. Contact [support@coop-ai.dev](mailto:support@coop-ai.dev). See [Enterprise deployment](/docs/enterprise-deployment).
 
 ## Setup
 
@@ -121,7 +121,7 @@ No. Coop sends a verification link on password signup but does **not** hard-bloc
 
 ### How do I contact support?
 
-Email [hello@coop-ai.dev](mailto:hello@coop-ai.dev) or [book a demo](/demo).
+Email [support@coop-ai.dev](mailto:support@coop-ai.dev) or [book a demo](/demo).
 
 ### Where is the install guide?
 

@@ -53,7 +53,7 @@ Pro adds unlimited Deep-Indexed repos, team seats, Collections, usage analytics,
 
 ## Enterprise
 
-Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev) or [book a demo](/demo) for:
+Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) or [book a demo](/demo) for:
 
 - Self-hosted deployment on your infrastructure
 - BYOK (bring your own LLM provider keys)

@@ -49,4 +49,4 @@ CoopAI is in active development. We are working with design partners on real mon
 
 If your team spends hours each week answering the same codebase questions, we would love to show you what CoopAI can do.
 
-**[Book a demo](https://coop-ai.dev/demo)**, or reach us at [hello@coop-ai.dev](mailto:hello@coop-ai.dev).
+**[Book a demo](https://coop-ai.dev/demo)**, or reach us at [support@coop-ai.dev](mailto:support@coop-ai.dev).

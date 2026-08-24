@@ -66,7 +66,7 @@ export function BlogIndex({ featuredPosts, posts }: BlogIndexProps) {
               </p>
             </div>
             <a
-              href="mailto:hello@coop-ai.dev?subject=CoopAI%20blog%20updates"
+              href={`mailto:${siteConfig.contactEmail}?subject=CoopAI%20blog%20updates`}
               className="inline-flex shrink-0 items-center justify-center rounded border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-50"
             >
               Get updates →

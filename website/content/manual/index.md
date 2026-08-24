@@ -817,7 +817,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 
 ## Support
 
-- **Email:** [hello@coop-ai.dev](mailto:hello@coop-ai.dev)
+- **Email:** [support@coop-ai.dev](mailto:support@coop-ai.dev)
 - **Demo / enterprise:** [Book a demo](/demo)
 - **Documentation:** [Docs hub](/docs) for admin portal, integrations, API reference, and enterprise deployment
 - **Enterprise SSO:** [Single Sign On (SSO)](/docs/sso) setup · [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) error codes

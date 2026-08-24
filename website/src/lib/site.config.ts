@@ -7,7 +7,7 @@ export const siteConfig = {
   tagline: "From your stack, to your codebase.",
   subheadline:
     "Slack threads, Jira tickets, and symbol graphs in every answer and every line you write.",
-  contactEmail: "hello@coop-ai.dev",
+  contactEmail: "support@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   securityEmail: "security@coop-ai.dev",
   seo: {

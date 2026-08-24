@@ -5,4 +5,4 @@ export const PRICING_PAGE_URL = `${MARKETING_SITE_URL}/pricing`;
 
 export const MARKETING_DOMAIN = "coop-ai.dev";
 
-export const CONTACT_EMAIL = "hello@coop-ai.dev";
+export const CONTACT_EMAIL = "support@coop-ai.dev";

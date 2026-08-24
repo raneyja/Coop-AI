@@ -56,7 +56,7 @@ test("assertSafePublicEmailUrl allows https coop hosts on production API", () =>
     assertSafePublicEmailUrl("https://admin.coop-ai.dev/login", "https://api.coop-ai.dev")
   );
   assert.doesNotThrow(() =>
-    assertSafePublicEmailUrl("mailto:hello@coop-ai.dev", "https://api.coop-ai.dev")
+    assertSafePublicEmailUrl("mailto:support@coop-ai.dev", "https://api.coop-ai.dev")
   );
 });
 

@@ -109,6 +109,6 @@ Coop **operators** (self-hosted or support): post-deploy validation steps in [En
 
 ## Still stuck?
 
-- Email [hello@coop-ai.dev](mailto:hello@coop-ai.dev)
+- Email [support@coop-ai.dev](mailto:support@coop-ai.dev)
 - [Book a demo](/demo) for enterprise support
 - See [FAQ](/docs/faq)
