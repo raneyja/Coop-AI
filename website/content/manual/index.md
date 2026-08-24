@@ -347,7 +347,7 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
-| **Preferences** | Assigned models, prompt library, identity links, timezone |
+| **Preferences** | Assigned models, prompt library, timezone |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use **Workflows → Understand Repo** or `/understand` after **Use repo** in the Remote workspace picker.
 

@@ -554,8 +554,10 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     lightningStatusBar,
     vscode.window.registerWebviewViewProvider("coopAI.sidebar", provider, {
+      // Sidebar WebviewView + Extension Host reload (Cmd+R) leaves a blank panel when
+      // context is retained — VS Code skips resolveWebviewView and never gets HTML.
       webviewOptions: {
-        retainContextWhenHidden: true
+        retainContextWhenHidden: false
       }
     }),
     provider,
@@ -765,12 +767,14 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   const reloadAllChatWebviews = (): void => {
+    provider.ensureSidebarWebviewLoaded();
     for (const session of coopSessionRegistry.getAll()) {
       session.reloadChatWebviewHtml();
     }
   };
   reloadAllChatWebviews();
   setTimeout(reloadAllChatWebviews, 0);
+  setTimeout(reloadAllChatWebviews, 250);
 }
 
 export function deactivate(): void {}

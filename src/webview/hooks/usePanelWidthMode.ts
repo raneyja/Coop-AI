@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { COOP_PANEL_MIN_WIDTH } from "../../ui/panelMinWidth";
 
-/** Track webview width without CSS container-type (breaks VS Code sidebar sizing). */
+/** Track webview width — use window.innerWidth (iframe viewport), not documentElement shrink-wrap. */
 export function usePanelWidthMode(): void {
   useEffect(() => {
     const root = document.documentElement;
 
-    const apply = (width: number) => {
+    const apply = () => {
+      const width = window.innerWidth;
       if (width < COOP_PANEL_MIN_WIDTH) {
         root.dataset.coopNarrow = "true";
       } else {
@@ -14,15 +15,11 @@ export function usePanelWidthMode(): void {
       }
     };
 
-    const observer = new ResizeObserver(([entry]) => {
-      apply(entry.contentRect.width);
-    });
-
-    observer.observe(root);
-    apply(root.clientWidth);
+    window.addEventListener("resize", apply);
+    apply();
 
     return () => {
-      observer.disconnect();
+      window.removeEventListener("resize", apply);
       delete root.dataset.coopNarrow;
     };
   }, []);

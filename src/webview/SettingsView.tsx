@@ -845,10 +845,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setGoogleDocsTokenDraft("");
         }}
         onTestIntegration={testIntegration}
-        onSaveIdentityDirectory={(directory) => {
-          post({ type: "settings:save-identity-directory", payload: { directory } });
-          flashSaved("team");
-        }}
         onClearChat={() => post({ type: "chat:clear" })}
         collections={collections}
         collectionsError={collectionsError}

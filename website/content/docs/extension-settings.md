@@ -114,7 +114,6 @@ Profile and chat defaults — moved out of Account:
 | Item | Purpose |
 | --- | --- |
 | **Timezone** | Usage reset times and scheduling context in chat |
-| **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
 | **Model & chat** | Read-only assigned models, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
 

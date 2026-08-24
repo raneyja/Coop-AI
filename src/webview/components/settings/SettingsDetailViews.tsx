@@ -25,9 +25,7 @@ import {
   preferencesSignedIn
 } from "./connectionCopy";
 import type { SettingsLightningSummary } from "./SettingsHub";
-import { IdentityLinksDetail } from "./IdentityLinksDetail";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
-import type { IdentityDirectory } from "../../../identity/types";
 import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
@@ -36,7 +34,6 @@ import { agentsMdAttached } from "../../lib/agentsMdStatus";
 import {
   codeHostConfigured,
   codeHostOrgInstalled,
-  identityLinksHubSubtitle,
   integrationConfigured
 } from "./subtitles";
 import { IntegrationStatusCard, MemberAdminPortalLink } from "./IntegrationStatusCard";
@@ -181,7 +178,6 @@ export type SettingsDetailProps = {
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
   onNavigate: (screen: SettingsDetailScreen) => void;
-  onSaveIdentityDirectory: (directory: IdentityDirectory) => void;
   onInstallSlackApp: () => void;
   onRefreshSlackInstallation: () => void;
   onInstallAtlassianApp: () => void;
@@ -249,13 +245,6 @@ export function SettingsDetailView({
       return <GoogleDocsDetail {...props} />;
     case "workspace":
       return <WorkspaceDetail {...props} />;
-    case "team":
-      return (
-        <IdentityLinksDetail
-          directory={props.prefs.identityDirectory}
-          signedIn={Boolean(props.prefs.isSignedIn ?? props.prefs.hasApiKey)}
-        />
-      );
     case "preferences":
       return <PreferencesListDetail {...props} />;
     case "prompts":
@@ -854,7 +843,7 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
   return (
     <>
       <p className="coop-settings-card-desc px-0.5">
-        Model defaults, profile links, timezone, and your quick prompt library.
+        Model defaults, timezone, and your quick prompt library.
       </p>
       <CoopNavList>
         <CoopNavRow
@@ -868,12 +857,6 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
           title="Prompt library"
           subtitle={pinned === 0 ? "No quick prompts pinned" : pinned === 1 ? "1 quick prompt pinned" : `${pinned} quick prompts pinned`}
           onClick={() => onNavigate("prompts")}
-        />
-        <CoopNavRow
-          title="Identity links"
-          subtitle={identityLinksHubSubtitle(prefs)}
-          configured={prefs.identityDirectory.people.length > 0}
-          onClick={() => onNavigate("team")}
         />
       </CoopNavList>
 

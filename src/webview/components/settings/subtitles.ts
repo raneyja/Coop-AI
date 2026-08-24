@@ -1,4 +1,3 @@
-import { identityDirectorySummary } from "../../../identity/identityDirectory";
 import type { IntegrationChatProvider } from "../../../chat/types";
 import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import type { Preferences } from "./types";
@@ -152,13 +151,6 @@ export function workspaceHubSubtitle(prefs: Preferences): string {
       : "";
   return `${repo} · ${branch}${agentsHint}`;
 }
-
-export function identityLinksHubSubtitle(prefs: Preferences): string {
-  return identityDirectorySummary(prefs.identityDirectory);
-}
-
-/** @deprecated Use identityLinksHubSubtitle */
-export const teamHubSubtitle = identityLinksHubSubtitle;
 
 export function promptsHubSubtitle(pinnedCount: number): string {
   if (pinnedCount === 0) {
