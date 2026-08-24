@@ -8,6 +8,17 @@ export type AuthRedirectAllowlist = {
   extraOrigins?: string[];
 };
 
+/** Editor URI schemes that receive the session via a protocol handler, not a document navigation. */
+const IDE_AUTH_PROTOCOLS = new Set(["vscode:", "vscode-insiders:", "cursor:", "cursor-insiders:"]);
+
+export function isIdeAuthRedirect(redirect: string): boolean {
+  try {
+    return IDE_AUTH_PROTOCOLS.has(new URL(redirect).protocol);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Post-login redirects may carry access tokens in the URL fragment.
  * Allow only Coop surfaces (admin / marketing / localhost mirrors) and VS Code URI handlers —
@@ -26,7 +37,7 @@ export function sanitizeAuthRedirect(
   }
   try {
     const url = new URL(trimmed);
-    if (url.protocol === "vscode:" || url.protocol === "vscode-insiders:") {
+    if (IDE_AUTH_PROTOCOLS.has(url.protocol)) {
       return trimmed;
     }
     if (url.protocol !== "https:" && url.protocol !== "http:") {
@@ -87,6 +98,14 @@ export function deliverSessionToken(
       params.set("coopRefresh", refreshToken);
     }
     const location = appendAuthFragmentParams(redirect, params);
+    if (isIdeAuthRedirect(redirect)) {
+      writeIdeAuthHandoffHtml(response, 200, location, {
+        title: "Signed in to Coop",
+        heading: "You're signed in",
+        body: "You can close this tab and return to your editor."
+      });
+      return;
+    }
     response.writeHead(302, { location });
     response.end();
     return;
@@ -118,13 +137,16 @@ export function deliverAuthError(
   if (redirect) {
     try {
       const target = new URL(redirect);
-      if (target.protocol === "vscode:" || target.protocol === "vscode-insiders:") {
+      if (isIdeAuthRedirect(redirect)) {
         const params = new URLSearchParams();
         params.set("error", error);
         params.set("message", message);
         const location = appendAuthFragmentParams(redirect, params);
-        response.writeHead(302, { location });
-        response.end();
+        writeIdeAuthHandoffHtml(response, statusCode, location, {
+          title: "Coop sign-in",
+          heading: "Sign-in didn't finish",
+          body: message
+        });
         return;
       }
       const errorPath = target.pathname.includes("/login")
@@ -148,4 +170,51 @@ export function deliverAuthError(
     }
   }
   writeJson(response, statusCode, { error, message });
+}
+
+function writeIdeAuthHandoffHtml(
+  response: ServerResponse,
+  statusCode: number,
+  location: string,
+  copy: { title: string; heading: string; body: string }
+): void {
+  const safeLocation = escapeHtml(location);
+  const jsLocation = JSON.stringify(location);
+  response.writeHead(statusCode, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "referrer-policy": "no-referrer"
+  });
+  response.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>${escapeHtml(copy.title)}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b0f14; color: #e8eef5; }
+    .card { max-width: 28rem; padding: 2rem; text-align: center; }
+    h1 { font-size: 1.35rem; margin: 0 0 0.75rem; }
+    p { margin: 0 0 1rem; line-height: 1.45; color: #b7c2ce; }
+    a { color: #7eb6ff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${escapeHtml(copy.heading)}</h1>
+    <p>${escapeHtml(copy.body)}</p>
+    <p><a href="${safeLocation}">Open Coop in your editor</a> if it didn't open automatically.</p>
+  </div>
+  <script>setTimeout(function () { window.location.href = ${jsLocation}; }, 50);</script>
+</body>
+</html>`);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

@@ -15,13 +15,14 @@ const allowlist = authRedirectAllowlistFromConfig({
 
 function mockRedirectResponse(): {
   response: ServerResponse;
-  state: { statusCode?: number; location?: string; body?: string };
+  state: { statusCode?: number; location?: string; body?: string; contentType?: string };
 } {
-  const state: { statusCode?: number; location?: string; body?: string } = {};
+  const state: { statusCode?: number; location?: string; body?: string; contentType?: string } = {};
   const response = {
     writeHead(statusCode: number, headers?: Record<string, string>) {
       state.statusCode = statusCode;
       state.location = headers?.location;
+      state.contentType = headers?.["content-type"];
     },
     end(payload?: string) {
       state.body = payload;
@@ -38,6 +39,10 @@ test("sanitizeAuthRedirect allows vscode and Coop callback origins", () => {
   assert.equal(
     sanitizeAuthRedirect("vscode-insiders://coop-ai.coop-ai/auth/callback", allowlist),
     "vscode-insiders://coop-ai.coop-ai/auth/callback"
+  );
+  assert.equal(
+    sanitizeAuthRedirect("cursor://coop-ai.coop-ai/auth/callback", allowlist),
+    "cursor://coop-ai.coop-ai/auth/callback"
   );
   assert.equal(
     sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback", allowlist),
@@ -70,7 +75,7 @@ test("sanitizeAuthRedirect rejects unsafe schemes and https without allowlist", 
   assert.equal(sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback"), undefined);
 });
 
-test("deliverAuthError redirects vscode URIs to callback fragment", () => {
+test("deliverAuthError hands vscode URIs an HTML page instead of a protocol 302", () => {
   const { response, state } = mockRedirectResponse();
   deliverAuthError(
     response,
@@ -78,10 +83,13 @@ test("deliverAuthError redirects vscode URIs to callback fragment", () => {
     "saml_failed",
     "Assertion was rejected."
   );
-  assert.equal(state.statusCode, 302);
-  assert.equal(
-    state.location,
-    "vscode://coop-ai.coop-ai/auth/callback#error=saml_failed&message=Assertion+was+rejected."
+  assert.equal(state.statusCode, 400);
+  assert.equal(state.location, undefined);
+  assert.match(state.contentType ?? "", /text\/html/);
+  assert.match(state.body ?? "", /Sign-in didn't finish/);
+  assert.match(
+    state.body ?? "",
+    /vscode:\/\/coop-ai\.coop-ai\/auth\/callback#error=saml_failed&amp;message=Assertion\+was\+rejected\./
   );
 });
 
@@ -116,13 +124,35 @@ test("deliverAuthError preserves accept-invite path and token", () => {
   assert.equal(url.searchParams.get("message"), "Sign in with the invited Google account.");
 });
 
-test("deliverSessionToken appends coopToken to redirect fragment", () => {
+test("deliverSessionToken hands vscode URIs an HTML success page instead of a protocol 302", () => {
   const { response, state } = mockRedirectResponse();
   deliverSessionToken(response, "access-token-123", "vscode://coop-ai.coop-ai/auth/callback", "refresh-456");
+  assert.equal(state.statusCode, 200);
+  assert.equal(state.location, undefined);
+  assert.match(state.contentType ?? "", /text\/html/);
+  assert.match(state.body ?? "", /You're signed in/);
+  assert.match(
+    state.body ?? "",
+    /vscode:\/\/coop-ai\.coop-ai\/auth\/callback#coopToken=access-token-123&amp;coopRefresh=refresh-456/
+  );
+  assert.match(
+    state.body ?? "",
+    /window\.location\.href = "vscode:\/\/coop-ai\.coop-ai\/auth\/callback#coopToken=access-token-123&coopRefresh=refresh-456"/
+  );
+});
+
+test("deliverSessionToken still 302s browser portal callbacks", () => {
+  const { response, state } = mockRedirectResponse();
+  deliverSessionToken(
+    response,
+    "access-token-123",
+    "https://admin.coop-ai.dev/auth/callback",
+    "refresh-456"
+  );
   assert.equal(state.statusCode, 302);
   assert.equal(
     state.location,
-    "vscode://coop-ai.coop-ai/auth/callback#coopToken=access-token-123&coopRefresh=refresh-456"
+    "https://admin.coop-ai.dev/auth/callback#coopToken=access-token-123&coopRefresh=refresh-456"
   );
 });
 
