@@ -2,7 +2,13 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsView } from "./SettingsView";
+import { usePanelWidthMode } from "./hooks/usePanelWidthMode";
 import { startVscodeThemeSync } from "./theme";
+
+function AppShell({ children }: { children: React.ReactNode }): React.ReactElement {
+  usePanelWidthMode();
+  return <>{children}</>;
+}
 
 declare global {
   interface Window {
@@ -20,8 +26,8 @@ const view = window.__COOP_VIEW__ ?? "chat";
 startVscodeThemeSync();
 const root = createRoot(document.getElementById("root") as HTMLElement);
 
-if (view === "settings") {
-  root.render(<SettingsView vscode={vscode} />);
-} else {
-  root.render(<ChatPanel vscode={vscode} />);
-}
+root.render(
+  <AppShell>
+    {view === "settings" ? <SettingsView vscode={vscode} /> : <ChatPanel vscode={vscode} />}
+  </AppShell>
+);
