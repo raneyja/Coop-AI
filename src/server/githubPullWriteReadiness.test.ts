@@ -4,6 +4,7 @@ import {
   GITHUB_NOT_CONNECTED_MESSAGE,
   GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE,
   GITHUB_WRITE_PERMISSION_MESSAGE,
+  githubAppNotInstalledOnAccountMessage,
   githubInstallationAcceptMessage
 } from "../api/codeHosts/pullRequestWrite";
 import { inspectGithubPullWrite, type InspectGithubPullWriteOptions } from "./githubPullWriteReadiness";
@@ -71,11 +72,13 @@ function mockRepoFetch(options: { status?: number; scopes?: string | null }): vo
 
 type AppService = NonNullable<InspectGithubPullWriteOptions["githubApp"]>;
 type Attempt = Awaited<ReturnType<AppService["tryCreatePullWriteAccessToken"]>>;
+type RepoInstallation = Awaited<ReturnType<AppService["getRepositoryInstallation"]>>;
 
 function appService(
   attempt: Attempt | ((installationId: number) => Attempt),
   identity?: { accountLogin?: string; htmlUrl?: string; permissions?: Record<string, string> },
-  installations?: Array<{ id: number; accountLogin: string; accountType: string }>
+  installations?: Array<{ id: number; accountLogin: string; accountType: string }>,
+  repoInstallation?: RepoInstallation | null
 ): AppService {
   return {
     tryCreatePullWriteAccessToken: async (installationId: number) =>
@@ -98,7 +101,35 @@ function appService(
         permissions: identity?.permissions
       } as never;
     },
-    listAppInstallations: async () => installations ?? []
+    listAppInstallations: async () => installations ?? [],
+    getRepositoryInstallation: async () => {
+      if (repoInstallation === null) {
+        return undefined;
+      }
+      if (repoInstallation) {
+        return repoInstallation;
+      }
+      const listed =
+        (installations ?? []).find((row) => row.accountLogin.toLowerCase() === "raneyja") ??
+        (installations ?? [])[0];
+      if (listed) {
+        return {
+          id: listed.id,
+          accountLogin: listed.accountLogin,
+          htmlUrl:
+            listed.accountType === "Organization"
+              ? `https://github.com/organizations/${listed.accountLogin}/settings/installations/${listed.id}`
+              : `https://github.com/settings/installations/${listed.id}`,
+          permissions: identity?.permissions
+        };
+      }
+      return {
+        id: APP_INSTALLATION_ID,
+        accountLogin: identity?.accountLogin,
+        htmlUrl: identity?.htmlUrl,
+        permissions: identity?.permissions
+      };
+    }
   } as AppService;
 }
 
@@ -240,6 +271,74 @@ test("company install cannot see a personal repo — use the owner's install ins
   }
 });
 
+test("a public personal repo is not treated as writable by the company GitHub App", async () => {
+  const CORP_ID = 144638755;
+  const PERSONAL_ID = 111;
+  const { store, upserts } = mockStore({ installationId: CORP_ID });
+  mockRepoFetch({ scopes: null });
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        (installationId) =>
+          installationId === PERSONAL_ID
+            ? {
+                ok: true,
+                token: "ghs_personal",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              }
+            : {
+                ok: true,
+                token: "ghs_corp",
+                expiresAt: new Date(Date.now() + 3_600_000),
+                permissions: { contents: "write", pull_requests: "write" }
+              },
+        undefined,
+        [
+          { id: CORP_ID, accountLogin: "CoopAI-Corp", accountType: "Organization" },
+          { id: PERSONAL_ID, accountLogin: "raneyja", accountType: "User" }
+        ]
+      )
+    });
+    assert.equal(readiness.ok, true);
+    assert.equal(readiness.installationId, PERSONAL_ID);
+    assert.equal(readiness.token, "ghs_personal");
+    assert.equal(readiness.switchedFromInstallationId, CORP_ID);
+    assert.equal(upserts.length, 0, "must not replace the company GitHub App with the personal install");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a public personal repo with no App install on the owner is not treated as ready", async () => {
+  const CORP_ID = 144638755;
+  const { store, upserts } = mockStore({ installationId: CORP_ID });
+  mockRepoFetch({ scopes: null });
+  try {
+    const readiness = await inspect({
+      orgStore: store,
+      githubApp: appService(
+        {
+          ok: true,
+          token: "ghs_corp",
+          expiresAt: new Date(Date.now() + 3_600_000),
+          permissions: { contents: "write", pull_requests: "write" }
+        },
+        { accountLogin: "CoopAI-Corp" },
+        [{ id: CORP_ID, accountLogin: "CoopAI-Corp", accountType: "Organization" }],
+        null
+      )
+    });
+    assert.equal(readiness.ok, false);
+    assert.equal(readiness.reason, "repo_not_in_installation");
+    assert.equal(readiness.message, githubAppNotInstalledOnAccountMessage("raneyja", "Coop-AI"));
+    assert.equal(upserts.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("when the stored install is the company, a missing owner approval names raneyja not the company", async () => {
   const CORP_ID = 144638755;
   const PERSONAL_ID = 111;
@@ -287,12 +386,12 @@ test("a second installation that cannot see the repo is not used as a fix", asyn
               }
             : { ok: false, githubMessage: "not granted to this installation" },
         { accountLogin: "raneyja" },
-        [{ id: OTHER_ID, accountLogin: "raneyja", accountType: "User" }]
+        [{ id: OTHER_ID, accountLogin: "raneyja", accountType: "User" }],
+        null
       )
     });
     assert.equal(readiness.ok, false);
-    assert.equal(readiness.reason, "app_permissions_not_accepted");
-    assert.equal(readiness.installationId, APP_INSTALLATION_ID);
+    assert.equal(readiness.reason, "repo_not_in_installation");
     assert.equal(upserts.length, 0, "never repoints the org at an installation that cannot see the repo");
   } finally {
     globalThis.fetch = originalFetch;
@@ -333,12 +432,17 @@ test("App with write access but repo outside Repository access reports repo_not_
   try {
     const readiness = await inspect({
       orgStore: store,
-      githubApp: appService({
-        ok: true,
-        token: "ghs_write",
-        expiresAt: new Date(Date.now() + 3_600_000),
-        permissions: { contents: "write", pull_requests: "write" }
-      })
+      githubApp: appService(
+        {
+          ok: true,
+          token: "ghs_write",
+          expiresAt: new Date(Date.now() + 3_600_000),
+          permissions: { contents: "write", pull_requests: "write" }
+        },
+        { accountLogin: "raneyja" },
+        [{ id: APP_INSTALLATION_ID, accountLogin: "raneyja", accountType: "User" }],
+        null
+      )
     });
     assert.equal(readiness.ok, false);
     assert.equal(readiness.reason, "repo_not_in_installation");

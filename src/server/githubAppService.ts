@@ -282,6 +282,63 @@ export class GitHubAppService {
     };
   }
 
+  /**
+   * GET /repos/{owner}/{repo}/installation. 404 when this App is not on that repo —
+   * including public repos that any installation token can still GET.
+   */
+  public async getRepositoryInstallation(
+    owner: string,
+    repo: string
+  ): Promise<
+    | {
+        id: number;
+        htmlUrl?: string;
+        accountLogin?: string;
+        accountType?: string;
+        permissions?: Record<string, string>;
+        repositorySelection?: string;
+      }
+    | undefined
+  > {
+    const jwt = this.createAppJwt();
+    const response = await fetch(
+      `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/installation`,
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-backend"
+        }
+      }
+    );
+    if (response.status === 404) {
+      return undefined;
+    }
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`GitHub get repository installation failed (${response.status}): ${body}`);
+    }
+    const data = (await response.json()) as {
+      id?: number;
+      html_url?: string;
+      account?: { login?: string; type?: string };
+      permissions?: Record<string, string>;
+      repository_selection?: string;
+    };
+    if (!data.id) {
+      return undefined;
+    }
+    return {
+      id: data.id,
+      htmlUrl: data.html_url,
+      accountLogin: data.account?.login,
+      accountType: data.account?.type,
+      permissions: data.permissions,
+      repositorySelection: data.repository_selection
+    };
+  }
+
   /** Paginate GET /app/installations for this GitHub App (JWT auth). */
   public async listAppInstallations(): Promise<
     Array<{ id: number; accountLogin: string; accountType: string }>

@@ -2,6 +2,7 @@ import { codeHostRequest } from "../api/codeHosts/codeHostHttp";
 import {
   GITHUB_NOT_CONNECTED_MESSAGE,
   GITHUB_OAUTH_WRITE_PERMISSION_MESSAGE,
+  githubAppNotInstalledOnAccountMessage,
   githubInstallationAcceptMessage,
   githubRepoNotInInstallationMessage,
   githubTokenHasWriteScopes
@@ -52,7 +53,7 @@ export type InspectGithubPullWriteOptions = {
   orgStore: Pick<OrgStore, "getCodeHostInstallation" | "getInstallationToken" | "upsertCodeHostInstallation" | "getCredential">;
   githubApp?: Pick<
     GitHubAppService,
-    "tryCreatePullWriteAccessToken" | "getInstallation" | "listAppInstallations"
+    "tryCreatePullWriteAccessToken" | "getInstallation" | "getRepositoryInstallation" | "listAppInstallations"
   >;
   allowPatFallback?: boolean;
 };
@@ -124,6 +125,14 @@ async function inspectAppInstallation(
   options: InspectGithubPullWriteOptions,
   storedInstallationId: number
 ): Promise<GithubPullWriteInspection> {
+  const covering = await lookupRepositoryInstallation(options);
+  if (covering.status === "found") {
+    return finishCoveringInstallation(options, storedInstallationId, covering.installation);
+  }
+  if (covering.status === "missing") {
+    return missingRepoInstallation(options, storedInstallationId);
+  }
+
   const storedAttempt = await options.githubApp!.tryCreatePullWriteAccessToken(storedInstallationId);
   if (storedAttempt.ok) {
     const stored = await finishAppInstallation(options, storedInstallationId, storedAttempt, {
@@ -174,14 +183,106 @@ async function inspectAppInstallation(
   };
 }
 
+async function finishCoveringInstallation(
+  options: InspectGithubPullWriteOptions,
+  storedInstallationId: number,
+  covering: {
+    id: number;
+    htmlUrl?: string;
+    accountLogin?: string;
+    permissions?: Record<string, string>;
+  }
+): Promise<GithubPullWriteInspection> {
+  const attempt = await options.githubApp!.tryCreatePullWriteAccessToken(covering.id);
+  if (!attempt.ok) {
+    return {
+      ok: false,
+      reason: "app_permissions_not_accepted",
+      message: githubInstallationAcceptMessage({
+        accountLogin: covering.accountLogin,
+        installationId: covering.id,
+        installationUrl: covering.htmlUrl
+      }),
+      tokenKind: "github_app",
+      installationId: covering.id,
+      accountLogin: covering.accountLogin,
+      installationUrl: covering.htmlUrl,
+      grantedPermissions: attempt.permissions ?? covering.permissions,
+      githubDetail: attempt.githubMessage
+    };
+  }
+  const persist = covering.id === storedInstallationId;
+  const finished = await finishAppInstallation(options, covering.id, attempt, { persist });
+  if (finished.ok && !persist) {
+    return { ...finished, switchedFromInstallationId: storedInstallationId };
+  }
+  return finished;
+}
+
+async function missingRepoInstallation(
+  options: InspectGithubPullWriteOptions,
+  storedInstallationId: number
+): Promise<GithubPullWriteInspection> {
+  const identity = await describeInstallation(options, storedInstallationId);
+  let ownerInstall: { id: number; accountLogin: string } | undefined;
+  try {
+    const installations = (await options.githubApp?.listAppInstallations()) ?? [];
+    const ownerLc = options.owner.toLowerCase();
+    ownerInstall = installations.find((row) => row.accountLogin.toLowerCase() === ownerLc);
+  } catch {
+    ownerInstall = undefined;
+  }
+  const message = ownerInstall
+    ? githubRepoNotInInstallationMessage(options.owner, options.repo)
+    : githubAppNotInstalledOnAccountMessage(options.owner, options.repo);
+  return {
+    ok: false,
+    reason: "repo_not_in_installation",
+    message,
+    tokenKind: "github_app",
+    installationId: ownerInstall?.id ?? storedInstallationId,
+    accountLogin: ownerInstall?.accountLogin ?? identity?.accountLogin,
+    installationUrl: identity?.htmlUrl,
+    githubDetail: undefined
+  };
+}
+
+type RepositoryInstallationLookup =
+  | {
+      status: "found";
+      installation: {
+        id: number;
+        htmlUrl?: string;
+        accountLogin?: string;
+        accountType?: string;
+        permissions?: Record<string, string>;
+      };
+    }
+  | { status: "missing" }
+  | { status: "unknown" };
+
+async function lookupRepositoryInstallation(
+  options: InspectGithubPullWriteOptions
+): Promise<RepositoryInstallationLookup> {
+  if (!options.githubApp?.getRepositoryInstallation) {
+    return { status: "unknown" };
+  }
+  try {
+    const installation = await options.githubApp.getRepositoryInstallation(options.owner, options.repo);
+    return installation ? { status: "found", installation } : { status: "missing" };
+  } catch {
+    return { status: "unknown" };
+  }
+}
+
 async function finishAppInstallation(
   options: InspectGithubPullWriteOptions,
   installationId: number,
   attempt: { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> },
   persist: { persist: boolean }
 ): Promise<GithubPullWriteInspection> {
-  const probe = await probeRepository(options.owner, options.repo, attempt.token);
-  if (probe.status !== "ok") {
+  const covering = await lookupRepositoryInstallation(options);
+  if (covering.status === "found" && covering.installation.id !== installationId) {
     const identity = await describeInstallation(options, installationId);
     return {
       ok: false,
@@ -191,9 +292,38 @@ async function finishAppInstallation(
       installationId,
       accountLogin: identity?.accountLogin,
       installationUrl: identity?.htmlUrl,
-      grantedPermissions: attempt.permissions,
-      githubDetail: probe.githubDetail
+      grantedPermissions: attempt.permissions
     };
+  }
+  if (covering.status === "missing") {
+    const identity = await describeInstallation(options, installationId);
+    return {
+      ok: false,
+      reason: "repo_not_in_installation",
+      message: githubRepoNotInInstallationMessage(options.owner, options.repo),
+      tokenKind: "github_app",
+      installationId,
+      accountLogin: identity?.accountLogin,
+      installationUrl: identity?.htmlUrl,
+      grantedPermissions: attempt.permissions
+    };
+  }
+  if (covering.status === "unknown") {
+    const probe = await probeRepository(options.owner, options.repo, attempt.token);
+    if (probe.status !== "ok") {
+      const identity = await describeInstallation(options, installationId);
+      return {
+        ok: false,
+        reason: "repo_not_in_installation",
+        message: githubRepoNotInInstallationMessage(options.owner, options.repo),
+        tokenKind: "github_app",
+        installationId,
+        accountLogin: identity?.accountLogin,
+        installationUrl: identity?.htmlUrl,
+        grantedPermissions: attempt.permissions,
+        githubDetail: probe.githubDetail
+      };
+    }
   }
 
   if (persist.persist) {

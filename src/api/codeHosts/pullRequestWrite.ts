@@ -53,6 +53,11 @@ export function githubRepoNotInInstallationMessage(owner: string, repo: string):
   return `GitHub blocked this. The Coop GitHub App cannot see ${owner}/${repo}. An admin needs to add this repository under the App's Repository access. Nothing was created.`;
 }
 
+/** The App is on a different GitHub account than the Use-repo (common for public personal repos). */
+export function githubAppNotInstalledOnAccountMessage(owner: string, repo: string): string {
+  return `GitHub blocked this. Coop's GitHub App is not installed on ${owner}. An admin needs to install it on that GitHub account and include ${owner}/${repo}. Nothing was created.`;
+}
+
 export const GITLAB_WRITE_PERMISSION_MESSAGE =
   "GitLab blocked this. Coop does not have permission to create a merge request. Reconnect GitLab in Coop settings with api access, then try again. Nothing was created.";
 
