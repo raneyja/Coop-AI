@@ -30,13 +30,14 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 
 1. Citation locators are recognized on the fence info-string **or** the first body line.
 2. Placeholder locators (`startLine:endLine:…`) and path-only first lines that look like repo files **must** upgrade to `code-citation`, not `code-fence`.
-3. Mistaken ` ```lang ` dumps of repo code **must** upgrade to cite when:
+3. Locators sitting **above or immediately after** a fence, **indented** fences inside lists, unlabeled fences with a nearby repo path, **bold / File: path wrappers**, and **unclosed fences** that would swallow following lists **must** still render as cite — never anonymous Copy boxes wrapping the rest of the answer.
+4. Mistaken ` ```lang ` dumps of repo code **must** upgrade to cite when:
    - a nearby prose path is found, or
    - the open/active file language family matches (treat **javascript ↔ typescript ↔ jsx/tsx** as one family — models mislabel constantly), or
    - the active file's basename appears in nearby prose.
-4. Never upgrade `patch` / `diff` / shell / doc fences via active file.
-5. Remaining anonymous fences still use **IDE chrome + token colors** for any language — never uppercase **TEXT** / monochrome markdown. Highlighter must color unknown source langs, not fall back to plain text.
-6. `ChatCodeBlock` must not show a **TEXT** badge. Cite and patch file headers are the same product family: path-first, monospace, open-in-editor.
+5. Never upgrade `patch` / `diff` / shell / doc fences via active file.
+6. Remaining anonymous fences still use **IDE chrome + token colors** for any language — never uppercase **TEXT** / monochrome markdown. Highlighter must color unknown source langs, not fall back to plain text.
+7. `ChatCodeBlock` must not show a **TEXT** badge. Cite and patch file headers are the same product family: path-first, monospace, open-in-editor.
 
 ## Prompt contract
 

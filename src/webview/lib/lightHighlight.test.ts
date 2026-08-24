@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lightHighlight } from "./lightHighlight";
+import { lightHighlight, MAX_HIGHLIGHT_CHARS } from "./lightHighlight";
 
 let passed = 0;
 let failed = 0;
@@ -52,6 +52,15 @@ test("property access after a dot is classified", () => {
   const kinds = kindsFor(`req.headers.authorization`, "typescript");
   assert.equal(kinds.headers, "property");
   assert.equal(kinds.authorization, "property");
+});
+
+test("huge code blocks highlight without hanging the webview", () => {
+  const started = Date.now();
+  const code = `${"x = 1\n".repeat(80)}${"a" + "b".repeat(MAX_HIGHLIGHT_CHARS)}`;
+  const tokens = lightHighlight(code, "python");
+  assert.ok(Date.now() - started < 500, "highlighter hung on a huge block");
+  assert.ok(tokens.length >= 1);
+  assert.equal(tokens[tokens.length - 1]?.kind, "plain");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

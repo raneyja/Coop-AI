@@ -158,8 +158,10 @@ export function displayPlanLabel(prefs: Pick<Preferences, "plan">): string {
       return "Enterprise";
     case "pro":
       return "Pro";
-    default:
+    case "free":
       return "Developer (free)";
+    default:
+      return "";
   }
 }
 
@@ -173,7 +175,10 @@ export function displayIdentitySubtitle(prefs: Preferences): string | undefined 
   }
   const orgName = displayOrgName(prefs);
   const plan = displayPlanLabel(prefs);
-  return orgName ? `${orgName} · ${plan}` : plan;
+  if (orgName && plan) {
+    return `${orgName} · ${plan}`;
+  }
+  return orgName ?? (plan || undefined);
 }
 
 export function accountHubSubtitle(prefs: Preferences): string {

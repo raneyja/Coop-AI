@@ -359,9 +359,17 @@ function highlightWithKeywords(
   });
 }
 
+export const MAX_HIGHLIGHT_CHARS = 24_000;
+
 export function lightHighlight(code: string, language?: string): HighlightToken[] {
   if (!code) {
     return [];
+  }
+  if (code.length > MAX_HIGHLIGHT_CHARS) {
+    return [
+      ...lightHighlight(code.slice(0, MAX_HIGHLIGHT_CHARS), language),
+      { text: code.slice(MAX_HIGHLIGHT_CHARS), kind: "plain" }
+    ];
   }
 
   const family = normalizeFamily(language);

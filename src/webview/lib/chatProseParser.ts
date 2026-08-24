@@ -18,14 +18,20 @@ import {
   sourceCitationSlug
 } from "../../prompts/sourceCitationRegistry";
 import {
+  findCitationNearFence,
   isOrdinaryLanguageTag,
+  isUnfencedCitationStartLine,
+  locatorFromProseLine,
   resolveCitePathForLanguageFence,
-  tryParseCitationLocator
+  shouldNeverUpgradeLanguageFence,
+  tryParseCitationLocator,
+  tryParseFenceInfoLocator,
+  type CodeCitationLocator
 } from "./codeCitationLocator";
 
 const SECTION_HEADING_RE = /^\*\*[^*\n]+\*\*\s*$/;
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+.+/;
-const CODE_FENCE_OPEN_RE = /^```/;
+const CODE_FENCE_LINE_RE = /^(\s*)```(.*)$/;
 const LIST_ITEM_RE = /^(\s*)(- |\* |(\d+)\.\s)(.*)$/;
 const INLINE_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
 const COOP_EVIDENCE_LINK_RE = /^\[([^\]]+)\]\(coop-evidence:\)/;
@@ -56,6 +62,8 @@ export function parseChatProse(content: string, options?: ParseChatProseOptions)
   const blocks: ChatProseBlock[] = [];
   let i = 0;
 
+  const advance = (next: number): number => (next > i ? next : i + 1);
+
   while (i < lines.length) {
     if (lines[i].trim() === "") {
       i += 1;
@@ -64,8 +72,19 @@ export function parseChatProse(content: string, options?: ParseChatProseOptions)
 
     const codeBlock = tryParseCodeFence(lines, i, options);
     if (codeBlock) {
+      if (codeBlock.skip) {
+        i = advance(codeBlock.nextIndex);
+        continue;
+      }
       blocks.push(codeBlock.block);
-      i = codeBlock.nextIndex;
+      i = advance(codeBlock.nextIndex);
+      continue;
+    }
+
+    const bareCitation = tryParseBareCitation(lines, i, options);
+    if (bareCitation) {
+      blocks.push(bareCitation.block);
+      i = advance(bareCitation.nextIndex);
       continue;
     }
 
@@ -83,27 +102,27 @@ export function parseChatProse(content: string, options?: ParseChatProseOptions)
     const knowledgeGapList = tryParseKnowledgeGapGroupedList(lines, i);
     if (knowledgeGapList) {
       blocks.push(...knowledgeGapList.blocks);
-      i = knowledgeGapList.nextIndex;
+      i = advance(knowledgeGapList.nextIndex);
       continue;
     }
 
     const listBlock = tryParseList(lines, i);
     if (listBlock) {
       blocks.push({ type: "list", items: listBlock.items });
-      i = listBlock.nextIndex;
+      i = advance(listBlock.nextIndex);
       continue;
     }
 
     const jiraStack = tryParseJiraTicketStack(lines, i);
     if (jiraStack) {
       blocks.push(jiraStack.block);
-      i = jiraStack.nextIndex;
+      i = advance(jiraStack.nextIndex);
       continue;
     }
 
     const paragraph = parseParagraph(lines, i);
     blocks.push(paragraph.block);
-    i = paragraph.nextIndex;
+    i = advance(paragraph.nextIndex);
   }
 
   return { blocks };
@@ -122,70 +141,330 @@ function citationBlockFromLocator(
   };
 }
 
-function tryParseCodeFence(
+function stripFenceIndent(line: string, indentLen: number): string {
+  if (indentLen <= 0) {
+    return line;
+  }
+  let stripped = 0;
+  let result = line;
+  while (stripped < indentLen && (result.startsWith(" ") || result.startsWith("\t"))) {
+    result = result.slice(1);
+    stripped += 1;
+  }
+  return result;
+}
+
+function stripCommonIndent(body: string[]): string[] {
+  const indents = body
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.match(/^[ \t]*/)?.[0]?.length ?? 0);
+  if (indents.length === 0) {
+    return body;
+  }
+  const min = Math.min(...indents);
+  if (min <= 0) {
+    return body;
+  }
+  return body.map((line) => (line.trim() === "" ? line : line.slice(min)));
+}
+
+function locatorInFenceBody(
+  body: string[]
+): { locator: NonNullable<ReturnType<typeof tryParseCitationLocator>>; codeStart: number } | null {
+  const limit = Math.min(body.length, 6);
+  for (let i = 0; i < limit; i++) {
+    const line = body[i] ?? "";
+    const locator = locatorFromProseLine(line) ?? tryParseCitationLocator(line.trim());
+    if (locator) {
+      return { locator, codeStart: i + 1 };
+    }
+  }
+  return null;
+}
+
+function looksLikeCodeLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (
+    /^(export |import |from |const |let |var |function |class |def |async |await |return |if \(|for \(|while \(|type |interface |enum |package |using |struct |public |private |protected )/.test(
+      trimmed
+    )
+  ) {
+    return true;
+  }
+  if (/^[{}\]<>]/.test(trimmed) || trimmed.startsWith("</")) {
+    return true;
+  }
+  if (trimmed.includes("=>") || trimmed.includes("::")) {
+    return true;
+  }
+  if (/[;{}()=]/.test(trimmed) && !/^[A-Z][^.]*[.?!]$/.test(trimmed)) {
+    return true;
+  }
+  return /^[ \t]{2,}/.test(line);
+}
+
+function mergeLocatorIntoCodeBlock(
+  locator: CodeCitationLocator,
+  block: ChatProseBlock
+): ChatProseBlock {
+  if (block.type === "code-citation") {
+    if (block.startLine != null) {
+      return block;
+    }
+    return {
+      ...block,
+      path: block.path || locator.path,
+      startLine: locator.startLine,
+      endLine: locator.endLine
+    };
+  }
+  if (block.type === "code-fence") {
+    return citationBlockFromLocator(locator, block.code);
+  }
+  return block;
+}
+
+function isPatchOrDiffBlock(block: ChatProseBlock): boolean {
+  if (block.type === "code-fence") {
+    const lang = block.language?.trim().toLowerCase();
+    return lang === "patch" || lang === "diff" || block.code.includes("<<<<<<< SEARCH");
+  }
+  if (block.type === "code-citation") {
+    return block.code.includes("<<<<<<< SEARCH");
+  }
+  return false;
+}
+
+function isMarkdownResumeLine(line: string): boolean {
+  return (
+    isSectionHeading(line) ||
+    isListLine(line) ||
+    isUnfencedCitationStartLine(line) ||
+    isJiraTicketStartLine(line)
+  );
+}
+
+/**
+ * Unclosed fences must not swallow the rest of the answer (lists, headings).
+ * Returns "stray" to skip a lone ``` opener, a body index to truncate at, or
+ * null to keep the body (in-progress stream of real code).
+ */
+function findUnclosedFenceResume(
+  body: string[],
+  infoString: string | undefined
+): "stray" | number | null {
+  const lang = infoString?.trim().toLowerCase() ?? "";
+  if (lang === "yaml" || lang === "yml" || lang === "markdown" || lang === "md" || lang === "diff" || lang === "patch") {
+    return null;
+  }
+
+  const firstIdx = body.findIndex((line) => line.trim() !== "");
+  if (firstIdx < 0) {
+    return null;
+  }
+
+  const first = body[firstIdx]!;
+  const firstIsLocator = Boolean(locatorFromProseLine(first) ?? tryParseCitationLocator(first.trim()));
+  if (isMarkdownResumeLine(first) && !firstIsLocator && !looksLikeCodeLine(first)) {
+    const loc = locatorInFenceBody(body);
+    if (loc && loc.codeStart > firstIdx) {
+      return null;
+    }
+    return "stray";
+  }
+
+  let seenCode = looksLikeCodeLine(first) || firstIsLocator;
+  for (let i = firstIdx + 1; i < body.length; i++) {
+    const line = body[i]!;
+    if (line.trim() === "") {
+      continue;
+    }
+    if (looksLikeCodeLine(line) || locatorFromProseLine(line)) {
+      seenCode = true;
+      continue;
+    }
+    if (seenCode && isMarkdownResumeLine(line)) {
+      return i;
+    }
+  }
+  return null;
+}
+
+function consumeTrailingLocator(
+  lines: string[],
+  afterIndex: number,
+  block: ChatProseBlock
+): { block: ChatProseBlock; nextIndex: number } {
+  if (isPatchOrDiffBlock(block)) {
+    return { block, nextIndex: afterIndex };
+  }
+  let j = afterIndex;
+  while (j < lines.length && lines[j]!.trim() === "") {
+    j += 1;
+  }
+  const locator = locatorFromProseLine(lines[j] ?? "");
+  if (!locator) {
+    return { block, nextIndex: afterIndex };
+  }
+  let k = j + 1;
+  while (k < lines.length && lines[k]!.trim() === "") {
+    k += 1;
+  }
+  if (k < lines.length && CODE_FENCE_LINE_RE.test(lines[k] ?? "")) {
+    return { block, nextIndex: afterIndex };
+  }
+  if (block.type === "code-citation" && block.startLine != null) {
+    return { block, nextIndex: afterIndex };
+  }
+  return {
+    block: mergeLocatorIntoCodeBlock(locator, block),
+    nextIndex: j + 1
+  };
+}
+
+type ParsedFence =
+  | { skip: true; nextIndex: number; block?: undefined }
+  | { skip?: false; block: ChatProseBlock; nextIndex: number };
+
+function tryParseBareCitation(
   lines: string[],
   startIndex: number,
   options?: ParseChatProseOptions
 ): { block: ChatProseBlock; nextIndex: number } | null {
-  const openingLine = lines[startIndex];
-  if (!CODE_FENCE_OPEN_RE.test(openingLine)) {
+  const locator = locatorFromProseLine(lines[startIndex] ?? "");
+  if (!locator) {
     return null;
   }
 
-  const infoString = openingLine.replace(/^```/, "").trim() || undefined;
-  const body: string[] = [];
-  let i = startIndex + 1;
-  while (i < lines.length && !CODE_FENCE_OPEN_RE.test(lines[i])) {
-    body.push(lines[i]);
-    i += 1;
+  let j = startIndex + 1;
+  while (j < lines.length && lines[j]!.trim() === "") {
+    j += 1;
   }
 
-  const nextIndex = i < lines.length ? i + 1 : i;
-
-  // Cursor-style: ```startLine:endLine:path on the fence line (also recovers placeholders).
-  const infoCitation = infoString ? tryParseCitationLocator(infoString) : null;
-  if (infoCitation) {
-    return {
-      block: citationBlockFromLocator(infoCitation, body.join("\n")),
-      nextIndex
-    };
-  }
-
-  // Preferred / recovered: first body line is a locator (numeric, placeholder, or path-only).
-  const [firstBodyLine = "", ...rest] = body;
-  const bodyCitation = tryParseCitationLocator(firstBodyLine);
-  if (bodyCitation) {
-    return {
-      block: citationBlockFromLocator(bodyCitation, rest.join("\n")),
-      nextIndex
-    };
-  }
-
-  // Model dumped ```typescript / ```javascript of repo code — recover cite chrome.
-  if (isOrdinaryLanguageTag(infoString) && body.join("\n").trim()) {
-    const citePath = resolveCitePathForLanguageFence({
-      language: infoString,
-      code: body.join("\n"),
-      lines,
-      fenceStartIndex: startIndex,
-      activeFilePath: options?.activeFilePath
-    });
-    if (citePath) {
-      return {
-        block: citationBlockFromLocator({ path: citePath }, body.join("\n")),
-        nextIndex
-      };
+  const fence = j < lines.length ? tryParseCodeFence(lines, j, options) : null;
+  if (fence && !fence.skip) {
+    if (isPatchOrDiffBlock(fence.block) && /^File:\s+/i.test((lines[startIndex] ?? "").trim())) {
+      return null;
     }
+    return {
+      block: mergeLocatorIntoCodeBlock(locator, fence.block),
+      nextIndex: fence.nextIndex
+    };
+  }
+
+  if (locator.startLine == null) {
+    return null;
+  }
+
+  const body: string[] = [];
+  let k = fence?.skip ? fence.nextIndex : j;
+  while (k < lines.length) {
+    const line = lines[k]!;
+    if (line.trim() === "") {
+      break;
+    }
+    if (
+      isSectionHeading(line) ||
+      isListLine(line) ||
+      CODE_FENCE_LINE_RE.test(line) ||
+      isJiraTicketStartLine(line) ||
+      isUnfencedCitationStartLine(line)
+    ) {
+      break;
+    }
+    if (body.length === 0 && !looksLikeCodeLine(line) && !/^[ \t]+/.test(line)) {
+      break;
+    }
+    body.push(line);
+    k += 1;
   }
 
   return {
-    block: {
-      type: "code-fence",
-      language: infoString,
-      code: body.join("\n")
-    },
-    nextIndex
+    block: citationBlockFromLocator(locator, stripCommonIndent(body).join("\n")),
+    nextIndex: k
   };
+}
+
+function tryParseCodeFence(
+  lines: string[],
+  startIndex: number,
+  options?: ParseChatProseOptions
+): ParsedFence | null {
+  const openingMatch = lines[startIndex]?.match(CODE_FENCE_LINE_RE);
+  if (!openingMatch) {
+    return null;
+  }
+
+  const openIndent = openingMatch[1] ?? "";
+  const infoString = (openingMatch[2] ?? "").trim() || undefined;
+  const body: string[] = [];
+  let i = startIndex + 1;
+  while (i < lines.length && !CODE_FENCE_LINE_RE.test(lines[i] ?? "")) {
+    body.push(stripFenceIndent(lines[i] ?? "", openIndent.length));
+    i += 1;
+  }
+
+  const closed = i < lines.length;
+  if (!closed) {
+    const resume = findUnclosedFenceResume(body, infoString);
+    if (resume === "stray") {
+      return { skip: true, nextIndex: startIndex + 1 };
+    }
+    if (typeof resume === "number") {
+      body.length = resume;
+      i = startIndex + 1 + resume;
+    }
+  }
+
+  let nextIndex = closed ? i + 1 : i;
+
+  const finish = (block: ChatProseBlock): ParsedFence => {
+    const trailing = consumeTrailingLocator(lines, nextIndex, block);
+    return { block: trailing.block, nextIndex: trailing.nextIndex };
+  };
+
+  // Cursor-style: ```startLine:endLine:path on the fence line (also recovers placeholders).
+  const infoCitation = infoString ? tryParseFenceInfoLocator(infoString) : null;
+  if (infoCitation) {
+    return finish(citationBlockFromLocator(infoCitation, body.join("\n")));
+  }
+
+  // Locator on the first body line, or a few lines in (list preamble + locator).
+  const bodyCitation = locatorInFenceBody(body);
+  if (bodyCitation) {
+    return finish(
+      citationBlockFromLocator(bodyCitation.locator, body.slice(bodyCitation.codeStart).join("\n"))
+    );
+  }
+
+  const code = body.join("\n");
+  if (code.trim() && !shouldNeverUpgradeLanguageFence(infoString)) {
+    if (!infoString || isOrdinaryLanguageTag(infoString)) {
+      const nearby = findCitationNearFence(lines, startIndex, options?.activeFilePath);
+      if (nearby) {
+        return finish(citationBlockFromLocator(nearby, code));
+      }
+      const citePath = resolveCitePathForLanguageFence({
+        language: infoString,
+        code,
+        lines,
+        fenceStartIndex: startIndex,
+        activeFilePath: options?.activeFilePath
+      });
+      if (citePath) {
+        return finish(citationBlockFromLocator({ path: citePath }, code));
+      }
+    }
+  }
+
+  return finish({
+    type: "code-fence",
+    language: infoString,
+    code
+  });
 }
 
 function tryParseList(
@@ -333,7 +612,11 @@ function parseParagraph(
     }
     if (
       parts.length > 0 &&
-      (isSectionHeading(line) || isListLine(line) || CODE_FENCE_OPEN_RE.test(line) || isJiraTicketStartLine(line))
+      (isSectionHeading(line) ||
+        isListLine(line) ||
+        CODE_FENCE_LINE_RE.test(line) ||
+        isJiraTicketStartLine(line) ||
+        isUnfencedCitationStartLine(line))
     ) {
       break;
     }

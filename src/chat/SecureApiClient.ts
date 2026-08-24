@@ -35,6 +35,7 @@ import type { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN, SECRET_KEY_REFRESH_TOKEN } from "./types";
+import { verifyStoredSession } from "./verifyStoredSession";
 
 export type StreamChatParams = {
   message: string;
@@ -875,7 +876,7 @@ export function readConfiguration(): Omit<
     model: config.get<string>("defaultModel", DEFAULT_MODEL_BY_PROVIDER[llmProvider]),
     llmProvider,
     temperature: config.get<number>("temperature", 0.5),
-    maxTokens: config.get<number>("maxTokens", 2000),
+    maxTokens: config.get<number>("maxTokens", 8192),
     llmEnabled: true,
     autocompleteEnabled: config.get<boolean>("autocomplete.enabled", true),
     useCachedResponses: config.get<boolean>("useCachedResponses", true),
@@ -1023,28 +1024,24 @@ export async function readPreferences(
   let repoAccessMode: UserPreferences["repoAccessMode"];
   let adminControlledRepos = false;
   let quotaCredits: UserPreferences["quotaCredits"];
-  if (await api.hasToken()) {
-    try {
-      const me = await api.fetchMe(base.apiBaseUrl);
-      orgName = me.orgName;
-      userEmail = typeof me.email === "string" && me.email.trim() ? me.email.trim() : undefined;
-      plan = me.plan;
-      userRole = me.role;
-      authMethod = me.authMethod;
-      canInstallIntegrations = me.canInstallIntegrations ?? false;
-      onboardingCompleted = me.onboardingCompleted ?? false;
-      adminPortalUrl = me.adminPortalUrl;
-      integrationHealthSummary = me.integrationHealthSummary;
-      indexedRepoCount = me.indexedRepoCount;
-      workspaceRepoCount = me.workspaceRepoCount;
-      workspaceRepoLimit = me.workspaceRepoLimit;
-      canAddMoreWorkspaceRepos = me.canAddMoreWorkspaceRepos;
-      primaryWorkspaceRepoId = me.primaryWorkspaceRepoId;
-      repoAccessMode = me.repoAccessMode;
-      quotaCredits = me.quota;
-    } catch {
-      // Non-fatal — other preference fields still load.
-    }
+  const me = await verifyStoredSession(api, base.apiBaseUrl);
+  if (me) {
+    orgName = me.orgName;
+    userEmail = typeof me.email === "string" && me.email.trim() ? me.email.trim() : undefined;
+    plan = me.plan;
+    userRole = me.role;
+    authMethod = me.authMethod;
+    canInstallIntegrations = me.canInstallIntegrations ?? false;
+    onboardingCompleted = me.onboardingCompleted ?? false;
+    adminPortalUrl = me.adminPortalUrl;
+    integrationHealthSummary = me.integrationHealthSummary;
+    indexedRepoCount = me.indexedRepoCount;
+    workspaceRepoCount = me.workspaceRepoCount;
+    workspaceRepoLimit = me.workspaceRepoLimit;
+    canAddMoreWorkspaceRepos = me.canAddMoreWorkspaceRepos;
+    primaryWorkspaceRepoId = me.primaryWorkspaceRepoId;
+    repoAccessMode = me.repoAccessMode;
+    quotaCredits = me.quota;
     try {
       const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
       orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
@@ -1133,7 +1130,7 @@ export async function readPreferences(
     ? Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken)
     : hasAtlassianInstalled ||
       Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
-  const signedIn = await api.isSignedIn();
+  const signedIn = Boolean(me);
   const preferredCodeHost = resolvePreferredCodeHost({
     current: base.defaultCodeHost,
     github: hasGitHubAppInstalled || (devMode && Boolean(codeHostCreds.githubToken)),

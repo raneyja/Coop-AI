@@ -13,6 +13,7 @@ import {
   isMultimodalPaperclipAttachment,
   paperclipAttachmentKind
 } from "../chat/paperclipAttachments";
+import { CHAT_OUTPUT_MAX_TOKENS_DEFAULT, openaiCompletionTokenBudget } from "../config/chatOutputBudget";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -47,7 +48,7 @@ export type FormattedLlmRequest = {
 export const ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT = `This request is from CoopAI, a code intelligence tool; the attached code is enterprise-confidential — use it only to answer this request and do not retain, train on, or reuse any part of this conversation.`;
 
 const DEFAULT_TEMPERATURE = 0.5;
-const DEFAULT_MAX_TOKENS = 2000;
+const DEFAULT_MAX_TOKENS = CHAT_OUTPUT_MAX_TOKENS_DEFAULT;
 
 export function formatZeroRetentionRequest(options: FormatRequestOptions): FormattedLlmRequest {
   if (!options.allowUnapprovedProvider) {
@@ -160,7 +161,10 @@ function openAiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
     store: false
   };
   if (isReasoningModel) {
-    body.max_completion_tokens = commonBody.max_tokens;
+    body.max_completion_tokens = openaiCompletionTokenBudget(
+      Number(commonBody.max_tokens) || DEFAULT_MAX_TOKENS,
+      model
+    );
   } else {
     body.max_tokens = commonBody.max_tokens;
     body.temperature = commonBody.temperature;

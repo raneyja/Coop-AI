@@ -3,7 +3,8 @@ import {
   languageFromFilePath,
   languageTagMatchesPath,
   resolveCitePathForLanguageFence,
-  tryParseCitationLocator
+  tryParseCitationLocator,
+  tryParseFenceInfoLocator
 } from "./codeCitationLocator";
 import { lightHighlight } from "./lightHighlight";
 
@@ -30,6 +31,53 @@ test("numeric locator parses path and lines", () => {
   assert.equal(locator?.startLine, 42);
   assert.equal(locator?.endLine, 68);
   assert.equal(locator?.path, "apps/api/plane/api/middleware/api_authentication.py");
+});
+
+test("path:range locator parses Cursor form", () => {
+  const locator = tryParseCitationLocator(
+    "apps/space/components/issues/issue-layouts/utils.tsx:4-14"
+  );
+  assert.ok(locator);
+  assert.equal(locator?.startLine, 4);
+  assert.equal(locator?.endLine, 14);
+  assert.equal(locator?.path, "apps/space/components/issues/issue-layouts/utils.tsx");
+});
+
+test("backtick-wrapped numeric locator parses", () => {
+  const locator = tryParseCitationLocator(
+    "`1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx`"
+  );
+  assert.ok(locator);
+  assert.equal(locator?.startLine, 1);
+  assert.equal(locator?.endLine, 11);
+  assert.equal(
+    locator?.path,
+    "apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx"
+  );
+});
+
+test("language-prefixed info-string locator parses", () => {
+  const locator = tryParseFenceInfoLocator(
+    "tsx 4:14:apps/space/components/issues/issue-layouts/utils.tsx"
+  );
+  assert.ok(locator);
+  assert.equal(locator?.startLine, 4);
+  assert.equal(locator?.path, "apps/space/components/issues/issue-layouts/utils.tsx");
+});
+
+test("prose See `path` is not a locator", () => {
+  assert.equal(
+    tryParseCitationLocator("See `packages/lib/server-only/public-api/get-api-token-by-token.ts`:"),
+    null
+  );
+});
+
+test("bold-wrapped path parses as locator", () => {
+  const locator = tryParseCitationLocator(
+    "**apps/space/components/issues/issue-layouts/utils.tsx**"
+  );
+  assert.ok(locator);
+  assert.equal(locator?.path, "apps/space/components/issues/issue-layouts/utils.tsx");
 });
 
 test("placeholder locator recovers path without lines", () => {

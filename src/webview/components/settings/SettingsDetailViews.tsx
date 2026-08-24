@@ -51,7 +51,7 @@ import {
 import type { OrgIntegrationProvider } from "../../../chat/integrationStatusTypes";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
-  return !prefs.plan || prefs.plan === "free";
+  return prefs.plan === "free";
 }
 
 /**

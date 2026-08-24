@@ -86,6 +86,8 @@ import {
 import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerms";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
+import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
+import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import {
   abortablePromise,
@@ -609,7 +611,7 @@ export class CoopChatSession {
       model: "claude-sonnet-4-6",
       llmProvider: "anthropic",
       temperature: 0.5,
-      maxTokens: 2000,
+      maxTokens: 8192,
       llmEnabled: true,
       autocompleteEnabled: true,
       useCachedResponses: true,
@@ -1088,6 +1090,18 @@ export class CoopChatSession {
       return;
     }
     this.post(message);
+  }
+
+  /** Batch token-sized chat:delta posts so a long stream cannot freeze the host. */
+  private createChatDeltaBatcher(threadId: string) {
+    return createStreamDeltaBatcher({
+      publish: (chunk) => {
+        this.postForThread(threadId, {
+          type: "chat:delta",
+          payload: { chunk, threadId }
+        });
+      }
+    });
   }
 
   private abortActiveJob(threadId?: string): void {
@@ -3883,7 +3897,7 @@ export class CoopChatSession {
         provider: runtime.provider,
         useCase,
         temperature: this.preferences.temperature,
-        maxTokens: this.preferences.maxTokens,
+        maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
         enableThinking: true
       },
       (chunk) => {
@@ -3970,6 +3984,7 @@ export class CoopChatSession {
 
     let full = "";
     let clearedIntentForOutput = false;
+    const deltaBatcher = this.createChatDeltaBatcher(turn.threadId);
     const outputGate = createChatOutputGate({
       startedAt: turn.startedAt,
       minVisibleMs: 0,
@@ -3986,10 +4001,7 @@ export class CoopChatSession {
         }
         full += chunk;
         this.threadRuns.appendPartial(turn, chunk);
-        this.postForThread(turn.threadId, {
-          type: "chat:delta",
-          payload: { chunk, threadId: turn.threadId }
-        });
+        deltaBatcher.push(chunk);
       }
     });
 
@@ -4144,6 +4156,7 @@ export class CoopChatSession {
         payload: { message, threadId: turn.threadId }
       });
     } finally {
+      deltaBatcher.flush();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;
@@ -6815,6 +6828,7 @@ export class CoopChatSession {
       });
     }
 
+    const deltaBatcher = this.createChatDeltaBatcher(turn.threadId);
     try {
       const mentionRefs = this.quickActionMentionRefs(options?.mentions);
       const activeRepoId = buildRepoId(this.preferences, turnContext);
@@ -7360,10 +7374,7 @@ export class CoopChatSession {
           }
           full += chunk;
           this.threadRuns.appendPartial(turn, chunk);
-          this.postForThread(turn.threadId, {
-            type: "chat:delta",
-            payload: { chunk, threadId: turn.threadId }
-          });
+          deltaBatcher.push(chunk);
         }
       });
 
@@ -7392,7 +7403,7 @@ export class CoopChatSession {
           provider: runtimeModel.provider,
           useCase: chatUseCase,
           temperature: this.preferences.temperature,
-          maxTokens: this.preferences.maxTokens,
+          maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
           enableThinking: true
         },
         (chunk) => {
@@ -7550,6 +7561,7 @@ export class CoopChatSession {
         payload: { message, threadId: turn.threadId }
       });
     } finally {
+      deltaBatcher.flush();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;

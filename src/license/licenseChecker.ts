@@ -68,6 +68,13 @@ export async function resolveLicenseStatus(
 ): Promise<LicenseStatus> {
   if (secrets && apiBaseUrl) {
     const apiStatus = await resolveLicenseStatusFromApi(secrets, apiBaseUrl, clientFactory);
+    if (apiStatus === "unverified") {
+      return {
+        plan: "free",
+        isActive: false,
+        source: "default"
+      };
+    }
     if (apiStatus) {
       return apiStatus;
     }
@@ -110,7 +117,7 @@ async function resolveLicenseStatusFromApi(
   secrets: vscode.SecretStorage,
   apiBaseUrl: string,
   clientFactory?: () => import("../api/CoopBackendClient").CoopBackendClient | undefined
-): Promise<LicenseStatus | undefined> {
+): Promise<LicenseStatus | "unverified" | undefined> {
   const token = await secrets.get("coopAI.apiToken");
   if (!token?.trim()) {
     return undefined;
@@ -129,7 +136,7 @@ async function resolveLicenseStatusFromApi(
       canEnableMoreRepos: me.canEnableMoreRepos
     };
   } catch {
-    return undefined;
+    return "unverified";
   }
 }
 

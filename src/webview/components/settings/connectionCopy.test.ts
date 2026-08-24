@@ -41,13 +41,17 @@ test("displayPlanLabel maps plan ids to product names", () => {
   assert.equal(displayPlanLabel({ plan: "free" }), "Developer (free)");
   assert.equal(displayPlanLabel({ plan: "pro" }), "Pro");
   assert.equal(displayPlanLabel({ plan: "enterprise" }), "Enterprise");
-  assert.equal(displayPlanLabel({}), "Developer (free)");
+  assert.equal(displayPlanLabel({}), "");
 });
 
 test("displayIdentitySubtitle combines org and plan when signed in", () => {
   assert.equal(
     displayIdentitySubtitle({ ...basePrefs, orgName: "Acme Corp", plan: "pro" }),
     "Acme Corp · Pro"
+  );
+  assert.equal(
+    displayIdentitySubtitle({ ...basePrefs, orgName: "Acme Corp" }),
+    "Acme Corp"
   );
   assert.equal(displayIdentitySubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), undefined);
 });

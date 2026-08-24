@@ -88,7 +88,7 @@ const DEFAULT_PREFS: Preferences = {
   model: "claude-sonnet-4-6",
   llmProvider: "anthropic",
   temperature: 0.5,
-  maxTokens: 2000,
+  maxTokens: 8192,
   llmEnabled: true,
   autocompleteEnabled: true,
   useCachedResponses: true,

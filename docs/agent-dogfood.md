@@ -1,10 +1,18 @@
-# Agent dogfood — Extension Host checklist
+# Agent dogfood — production-readiness eval
 
 **Primary surface for Jon:** the Cursor canvas **[agent-dogfood](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/agent-dogfood.canvas.tsx)**.
 
-This markdown is the backup / git copy. Prefer the canvas.
+This markdown is the backup / git copy. Prefer the canvas. Paste answers there, then **Ask chat to review**.
 
-**Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md) (full S1–S15), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md) (log results).
+**Companions:** [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md), [agent-ship-loop-notes.md](./agent-ship-loop-notes.md).
+
+---
+
+## What this eval is
+
+14 product features, **two completely different runs each** (different repo, different surface, different ask). You are one engineer on a **500-person** team — ticket pickup, review, blast, ship — not vibe coding.
+
+**Ship claim:** zero Fail on required tests. Skip is allowed only when Slack/Jira is disconnected, or a PR test had no Apply. One required Fail = not production-ready.
 
 ---
 
@@ -12,21 +20,10 @@ This markdown is the backup / git copy. Prefer the canvas.
 
 | Use-repo | What’s actually there | Run | Do not run |
 |----------|----------------------|-----|------------|
-| **plane** (indexed, not cloned) | Django `APIKeyAuthentication` in `apps/api/plane/api/middleware/api_authentication.py` | Locate, Stop, `/edit` | Slack or Jira — nothing is seeded for Plane |
-| **raneyja/Coop-AI** | `requireAuth` in `src/server/authMiddleware.ts`. Slack `#epd` + Jira **COOP-101** (peel auth into coop-backend) | Hunt+Slack, Hunt+Jira, Slack-only | Zero-Clone proof — this folder is already open |
+| **plane** (indexed, not cloned) | Django `APIKeyAuthentication`, `StateGroup` in `apps/api/plane/db/models/state.py` | Locate, explain, Trace, Blast, /edit, autocomplete, Stop, Understand | Slack or Jira. **Never submit a GitHub PR to plane** (10a is Cancel only) |
+| **raneyja/Coop-AI** | `requireAuth` in `src/server/authMiddleware.ts`. Slack `#epd` + Jira **COOP-101** (peel auth into coop-backend) | Hunt+Slack/Jira, slash integrations, Coop /edit + PR, autocomplete TS | Zero-Clone proof — this folder is already open |
 
 `requireAuth` is a Coop name. Slack and Jira seeds are Coop-only. Asking those on Plane is a bad test, not a product miss.
-
-### Repo vs file
-
-| Test | Needs | File |
-|------|-------|------|
-| 1 Locate on plane | **Repo only** | None — close every tab |
-| 2 Stop mid-hunt | **Repo only** | None — close every tab |
-| 3 `/edit` comment | **Repo + file** | `apps/api/plane/db/models/state.py` — select a function |
-| 4 Hunt + Slack | **Repo only** | None — close every tab |
-| 5 Hunt + Jira | **Repo only** | None — close every tab |
-| 6 Slack-only | **Repo only** | None — close every tab |
 
 ---
 
@@ -34,136 +31,66 @@ This markdown is the backup / git copy. Prefer the canvas.
 
 | Check | Detail |
 |-------|--------|
-| Branch | Combined test branch with always-on hunts, hunt-quality fixes, and allowlisted mid-loop tools |
-| Fixture | Extension Development Host |
+| Fixture | Extension Development Host. Reload Window once. |
+| Autocomplete | Settings → Preferences → Model & chat → enabled |
 | Open folder | Coop-AI may be open — Plane answers must still come from plane |
-| Slack / Jira | Connected for Block B only (skip those rows if not) |
-
-**Terminal (once):** from repo root
-
-```bash
-npm run lint && npm run test:agent-ship && npm run test:agent-ship:pressure && npm run test:chat-intent
-```
-
-**Success:** all exit 0. Any red → stop; do not dogfood a red tree.
+| Slack / Jira | Connected for 12–13. Skip those rows if not. |
 
 ---
 
-## Product laws (what “Pass” means now)
+## The 28 tests (run from the canvas)
 
-| Law | Expect |
-|-----|--------|
-| Agent is **on** | No Coop Settings toggle. Hunts run without you flipping anything. |
-| Locate / change | Repo hunts run the tool loop automatically. |
-| Prefetch + mid-loop | Named Slack/Jira/… prefetch first; agent may call **only allowlisted** `search_jira` / `search_slack` / … mid-loop (max 3) when it finds a ticket key / topic. |
-| Still out of the loop | Trace / Owner / Blast / Gaps / Understand, `/edit`, local “explain this”, Slack-only (no repo hunt), Thanks. |
-| NES | Still **default off**. |
-| PR | Still an explicit **Create pull request** button after Apply. |
+| ID | Feature | Surface | Repo | File |
+|----|---------|---------|------|------|
+| 1a | Explain open file | Plain chat | plane | `apps/api/plane/db/models/state.py` |
+| 1b | Explain open file | Plain chat | Coop-AI | `src/server/authMiddleware.ts` |
+| 2a | Locate symbol | Plain chat, no file | plane | — |
+| 2b | Locate symbol | Plain chat, no file | Coop-AI | — |
+| 3a | Ticket pickup | Plain chat | plane | `apps/api/plane/utils/issue_relation_mapper.py` |
+| 3b | Ticket pickup (COOP-101) | Plain chat, no file | Coop-AI | — |
+| 4a | Understand Repo | Workflows | plane | — |
+| 4b | Understand Repo | `/understand` | Coop-AI | — |
+| 5a | Trace Decision | `/trace` | plane | `state.py` — select StateGroup |
+| 5b | Trace Decision | Workflows | Coop-AI | `src/config/responseDeadline.ts` |
+| 6a | Find Owner | Workflows | plane | `apps/api/plane/app/permissions/workspace.py` |
+| 6b | Find Owner | `/owner` | Coop-AI | `authMiddleware.ts` — select requireAuth |
+| 7a | Blast Radius | `/blast` | plane | `state.py` — StateGroup |
+| 7b | Blast Radius | Workflows | Coop-AI | `responseDeadline.ts` |
+| 8a | Knowledge Gaps | `/gaps` | plane | — |
+| 8b | Knowledge Gaps | Workflows | Coop-AI | — |
+| 9a | `/edit` | Slash | plane | `state.py` — select a function |
+| 9b | `/edit` | Slash | Coop-AI | `authMiddleware.ts` — requireAuth JSDoc |
+| 10a | Create PR | Patch card → **Cancel** | plane | after 9a Apply |
+| 10b | Create PR | Chat “Create a PR” | Coop-AI | after 9b Apply; branch `coop/dogfood-pra` |
+| 11a | Autocomplete | Type in editor | plane | `state.py` — `def ` |
+| 11b | Autocomplete | Type in editor | Coop-AI | `authMiddleware.ts` — `export function ` |
+| 12a | Slack | Plain chat hunt + Slack | Coop-AI | — |
+| 12b | Slack | `/slack` only | Coop-AI | — |
+| 13a | Jira | Plain chat hunt + Jira | Coop-AI | — |
+| 13b | Jira | `/jira` only | Coop-AI | — |
+| 14a | Stop | Mid-hunt | plane | — |
+| 14b | Stop | Mid-`/understand` | Coop-AI | — |
 
----
-
-## Block A — plane (not cloned)
-
-### 1. Extension UI — Locate a real Plane symbol
-
-**Repo only — close every tab.** No file chip.
-
-1. Remote workspace → Use-repo = **plane** (In use). Do not clone it.  
-2. Close every editor tab.  
-3. Ask: *Where is APIKeyAuthentication defined in this repo?*
-
-**Success:**
-- Activity shows Searched / Read.  
-- Answer cites a real plane path such as `apps/api/plane/api/middleware/api_authentication.py`.  
-- Jump-to-file lands on `APIKeyAuthentication`.  
-- Not Coop-AI. Not live collab / Hocuspocus.
-
----
-
-### 2. Extension UI — Stop mid-hunt
-
-**Repo only — close every tab.** Same ask as test 1. Click **Stop** while Preparing answer or streaming.
-
-**Success:** Turn cancels. Stopped. No latency timeout bubble.
+Exact asks, Pass/Fail text, and paste boxes live in the canvas.
 
 ---
 
-### 3. Extension UI — `/edit` on a Plane file
+## Review bar (what chat will enforce)
 
-**Repo + file.** Open `apps/api/plane/db/models/state.py`.
-
-1. Open `apps/api/plane/db/models/state.py` from Remote workspace (not a local clone).  
-2. Select a function. Confirm the chat chip shows `state.py` and the line range.  
-3. Ask: */edit add a one-line comment above the selected function.*
-
-**Success:** Patch is on `apps/api/plane/db/models/state.py`. Comment sits above the selection. Original line is not pasted twice.
-
----
-
-## Block B — Coop-AI (Slack / Jira seeded)
-
-**Switch first:** Remote workspace → Use-repo = **raneyja/Coop-AI**. Success = In use. **Close every editor tab** — tests 4–6 are repo-only.
-
-### 4. Extension UI — Hunt + Slack (COOP-101)
-
-**Repo only — close every tab.** Requires Slack connected.
-
-Ask: *Where is requireAuth defined, and what did Slack say about COOP-101?*
-
-**Success:**
-- Hunt found `src/server/authMiddleware.ts` (real requireAuth).  
-- Slack on the **same** turn mentions peeling auth into coop-backend / COOP-101.  
-- **Open in Slack** opens the native message.
-
----
-
-### 5. Extension UI — Hunt + Jira (COOP-101)
-
-**Repo only — close every tab.** Requires Jira connected.
-
-Ask: *Where is requireAuth defined, and check Jira for COOP-101?*
-
-**Success:**
-- Hunt found the real requireAuth file.  
-- Jira shows **COOP-101** (extract auth / coop-backend) — not a 20-ticket dump.  
-- **Open in Jira** works.
-
----
-
-### 6. Extension UI — Slack-only (COOP-101)
-
-**Repo only — close every tab.** Ask: *What's in Slack about COOP-101?*
-
-**Success:** Slack fetch about COOP-101. **No** Searched / Read repo stack. Hits have Open in Slack.
-
----
-
-## Scorecard
-
-| ID | Result | What you saw |
-|----|--------|--------------|
-| S1 Locate APIKeyAuthentication on plane | | |
-| S2 Stop on plane | | |
-| S3 /edit on a plane file | | |
-| S4 Hunt + Slack (Coop-AI, COOP-101) | | |
-| S5 Hunt + Jira (Coop-AI, COOP-101) | | |
-| S6 Slack-only (Coop-AI, COOP-101) | | |
-
-**Ship claim:** all rows Pass (or Skip only if that tool is disconnected). One Fail = do not demo as production.
-
----
-
-## Only if blocked
-
-| Blocker | What to do |
-|---------|------------|
-| Terminal red | Fix or stop; do not dogfood |
-| No indexed plane | Deep-Index plane first (Block A) |
-| Slack/Jira not connected | Skip S4–S6; still run Block A |
+- Invented path or wrong-repo bleed = Fail
+- Generic essay with no clickable path on locate/explain/ticket = Fail
+- Trace / Owner / Blast / Gaps / Understand must **not** enter the agent hunt loop
+- `/slack` and `/jira` must **not** hunt the repo
+- Jira 20-ticket dump instead of COOP-101 = Fail
+- Stop that still posts a finished answer, or a timeout bubble = Fail
+- Skip is not Pass
+- Wrong fixture (wrong repo/file/ask) = Invalid run / retest, not a product Pass
+- Both ways of a feature must Pass or the feature Fails
 
 ---
 
 ## After dogfood
 
-1. Paste Pass/Fail into the canvas (preferred) or the table above.  
-2. Note wrong citations or missing Open in Slack/Jira with the exact ask you used.
+1. Paste Pass/Fail + the full Coop answer into each canvas card.
+2. Click **Ask chat to review** on the canvas.
+3. Close the Coop-AI dogfood PR from 10b when the eval is done.

@@ -516,6 +516,236 @@ test("bash fences stay anonymous even with active file", () => {
   assert.equal(doc.blocks[0]!.type, "code-fence");
 });
 
+test("locator above a language fence becomes a citation with line range", () => {
+  const input = [
+    "- In space issue layout columns:",
+    "4:14:apps/space/components/issues/issue-layouts/utils.tsx",
+    "```tsx",
+    "export const getStateColumns = () => [];",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citation = doc.blocks.find((block) => block.type === "code-citation");
+  assert.ok(citation, "expected code-citation, not a language fence");
+  if (citation?.type === "code-citation") {
+    assert.equal(citation.path, "apps/space/components/issues/issue-layouts/utils.tsx");
+    assert.equal(citation.startLine, 4);
+    assert.equal(citation.endLine, 14);
+    assert.ok(citation.code.includes("getStateColumns"));
+    assert.equal(citation.code.includes("4:14:"), false);
+  }
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-fence"),
+    false,
+    "consumer dumps must not fall back to anonymous fences"
+  );
+});
+
+test("locator above an unlabeled fence becomes a citation", () => {
+  const input = [
+    "1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx",
+    "```",
+    "export const StateGroupFilter = () => null;",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-citation");
+  if (doc.blocks[0]!.type === "code-citation") {
+    assert.equal(
+      doc.blocks[0].path,
+      "apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx"
+    );
+    assert.equal(doc.blocks[0].startLine, 1);
+    assert.equal(doc.blocks[0].endLine, 11);
+    assert.ok(doc.blocks[0].code.includes("StateGroupFilter"));
+  }
+});
+
+test("indented fence inside a list recovers as a citation", () => {
+  const input = [
+    "- In applied filters UI:",
+    "  ```",
+    "  1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx",
+    "  export const Applied = () => null;",
+    "  ```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "list");
+  assert.equal(doc.blocks[1]!.type, "code-citation");
+  if (doc.blocks[1]!.type === "code-citation") {
+    assert.equal(doc.blocks[1].startLine, 1);
+    assert.equal(doc.blocks[1].endLine, 11);
+    assert.ok(doc.blocks[1].code.includes("export const Applied"));
+    assert.equal(doc.blocks[1].code.startsWith("  export"), false);
+  }
+});
+
+test("fence body with list preamble then locator recovers as citation", () => {
+  const input = [
+    "```",
+    "- In applied filters UI:",
+    "1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx",
+    "export const Applied = () => null;",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-citation");
+  if (doc.blocks[0]!.type === "code-citation") {
+    assert.equal(doc.blocks[0].startLine, 1);
+    assert.ok(doc.blocks[0].code.includes("export const Applied"));
+    assert.equal(doc.blocks[0].code.includes("In applied filters"), false);
+  }
+});
+
+test("unfenced numeric locator plus following code becomes a citation", () => {
+  const input = [
+    "- In space issue layout columns:",
+    "4:14:apps/space/components/issues/issue-layouts/utils.tsx",
+    "export const getStateColumns = (groups) => groups.map((g) => g);",
+    "return columns;"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citation = doc.blocks.find((block) => block.type === "code-citation");
+  assert.ok(citation);
+  if (citation?.type === "code-citation") {
+    assert.equal(citation.path, "apps/space/components/issues/issue-layouts/utils.tsx");
+    assert.equal(citation.startLine, 4);
+    assert.ok(citation.code.includes("getStateColumns"));
+  }
+});
+
+test("tsx fence after backtick path in a list item upgrades to citation", () => {
+  const input = [
+    "1. State group icons (shared)",
+    "`apps/web/core/components/core/sidebar/progress-stats/state_group.tsx`",
+    "```tsx",
+    "return STATE_GROUP_MAP[group];",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citation = doc.blocks.find((block) => block.type === "code-citation");
+  assert.ok(citation);
+  if (citation?.type === "code-citation") {
+    assert.equal(
+      citation.path,
+      "apps/web/core/components/core/sidebar/progress-stats/state_group.tsx"
+    );
+    assert.ok(citation.code.includes("STATE_GROUP_MAP"));
+  }
+});
+
+test("unclosed fence does not swallow following lists into a Copy box", () => {
+  const input = [
+    "```tsx",
+    "export const getStateColumns = () => [];",
+    "",
+    "**Reviewer flags**",
+    "- Adding a group without DEFAULT_STATES will break onboarding."
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-fence" && block.code.includes("Reviewer flags")),
+    false
+  );
+  assert.ok(doc.blocks.some((block) => block.type === "section-heading"));
+  assert.ok(doc.blocks.some((block) => block.type === "list"));
+  const code = doc.blocks.find((block) => block.type === "code-fence" || block.type === "code-citation");
+  assert.ok(code);
+  if (code && (code.type === "code-fence" || code.type === "code-citation")) {
+    assert.ok(code.code.includes("getStateColumns"));
+    assert.equal(code.code.includes("Reviewer flags"), false);
+  }
+});
+
+test("stray fence opener before a list is ignored", () => {
+  const input = ["```", "- In applied filters UI:", "- Also in space columns:"].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-fence"),
+    false
+  );
+  assert.equal(doc.blocks[0]!.type, "list");
+});
+
+test("unclosed in-progress code fence stays a fence", () => {
+  const input = "```tsx\nexport const stillStreaming = true;";
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks.length, 1);
+  assert.equal(doc.blocks[0]!.type, "code-fence");
+  if (doc.blocks[0]!.type === "code-fence") {
+    assert.ok(doc.blocks[0].code.includes("stillStreaming"));
+  }
+});
+
+test("locator after a language fence becomes a citation", () => {
+  const input = [
+    "```tsx",
+    "export const Applied = () => null;",
+    "```",
+    "1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-citation");
+  if (doc.blocks[0]!.type === "code-citation") {
+    assert.equal(doc.blocks[0].startLine, 1);
+    assert.equal(doc.blocks[0].endLine, 11);
+    assert.ok(doc.blocks[0].code.includes("Applied"));
+  }
+  assert.equal(doc.blocks.length, 1);
+});
+
+test("bold path above a fence becomes a citation", () => {
+  const input = [
+    "**apps/space/components/issues/issue-layouts/utils.tsx**",
+    "```tsx",
+    "export const getStateColumns = () => [];",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citation = doc.blocks.find((block) => block.type === "code-citation");
+  assert.ok(citation);
+  if (citation?.type === "code-citation") {
+    assert.equal(citation.path, "apps/space/components/issues/issue-layouts/utils.tsx");
+  }
+});
+
+test("File: path above a tsx fence becomes a citation", () => {
+  const input = [
+    "File: apps/web/core/components/core/sidebar/progress-stats/state_group.tsx",
+    "```tsx",
+    "return STATE_GROUP_MAP[group];",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "code-citation");
+  if (doc.blocks[0]!.type === "code-citation") {
+    assert.equal(
+      doc.blocks[0].path,
+      "apps/web/core/components/core/sidebar/progress-stats/state_group.tsx"
+    );
+  }
+});
+
+test("File: path above a patch fence stays a File header, not a citation", () => {
+  const input = [
+    "File: src/foo.ts",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks[0]!.type, "paragraph");
+  assert.equal(doc.blocks[1]!.type, "code-fence");
+  if (doc.blocks[1]!.type === "code-fence") {
+    assert.equal(doc.blocks[1].language, "patch");
+  }
+});
+
 test("plain language tag typescript is not treated as a path citation", () => {
   const input = "```typescript\nconst x = 1;\n```";
   const doc = parseChatProse(input);
@@ -687,6 +917,27 @@ test("parses coop-evidence card jump links", () => {
       assert.equal(link.label, "View all sources ↑");
     }
   }
+});
+
+test("long walkthrough with citations keeps the closing sentence", () => {
+  const started = Date.now();
+  const body = Array.from({ length: 40 }, (_, i) => `Line ${i} of the StateGroup walkthrough.`).join("\n");
+  const input = [
+    "**What a reviewer would flag if you add a new StateGroup**",
+    "",
+    "```12:20:apps/api/plane/db/models/state.py",
+    "class StateGroup(models.TextChoices):",
+    "    BACKLOG = \"backlog\"",
+    "```",
+    "",
+    body,
+    "",
+    "Given the above, a careful reviewer would require a matching frontend map."
+  ].join("\n");
+  const doc = parseChatProse(input);
+  assert.ok(Date.now() - started < 500, "parser hung on a long cited answer");
+  const text = JSON.stringify(doc);
+  assert.match(text, /careful reviewer would require a matching frontend map/);
 });
 
 // ── Summary ────────────────────────────────────────────────────────────────

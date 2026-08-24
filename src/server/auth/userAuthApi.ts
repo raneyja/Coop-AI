@@ -794,7 +794,7 @@ async function handleExchangeCode(
   return true;
 }
 
-async function resolveGoogleUser(
+export async function resolveGoogleUser(
   deps: UserAuthApiDeps,
   profile: { sub: string; email: string; emailVerified: boolean; name?: string },
   state: {
@@ -830,6 +830,15 @@ async function resolveGoogleUser(
   }
 
   if (!user) {
+    if (state.mode !== "signup") {
+      return {
+        ok: false,
+        status: 404,
+        error: "account_not_found",
+        message:
+          "No Coop account for this Google login. Use the Google account you signed up with, or create an account first."
+      };
+    }
     const orgName = state.orgName?.trim() || deriveOrgName(profile.email);
     const org = await deps.orgStore!.createOrganization(orgName, "free");
     user = await deps.userStore!.createUser(org.id, profile.email, "admin");

@@ -88,4 +88,23 @@ assert.deepEqual(withUser, { user_id: "user-abc-123" });
 assert.equal("usage_type" in withUser, false);
 assert.equal("data_classification" in withUser, false);
 
+const gpt5Body = formatZeroRetentionRequest({
+  provider: "openai",
+  model: "gpt-5-mini",
+  messages: baseMessages,
+  maxTokens: 8192,
+  allowUnapprovedProvider: true
+}).body;
+assert.equal("max_tokens" in gpt5Body, false);
+assert.equal(gpt5Body.max_completion_tokens, 8192 + 4096);
+
+const plannerBody = formatZeroRetentionRequest({
+  provider: "openai",
+  model: "gpt-5-mini",
+  messages: baseMessages,
+  maxTokens: 600,
+  allowUnapprovedProvider: true
+}).body;
+assert.equal(plannerBody.max_completion_tokens, 600);
+
 console.log("requestFormatter.test.ts: ok");

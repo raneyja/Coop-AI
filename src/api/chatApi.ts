@@ -5,6 +5,7 @@ import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { resolveAssignedModelForUseCase } from "../config/featureModelAssignments";
+import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
 import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
 import {
@@ -151,7 +152,9 @@ export async function handleChatApiRequest(
   }
 
   const planQuota = resolvePlanQuota(deps);
-  const maxTokens = typeof body.maxTokens === "number" ? body.maxTokens : 2000;
+  const maxTokens = resolveChatOutputMaxTokens(
+    typeof body.maxTokens === "number" ? body.maxTokens : undefined
+  );
   const history = Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [];
   const visionAttachmentCount = countVisionWeightedAttachments(attachments);
   const visionWeighted =
