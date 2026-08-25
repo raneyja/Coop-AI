@@ -764,11 +764,12 @@ export type WebviewOutbound =
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload }
   | {
-      /** Open the existing Create PR confirm modal for applied patches in this thread. */
+      /** Open the existing Create PR confirm modal for applied patches or editor changes. */
       type: "patch:open-create-pr";
       payload: {
         messageTimestamp: number;
         files?: Array<{ path: string; content: string }>;
+        diff?: string;
       };
     }
   | {

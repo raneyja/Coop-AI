@@ -722,6 +722,51 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /middleware\.py/);
   });
 
+  await test("feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS", async () => {
+    const mapper = "apps/api/plane/utils/issue_relation_mapper.py";
+    const ask =
+      "We're adding a blocked_by issue link type this sprint. Where should validation live, and which existing link types in this mapper should I mirror so we don't fork a second relation model?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === mapper
+          ? {
+              path: rel,
+              content: "RELATION_MAP = {\n  'blocking': 'blocked_by',\n  'related': 'related',\n}\n"
+            }
+          : undefined
+    });
+    let planCalls = 0;
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        openFile: mapper
+      },
+      {
+        planTurn: async () => {
+          planCalls += 1;
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () =>
+          "Validation belongs in issue_relation_mapper.py next to blocking / related."
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.equal(planCalls >= 1, true);
+    assert.match(result.answer ?? "", /issue_relation_mapper/);
+    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+  });
+
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);

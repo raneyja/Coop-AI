@@ -158,6 +158,9 @@ export function extractExportNamesFromSource(source: string): string[] {
   )) {
     names.add(match[1]);
   }
+  for (const match of source.matchAll(/\bclass\s+([A-Z][A-Za-z0-9_]*)\s*[\(:]/g)) {
+    names.add(match[1]);
+  }
   for (const match of source.matchAll(/export\s+\{\s*([^}]+)\}/g)) {
     for (const part of match[1].split(",")) {
       const name = part
@@ -582,7 +585,7 @@ export async function searchDependentsFallback(
     (pattern) => !symbols.some((symbol) => pattern === symbol || pattern.startsWith(`${symbol}.`) || pattern.startsWith(`${symbol}(`))
   );
   const symbolPatterns = patterns.filter((pattern) => !importPatterns.includes(pattern));
-  const ordered = [...importPatterns, ...symbolPatterns];
+  const ordered = [...symbolPatterns, ...importPatterns];
   const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
   const seen = new Set<string>([file]);
   const dependents: BlastRadiusDependentDetail[] = [];

@@ -103,6 +103,11 @@ export function shouldMergeRepoWideJiraHits(options: { hasFocusJql: boolean }): 
   return !options.hasFocusJql;
 }
 
+/** Named keys (COOP-101) skip the 20-ticket focus dump. */
+export function shouldRunJiraFocusTextSearch(namedIssueKeys: string[]): boolean {
+  return namedIssueKeys.length === 0;
+}
+
 /** Focus terms for Jira text search (path stem, basename, caller extras). */
 export function buildJiraFocusTerms(options: {
   activeFile?: string;
@@ -390,7 +395,7 @@ export async function fetchJiraSearchContext(options: {
   let textSearchCount = 0;
   let usedJql = focusJql ?? repoJql ?? "";
 
-  if (focusJql) {
+  if (focusJql && shouldRunJiraFocusTextSearch(queryKeys)) {
     try {
       const focusHits = await client.searchIssues(focusJql, limit);
       textSearchCount = focusHits.length;

@@ -256,6 +256,14 @@ test("buildImportSearchPatterns includes path suffixes for relative imports", ()
   assert.ok(patterns.indexOf("config/responseDeadline") < 10);
 });
 
+test("extractExportNamesFromSource includes Python class names", () => {
+  const names = extractExportNamesFromSource(`
+class StateGroup(models.TextChoices):
+    BACKLOG = "backlog", "Backlog"
+`);
+  assert.ok(names.includes("StateGroup"));
+});
+
 test("extractExportNamesFromSource prefers distinctive exports", () => {
   const names = extractExportNamesFromSource(`
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;

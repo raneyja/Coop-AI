@@ -65,7 +65,7 @@ const CHANGE_VERB =
  * `calls?` — that matched "who is on call this week".
  */
 const LOCATE =
-  /\b(where|which\s+file|what\s+file|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|references?|usages?|used\s+by|implemented|exists?)\b/i;
+  /\b(where|which\s+file|what\s+file|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|(?:who|what|which)\s+(?:in\s+(?:this\s+)?repo\s+)?(?:still\s+)?owns?|references?|usages?|used\s+by|implemented|exists?|picking\s+up)\b/i;
 
 /** "Does the project …?" — an existence question, answerable only from code. */
 const EXISTENCE_START = /^(?:does|do|is|are|has|have)\b/i;

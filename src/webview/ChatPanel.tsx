@@ -16,7 +16,14 @@ import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
 import { compactPatchDiffForPrNotes } from "./prNotesDiff";
-import { createdPullRequestFromResult, defaultPrTitle, prCreateErrorFromResult } from "./createPullRequestConfirm";
+import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
+import {
+  createdPullRequestFromResult,
+  createConfirmSubmitGuard,
+  defaultPrBranchName,
+  defaultPrTitle,
+  prCreateErrorFromResult
+} from "./createPullRequestConfirm";
 import { mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
 import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
@@ -158,7 +165,7 @@ type InboundMessage =
   | { type: "patch:update"; payload: PatchCardsUpdatePayload | PatchCardState }
   | {
       type: "patch:open-create-pr";
-      payload: { messageTimestamp: number; files?: Array<{ path: string; content: string }> };
+      payload: { messageTimestamp: number; files?: Array<{ path: string; content: string }>; diff?: string };
     }
   | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string } }
   | {
@@ -401,6 +408,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<
     Record<number, Array<{ path: string; content: string }>>
   >({});
+  const [createPrDiffByTimestamp, setCreatePrDiffByTimestamp] = useState<Record<number, string>>({});
+  const [standaloneCreatePr, setStandaloneCreatePr] = useState<
+    { timestamp: number; files: Array<{ path: string; content: string }> } | undefined
+  >();
+  const [standalonePrSubmitting, setStandalonePrSubmitting] = useState(false);
+  const standalonePrSubmitGuard = useMemo(() => createConfirmSubmitGuard(), []);
   const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<
     Record<
       number,
@@ -431,6 +444,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   threadsStateRef.current = threadsState;
   /** After Stop, ignore late host deltas/feedback until the next send. */
   const userStoppedRef = useRef(false);
+  /** After complete/error, ignore leftover chat:delta (batched tokens after done). */
+  const liveStreamRef = useRef(false);
+  /** Sync lock so Enter-repeat / double-click cannot post chat:send twice. */
+  const inFlightSendRef = useRef(false);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
@@ -440,6 +457,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const resetEphemeralChatState = useCallback(() => {
     userStoppedRef.current = false;
+    liveStreamRef.current = false;
+    inFlightSendRef.current = false;
     setStreamingBuffer("");
     setThinkingBuffer("");
     setAgentOverlay(undefined);
@@ -862,6 +881,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               const override = createPrFilesByTimestamp[messageTimestamp];
               const titlePaths = (override ?? card.prFiles)?.map((file) => file.path) ?? [];
               const preview = override ? mergeAppliedPrPreviewFiles(patchCards) : card.files;
+              const diff =
+                createPrDiffByTimestamp[messageTimestamp] || compactPatchDiffForPrNotes(preview);
               setPrNotesByTimestamp((current) => ({
                 ...current,
                 [messageTimestamp]: { ...current[messageTimestamp], loading: true }
@@ -871,7 +892,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 payload: {
                   messageTimestamp,
                   title: defaultPrTitle(titlePaths),
-                  diff: compactPatchDiffForPrNotes(preview)
+                  diff
                 }
               });
             }}
@@ -918,6 +939,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       context.owner,
       context.provider,
       context.repo,
+      createPrDiffByTimestamp,
       createPrFilesByTimestamp,
       handleOpenLink,
       openCreatePrTimestamp,
@@ -928,6 +950,54 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       suppressedPatchTimestamps
     ]
   );
+
+  useEffect(() => {
+    if (openCreatePrTimestamp === undefined) {
+      return;
+    }
+    const timestamp = openCreatePrTimestamp;
+    const files = createPrFilesByTimestamp[timestamp];
+    const hasCard = shouldRenderPatchCardForMessage(patchCards, timestamp);
+    if (hasCard) {
+      return;
+    }
+    if (!files?.length) {
+      return;
+    }
+    setStandaloneCreatePr({ timestamp, files });
+    setStandalonePrSubmitting(false);
+    setPrNotesByTimestamp((current) => ({
+      ...current,
+      [timestamp]: { ...current[timestamp], loading: true }
+    }));
+    post({
+      type: "patch:summarize-pr",
+      payload: {
+        messageTimestamp: timestamp,
+        title: defaultPrTitle(files.map((file) => file.path)),
+        diff:
+          createPrDiffByTimestamp[timestamp] ||
+          files.map((file) => `${file.path}\n(editor changes)`).join("\n\n")
+      }
+    });
+    setOpenCreatePrTimestamp(undefined);
+  }, [
+    createPrDiffByTimestamp,
+    createPrFilesByTimestamp,
+    openCreatePrTimestamp,
+    patchCards,
+    post
+  ]);
+
+  useEffect(() => {
+    if (!standaloneCreatePr) {
+      return;
+    }
+    const result = prCreateByTimestamp[standaloneCreatePr.timestamp];
+    if (result && ("htmlUrl" in result || "error" in result)) {
+      setStandalonePrSubmitting(false);
+    }
+  }, [prCreateByTimestamp, standaloneCreatePr]);
 
   const handleCopyEvidenceText = useCallback(
     (text: string, toast?: string) => {
@@ -959,6 +1029,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setThinkingBuffer("");
       setAgentOverlay(undefined);
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -986,6 +1057,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1012,6 +1084,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (choice: { choice: "plain" } | { choice: "action"; actionId: string }) => {
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1128,6 +1201,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             setSuppressedPatchTimestamps([]);
           }
           setPrCreateByTimestamp({});
+          setCreatePrDiffByTimestamp({});
+          setStandaloneCreatePr(undefined);
           setChatHistorySynced(true);
           // Do not clear isStreaming on mid-turn history echoes. Only clear when
           // the thread is emptied (new/clear chat without a stream-resume).
@@ -1158,6 +1233,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           });
           resetEphemeralChatState();
           setPrCreateByTimestamp({});
+          setCreatePrDiffByTimestamp({});
+          setStandaloneCreatePr(undefined);
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
@@ -1180,6 +1257,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = true;
           setIntentFeedback(undefined);
           setThinkingBuffer("");
           setAgentOverlay(undefined);
@@ -1188,7 +1266,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:thinking-delta": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
@@ -1200,7 +1278,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "agent:activity": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
@@ -1212,7 +1290,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:delta": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
@@ -1230,6 +1308,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = false;
           setMessages((prev) => [...prev, message.payload.message]);
           setIntentFeedback(undefined);
           setJobProgress((current) =>
@@ -1247,6 +1326,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = true;
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress(undefined);
           setDegradationNotification(undefined);
@@ -1277,6 +1357,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -1289,6 +1370,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:quota-exceeded":
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -1391,6 +1473,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           );
           if (files.length > 0) {
             setCreatePrFilesByTimestamp((current) => ({ ...current, [timestamp]: files }));
+          }
+          if (message.payload.diff?.trim()) {
+            setCreatePrDiffByTimestamp((current) => ({ ...current, [timestamp]: message.payload.diff as string }));
           }
           setOpenCreatePrTimestamp(timestamp);
           break;
@@ -1586,6 +1671,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     vscode.setState({ draftInput: input } satisfies PersistedWebviewState);
   }, [input, vscode]);
 
+  useEffect(() => {
+    if (!isStreaming) {
+      inFlightSendRef.current = false;
+    }
+  }, [isStreaming]);
+
   const submitPrompt = useCallback(
     (
       prompt: string,
@@ -1595,6 +1686,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
+      if (inFlightSendRef.current) {
+        return;
+      }
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
         return;
       }
@@ -1602,9 +1696,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setError(`Prompt exceeds ${INPUT_MAX} characters.`);
         return;
       }
+      inFlightSendRef.current = true;
       setError("");
       setAttachmentError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1714,6 +1810,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       }
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1725,6 +1822,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const handleStopStreaming = useCallback(() => {
     userStoppedRef.current = true;
+    liveStreamRef.current = false;
     post({ type: "chat:stream-cancel" });
     setIsStreaming(false);
     setThinkingBuffer("");
@@ -2234,6 +2332,71 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             }
           })
         }
+      />
+      <CreatePullRequestModal
+        open={Boolean(standaloneCreatePr)}
+        provider={context.provider}
+        branch={defaultPrBranchName()}
+        title={defaultPrTitle(standaloneCreatePr?.files.map((file) => file.path) ?? [])}
+        files={standaloneCreatePr?.files ?? []}
+        submitting={standalonePrSubmitting}
+        error={
+          standaloneCreatePr
+            ? prCreateErrorFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp], context.provider)
+            : undefined
+        }
+        notesLoading={
+          standaloneCreatePr
+            ? Boolean(prNotesByTimestamp[standaloneCreatePr.timestamp]?.loading)
+            : false
+        }
+        generatedNotes={
+          standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.text : undefined
+        }
+        created={
+          standaloneCreatePr
+            ? createdPullRequestFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp])
+            : undefined
+        }
+        onOpenLink={handleOpenLink}
+        onClose={() => {
+          if (standalonePrSubmitting) {
+            return;
+          }
+          setStandaloneCreatePr(undefined);
+        }}
+        onConfirm={(draft) => {
+          if (!standaloneCreatePr) {
+            return;
+          }
+          const timestamp = standaloneCreatePr.timestamp;
+          void standalonePrSubmitGuard(async () => {
+            setStandalonePrSubmitting(true);
+            setPrCreateByTimestamp((current) => {
+              const next = { ...current };
+              delete next[timestamp];
+              return next;
+            });
+            const provider = draft.provider ?? context.provider;
+            const repoId =
+              context.owner && context.repo
+                ? `${provider ?? "github"}:${context.owner}/${context.repo}`
+                : undefined;
+            post({
+              type: "patch:create-pr",
+              payload: {
+                messageTimestamp: timestamp,
+                repoId,
+                provider,
+                branch: draft.branch,
+                title: draft.title,
+                body: draft.body,
+                base: draft.base ?? context.branch,
+                files: draft.files
+              }
+            });
+          });
+        }}
       />
       {savePromptOpen ? (
         <PromptDetailOverlay

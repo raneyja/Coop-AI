@@ -54,5 +54,21 @@ void (async () => {
   passed += 1;
   console.log("ok - flush publishes leftover buffer without waiting");
 
+  const ended: string[] = [];
+  const endBatcher = createStreamDeltaBatcher({
+    publish: (chunk) => ended.push(chunk),
+    intervalMs: 5_000
+  });
+  endBatcher.push("Hello");
+  endBatcher.push(".");
+  assert.deepEqual(ended, ["Hello"]);
+  endBatcher.end();
+  assert.deepEqual(ended, ["Hello", "."]);
+  endBatcher.flush();
+  endBatcher.push("late");
+  assert.deepEqual(ended, ["Hello", "."]);
+  passed += 1;
+  console.log("ok - end flushes leftover then ignores later push/flush");
+
   console.log(`\nstreamDeltaBatcher: ${passed} passed`);
 })();

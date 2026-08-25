@@ -14,7 +14,7 @@ CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and do
 
 ### How is CoopAI different from GitHub Copilot or Cursor?
 
-CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
+CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
 
 ### Is my code used to train models?
 
@@ -85,7 +85,7 @@ Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Li
 
 ### Can I create a pull request from Coop?
 
-Yes. After you **Apply** an `/edit`, click **Create pull request** on the patch card, or type **Create a PR** in chat (for example “create a pull request of all the work I just applied”). Chat includes every Apply in that thread. Confirm the branch, title, and notes, then submit. Cancel or Escape creates nothing. See [Create pull request](/docs/create-pull-request).
+Yes. After you **Apply** an `/edit`, click **Create pull request** on the patch card. Or type **Create a PR** in chat — that works after Apply **or** after you type in a Use-repo file (no Apply required). Confirm the branch, title, and notes, then submit. Cancel or Escape creates nothing. See [Create pull request](/docs/create-pull-request).
 
 ## Enterprise SSO
 

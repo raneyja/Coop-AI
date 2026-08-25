@@ -18,6 +18,7 @@ import { wantsNotionContext } from "../../context/notionContext";
 import { wantsGoogleDocsContext } from "../../context/googleDocsContext";
 import { isIncidentShapedQuery } from "../../context/incidentIntent";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
+import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 
 const WORKFLOW_PATTERNS: Array<{
   workflow: ChatIntentWorkflow;
@@ -223,6 +224,11 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   }
 
   if (tools.length > 0) {
+    const classified = classifyRepoCodeIntent(message);
+    const codeIntent =
+      classified.action === "none" && queryHasNamedSymbol(message)
+        ? { action: "locate" as const, confidence: "high" as const, reason: "named symbol plus tools" }
+        : classified;
     return {
       mode: "tools-only",
       tools,
@@ -231,7 +237,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       execution: "none",
       reason: "named tools",
       // A compound ask ("where is X, and what did Slack say?") still needs code.
-      codeIntent: classifyRepoCodeIntent(message)
+      codeIntent
     };
   }
 

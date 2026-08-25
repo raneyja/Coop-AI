@@ -11,6 +11,7 @@ import {
   languageIdForPatchPath,
   rememberRemotePatchBuffer
 } from "../edit/patchTarget";
+import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/editorWorkingCopy";
 import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
 import {
   extractAgentProposedPatchText,
@@ -96,6 +97,7 @@ import {
   remainingContextGatherBudgetMs
 } from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
+import { replaceExclusiveDisposable } from "./exclusiveDisposable";
 import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";
 import type {
   CachedValue,
@@ -458,7 +460,7 @@ import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
-import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForAgentHunt } from "./agentRouting";
+import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForAgentHunt, shouldSkipAgentHuntForOpenFileFeatureAdd } from "./agentRouting";
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
@@ -515,7 +517,10 @@ const UNDERSTAND_REPO_INTEGRATION_BUDGET_MS = 10_000;
 export class CoopChatSession {
   private webview?: vscode.Webview;
   private settingsWebview?: vscode.Webview;
+  private chatMessageDisposable?: vscode.Disposable;
   private settingsMessageDisposable?: vscode.Disposable;
+  /** Sidebar/session hydrate runs once; later resolveWebviewView only re-attaches the iframe. */
+  private sessionHydrated = false;
   private closeSettingsHandler?: () => void;
   private pendingSettingsScreen?: SettingsScreen;
   private readonly chatHistory: ChatMessage[] = [];
@@ -661,15 +666,26 @@ export class CoopChatSession {
   public dispose(): void {
     this.threadRuns.abortAll();
     this.intentDebouncer.dispose();
+    this.chatMessageDisposable?.dispose();
+    this.chatMessageDisposable = undefined;
+    this.settingsMessageDisposable?.dispose();
+    this.settingsMessageDisposable = undefined;
+    this.workspacePromptWatcher?.dispose();
+    this.workspacePromptWatcher = undefined;
     this.requestBatcher.cancelAll("Session disposed.");
     this.requestPrioritizer.clear("Session disposed.");
     coopSessionRegistry.unregister(this);
   }
 
   public attachWebview(webview: vscode.Webview): void {
+    // EH reload + visibility re-attach call this repeatedly. Settings already
+    // replaces its listener; chat must too or one Send is handled twice.
     this.webview = webview;
     this.reloadChatWebviewHtml();
-    this.wireWebview(webview, "chat");
+    this.chatMessageDisposable = replaceExclusiveDisposable(
+      this.chatMessageDisposable,
+      this.wireWebview(webview, "chat")
+    );
     coopSessionRegistry.setActive(this);
   }
 
@@ -684,11 +700,13 @@ export class CoopChatSession {
   }
 
   public attachSettingsWebview(webview: vscode.Webview, onClose?: () => void): void {
-    this.settingsMessageDisposable?.dispose();
     this.settingsWebview = webview;
     this.closeSettingsHandler = onClose;
     webview.html = renderWebviewHtml(webview, this.options.extensionUri, { view: "settings" });
-    this.settingsMessageDisposable = this.wireWebview(webview, "settings");
+    this.settingsMessageDisposable = replaceExclusiveDisposable(
+      this.settingsMessageDisposable,
+      this.wireWebview(webview, "settings")
+    );
   }
 
   public detachSettingsWebview(): void {
@@ -704,6 +722,10 @@ export class CoopChatSession {
   }
 
   public async initialize(): Promise<void> {
+    if (this.sessionHydrated) {
+      return;
+    }
+    this.sessionHydrated = true;
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
@@ -2696,7 +2718,8 @@ export class CoopChatSession {
       const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
       const language = languageIdForPatchPath(filePath);
       const doc = await vscode.workspace.openTextDocument({ content: text, language });
-      rememberRemotePatchBuffer(filePath, doc.uri, text);
+      rememberRemotePatchBuffer(filePath, doc.uri, text, { owner, repo });
+      snapshotWorkingCopyIfAbsent(filePath, doc.uri.toString(), text, { owner, repo });
       const editor = await vscode.window.showTextDocument(doc, options?.reviewOpen
         ? {
             viewColumn: vscode.ViewColumn.Beside,
@@ -3940,6 +3963,12 @@ export class CoopChatSession {
     if (this.turnAgentAction === "none") {
       return false;
     }
+    if (shouldSkipAgentHuntForOpenFileFeatureAdd({
+      message: _message,
+      openFile: this.currentContext.file
+    })) {
+      return false;
+    }
     const repoId = buildRepoId(this.preferences, this.currentContext);
     return Boolean(repoId) && !repoId.includes("unknown/unknown");
   }
@@ -4021,7 +4050,8 @@ export class CoopChatSession {
           message: query,
           repoId,
           maxSteps: AGENT_MAX_TOOL_ROUNDS,
-          action
+          action,
+          openFile: turn.context.file
         },
         {
           signal,
@@ -4131,6 +4161,9 @@ export class CoopChatSession {
           });
         }
       }
+      // Flush leftover batched tokens BEFORE complete. A post-complete flush
+      // paints a second CoopAI bubble that never finishes.
+      deltaBatcher.end();
       await this.finishTurnAssistantMessage(turn, finalMessage);
     } catch (error) {
       if (isCancelled()) {
@@ -4156,7 +4189,7 @@ export class CoopChatSession {
         payload: { message, threadId: turn.threadId }
       });
     } finally {
-      deltaBatcher.flush();
+      deltaBatcher.dispose();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;
@@ -4588,7 +4621,7 @@ export class CoopChatSession {
     const fromPayload = (payload.files ?? []).filter((file) => file.path && file.content);
     const files = fromPayload.length > 0 ? fromPayload : (record?.card.prFiles ?? []);
     if (!files.length) {
-      fail("Apply the patch first, then create a pull request.");
+      fail("No file changes to ship.");
       return;
     }
 
@@ -5678,6 +5711,44 @@ export class CoopChatSession {
     this.chatTurnStartedAt = Date.now();
     this.clearIntentFeedback();
 
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    let editorFiles: Array<{ path: string; content: string }> = [];
+    let editorDiff = "";
+    if (owner && repo) {
+      const localDiskMatchesUseRepo = await localDiskMatchesTargetRepo({
+        owner,
+        repo,
+        provider: this.currentContext.provider
+      });
+      const collected = await collectEditorPrFiles(
+        {
+          owner,
+          repo,
+          provider: this.currentContext.provider,
+          branch: this.currentContext.branch
+        },
+        {
+          localDiskMatchesUseRepo,
+          readRemoteBaseline: async (filePath) => {
+            try {
+              const remote = await this.options.codeHostRouter.getFileContent(filePath, {
+                provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+                owner,
+                repo,
+                branch: this.currentContext.branch
+              });
+              return remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
+            } catch {
+              return undefined;
+            }
+          }
+        }
+      );
+      editorFiles = collected.files.map((file) => ({ path: file.path, content: file.content }));
+      editorDiff = collected.diff;
+    }
+
     const threadTimestamps = new Set(this.chatHistory.map((entry) => entry.timestamp));
     const routing = resolveCreatePrChatRouting({
       asked: true,
@@ -5685,12 +5756,18 @@ export class CoopChatSession {
       cards: listPatchCards().filter(
         (card) =>
           typeof card.messageTimestamp === "number" && threadTimestamps.has(card.messageTimestamp)
-      )
+      ),
+      editorFiles,
+      confirmTimestamp: userMessage.timestamp
     });
     if (routing.kind === "open-confirm") {
       this.post({
         type: "patch:open-create-pr",
-        payload: { messageTimestamp: routing.messageTimestamp, files: routing.files }
+        payload: {
+          messageTimestamp: routing.messageTimestamp,
+          files: routing.files,
+          diff: editorDiff || undefined
+        }
       });
     }
 
@@ -7515,6 +7592,9 @@ export class CoopChatSession {
       if (result.usage) {
         turn.sessionCostUsd += result.usage.estimatedCostUsd;
       }
+      // Flush leftover batched tokens BEFORE complete. A post-complete flush
+      // paints a second CoopAI bubble that never finishes.
+      deltaBatcher.end();
       await this.finishTurnAssistantMessage(turn, finalMessage);
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
@@ -7561,7 +7641,7 @@ export class CoopChatSession {
         payload: { message, threadId: turn.threadId }
       });
     } finally {
-      deltaBatcher.flush();
+      deltaBatcher.dispose();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingCodeEditIntent = false;

@@ -8,6 +8,7 @@ import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolation";
 import { indexQueryForRetrieval, selectChatEvidencePaths } from "../api/agent/searchQuery";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
+import { semanticAttachModeForChat } from "../chat/plainChatExplain";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -28,6 +29,8 @@ export type RepoSemanticSearchContext = {
   rankQuery?: string;
   searchSource?: LocalSearchResult["source"];
   files: RepoSemanticSnippet[];
+  /** Path hits when we did not attach bodies (open-file explain). */
+  pathHits?: string[];
   /** Unique paths ranked from search before the attach cap — not a repo inventory. */
   matchedPathCount?: number;
   /** Hard cap used when attaching file bodies (MAX_SEMANTIC_FILES). */
@@ -228,6 +231,8 @@ export async function searchRepoForChat(
     return undefined;
   }
   const indexQuery = indexQueryForRetrieval(userQuery);
+  const openFile = options.request.params.file?.trim();
+  const pathsOnly = semanticAttachModeForChat({ query: userQuery, openFile }) === "paths-only";
 
   return loadSemanticSearchContext({
     repoId,
@@ -242,7 +247,8 @@ export async function searchRepoForChat(
     provider: options.request.params.provider as CodeHostProviderPreference | undefined,
     collectionId: options.collectionId,
     searchScope: options.searchScope,
-    maxFiles: MAX_SEMANTIC_FILES
+    maxFiles: pathsOnly ? 0 : MAX_SEMANTIC_FILES,
+    excludePath: pathsOnly ? openFile : undefined
   });
 }
 
@@ -304,25 +310,48 @@ type LoadSemanticSearchOptions = {
   collectionId?: string;
   searchScope?: "indexed" | "org";
   maxFiles: number;
+  /** Do not attach this path (usually the already-open file). */
+  excludePath?: string;
 };
 
 async function loadSemanticSearchContext(
   options: LoadSemanticSearchOptions
 ): Promise<RepoSemanticSearchContext | undefined> {
   const searchResult = await runRepoSearch(options, options.repoId, options.query);
-  const rankedPaths = rankSearchPaths(searchResult, options.maxFiles * 4);
+  const pathBudget = Math.max(options.maxFiles, 1) * 4;
+  const rankedPaths = rankSearchPaths(searchResult, pathBudget);
   const rankQuery = options.rankQuery ?? options.query;
+  const exclude = options.excludePath?.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
   const selected = selectChatEvidencePaths(
     rankedPaths.map((entry) => entry.path),
     rankQuery,
-    options.maxFiles
-  );
+    Math.max(options.maxFiles, 6)
+  ).filter((path) => {
+    if (!exclude) {
+      return true;
+    }
+    const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
+    return normalized !== exclude && !normalized.endsWith(`/${exclude}`);
+  });
   const byPath = new Map(rankedPaths.map((entry) => [entry.path, entry]));
   const filteredPaths = selected
     .map((path) => byPath.get(path))
     .filter((entry): entry is { path: string; score: number } => Boolean(entry));
   if (filteredPaths.length === 0) {
     return undefined;
+  }
+
+  if (options.maxFiles <= 0) {
+    return {
+      source: "repo-semantic-search",
+      query: options.query,
+      rankQuery: options.rankQuery,
+      searchSource: searchResult.source,
+      files: [],
+      pathHits: filteredPaths.map((entry) => entry.path).slice(0, 6),
+      matchedPathCount: rankedPaths.length,
+      attachmentCap: 0
+    };
   }
 
   const resolved: Array<{ path: string; repoId: string; content: string }> = [];
@@ -448,7 +477,10 @@ export function mergeRepoSemanticContext(
   result: ContextFetchResult,
   semantic?: RepoSemanticSearchContext
 ): ContextFetchResult {
-  if (!semantic?.files.length) {
+  if (!semantic) {
+    return result;
+  }
+  if (!semantic.files.length && !(semantic.pathHits?.length)) {
     return result;
   }
 

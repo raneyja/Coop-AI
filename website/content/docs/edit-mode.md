@@ -80,7 +80,7 @@ flowchart LR
 3. **Review** — A VS Code notification shows **Patch ready — N file(s) (M edits)** with **Apply** and **Reject**. Dismissing the notification (X) keeps the patch pending — run **CoopAI: Apply Patch** later.
 4. **Apply** — Click **Apply** or run **CoopAI: Apply Patch** (`coopAI.applyPatch`). Changed files are written in the workspace. SEARCH blocks tolerate minor whitespace drift (indent/trim) when an exact match is not found.
 5. **Undo** — After apply, the success notification includes **Undo**, or run **CoopAI: Undo Last Patch** (`coopAI.undoLastPatch`).
-6. **Create a pull request** — After Apply, click **Create pull request** on the patch card, or type **Create a PR** in chat. Chat includes every `/edit` you Applied in that thread. Confirm branch, title, and notes — nothing is created on GitHub until you submit. See [Create pull request](/docs/create-pull-request).
+6. **Create a pull request** — After Apply, click **Create pull request** on the patch card, or type **Create a PR** in chat. Chat also works if you typed in the file yourself (no Apply). Confirm branch, title, and notes — nothing is created on GitHub until you submit. See [Create pull request](/docs/create-pull-request).
 7. **Retry** — If apply fails, click **Retry** on the error notification or run **CoopAI: Retry Last Patch** (`coopAI.retryLastPatch`). Coop re-opens the pending patch or sends a follow-up `/edit` turn asking the model to fix SEARCH blocks.
 
 If parsing fails, no patch is staged — check the chat response for valid patch formatting.

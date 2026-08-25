@@ -25,6 +25,21 @@ test("sanitizeIntegrationSnippet removes replacement chars and highlight markers
   assert.equal(out, "Hello world x");
 });
 
+test("filterDocPagesForUseRepo drops COOP ticket ADRs when Use-repo is not Coop", () => {
+  const filtered = filterDocPagesForUseRepo(
+    [
+      { title: "ADR: Backend service extraction (COOP-101)" },
+      { title: "ADR: Webview vs native sidebar (COOP-55)" },
+      { title: "Plane architecture", excerpt: "apps/api plane states" }
+    ],
+    { repo: "plane", owner: "makeplane" }
+  );
+  assert.equal(
+    filtered.some((page) => /COOP-\d+/i.test(page.title)),
+    false
+  );
+});
+
 test("filterDocPagesForUseRepo prefers Use-repo pages over Coop bleed", () => {
   const filtered = filterDocPagesForUseRepo(
     [

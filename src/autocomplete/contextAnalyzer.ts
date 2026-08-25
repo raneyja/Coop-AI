@@ -347,9 +347,15 @@ function isEmptyLineInsideBlock(context: ExtractedCodeContext): boolean {
   return false;
 }
 
+export const AUTOCOMPLETE_EDITOR_SCHEMES = ["file", "untitled", "vscode-vfs", "github"] as const;
+
+export function isAutocompleteEditorScheme(scheme: string): boolean {
+  return (AUTOCOMPLETE_EDITOR_SCHEMES as readonly string[]).includes(scheme);
+}
+
 export function isFileEligible(document: vscode.TextDocument): boolean {
   const path = document.uri.fsPath;
-  if (document.uri.scheme !== "file" && document.uri.scheme !== "untitled") {
+  if (!isAutocompleteEditorScheme(document.uri.scheme)) {
     return false;
   }
   if (path.includes("node_modules") || path.includes("/dist/") || path.includes("\\dist\\")) {

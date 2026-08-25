@@ -174,6 +174,98 @@ async function main(): Promise<void> {
     assert.ok(joined.includes("# State representing an ongoing task"));
   });
 
+  await test("expanding Backlog REPLACE does not duplicate the selected dict", async () => {
+    const fileBody = [
+      "DEFAULT_STATES = [",
+      "    {",
+      '        "name": "Backlog",',
+      '        "color": "#60646C",',
+      "        \"sequence\": 15000,",
+      "        \"group\": StateGroup.BACKLOG.value,",
+      "        \"default\": True,",
+      "    },",
+      "]"
+    ].join("\n");
+    const selection = [
+      "    {",
+      '        "name": "Backlog",',
+      '        "color": "#60646C",',
+      "        \"sequence\": 15000,",
+      "        \"group\": StateGroup.BACKLOG.value,",
+      "        \"default\": True,",
+      "    },"
+    ].join("\n");
+    const content = [
+      "File: `apps/api/plane/db/models/state.py`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      '        "name": "Backlog",',
+      "=======",
+      "        # Represents the default state for the backlog",
+      selection,
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 921,
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [2, 8],
+      fileContents: { "apps/api/plane/db/models/state.py": fileBody },
+      commentOnly: true,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+      .filter((line) => line.kind === "add")
+      .map((line) => line.text)
+      .join("\n");
+    assert.equal(addText.split('"name": "Backlog"').length - 1, 1);
+    assert.ok(addText.includes("Represents the default state"));
+  });
+
+  await test("duplicate requireAuth signature snaps to one JSDoc above the function", async () => {
+    const fileBody = [
+      "export function requireAuth(",
+      "  auth: AuthContext | undefined,",
+      "  requireInProduction: boolean",
+      "): auth is AuthContext {",
+      "  if (auth) {",
+      "    return true;",
+      "  }",
+      "  return !requireInProduction;",
+      "}"
+    ].join("\n");
+    const content = [
+      "File: `src/server/authMiddleware.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "export function requireAuth(",
+      "=======",
+      "export function requireAuth(",
+      "/** Returns true when auth is present or when production auth is not required. */",
+      "export function requireAuth(",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 922,
+      file: "src/server/authMiddleware.ts",
+      selectedLines: [1, 4],
+      fileContents: { "src/server/authMiddleware.ts": fileBody },
+      commentOnly: true,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+      .filter((line) => line.kind === "add")
+      .map((line) => line.text)
+      .join("\n");
+    assert.equal(addText.split("export function requireAuth(").length - 1, 1);
+    assert.ok(addText.includes("Returns true when auth is present"));
+  });
+
   await test("comment-only ask rejects a constructor rewrite with no comment", async () => {
     const fileBody = [
       "export class CoopSidebarProvider {",

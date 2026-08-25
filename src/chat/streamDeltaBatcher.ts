@@ -8,6 +8,8 @@ export const STREAM_DELTA_BATCH_MS = 32;
 export type StreamDeltaBatcher = {
   push: (chunk: string) => void;
   flush: () => void;
+  /** Flush leftover tokens, then ignore further push/flush. Call before chat:complete. */
+  end: () => void;
   dispose: () => void;
 };
 
@@ -50,6 +52,15 @@ export function createStreamDeltaBatcher(options: {
       }
     },
     flush,
+    end() {
+      flush();
+      disposed = true;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      buffer = "";
+    },
     dispose() {
       disposed = true;
       if (timer !== undefined) {

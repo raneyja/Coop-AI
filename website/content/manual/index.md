@@ -324,7 +324,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, click **Create pull request** on the card, or type **Create a PR** in chat |
+| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, click **Create pull request** on the card, or type **Create a PR** in chat (also works after you type in the file) |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -427,33 +427,34 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 ## Create a pull request
 
-After you **Apply** an `/edit`, you can open a pull request for your team without leaving VS Code.
+You can open a pull request for your team without leaving VS Code.
 
-Two ways — both open the same confirm step. Cancel, Escape, or clicking away creates nothing.
+Three ways — all open the same confirm step. Cancel, Escape, or clicking away creates nothing.
 
 - Click **Create pull request** on a patch card — that Apply only.
-- Type **Create a PR** in chat (or “create a pull request of all the work I just applied”) — **every** `/edit` you Applied in this thread.
+- Type **Create a PR** in chat after Apply — **every** `/edit` you Applied in this thread.
+- Type **Create a PR** in chat after editing a Use-repo file — dirty buffers, **no Apply required**. Unsaved is fine.
 
 There is no `/pr` slash command.
 
 <!-- figures lg -->
-![Create pull request — confirm branch, title, and AI-generated notes after applying an /edit patch](/screenshots/docs/extension-create-pull-request.png)
+![Create pull request — confirm branch, title, and AI-generated notes](/screenshots/docs/extension-create-pull-request.png)
 <!-- /figures -->
 
 ### Open a pull request
 
 1. Select the repository with **Use repo**.
-2. Send `/edit <instruction>` and click **Apply**. Repeat for more changes in the same thread if you want.
+2. Either Apply an `/edit`, **or** type in a Use-repo file.
 3. Click **Create pull request** on a card, **or** type **Create a PR** in chat.
 4. Review **Branch** (default `coop/patch`), **Title**, and **Notes (AI Generated)**. Edit anything you want.
-5. Click **Create pull request**. Coop shows a link — open it to see the PR.
+5. Click **Create pull request**. Coop shows a link — open it to see the PR. Or **Cancel**.
 
 | Field | Default |
 | --- | --- |
 | **Branch** | `coop/patch` |
 | **Title** | `Update path/to/file` (or `Update N files`) |
 | **Notes (AI Generated)** | A short summary you can edit or clear |
-| **Files** | That card (button) or every Apply in this thread (chat) |
+| **Files** | That card, every Apply in this thread, or dirty Use-repo tabs |
 
 **Undo** restores the editor. It does not close the PR.
 

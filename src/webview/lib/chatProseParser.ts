@@ -88,7 +88,7 @@ export function parseChatProse(content: string, options?: ParseChatProseOptions)
       continue;
     }
 
-    if (isSectionHeading(lines[i])) {
+    if (isSectionHeading(lines[i], nextNonEmptyLine(lines, i + 1))) {
       const text = stripHeadingSyntax(lines[i]);
       blocks.push({
         type: "section-heading",
@@ -791,14 +791,27 @@ function hostLabelFromUrl(url: string): string {
 const FIELD_LABEL_HEADING_RE =
   /^(open question|what to check|question|evidence needed|unknown|risk|owner|answer|status|impact|confidence|note|priority|type|source)s?:$/i;
 
-function isSectionHeading(line: string): boolean {
+function nextNonEmptyLine(lines: string[], fromIndex: number): string | undefined {
+  for (let i = fromIndex; i < lines.length; i++) {
+    const trimmed = lines[i]?.trim() ?? "";
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function isSectionHeading(line: string, nextNonEmpty?: string): boolean {
   const trimmed = line.trim();
   if (!SECTION_HEADING_RE.test(trimmed) && !MARKDOWN_HEADING_RE.test(trimmed)) {
     return false;
   }
   const plain = stripHeadingSyntax(trimmed);
   if (plain.endsWith(".")) {
-    return false;
+    const nextIsList = Boolean(nextNonEmpty && isListLine(nextNonEmpty));
+    if (!(nextIsList && plain.length <= 90)) {
+      return false;
+    }
   }
   if (FIELD_LABEL_HEADING_RE.test(plain)) {
     return false;

@@ -1,4 +1,5 @@
 import { findAllSearchMatches, type SearchMatchHit } from "./patchContent";
+import { replaceDuplicatesSearch } from "./patchHunkGuards";
 import type { ParsedPatchSet, PatchHunk } from "./patchParser";
 
 export type LineRange = [number, number];
@@ -127,13 +128,61 @@ export function coerceCommentOnlyHunk(
   return undefined;
 }
 
+function extractUniqueCommentLines(replace: string, search: string): string | undefined {
+  const searchTrimmed = new Set(
+    splitLines(search)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  );
+  const comments = splitLines(replace).filter(
+    (line) => looksLikeCommentLine(line) && !searchTrimmed.has(line.trim())
+  );
+  if (comments.length === 0) {
+    return undefined;
+  }
+  return comments.join("\n");
+}
+
+function normalizePatchText(text: string): string {
+  return text.replace(/\r\n/g, "\n").trimEnd();
+}
+
+/**
+ * Overlap is not enough: a short SEARCH plus a fat REPLACE (comment + whole
+ * block, or SEARCH pasted twice) expands on Apply and duplicates lines.
+ */
+export function hunkExpandsSelection(hunk: PatchHunk, selectedText: string): boolean {
+  if (replaceDuplicatesSearch(hunk.replace, hunk.search)) {
+    return true;
+  }
+  const sel = normalizePatchText(selectedText);
+  const sch = normalizePatchText(hunk.search);
+  if (!sel || sch === sel) {
+    return false;
+  }
+  if (sel.includes(sch) && sch.length < sel.length) {
+    if (hunk.replace.includes(sel)) {
+      return true;
+    }
+    const prefix = extractInsertedPrefix(hunk.replace, hunk.search);
+    if (prefix !== undefined && splitLines(prefix).some((line) => looksLikeCommentLine(line))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function retargetOntoSelection(
   hunk: PatchHunk,
   selectedText: string,
   commentOnly?: boolean
 ): PatchHunk | undefined {
   if (commentOnly) {
-    return coerceCommentOnlyHunk(hunk, selectedText);
+    return retargetDuplicateComment(hunk, selectedText) ?? coerceCommentOnlyHunk(hunk, selectedText);
+  }
+  const duplicateComment = retargetDuplicateComment(hunk, selectedText);
+  if (duplicateComment) {
+    return duplicateComment;
   }
   const prefix = extractInsertedPrefix(hunk.replace, hunk.search);
   if (prefix !== undefined) {
@@ -148,6 +197,24 @@ function retargetOntoSelection(
     replace: hunk.replace.includes(hunk.search)
       ? hunk.replace.replace(hunk.search, selectedText)
       : hunk.replace
+  };
+}
+
+function retargetDuplicateComment(hunk: PatchHunk, selectedText: string): PatchHunk | undefined {
+  if (!replaceDuplicatesSearch(hunk.replace, hunk.search)) {
+    return undefined;
+  }
+  const unique = extractUniqueCommentLines(hunk.replace, hunk.search);
+  if (!unique) {
+    return {
+      search: selectedText,
+      replace: selectedText
+    };
+  }
+  const comment = indentCommentToSelection(unique, selectedText);
+  return {
+    search: selectedText,
+    replace: `${comment}\n${selectedText}`
   };
 }
 
@@ -178,6 +245,9 @@ export function snapHunkToSelection(options: {
       const matches = findAllSearchMatches(options.content, options.hunk.search);
       const inside = matches.filter((hit) => rangesOverlap(hitLineRange(options.content!, hit), selectedLines));
       if (inside.length > 0) {
+        if (hunkExpandsSelection(options.hunk, selectedText)) {
+          return retargetOntoSelection(options.hunk, selectedText, true);
+        }
         return coerceCommentOnlyHunk(options.hunk, selectedText);
       }
     } else if (options.hunk.search === selectedText) {
@@ -192,9 +262,15 @@ export function snapHunkToSelection(options: {
     }
     const inside = matches.filter((hit) => rangesOverlap(hitLineRange(options.content!, hit), selectedLines));
     if (inside.length > 0) {
+      if (hunkExpandsSelection(options.hunk, selectedText)) {
+        return retargetOntoSelection(options.hunk, selectedText);
+      }
       return options.hunk;
     }
   } else if (options.hunk.search === selectedText) {
+    if (hunkExpandsSelection(options.hunk, selectedText)) {
+      return retargetOntoSelection(options.hunk, selectedText);
+    }
     return options.hunk;
   }
   return retargetOntoSelection(options.hunk, selectedText);

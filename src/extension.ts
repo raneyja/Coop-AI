@@ -14,6 +14,7 @@ import {
   registerAutocompleteIndexNotifier,
   createAutocompleteUsageTelemetryHandler
 } from "./autocomplete/registerAutocomplete";
+import { snapshotAlreadyOpenDocuments, snapshotOpenDocument } from "./edit/editorWorkingCopy";
 import { registerPatchCommands } from "./edit/registerPatchCommands";
 import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides, restoreAutocompleteUnlessUserOptedOut } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
@@ -679,6 +680,9 @@ export function activate(context: vscode.ExtensionContext): void {
         session.reconcileEditorFileChips();
       }
     }),
+    vscode.workspace.onDidOpenTextDocument((doc) => {
+      snapshotOpenDocument(doc);
+    }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       for (const session of coopSessionRegistry.getAll()) {
         session.handleThemeChange();
@@ -703,6 +707,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  snapshotAlreadyOpenDocuments();
 
   registerQuickActionCommands(context, () => provider.session);
 

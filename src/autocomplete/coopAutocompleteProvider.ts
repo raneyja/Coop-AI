@@ -9,7 +9,7 @@ import {
   onAutocompleteSettingsChanged,
   resolveAutocompleteActiveRepoId
 } from "./autocompleteConfig";
-import { analyzeDocumentContext, isFileEligible } from "./contextAnalyzer";
+import { analyzeDocumentContext, isAutocompleteEditorScheme, isFileEligible } from "./contextAnalyzer";
 import { CompletionRouter } from "./completionRouter";
 import { toInlineInsertText, sanitizeAfterDotMemberText, consolidateAfterDotRanked, isValidAfterDotInsertText } from "./completionFilter";
 import { fetchAfterDotMemberCompletions } from "./memberCompletionProvider";
@@ -748,14 +748,16 @@ export function registerCoopAutocomplete(
 
   const selector: vscode.DocumentSelector = [
     { scheme: "file" },
-    { scheme: "untitled" }
+    { scheme: "untitled" },
+    { scheme: "vscode-vfs" },
+    { scheme: "github" }
   ];
 
   context.subscriptions.push(
     provider,
     vscode.languages.registerInlineCompletionItemProvider(selector, provider),
     vscode.workspace.onDidChangeTextDocument((event) => {
-      if (event.document.uri.scheme === "file" || event.document.uri.scheme === "untitled") {
+      if (isAutocompleteEditorScheme(event.document.uri.scheme)) {
         provider.noteDocumentChange(event);
       }
     })

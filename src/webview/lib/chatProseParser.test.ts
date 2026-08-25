@@ -61,6 +61,18 @@ test("**Sentence ending with period.** is a paragraph, not section-heading", () 
   assert.equal(doc.blocks[0]!.type, "paragraph");
 });
 
+test("title with period stays a heading when a list follows", () => {
+  const doc = parseChatProse(
+    "**What a reviewer should check.**\n\n- Call sites pass requireInProduction in prod\n- Unauthed flows still 401\n- Config is not left false in staging"
+  );
+  assert.equal(doc.blocks[0]!.type, "section-heading");
+  if (doc.blocks[0]!.type === "section-heading") {
+    assert.equal(doc.blocks[0]!.text, "What a reviewer should check.");
+    assert.equal(doc.blocks[0]!.headingLevel, 1);
+  }
+  assert.equal(doc.blocks[1]!.type, "list");
+});
+
 test("**Open question:** alone is a paragraph, not section-heading", () => {
   const doc = parseChatProse("**Open question:**");
   assert.equal(doc.blocks.length, 1);

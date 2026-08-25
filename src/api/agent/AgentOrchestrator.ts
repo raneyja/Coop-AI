@@ -37,6 +37,7 @@ import {
   isAgentIntegrationTool
 } from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
+import { isFeatureAddAsk } from "../../context/existingCapabilityGrounding";
 
 export { pickTopSearchHit };
 
@@ -165,10 +166,11 @@ export class AgentOrchestrator {
     this.runSearchIntegration = options?.searchIntegration;
     try {
       const action = request.action ?? "none";
+      const openFile = request.openFile?.trim();
       if (options?.planTurn) {
-        return await this.runOwnedLoop(repoId, query, maxSteps, action, options);
+        return await this.runOwnedLoop(repoId, query, maxSteps, action, options, openFile);
       }
-      return await this.runDeterministic(repoId, query, maxSteps, options);
+      return await this.runDeterministic(repoId, query, maxSteps, options, openFile);
     } finally {
       this.runAllowedIntegrations = [];
       this.runSearchIntegration = undefined;
@@ -184,7 +186,8 @@ export class AgentOrchestrator {
     query: string,
     maxSteps: number,
     action: NonNullable<AgentSessionRequest["action"]>,
-    options: AgentRunOptions
+    options: AgentRunOptions,
+    openFile?: string
   ): Promise<AgentSessionResult> {
     const planTurn = options.planTurn as AgentPlanTurnFn;
     const steps: AgentStep[] = [];
@@ -201,6 +204,19 @@ export class AgentOrchestrator {
     let lastToolResult: string | undefined;
     let matchingRead = false;
     const allowedIntegrations = options.allowedIntegrations ?? [];
+    const seeded = await this.seedOpenFileReadIfFeatureAdd(
+      repoId,
+      query,
+      openFile,
+      emit,
+      context,
+      conversation
+    );
+    if (seeded.ok) {
+      matchingRead = true;
+      filesRead = 1;
+      lastToolResult = seeded.raw;
+    }
 
     const canAnswerNow = (): boolean => {
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
@@ -230,7 +246,7 @@ export class AgentOrchestrator {
         });
       } catch {
         if (steps.length === 0) {
-          const fallback = await this.runDeterministic(repoId, query, maxSteps, options);
+          const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
           return this.finishWithAnswer(
             fallback,
             query,
@@ -249,7 +265,7 @@ export class AgentOrchestrator {
       const plan = parseAgentToolPlan(raw, { allowedIntegrations });
       if (plan.kind === "invalid") {
         if (steps.length === 0) {
-          const fallback = await this.runDeterministic(repoId, query, maxSteps, options);
+          const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
           return this.finishWithAnswer(
             fallback,
             query,
@@ -490,11 +506,14 @@ export class AgentOrchestrator {
       });
     }
     if (needsGrounding && !matchingRead && !hasIntegrationHits) {
-      return {
-        ...result,
-        answer: INDEX_HUNT_MISS,
-        context: result.steps.length ? result.context : undefined
-      };
+      const hadSuccessfulRead = readFileContextHasBody(result.context);
+      if (!(isFeatureAddAsk(query) && hadSuccessfulRead)) {
+        return {
+          ...result,
+          answer: INDEX_HUNT_MISS,
+          context: result.steps.length ? result.context : undefined
+        };
+      }
     }
     if (!options.streamAnswer) {
       return { ...result, context: result.steps.length ? result.context : undefined };
@@ -574,6 +593,41 @@ export class AgentOrchestrator {
     return false;
   }
 
+  private async seedOpenFileReadIfFeatureAdd(
+    repoId: string,
+    query: string,
+    openFile: string | undefined,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string }> {
+    const filePath = openFile?.trim();
+    if (!filePath || !isFeatureAddAsk(query)) {
+      return { ok: false };
+    }
+    try {
+      const rawResult = await this.executeTool("read_file", { path: filePath, repoId });
+      if (!readFilePayloadHasBody(rawResult)) {
+        return { ok: false };
+      }
+      this.mergeContext(context, "read_file", rawResult);
+      conversation?.push({
+        role: "assistant",
+        content: JSON.stringify({ tool: "read_file", args: { path: filePath } })
+      });
+      conversation?.push({ role: "user", content: rawResult });
+      emit({
+        index: 0,
+        tool: "read_file",
+        summary: `read_file: ${filePath}`,
+        completed: true
+      });
+      return { ok: true, raw: rawResult };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   private judgeReadResult(
     raw: string,
     query: string,
@@ -589,6 +643,9 @@ export class AgentOrchestrator {
       const path = typeof args.path === "string" ? args.path : parsed.path ?? "";
       const body = (parsed.files ?? []).map((file) => `${file.path}\n${file.content}`).join("\n");
       const blob = `${path}\n${body}`;
+      if (isFeatureAddAsk(query) && readFilePayloadHasBody(raw)) {
+        return { raw, matchesSymbol: true };
+      }
       const matches = needsNamed
         ? textMentionsNamedSymbol(blob, query)
         : textMentionsQueryRoles(blob, query);
@@ -613,7 +670,8 @@ export class AgentOrchestrator {
     repoId: string,
     query: string,
     maxSteps: number,
-    options?: AgentRunOptions
+    options?: AgentRunOptions,
+    openFile?: string
   ): Promise<AgentSessionResult> {
     const steps: AgentStep[] = [];
     const context: AgentSessionContext = {};
@@ -621,6 +679,17 @@ export class AgentOrchestrator {
       steps.push(step);
       options?.onStep?.(step, [...steps]);
     };
+
+    const seeded = await this.seedOpenFileReadIfFeatureAdd(
+      repoId,
+      query,
+      openFile,
+      emit,
+      context
+    );
+    if (seeded.ok) {
+      return { steps, context };
+    }
 
     if (isRepoStructureQuery(query) && this.registry.list_directory) {
       const listRaw = await this.executeTool("list_directory", { path: "", repoId });
@@ -865,6 +934,23 @@ function looksLikeProseAnswer(raw: string): boolean {
     return false;
   }
   return trimmed.length > 40 && /[.!?\n]/.test(trimmed);
+}
+
+function readFilePayloadHasBody(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as ReadFilePayload;
+    if (parsed.error) {
+      return false;
+    }
+    return (parsed.files ?? []).some((file) => Boolean(file.content?.trim()));
+  } catch {
+    return false;
+  }
+}
+
+function readFileContextHasBody(context: AgentSessionContext | undefined): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files;
+  return Boolean(files?.some((file) => Boolean(file.content?.trim())));
 }
 
 function symbolToHit(symbol: SymbolHit): SearchHit {

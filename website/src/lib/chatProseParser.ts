@@ -61,7 +61,7 @@ export function parseChatProse(content: string, options?: ParseChatProseOptions)
       continue;
     }
 
-    if (isSectionHeading(lines[i])) {
+    if (isSectionHeading(lines[i], nextNonEmptyLine(lines, i + 1))) {
       blocks.push({
         type: "section-heading",
         text: stripHeadingSyntax(lines[i])
@@ -602,12 +602,28 @@ function hostLabelFromUrl(url: string): string {
   }
 }
 
-function isSectionHeading(line: string): boolean {
+function nextNonEmptyLine(lines: string[], fromIndex: number): string | undefined {
+  for (let i = fromIndex; i < lines.length; i++) {
+    const trimmed = lines[i]?.trim() ?? "";
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function isSectionHeading(line: string, nextNonEmpty?: string): boolean {
   if (!SECTION_HEADING_RE.test(line)) {
     return false;
   }
   const plain = stripHeadingSyntax(line);
-  return !plain.endsWith(".");
+  if (plain.endsWith(".")) {
+    const nextIsList = Boolean(nextNonEmpty && isListLine(nextNonEmpty));
+    if (!(nextIsList && plain.length <= 90)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function stripHeadingSyntax(line: string): string {

@@ -63,6 +63,8 @@ export type AgentSessionRequest = {
    * only the no-planTurn fallback (tests / fail-open).
    */
   action?: "locate" | "understand" | "change" | "none";
+  /** Open file chip — seed `read_file` on ticket-style feature-add so we do not hunt the new token. */
+  openFile?: string;
 };
 
 /** Tool payloads collected during a run — used for the Apply-card bridge. */

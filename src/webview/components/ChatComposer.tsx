@@ -416,6 +416,9 @@ export function ChatComposer({
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
       if (canSend && !isStreaming) {
         onSend();
       }

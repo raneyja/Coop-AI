@@ -10,6 +10,7 @@ import {
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -109,10 +110,16 @@ export async function fetchGoogleDocsSearchContext(options: {
   const allowedFolderIds = new Set(options.integrationScope?.googleDocs?.expandedFolderIds ?? []);
   try {
     const rawDocuments = await client.searchDocumentsForTerms(terms, options.limit ?? 20, driveScope);
-    const documents =
+    const scoped =
       options.integrationScope?.enforced && allowedFolderIds.size > 0
         ? filterGoogleDocsHitsByFolder(rawDocuments, allowedFolderIds).map(stripGoogleDocParents)
         : rawDocuments.map(stripGoogleDocParents);
+    const documents = filterDocPagesForUseRepo(scoped, {
+      owner: options.owner,
+      repo: options.repo,
+      focusTerms: options.extraTerms,
+      limit: options.limit ?? 20
+    });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`

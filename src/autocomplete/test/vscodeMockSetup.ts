@@ -316,13 +316,13 @@ export type { MockTextDocument, MockPosition };
 
 export function createMockDocument(
   text: string,
-  options: { languageId?: string; path?: string } = {}
+  options: { languageId?: string; path?: string; scheme?: string } = {}
 ): MockTextDocument {
   const lines = text.split(/\r?\n/);
   return {
     uri: {
       fsPath: options.path ?? "/workspace/src/example.ts",
-      scheme: "file"
+      scheme: options.scheme ?? "file"
     },
     languageId: options.languageId ?? "typescript",
     getText(range?: { start: MockPosition; end: MockPosition }) {

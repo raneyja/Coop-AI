@@ -3,6 +3,7 @@ import { applyHunkToContent } from "./patchContent";
 import {
   coerceCommentOnlyHunk,
   extractInsertedPrefix,
+  hunkExpandsSelection,
   selectionTextFromFile,
   snapHunkToSelection,
   snapPatchSetToSelection
@@ -109,6 +110,78 @@ test("snapHunkToSelection keeps SEARCH that already matches inside the highlight
   });
   assert.equal(snapped.search, hunk.search);
   assert.equal(snapped.replace, hunk.replace);
+});
+
+const BACKLOG_BLOCK = [
+  "    {",
+  '        "name": "Backlog",',
+  '        "color": "#94A3B8",',
+  "        \"sequence\": 10000,",
+  "        \"group\": StateGroup.BACKLOG.value,",
+  "    },"
+].join("\n");
+
+test("expanding comment+full-block over a short SEARCH retargets onto the highlight once", () => {
+  const hunk = {
+    search: '        "name": "Backlog",',
+    replace: [
+      "        # Represents the default state for the backlog",
+      BACKLOG_BLOCK
+    ].join("\n")
+  };
+  assert.equal(hunkExpandsSelection(hunk, BACKLOG_BLOCK), true);
+  const snapped = snapHunkToSelection({
+    content: FILE,
+    selectedLines: [9, 14],
+    hunk
+  });
+  assert.equal(snapped.search, BACKLOG_BLOCK);
+  assert.equal(
+    snapped.replace,
+    `    # Represents the default state for the backlog\n${BACKLOG_BLOCK}`
+  );
+  const applied = applyHunkToContent(FILE, snapped);
+  assert.equal(applied.ok, true);
+  if (applied.ok) {
+    const backlogHits = applied.content.split('"name": "Backlog"').length - 1;
+    assert.equal(backlogHits, 1);
+  }
+});
+
+test("REPLACE that pastes SEARCH twice becomes one JSDoc above the selection", () => {
+  const signature = "export function requireAuth(";
+  const selected = [
+    "export function requireAuth(",
+    "  auth: AuthContext | undefined,",
+    "  requireInProduction: boolean",
+    "): auth is AuthContext {"
+  ].join("\n");
+  const hunk = {
+    search: signature,
+    replace: [
+      signature,
+      "/** Returns true when auth is present or when production auth is not required. */",
+      signature
+    ].join("\n")
+  };
+  assert.equal(hunkExpandsSelection(hunk, selected), true);
+  const file = `${selected}\n  if (auth) {\n    return true;\n  }\n  return !requireInProduction;\n}`;
+  const snapped = snapHunkToSelection({
+    content: file,
+    selectedLines: [1, 4],
+    hunk
+  });
+  assert.equal(snapped.search, selected);
+  assert.equal(
+    snapped.replace,
+    `/** Returns true when auth is present or when production auth is not required. */\n${selected}`
+  );
+  const applied = applyHunkToContent(file, snapped);
+  assert.equal(applied.ok, true);
+  if (applied.ok) {
+    const hits = applied.content.split("export function requireAuth(").length - 1;
+    assert.equal(hits, 1);
+  }
 });
 
 test("snapHunkToSelection retargets from selectionText when the file cannot be read", () => {

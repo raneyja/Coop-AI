@@ -41,7 +41,7 @@ async function run(): Promise<void> {
     }
   };
 
-  await test("selectFocusCommit keeps introduction for line selections", () => {
+  await test("selectFocusCommit keeps introduction for line selections with no symbol ask", () => {
     const introduction = commit({
       sha: "aaaaaaa1",
       message: "Initial commit: Coop AI VS Code extension and tooling scaffold."
@@ -57,6 +57,33 @@ async function run(): Promise<void> {
       ]
     });
     assert.equal(focus.sha, introduction.sha);
+  });
+
+  await test("line selection with StateGroup ask does not keep a session-auth mega as aligned", () => {
+    const introduction = commit({
+      sha: "5933561",
+      message: [
+        "feat: session auth implementation (#4411)",
+        "",
+        "* chore: instance empty state for god-mode.",
+        "x".repeat(1600)
+      ].join("\n")
+    });
+    const aligned = commit({
+      sha: "state001",
+      message: "Refine StateGroup choices used by the state model workflow."
+    });
+    const meta = selectFocusCommitWithMeta({
+      lineRange: { start: 14, end: 20 },
+      introduction,
+      recentCommits: [aligned],
+      focusTerms: ["stategroup", "state", "group"],
+      symbolTerms: ["stategroup"],
+      filesChangedBySha: { "5933561": 87 }
+    });
+    assert.notEqual(meta.commit.sha, introduction.sha);
+    assert.equal(meta.commit.sha, aligned.sha);
+    assert.equal(meta.quality, "aligned");
   });
 
   await test("selectFocusCommit prefers high-signal recent commit for full-file traces", () => {

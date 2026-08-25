@@ -39,10 +39,10 @@ test("chat use case includes audience and output contract", () => {
 test("chat use case asks for right-sized dense answers that still finish", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("Be dense, not thin"));
-  assert.ok(prompt.includes("Do not pad, and do not strip substance just to look short"));
+  assert.ok(prompt.includes("Extra citations and 15+ peer bullets are fatigue, not density"));
   assert.ok(prompt.includes("Match depth to the ask"));
   assert.ok(prompt.includes("Finish the answer"));
-  assert.ok(prompt.includes("write as much as the ask needs"));
+  assert.ok(prompt.includes("one screen"));
   assert.ok(prompt.includes("Complete the last thought"));
   assert.ok(prompt.includes("only what the ask requires"));
 });
@@ -64,6 +64,17 @@ test("chat use case requires answer-style Your question and applyable edit patch
   assert.ok(prompt.includes("Multiple edits → multiple patch blocks"));
   assert.ok(prompt.includes("emit applyable patches"));
   assert.ok(prompt.includes("not literal `startLine:endLine:…` placeholders"));
+});
+
+test("chat open-file explain is a one-screen briefing, not a walkthrough dump", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("one screen"));
+  assert.ok(prompt.includes("25-bullet reviewer list"));
+  assert.ok(prompt.includes("at most **two** citation fences") || prompt.includes("≤2 citation fences"));
+  assert.equal(prompt.includes("a walkthrough can be thorough"), false);
+  const comprehension = systemPromptForUseCase("comprehension");
+  assert.ok(comprehension.includes("**Architecture**"));
+  assert.ok(comprehension.includes("**Key subsystems**"));
 });
 
 test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {

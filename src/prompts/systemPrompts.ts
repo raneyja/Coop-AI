@@ -23,8 +23,9 @@ export const OPERATING_CONTEXT = `
 - The user is a professional software engineer using CoopAI inside their code editor.
 - Assume strong technical fluency; skip basic explanations unless asked.
 - Favor concrete, actionable answers: real file paths, code, and specifics over generic advice.
-- Be dense, not thin: include the evidence a teammate needs to act, in as little prose as that takes. Do not pad, and do not strip substance just to look short.
+- Be dense, not thin: include the evidence a teammate needs to act, in as little prose as that takes. Do not pad. Extra citations and 15+ peer bullets are fatigue, not density.
 - Match depth to the ask. Cover what they asked; skip adjacent subsystems they did not ask about. If two sections would say the same thing, keep one.
+- Open-file explain / walk-through: a one-screen briefing. One citation of the named symbol, at most three reviewer bullets if they asked, then stop. Related files are backtick paths — not extra code cards.
 - Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
@@ -44,7 +45,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Repo code you are explaining or highlighting (not changing): use a **citation fence** (cite intent) — never a language-tagged fence.
   - Preferred: plain \`\`\` fence (no language tag); first body line is REAL integers + path, e.g. \`42:68:apps/api/plane/api/middleware/api_authentication.py\`; then only the relevant lines.
   - Also accepted: fence info-string \`\`\`42:68:path/to/file.py\` with the snippet as the body (no duplicate location line).
-  - Keep slices short (about 5–40 lines). Prefer one tight citation over pasting a whole function.
+  - Keep slices short (about 5–20 lines). Prefer one tight citation over pasting a whole function. For explain/walkthrough of the open file: at most **two** citation fences; name other files as backtick paths — do not paste their bodies.
   - Citation body must be copied **verbatim** from attached evidence / open-file content: same characters, indentation width, and call style. Do **not** reindent (2-space ↔ 4-space), rewrite, or invent a cleaner version.
   - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
@@ -62,7 +63,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
-- Complete sentences; prefer 4-8 topical sections over 15+ peer-level bullets. No fabricated URLs or paths.
+- Complete sentences. When the required structure below lists named sections, follow that list. Otherwise prefer 2–4 short sections — not 15+ peer-level bullets. No fabricated URLs or paths.
 - Spend output on new evidence, not restating **Answer** / **Your question** in later sections. Extra citations of the same snippet do not make the answer better.
 `;
 
@@ -334,21 +335,31 @@ ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when pr
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Answer**
-Direct 1-2 sentence answer first. When the user asked something specific, that ask is the answer — do not open with a generic overview that ignores it.
+2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll.
 
 **Your question**
-Include when the user asked something specific beyond a yes/no. Place immediately after **Answer**.
+Include when the user asked something specific beyond a yes/no **and** **Answer** did not already cover it. Place immediately after **Answer**.
 PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).
 FAIL: restating, paraphrasing, or truncating the user's question; repeating **Answer** with no added evidence; burying the ask under later sections.
-Omit only when **Answer** already fully covers a short yes/no or one-liner ask.
+Omit when **Answer** already fully covers the ask (typical for open-file explain).
 
-Then add focused topic sections as needed — only what the ask requires (how it works, where it lives, what to watch). Skip adjacent files and subsystems they did not ask about.
+**How it works** (open-file explain only)
+At most **one** citation fence — the named function or type in the open file. Then 3 bullets max.
 
-Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list, and not essay paragraphs that restate the bullets.
+**Reviewer checks** (only if they asked what to watch / what a reviewer would flag)
+Exactly **3** one-line bullets. No fourth. No 25-item audit.
+
+For open-file explain: then stop. Do not add extra sections, extra citations, or consumer file dumps.
+PASS: one screen; ≤2 citation fences total; consumers named as \`path\` backticks.
+FAIL: four code cards; a 25-bullet reviewer list; pasting jobsApi / samlApi / DEFAULT_STATES / i18n after the open-file citation.
+
+For other chat: add focused topic sections as needed — only what the ask requires. Skip adjacent files they did not ask about.
+
+Under each section: optional one-line lead, then bullets — not essay paragraphs that restate the bullets.
 
 For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.
 
-Depth: write as much as the ask needs (a walkthrough can be thorough) and no more. Cite only the line ranges that earn their place. Complete the last thought — never trail off mid-sentence.
+Depth: fit an open-file explain on **one screen** (~20 lines of prose, ≤2 citation fences). "Walk me through" means a tight briefing, not a dump of DEFAULT_STATES, i18n JSON, or every frontend consumer. Name extra files as \`path\` backticks. Complete the last thought — never trail off mid-sentence.
 
 ## Concrete file edits (when recommending code to apply)
 When you recommend changes the user should put into an open or attached file:
@@ -431,7 +442,7 @@ When the user message has no discernible question or task, ask a brief clarifyin
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
-When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
+When \`<repo_semantic_paths>\` is attached, those are related-path hits only — name them in backticks. Do not invent file bodies or paste guessed implementations.
 When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
 When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn. Never mention XML-like tag names (\`repo_inventory\`, \`repo_semantic_files\`, etc.) in the user-visible answer — say "indexed inventory" or "repository totals" in plain language.
 When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
@@ -853,6 +864,7 @@ export function buildUserMessageWithContext(
   const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const agentProposedPatch = extractAgentProposedPatch(context?.contextBundle);
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const repoSemanticPathHits = extractRepoSemanticPathHits(context?.contextBundle);
   const dualRepoCompare = extractDualRepoCompareEvidence(context?.contextBundle);
   const repoInventory = extractRepoInventory(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
@@ -871,6 +883,7 @@ export function buildUserMessageWithContext(
     projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
     repoSemanticSnippets.length === 0 &&
+    repoSemanticPathHits.length === 0 &&
     !dualRepoCompare &&
     !repoInventory &&
     agentFileSnippets.length === 0 &&
@@ -977,6 +990,16 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</repo_semantic_files>");
+  }
+  if (repoSemanticPathHits.length > 0 && !dualRepoCompare) {
+    lines.push("<repo_semantic_paths>");
+    lines.push(
+      "Related paths from search (no file bodies). Name them as backtick paths in the answer. Do not invent or paste their contents."
+    );
+    for (const path of repoSemanticPathHits) {
+      lines.push(`- ${path}`);
+    }
+    lines.push("</repo_semantic_paths>");
   }
   if (dualRepoCompare) {
     lines.push(...formatDualRepoCompareForLlm(dualRepoCompare));
@@ -1234,6 +1257,25 @@ function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
   return [];
 }
 
+function extractRepoSemanticPathHits(bundle: unknown): string[] {
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const hits = (
+      entry as { data?: { repoSemanticSearch?: { pathHits?: unknown } } }
+    ).data?.repoSemanticSearch?.pathHits;
+    if (!Array.isArray(hits)) {
+      continue;
+    }
+    return hits.filter((path): path is string => typeof path === "string" && path.trim().length > 0);
+  }
+  return [];
+}
+
 function extractRepoSemanticMeta(
   bundle: unknown
 ): { matchedPathCount?: number; attachmentCap?: number } | undefined {
@@ -1247,11 +1289,16 @@ function extractRepoSemanticMeta(
     const semantic = (
       entry as {
         data?: {
-          repoSemanticSearch?: { matchedPathCount?: number; attachmentCap?: number; files?: unknown[] };
+          repoSemanticSearch?: {
+            matchedPathCount?: number;
+            attachmentCap?: number;
+            files?: unknown[];
+            pathHits?: unknown[];
+          };
         };
       }
     ).data?.repoSemanticSearch;
-    if (semantic?.files?.length) {
+    if (semantic?.files?.length || semantic?.pathHits?.length) {
       return {
         matchedPathCount: semantic.matchedPathCount,
         attachmentCap: semantic.attachmentCap

@@ -20,13 +20,13 @@ const CONTEXT_CHIP_LINE =
   /^(?:file|repo|branch|selection):[^\n]+\n*/gim;
 
 export const CREATE_PR_CHAT_NEED_APPLY =
-  "I open pull requests for an /edit you Applied in this chat — not for text you typed in the file. Apply an /edit first, then say Create a PR.";
+  "I don't see editor changes or an Applied /edit in this chat. Edit a Use-repo file, or Apply an /edit, then say Create a PR.";
 
 export const CREATE_PR_CHAT_NEED_APPLY_PENDING =
-  "Apply the patch on the card above first. Then I can open a pull request for that change — not for text you typed in the file.";
+  "Apply the patch on the card above first. Then I can open a pull request.";
 
 export const CREATE_PR_CHAT_NEED_USE_REPO =
-  "Pick a Use-repo first. Then I can open a pull request for the change you applied.";
+  "Pick a Use-repo first. Then I can open a pull request for your changes.";
 
 export const CREATE_PR_CHAT_OPENED =
   "Review the branch, title, and notes, then create the pull request.";
@@ -106,6 +106,22 @@ export function mergeAppliedPrFiles(cards: readonly PatchCardState[]): CreatePrF
   return [...byPath.values()];
 }
 
+/** Oldest → newest applied, then editor buffers. Same path keeps the live editor body. */
+export function mergeCreatePrFiles(
+  applied: readonly CreatePrFile[],
+  editor: readonly CreatePrFile[] = []
+): CreatePrFile[] {
+  const byPath = new Map<string, CreatePrFile>();
+  for (const file of [...applied, ...editor]) {
+    const path = file.path.trim();
+    if (!path || !file.content.length) {
+      continue;
+    }
+    byPath.set(path, { path, content: file.content });
+  }
+  return [...byPath.values()];
+}
+
 /** All applied hunks in this thread, so PR notes cover every /edit. */
 export function mergeAppliedPrPreviewFiles(
   cards: readonly PatchCardState[]
@@ -134,22 +150,28 @@ export function resolveCreatePrChatRouting(options: {
   asked: boolean;
   hasUseRepo: boolean;
   cards: readonly PatchCardState[];
+  editorFiles?: readonly CreatePrFile[];
+  confirmTimestamp?: number;
 }): CreatePrChatRouting {
   if (!options.asked) {
     return { kind: "none" };
   }
-  const files = mergeAppliedPrFiles(options.cards);
+  const applied = mergeAppliedPrFiles(options.cards);
+  const files = mergeCreatePrFiles(applied, options.editorFiles ?? []);
   const eligible = latestEligibleCreatePrCard(options.cards);
-  if (eligible?.messageTimestamp !== undefined && files.length > 0) {
+  if (files.length > 0) {
     if (!options.hasUseRepo) {
       return { kind: "need-use-repo" };
     }
-    const appliedEditCount = options.cards.filter(isEligibleCreatePrCard).length;
+    const messageTimestamp = eligible?.messageTimestamp ?? options.confirmTimestamp;
+    if (messageTimestamp === undefined) {
+      return { kind: "need-apply" };
+    }
     return {
       kind: "open-confirm",
-      messageTimestamp: eligible.messageTimestamp,
+      messageTimestamp,
       files,
-      appliedEditCount
+      appliedEditCount: options.cards.filter(isEligibleCreatePrCard).length
     };
   }
   if (options.cards.some((card) => card.status === "pending")) {

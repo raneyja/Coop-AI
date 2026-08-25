@@ -86,6 +86,15 @@ function pageLooksLikeForeignProduct(haystack: string, activeRepo?: string): boo
   return false;
 }
 
+/** COOP-101 ADRs belong to Coop-AI, not plane. */
+function pageLooksLikeForeignTicket(haystack: string, activeRepo?: string): boolean {
+  const repo = activeRepo?.trim().toLowerCase() ?? "";
+  if (/coop/.test(repo)) {
+    return false;
+  }
+  return /\bcoop-\d+\b/i.test(haystack);
+}
+
 /**
  * Score a doc page for Use-repo relevance (+ optional focus terms).
  * Higher is better. Negative scores are foreign-product bleed.
@@ -106,6 +115,9 @@ export function scoreDocPageForUseRepo(
   }
 
   if (pageLooksLikeForeignProduct(haystack, options.repo)) {
+    score -= 40;
+  }
+  if (pageLooksLikeForeignTicket(haystack, options.repo)) {
     score -= 40;
   }
 

@@ -1,5 +1,6 @@
 import type { ChatIntentPlan } from "./intentPlanner/types";
 import { classifyRepoCodeIntent, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
+import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
 
 /**
  * Whether answering needs the repository's own code.
@@ -72,4 +73,15 @@ export function plannerAllowsAgentRepoLoop(
  */
 export function shouldSuppressSuggestChipsForAgentHunt(options: { query: string }): boolean {
   return isRepoInvestigationQuery(options.query);
+}
+
+/**
+ * Open-file "we're adding X this sprint" must use A10 grounding on the chip
+ * file. Agent locate hunts for the new token (blocked_by) and posts INDEX_HUNT_MISS.
+ */
+export function shouldSkipAgentHuntForOpenFileFeatureAdd(options: {
+  message: string;
+  openFile?: string;
+}): boolean {
+  return Boolean(options.openFile?.trim()) && isFeatureAddAsk(options.message);
 }

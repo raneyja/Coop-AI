@@ -49,10 +49,10 @@ If the App is on your org but Coop shows not connected, click **Connect (GitHub 
 - Webhook-driven repo indexing (push, PR events)
 - CODEOWNERS and blame for **Find Owner**
 - PR and commit history for **Trace Decision**
-- **Create pull request** from applied `/edit`s — patch card or **Create a PR** in chat
+- **Create pull request** from applied `/edit`s or any Use-repo editor change — patch card or **Create a PR** in chat
 - Symbol graph and dependency analysis (Deep-Index / Lightning Mode — all plans)
 
-To open a PR from VS Code after Apply, see [Create pull request](/docs/create-pull-request). Click **Create pull request** on the patch card, or type **Create a PR** in chat. It uses this GitHub connection.
+To open a PR from VS Code, see [Create pull request](/docs/create-pull-request). Click **Create pull request** on the patch card, or type **Create a PR** in chat after Apply or after editing a Use-repo file. It uses this GitHub connection.
 
 ## GitHub App vs OAuth
 

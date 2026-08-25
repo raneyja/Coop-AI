@@ -47,7 +47,7 @@ Admins with owner/admin role can also connect from **Extension UI â†’ Settings â
 
 | Tool | Coop features powered |
 | --- | --- |
-| **GitHub / GitLab / Bitbucket** | Repo indexing, PR history, CODEOWNERS, blame, [Create pull request](/docs/create-pull-request) from applied `/edit`s (patch card or **Create a PR** in chat) |
+| **GitHub / GitLab / Bitbucket** | Repo indexing, PR history, CODEOWNERS, blame, [Create pull request](/docs/create-pull-request) from applied `/edit`s or editor changes (patch card or **Create a PR** in chat) |
 | **Slack** | Trace Decision, Knowledge Gaps with thread context |
 | **Jira** | Ticket-linked decision archaeology |
 | **Confluence / Notion / Google Docs** | Documentation cross-reference in answers |

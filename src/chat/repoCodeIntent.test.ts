@@ -18,6 +18,11 @@ const CASES: Case[] = [
   { q: "Do we have a retry helper in this codebase?", expect: "locate" },
   { q: "Find all usages of verifyToken", expect: "locate" },
   { q: "Where does the webhook handler live?", expect: "locate" },
+  {
+    q: "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?",
+    expect: "locate"
+  },
+  { q: "What in this repo still owns requireAuth?", expect: "locate" },
 
   // Understand — the user wants an explanation grounded in repo code.
   { q: "What happens when a user signs in?", expect: "understand" },

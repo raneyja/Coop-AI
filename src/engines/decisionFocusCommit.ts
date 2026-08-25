@@ -127,7 +127,8 @@ export function rerankTraceFocusCandidates(options: {
 
 /**
  * Full-file traces prefer a commit aligned with the open file + user ask when possible.
- * Line selections keep the blame introduction as the focus.
+ * Line selections keep blame only when the ask names no symbol; otherwise
+ * mega/unrelated blame is demoted the same way as full-file traces.
  *
  * Z3 Gate A PASS: auth mega-PR body must not align via "empty state" — subject + symbol only.
  */
@@ -151,17 +152,24 @@ export function selectFocusCommitWithMeta(options: {
   filesChangedBySha?: Record<string, number | undefined>;
 }): SelectFocusCommitResult {
   if (options.lineRange) {
-    const score = scoreCommit(
-      options.introduction,
-      options.focusTerms ?? [],
-      options.symbolTerms ?? []
-    );
-    return {
-      commit: options.introduction,
-      quality: "aligned",
-      score,
-      isMegaDriveBy: false
-    };
+    const focusTerms = options.focusTerms ?? [];
+    const symbolTerms = options.symbolTerms ?? [];
+    if (focusTerms.length === 0 && symbolTerms.length === 0) {
+      const score = scoreCommit(options.introduction, focusTerms, symbolTerms);
+      return {
+        commit: options.introduction,
+        quality: "aligned",
+        score,
+        isMegaDriveBy: false
+      };
+    }
+    return rerankTraceFocusCandidates({
+      introduction: options.introduction,
+      candidates: options.recentCommits,
+      focusTerms,
+      symbolTerms,
+      filesChangedBySha: options.filesChangedBySha
+    });
   }
 
   return rerankTraceFocusCandidates({

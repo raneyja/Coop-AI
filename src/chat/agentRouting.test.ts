@@ -3,6 +3,7 @@ import {
   isRepoInvestigationQuery,
   plannerAllowsAgentRepoLoop,
   shouldRunAgentToolLoop,
+  shouldSkipAgentHuntForOpenFileFeatureAdd,
   shouldSuppressSuggestChipsForAgentHunt
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
@@ -186,6 +187,50 @@ test("suggest-chips leftover plan blocks the loop; none plan after Just answer a
 test("isRepoInvestigationQuery requires length and hunt language", () => {
   assert.equal(isRepoInvestigationQuery("ok"), false);
   assert.equal(isRepoInvestigationQuery("Where is the session token validated across the codebase?"), true);
+});
+
+test("open-file feature-add skips the agent hunt so A10 can read the chip file", () => {
+  const ask =
+    "We're adding a blocked_by issue link type this sprint. Where should validation live, and which existing link types in this mapper should I mirror so we don't fork a second relation model?";
+  assert.equal(
+    shouldSkipAgentHuntForOpenFileFeatureAdd({
+      message: ask,
+      openFile: "apps/api/plane/utils/issue_relation_mapper.py"
+    }),
+    true
+  );
+  assert.equal(
+    shouldSkipAgentHuntForOpenFileFeatureAdd({ message: ask, openFile: undefined }),
+    false
+  );
+  assert.equal(
+    shouldSkipAgentHuntForOpenFileFeatureAdd({
+      message: "Where is APIKeyAuthentication defined in this repo?",
+      openFile: "apps/api/plane/utils/issue_relation_mapper.py"
+    }),
+    false
+  );
+});
+
+test("ticket pickup with requireAuth and Jira still runs the hunt (3b)", () => {
+  const query =
+    "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["jira"],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    true
+  );
 });
 
 console.log(`\nagentRouting: ${passed}/${passed + failed} tests passed`);

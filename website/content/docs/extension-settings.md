@@ -191,4 +191,4 @@ Enterprise customers should keep dev mode **off** in workspace settings.
 | **CoopAI: Understand Repo** | Run Understand Repo — requires **Use repo** first (blocked if a file chip is active) |
 | **CoopAI: Trace Decision** | Run Trace Decision (file required) |
 
-See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. After `/edit` Apply, see [Create pull request](/docs/create-pull-request) (patch card or **Create a PR** in chat). For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).
+See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. After `/edit` Apply or any Use-repo editor change, see [Create pull request](/docs/create-pull-request) (patch card or **Create a PR** in chat). For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).

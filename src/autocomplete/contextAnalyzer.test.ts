@@ -82,6 +82,15 @@ test("isFileEligible accepts typescript source files", () => {
   assert.equal(isFileEligible(doc as never), true);
 });
 
+test("isFileEligible accepts github VFS remote buffers", () => {
+  const doc = createMockDocument("class StateGroup:\n    pass\n", {
+    path: "/github/coop-ai/plane/apps/api/plane/db/models/state.py",
+    languageId: "python",
+    scheme: "vscode-vfs"
+  });
+  assert.equal(isFileEligible(doc as never), true);
+});
+
 test("wantsMultiLineCompletion after opening brace", () => {
   const doc = createMockDocument("function run() {");
   const context = analyzeDocumentContext(doc as never, new vscode.Position(0, doc.getText().length));

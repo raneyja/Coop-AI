@@ -350,6 +350,25 @@ async function runAsyncTests(): Promise<void> {
     const data = merged.data as { repoSemanticSearch?: { files: Array<{ path: string }> } };
     assert.equal(data.repoSemanticSearch?.files[0]?.path, "src/auth.ts");
   });
+
+  await asyncTest("mergeRepoSemanticContext keeps pathHits when no extra bodies", async () => {
+    const semantic = {
+      source: "repo-semantic-search" as const,
+      query: "Explain requireAuth in this file",
+      files: [] as Array<{ path: string; repoId: string; content: string }>,
+      pathHits: ["src/jobs/jobsApi.ts", "src/server/sse/samlApi.ts"]
+    };
+    const merged = mergeRepoSemanticContext(
+      { requestId: "r1", type: "chat_context", fetchedAt: new Date(), data: { context: {} } },
+      semantic
+    );
+    const data = merged.data as { repoSemanticSearch?: { pathHits?: string[]; files: unknown[] } };
+    assert.deepEqual(data.repoSemanticSearch?.pathHits, [
+      "src/jobs/jobsApi.ts",
+      "src/server/sse/samlApi.ts"
+    ]);
+    assert.equal(data.repoSemanticSearch?.files.length, 0);
+  });
 }
 
 void runAsyncTests().then(() => {

@@ -12,6 +12,7 @@ import {
   latestEligibleCreatePrCard,
   mergeAppliedPrFiles,
   mergeAppliedPrPreviewFiles,
+  mergeCreatePrFiles,
   resolveCreatePrChatRouting
 } from "./createPrChatRouting";
 
@@ -240,7 +241,7 @@ test("resolveCreatePrChatRouting asks to Apply when a patch is still pending", (
   assert.equal(createPrChatReply(routing), CREATE_PR_CHAT_NEED_APPLY_PENDING);
 });
 
-test("resolveCreatePrChatRouting asks for /edit when this thread has no applied work", () => {
+test("resolveCreatePrChatRouting asks for changes when this thread has no applied work", () => {
   const routing = resolveCreatePrChatRouting({
     asked: true,
     hasUseRepo: true,
@@ -248,6 +249,66 @@ test("resolveCreatePrChatRouting asks for /edit when this thread has no applied 
   });
   assert.equal(routing.kind, "need-apply");
   assert.equal(createPrChatReply(routing), CREATE_PR_CHAT_NEED_APPLY);
+});
+
+test("resolveCreatePrChatRouting opens confirm for editor files without an Apply", () => {
+  const routing = resolveCreatePrChatRouting({
+    asked: true,
+    hasUseRepo: true,
+    cards: [],
+    editorFiles: [{ path: "src/a.ts", content: "typed\n" }],
+    confirmTimestamp: 99
+  });
+  assert.equal(routing.kind, "open-confirm");
+  if (routing.kind === "open-confirm") {
+    assert.equal(routing.messageTimestamp, 99);
+    assert.equal(routing.appliedEditCount, 0);
+    assert.deepEqual(routing.files, [{ path: "src/a.ts", content: "typed\n" }]);
+  }
+  assert.equal(createPrChatReply(routing), CREATE_PR_CHAT_OPENED);
+});
+
+test("resolveCreatePrChatRouting prefers live editor body over Applied prFiles", () => {
+  const routing = resolveCreatePrChatRouting({
+    asked: true,
+    hasUseRepo: true,
+    cards: [
+      card({
+        status: "applied",
+        messageTimestamp: 22,
+        prFiles: [{ path: "src/a.ts", content: "from-apply\n" }]
+      })
+    ],
+    editorFiles: [{ path: "src/a.ts", content: "typed-after\n" }]
+  });
+  assert.equal(routing.kind, "open-confirm");
+  if (routing.kind === "open-confirm") {
+    assert.deepEqual(routing.files, [{ path: "src/a.ts", content: "typed-after\n" }]);
+  }
+});
+
+test("resolveCreatePrChatRouting opens confirm when pending /edit and editor files exist", () => {
+  const routing = resolveCreatePrChatRouting({
+    asked: true,
+    hasUseRepo: true,
+    cards: [card({ status: "pending", messageTimestamp: 8 })],
+    editorFiles: [{ path: "src/a.ts", content: "typed\n" }],
+    confirmTimestamp: 50
+  });
+  assert.equal(routing.kind, "open-confirm");
+  if (routing.kind === "open-confirm") {
+    assert.equal(routing.messageTimestamp, 50);
+  }
+});
+
+test("mergeCreatePrFiles lets editor files win", () => {
+  assert.deepEqual(
+    mergeCreatePrFiles(
+      [{ path: "src/a.ts", content: "applied\n" }],
+      [{ path: "src/a.ts", content: "editor\n" }]
+    ),
+    [{ path: "src/a.ts", content: "editor\n" }]
+  );
 });
 
 test("resolveCreatePrChatRouting requires Use-repo before opening confirm", () => {
