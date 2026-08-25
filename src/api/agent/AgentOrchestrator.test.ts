@@ -767,6 +767,71 @@ async function run(): Promise<void> {
     assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
   });
 
+  await test("planTurn startLine:1 still reads the class, not only the copyright line", async () => {
+    const body = [
+      "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+      ...Array.from({ length: 15 }, (_, i) => `# filler ${i + 2}`),
+      "class APIKeyAuthentication:",
+      "    def authenticate(self, request):",
+      "        return True"
+    ].join("\n");
+    const authPath = "apps/api/plane/api/middleware/api_authentication.py";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "scip",
+          stale: false,
+          hits: [
+            {
+              fileName: authPath,
+              lineNumber: 1,
+              content: "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+              score: 1
+            }
+          ],
+          symbols: [
+            {
+              symbol: "APIKeyAuthentication",
+              kind: "class",
+              file: authPath,
+              line: 17,
+              character: 0,
+              displayName: "APIKeyAuthentication"
+            }
+          ]
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => ({ path: rel, content: body })
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: "Where is APIKeyAuthentication defined, and what requests does it actually authenticate?",
+        repoId: "coop-ai/plane"
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "APIKeyAuthentication" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: authPath, startLine: 1, endLine: 1 }
+            });
+          }
+          return JSON.stringify({ done: true });
+        }
+      }
+    );
+    const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
+    const content = readFile?.files?.[0]?.content ?? "";
+    assert.match(content, /class APIKeyAuthentication:/);
+    assert.equal(content.trim() === "1|# Copyright (c) 2023-present Plane Software, Inc. and contributors", false);
+  });
+
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);

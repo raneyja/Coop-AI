@@ -300,6 +300,7 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
+import { enclosingDefinitionRange } from "../context/enclosingDefinitionRange";
 import {
   isUserClearedEditorSelection,
   resolveStickySelectedLines,
@@ -915,11 +916,20 @@ export class CoopChatSession {
       userClearedSelection || !this.currentContext.file?.trim()
         ? undefined
         : this.liveSelectedLinesFromOpenEditors(this.currentContext.file);
-    const live = userClearedSelection
+    let live = userClearedSelection
       ? undefined
       : liveFromOpenTabs ??
         selectedLinesFromEditorSelection(eventEditor?.selection) ??
         selectedLinesFromEditorSelection(resolvedEditor?.selection);
+    if (!live && userClearedSelection) {
+      const caretEditor = eventEditor ?? resolvedEditor;
+      if (caretEditor && !caretEditor.document.isClosed) {
+        live = enclosingDefinitionRange(
+          caretEditor.document.getText(),
+          caretEditor.selection.active.line + 1
+        );
+      }
+    }
     const liveFile =
       (eventEditor && resolveEditorFile(eventEditor).file) ||
       (resolvedEditor && resolveEditorFile(resolvedEditor).file) ||

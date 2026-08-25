@@ -26,6 +26,24 @@ function ctx(content: string): AgentToolContext {
 }
 
 async function main(): Promise<void> {
+  await test("startLine-only does not return just the copyright line", async () => {
+    const body = [
+      "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+      ...Array.from({ length: 15 }, (_, i) => `# line ${i + 2}`),
+      "class APIKeyAuthentication:",
+      "    def authenticate(self, request):",
+      "        return True"
+    ].join("\n");
+    const raw = await handleReadFile(ctx(body), {
+      path: "apps/api/plane/api/middleware/api_authentication.py",
+      startLine: 1
+    });
+    const parsed = JSON.parse(raw) as { files: Array<{ content: string }> };
+    const content = parsed.files[0]?.content ?? "";
+    assert.match(content, /class APIKeyAuthentication:/);
+    assert.equal(content.split("\n").length > 1, true);
+  });
+
   await test("read_file prefixes the real file line numbers", async () => {
     const body = Array.from({ length: 140 }, (_, i) =>
       i === 131 ? "export function requireAuth() {" : `// line ${i + 1}`

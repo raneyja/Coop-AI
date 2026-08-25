@@ -94,6 +94,46 @@ function readLineWindow(lineNumber: number): { startLine: number; endLine: numbe
   };
 }
 
+function normalizeHuntPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "").toLowerCase();
+}
+
+function sameHuntPath(left: string, right: string): boolean {
+  const a = normalizeHuntPath(left);
+  const b = normalizeHuntPath(right);
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+function preferredLineForPath(
+  search: Record<string, unknown> | undefined,
+  path: string
+): number {
+  if (!path.trim() || !search) {
+    return 0;
+  }
+  const preferred = Array.isArray(search.preferredHits)
+    ? (search.preferredHits as SearchHit[])
+    : [];
+  for (const hit of preferred) {
+    if (sameHuntPath(hit.fileName, path) && Number.isInteger(hit.lineNumber) && hit.lineNumber >= 1) {
+      return hit.lineNumber;
+    }
+  }
+  const symbols = Array.isArray(search.symbols) ? (search.symbols as SymbolHit[]) : [];
+  for (const symbol of symbols) {
+    if (sameHuntPath(symbol.file, path) && Number.isInteger(symbol.line) && symbol.line >= 1) {
+      return symbol.line;
+    }
+  }
+  const hits = Array.isArray(search.hits) ? (search.hits as SearchHit[]) : [];
+  for (const hit of hits) {
+    if (sameHuntPath(hit.fileName, path) && Number.isInteger(hit.lineNumber) && hit.lineNumber >= 1) {
+      return hit.lineNumber;
+    }
+  }
+  return 0;
+}
+
 export type AgentRunOptions = {
   onStep?: (step: AgentStep, steps: AgentStep[]) => void;
   /** When set, the same model conversation chooses tools. Missing/invalid first plan → deterministic fallback. */
@@ -347,6 +387,9 @@ export class AgentOrchestrator {
       }
 
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query);
+      if (plan.tool === "read_file") {
+        this.applyPreferredReadWindow(args, context);
+      }
       let rawResult: string;
       try {
         rawResult = await this.executeTool(plan.tool, args);
@@ -355,7 +398,14 @@ export class AgentOrchestrator {
       }
 
       if (plan.tool === "read_file") {
-        const judged = this.judgeReadResult(rawResult, query, args);
+        let judged = this.judgeReadResult(rawResult, query, args);
+        if (!judged.matchesSymbol) {
+          const retried = await this.retryReadWithoutWindow(args, repoId, query);
+          if (retried) {
+            judged = retried;
+            rawResult = retried.raw;
+          }
+        }
         rawResult = judged.raw;
         if (judged.matchesSymbol) {
           matchingRead = true;
@@ -817,6 +867,42 @@ export class AgentOrchestrator {
       };
     }
     return undefined;
+  }
+
+  /**
+   * The model often asks for startLine:1 (copyright). If search already found
+   * the declaration, window around that line instead.
+   */
+  private applyPreferredReadWindow(
+    args: Record<string, unknown>,
+    context: AgentSessionContext
+  ): void {
+    const path = typeof args.path === "string" ? args.path : "";
+    const line = preferredLineForPath(context.search_code, path);
+    if (line < 1) {
+      return;
+    }
+    const window = readLineWindow(line);
+    args.startLine = window.startLine;
+    args.endLine = window.endLine;
+  }
+
+  private async retryReadWithoutWindow(
+    args: Record<string, unknown>,
+    repoId: string,
+    query: string
+  ): Promise<{ raw: string; matchesSymbol: boolean } | undefined> {
+    const path = typeof args.path === "string" ? args.path : "";
+    if (!path.trim()) {
+      return undefined;
+    }
+    try {
+      const raw = await this.executeTool("read_file", { path, repoId });
+      const judged = this.judgeReadResult(raw, query, { path, repoId });
+      return judged.matchesSymbol ? judged : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private prepareToolArgs(
