@@ -1,15 +1,37 @@
 {
   "name": "coop-ai",
   "displayName": "CoopAI",
-  "description": "Zero-clone code intelligence sidebar for VS Code",
+  "description": "Code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets.",
   "version": "0.1.0",
   "publisher": "coop-ai",
   "license": "MIT",
+  "icon": "media/coop-icon.png",
+  "galleryBanner": {
+    "color": "#14171f",
+    "theme": "dark"
+  },
+  "homepage": "https://coop-ai.dev",
+  "bugs": {
+    "url": "https://coop-ai.dev/docs/troubleshooting",
+    "email": "support@coop-ai.dev"
+  },
+  "qna": "https://coop-ai.dev/docs/faq",
+  "keywords": [
+    "ai",
+    "chat",
+    "code intelligence",
+    "autocomplete",
+    "slack",
+    "jira",
+    "github"
+  ],
   "engines": {
     "vscode": "^1.92.0"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Chat",
+    "Machine Learning"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -819,7 +841,7 @@
     "watch:webview:css": "tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --watch",
     "watch:webview:js": "esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --external:node:fs --external:node:path --watch",
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json",
-    "package": "npm run build:extension && npm run build:webview && npx --yes @vscode/vsce package --allow-missing-repository --skip-license --out coop-ai.vsix",
+    "package": "npm run build:extension && npm run build:webview && npx --yes @vscode/vsce package --allow-missing-repository --out coop-ai.vsix",
     "test:patch": "npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/edit/patchTarget.test.ts && npx tsx src/edit/editorWorkingCopy.test.ts && npx tsx src/edit/patchFileContents.test.ts && npx tsx src/edit/handlePatchComplete.test.ts && npx tsx src/edit/hydratePatchCardsFromHistory.test.ts && npx tsx src/edit/snapPatchToSelection.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts && npx tsx src/webview/lib/patchStreamDisplay.test.ts",
     "test:agent-routing": "npx tsx src/chat/agentRouting.test.ts && npx tsx src/chat/editSendRouting.test.ts && npx tsx src/chat/createPrChatRouting.test.ts && npx tsx src/chat/editAskKind.test.ts && npx tsx src/chat/quickActionSuggestIntent.test.ts && npx tsx src/chat/quickActionIntentModel.test.ts && npx tsx src/prompts/mentionScope.test.ts",
     "test:agent-ship:a": "npx tsx src/api/agent/phaseA.gates.test.ts && npx tsx src/api/agent/phaseA.pressure.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/dataSanitization.test.ts && npx tsx src/api/agent/searchQuery.test.ts && npx tsx src/indexing/graphSearchHit.test.ts && npx tsx src/webview/agentActivity.test.ts && npx tsx src/api/agent/honesty.gates.test.ts && npx tsx src/api/agent/noRepoSpecificRules.test.ts && npx tsx src/chat/repoCodeIntent.test.ts && npx tsx src/chat/agentProposedPatch.test.ts && npx tsx src/api/agent/tools/proposePatch.test.ts && npx tsx src/api/agent/tools/readFile.test.ts && npx tsx src/api/agent/eval/huntEval.test.ts && npx tsx src/api/agent/eval/agentScopeEval.test.ts && npx tsx src/api/agent/join.gates.test.ts && npx tsx src/api/agent/integrationMidLoop.test.ts && npx tsx src/api/agent/enterprise.scorecard.test.ts",

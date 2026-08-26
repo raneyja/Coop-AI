@@ -300,7 +300,7 @@ import {
   repoContextForRepoSelect
 } from "../context/contextScope";
 import { mergeRepoContext, stripStaleContextWarning } from "../context/repoContextMerge";
-import { enclosingDefinitionRange } from "../context/enclosingDefinitionRange";
+import { resolveEditTargetLines } from "../context/enclosingDefinitionRange";
 import {
   isUserClearedEditorSelection,
   resolveStickySelectedLines,
@@ -902,6 +902,8 @@ export class CoopChatSession {
    * Record the live highlight immediately. Clicking Chat collapses the caret
    * before the 1s selection debounce fires — that must not drop L56–61.
    * A mouse/keyboard unhighlight in the editor must clear the chip.
+   * Click inside a function (empty caret) becomes that function’s range —
+   * leftover DEFAULT_STATES L38–43 must not survive a click in get_queryset.
    */
   private stampLiveEditorSelection(
     eventEditor: vscode.TextEditor | undefined,
@@ -916,29 +918,28 @@ export class CoopChatSession {
       userClearedSelection || !this.currentContext.file?.trim()
         ? undefined
         : this.liveSelectedLinesFromOpenEditors(this.currentContext.file);
-    let live = userClearedSelection
+    const dragLines = userClearedSelection
       ? undefined
       : liveFromOpenTabs ??
         selectedLinesFromEditorSelection(eventEditor?.selection) ??
         selectedLinesFromEditorSelection(resolvedEditor?.selection);
-    if (!live && userClearedSelection) {
-      const caretEditor = eventEditor ?? resolvedEditor;
-      if (caretEditor && !caretEditor.document.isClosed) {
-        live = enclosingDefinitionRange(
-          caretEditor.document.getText(),
-          caretEditor.selection.active.line + 1
-        );
-      }
-    }
+    const caretEditor = eventEditor ?? resolvedEditor;
     const liveFile =
       (eventEditor && resolveEditorFile(eventEditor).file) ||
       (resolvedEditor && resolveEditorFile(resolvedEditor).file) ||
       this.currentContext.file;
-    const nextLines = resolveStickySelectedLines({
-      existingFile: this.currentContext.file,
-      existingLines: this.currentContext.selectedLines,
-      incomingFile: liveFile,
-      incomingLines: live,
+    const nextLines = resolveEditTargetLines({
+      dragLines,
+      fileContent:
+        caretEditor && !caretEditor.document.isClosed ? caretEditor.document.getText() : undefined,
+      caretLine: caretEditor ? caretEditor.selection.active.line + 1 : undefined,
+      stickyLines: resolveStickySelectedLines({
+        existingFile: this.currentContext.file,
+        existingLines: this.currentContext.selectedLines,
+        incomingFile: liveFile,
+        incomingLines: dragLines,
+        userClearedSelection: false
+      }),
       userClearedSelection
     });
     if (selectedLineRangesEqual(nextLines, this.currentContext.selectedLines)) {
@@ -9539,14 +9540,15 @@ export class CoopChatSession {
     const liveLines =
       selectedLinesFromEditorSelection(editor.selection) ??
       this.liveSelectedLinesFromOpenEditors(this.currentContext.file);
+    const nextLines = resolveEditTargetLines({
+      dragLines: liveLines,
+      fileContent: editor.document.isClosed ? undefined : editor.document.getText(),
+      caretLine: editor.selection.active.line + 1,
+      stickyLines: this.currentContext.selectedLines
+    });
     this.currentContext = {
       ...this.currentContext,
-      selectedLines: resolveStickySelectedLines({
-        existingFile: this.currentContext.file,
-        existingLines: this.currentContext.selectedLines,
-        incomingFile: this.currentContext.file,
-        incomingLines: liveLines
-      })
+      selectedLines: nextLines
     };
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     if (

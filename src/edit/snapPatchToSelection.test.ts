@@ -294,6 +294,64 @@ test("comment-only snap rejects a constructor rewrite onto the highlight", () =>
   assert.equal(snapped, undefined);
 });
 
+const PLANE_STATE_PY = [
+  "DEFAULT_STATES = [",
+  "    {",
+  '        "name": "In Progress",',
+  '        "color": "#F59E0B",',
+  "        \"sequence\": 35000,",
+  "        \"group\": StateGroup.STARTED.value,",
+  "    },",
+  "]",
+  "",
+  "class StateManager(SoftDeletionManager):",
+  '    """Default manager"""',
+  "",
+  "    def get_queryset(self):",
+  "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)"
+].join("\n");
+
+const IN_PROGRESS_DICT = [
+  "    {",
+  '        "name": "In Progress",',
+  '        "color": "#F59E0B",',
+  "        \"sequence\": 35000,",
+  "        \"group\": StateGroup.STARTED.value,",
+  "    },"
+].join("\n");
+
+test("comment-only DEFAULT_STATES duplicate retargets onto get_queryset once", () => {
+  const queryset = [
+    "    def get_queryset(self):",
+    "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)"
+  ].join("\n");
+  const hunk = {
+    search: IN_PROGRESS_DICT,
+    replace: [
+      IN_PROGRESS_DICT,
+      "    # Represents the state of an item that is currently in progress.",
+      IN_PROGRESS_DICT
+    ].join("\n")
+  };
+  const snapped = snapHunkToSelection({
+    content: PLANE_STATE_PY,
+    selectedLines: [13, 14],
+    commentOnly: true,
+    hunk
+  });
+  assert.equal(snapped?.search, queryset);
+  assert.equal(
+    snapped?.replace,
+    "    # Represents the state of an item that is currently in progress.\n" + queryset
+  );
+  const applied = applyHunkToContent(PLANE_STATE_PY, snapped!);
+  assert.equal(applied.ok, true);
+  if (applied.ok) {
+    assert.equal(applied.content.split('"name": "In Progress"').length - 1, 1);
+    assert.ok(applied.content.includes("# Represents the state of an item that is currently in progress.\n    def get_queryset"));
+  }
+});
+
 const total = passed + failed;
 console.log(`\nsnapPatchToSelection: ${passed}/${total} tests passed`);
 if (failed > 0) {

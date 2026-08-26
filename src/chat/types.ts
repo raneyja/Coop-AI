@@ -195,6 +195,12 @@ export type PatchPreviewHunk = {
   resolvedMatchIndices?: number[];
   /** Per-edit review state — defaults to pending when omitted. */
   status?: PatchPreviewHunkStatus;
+  /** Class.method (or function) that contains this edit. */
+  anchorLabel?: string;
+  /** 1-based SEARCH start in the file. */
+  startLine?: number;
+  /** 1-based SEARCH end (inclusive). */
+  endLine?: number;
 };
 
 export type PatchPreviewFile = {

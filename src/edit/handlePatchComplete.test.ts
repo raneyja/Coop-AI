@@ -369,6 +369,63 @@ async function main(): Promise<void> {
     clearRemotePatchBuffersForTests();
   });
 
+  await test("comment-only In Progress duplicate snaps onto get_queryset, not DEFAULT_STATES", async () => {
+    const fileBody = [
+      "DEFAULT_STATES = [",
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },",
+      "]",
+      "",
+      "class StateManager(SoftDeletionManager):",
+      '    """Default manager"""',
+      "",
+      "    def get_queryset(self):",
+      "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)"
+    ].join("\n");
+    const dict = [
+      "    {",
+      '        "name": "In Progress",',
+      '        "color": "#F59E0B",',
+      "        \"sequence\": 35000,",
+      "        \"group\": StateGroup.STARTED.value,",
+      "    },"
+    ].join("\n");
+    const content = [
+      "File: `apps/api/plane/db/models/state.py`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      dict,
+      "=======",
+      dict,
+      "    # Represents the state of an item that is currently in progress.",
+      dict,
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 1013,
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [13, 14],
+      fileContents: { "apps/api/plane/db/models/state.py": fileBody },
+      commentOnly: true,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
+    assert.ok(joined.includes("def get_queryset"));
+    assert.equal(joined.split('"name": "In Progress"').length - 1, 0);
+    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+      .filter((line) => line.kind === "add")
+      .map((line) => line.text)
+      .join("\n");
+    assert.equal(addText.split("def get_queryset").length - 1, 1);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

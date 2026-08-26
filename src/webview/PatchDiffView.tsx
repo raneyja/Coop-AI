@@ -8,6 +8,7 @@ import type {
   PatchSharedMatchLocation
 } from "../chat/types";
 import { IntegrationResultNested, IntegrationResultText } from "./components/IntegrationResultCard";
+import { formatFileLocation, formatHunkLocation } from "./patchLocationLabel";
 
 type PatchDiffViewProps = {
   files: PatchPreviewFile[];
@@ -74,11 +75,15 @@ function PatchFileDiff({
 }): React.ReactElement {
   const sharedHunkIds = hunkIdsInSharedGroups(file);
   const standaloneHunks = file.hunks.filter((hunk) => !sharedHunkIds.has(hunk.id));
+  const fileLocation = formatFileLocation(file);
 
   return (
     <div className="coop-patch-file">
       <div className="coop-patch-file-header">
-        <span className="coop-patch-file-path">{file.relativePath}</span>
+        <div className="coop-patch-file-heading">
+          <span className="coop-patch-file-path">{file.relativePath}</span>
+          {fileLocation ? <span className="coop-patch-file-anchor">{fileLocation}</span> : null}
+        </div>
         {onOpenFile ? (
           <button type="button" className="coop-text-btn" onClick={() => onOpenFile(file.relativePath)}>
             Open file
@@ -99,6 +104,7 @@ function PatchFileDiff({
           <PatchHunkDiff
             key={hunk.id}
             hunk={hunk}
+            hideWhere={Boolean(fileLocation)}
             onApplyHunk={onApplyHunk}
             onRejectHunk={onRejectHunk}
             onToggleMatchLocation={onToggleMatchLocation}
@@ -115,11 +121,13 @@ function selectedLocationCount(hunk: PatchPreviewHunk): number {
 
 function PatchHunkDiff({
   hunk,
+  hideWhere,
   onApplyHunk,
   onRejectHunk,
   onToggleMatchLocation
 }: {
   hunk: PatchPreviewHunk;
+  hideWhere?: boolean;
   onApplyHunk?: (hunkId: string) => void;
   onRejectHunk?: (hunkId: string) => void;
   onToggleMatchLocation?: (hunkId: string, locationId: string, selected: boolean) => void;
@@ -132,9 +140,16 @@ function PatchHunkDiff({
     hunk.matchStatus === "matched" ||
     Boolean(hunk.resolvedMatchIndices?.length) ||
     (isAmbiguous && selectedCount > 0);
+  const where = hideWhere ? undefined : formatHunkLocation(hunk);
 
   return (
     <div className={`coop-patch-hunk${status !== "pending" ? ` coop-patch-hunk--${status}` : ""}`}>
+      {where ? (
+        <div className="coop-patch-hunk-where">
+          {where}
+          {status === "applied" ? " · applied" : status === "rejected" ? " · rejected" : ""}
+        </div>
+      ) : null}
       {hunk.matchStatus === "not_found" ? (
         <IntegrationResultText muted>
           SEARCH block not found — review before applying.
@@ -146,10 +161,10 @@ function PatchHunkDiff({
           {selectedCount > 0 ? ` (${selectedCount} selected)` : ""}
         </IntegrationResultText>
       ) : null}
-      {status === "applied" ? (
+      {status === "applied" && !where ? (
         <IntegrationResultText muted>Applied</IntegrationResultText>
       ) : null}
-      {status === "rejected" ? (
+      {status === "rejected" && !where ? (
         <IntegrationResultText muted>Rejected</IntegrationResultText>
       ) : null}
 

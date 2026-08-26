@@ -5,6 +5,7 @@ import {
   showCreatePullRequestButton
 } from "./PatchCard";
 import type { PatchCardState } from "../chat/types";
+import { formatPatchLandingCopy } from "./patchLocationLabel";
 
 let passed = 0;
 let failed = 0;
@@ -123,6 +124,32 @@ test("B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr", () => {
       prFiles: [{ path: "src/example.ts", content: "new\n" }]
     }),
     true
+  );
+});
+
+test("landing copy names the class.method and file", () => {
+  const files: PatchCardState["files"] = [
+    {
+      relativePath: "apps/api/plane/db/models/state.py",
+      hunks: [
+        {
+          id: "h1",
+          matchStatus: "matched",
+          lines: [],
+          anchorLabel: "StateManager.get_queryset",
+          startLine: 69,
+          endLine: 70
+        }
+      ]
+    }
+  ];
+  assert.equal(
+    formatPatchLandingCopy(files, "pending"),
+    "Lands in StateManager.get_queryset · L69–70 · state.py."
+  );
+  assert.equal(
+    formatPatchLandingCopy(files, "applied"),
+    "Landed in StateManager.get_queryset · L69–70 · state.py."
   );
 });
 

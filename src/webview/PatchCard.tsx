@@ -19,6 +19,7 @@ import {
   type CreatePullRequestDraft,
   type CreatePullRequestFile
 } from "./createPullRequestConfirm";
+import { formatPatchLandingCopy } from "./patchLocationLabel";
 
 type PatchCardProps = {
   state: PatchCardState;
@@ -213,18 +214,20 @@ export function PatchCard({
             ? "warning"
             : "default";
 
+  const landingCopy = formatPatchLandingCopy(state.files, state.status);
   const reviewCopy =
-    state.status === "applied"
-      ? "Changes are in your workspace. Create a pull request, or Undo to restore Apply / Reject."
+    landingCopy ??
+    (state.status === "applied"
+      ? "In your workspace. Undo if this is the wrong spot."
       : state.status === "rejected"
-        ? "Rejected patches stay in this thread. Undo returns Apply / Reject without regenerating."
+        ? "Not applied. Undo to review again."
         : state.status === "failed"
           ? "Select match locations or regenerate with /edit, then try again."
           : hasAmbiguous
             ? "This edit matches multiple places — select one or more options below, then Apply."
             : multiEdit
               ? "Review each edit below — Apply or Reject individually, or apply all remaining."
-              : "Review the diff below, then apply changes to your workspace.";
+              : "Review the diff, then Apply.");
 
   const showBulkActions = (state.status === "pending" || state.status === "failed") && pending > 1;
   const showSingleActions =

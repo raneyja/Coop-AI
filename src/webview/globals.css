@@ -1788,9 +1788,27 @@
     );
   }
 
+  .coop-patch-file-heading {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
   .coop-patch-file-path {
-    @apply min-w-0 flex-1 truncate text-left font-medium;
+    @apply min-w-0 truncate text-left font-medium;
     color: var(--vscode-textLink-foreground);
+  }
+
+  .coop-patch-file-header > .coop-patch-file-path {
+    @apply flex-1;
+  }
+
+  .coop-patch-file-anchor {
+    @apply truncate font-normal;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-patch-hunk-where {
+    @apply px-2.5 pt-1.5 text-[11px];
+    color: var(--coop-panel-muted);
   }
 
   button.coop-patch-file-path {
@@ -1814,7 +1832,6 @@
     border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
   }
 
-  .coop-patch-hunk--applied,
   .coop-patch-hunk--rejected {
     opacity: 0.72;
   }

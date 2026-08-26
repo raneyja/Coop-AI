@@ -241,18 +241,8 @@ export function snapHunkToSelection(options: {
     return options.commentOnly ? coerceCommentOnlyHunk(options.hunk, options.hunk.search) : options.hunk;
   }
   if (options.commentOnly) {
-    if (options.content && selectedLines) {
-      const matches = findAllSearchMatches(options.content, options.hunk.search);
-      const inside = matches.filter((hit) => rangesOverlap(hitLineRange(options.content!, hit), selectedLines));
-      if (inside.length > 0) {
-        if (hunkExpandsSelection(options.hunk, selectedText)) {
-          return retargetOntoSelection(options.hunk, selectedText, true);
-        }
-        return coerceCommentOnlyHunk(options.hunk, selectedText);
-      }
-    } else if (options.hunk.search === selectedText) {
-      return coerceCommentOnlyHunk(options.hunk, selectedText);
-    }
+    // Always land on the highlight. Overlap with DEFAULT_STATES is not permission
+    // to keep a paraphrased / duplicated SEARCH of that dict.
     return retargetOntoSelection(options.hunk, selectedText, true);
   }
   if (options.content && selectedLines) {

@@ -346,6 +346,55 @@ test("buildPatchCardState prefers the live untitled tab over stale captured byte
   (vscode.workspace.textDocuments as unknown[]).length = 0;
 });
 
+test("preview names StateManager.get_queryset and includes the class line", () => {
+  const fileBody = [
+    "DEFAULT_STATES = [",
+    "    {",
+    '        "name": "In Progress",',
+    "    },",
+    "]",
+    "",
+    "class StateManager(SoftDeletionManager):",
+    '    """Default manager"""',
+    "",
+    "    def get_queryset(self):",
+    "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)",
+    "",
+    "class TriageStateManager(SoftDeletionManager):",
+    "    pass"
+  ].join("\n");
+  const search = "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)";
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search,
+              replace: `        # Returns a queryset excluding triage states\n${search}`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "apps/api/plane/db/models/state.py": fileBody }
+    }
+  );
+  const hunk = state.files[0]?.hunks[0];
+  assert.equal(hunk?.anchorLabel, "StateManager.get_queryset");
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "context" && line.text.includes("class StateManager")),
+    true
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "add" && line.lineNumber !== undefined),
+    true
+  );
+});
+
 console.log(`\npatchDiffPreview: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
