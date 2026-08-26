@@ -3,14 +3,14 @@ title: Plans & billing
 description: Developer, Pro, and Enterprise plans — features, limits, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-08-26"
 ---
 
 ## Plan comparison
 
 | Feature | Developer (free) | Pro | Enterprise |
 | --- | --- | --- | --- |
-| **Price** | Free | $20/seat/month | Custom |
+| **Price** | Free | $25/seat/month | Custom |
 | **VS Code extension** | Yes | Yes | Yes |
 | **Local workspace context** | Yes | Yes | Yes |
 | **Usage** | Rolling 5-hour allowance | Included with each seat | Custom |

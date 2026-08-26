@@ -295,7 +295,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
             {onViewPlans ? (
               <p className="mt-2">
                 <button type="button" className="coop-text-btn !inline !px-0 !py-0" onClick={onViewPlans}>
-                  Pro — $20/user/month
+                  Pro — $25/user/month
                 </button>
               </p>
             ) : null}
@@ -492,7 +492,7 @@ export function ProUpgradeChip({ onClick }: { onClick: () => void }): React.Reac
       type="button"
       className="coop-quick-action-pill"
       onClick={onClick}
-      title="Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $20/user/mo."
+      title="Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $25/user/mo."
       aria-label="Upgrade to Pro for Deep-Code Graph indexing"
     >
       Upgrade to Pro

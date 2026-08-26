@@ -34,7 +34,7 @@ export type LicenseStatus = {
   canEnableMoreRepos?: boolean;
 };
 
-export const PRO_PLAN_PRICE_USD = 20;
+export const PRO_PLAN_PRICE_USD = 25;
 
 const SECRET_KEY_LICENSE = "coopAI.licenseKey";
 

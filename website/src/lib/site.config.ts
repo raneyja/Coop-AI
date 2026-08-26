@@ -28,7 +28,7 @@ export const siteConfig = {
       pricing: {
         title: "Pricing | Plans for engineering teams",
         description:
-          "CoopAI pricing: free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
+          "CoopAI pricing: free Developer plan, Pro at $25/user/month, and Enterprise with org-wide context and deployment options."
       },
       security: {
         title: "Security | Zero-clone architecture",

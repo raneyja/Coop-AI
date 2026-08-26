@@ -45,7 +45,7 @@ const tiers: PricingTier[] = [
   },
   {
     name: "Pro",
-    price: "$20",
+    price: "$25",
     period: "per user / month",
     features: [
       "Everything in Developer",
