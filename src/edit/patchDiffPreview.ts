@@ -10,6 +10,7 @@ import type {
 } from "../chat/types";
 import { enclosingDefinitionAnchor } from "../context/enclosingDefinitionRange";
 import { findAllSearchMatches, findSearchMatch, type SearchMatchHit } from "./patchContent";
+import { extractInsertedPrefix } from "./snapPatchToSelection";
 import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
 import { lookupPatchFileContent } from "./patchFileContents";
@@ -105,6 +106,28 @@ function buildUnmatchedHunkPreview(hunk: PatchHunk, hunkId: string): PatchPrevie
   return { id: hunkId, lines, matchStatus: "not_found", status: "pending" };
 }
 
+function insertAbovePrefix(hunk: PatchHunk): string | undefined {
+  const search = hunk.search;
+  const replace = hunk.replace;
+  if (!search || replace.length <= search.length) {
+    return undefined;
+  }
+  if (replace.endsWith(search)) {
+    return extractInsertedPrefix(replace, search);
+  }
+  const replaceLines = splitLines(replace);
+  const searchLines = splitLines(search);
+  if (replaceLines.length <= searchLines.length) {
+    return undefined;
+  }
+  const extraCount = replaceLines.length - searchLines.length;
+  const rest = replaceLines.slice(extraCount).join("\n");
+  if (rest !== search) {
+    return undefined;
+  }
+  return extractInsertedPrefix(replace, search);
+}
+
 function buildLocationPreviewLines(
   content: string,
   hit: SearchMatchHit,
@@ -134,17 +157,33 @@ function buildLocationPreviewLines(
   for (let i = contextStart; i < startLineIdx; i++) {
     lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: i + 1 });
   }
-  for (let i = 0; i < matchedLines.length; i++) {
-    lines.push({
-      kind: "remove",
-      text: matchedLines[i] ?? "",
-      lineNumber: startLineIdx + i + 1
-    });
-  }
+  const inserted = insertAbovePrefix(hunk);
   let newLine = startLineIdx + 1;
-  for (const line of buildReplaceLines(hunk)) {
-    lines.push({ ...line, lineNumber: newLine });
-    newLine += 1;
+  if (inserted !== undefined) {
+    for (const line of splitLines(inserted)) {
+      lines.push({ kind: "add", text: line, lineNumber: newLine });
+      newLine += 1;
+    }
+    for (let i = 0; i < matchedLines.length; i++) {
+      lines.push({
+        kind: "context",
+        text: matchedLines[i] ?? "",
+        lineNumber: newLine
+      });
+      newLine += 1;
+    }
+  } else {
+    for (let i = 0; i < matchedLines.length; i++) {
+      lines.push({
+        kind: "remove",
+        text: matchedLines[i] ?? "",
+        lineNumber: startLineIdx + i + 1
+      });
+    }
+    for (const line of buildReplaceLines(hunk)) {
+      lines.push({ ...line, lineNumber: newLine });
+      newLine += 1;
+    }
   }
   for (let i = endLineIdx + 1; i <= contextEnd; i++) {
     lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: newLine });

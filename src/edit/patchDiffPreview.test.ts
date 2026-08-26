@@ -59,8 +59,12 @@ test("buildPatchCardState includes add/remove diff lines", () => {
   const hunk = state.files[0]?.hunks[0];
   assert.ok(hunk);
   assert.equal(hunk.matchStatus, "matched");
-  assert.ok(hunk.lines.some((line) => line.kind === "remove"));
   assert.ok(hunk.lines.some((line) => line.kind === "add"));
+  assert.equal(
+    hunk.lines.some((line) => line.kind === "remove" && line.text.includes("bindSession")),
+    false
+  );
+  assert.ok(hunk.lines.some((line) => line.kind === "context" && line.text.includes("bindSession")));
 });
 
 test("buildPatchCardState lists all locations when SEARCH is ambiguous", () => {
@@ -390,7 +394,15 @@ test("preview names StateManager.get_queryset and includes the class line", () =
     true
   );
   assert.equal(
-    hunk?.lines.some((line) => line.kind === "add" && line.lineNumber !== undefined),
+    hunk?.lines.some((line) => line.kind === "add" && line.text.includes("Returns a queryset")),
+    true
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "remove" && line.text.includes("return super()")),
+    false
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "context" && line.text.includes("return super()")),
     true
   );
 });

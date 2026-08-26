@@ -216,12 +216,15 @@ async function main(): Promise<void> {
       publish: () => undefined
     });
     assert.equal(result?.status, "pending");
-    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+    const lines = result?.files[0]?.hunks[0]?.lines ?? [];
+    const joined = lines.map((line) => line.text).join("\n");
+    const addText = lines
       .filter((line) => line.kind === "add")
       .map((line) => line.text)
       .join("\n");
-    assert.equal(addText.split('"name": "Backlog"').length - 1, 1);
+    assert.equal(joined.split('"name": "Backlog"').length - 1, 1);
     assert.ok(addText.includes("Represents the default state"));
+    assert.equal(addText.split('"name": "Backlog"').length - 1, 0);
   });
 
   await test("duplicate requireAuth signature snaps to one JSDoc above the function", async () => {
@@ -258,12 +261,15 @@ async function main(): Promise<void> {
       publish: () => undefined
     });
     assert.equal(result?.status, "pending");
-    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+    const lines = result?.files[0]?.hunks[0]?.lines ?? [];
+    const joined = lines.map((line) => line.text).join("\n");
+    const addText = lines
       .filter((line) => line.kind === "add")
       .map((line) => line.text)
       .join("\n");
-    assert.equal(addText.split("export function requireAuth(").length - 1, 1);
+    assert.equal(joined.split("export function requireAuth(").length - 1, 1);
     assert.ok(addText.includes("Returns true when auth is present"));
+    assert.equal(addText.split("export function requireAuth(").length - 1, 0);
   });
 
   await test("comment-only ask rejects a constructor rewrite with no comment", async () => {
@@ -416,14 +422,17 @@ async function main(): Promise<void> {
       publish: () => undefined
     });
     assert.equal(result?.status, "pending");
-    const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
-    assert.ok(joined.includes("def get_queryset"));
-    assert.equal(joined.split('"name": "In Progress"').length - 1, 0);
-    const addText = (result?.files[0]?.hunks[0]?.lines ?? [])
+    const lines = result?.files[0]?.hunks[0]?.lines ?? [];
+    const joined = lines.map((line) => line.text).join("\n");
+    const addText = lines
       .filter((line) => line.kind === "add")
       .map((line) => line.text)
       .join("\n");
-    assert.equal(addText.split("def get_queryset").length - 1, 1);
+    assert.ok(joined.includes("def get_queryset"));
+    assert.equal(joined.split('"name": "In Progress"').length - 1, 0);
+    assert.equal(joined.split("def get_queryset").length - 1, 1);
+    assert.equal(addText.split("def get_queryset").length - 1, 0);
+    assert.ok(addText.includes("currently in progress"));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

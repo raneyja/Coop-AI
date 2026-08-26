@@ -214,11 +214,12 @@ export function PatchCard({
             ? "warning"
             : "default";
 
-  const landingCopy = formatPatchLandingCopy(state.files, state.status);
+  const landingCopy =
+    state.status === "applied" ? formatPatchLandingCopy(state.files, state.status) : undefined;
   const reviewCopy =
     landingCopy ??
     (state.status === "applied"
-      ? "In your workspace. Undo if this is the wrong spot."
+      ? "Undo if this is the wrong spot."
       : state.status === "rejected"
         ? "Not applied. Undo to review again."
         : state.status === "failed"
@@ -227,7 +228,7 @@ export function PatchCard({
             ? "This edit matches multiple places — select one or more options below, then Apply."
             : multiEdit
               ? "Review each edit below — Apply or Reject individually, or apply all remaining."
-              : "Review the diff, then Apply.");
+              : undefined);
 
   const showBulkActions = (state.status === "pending" || state.status === "failed") && pending > 1;
   const showSingleActions =
@@ -258,9 +259,9 @@ export function PatchCard({
       <IntegrationResultSection className="coop-patch-card-section">
         {state.error ? (
           <IntegrationResultText muted>{state.error}</IntegrationResultText>
-        ) : (
+        ) : reviewCopy ? (
           <IntegrationResultText muted>{reviewCopy}</IntegrationResultText>
-        )}
+        ) : null}
         {state.files.length > 0 ? (
           <div className="coop-patch-diff-scroll">
             <PatchDiffView

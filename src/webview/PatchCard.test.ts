@@ -144,12 +144,12 @@ test("landing copy names the class.method and file", () => {
     }
   ];
   assert.equal(
-    formatPatchLandingCopy(files, "pending"),
-    "Lands in StateManager.get_queryset · L69–70 · state.py."
-  );
-  assert.equal(
     formatPatchLandingCopy(files, "applied"),
     "Landed in StateManager.get_queryset · L69–70 · state.py."
+  );
+  assert.equal(
+    formatPatchLandingCopy(files, "pending"),
+    "Lands in StateManager.get_queryset · L69–70 · state.py."
   );
 });
 
