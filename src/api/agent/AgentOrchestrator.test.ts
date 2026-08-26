@@ -828,7 +828,7 @@ async function run(): Promise<void> {
     );
     const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
     const content = readFile?.files?.[0]?.content ?? "";
-    assert.match(content, /class APIKeyAuthentication:/);
+    assert.match(content, /17\|class APIKeyAuthentication:/);
     assert.equal(content.trim() === "1|# Copyright (c) 2023-present Plane Software, Inc. and contributors", false);
   });
 

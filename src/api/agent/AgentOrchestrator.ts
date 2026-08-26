@@ -111,18 +111,18 @@ function preferredLineForPath(
   if (!path.trim() || !search) {
     return 0;
   }
+  const symbols = Array.isArray(search.symbols) ? (search.symbols as SymbolHit[]) : [];
+  for (const symbol of symbols) {
+    if (sameHuntPath(symbol.file, path) && Number.isInteger(symbol.line) && symbol.line >= 1) {
+      return symbol.line;
+    }
+  }
   const preferred = Array.isArray(search.preferredHits)
     ? (search.preferredHits as SearchHit[])
     : [];
   for (const hit of preferred) {
     if (sameHuntPath(hit.fileName, path) && Number.isInteger(hit.lineNumber) && hit.lineNumber >= 1) {
       return hit.lineNumber;
-    }
-  }
-  const symbols = Array.isArray(search.symbols) ? (search.symbols as SymbolHit[]) : [];
-  for (const symbol of symbols) {
-    if (sameHuntPath(symbol.file, path) && Number.isInteger(symbol.line) && symbol.line >= 1) {
-      return symbol.line;
     }
   }
   const hits = Array.isArray(search.hits) ? (search.hits as SearchHit[]) : [];

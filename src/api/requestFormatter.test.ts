@@ -107,4 +107,42 @@ const plannerBody = formatZeroRetentionRequest({
 }).body;
 assert.equal(plannerBody.max_completion_tokens, 600);
 
+{
+  const body = [
+    "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+    "",
+    "class APIKeyAuthentication:",
+    "    def authenticate(self, request):",
+    "        return True"
+  ].join("\n");
+  const numbered = body.split("\n").map((row, i) => `${i + 1}|${row}`).join("\n");
+  const toolJson = JSON.stringify({
+    path: "apps/api/plane/api/middleware/api_authentication.py",
+    startLine: 1,
+    files: [
+      {
+        path: "apps/api/plane/api/middleware/api_authentication.py",
+        content: numbered
+      }
+    ]
+  });
+  const formatted = formatZeroRetentionRequest({
+    provider: "openai",
+    model: "gpt-5-mini",
+    messages: [
+      { role: "user", content: "Where is APIKeyAuthentication defined?" },
+      { role: "assistant", content: JSON.stringify({ tool: "read_file" }) },
+      { role: "user", content: toolJson }
+    ],
+    allowUnapprovedProvider: true
+  });
+  const messagesOut = formatted.body.messages as Array<{ role: string; content: unknown }>;
+  const toolResult = messagesOut.find(
+    (message) => message.role === "user" && String(message.content).includes("api_authentication.py")
+  );
+  const text = String(toolResult?.content ?? "");
+  assert.ok(text.includes("class APIKeyAuthentication:"), "LLM request must keep the class after sanitization");
+  assert.equal(text.includes("REDACTED_SENSITIVE_COMMENT"), false);
+}
+
 console.log("requestFormatter.test.ts: ok");

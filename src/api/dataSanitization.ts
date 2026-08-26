@@ -75,7 +75,11 @@ const CODE_RULES: ReplacementRule[] = [
   },
   {
     type: "comment_secret",
-    pattern: /(\/\/|#|\/\*)[^\n]*(secret|password|token|api[_-]?key)[^\n]*/gi,
+    // Assignment in a comment only — not class names (APIKeyAuthentication) or
+    // docs that mention tokens. Compact JSON has no real newlines, so this must
+    // never run against stringified tool results (see sanitizeAgentToolTree).
+    pattern:
+      /(\/\/|#|\/\*)[^\n]*\b(?:password|secret|api[_-]key|access[_-]token|auth[_-]token)\s*[:=]\s*(?:['"][^'"]+['"]|\S+)/gi,
     replacement: "$1 [REDACTED_SENSITIVE_COMMENT]"
   }
 ];
@@ -203,6 +207,11 @@ function sanitizeUnknown(value: unknown, counts: MutableFindingCounts): unknown 
 }
 
 function sanitizeMessageOrCodeString(value: string, counts: MutableFindingCounts): string {
+  const toolJson = tryParseAgentToolJson(value);
+  if (toolJson !== undefined) {
+    return JSON.stringify(sanitizeAgentToolTree(toolJson, counts));
+  }
+
   if (!CODE_ATTACHMENT_BLOCK_PATTERN.test(value)) {
     return sanitizeText(value, [...CODE_RULES, ...GENERAL_RULES], counts).value;
   }
@@ -219,6 +228,55 @@ function sanitizeMessageOrCodeString(value: string, counts: MutableFindingCounts
 
   const sanitizedOutside = sanitizeText(withPlaceholders, [...CODE_RULES, ...GENERAL_RULES], counts).value;
   return sanitizedOutside.replace(/\0COOP_CODE_BLOCK_(\d+)\0/g, (_, index) => preserved[Number(index)] ?? "");
+}
+
+/**
+ * Agent read_file / search_code results are JSON.stringify'd (newlines become
+ * the two-character sequence \\n). Comment rules that use [^\n]* then treat the
+ * whole file as one line and wipe class names like APIKeyAuthentication.
+ * Decode first; sanitize file bodies like <file_content> (GENERAL_RULES only).
+ */
+function tryParseAgentToolJson(value: string): unknown | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return isAgentToolPayload(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isAgentToolPayload(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    Array.isArray(record.files) ||
+    Array.isArray(record.hits) ||
+    Array.isArray(record.preferredHits) ||
+    Array.isArray(record.symbols)
+  );
+}
+
+function sanitizeAgentToolTree(value: unknown, counts: MutableFindingCounts): unknown {
+  if (typeof value === "string") {
+    return sanitizeText(value, GENERAL_RULES, counts).value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeAgentToolTree(entry, counts));
+  }
+  if (value && typeof value === "object") {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      sanitized[key] = sanitizeAgentToolTree(entry, counts);
+    }
+    return sanitized;
+  }
+  return value;
 }
 
 function sanitizeObject(value: Record<string, unknown>, counts: MutableFindingCounts): Record<string, unknown> {
