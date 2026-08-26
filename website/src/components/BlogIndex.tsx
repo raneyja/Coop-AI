@@ -5,6 +5,7 @@ import type { BlogCategory, BlogPostMeta } from "@/lib/blog.shared";
 import { blogCategories, formatCategoryLabel } from "@/lib/blog.shared";
 import { BlogFeaturedCard } from "@/components/BlogFeaturedCard";
 import { BlogPostRow } from "@/components/BlogPostRow";
+import { siteConfig } from "@/lib/site.config";
 
 type BlogFilter = "all" | BlogCategory;
 
