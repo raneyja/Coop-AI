@@ -335,13 +335,21 @@ import {
   searchRepoForFocusQuery
 } from "../context/repoSemanticRetrieval";
 import {
+  FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
   mergeFocusFilesIntoEntryFiles
 } from "../context/userFocusQuery";
 import {
+  onboardingIndexQueries,
+  pickOnboardingTopicAttachPaths,
+  rankOnboardingEntryFiles,
+  uncoveredOnboardingTopics
+} from "../context/onboardingSearchQueries";
+import {
   knowledgeGapsFocusGatherTerms,
   knowledgeGapsFocusTopicGapStubs,
   knowledgeGapsGatherQuery,
+  knowledgeGapsIndexQueries,
   mergeKnowledgeGapsFocusStubsIntoScan,
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope
@@ -3050,6 +3058,8 @@ export class CoopChatSession {
         searchRepoForFocusQuery({
           repoId,
           query: gatherQuery,
+          indexQueries: knowledgeGapsIndexQueries(gatherQuery),
+          maxFiles: 5,
           indexBackend: this.options.indexBackend,
           api: this.options.api,
           apiBaseUrl: this.preferences.apiBaseUrl,
@@ -3122,6 +3132,7 @@ export class CoopChatSession {
         : this.preferences.defaultCodeHost;
 
     const userFocus = focusQueryForRetrieval(request.intent.context.queryText);
+    const topicQueries = onboardingIndexQueries(userFocus);
 
     try {
       const evidencePromise = buildRepoSummaryEvidence({
@@ -3137,11 +3148,35 @@ export class CoopChatSession {
         userFocus,
         resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
       });
-      const evidence = await Promise.race([
-        evidencePromise,
-        new Promise<undefined>((resolve) => {
-          setTimeout(() => resolve(undefined), budgetMs);
-        })
+      const focusSearchPromise = userFocus
+        ? searchRepoForFocusQuery({
+            repoId,
+            query: userFocus,
+            indexQueries: topicQueries,
+            maxFiles: 5,
+            indexBackend: this.options.indexBackend,
+            api: this.options.api,
+            apiBaseUrl: this.preferences.apiBaseUrl,
+            branch: target.branch ?? this.currentContext.branch,
+            owner,
+            repo,
+            provider
+          })
+        : Promise.resolve(undefined);
+
+      const [evidence, initialFocusSearch] = await Promise.all([
+        Promise.race([
+          evidencePromise,
+          new Promise<undefined>((resolve) => {
+            setTimeout(() => resolve(undefined), budgetMs);
+          })
+        ]),
+        Promise.race([
+          focusSearchPromise,
+          new Promise<undefined>((resolve) => {
+            setTimeout(() => resolve(undefined), budgetMs);
+          })
+        ])
       ]);
 
       const baseData =
@@ -3151,14 +3186,82 @@ export class CoopChatSession {
       let evidenceData =
         evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>) : {};
 
-      // Focus ask → index/Zoekt search; merge hit bodies into entryFiles for synthesis.
+      let focusSearch = initialFocusSearch;
       if (userFocus) {
+        const priorEntries = Array.isArray(evidenceData.entryFiles)
+          ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
+          : [];
+        const rankQuery = topicQueries.join(" ") || userFocus;
+        const collectHits = (
+          search: typeof focusSearch
+        ): string[] => [
+          ...(search?.files.map((file) => file.path) ?? []),
+          ...(search?.pathHits ?? [])
+        ];
+        let entryFiles = rankOnboardingEntryFiles(
+          mergeFocusFilesIntoEntryFiles(priorEntries, focusSearch?.files ?? []),
+          rankQuery
+        );
+        let hitPaths = collectHits(focusSearch);
+
+        const attachUncoveredHits = async (): Promise<void> => {
+          const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+          if (remainingMs <= 0 || topicQueries.length === 0) {
+            return;
+          }
+          const toFetch = pickOnboardingTopicAttachPaths({
+            topicQueries,
+            hitPaths,
+            attachedPaths: entryFiles.map((file) => file.path),
+            maxPaths: Math.min(topicQueries.length, FOCUS_MAX_INJECTED_PATHS)
+          });
+          if (toFetch.length === 0) {
+            return;
+          }
+          const fetched: Array<{ path: string; content: string; truncated?: boolean }> = [];
+          for (const path of toFetch) {
+            if (remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()) <= 0) {
+              break;
+            }
+            try {
+              const evidence = await this.indexedRepoWorkspace().readFile(target, path);
+              if (!evidence?.content?.trim()) {
+                continue;
+              }
+              fetched.push({
+                path: evidence.path || path,
+                content: evidence.content,
+                truncated: evidence.truncated
+              });
+            } catch {
+              // Zero-clone miss — remaining topics still attach if fetches succeed.
+            }
+          }
+          if (fetched.length === 0) {
+            return;
+          }
+          entryFiles = rankOnboardingEntryFiles(
+            mergeFocusFilesIntoEntryFiles(entryFiles, fetched),
+            rankQuery
+          );
+        };
+
+        await attachUncoveredHits();
+        hitPaths = [...new Set([...hitPaths, ...entryFiles.map((file) => file.path)])];
+
         const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-        if (remainingMs > 0) {
-          const focusSearch = await Promise.race([
+        const uncovered = uncoveredOnboardingTopics({
+          topicQueries,
+          hitPaths,
+          attachedPaths: entryFiles.map((file) => file.path)
+        });
+        if (remainingMs > 0 && uncovered.length > 0) {
+          const retrySearch = await Promise.race([
             searchRepoForFocusQuery({
               repoId,
               query: userFocus,
+              indexQueries: uncovered,
+              maxFiles: 5,
               indexBackend: this.options.indexBackend,
               api: this.options.api,
               apiBaseUrl: this.preferences.apiBaseUrl,
@@ -3171,22 +3274,27 @@ export class CoopChatSession {
               setTimeout(() => resolve(undefined), remainingMs);
             })
           ]);
-          if (focusSearch?.files.length) {
-            const priorEntries = Array.isArray(evidenceData.entryFiles)
-              ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
-              : [];
-            evidenceData = {
-              ...evidenceData,
-              userFocus,
-              entryFiles: mergeFocusFilesIntoEntryFiles(priorEntries, focusSearch.files),
-              repoSemanticSearch: focusSearch,
-              focusSearchQuery: focusSearch.query,
-              focusSearchPaths: focusSearch.files.map((file) => file.path)
-            };
-          } else {
-            evidenceData = { ...evidenceData, userFocus };
+          if (retrySearch?.files.length || retrySearch?.pathHits?.length) {
+            focusSearch = retrySearch;
+            hitPaths = [...new Set([...hitPaths, ...collectHits(retrySearch)])];
+            entryFiles = rankOnboardingEntryFiles(
+              mergeFocusFilesIntoEntryFiles(entryFiles, retrySearch.files ?? []),
+              rankQuery
+            );
+            await attachUncoveredHits();
           }
         }
+        evidenceData = {
+          ...evidenceData,
+          userFocus,
+          entryFiles,
+          repoSemanticSearch: focusSearch,
+          focusSearchQuery: focusSearch?.query ?? topicQueries.join(" | "),
+          focusSearchPaths: [
+            ...(focusSearch?.files.map((file) => file.path) ?? []),
+            ...(focusSearch?.pathHits ?? [])
+          ]
+        };
       }
 
       const resolvedFromEvidence =
@@ -5552,7 +5660,7 @@ export class CoopChatSession {
       this.loadingFeedbackFor(prefetchIntentEvent, options?.intentPlan)
     );
 
-    if (quickAction && shouldUseAsyncJob(quickAction)) {
+    if (quickAction && shouldUseAsyncJob(quickAction) && !(quickAction === "knowledge-gaps" && userFocus)) {
       try {
         const ranAsync = await abortablePromise(
           this.runAsyncQuickAction(quickAction, modelMessage, turn),
@@ -8616,7 +8724,8 @@ export class CoopChatSession {
     }
     const stubs = knowledgeGapsFocusTopicGapStubs({
       userFocus,
-      focusHitPaths: evidence.focusSearchPaths
+      focusHitPaths: evidence.focusSearchPaths,
+      focusFiles: evidence.focusFiles
     });
     if (stubs.length === 0) {
       return;
@@ -8727,7 +8836,8 @@ export class CoopChatSession {
     if (scope.focusPrimary) {
       for (const stub of knowledgeGapsFocusTopicGapStubs({
         userFocus,
-        focusHitPaths: evidence.focusSearchPaths
+        focusHitPaths: evidence.focusSearchPaths,
+        focusFiles: evidence.focusFiles
       })) {
         gaps.push(stub);
       }

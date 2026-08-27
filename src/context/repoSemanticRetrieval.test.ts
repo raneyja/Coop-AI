@@ -6,6 +6,7 @@ import {
   gateOptionsFromRequest,
   isPlainChatIntentEvent,
   mergeRepoSemanticContext,
+  mergeFocusSearchResults,
   rankSearchPaths,
   semanticRetrievalQueryText,
   shouldRunRepoSemanticRetrieval,
@@ -335,6 +336,171 @@ async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
     failed++;
   }
 }
+
+test("mergeFocusSearchResults round-robins unique paths from topic searches", () => {
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "API auth",
+        files: [
+          {
+            path: "apps/api/plane/api/middleware/api_authentication.py",
+            repoId: "coop-ai/plane",
+            content: "class APIKeyAuthentication:"
+          }
+        ]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "states",
+        files: [
+          {
+            path: "apps/api/plane/db/models/state.py",
+            repoId: "coop-ai/plane",
+            content: "class State:"
+          }
+        ]
+      }
+    ],
+    { query: "API auth | states", rankQuery: "where does API auth live", maxFiles: 5 }
+  );
+  assert.ok(merged);
+  assert.equal(merged!.files.length, 2);
+  assert.ok(merged!.files.some((file) => file.path.includes("api_authentication")));
+  assert.ok(merged!.files.some((file) => file.path.includes("state.py")));
+});
+
+test("mergeFocusSearchResults drops OpenAPI/seed/i18n when domain files exist", () => {
+  const snippet = (path: string, content: string) => ({
+    path,
+    repoId: "coop-ai/plane",
+    content
+  });
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "authentication",
+        files: [
+          snippet("apps/api/plane/settings/openapi.py", "openapi schema"),
+          snippet(
+            "apps/api/plane/api/middleware/api_authentication.py",
+            "class APIKeyAuthentication:"
+          )
+        ]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "issue",
+        files: [
+          snippet("apps/api/plane/seeds/data/issues.json", "[]"),
+          snippet("apps/api/plane/db/models/issue.py", "class Issue:")
+        ]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "state",
+        files: [
+          snippet("packages/i18n/src/locales/en/workspace.json", "{}"),
+          snippet("apps/api/plane/db/models/state.py", "class State:")
+        ]
+      }
+    ],
+    { query: "authentication | issue | state", rankQuery: "authentication issue state", maxFiles: 5 }
+  );
+  assert.ok(merged);
+  const paths = merged!.files.map((file) => file.path);
+  assert.ok(paths.some((path) => path.includes("api_authentication.py")));
+  assert.ok(paths.some((path) => path.endsWith("issue.py")));
+  assert.ok(paths.some((path) => path.endsWith("state.py")));
+  assert.ok(!paths.some((path) => /openapi|seeds\/|locales\/|i18n\//.test(path)));
+});
+
+test("mergeFocusSearchResults does not let auth files crowd out issue/state models", () => {
+  const snippet = (path: string, content: string) => ({
+    path,
+    repoId: "coop-ai/plane",
+    content
+  });
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "authentication",
+        files: [
+          snippet(
+            "apps/api/plane/api/middleware/api_authentication.py",
+            "class APIKeyAuthentication:"
+          ),
+          snippet(
+            "apps/api/plane/app/middleware/api_authentication.py",
+            "class APIKeyAuthentication:"
+          ),
+          snippet(
+            "apps/admin/components/authentication/authentication-method-card.tsx",
+            "export function AuthenticationMethodCard"
+          ),
+          snippet(
+            "apps/api/plane/tests/contract/app/test_authentication.py",
+            "def test_authentication"
+          )
+        ]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "issue",
+        files: [snippet("apps/api/plane/db/models/issue.py", "class Issue:")]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "state",
+        files: [snippet("apps/api/plane/db/models/state.py", "class State:")]
+      }
+    ],
+    { query: "authentication | issue | state", rankQuery: "authentication issue state", maxFiles: 5 }
+  );
+  assert.ok(merged);
+  const paths = merged!.files.map((file) => file.path);
+  assert.ok(paths.some((path) => path.includes("api_authentication.py")));
+  assert.ok(paths.some((path) => path.endsWith("issue.py")), `issue missing from ${paths.join(", ")}`);
+  assert.ok(paths.some((path) => path.endsWith("state.py")), `state missing from ${paths.join(", ")}`);
+  assert.ok(!paths.some((path) => /\/tests?\/|\/migrations?\//.test(path)));
+  assert.ok(merged!.pathHits?.some((path) => path.endsWith("issue.py")));
+  assert.ok(merged!.pathHits?.some((path) => path.endsWith("state.py")));
+});
+
+test("mergeFocusSearchResults keeps issue/state pathHits when attach cap is auth-only", () => {
+  const snippet = (path: string, content: string) => ({
+    path,
+    repoId: "coop-ai/plane",
+    content
+  });
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "authentication",
+        files: [
+          snippet(
+            "apps/api/plane/api/middleware/api_authentication.py",
+            "class APIKeyAuthentication:"
+          )
+        ],
+        pathHits: [
+          "apps/api/plane/api/middleware/api_authentication.py",
+          "apps/api/plane/db/models/issue.py",
+          "apps/api/plane/db/models/state.py"
+        ]
+      }
+    ],
+    { query: "authentication", rankQuery: "authentication issue state", maxFiles: 1 }
+  );
+  assert.ok(merged);
+  assert.equal(merged!.files.length, 1);
+  assert.ok(merged!.pathHits?.some((path) => path.endsWith("issue.py")));
+  assert.ok(merged!.pathHits?.some((path) => path.endsWith("state.py")));
+});
 
 async function runAsyncTests(): Promise<void> {
   await asyncTest("mergeRepoSemanticContext attaches repoSemanticSearch to chat context", async () => {

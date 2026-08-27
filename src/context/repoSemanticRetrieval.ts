@@ -8,6 +8,11 @@ import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolation";
 import { indexQueryForRetrieval, selectChatEvidencePaths } from "../api/agent/searchQuery";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
+import {
+  isWeakIndexQuery,
+  rankOnboardingEntryFiles,
+  selectOnboardingEvidencePaths
+} from "./onboardingSearchQueries";
 import { semanticAttachModeForChat } from "../chat/plainChatExplain";
 
 export const MAX_SEMANTIC_FILES = 3;
@@ -264,12 +269,20 @@ export type SearchRepoForFocusOptions = {
   provider?: CodeHostProviderPreference;
   /** Cap on attached focus file bodies (default FOCUS_MAX_INJECTED_PATHS). */
   maxFiles?: number;
+  /**
+   * Topic queries for Understand Repo / Gaps. When set, these are searched in
+   * parallel and hunt shortening (`indexQueryForRetrieval`) is skipped.
+   */
+  indexQueries?: string[];
 };
 
 /**
  * Focus-driven index search for quick actions.
  * Unlike {@link searchRepoForChat}, this is not gated off by `quickAction` —
  * callers must pass a real user focus query (never a canned prompt).
+ *
+ * When `indexQueries` is set (Understand / Gaps topics), those strings go to
+ * the index as-is — never hunt-shortened to `"this service"` / `"Focus"`.
  */
 export async function searchRepoForFocusQuery(
   options: SearchRepoForFocusOptions
@@ -280,9 +293,14 @@ export async function searchRepoForFocusQuery(
     return undefined;
   }
 
-  return loadSemanticSearchContext({
+  const maxFiles = options.maxFiles ?? FOCUS_MAX_INJECTED_PATHS;
+  const topicQueries = (options.indexQueries ?? [])
+    .map((query) => query.trim())
+    .filter((query) => query.length >= 2 && !isWeakIndexQuery(query))
+    .slice(0, 3);
+
+  const shared = {
     repoId,
-    query: indexQueryForRetrieval(userQuery),
     rankQuery: userQuery,
     indexBackend: options.indexBackend,
     api: options.api,
@@ -290,9 +308,104 @@ export async function searchRepoForFocusQuery(
     branch: options.branch,
     owner: options.owner,
     repo: options.repo,
-    provider: options.provider,
-    maxFiles: options.maxFiles ?? FOCUS_MAX_INJECTED_PATHS
+    provider: options.provider
+  };
+
+  if (topicQueries.length === 0) {
+    return loadSemanticSearchContext({
+      ...shared,
+      query: indexQueryForRetrieval(userQuery),
+      maxFiles
+    });
+  }
+
+  const perQueryCap = Math.max(2, Math.ceil(maxFiles / topicQueries.length) + 1);
+  const results = await Promise.all(
+    topicQueries.map((query) =>
+      loadSemanticSearchContext({
+        ...shared,
+        query,
+        rankQuery: topicQueries.join(" ") || userQuery,
+        rankMode: "onboarding",
+        maxFiles: perQueryCap
+      })
+    )
+  );
+  return mergeFocusSearchResults(results, {
+    query: topicQueries.join(" | "),
+    rankQuery: topicQueries.join(" ") || userQuery,
+    maxFiles
   });
+}
+
+/** Round-robin merge of parallel topic searches — unique paths, domain files first. */
+export function mergeFocusSearchResults(
+  results: Array<RepoSemanticSearchContext | undefined>,
+  options: { query: string; rankQuery: string; maxFiles: number }
+): RepoSemanticSearchContext | undefined {
+  const present = results.filter((result): result is RepoSemanticSearchContext =>
+    Boolean(result && (result.files.length || result.pathHits?.length))
+  );
+  if (present.length === 0) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  const files: RepoSemanticSearchContext["files"] = [];
+  const pathHits: string[] = [];
+  let matchedPathCount = 0;
+  let searchSource = present[0]?.searchSource;
+  const queues = present.map((result) => [...result.files]);
+  const poolCap = Math.max(options.maxFiles * 2, options.maxFiles);
+  let added = true;
+  while (added && files.length < poolCap) {
+    added = false;
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (!next) {
+        continue;
+      }
+      const key = next.path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      files.push(next);
+      added = true;
+      if (files.length >= poolCap) {
+        break;
+      }
+    }
+  }
+  const rankedFiles = rankOnboardingEntryFiles(files, options.rankQuery).slice(
+    0,
+    options.maxFiles
+  );
+  for (const result of present) {
+    matchedPathCount += result.matchedPathCount ?? result.files.length;
+    for (const path of result.pathHits ?? result.files.map((file) => file.path)) {
+      const key = path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+      if (seen.has(`hit:${key}`)) {
+        continue;
+      }
+      seen.add(`hit:${key}`);
+      pathHits.push(path);
+    }
+  }
+  if (rankedFiles.length === 0 && pathHits.length === 0) {
+    return undefined;
+  }
+  return {
+    source: "repo-semantic-search",
+    query: options.query,
+    rankQuery: options.rankQuery,
+    searchSource,
+    files: rankedFiles,
+    pathHits: pathHits.length
+      ? selectOnboardingEvidencePaths(pathHits, options.rankQuery, 12)
+      : undefined,
+    matchedPathCount,
+    attachmentCap: options.maxFiles
+  };
 }
 
 type LoadSemanticSearchOptions = {
@@ -312,20 +425,26 @@ type LoadSemanticSearchOptions = {
   maxFiles: number;
   /** Do not attach this path (usually the already-open file). */
   excludePath?: string;
+  /** Understand / Gaps: demote OpenAPI, seeds, and i18n. Hunt locate stays `selectChatEvidencePaths`. */
+  rankMode?: "onboarding" | "hunt";
 };
 
 async function loadSemanticSearchContext(
   options: LoadSemanticSearchOptions
 ): Promise<RepoSemanticSearchContext | undefined> {
   const searchResult = await runRepoSearch(options, options.repoId, options.query);
-  const pathBudget = Math.max(options.maxFiles, 1) * 4;
+  const pathBudget =
+    options.rankMode === "onboarding"
+      ? Math.max(24, options.maxFiles * 8)
+      : Math.max(options.maxFiles, 1) * 4;
   const rankedPaths = rankSearchPaths(searchResult, pathBudget);
   const rankQuery = options.rankQuery ?? options.query;
   const exclude = options.excludePath?.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
-  const selected = selectChatEvidencePaths(
-    rankedPaths.map((entry) => entry.path),
-    rankQuery,
-    Math.max(options.maxFiles, 6)
+  const candidatePaths = rankedPaths.map((entry) => entry.path);
+  const selected = (
+    options.rankMode === "onboarding"
+      ? selectOnboardingEvidencePaths(candidatePaths, rankQuery, Math.max(options.maxFiles, 6))
+      : selectChatEvidencePaths(candidatePaths, rankQuery, Math.max(options.maxFiles, 6))
   ).filter((path) => {
     if (!exclude) {
       return true;
@@ -367,13 +486,17 @@ async function loadSemanticSearchContext(
   }
 
   const files = applySemanticByteBudget(resolved, MAX_SEMANTIC_BYTES, options.maxFiles);
-  if (files.length === 0) {
+  const onboardingHits =
+    options.rankMode === "onboarding"
+      ? selectOnboardingEvidencePaths(candidatePaths, rankQuery, 12)
+      : [];
+  if (files.length === 0 && onboardingHits.length === 0) {
     return undefined;
   }
 
   // Defense in depth: never attach a snippet stamped with a foreign repoId.
   const isolated = filterSemanticFilesToRepoId(files, options.repoId);
-  if (isolated.length === 0) {
+  if (isolated.length === 0 && onboardingHits.length === 0) {
     return undefined;
   }
 
@@ -383,6 +506,7 @@ async function loadSemanticSearchContext(
     rankQuery: options.rankQuery,
     searchSource: searchResult.source,
     files: isolated,
+    pathHits: onboardingHits.length ? onboardingHits : undefined,
     matchedPathCount: rankedPaths.length,
     attachmentCap: options.maxFiles
   };

@@ -10,11 +10,13 @@ import {
   knowledgeGapsFocusTopics,
   knowledgeGapsFocusTopicGapStubs,
   knowledgeGapsGatherQuery,
+  knowledgeGapsIndexQueries,
   mergeKnowledgeGapsFocusStubsIntoScan,
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope,
   stripKnowledgeGapsTopicFraming
 } from "./knowledgeGapsFocus";
+import { indexQueryForRetrieval } from "../api/agent/searchQuery";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
 
 let passed = 0;
@@ -136,13 +138,14 @@ test("focus gather terms for signing ask prefer signing/status — not documenta
   );
 });
 
-test("knowledgeGapsFocusTopicGapStubs emit no-evidence stubs per topic without hits", () => {
+test("knowledgeGapsFocusTopicGapStubs emit honest miss stubs per topic without hits", () => {
   const stubs = knowledgeGapsFocusTopicGapStubs({
     userFocus: "focus on webhook delivery and signature certificates",
     focusHitPaths: []
   });
   assert.ok(stubs.length >= 2);
-  assert.ok(stubs.every((gap) => gap.type === "missing_docs"));
+  assert.ok(stubs.every((gap) => gap.type === "focus_search_miss"));
+  assert.ok(stubs.every((gap) => !String(gap.message).includes("No indexed code")));
   assert.ok(stubs.some((gap) => String(gap.message).includes("webhook")));
   assert.ok(stubs.some((gap) => String(gap.message).includes("certificate")));
 });
@@ -319,6 +322,49 @@ test("scoreDocPageForUseRepo penalizes foreign Coop pages for documenso", () => 
   assert.ok(coop < 0);
   assert.ok(doc >= 50);
   assert.ok(doc > coop);
+});
+
+const E6_ASK =
+  "Focus on the agent hunt loop and mid-loop Slack/Jira tools — what's undocumented or still unsafe for a 500-person org to turn on by default?";
+
+test("E6 ask keeps Slack/Jira as one topic and drops the safety question", () => {
+  const topics = knowledgeGapsFocusTopics(E6_ASK);
+  assert.ok(topics.length <= 2, `topics=${JSON.stringify(topics)}`);
+  assert.ok(topics.some((t) => /hunt loop/i.test(t)), `topics=${JSON.stringify(topics)}`);
+  assert.ok(
+    topics.some((t) => /slack\/jira/i.test(t) || (/slack/i.test(t) && /jira/i.test(t))),
+    `topics=${JSON.stringify(topics)}`
+  );
+  assert.ok(!topics.some((t) => /undocumented|500-person/i.test(t)));
+  assert.ok(!topics.some((t) => /^jira tools/i.test(t)));
+});
+
+test("E6 index queries are not hunt-shortened to Focus", () => {
+  assert.equal(indexQueryForRetrieval(E6_ASK), "Focus");
+  const queries = knowledgeGapsIndexQueries(E6_ASK);
+  assert.ok(queries.length >= 2, `queries=${JSON.stringify(queries)}`);
+  assert.ok(queries.every((q) => q.toLowerCase() !== "focus"));
+  assert.ok(queries.some((q) => /hunt|orchestrator|agent/i.test(q)));
+  assert.ok(queries.some((q) => /slack|jira/i.test(q)));
+});
+
+test("E6 stubs stay silent on no-indexed-code when AgentOrchestrator and slack paths exist", () => {
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: E6_ASK,
+    focusHitPaths: [
+      "src/api/agent/AgentOrchestrator.ts",
+      "src/server/slackAppApi.ts",
+      "src/api/agent/tools/integrationTools.ts"
+    ],
+    focusFiles: [
+      {
+        path: "src/api/agent/AgentOrchestrator.ts",
+        content: "export function createAgentOrchestrator() { search_slack; search_jira; }"
+      }
+    ]
+  });
+  assert.ok(!stubs.some((gap) => String(gap.message).includes("No indexed code")));
+  assert.ok(!stubs.some((gap) => gap.type === "focus_search_miss"));
 });
 
 const total = passed + failed;

@@ -11,9 +11,11 @@ import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import {
   FOCUS_MAX_ENTRY_PATHS,
+  FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
   mergeFocusEntryPaths
 } from "./userFocusQuery";
+import { onboardingIndexQueries, selectOnboardingEvidencePaths } from "./onboardingSearchQueries";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_FILE_CHARS = 12_000;
@@ -221,19 +223,26 @@ export function pickEntryPaths(options: {
     push(options.activeFile, true);
   }
 
-  for (const candidate of ENTRY_POINT_CANDIDATES) {
+  const focusQueryEarly = focusQueryForRetrieval(options.userFocus);
+  const candidates = focusQueryEarly
+    ? ENTRY_POINT_CANDIDATES.filter((candidate) => /^readme\.md$/i.test(candidate))
+    : ENTRY_POINT_CANDIDATES;
+
+  for (const candidate of candidates) {
     push(candidate, allowBlindCandidates);
     if (picked.length >= MAX_ENTRY_FILES) {
       break;
     }
   }
 
-  for (const path of manifestPaths) {
-    if (picked.length >= MAX_ENTRY_FILES) {
-      break;
-    }
-    if (/^(src\/|docs\/|README)/i.test(path) && /\.(ts|tsx|js|jsx|md|json|yml|yaml)$/i.test(path)) {
-      push(path);
+  if (!focusQueryEarly) {
+    for (const path of manifestPaths) {
+      if (picked.length >= MAX_ENTRY_FILES) {
+        break;
+      }
+      if (/^(src\/|docs\/|README)/i.test(path) && /\.(ts|tsx|js|jsx|md|json|yml|yaml)$/i.test(path)) {
+        push(path);
+      }
     }
   }
 
@@ -243,12 +252,14 @@ export function pickEntryPaths(options: {
     return anchors;
   }
 
-  const focusPaths = topManifestPaths(
-    focusQuery,
+  const topicQuery = onboardingIndexQueries(options.userFocus).join(" ") || focusQuery;
+  const ranked = topManifestPaths(
+    topicQuery,
     { activeFile: options.activeFile },
     options.manifest,
-    FOCUS_MAX_ENTRY_PATHS
+    Math.max(FOCUS_MAX_ENTRY_PATHS * 4, 18)
   );
+  const focusPaths = selectOnboardingEvidencePaths(ranked, topicQuery, FOCUS_MAX_INJECTED_PATHS);
   if (focusPaths.length === 0) {
     return anchors;
   }
@@ -256,7 +267,8 @@ export function pickEntryPaths(options: {
   return mergeFocusEntryPaths({
     anchorPaths: anchors,
     focusPaths,
-    maxPaths: MAX_ENTRY_FILES
+    maxPaths: MAX_ENTRY_FILES,
+    minAnchors: 1
   });
 }
 

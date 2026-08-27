@@ -113,11 +113,17 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("PASS:"));
   assert.ok(prompt.includes("FAIL:"));
   assert.ok(prompt.includes("generic form→API→DB"));
+  assert.ok(prompt.includes("attached domain paths"));
+  assert.ok(prompt.includes("each topic that has attached evidence"));
+  assert.ok(prompt.includes("invented paths"));
+  assert.ok(prompt.includes("models.py"));
+  assert.ok(prompt.includes("tests/migrations"));
+  assert.ok(prompt.includes("compose service names"));
   assert.ok(prompt.includes("**How the open file fits**"));
   assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
   assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));
   assert.ok(prompt.includes("Do not treat disconnected or empty Coop integrations"));
-  assert.ok(prompt.includes('Avoid generic "read the README"'));
+  assert.ok(prompt.includes('generic "read the README"'));
   assert.ok(prompt.includes("one concrete fact"));
   assert.ok(prompt.includes("answer that ask explicitly"));
 });

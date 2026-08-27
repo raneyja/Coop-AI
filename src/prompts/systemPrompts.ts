@@ -147,14 +147,14 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence.
-FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints; section omitted, folded into Architecture, or left until the end.
+PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence. When the ask requests N files to read first, list N **attached domain paths** (not README / docker-compose / package.json unless that is the only evidence). If the ask has multiple topics, cover **each topic that has attached evidence** — not N files from one topic. Never name a path that is not in attached entry/focus-search files.
+FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); compose service names (web / api / postgres / redis) as the five files; tests/migrations as the five unless that is the only attached evidence; five files from a single topic when other topics have attached files; section omitted, folded into Architecture, or left until the end.
 
 **Architecture**
-How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture.
+How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture or docker-compose service names (web / api / postgres / redis) with no domain path.
 
 **Key subsystems**
-One bullet per subsystem with supporting file paths.
+One bullet per subsystem with supporting file paths. FAIL: compose service names as subsystems with no domain path from attached entry/focus files.
 ${activeFileSection}
 
 **Entry points**
@@ -167,7 +167,7 @@ Concrete risks tied to paths, config, or missing docs *in the repository*. Do no
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
 
 **Suggested next steps**
-Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). Avoid generic "read the README" unless that is the only onboarding path in evidence.
+Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). When ## User focus asked for files to read first, those steps must be the same attached domain files — not generic "read the README" unless that is the only onboarding path in evidence.
 
 **Sources**
 Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from that source (file counts, top-level dirs, named anchors) — never filler like "contributed insights into the structure." Full detail is in the Sources evidence card.`;
@@ -289,10 +289,10 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: answers the ask from scan/docs evidence (or states scan unavailable). FAIL: invents gaps; omits the section.
+PASS: answers the ask from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached; omits the section.
 
 **Documentation gaps**
-When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
+When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection unless focus file excerpts are attached in the user message.
 
 For each attached documentation source with \`count\` > 0, add its subsection first in this section, in this order: Notion (\`<notion_pages count="N">\` → **Notion pages reviewed**), Confluence (\`<confluence_pages count="N">\` → **Confluence pages reviewed**), then Google Docs (\`<google_docs count="N">\` → **Google Docs reviewed**). Under each, list exactly N bullets — one per \`<page>\`/\`<doc>\` title, in the same order as the XML:
 

@@ -72,6 +72,9 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     lines.push(
       "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
+    lines.push(
+      "When the focus asks where something lives, how a flow works, or which files to read first: **Your question** must name those files/symbols from attached `<repo_entry_files>` / focus-search bodies **before** Architecture. Five files to read first = five attached **domain** paths, not README / docker-compose / package.json unless that is the only evidence. Never name a path that is not in those attached files (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence — not five files from one topic. Tests/migrations are not the five unless that is the only attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
+    );
   } else {
     lines.push(
       "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
@@ -137,7 +140,7 @@ function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummar
     "- **Risks & unknowns**: only path-tied or evidence-tied risks (config, deploy, missing docs *in the repo*). Do **not** treat disconnected or empty Coop integrations (Slack, Jira, Confluence, etc.) as repository risks unless the user asked about those tools or code evidence shows they are required."
   );
   lines.push(
-    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
+    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). When ## User focus asked for files to read first, list those attached domain files — the same paths as **Your question**, covering each attached topic. Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
   );
   lines.push(
     "- **Sources** bullets: after each `[Sources: …]` label, keep one concrete fact (counts, top-level dirs, named anchors). Forbidden filler: \"contributed insights\", \"provided details\", \"offered information\"."

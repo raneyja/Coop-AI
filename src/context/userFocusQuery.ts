@@ -6,14 +6,39 @@
 /** Min length for a retrieval query (aligned with semantic retrieval). */
 export const FOCUS_QUERY_MIN_LENGTH = 8;
 
-/** Keep at least this many canonical anchors when merging focus paths. */
-export const FOCUS_MIN_ANCHOR_PATHS = 2;
+/** Keep at most this many canonical anchors when merging focus paths. */
+export const FOCUS_MIN_ANCHOR_PATHS = 1;
+
+const LOW_VALUE_ANCHOR_BASENAMES = new Set([
+  "package.json",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "agents.md",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock"
+]);
+
+/** README is the only onboarding anchor worth keeping when focus hits exist. */
+export function isLowValueAnchorPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+  const base = normalized.split("/").pop() ?? normalized;
+  if (LOW_VALUE_ANCHOR_BASENAMES.has(base) || LOW_VALUE_ANCHOR_BASENAMES.has(normalized)) {
+    return true;
+  }
+  return normalized === "docs/readme.md";
+}
+
+export function isReadmeAnchorPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+  return /(^|\/)readme\.md$/.test(normalized);
+}
 
 /** Max entry files after merging anchors + focus hits. */
 export const FOCUS_MAX_ENTRY_PATHS = 6;
 
 /** Max focus-ranked paths to inject ahead of generic manifest fillers. */
-export const FOCUS_MAX_INJECTED_PATHS = 3;
+export const FOCUS_MAX_INJECTED_PATHS = 5;
 
 const PREFIX_FILLER_RE =
   /^(please|pls|can you|could you|would you|hey coop|hey|hi|ok|okay)[,!.:]?(?:\s+|$)/i;
@@ -178,7 +203,8 @@ export function focusGatherSatisfied(options: {
 
 /**
  * Merge focus-search file bodies into Understand Repo entryFiles.
- * Preserves existing anchors; appends focus hits that are not already attached.
+ * Focus hits go first and displace low-value anchors (package.json, compose, AGENTS.md).
+ * At most one README is kept when focus bodies exist.
  */
 export function mergeFocusFilesIntoEntryFiles<T extends { path: string; content?: string; truncated?: boolean }>(
   entryFiles: T[] | undefined,
@@ -186,21 +212,45 @@ export function mergeFocusFilesIntoEntryFiles<T extends { path: string; content?
   maxPaths = FOCUS_MAX_ENTRY_PATHS
 ): T[] {
   const existing = [...(entryFiles ?? [])];
-  const seen = new Set(
-    existing.map((file) => file.path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase())
-  );
-  for (const file of focusFiles) {
-    if (existing.length >= maxPaths) {
-      break;
+  const focus = focusFiles.filter((file) => file.content.trim());
+  if (focus.length === 0) {
+    return existing.slice(0, maxPaths);
+  }
+
+  const normalize = (path: string): string =>
+    path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+  const seen = new Set<string>();
+  const out: T[] = [];
+
+  const push = (file: T | undefined): void => {
+    if (!file || out.length >= maxPaths) {
+      return;
     }
-    const key = file.path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
-    if (seen.has(key) || !file.content.trim()) {
-      continue;
+    const key = normalize(file.path);
+    if (seen.has(key)) {
+      return;
     }
     seen.add(key);
-    existing.push(file as T);
+    out.push(file);
+  };
+
+  for (const file of focus) {
+    if (isLowValueAnchorPath(file.path)) {
+      continue;
+    }
+    push(file as T);
   }
-  return existing.slice(0, maxPaths);
+  const readme = existing.find((file) => isReadmeAnchorPath(file.path));
+  if (readme) {
+    push(readme);
+  }
+  for (const file of existing) {
+    if (isLowValueAnchorPath(file.path) || isReadmeAnchorPath(file.path)) {
+      continue;
+    }
+    push(file);
+  }
+  return out.slice(0, maxPaths);
 }
 
 /** Content tokens from focus text for path matching (stop-word stripped). */

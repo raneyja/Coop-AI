@@ -141,6 +141,33 @@ test("knowledge-gaps synthesis labels Confluence as org docs not repo architectu
   assert.ok(prompt.includes("Coop-AI ADRs"));
 });
 
+test("knowledge-gaps with focus excerpts audits attached code instead of claiming it is missing", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: {
+      userFocus:
+        "Focus on the agent hunt loop and mid-loop Slack/Jira tools — what's undocumented or still unsafe for a 500-person org to turn on by default?",
+      focusSearchQuery: "agent hunt loop | mid-loop Slack/Jira tools",
+      focusSearchPaths: ["src/api/agent/AgentOrchestrator.ts"],
+      focusFiles: [
+        {
+          path: "src/api/agent/AgentOrchestrator.ts",
+          content: "const MAX_INTEGRATION_TOOL_CALLS = 3;\nsearch_slack(); search_jira();"
+        }
+      ]
+    },
+    owner: "raneyja",
+    repo: "Coop-AI",
+    userFocus:
+      "Focus on the agent hunt loop and mid-loop Slack/Jira tools — what's undocumented or still unsafe for a 500-person org to turn on by default?"
+  });
+  assert.ok(prompt.includes("### Focus file excerpts"));
+  assert.ok(prompt.includes("src/api/agent/AgentOrchestrator.ts"));
+  assert.ok(prompt.includes("MAX_INTEGRATION_TOOL_CALLS"));
+  assert.ok(prompt.includes("default-on"));
+  assert.ok(!prompt.includes("No indexed code"));
+  assert.ok(prompt.includes("Do not claim the code is missing"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

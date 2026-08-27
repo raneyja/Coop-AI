@@ -5,6 +5,7 @@
  */
 
 import { focusQueryForRetrieval, tokenizeFocusTerms } from "./userFocusQuery";
+import { isWeakIndexQuery } from "./onboardingSearchQueries";
 
 /** Phrases that only set framing, not subsystem topics. */
 const FOCUS_FRAMING_PREFIX =
@@ -17,6 +18,12 @@ const FOCUS_FRAMING_PREFIX =
  */
 const GAPS_QUESTION_FRAMING =
   /^(?:where\s+are\s+(?:the\s+)?(?:biggest\s+)?(?:documentation\s+or\s+|docs?\s+or\s+)?(?:knowledge\s+)?gaps?\s+(?:around|for|in|about|regarding)\s+|what\s+are\s+(?:the\s+)?(?:biggest\s+)?(?:documentation\s+or\s+|docs?\s+or\s+)?(?:knowledge\s+)?gaps?\s+(?:around|for|in|about|regarding)\s+|audit\s+(?:the\s+)?(?:knowledge\s+)?gaps?\s+(?:around|for|in|about|regarding)\s+)/i;
+
+/** Trailing “what’s undocumented / still unsafe…” is the audit ask, not a topic. */
+const TRAILING_AUDIT_QUESTION =
+  /\s*[—–-]\s*(?:what'?s|what is|what remains)?\s*(?:undocumented|still unsafe|unsafe|missing).*$/i;
+
+const TOOL_PAIR_PLACEHOLDER = "\u0000";
 
 /** Meta tokens that must not suppress focus stubs or dominate Confluence OR queries. */
 const GAPS_FOCUS_META_TOKENS = new Set([
@@ -76,6 +83,7 @@ export function stripKnowledgeGapsTopicFraming(text: string): string {
   return text
     .replace(GAPS_QUESTION_FRAMING, "")
     .replace(FOCUS_FRAMING_PREFIX, "")
+    .replace(TRAILING_AUDIT_QUESTION, "")
     .replace(/[?!.]+$/g, "")
     .trim();
 }
@@ -96,12 +104,25 @@ export function knowledgeGapsFocusTopics(userFocus?: string): string[] {
   if (!stripped) {
     return [gather];
   }
-  const parts = stripped
+  const withPairs = stripped.replace(
+    /\b([A-Za-z][A-Za-z0-9+.-]{1,24})\/([A-Za-z][A-Za-z0-9+.-]{1,24})\b/g,
+    (_match, left: string, right: string) => `${left}${TOOL_PAIR_PLACEHOLDER}${right}`
+  );
+  const parts = withPairs
     .split(/\s*(?:,|;|\/|\band\b|\bplus\b|\bas\s+well\s+as\b)\s*/i)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 3);
-  const unique = [...new Set(parts)];
+    .map((part) =>
+      part
+        .replace(new RegExp(TOOL_PAIR_PLACEHOLDER, "g"), "/")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter((part) => part.length >= 3 && !isAuditLeftoverTopic(part));
+  const unique = [...new Set(parts)].slice(0, 3);
   return unique.length > 0 ? unique : [stripped];
+}
+
+function isAuditLeftoverTopic(part: string): boolean {
+  return /^(what'?s undocumented|still unsafe|undocumented or still unsafe)/i.test(part.trim());
 }
 
 /** Distinctive topic tokens — meta Gaps words excluded. */
@@ -217,40 +238,122 @@ export function knowledgeGapsFocusGatherTerms(userFocus?: string): string[] {
   return terms.slice(0, 12);
 }
 
-function topicHasCodeEvidence(topic: string, hits: string[]): boolean {
-  if (hits.length === 0) {
+/** Index queries for Gaps — topics + synonyms, never hunt-shortened `"Focus"`. */
+export function knowledgeGapsIndexQueries(userFocus?: string): string[] {
+  const topics = knowledgeGapsFocusTopics(userFocus);
+  const terms = knowledgeGapsFocusGatherTerms(userFocus);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string): void => {
+    const term = raw.trim();
+    if (!term || isWeakIndexQuery(term) || term.length < 3) {
+      return;
+    }
+    const key = term.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    out.push(term);
+  };
+  for (const topic of topics) {
+    push(topic);
+    for (const synonym of topicIndexSynonyms(topic)) {
+      push(synonym);
+    }
+  }
+  for (const term of terms) {
+    push(term);
+  }
+  return out.slice(0, 8);
+}
+
+const DISTINCTIVE_TOPIC_TOKENS = new Set([
+  "agent",
+  "slack",
+  "jira",
+  "hunt",
+  "loop",
+  "orchestrator",
+  "webhook",
+  "auth"
+]);
+
+function topicIndexSynonyms(topic: string): string[] {
+  const lower = topic.toLowerCase();
+  const extra: string[] = [];
+  if (/\bhunt\b|\bloop\b|\bagent\b/i.test(lower)) {
+    extra.push("orchestrator", "agent");
+  }
+  if (/\bslack\b/i.test(lower)) {
+    extra.push("search_slack", "slack");
+  }
+  if (/\bjira\b/i.test(lower)) {
+    extra.push("search_jira", "jira");
+  }
+  return extra;
+}
+
+function topicHasCodeEvidence(
+  topic: string,
+  hits: string[],
+  bodies?: Array<{ path: string; content?: string }>
+): boolean {
+  const tokens = [
+    ...knowledgeGapsTopicContentTokens(topic),
+    ...topicIndexSynonyms(topic).map((syn) => syn.toLowerCase())
+  ];
+  const uniqueTokens = [...new Set(tokens.filter((token) => token.length >= 4))];
+  const pathHaystacks = hits.map((path) => path.replace(/\\/g, "/").toLowerCase());
+  const bodyHaystacks = (bodies ?? []).map(
+    (file) => `${file.path}\n${file.content ?? ""}`.toLowerCase()
+  );
+  const haystacks = [...pathHaystacks, ...bodyHaystacks];
+  if (haystacks.length === 0) {
     return false;
   }
-  const tokens = knowledgeGapsTopicContentTokens(topic);
-  const phrase = topic
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
+  const phrase = topic.toLowerCase().replace(/[^a-z0-9]+/g, "");
   if (phrase.length >= 6) {
-    const phraseHit = hits.some((path) => path.replace(/[^a-z0-9]/g, "").includes(phrase));
+    const phraseHit = haystacks.some((hay) => hay.replace(/[^a-z0-9]/g, "").includes(phrase));
     if (phraseHit) {
       return true;
     }
   }
-  if (tokens.length === 0) {
+  if (uniqueTokens.length === 0) {
     return false;
   }
-  return hits.some((path) => {
-    const matched = tokens.filter((token) => path.includes(token));
-    if (tokens.length === 1) {
+  return haystacks.some((hay) => {
+    const matched = uniqueTokens.filter((token) => hay.includes(token));
+    if (matched.length === 0) {
+      return false;
+    }
+    if (uniqueTokens.length === 1) {
       return matched.length === 1;
     }
-    // Multi-token topics need a strong signal (2+ tokens or one distinctive ≥6).
-    return matched.length >= 2 || matched.some((token) => token.length >= 6);
+    return (
+      matched.length >= 2 ||
+      matched.some((token) => token.length >= 5 || DISTINCTIVE_TOPIC_TOKENS.has(token))
+    );
   });
+}
+
+function isDocsPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  return (
+    /(^|\/)docs\//.test(normalized) ||
+    /(^|\/)readme\.md$/.test(normalized) ||
+    /\.md$/.test(normalized)
+  );
 }
 
 /**
  * Heuristic scan stubs when focus topics have no attached code/docs evidence yet.
- * Keeps the response contract from collapsing to open-file ownership alone.
+ * Never claims indexed code is missing when focus hits or file bodies exist.
  */
 export function knowledgeGapsFocusTopicGapStubs(options: {
   userFocus?: string;
   focusHitPaths?: string[];
+  focusFiles?: Array<{ path: string; content?: string }>;
 }): Array<Record<string, unknown>> {
   const topics = knowledgeGapsFocusTopics(options.userFocus);
   if (topics.length === 0) {
@@ -259,16 +362,36 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
   const hits = (options.focusHitPaths ?? []).map((path) =>
     path.replace(/\\/g, "/").toLowerCase()
   );
+  const bodies = options.focusFiles ?? [];
+  const anyHits = hits.length > 0 || bodies.some((file) => (file.content ?? "").trim());
+  const docsAttached = [...hits, ...bodies.map((file) => file.path)].some(isDocsPath);
   const gaps: Array<Record<string, unknown>> = [];
   for (const topic of topics) {
-    if (topicHasCodeEvidence(topic, hits)) {
+    if (topicHasCodeEvidence(topic, hits, bodies)) {
+      if (!docsAttached) {
+        gaps.push({
+          type: "default_on_risk",
+          priority: "medium",
+          topic,
+          message: `${topic} is implemented in attached code; no operator default-on runbook in attached docs.`
+        });
+      }
+      continue;
+    }
+    if (anyHits) {
+      gaps.push({
+        type: "missing_docs",
+        priority: "medium",
+        topic,
+        message: `Docs/runbook may be thin for focus topic: ${topic}`
+      });
       continue;
     }
     gaps.push({
-      type: "missing_docs",
+      type: "focus_search_miss",
       priority: "medium",
       topic,
-      message: `No indexed code or docs evidence attached yet for focus topic: ${topic}`
+      message: `No focus-ranked paths yet for focus topic: ${topic}`
     });
   }
   return gaps;
