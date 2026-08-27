@@ -392,7 +392,7 @@
         "coopAI.autocomplete.showMultipleSuggestions": {
           "type": "boolean",
           "default": false,
-          "description": "Request and cycle multiple ranked suggestions (Alt+[ / Alt+])."
+          "description": "Cycle distinct ranked suggestions (Alt+[ / Alt+]). Off by default. Near-duplicates such as || vs ?? are shown as one suggestion."
         },
         "coopAI.autocomplete.requestTimeoutMs": {
           "type": "number",

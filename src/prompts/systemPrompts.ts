@@ -475,11 +475,14 @@ export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
 
 const INLINE_COMPLETION_PROMPT = `You are a code completion engine. The user is typing code.
 
-TASK: Complete the current line or the next 2-3 lines of code.
+TASK: Complete the current line, or the full remaining function/block body when the cursor sits in an empty block (opening brace above, closing brace in SUFFIX).
 
 RULES:
 - Match indentation and style of surrounding code
-- Complete ONE logical statement (not multiple unrelated blocks)
+- Empty function/block hole: fill the FULL body until the suffix closing brace — not one statement
+- Otherwise complete ONE logical statement (not multiple unrelated blocks)
+- Prefer identifiers and property access from PREFIX (headers.authorization), not invented bracket/case-fold lookups
+- Use the function name in PREFIX (extractBearerToken → Bearer token extraction)
 - If uncertain, return JUST the most likely completion
 - Never explain, never add comments, just code
 - Respect language syntax and conventions

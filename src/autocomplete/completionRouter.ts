@@ -6,7 +6,7 @@ import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveRuntimeAutocompleteModel } from "../config/featureModelAssignments";
 import { resolveEffectiveUseGraphContext } from "./autocompleteConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
-import { buildPromptContextBlock, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
+import { buildPromptContextBlock, isEmptyBlockHole, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
 import { filterAndRankCompletions, normalizeCompletionText, consolidateAfterDotRanked, type SymbolPlausibilityHints } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
 import { applyEdgeCaseFallbacks } from "./edgeCases";
@@ -338,7 +338,7 @@ export class CompletionRouter {
     };
 
     try {
-      return await this.requestStreaming(body, baseUrl, signal);
+      return await this.requestStreaming(body, baseUrl, signal, context);
     } catch (primaryError) {
       if (!preset.fallback || signal.aborted) {
         throw primaryError;
@@ -350,7 +350,8 @@ export class CompletionRouter {
           model: preset.fallback.model
         },
         baseUrl,
-        signal
+        signal,
+        context
       );
     }
   }
@@ -369,7 +370,8 @@ export class CompletionRouter {
       temperature: number;
     },
     baseUrl: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    context: ExtractedCodeContext
   ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
     let buffered = "";
     let lastValid = "";
@@ -379,7 +381,7 @@ export class CompletionRouter {
       body,
       (chunk) => {
         buffered += chunk;
-        const normalized = normalizeCompletionText(buffered, undefined);
+        const normalized = normalizeCompletionText(buffered, context);
         if (normalized) {
           lastValid = normalized;
         }
@@ -387,7 +389,7 @@ export class CompletionRouter {
       signal
     );
 
-    const text = lastValid || normalizeCompletionText(result.text, undefined) || buffered.trim();
+    const text = lastValid || normalizeCompletionText(result.text, context) || buffered.trim();
     return { ...result, text, alternatives: result.alternatives ?? [] };
   }
 }
@@ -402,7 +404,10 @@ export function synthesizeMessageFromSegments(
   if (!prefix) {
     return fallbackPrompt;
   }
-  return `${hints}\n\nGROUNDING: ${autocompleteGroundingRules(context)}\n\nPREFIX:\n${segments.prefix}\n\nSUFFIX:\n${segments.suffix}\n\nTASK: Complete the code at the cursor position (between PREFIX and SUFFIX). Return ONLY the completion text.`;
+  const task = isEmptyBlockHole(context)
+    ? "Complete the FULL function/block body between PREFIX and the closing brace in SUFFIX. Match PREFIX property-access style. Return ONLY the completion text."
+    : "Complete the code at the cursor position (between PREFIX and SUFFIX). Return ONLY the completion text.";
+  return `${hints}\n\nGROUNDING: ${autocompleteGroundingRules(context)}\n\nPREFIX:\n${segments.prefix}\n\nSUFFIX:\n${segments.suffix}\n\nTASK: ${task}`;
 }
 
 export function buildFimSegments(
@@ -424,6 +429,9 @@ export function buildFimSegments(
 
 function buildFimPrefix(context: ExtractedCodeContext): string {
   const parts: string[] = [];
+  if (isEmptyBlockHole(context) && context.importsBlock && !context.previousLines.includes(context.importsBlock)) {
+    parts.push(context.importsBlock);
+  }
   if (context.previousLines) {
     parts.push(context.previousLines);
   }
@@ -439,7 +447,9 @@ function buildAutocompleteUserMessage(context: ExtractedCodeContext): string {
   const grounding = autocompleteGroundingRules(context);
   const task = context.afterDot
     ? "Complete ONLY the identifier/method after the dot. Return a single member name (optional `(`). No arguments, string literals, or newlines."
-    : "Complete the current line or next 2-3 lines. Return ONLY code grounded in the attached context.";
+    : isEmptyBlockHole(context)
+      ? "Fill the FULL function/block body until the closing brace in SUFFIX. Match PREFIX style and function-name identifiers. Return ONLY code."
+      : "Complete the current line or next 2-3 lines. Return ONLY code grounded in the attached context.";
   return `${block}\n\nHINT: ${hints}\n\nGROUNDING: ${grounding}\n\nTASK: ${task}`;
 }
 

@@ -1,5 +1,5 @@
 import type { AutocompleteSettings, ExtractedCodeContext, RankedCompletion } from "./types";
-import { wantsMultiLineCompletion } from "./contextAnalyzer";
+import { isEmptyBlockHole, wantsMultiLineCompletion } from "./contextAnalyzer";
 
 export type SymbolPlausibilityHints = {
   manifestSymbols?: ReadonlySet<string>;
@@ -9,6 +9,12 @@ const TRIVIAL_PATTERN = /^[\s;,.)}\]]+$/;
 const FENCE_PATTERN = /^```[\w]*\n?|```$/g;
 const SINGLE_LINE_CAP = 4;
 const MULTI_LINE_CAP = 8;
+const EMPTY_BLOCK_LINE_CAP = 16;
+/** Multi-line / empty-block holes may exceed the single-line setting cap. */
+export const MULTI_LINE_MIN_SUGGESTION_CHARS = 480;
+const GENERIC_HEADER_CASE_FOLD = /\[[\s]*["']Authorization["'][\s]*\]/;
+const BRACKET_AUTH_HEADER = /headers\s*\[\s*["']authorization["']\s*\]/i;
+const DOT_AUTH_HEADER = /headers\.authorization\b/;
 const DECL_ASSIGNMENT_PREFIX = /\b(?:const|let|var)\s+\w+\s*=\s*$/;
 const REDUNDANT_DECL_ASSIGNMENT = /^(?:const|let|var)\s+\w+\s*=\s*/;
 const INLINE_STATEMENT_START =
@@ -110,7 +116,10 @@ export function filterAndRankCompletions(
   const ranked: RankedCompletion[] = [];
 
   for (const item of raw) {
-    const cleaned = sanitizeCompletionForContext(normalizeCompletionText(item, context), context);
+    const cleaned = clampCompletionToMaxLength(
+      sanitizeCompletionForContext(normalizeCompletionText(item, context), context),
+      effectiveMaxSuggestionLength(context, settings)
+    );
     if (!cleaned) {
       continue;
     }
@@ -132,13 +141,14 @@ export function filterAndRankCompletions(
   }
 
   ranked.sort((a, b) => b.score - a.score);
+  const distinct = collapseNearDuplicateCompletions(ranked);
   const limit = settings.showMultipleSuggestions ? 3 : 1;
   if (context.afterDot) {
-    return ranked
+    return distinct
       .filter((item) => !rejectsAfterDotCompletion(item.text, context.currentLinePrefix))
       .slice(0, limit);
   }
-  return ranked.slice(0, limit);
+  return distinct.slice(0, limit);
 }
 
 export function normalizeCompletionText(text: string, context?: ExtractedCodeContext): string {
@@ -150,9 +160,11 @@ export function normalizeCompletionText(text: string, context?: ExtractedCodeCon
   const lineCap =
     context?.afterDot
       ? 1
-      : context && wantsMultiLineCompletion(context)
-        ? MULTI_LINE_CAP
-        : SINGLE_LINE_CAP;
+      : context && isEmptyBlockHole(context)
+        ? EMPTY_BLOCK_LINE_CAP
+        : context && wantsMultiLineCompletion(context)
+          ? MULTI_LINE_CAP
+          : SINGLE_LINE_CAP;
   const lines = value.split("\n");
   if (lines.length > lineCap) {
     value = lines.slice(0, lineCap).join("\n");
@@ -584,7 +596,8 @@ function scoreCompletion(
   if (text.length < 2) {
     return { include: false, score: 0 };
   }
-  if (text.length > settings.maxSuggestionLength) {
+  const maxLen = effectiveMaxSuggestionLength(context, settings);
+  if (text.length > maxLen) {
     return { include: false, score: 0 };
   }
   if (TRIVIAL_PATTERN.test(text)) {
@@ -621,8 +634,107 @@ function scoreCompletion(
   if (isBoilerplate(text)) {
     score -= 0.1;
   }
+  score += emptyBlockHoleAlignment(text, context, fileTextSample);
   score += symbolPlausibilityAdjustment(text, context, fileTextSample, symbolHints);
   return { include: true, score };
+}
+
+export function effectiveMaxSuggestionLength(
+  context: ExtractedCodeContext,
+  settings: AutocompleteSettings
+): number {
+  if (isEmptyBlockHole(context) || wantsMultiLineCompletion(context)) {
+    return Math.max(settings.maxSuggestionLength, MULTI_LINE_MIN_SUGGESTION_CHARS);
+  }
+  return settings.maxSuggestionLength;
+}
+
+export function suggestionDedupeKey(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/\|\|/g, "??")
+    .replace(/\["Authorization"\]/g, '["authorization"]')
+    .replace(/\['Authorization'\]/g, "['authorization']")
+    .trim()
+    .toLowerCase();
+}
+
+export function collapseNearDuplicateCompletions(ranked: RankedCompletion[]): RankedCompletion[] {
+  const seen = new Set<string>();
+  const distinct: RankedCompletion[] = [];
+  for (const item of ranked) {
+    const key = suggestionDedupeKey(item.text);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    distinct.push(item);
+  }
+  return distinct;
+}
+
+export function clampCompletionToMaxLength(text: string, maxLen: number): string {
+  if (!text || text.length <= maxLen) {
+    return text;
+  }
+  const sliced = text.slice(0, maxLen);
+  const lastNl = sliced.lastIndexOf("\n");
+  if (lastNl > 32) {
+    return sliced.slice(0, lastNl);
+  }
+  return sliced;
+}
+
+function emptyBlockHoleAlignment(
+  text: string,
+  context: ExtractedCodeContext,
+  fileTextSample?: string
+): number {
+  if (!isEmptyBlockHole(context)) {
+    return 0;
+  }
+
+  let adjustment = 0;
+  if (text.includes("\n")) {
+    adjustment += 0.1;
+  } else {
+    adjustment -= 0.12;
+  }
+
+  const signature = `${context.parentSignature}\n${context.previousLines}`;
+  const tokens = signatureNameTokens(signature);
+  const lowerText = text.toLowerCase();
+  for (const token of tokens) {
+    if (lowerText.includes(token.toLowerCase())) {
+      adjustment += 0.08;
+    }
+  }
+
+  const styleCorpus = `${context.previousLines}\n${context.currentLinePrefix}\n${fileTextSample ?? ""}`;
+  if (GENERIC_HEADER_CASE_FOLD.test(text) && !GENERIC_HEADER_CASE_FOLD.test(styleCorpus)) {
+    adjustment -= 0.2;
+  }
+  const preferDotAccess =
+    DOT_AUTH_HEADER.test(styleCorpus) || tokens.some((token) => token.toLowerCase() === "bearer");
+  if (preferDotAccess && BRACKET_AUTH_HEADER.test(text) && !BRACKET_AUTH_HEADER.test(styleCorpus)) {
+    adjustment -= 0.18;
+  }
+
+  return Math.max(-0.28, Math.min(0.24, adjustment));
+}
+
+function signatureNameTokens(signature: string): string[] {
+  const match =
+    /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/.exec(signature) ||
+    /\b(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/.exec(signature);
+  const name = match?.[1];
+  if (!name) {
+    return [];
+  }
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[\s_]+/)
+    .filter((part) => part.length >= 4);
 }
 
 function collectIdentifiers(source: string | undefined, target: Set<string>): void {

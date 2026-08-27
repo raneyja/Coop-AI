@@ -165,7 +165,7 @@ Inline ghost-text completions are **on by default**. Turn them off from the chat
 | `coopAI.autocomplete.debounceMs` | `300` | Ms after typing before auto-trigger (0–2000) |
 | `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters per suggestion (8–500) |
-| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle alternatives with Alt+[ / Alt+] |
+| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle distinct alternatives with Alt+[ / Alt+]; near-duplicates stay one suggestion |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias completions |
 
 Production routing uses **Mistral Codestral** — not user-selected models. See [Model assignments](/docs/model-assignments).

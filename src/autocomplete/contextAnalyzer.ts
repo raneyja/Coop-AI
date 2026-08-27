@@ -8,6 +8,8 @@ const MAX_LINE_SUFFIX_ON_LINE = 80;
 const MAX_SUFFIX_WINDOW_CHARS = 500;
 const MAX_PREVIOUS_LINES = 10;
 const MAX_PREVIOUS_CHARS = 1000;
+const EMPTY_BLOCK_PREVIOUS_LINES = 40;
+const EMPTY_BLOCK_PREVIOUS_CHARS = 3500;
 const MAX_SIGNATURE_CHARS = 200;
 const MAX_IMPORTS_CHARS = 500;
 
@@ -25,12 +27,15 @@ export function analyzeDocumentContext(
   const currentLinePrefix = currentLine.slice(0, column).slice(-MAX_LINE_PREFIX);
   const currentLineSuffix = currentLine.slice(column);
   const suffixWindow = extractSuffixWindow(lines, lineIndex, column);
+  const emptyBlock = isEmptyBlockCursor(lines, lineIndex, column);
+  const previousLineLimit = emptyBlock ? EMPTY_BLOCK_PREVIOUS_LINES : MAX_PREVIOUS_LINES;
+  const previousCharLimit = emptyBlock ? EMPTY_BLOCK_PREVIOUS_CHARS : MAX_PREVIOUS_CHARS;
 
-  const previousStart = Math.max(0, lineIndex - MAX_PREVIOUS_LINES);
+  const previousStart = Math.max(0, lineIndex - previousLineLimit);
   const previousSlice = lines.slice(previousStart, lineIndex);
   let previousLines = previousSlice.join("\n");
-  if (previousLines.length > MAX_PREVIOUS_CHARS) {
-    previousLines = previousLines.slice(-MAX_PREVIOUS_CHARS);
+  if (previousLines.length > previousCharLimit) {
+    previousLines = previousLines.slice(-previousCharLimit);
   }
 
   const importsBlock = truncateOversizedImports(extractImports(lines, document.languageId), MAX_IMPORTS_CHARS);
@@ -110,6 +115,9 @@ export function languageSpecificHints(context: ExtractedCodeContext): string {
     if (context.afterDot) {
       return "Complete ONLY the member name after the dot (and optional opening paren). One line. No blocks, arguments, or new statements.";
     }
+    if (isEmptyBlockHole(context)) {
+      return "Empty function/block body: fill the FULL body until the closing brace in SUFFIX. Match identifiers and property-access style from PREFIX (e.g. headers.authorization, not invented headers[\"Authorization\"] case-fold). Use names in the function signature (extractBearerToken → Bearer token extraction).";
+    }
     return "Match TS/JS style from context only; do not invent messages or copy unrelated blocks.";
   }
   if (id === "python") {
@@ -122,6 +130,18 @@ export function languageSpecificHints(context: ExtractedCodeContext): string {
     return "Prefer JOIN/WHERE patterns; respect SQL dialect keywords in context.";
   }
   return "Match surrounding code style.";
+}
+
+function isEmptyBlockCursor(lines: string[], lineIndex: number, column: number): boolean {
+  const current = lines[lineIndex] ?? "";
+  const prefix = current.slice(0, column);
+  const suffix = current.slice(column);
+  const following = lines.slice(lineIndex + 1).join("\n");
+  const after = following ? `${suffix}\n${following}` : suffix;
+  if (prefix.trim() !== "" && !/{\s*$/.test(prefix)) {
+    return false;
+  }
+  return /^\s*\}/.test(after);
 }
 
 function extractSuffixWindow(lines: string[], lineIndex: number, column: number): string {
@@ -315,17 +335,31 @@ export function wantsMultiLineCompletion(context: ExtractedCodeContext): boolean
   if (/[\(,]\s*$/.test(prefix)) {
     return true;
   }
-  if (isEmptyLineInsideBlock(context)) {
+  if (isEmptyBlockHole(context) || isEmptyLineInsideBlock(context)) {
     return true;
   }
   return false;
 }
 
-function isEmptyLineInsideBlock(context: ExtractedCodeContext): boolean {
+/**
+ * Cursor is on a blank (or indent-only) line, and the next code is a closing brace.
+ * Fill the whole body — not a single statement.
+ */
+export function isEmptyBlockHole(context: ExtractedCodeContext): boolean {
+  if (context.afterDot) {
+    return false;
+  }
+  if (/{\s*$/.test(context.currentLinePrefix)) {
+    return /^\s*\}/.test(`${context.currentLineSuffix}\n${context.suffixWindow}`);
+  }
   if (context.currentLinePrefix.trim() !== "") {
     return false;
   }
-  if (context.currentLinePrefix.length === 0) {
+  return /^\s*\}/.test(context.currentLineSuffix) || /^\s*\}/.test(context.suffixWindow);
+}
+
+function isEmptyLineInsideBlock(context: ExtractedCodeContext): boolean {
+  if (context.currentLinePrefix.trim() !== "") {
     return false;
   }
   let braceDepth = 0;

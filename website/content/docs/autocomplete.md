@@ -117,7 +117,7 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
 | `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters in one suggestion (8–500) |
-| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Request and cycle ranked alternatives (Alt+[ / Alt+]) |
+| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle **distinct** ranked suggestions (Alt+[ / Alt+]). Near-duplicates (`||` vs `??`) stay one ghost. |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias project-style completions |
 
 Advanced `coopAI.autocomplete.model` presets exist for developer tuning; production inline routing uses the assigned **Codestral** model regardless. See [Extension settings](/docs/extension-settings).

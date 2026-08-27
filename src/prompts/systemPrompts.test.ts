@@ -156,6 +156,8 @@ test("inline_completion excludes audience and output contract", () => {
   assert.equal(prompt.includes(AUDIENCE_MARKER), false);
   assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
   assert.ok(prompt.includes("code completion engine"));
+  assert.match(prompt, /full remaining function\/block body/i);
+  assert.match(prompt, /extractBearerToken/i);
 });
 
 test("code_edit use case uses patch output contract without Summary template", () => {
