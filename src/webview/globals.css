@@ -1395,7 +1395,32 @@
     cursor: pointer;
   }
 
+  .coop-agent-worked-toggle {
+    @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[12.5px] font-medium;
+    color: color-mix(in srgb, var(--coop-panel-muted) 62%, var(--coop-panel-foreground) 38%);
+    cursor: pointer;
+  }
+
+  .coop-agent-worked-toggle:hover,
   .coop-agent-thinking-toggle:hover {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-agent-worked-body {
+    @apply flex flex-col gap-1.5 pt-1;
+  }
+
+  .chat-message--agent-activity-complete {
+    @apply mb-1;
+  }
+
+  .coop-agent-path-btn {
+    @apply inline cursor-pointer border-0 bg-transparent p-0 text-left;
+    font: inherit;
+  }
+
+  .coop-agent-path-btn:hover {
+    text-decoration: underline;
     color: var(--coop-panel-foreground);
   }
 
@@ -1795,6 +1820,12 @@
   .coop-patch-file-path {
     @apply min-w-0 truncate text-left font-medium;
     color: var(--vscode-textLink-foreground);
+  }
+
+  .coop-patch-file-lang {
+    @apply min-w-0 flex-1 truncate text-left font-medium;
+    color: var(--coop-panel-foreground);
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
 
   .coop-patch-file-header > .coop-patch-file-path {

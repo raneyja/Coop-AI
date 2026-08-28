@@ -484,7 +484,18 @@ export function activate(context: vscode.ExtensionContext): void {
         api,
         apiBaseUrl: getApiBaseUrl(),
         codeHostRouter
-      }).readFile({ repoId }, filePath)
+      }).readFile({ repoId }, filePath),
+    findFiles: async ({ query: fileQuery, repoId }) => {
+      const coords = repoId
+        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
+        : undefined;
+      const hits = await codeHostRouter.searchRepositoryFiles(
+        fileQuery,
+        coords ?? undefined,
+        20
+      );
+      return hits.map((hit) => hit.path);
+    }
   });
   const services = {
     healthMonitor,

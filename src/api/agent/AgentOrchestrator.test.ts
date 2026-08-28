@@ -767,6 +767,76 @@ async function run(): Promise<void> {
     assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
   });
 
+  await test("named filename seeds read_file even when the body uses a different export", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = "export function extractBearerToken(header) {\n  return header;\n}\n";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query }) =>
+        query.toLowerCase().includes("authmiddleware") ? [filePath] : [],
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Find authMiddleware.ts and show me the export.",
+        repoId: "github:acme/demo",
+        action: "locate"
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /extractBearerToken/);
+          return "The export in src/server/authMiddleware.ts is extractBearerToken.";
+        }
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.match(result.steps[0]?.summary ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
+  await test("named path seeds the same read as a follow-up Read prompt", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = "export function extractBearerToken(header) {\n  return header;\n}\n";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Read src/server/authMiddleware.ts and show me the export.",
+        repoId: "github:acme/demo",
+        action: "locate"
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "The export is extractBearerToken."
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
   await test("planTurn startLine:1 still reads the class, not only the copyright line", async () => {
     const body = [
       "# Copyright (c) 2023-present Plane Software, Inc. and contributors",

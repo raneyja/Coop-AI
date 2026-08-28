@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DOGFOOD_HUNT_QUESTION, DOGFOOD_HUNT_SEARCH_QUERY } from "./dogfoodContract";
 import {
   extractAgentSearchQuery,
+  extractNamedSourceFiles,
   fallbackAgentSearchQueries,
   identifierSearchAliases,
   indexQueryForRetrieval,
@@ -10,6 +11,8 @@ import {
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
+  queryHasNamedSymbol,
+  queryNamesSourceFile,
   queryRoleHints,
   sanitizeAgentSearchQuery,
   selectChatEvidencePaths,
@@ -354,6 +357,36 @@ test("textMentionsQueryRoles requires the role in the file or path", () => {
     ),
     true
   );
+});
+
+test("filename asks are file hunts, not required in-body symbols", () => {
+  const findAsk = "Find authMiddleware.ts and show me the export.";
+  const readAsk = "Read src/server/authMiddleware.ts and show me the export.";
+  assert.deepEqual(extractNamedSourceFiles(findAsk), ["authMiddleware.ts"]);
+  assert.deepEqual(extractNamedSourceFiles(readAsk), ["src/server/authMiddleware.ts"]);
+  assert.equal(queryHasNamedSymbol(findAsk), false);
+  assert.equal(queryHasNamedSymbol(readAsk), false);
+  assert.equal(queryHasNamedSymbol("Where is requireAuth defined?"), true);
+  assert.equal(queryNamesSourceFile("src/server/authMiddleware.ts", findAsk), true);
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "src/server/authMiddleware.ts",
+        lineNumber: 1,
+        content: "export function extractBearerToken() {}",
+        score: 0.4
+      },
+      {
+        fileName: "web/login-form.tsx",
+        lineNumber: 1,
+        content: "export function LoginForm() {}",
+        score: 0.9
+      }
+    ],
+    2,
+    findAsk
+  );
+  assert.equal(picked[0]?.fileName, "src/server/authMiddleware.ts");
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

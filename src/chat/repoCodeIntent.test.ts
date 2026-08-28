@@ -17,6 +17,8 @@ const CASES: Case[] = [
   { q: "Is rate limiting implemented anywhere?", expect: "locate" },
   { q: "Do we have a retry helper in this codebase?", expect: "locate" },
   { q: "Find all usages of verifyToken", expect: "locate" },
+  { q: "Find authMiddleware.ts and show me the export.", expect: "locate" },
+  { q: "Read src/server/authMiddleware.ts and show me the export.", expect: "locate" },
   { q: "Where does the webhook handler live?", expect: "locate" },
   {
     q: "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?",
@@ -29,7 +31,11 @@ const CASES: Case[] = [
   { q: "Why do we have two auth systems in this project?", expect: "understand" },
   { q: "How does session refresh work?", expect: "understand" },
   { q: "How does the payment pipeline handle retries?", expect: "understand" },
+  { q: "How is auth middleware wired?", expect: "understand" },
+  { q: "How do we handle retries in the payment pipeline?", expect: "understand" },
+  { q: "Why is requireAuth called twice?", expect: "understand" },
   { q: "Does this project validate webhook signatures?", expect: "locate" },
+  { q: "How many files import lodash?", expect: "locate" },
 
   // Change — the user wants code modified.
   { q: "Add a null check to requireAuth in the auth middleware", expect: "change" },
@@ -44,6 +50,24 @@ const CASES: Case[] = [
   { q: "Describe how the billing service is structured", expect: "understand" },
   { q: "Explain this function and how it uses requireAuth", expect: "understand" },
   { q: "Explain this function and how it fits into the codebase", expect: "understand" },
+
+  // Inventory — measured index facts, not a hunt (agent listing dirs cannot count files).
+  { q: "How many files are in this repo?", expect: "none" },
+  { q: "What's the file count?", expect: "none" },
+  { q: "How many lines of code are in this repository?", expect: "none" },
+  { q: "How big is this repo?", expect: "none" },
+  { q: "What's the structure of this repo?", expect: "none" },
+  { q: "How is this repo organized?", expect: "none" },
+
+  // How/Why that is not a code hunt (how-to, age, status, product).
+  { q: "How old is this repo?", expect: "none" },
+  { q: "How do I run the tests?", expect: "none" },
+  { q: "How long does indexing take?", expect: "none" },
+  { q: "How should we price this?", expect: "none" },
+  { q: "How is the project going?", expect: "none" },
+  { q: "Why am I not getting an answer?", expect: "none" },
+  { q: "Why is chat so slow?", expect: "none" },
+  { q: "Why is this taking so long?", expect: "none" },
 
   // Adversarial — must NOT loop (enterprise false-positive bar).
   { q: "Explain this function", expect: "none" },

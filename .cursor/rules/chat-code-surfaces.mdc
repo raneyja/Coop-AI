@@ -14,7 +14,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 |--------|------|-------------|--------------|
 | **Cite** | Explaining or highlighting **existing** repo code (no change) | Citation fence with **real** `startLine:endLine:path` (integers), or Cursor info-string form | Clickable **path** header (optional `:lines`), VS Code token colors from path extension, jump-to-file. **No** `TEXT` / `TYPESCRIPT` language badge. |
 | **Edit** | User should apply a change | `File:` + ` ```patch ` SEARCH/REPLACE | Patch card / diff chrome + Apply / Reject (shared IDE family with cite, plus diff markers). |
-| **Anonymous** | Invented / non-repo example only | Ordinary ` ```lang ` fence | Language badge + Copy allowed. Rare. |
+| **Anonymous** | Invented / non-repo example only | Ordinary ` ```lang ` fence | Same `coop-patch-file` header + token-colored body as cite. Language may appear in the path-style header. Copy allowed. Never a markdown language-badge card or **TEXT**. Rare. |
 
 ## Hard fails (never ship / never prompt)
 
@@ -37,7 +37,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
    - the active file's basename appears in nearby prose.
 5. Never upgrade `patch` / `diff` / shell / doc fences via active file.
 6. Remaining anonymous fences still use **IDE chrome + token colors** for any language — never uppercase **TEXT** / monochrome markdown. Highlighter must color unknown source langs, not fall back to plain text.
-7. `ChatCodeBlock` must not show a **TEXT** badge. Cite and patch file headers are the same product family: path-first, monospace, open-in-editor.
+7. `ChatCodeBlock` must not show a **TEXT** badge. Cite, edit, and anonymous headers are the same product family (`coop-patch-file`): path-first, monospace. Anonymous reuses that chrome — never the old markdown `bash` + Copy language-badge card.
 
 ## Prompt contract
 

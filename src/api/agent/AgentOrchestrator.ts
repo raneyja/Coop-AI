@@ -18,11 +18,13 @@ import type { AgentToolContext } from "./agentToolContext";
 import { parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
   fallbackAgentSearchQueries,
+  extractNamedSourceFiles,
   namedSymbolKeys,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
   queryHasNamedSymbol,
+  queryNamesSourceFile,
   queryRoleHints,
   rankSearchHits,
   sanitizeAgentSearchQuery,
@@ -256,6 +258,19 @@ export class AgentOrchestrator {
       matchingRead = true;
       filesRead = 1;
       lastToolResult = seeded.raw;
+    } else {
+      const named = await this.seedNamedFileReads(
+        repoId,
+        query,
+        emit,
+        context,
+        conversation
+      );
+      if (named.ok) {
+        matchingRead = true;
+        filesRead = 1;
+        lastToolResult = named.raw;
+      }
     }
 
     const canAnswerNow = (): boolean => {
@@ -678,6 +693,70 @@ export class AgentOrchestrator {
     }
   }
 
+  /**
+   * User typed a filename or path — read it before symbol search.
+   * `authMiddleware.ts` is often the file name, not an identifier in the body.
+   */
+  private async seedNamedFileReads(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string }> {
+    const named = extractNamedSourceFiles(query);
+    if (!named.length) {
+      return { ok: false };
+    }
+    const toRead: string[] = [];
+    const seen = new Set<string>();
+    const push = (path: string) => {
+      const trimmed = path.replace(/^\/+/, "").trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      toRead.push(trimmed);
+    };
+    for (const ref of named) {
+      if (ref.includes("/")) {
+        push(ref);
+        continue;
+      }
+      const found = (await this.ctx.findFiles?.({ query: ref, repoId }).catch(() => [])) ?? [];
+      const base = ref.toLowerCase();
+      const exact = found.filter((path) => (path.split("/").pop() ?? "").toLowerCase() === base);
+      for (const path of (exact.length ? exact : found).slice(0, 2)) {
+        push(path);
+      }
+    }
+    for (const filePath of toRead) {
+      try {
+        const rawResult = await this.executeTool("read_file", { path: filePath, repoId });
+        if (!readFilePayloadHasBody(rawResult)) {
+          continue;
+        }
+        this.mergeContext(context, "read_file", rawResult);
+        conversation?.push({
+          role: "assistant",
+          content: JSON.stringify({ tool: "read_file", args: { path: filePath } })
+        });
+        conversation?.push({ role: "user", content: rawResult });
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file: ${filePath}`,
+          completed: true
+        });
+        return { ok: true, raw: rawResult };
+      } catch {
+        // Try the next named path.
+      }
+    }
+    return { ok: false };
+  }
+
   private judgeReadResult(
     raw: string,
     query: string,
@@ -694,6 +773,9 @@ export class AgentOrchestrator {
       const body = (parsed.files ?? []).map((file) => `${file.path}\n${file.content}`).join("\n");
       const blob = `${path}\n${body}`;
       if (isFeatureAddAsk(query) && readFilePayloadHasBody(raw)) {
+        return { raw, matchesSymbol: true };
+      }
+      if (queryNamesSourceFile(path, query) && readFilePayloadHasBody(raw)) {
         return { raw, matchesSymbol: true };
       }
       const matches = needsNamed
@@ -738,6 +820,10 @@ export class AgentOrchestrator {
       context
     );
     if (seeded.ok) {
+      return { steps, context };
+    }
+    const named = await this.seedNamedFileReads(repoId, query, emit, context);
+    if (named.ok) {
       return { steps, context };
     }
 

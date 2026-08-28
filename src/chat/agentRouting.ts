@@ -1,6 +1,8 @@
 import type { ChatIntentPlan } from "./intentPlanner/types";
-import { classifyRepoCodeIntent, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
+import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
 import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
+import { extractNamedSourceFiles } from "../api/agent/searchQuery";
+import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 
 /**
  * Whether answering needs the repository's own code.
@@ -44,6 +46,11 @@ export function agentTurnAction(options: {
   if (options.hasQuickAction) {
     return "none";
   }
+  // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
+  // How-to / product How-Why must not hunt even if the planner stamped "understand".
+  if (isRepoStructureQuery(options.query) || isNonCodeHowWhyAsk(options.query)) {
+    return "none";
+  }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
     return "none";
   }
@@ -56,6 +63,15 @@ export function plannerAllowsAgentRepoLoop(
 ): boolean {
   if (!plan) {
     return isRepoInvestigationQuery(query);
+  }
+  // Follow-up "Read src/server/authMiddleware.ts" is a file hunt even when the
+  // planner locks the turn as local explain / plain chat.
+  if (
+    plan.mode === "plain" &&
+    extractNamedSourceFiles(query).length > 0 &&
+    isRepoInvestigationQuery(query)
+  ) {
+    return true;
   }
   if (plan.mode === "plain" || plan.mode === "run-workflow" || plan.mode === "suggest-chips") {
     return false;

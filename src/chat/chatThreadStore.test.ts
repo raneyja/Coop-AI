@@ -170,6 +170,32 @@ async function run(): Promise<void> {
     assert.equal(store.listSummaries()[0].id, "real");
   });
 
+  await test("assistant activity trail survives thread restore", () => {
+    const store = createStore();
+    const messages: ChatMessage[] = [
+      userMessage("where is login?"),
+      {
+        role: "assistant",
+        content: "In auth.ts",
+        timestamp: Date.now(),
+        activity: {
+          durationMs: 12_000,
+          thinkingText: "Look in the auth module.",
+          tools: [{ id: "t", kind: "read", label: "Read `src/auth.ts`", status: "done" }],
+          files: [{ path: "src/auth.ts", action: "read" }],
+          steps: [{ id: "s", content: "Read `src/auth.ts`", status: "completed" }]
+        }
+      }
+    ];
+    store.setActiveThread(messages, 0, "where is login?");
+    const id = store.getActiveThreadId();
+    store.startNewThread();
+    const restored = store.switchTo(id);
+    assert.equal(restored?.messages[1]?.content, "In auth.ts");
+    assert.equal(restored?.messages[1]?.activity?.thinkingText, "Look in the auth module.");
+    assert.equal(restored?.messages[1]?.activity?.files[0]?.path, "src/auth.ts");
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

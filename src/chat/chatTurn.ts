@@ -34,6 +34,14 @@ export type ChatTurn = {
   clearResponseDeadline: () => void;
   streamGeneration: number;
   partialAssistant: string;
+  /** Model thinking tokens accumulated this turn (display trail, not answer text). */
+  thinkingText?: string;
+  thinkingStartedAt?: number;
+  thinkingEndedAt?: number;
+  /** Last hunt/tool steps posted to the live activity panel. */
+  agentSteps?: Array<{ index: number; tool: string; summary: string; completed: boolean }>;
+  /** Concrete live tool lines (Slack/Jira/search) — not synthesis filler. */
+  activityLines?: string[];
   pendingEvidenceArtifactId?: string;
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];

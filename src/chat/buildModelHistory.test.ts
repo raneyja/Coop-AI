@@ -59,6 +59,20 @@ test("buildModelHistory preserves assistant content unchanged", () => {
   assert.equal(prior[1].content, "answer with **markdown**");
 });
 
+test("buildModelHistory strips persisted activity from model replay", () => {
+  const withTrail = assistant("In auth.ts");
+  withTrail.activity = {
+    durationMs: 4000,
+    thinkingText: "do not send this to the model",
+    tools: [],
+    files: []
+  };
+  const history = [user("q"), withTrail, user("follow-up")];
+  const prior = buildModelHistory(history);
+  assert.equal(prior[1].content, "In auth.ts");
+  assert.equal(prior[1].activity, undefined);
+});
+
 test("buildModelHistory handles empty history", () => {
   assert.deepEqual(buildModelHistory([]), []);
 });

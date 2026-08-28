@@ -91,6 +91,13 @@ import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
 import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import {
+  appendTurnThinkingChunk,
+  attachChatTurnActivity,
+  recordTurnActivityLine,
+  recordTurnAgentSteps,
+  repoFactActivityLabel
+} from "./chatTurnActivity";
+import {
   abortablePromise,
   clearResponseDeadlineForSynthesis,
   isSoftGatherLatencyMessage,
@@ -1193,12 +1200,15 @@ export class CoopChatSession {
       );
     }
 
-    const stoppedMessage: ChatMessage = {
-      role: "assistant",
-      content: partialText || CHAT_STOPPED_MESSAGE,
-      timestamp: Date.now(),
-      links: []
-    };
+    const stoppedMessage: ChatMessage = attachChatTurnActivity(
+      {
+        role: "assistant",
+        content: partialText || CHAT_STOPPED_MESSAGE,
+        timestamp: Date.now(),
+        links: []
+      },
+      turn
+    );
 
     if (history) {
       history.push(stoppedMessage);
@@ -1308,6 +1318,7 @@ export class CoopChatSession {
     } catch {
       // Fail open — never drop the turn if cite grounding cannot read the file.
     }
+    message = attachChatTurnActivity(message, turn);
     turn.history.push(message);
     if (this.isViewingThread(turn.threadId)) {
       this.chatHistory.push(message);
@@ -3603,6 +3614,14 @@ export class CoopChatSession {
     const target = this.repoTargetForRequest(request);
     const needCount = needs.fileCount || needs.lineCount;
     const needStructure = needs.treeOverview || needs.packageManifests;
+    const factLine = repoFactActivityLabel(queryText);
+    if (factLine) {
+      this.appendLiveToolActivityLine(
+        factLine,
+        request.params.quickAction,
+        String(request.intent.intent)
+      );
+    }
 
     const load = async (): Promise<ContextFetchResult> => {
       try {
@@ -4012,12 +4031,24 @@ export class CoopChatSession {
     }
   }
 
+  private postThinkingDelta(threadId: string, chunk: string): void {
+    const turn = this.threadRuns.get(threadId);
+    if (turn && turn.status === "running") {
+      appendTurnThinkingChunk(turn, chunk);
+    }
+    this.postForThread(threadId, {
+      type: "chat:thinking-delta",
+      payload: { chunk, threadId }
+    });
+  }
+
   private async streamAgentAnswer(
     input: AgentStreamAnswerInput,
     runtime: { model: string; provider: import("./types").LlmProviderPreference },
     useCase: "chat" | "code_edit",
     onChunk: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    threadId?: string
   ): Promise<string> {
     const prompt = buildAgentAnswerPrompt({
       message: input.message,
@@ -4055,10 +4086,7 @@ export class CoopChatSession {
         if (signal?.aborted) {
           return;
         }
-        this.postForThread(this.activeThreadId(), {
-          type: "chat:thinking-delta",
-          payload: { chunk: thinkingChunk, threadId: this.activeThreadId() }
-        });
+        this.postThinkingDelta(threadId ?? this.activeThreadId(), thinkingChunk);
       }
     );
     return result.message.content || full;
@@ -4183,8 +4211,9 @@ export class CoopChatSession {
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
               outputGate.push(chunk);
-            }, signal),
+            }, signal, turn.threadId),
           onStep: (_step, steps) => {
+            recordTurnAgentSteps(turn, steps);
             this.postForThread(turn.threadId, {
               type: "agent:activity",
               payload: {
@@ -4206,6 +4235,7 @@ export class CoopChatSession {
         return;
       }
 
+      recordTurnAgentSteps(turn, agentResult.steps);
       const contextBundle = [
         promoteAgentIntegrationSearches({
           requestId: "agent-owned",
@@ -4389,6 +4419,9 @@ export class CoopChatSession {
     const turn = this.threadRuns.get(threadId);
     if (turn && turn.status !== "running") {
       return;
+    }
+    if (turn) {
+      recordTurnActivityLine(turn, line);
     }
     const key = `${threadId}:${actionId ?? "chat"}`;
     const prior =
@@ -5316,7 +5349,8 @@ export class CoopChatSession {
         if (
           shouldSuppressSuggestChipsForAgentHunt({
             query: message
-          })
+          }) ||
+          shouldSkipQuickActionSuggest(message)
         ) {
           this.turnIntentPlan = emptyChatIntentPlan(message);
         } else {
@@ -7608,11 +7642,8 @@ export class CoopChatSession {
         this.preferences.apiBaseUrl,
         signal,
         (thinkingChunk) => {
-          // Thinking is live display only — do not fold into answer text or history.
-          this.postForThread(turn.threadId, {
-            type: "chat:thinking-delta",
-            payload: { chunk: thinkingChunk, threadId: turn.threadId }
-          });
+          // Thinking is not folded into answer text or model replay — persisted on the trail only.
+          this.postThinkingDelta(turn.threadId, thinkingChunk);
         }
       );
 

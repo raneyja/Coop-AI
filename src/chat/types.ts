@@ -97,6 +97,34 @@ export type ChatSuggestPayload = {
   resolved?: boolean;
 };
 
+export type ChatTurnActivityTodo = {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+};
+
+export type ChatTurnActivityTool = {
+  id: string;
+  kind: "search" | "read" | "explore" | "generic";
+  label: string;
+  status: "active" | "done";
+};
+
+export type ChatTurnActivityFile = {
+  path: string;
+  action: "read" | "searched" | "explored";
+};
+
+/** Cursor-style trail persisted on an assistant message after the turn finishes. */
+export type ChatTurnActivity = {
+  durationMs: number;
+  thinkingMs?: number;
+  thinkingText?: string;
+  tools: ChatTurnActivityTool[];
+  files: ChatTurnActivityFile[];
+  steps?: ChatTurnActivityTodo[];
+};
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -108,6 +136,8 @@ export type ChatMessage = {
   relatedArtifactId?: string;
   /** Clarifying suggest chips under an assistant message. */
   suggest?: ChatSuggestPayload;
+  /** Collapsed “Worked for…” trail. Display-only — never sent back to the model. */
+  activity?: ChatTurnActivity;
 };
 
 /** Serializable evidence card stored with chat thread history. */

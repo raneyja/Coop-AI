@@ -13,6 +13,9 @@ import {
   type ThinkingRotationOptions
 } from "./thinkingMessageRotation";
 import type { IntentFeedbackState, JobProgressState } from "./types";
+import { activityFromAgentSteps, extractFileChipsFromLabels } from "../chat/chatTurnActivity";
+
+export { extractFileChipsFromLabels };
 
 /** Keep the checklist short so timed reveal stays feelable during long jobs. */
 const MAX_ACTIVITY_TODOS = 5;
@@ -220,35 +223,6 @@ export function toolRowsFromTodos(todos: AgentTodoItem[]): AgentToolRow[] {
     });
 }
 
-/** Pull `path`-like tokens from status lines for the files toolbar. */
-export function extractFileChipsFromLabels(labels: string[]): AgentFileChip[] {
-  const chips: AgentFileChip[] = [];
-  const seen = new Set<string>();
-  for (const label of labels) {
-    const backtick = [...label.matchAll(/`([^`]+)`/g)];
-    for (const match of backtick) {
-      const path = (match[1] ?? "").trim();
-      if (!path || seen.has(path)) {
-        continue;
-      }
-      seen.add(path);
-      const lower = label.toLowerCase();
-      const action: AgentFileChip["action"] = lower.includes("read")
-        ? "read"
-        : lower.includes("search")
-          ? "searched"
-          : "explored";
-      chips.push({ path, action });
-    }
-    const pathLike = label.match(/\b([\w./-]+\.(?:ts|tsx|js|jsx|py|go|rs|java|md|json|yml|yaml))\b/);
-    if (pathLike?.[1] && !seen.has(pathLike[1])) {
-      seen.add(pathLike[1]);
-      chips.push({ path: pathLike[1], action: "explored" });
-    }
-  }
-  return chips.slice(0, 40);
-}
-
 export function mergeAgentActivity(
   base: AgentActivityState,
   overlay?: Partial<AgentActivityState>
@@ -313,68 +287,5 @@ export function agentStepsToActivity(
 ): AgentActivityState {
   // Keep every real tool row. The panel folds them behind Explored / Exploring;
   // do not cap to the first three or invent a growing “N more steps” leftover.
-  const todos: AgentTodoItem[] = steps.map((step) => ({
-    id: `agent-${step.index}-${step.tool}`,
-    content: humanizeAgentSummary(step.tool, step.summary),
-    status: step.completed ? "completed" : "in_progress"
-  }));
-  const tools: AgentToolRow[] = steps.map((step) => ({
-    id: `agent-tool-${step.index}`,
-    kind: toolKindFromName(step.tool),
-    label: humanizeAgentSummary(step.tool, step.summary),
-    status: step.completed ? "done" : "active"
-  }));
-  const files = extractFileChipsFromLabels(steps.map((step) => step.summary));
-  return { todos, tools, files };
-}
-
-function toolKindFromName(tool: string): AgentToolRow["kind"] {
-  if (tool.includes("search")) {
-    return "search";
-  }
-  if (tool.includes("read")) {
-    return "read";
-  }
-  if (tool.includes("list") || tool.includes("directory")) {
-    return "explore";
-  }
-  return "generic";
-}
-
-function humanizeAgentSummary(tool: string, summary: string): string {
-  const trimmed = summary.trim();
-  if (tool === "search_code") {
-    const q = trimmed.replace(/^search_code:\s*/i, "");
-    return q ? `Searched for \`${q}\`` : "Searched the codebase";
-  }
-  if (tool === "read_file") {
-    const path = trimmed.replace(/^read_file:\s*/i, "");
-    return path ? `Read \`${path}\`` : "Read a file";
-  }
-  if (tool === "list_directory") {
-    const path = trimmed.replace(/^list_directory:\s*/i, "") || "/";
-    return `Explored \`${path}\``;
-  }
-  if (tool === "git_blame") {
-    return trimmed.replace(/^git_blame:\s*/i, "Traced blame for ");
-  }
-  if (tool.startsWith("search_")) {
-    const label =
-      tool === "search_slack"
-        ? "Slack"
-        : tool === "search_jira"
-          ? "Jira"
-          : tool === "search_teams"
-            ? "Teams"
-            : tool === "search_notion"
-              ? "Notion"
-              : tool === "search_confluence"
-                ? "Confluence"
-                : tool === "search_google_docs"
-                  ? "Google Docs"
-                  : tool.replace(/^search_/, "");
-    const q = trimmed.replace(new RegExp(`^${tool}:\\s*`, "i"), "");
-    return q ? `Searched ${label} for \`${q}\`` : `Searched ${label}`;
-  }
-  return trimmed || tool;
+  return activityFromAgentSteps(steps);
 }

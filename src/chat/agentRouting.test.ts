@@ -100,6 +100,53 @@ test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   );
 });
 
+test("shouldRunAgentToolLoop is false for a file-count inventory ask", () => {
+  const query = "How many files are in this repo?";
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: emptyChatIntentPlan(query)
+    }),
+    false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: {
+        ...emptyChatIntentPlan(query),
+        mode: "none",
+        codeIntent: { action: "understand", confidence: "medium", reason: "asks why or how" }
+      }
+    }),
+    false
+  );
+});
+
+test("shouldRunAgentToolLoop is false for how-to and product How/Why asks", () => {
+  for (const query of [
+    "How do I run the tests?",
+    "How old is this repo?",
+    "Why is chat so slow?",
+    "How is this repo organized?"
+  ]) {
+    assert.equal(
+      shouldRunAgentToolLoop({
+        query,
+        hasQuickAction: false,
+        intentPlan: {
+          ...emptyChatIntentPlan(query),
+          mode: "none",
+          codeIntent: { action: "understand", confidence: "medium", reason: "asks why or how" }
+        }
+      }),
+      false,
+      query
+    );
+  }
+});
+
 test("shouldRunAgentToolLoop is false for thanks follow-up (UX-G7)", () => {
   assert.equal(
     shouldRunAgentToolLoop({
@@ -119,6 +166,35 @@ test("shouldRunAgentToolLoop is false for /edit (UX-G8)", () => {
       isEditTurn: true
     }),
     false
+  );
+});
+
+test("plannerAllowsAgentRepoLoop allows named-file follow-ups even when the plan is plain", () => {
+  const query = "Read src/server/authMiddleware.ts and show me the export.";
+  assert.equal(
+    plannerAllowsAgentRepoLoop(
+      {
+        ...emptyChatIntentPlan(query),
+        mode: "plain",
+        execution: "none",
+        confidence: "high"
+      },
+      query
+    ),
+    true
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: {
+        ...emptyChatIntentPlan(query),
+        mode: "plain",
+        execution: "none",
+        confidence: "high"
+      }
+    }),
+    true
   );
 });
 

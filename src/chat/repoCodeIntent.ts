@@ -1,3 +1,5 @@
+import { isRepoStructureQuery } from "../workspace/repoFactIntent";
+
 /**
  * Does this turn need the repository's code, and what does the user want done?
  *
@@ -81,8 +83,17 @@ const EXPLAIN_VERB =
 const META_REFERENCE =
   /\b(you\s+just|your\s+(?:last|previous)\s+(?:answer|message|response|change|edit)|what\s+you\s+did|that\s+again)\b/i;
 
-/** "why …" / "how …" is an explanation request even when it also says "do we have". */
-const EXPLANATION_START = /^(?:why|how)\b/i;
+/**
+ * How/why that is not a request to hunt the code.
+ * "How does session refresh work?" still hunts; "How do I run the tests?" does not.
+ */
+const NON_CODE_HOW_WHY =
+  /^(?:how\s+(?:much|old|long|big|large|often|soon|far|come)\b|how\s+(?:do|can|could|should|would)\s+i\b|how\s+can\s+you\b|why\s+am\s+i\b|why\s+(?:is|are)\s+(?:this|it|chat)\s+so\b|why\s+(?:is|does)\s+(?:this|it|chat)\s+tak(?:e|ing)\b|how\s+is\s+(?:the\s+)?(?:project|it|everything)\s+going\b)/i;
+
+/** True when How/Why is a how-to, status, or product question — not a code hunt. */
+export function isNonCodeHowWhyAsk(message: string): boolean {
+  return NON_CODE_HOW_WHY.test(message.trim());
+}
 
 /** Imperative change request: starts with the verb, or is politely prefixed. */
 function looksLikeChangeRequest(message: string): boolean {
@@ -104,6 +115,14 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   const trimmed = message?.trim() ?? "";
   if (trimmed.length < 8 || CONVERSATIONAL.test(trimmed) || META_REFERENCE.test(trimmed)) {
     return NONE;
+  }
+  // Inventory / layout facts use IndexedRepoWorkspace, not a hunt.
+  if (isRepoStructureQuery(trimmed)) {
+    return { action: "none", confidence: "high", reason: "indexed inventory or layout fact, not a code hunt" };
+  }
+  // "How do I…", "how old", "why is chat so slow" — not "how does this code work".
+  if (isNonCodeHowWhyAsk(trimmed)) {
+    return { action: "none", confidence: "high", reason: "how-to or product question, not a code hunt" };
   }
 
   const hasEntity = IDENTIFIER.test(trimmed) || FILE_PATH.test(trimmed) || BACKTICKED.test(trimmed);
@@ -141,11 +160,20 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   if (looksLikeChangeRequest(trimmed)) {
     return { action: "change", confidence, reason: `change request that ${subject}` };
   }
-  if (EXPLANATION_START.test(trimmed) && weakFormAllowed) {
-    return { action: "understand", confidence, reason: `asks why or how and ${subject}` };
+  // Inventory "how many files in this repo" already returned none. Remaining
+  // "how many files import X" is a search, not a total.
+  if (/\bhow many files\b/i.test(trimmed)) {
+    return { action: "locate", confidence, reason: `asks how many files match a condition and ${subject}` };
   }
   if (LOCATE.test(trimmed)) {
     return { action: "locate", confidence, reason: `asks where something is and ${subject}` };
+  }
+  // "Read src/server/authMiddleware.ts" — a named file is a hunt, not small talk.
+  if (
+    /\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml)\b/i.test(trimmed) &&
+    /(?:^|\s)(?:[\w.-]+\/)+[\w.-]+\.\w{1,8}\b/.test(trimmed)
+  ) {
+    return { action: "locate", confidence: "high", reason: "names a source file" };
   }
   if (EXISTENCE_START.test(trimmed) && weakFormAllowed) {
     return { action: "locate", confidence, reason: `asks whether code exists and ${subject}` };

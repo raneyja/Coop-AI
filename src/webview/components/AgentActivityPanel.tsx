@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentFileChip, AgentTodoItem, AgentToolRow } from "../agentActivity";
 import { summarizeAgentExploration } from "../agentActivity";
 import { splitNarrativeLabelParts } from "../agentNarrative";
+import {
+  formatThoughtLabel,
+  formatWorkedForLabel,
+  looksLikeRepoPath
+} from "../../chat/chatTurnActivity";
+import { useChatLinks } from "./ChatLinkContext";
 
 type AgentActivityPanelProps = {
   todos: AgentTodoItem[];
@@ -11,6 +17,10 @@ type AgentActivityPanelProps = {
   thinkingStreaming?: boolean;
   fallbackStatus?: string;
   onStop?: () => void;
+  /** Live = in-flight stack. Complete = persisted Cursor-style trail. */
+  mode?: "live" | "complete";
+  durationMs?: number;
+  thinkingMs?: number;
 };
 
 function TodoGlyph({ status }: { status: AgentTodoItem["status"] }): React.ReactElement {
@@ -63,14 +73,26 @@ function TodoGlyph({ status }: { status: AgentTodoItem["status"] }): React.React
 }
 
 function RichLabel({ text }: { text: string }): React.ReactElement {
+  const { onOpenFile } = useChatLinks();
   const parts = splitNarrativeLabelParts(text);
   return (
     <span className="coop-agent-rich-label">
       {parts.map((part, index) =>
         part.type === "code" ? (
-          <code key={`${part.value}-${index}`} className="coop-agent-inline-code">
-            {part.value}
-          </code>
+          looksLikeRepoPath(part.value) && onOpenFile ? (
+            <button
+              key={`${part.value}-${index}`}
+              type="button"
+              className="coop-agent-inline-code coop-agent-path-btn"
+              onClick={() => onOpenFile(part.value)}
+            >
+              {part.value}
+            </button>
+          ) : (
+            <code key={`${part.value}-${index}`} className="coop-agent-inline-code">
+              {part.value}
+            </code>
+          )
         ) : (
           <span key={`${part.value}-${index}`}>{part.value}</span>
         )
@@ -190,22 +212,31 @@ export function AgentActivityPanel({
   thinkingText,
   thinkingStreaming = false,
   fallbackStatus,
-  onStop
+  onStop,
+  mode = "live",
+  durationMs,
+  thinkingMs
 }: AgentActivityPanelProps): React.ReactElement | null {
+  const { onOpenFile } = useChatLinks();
+  const isComplete = mode === "complete";
   const trimmedThinking = thinkingText?.trim() ?? "";
-  const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [workedOpen, setWorkedOpen] = useState(!isComplete);
+  const [thinkingOpen, setThinkingOpen] = useState(!isComplete);
   const [exploredOpen, setExploredOpen] = useState(false);
-  const [exploringOpen, setExploringOpen] = useState(true);
+  const [exploringOpen, setExploringOpen] = useState(!isComplete);
   const [filesOpen, setFilesOpen] = useState(false);
-  const exploredTouchedRef = useRef(false);
+  const exploredTouchedRef = useRef(isComplete);
   const exploration = useMemo(() => summarizeAgentExploration(tools), [tools]);
 
   useEffect(() => {
+    if (isComplete) {
+      return;
+    }
     setThinkingOpen(thinkingStreaming || Boolean(trimmedThinking));
-  }, [thinkingStreaming, trimmedThinking]);
+  }, [isComplete, thinkingStreaming, trimmedThinking]);
 
   useEffect(() => {
-    if (exploredTouchedRef.current) {
+    if (isComplete || exploredTouchedRef.current) {
       return;
     }
     // While tools are the only activity, keep the list open so new work is visible.
@@ -215,7 +246,7 @@ export function AgentActivityPanel({
       return;
     }
     setExploredOpen(Boolean(exploration?.explored) && !trimmedThinking);
-  }, [exploration?.explored, exploration?.exploring, trimmedThinking]);
+  }, [isComplete, exploration?.explored, exploration?.exploring, trimmedThinking]);
 
   const exploredTodos = useMemo(
     () => todos.filter((todo) => todo.status === "completed"),
@@ -252,96 +283,130 @@ export function AgentActivityPanel({
     return null;
   }
 
-  return (
-    <article className="chat-message chat-message--agent-activity" aria-label="Agent activity">
-      <div className="chat-message-inner chat-message-inner--agent-activity">
-        {exploration?.explored && exploredTodos.length ? (
-          <CollapsibleTerm
-            label={exploration.explored}
-            open={exploredOpen}
-            onToggle={() => {
-              exploredTouchedRef.current = true;
-              setExploredOpen((value) => !value);
-            }}
-          >
-            <div className="coop-agent-explore-body">
-              <TodoList items={exploredTodos} />
-            </div>
-          </CollapsibleTerm>
-        ) : null}
-
-        {exploration?.exploring && exploringTodos.length ? (
-          <CollapsibleTerm
-            label={exploration.exploring}
-            open={exploringOpen}
-            live
-            onToggle={() => setExploringOpen((value) => !value)}
-          >
-            <div className="coop-agent-explore-body">
-              <TodoList items={exploringTodos} />
-            </div>
-          </CollapsibleTerm>
-        ) : null}
-
-        {!exploration && statusTodos.length ? <TodoList items={statusTodos} /> : null}
-
-        {!exploration && !statusTodos.length && fallbackStatus ? (
-          <p className="coop-agent-fallback-status">{fallbackStatus}</p>
-        ) : null}
-
-        {trimmedThinking ? (
-          <div className="coop-agent-thinking">
-            <button
-              type="button"
-              className="coop-agent-thinking-toggle"
-              aria-expanded={thinkingOpen}
-              onClick={() => setThinkingOpen((value) => !value)}
-            >
-              <span className="coop-agent-thinking-title">
-                {thinkingStreaming ? "Thinking" : "Thought"}
-                {thinkingStreaming ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
-              </span>
-              <Chevron open={thinkingOpen} />
-            </button>
-            {thinkingOpen ? <ThinkingBody text={trimmedThinking} /> : null}
+  const inner = (
+    <>
+      {exploration?.explored && exploredTodos.length ? (
+        <CollapsibleTerm
+          label={exploration.explored}
+          open={exploredOpen}
+          onToggle={() => {
+            exploredTouchedRef.current = true;
+            setExploredOpen((value) => !value);
+          }}
+        >
+          <div className="coop-agent-explore-body">
+            <TodoList items={exploredTodos} />
           </div>
-        ) : null}
+        </CollapsibleTerm>
+      ) : null}
 
-        {showFilesToolbar || onStop ? (
-          <div className="coop-agent-toolbar">
-            <div className="coop-agent-toolbar-left">
-              {showFilesToolbar ? (
-                <button
-                  type="button"
-                  className="coop-agent-files-toggle"
-                  aria-expanded={filesOpen}
-                  onClick={() => setFilesOpen((value) => !value)}
-                >
-                  <Chevron open={filesOpen} />
-                  <span>
-                    {fileCount} {fileCount === 1 ? "File" : "Files"}
-                  </span>
-                </button>
-              ) : null}
-            </div>
-            {onStop ? (
-              <button type="button" className="coop-agent-stop-btn" onClick={onStop}>
-                Stop
+      {!isComplete && exploration?.exploring && exploringTodos.length ? (
+        <CollapsibleTerm
+          label={exploration.exploring}
+          open={exploringOpen}
+          live
+          onToggle={() => setExploringOpen((value) => !value)}
+        >
+          <div className="coop-agent-explore-body">
+            <TodoList items={exploringTodos} />
+          </div>
+        </CollapsibleTerm>
+      ) : null}
+
+      {!exploration && statusTodos.length ? <TodoList items={statusTodos} /> : null}
+
+      {!exploration && !statusTodos.length && fallbackStatus ? (
+        <p className="coop-agent-fallback-status">{fallbackStatus}</p>
+      ) : null}
+
+      {trimmedThinking ? (
+        <div className="coop-agent-thinking">
+          <button
+            type="button"
+            className="coop-agent-thinking-toggle"
+            aria-expanded={thinkingOpen}
+            onClick={() => setThinkingOpen((value) => !value)}
+          >
+            <span className="coop-agent-thinking-title">
+              {thinkingStreaming ? "Thinking" : formatThoughtLabel(isComplete ? thinkingMs : undefined)}
+              {thinkingStreaming ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
+            </span>
+            <Chevron open={thinkingOpen} />
+          </button>
+          {thinkingOpen ? <ThinkingBody text={trimmedThinking} /> : null}
+        </div>
+      ) : null}
+
+      {showFilesToolbar || (onStop && !isComplete) ? (
+        <div className="coop-agent-toolbar">
+          <div className="coop-agent-toolbar-left">
+            {showFilesToolbar ? (
+              <button
+                type="button"
+                className="coop-agent-files-toggle"
+                aria-expanded={filesOpen}
+                onClick={() => setFilesOpen((value) => !value)}
+              >
+                <Chevron open={filesOpen} />
+                <span>
+                  {fileCount} {fileCount === 1 ? "File" : "Files"}
+                </span>
               </button>
             ) : null}
           </div>
-        ) : null}
+          {onStop && !isComplete ? (
+            <button type="button" className="coop-agent-stop-btn" onClick={onStop}>
+              Stop
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
-        {filesOpen && showFilesToolbar ? (
-          <ul className="coop-agent-file-list">
-            {files.map((file) => (
-              <li key={`${file.action}:${file.path}`} className="coop-agent-file-row">
-                <span className="coop-agent-file-action">{labelForFileAction(file.action)}</span>
+      {filesOpen && showFilesToolbar ? (
+        <ul className="coop-agent-file-list">
+          {files.map((file) => (
+            <li key={`${file.action}:${file.path}`} className="coop-agent-file-row">
+              <span className="coop-agent-file-action">{labelForFileAction(file.action)}</span>
+              {onOpenFile ? (
+                <button
+                  type="button"
+                  className="coop-agent-inline-code coop-agent-path-btn"
+                  onClick={() => onOpenFile(file.path)}
+                >
+                  {file.path}
+                </button>
+              ) : (
                 <code className="coop-agent-inline-code">{file.path}</code>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
+
+  return (
+    <article
+      className={`chat-message chat-message--agent-activity${isComplete ? " chat-message--agent-activity-complete" : ""}`}
+      aria-label={isComplete ? formatWorkedForLabel(durationMs ?? 0) : "Agent activity"}
+    >
+      <div className="chat-message-inner chat-message-inner--agent-activity">
+        {isComplete ? (
+          <>
+            <button
+              type="button"
+              className="coop-agent-worked-toggle"
+              aria-expanded={workedOpen}
+              onClick={() => setWorkedOpen((value) => !value)}
+            >
+              <span className="coop-agent-thinking-title">{formatWorkedForLabel(durationMs ?? 0)}</span>
+              <Chevron open={workedOpen} />
+            </button>
+            {workedOpen ? <div className="coop-agent-worked-body">{inner}</div> : null}
+          </>
+        ) : (
+          inner
+        )}
       </div>
     </article>
   );

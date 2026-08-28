@@ -43,6 +43,12 @@ const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
 const MAX_FALLBACK_QUERIES = 5;
+const SOURCE_FILE_EXT =
+  "ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml|css|html|vue|svelte|c|h|cpp|cc|kt|swift";
+const NAMED_SOURCE_FILE = new RegExp(
+  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*[\\w.-]+\\.(?:${SOURCE_FILE_EXT}))(?=$|[\\s\`'")\\],:;!?])`,
+  "gi"
+);
 
 export {
   isBarrelPath,
@@ -200,6 +206,13 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     unique.push(clipped);
   };
 
+  for (const file of extractNamedSourceFiles(userMessage)) {
+    push(file);
+    const base = file.split("/").pop();
+    if (base && base !== file) {
+      push(base);
+    }
+  }
   push(primary);
   for (const id of identifiers) {
     push(id);
@@ -275,9 +288,15 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
   const keys = userMessage ? namedSymbolKeys(userMessage) : [];
   // Named symbol in the ask → only keep hits that actually mention it. Empty is
   // better than reading a UI form that merely shares the word "auth".
+  // Exception: the user named this file (authMiddleware.ts) — keep it even if
+  // the body exports a different identifier.
   let pool =
     keys.length > 0
-      ? ranked.filter((hit) => hitMentionsNamedSymbol(hit, userMessage!))
+      ? ranked.filter(
+          (hit) =>
+            hitMentionsNamedSymbol(hit, userMessage!) ||
+            Boolean(userMessage && queryNamesSourceFile(hit.fileName, userMessage))
+        )
       : ranked;
   if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
     const roleHits = pool.filter((hit) =>
@@ -406,10 +425,48 @@ export function queryHasNamedSymbol(userMessage: string): boolean {
   return namedSymbolKeys(userMessage).length > 0;
 }
 
+/**
+ * Source files the user typed (`authMiddleware.ts`, `src/server/auth.ts`).
+ * File hunts are not the same as symbol hunts — the file may export other names.
+ */
+export function extractNamedSourceFiles(userMessage: string): string[] {
+  const named: string[] = [];
+  const seen = new Set<string>();
+  NAMED_SOURCE_FILE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = NAMED_SOURCE_FILE.exec(userMessage)) !== null) {
+    const value = (match[1] ?? "").replace(/^\/+/, "").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    named.push(value);
+  }
+  return named;
+}
+
+/** True when `fileName` is a file the user typed (basename or full path). */
+export function queryNamesSourceFile(fileName: string, userMessage: string): boolean {
+  const named = extractNamedSourceFiles(userMessage);
+  if (!named.length) {
+    return false;
+  }
+  const path = normalizePath(fileName).toLowerCase();
+  return named.some((ref) => {
+    const n = ref.toLowerCase();
+    return path === n || path.endsWith(`/${n}`) || path.endsWith(n);
+  });
+}
+
 /** Normalized keys for the symbol the user named + casing aliases. */
 export function namedSymbolKeys(userMessage: string): string[] {
   const primary = extractAgentSearchQuery(userMessage);
   if (!isSpecificCodeIdentifier(primary)) {
+    return [];
+  }
+  // "Find authMiddleware.ts" names a file, not a required in-body symbol.
+  if (isStemOfNamedSourceFile(primary, userMessage)) {
     return [];
   }
   const keys = new Set<string>([normalizeSymbol(primary)]);
@@ -420,6 +477,15 @@ export function namedSymbolKeys(userMessage: string): string[] {
     }
   }
   return [...keys];
+}
+
+function isStemOfNamedSourceFile(identifier: string, userMessage: string): boolean {
+  const stem = identifier.replace(/\.[^.]+$/, "").toLowerCase();
+  const identNorm = normalizeSymbol(identifier);
+  return extractNamedSourceFiles(userMessage).some((file) => {
+    const base = (file.split("/").pop() ?? file).replace(/\.[^.]+$/, "");
+    return base.toLowerCase() === stem || normalizeSymbol(base) === identNorm;
+  });
 }
 
 /**
