@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 import {
   buildStatusTransitionSynthesisUserPrompt,
   enrichStatusTransitionResponse,
@@ -120,6 +121,12 @@ export async function run() {
   });
 }
 `.trim();
+
+test("C4 PR-touching review is not a status-transition ask", () => {
+  assert.equal(isStatusTransitionAsk(COPILOT_C4_ASK), false);
+  assert.equal(isStatusTransitionAsk("Stay specific to this code"), false);
+  assert.equal(isStatusTransitionAsk("as if this were a PR touching production auth"), false);
+});
 
 test("isStatusTransitionAsk detects stuck PENDING / where status moves", () => {
   assert.equal(

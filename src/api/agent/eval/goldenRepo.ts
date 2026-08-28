@@ -32,7 +32,9 @@ const FILLER_LINES: Record<string, number> = {
   "packages/ui/src/button.tsx": 140,
   "services/gateway/router.go": 260,
   "services/gateway/health.go": 175,
-  "core/src/main/java/com/acme/PaymentProcessor.java": 210
+  "core/src/main/java/com/acme/PaymentProcessor.java": 210,
+  "server/http/bearer.py": 160,
+  "apps/api/issues/work_item_state.py": 150
 };
 
 function commentToken(path: string): string {
@@ -158,6 +160,37 @@ const SOURCES: Record<string, string> = {
     "public class PaymentProcessor {",
     "    public void charge(long cents) {}",
     "}"
+  ].join("\n"),
+
+  "server/http/bearer.py": [
+    '"""Parse Authorization Bearer tokens from request headers."""',
+    "",
+    "",
+    "def parse_authorization_header(headers):",
+    '    header = headers.get("authorization") or ""',
+    '    if not header.startswith("Bearer "):',
+    "        return None",
+    '    token = header[len("Bearer "):].strip()',
+    "    return token or None"
+  ].join("\n"),
+
+  "apps/api/issues/work_item_state.py": [
+    '"""Write work-item state and reject a bad transition."""',
+    "",
+    "ALLOWED_FROM_BACKLOG = frozenset({\"todo\", \"in_progress\"})",
+    "",
+    "",
+    "def is_valid_transition(current, new_state):",
+    '    if current == "backlog" and new_state not in ALLOWED_FROM_BACKLOG:',
+    "        return False",
+    "    return True",
+    "",
+    "",
+    "def write_work_item_state(item, new_state):",
+    "    if not is_valid_transition(item.state, new_state):",
+    '        raise ValueError("cannot move work item out of backlog")',
+    "    item.state = new_state",
+    "    return item"
   ].join("\n"),
 
   // --- Noise that must never win ---

@@ -771,6 +771,10 @@ export function contextBundleHasRepoFactEvidence(bundle: unknown): boolean {
     if (data.repoInventory) {
       return true;
     }
+    const semantic = data.repoSemanticSearch as { files?: unknown[] } | undefined;
+    if (Array.isArray(semantic?.files) && semantic.files.length > 0) {
+      return true;
+    }
   }
   return false;
 }

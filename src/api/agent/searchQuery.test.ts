@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { DOGFOOD_HUNT_QUESTION, DOGFOOD_HUNT_SEARCH_QUERY } from "./dogfoodContract";
+import {
+  COPILOT_C1_ASK,
+  COPILOT_C2_ASK,
+  COPILOT_C5_ASK,
+  DOGFOOD_HUNT_QUESTION,
+  DOGFOOD_HUNT_SEARCH_QUERY
+} from "./dogfoodContract";
 import {
   extractAgentSearchQuery,
   extractNamedSourceFiles,
@@ -357,6 +363,66 @@ test("textMentionsQueryRoles requires the role in the file or path", () => {
     ),
     true
   );
+});
+
+test("C1 prose locate does not require Authorization as a named symbol", () => {
+  const ask = COPILOT_C1_ASK;
+  assert.equal(queryHasNamedSymbol(ask), false);
+  const primary = extractAgentSearchQuery(ask);
+  assert.notEqual(primary.toLowerCase(), "authorization");
+  assert.match(primary, /Bearer/i);
+  const fallbacks = fallbackAgentSearchQueries(ask);
+  assert.equal(
+    fallbacks.some((q) => /bearer/i.test(q)),
+    true,
+    `fallbacks must include Bearer, got ${fallbacks.join(", ")}`
+  );
+  assert.equal(
+    fallbacks.some((q) => /^function\.?$/i.test(q) || /^existing$/i.test(q)),
+    false,
+    `must not burn retries on junk, got ${fallbacks.join(", ")}`
+  );
+});
+
+test("C2 prose locate does not require Users as a named symbol", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(queryHasNamedSymbol(ask), false);
+  const primary = extractAgentSearchQuery(ask);
+  assert.notEqual(primary.toLowerCase(), "users");
+  assert.equal(/^users\b/i.test(primary), false);
+  const fallbacks = fallbackAgentSearchQueries(ask);
+  const blob = [primary, ...fallbacks].join(" ").toLowerCase();
+  assert.equal(
+    /\bwork-item\b/.test(blob) || /\btransition\b/.test(blob),
+    true,
+    `C2 search must include work-item or transition, got ${primary} / ${fallbacks.join(", ")}`
+  );
+  assert.equal(
+    fallbacks[0]?.toLowerCase() === "users",
+    false,
+    "Users must not be the first fallback"
+  );
+});
+
+test("Where is requireAuth defined still requires that symbol", () => {
+  assert.equal(queryHasNamedSymbol("Where is requireAuth defined?"), true);
+  assert.equal(extractAgentSearchQuery("Where is requireAuth defined?"), "requireAuth");
+});
+
+test("Where is the Button component still searches Button", () => {
+  assert.equal(
+    extractAgentSearchQuery("Where is the Button component defined in this repo?"),
+    "Button"
+  );
+  assert.equal(
+    queryHasNamedSymbol("Where is the Button component defined in this repo?"),
+    false
+  );
+});
+
+test("edit tests-for-X prefers the callee over the test-file stem", () => {
+  assert.equal(extractAgentSearchQuery(COPILOT_C5_ASK), "extractBearerToken");
+  assert.equal(queryHasNamedSymbol(COPILOT_C5_ASK), true);
 });
 
 test("filename asks are file hunts, not required in-body symbols", () => {

@@ -51,6 +51,15 @@ test("/edit by itself is not a rewrite", () => {
   assert.equal(resolveEditAskKind("/edit please leave a comment above this"), "comment");
 });
 
+test("C3 one-line JSDoc /edit stays comment-only", () => {
+  assert.equal(
+    resolveEditAskKind(
+      '/edit Add a one-line JSDoc above extractBearerToken: returns the token after "Bearer " or undefined. Do not change the function body or any other line.'
+    ),
+    "comment"
+  );
+});
+
 test("ordinary change asks stay default (do exactly the words)", () => {
   assert.equal(resolveEditAskKind("/edit add a null check to the login handler"), "default");
   assert.equal(resolveEditAskKind("wire up the new helper in this file"), "default");

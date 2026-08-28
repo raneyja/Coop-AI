@@ -580,6 +580,20 @@ export class AgentOrchestrator {
         };
       }
     }
+    // Prose locate (no camelCase symbol): still refuse if we never read a file.
+    // Otherwise C2 becomes a Kanban lecture with no plane evidence.
+    if (
+      action === "locate" &&
+      !matchingRead &&
+      !hasIntegrationHits &&
+      !readFileContextHasBody(result.context)
+    ) {
+      return {
+        ...result,
+        answer: INDEX_HUNT_MISS,
+        context: result.steps.length ? result.context : undefined
+      };
+    }
     if (!options.streamAnswer) {
       return { ...result, context: result.steps.length ? result.context : undefined };
     }

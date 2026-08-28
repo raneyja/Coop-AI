@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { isOpenFileExplainAsk, semanticAttachModeForChat } from "./plainChatExplain";
+import { isOpenFileExplainAsk, isOpenFileReviewAsk, semanticAttachModeForChat } from "./plainChatExplain";
+import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -22,6 +23,18 @@ test("dogfood 1b explain requireAuth is an open-file explain ask", () => {
       "Explain requireAuth in this file. When does it allow an unauthenticated request through, and what should a reviewer check before we make auth required in production?"
     ),
     true
+  );
+});
+
+test("C4 PR review is an open-file review, not an explain briefing", () => {
+  assert.equal(isOpenFileReviewAsk(COPILOT_C4_ASK), true);
+  assert.equal(isOpenFileExplainAsk(COPILOT_C4_ASK), false);
+  assert.equal(
+    semanticAttachModeForChat({
+      query: COPILOT_C4_ASK,
+      openFile: "src/server/authMiddleware.ts"
+    }),
+    "bodies"
   );
 });
 

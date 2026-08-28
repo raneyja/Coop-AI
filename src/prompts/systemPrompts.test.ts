@@ -66,6 +66,16 @@ test("chat use case requires answer-style Your question and applyable edit patch
   assert.ok(prompt.includes("not literal `startLine:endLine:…` placeholders"));
 });
 
+test("chat PR-review contract stays in the file and forbids A8 headings", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("**Block:**"));
+  assert.ok(prompt.includes("**Fine because:**"));
+  assert.ok(prompt.includes("**Ask the author:**"));
+  assert.ok(prompt.includes("Never **Next-status WRITE path**"));
+  assert.ok(prompt.includes("**Hard errors that abort this attempt**"));
+  assert.ok(prompt.includes("No OWASP dump"));
+});
+
 test("chat open-file explain is a one-screen briefing, not a walkthrough dump", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("one screen"));

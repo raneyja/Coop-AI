@@ -5,6 +5,7 @@ import * as path from "node:path";
 import type { IndexBackend } from "../../indexing/indexBackend";
 import type { LocalSearchResult } from "../../indexing/types";
 import { createAgentOrchestrator, pickTopSearchHit } from "./AgentOrchestrator";
+import { COPILOT_C1_ASK, COPILOT_C2_ASK } from "./dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -900,6 +901,152 @@ async function run(): Promise<void> {
     const content = readFile?.files?.[0]?.content ?? "";
     assert.match(content, /17\|class APIKeyAuthentication:/);
     assert.equal(content.trim() === "1|# Copyright (c) 2023-present Plane Software, Inc. and contributors", false);
+  });
+
+  await test("C1 Authorization-Bearer ask streams when the index has a Bearer hit", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body =
+      'export function extractBearerToken(headers) {\n  const header = headers.authorization ?? "";\n  if (!header.startsWith("Bearer ")) {\n    return undefined;\n  }\n  return header.slice(7).trim() || undefined;\n}\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 10,
+              content: 'if (!header.startsWith("Bearer ")) {',
+              score: 0.9
+            }
+          ],
+          symbols: [
+            {
+              symbol: "extractBearerToken",
+              kind: "function",
+              file: filePath,
+              line: 10,
+              character: 0,
+              displayName: "extractBearerToken"
+            }
+          ]
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C1_ASK,
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Authorization" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: filePath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "extractBearerToken in src/server/authMiddleware.ts parses the Bearer token.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
+  await test("C2 work-item ask streams when the index has a transition hit", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Users" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: filePath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "write_work_item_state in apps/api/issues/work_item_state.py rejects a bad transition.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.match(result.answer ?? "", /work_item_state/);
+  });
+
+  await test("C1 empty index still posts INDEX_HUNT_MISS", async () => {
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C1_ASK,
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "Bearer" } }),
+        streamAnswer: async () => {
+          streamed += 1;
+          return "should not stream";
+        }
+      }
+    );
+    assert.equal(streamed, 0);
+    assert.match(result.answer ?? "", /will not guess a path/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

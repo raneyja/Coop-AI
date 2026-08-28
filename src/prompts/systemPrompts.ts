@@ -346,8 +346,12 @@ Omit when **Answer** already fully covers the ask (typical for open-file explain
 **How it works** (open-file explain only)
 At most **one** citation fence — the named function or type in the open file. Then 3 bullets max.
 
-**Reviewer checks** (only if they asked what to watch / what a reviewer would flag)
-Exactly **3** one-line bullets. No fourth. No 25-item audit.
+**Reviewer checks** (if they asked to review as a PR / what you'd block / what's fine / what a reviewer would flag)
+Exactly **3** one-line bullets, in this order:
+- **Block:** a concrete issue in this attached file, or "none — fine because …" with a specific condition
+- **Fine because:** a specific behavior in this code (not "looks good")
+- **Ask the author:** one question grounded in this file
+Stay in this file (Bearer extraction, 401 vs 403, org suspended, plan checks, requireInProduction). No OWASP dump. Never **Next-status WRITE path**, **Hard errors that abort this attempt**, or stuck-status playbook headings.
 
 For open-file explain: then stop. Do not add extra sections, extra citations, or consumer file dumps.
 PASS: one screen; ≤2 citation fences total; consumers named as \`path\` backticks.
@@ -469,6 +473,7 @@ RULES:
 - Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
+- When adding tests or calls for a symbol not defined in the open file, copy arity and types from an attached sibling / \`<repo_semantic_files>\` / \`<file_content>\` for that symbol. Always include the import hunk the change needs. Do not invent a string or undefined API from the user's English example.
 - Output patches only (see Patch output format); no **Summary** section, no ask-mode response template, and never invent PENDING/OPEN status-transition stories about unrelated files.`;
 
 export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
@@ -631,7 +636,9 @@ type MentionFileSnippet = ManifestSnippet & { repoId: string };
 function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
   lines.push("<local_files>");
   lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
-  lines.push("Answer ONLY from this code. Quote exact conditions; do not invent identifiers.");
+  lines.push(
+    "Treat every attached file as source of truth. If a callee is defined in another attached file, copy that signature and add the import — do not invent identifiers, arity, or types from the user's English example."
+  );
   for (const file of files) {
     const range =
       file.lineRange && file.lineRange.length === 2

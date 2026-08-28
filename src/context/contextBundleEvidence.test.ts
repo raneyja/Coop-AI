@@ -219,6 +219,19 @@ test("contextBundleHasRepoFactEvidence detects packageStructure and tree", () =>
     ]),
     false
   );
+  assert.equal(
+    contextBundleHasRepoFactEvidence([
+      {
+        type: "chat_context",
+        data: {
+          repoSemanticSearch: {
+            files: [{ path: "src/server/authMiddleware.ts", content: "export function extractBearerToken() {}" }]
+          }
+        }
+      }
+    ]),
+    true
+  );
 });
 
 const total = passed + failed;

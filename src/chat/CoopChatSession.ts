@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "../edit/handlePatchComplete";
+import { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";
 import {
   hydratePatchCardsFromHistory,
   patchCardsForMessages
@@ -7070,9 +7071,15 @@ export class CoopChatSession {
         allMentionsOutOfScope,
         context: turnContext
       });
-      const localPayload = skipLocalAttach
+      let localPayload = skipLocalAttach
         ? undefined
         : await abortablePromise(this.resolveChatLocalFiles(), signal);
+      if (options?.composerMode === "edit" && localPayload?.files.length) {
+        localPayload = await this.attachEditSutIfNeeded(
+          localPayload,
+          options?.taskContent ?? content
+        );
+      }
       if (
         options?.composerMode === "edit" &&
         !allMentionsOutOfScope &&
@@ -7440,6 +7447,7 @@ export class CoopChatSession {
       }
 
       const useContextBundle =
+        options?.composerMode === "edit" ||
         Boolean(effectiveQuickAction) ||
         Boolean(integrationProvider) ||
         contextBundleHasIntegrationSearch(contextBundle) ||
@@ -9892,6 +9900,58 @@ export class CoopChatSession {
       return syncRemote;
     }
     return this.fetchRemoteFileForChatAttach(lines);
+  }
+
+  /**
+   * /edit on a *.test.* file: attach the sibling implementation so tests copy the
+   * real signature (C5). Remote/codehost only — Zero-Clone.
+   */
+  private async attachEditSutIfNeeded(
+    local: LocalFileContextPayload,
+    _ask: string
+  ): Promise<LocalFileContextPayload> {
+    const openFile = local.activeFile || this.currentContext.file;
+    const sutPath = sutPathForEditAsk(openFile);
+    if (!sutPath) {
+      return local;
+    }
+    if (local.files.some((file) => normalizeRelativePath(file.path) === sutPath)) {
+      return local;
+    }
+    const text = await this.fetchRemotePathContent(sutPath);
+    if (!text?.trim()) {
+      return local;
+    }
+    return mergeSutFile(local, { path: sutPath, content: text, encoding: "utf8" });
+  }
+
+  private async fetchRemotePathContent(filePath: string): Promise<string | undefined> {
+    const owner = this.currentContext.owner?.trim();
+    const repo = this.currentContext.repo?.trim();
+    if (!filePath.trim() || !owner || !repo || isOsAbsoluteDiskPath(filePath)) {
+      return undefined;
+    }
+    const relativePath = normalizeRelativePath(filePath);
+    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+    if (!repoId) {
+      return undefined;
+    }
+    return readRepoFileForContext(
+      {
+        api: this.options.api,
+        apiBaseUrl: this.preferences.apiBaseUrl,
+        codeHostRouter: this.options.codeHostRouter
+      },
+      {
+        repoId,
+        owner,
+        repo,
+        branch: this.currentContext.branch,
+        provider,
+        path: relativePath
+      }
+    );
   }
 
   /** Fetch active remote file content — same stack as Understand Repo / Remote browse. */

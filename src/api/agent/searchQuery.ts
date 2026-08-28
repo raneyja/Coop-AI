@@ -74,6 +74,85 @@ const ROLE_HINTS = [
   "validator"
 ] as const;
 
+/** Question words — never a component/symbol name. */
+const DENIED_PASCAL =
+  /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
+
+/**
+ * Single-hump Pascal that is English or HTTP, not a code symbol. "Button" and
+ * "LoginForm" stay eligible for search; these must not become the hunt key.
+ */
+const PROSE_PASCAL = new Set(
+  [
+    "Authorization",
+    "Bearer",
+    "Users",
+    "User",
+    "Token",
+    "Request",
+    "Response",
+    "Header",
+    "Headers",
+    "Error",
+    "Client",
+    "Server",
+    "Message",
+    "File",
+    "Data",
+    "Type",
+    "Status",
+    "State",
+    "Item",
+    "Issue",
+    "Work",
+    "Api"
+  ].map((w) => w.toLowerCase())
+);
+
+/** Fallback tokens that burn the 3-try budget without finding a definition. */
+const JUNK_SEARCH_TOKEN = new Set(
+  [
+    "existing",
+    "helper",
+    "write",
+    "point",
+    "cloned",
+    "returns",
+    "error",
+    "move",
+    "out",
+    "bad",
+    "new",
+    "dont",
+    "have",
+    "can",
+    "cant",
+    "cannot",
+    "wont",
+    "just",
+    "really",
+    "function",
+    "ask",
+    "our",
+    "not",
+    "any",
+    "other",
+    "line",
+    "body",
+    "open",
+    "add",
+    "two",
+    "tests",
+    "match",
+    "style",
+    "rewrite",
+    "suite",
+    "missing",
+    "returns",
+    "undefined"
+  ].map((w) => w.toLowerCase())
+);
+
 export type RankedSearchHit = {
   fileName: string;
   lineNumber: number;
@@ -97,12 +176,18 @@ export function extractAgentSearchQuery(userMessage: string): string {
   }
 
   // "Where is the Button component" — prefer Button over the role phrase.
-  const deniedPascal = /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
-  const pascalName = [...trimmed.matchAll(/\b([A-Z][a-z][a-zA-Z0-9]+)\b/g)]
+  // Do not use HTTP/English Pascal (Authorization, Users) or a sentence-initial
+  // subject ("Users can't move…") as the hunt key.
+  const pascalName = [...trimmed.matchAll(/\b([A-Z][a-z][a-zA-Z0-9]+)(?!['’])\b/g)]
     .map((match) => match[1]!)
-    .find((word) => !deniedPascal.test(word));
+    .find((word) => isSearchablePascal(word, trimmed));
   if (pascalName) {
     return clip(pascalName);
+  }
+
+  const locate = locateObjectPhrase(trimmed);
+  if (locate) {
+    return clip(locate);
   }
 
   const role = trimmed.match(ROLE_NOUN);
@@ -110,7 +195,7 @@ export function extractAgentSearchQuery(userMessage: string): string {
     return clip(role[0]);
   }
 
-  const tokens = significantTokens(trimmed);
+  const tokens = significantTokens(trimmed).filter((token) => !isJunkSearchToken(token));
   if (tokens.length === 0) {
     return clip(trimmed);
   }
@@ -225,6 +310,9 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
   }
   push(role);
   for (const token of tokens) {
+    if (isJunkSearchToken(token)) {
+      continue;
+    }
     push(token);
     if (unique.length >= MAX_FALLBACK_QUERIES) {
       break;
@@ -404,20 +492,16 @@ function symbolNameScore(
 }
 
 /**
- * camelCase / snake_case token the user likely meant as a code symbol.
- * Plain words like "logging" are not specific enough to filter hits.
+ * camelCase / snake_case / multi-hump Pascal the user likely meant as a code
+ * symbol. Single-hump Pascal (Authorization, Users, Button) is not specific
+ * enough to require that token in every read — that latched C1/C2 onto prose.
  */
 export function isSpecificCodeIdentifier(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed.length < 4 || /\s/.test(trimmed)) {
     return false;
   }
-  return (
-    /_/.test(trimmed) ||
-    /[a-z][A-Z]/.test(trimmed) ||
-    /^[A-Z][a-z]+[A-Z]/.test(trimmed) ||
-    /^[A-Z][a-z]{2,}$/.test(trimmed)
-  );
+  return /_/.test(trimmed) || /[a-z][A-Z]/.test(trimmed) || /^[A-Z][a-z]+[A-Z]/.test(trimmed);
 }
 
 /** True when the user named a specific identifier (requireAuth), not a broad ask. */
@@ -479,11 +563,19 @@ export function namedSymbolKeys(userMessage: string): string[] {
   return [...keys];
 }
 
+function sourceFileStem(file: string): string {
+  const base = (file.split("/").pop() ?? file).replace(/^\/+/, "");
+  return base
+    .replace(/\.(test|spec)\.[^.]+$/i, "")
+    .replace(/_test\.[^.]+$/i, "")
+    .replace(/\.[^.]+$/, "");
+}
+
 function isStemOfNamedSourceFile(identifier: string, userMessage: string): boolean {
   const stem = identifier.replace(/\.[^.]+$/, "").toLowerCase();
   const identNorm = normalizeSymbol(identifier);
   return extractNamedSourceFiles(userMessage).some((file) => {
-    const base = (file.split("/").pop() ?? file).replace(/\.[^.]+$/, "");
+    const base = sourceFileStem(file);
     return base.toLowerCase() === stem || normalizeSymbol(base) === identNorm;
   });
 }
@@ -659,11 +751,46 @@ function userNamedPath(fileName: string, userMessage: string): boolean {
 }
 
 function firstIdentifier(text: string): string | undefined {
-  return allIdentifiers(text)[0];
+  return allIdentifiers(text).find((id) => !isStemOfNamedSourceFile(id, text));
 }
 
 function allIdentifiers(text: string): string[] {
-  return [...text.matchAll(IDENTIFIER)].map((m) => m[0]).filter((id) => !STOP.has(id.toLowerCase()));
+  return [...text.matchAll(IDENTIFIER)]
+    .map((m) => m[0])
+    .filter((id) => !STOP.has(id.toLowerCase()));
+}
+
+function isSearchablePascal(word: string, text: string): boolean {
+  if (DENIED_PASCAL.test(word) || PROSE_PASCAL.has(word.toLowerCase())) {
+    return false;
+  }
+  if (/^(where|what|which|how|find|who)\b/i.test(text.trim())) {
+    return true;
+  }
+  return !new RegExp(`^${word}\\b`).test(text.trim());
+}
+
+/** Noun phrase after "where is / where do we parse" — not the complaint subject. */
+function locateObjectPhrase(text: string): string | undefined {
+  const match = text.match(
+    /\bwhere\s+(?:is|are|do\s+we|does)\s+(?:(?:we\s+)?(?:parse|find|write|store|define|enforce|read)\s+)?(?:(?:the|a|an)\s+)?(.+?)(?:\?|,|\s+and\s+what|\s+and\s+how|$)/i
+  );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const cleaned = match[1]
+    .replace(/\b(defined|written|enforced|in this repo|in the codebase)\b.*$/i, "")
+    .trim();
+  const tokens = significantTokens(cleaned).filter((token) => !isJunkSearchToken(token));
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  return tokens.slice(0, 4).join(" ");
+}
+
+function isJunkSearchToken(token: string): boolean {
+  const normalized = token.toLowerCase().replace(/[./]+$/g, "");
+  return normalized.length < 3 || JUNK_SEARCH_TOKEN.has(normalized);
 }
 
 function significantTokens(text: string): string[] {

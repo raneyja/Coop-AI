@@ -18,6 +18,7 @@ import {
   createGoldenIndexBackend,
   readGoldenRepoFile
 } from "./goldenRepo";
+import { COPILOT_C1_ASK, COPILOT_C2_ASK } from "../dogfoodContract";
 
 type HuntCase = {
   question: string;
@@ -86,6 +87,16 @@ const CASES: HuntCase[] = [
     question: "Where is the AuthenticationMiddleware class defined?",
     expectFile: "server/auth/middleware.py",
     expectLine: "class AuthenticationMiddleware:"
+  },
+  {
+    question: COPILOT_C1_ASK,
+    expectFile: "server/http/bearer.py",
+    expectLine: "def parse_authorization_header(headers):"
+  },
+  {
+    question: COPILOT_C2_ASK,
+    expectFile: "apps/api/issues/work_item_state.py",
+    expectLine: "def write_work_item_state(item, new_state):"
   }
 ];
 
