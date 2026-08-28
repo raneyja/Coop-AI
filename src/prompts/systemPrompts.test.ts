@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, systemPromptForUseCase } from "./systemPrompts";
+import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, OPEN_FILE_PR_REVIEW_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
+import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -74,6 +75,11 @@ test("chat PR-review contract stays in the file and forbids A8 headings", () => 
   assert.ok(prompt.includes("Never **Next-status WRITE path**"));
   assert.ok(prompt.includes("**Hard errors that abort this attempt**"));
   assert.ok(prompt.includes("No OWASP dump"));
+  assert.ok(prompt.includes("omit **Summary**, **Answer**, and **Your question**"));
+  assert.ok(prompt.includes("Do not use **Summary**"));
+  assert.ok(prompt.includes("Do not invent a follow-up about tests"));
+  assert.ok(prompt.includes("named function"));
+  assert.ok(prompt.includes("not \"add logging\""));
 });
 
 test("chat open-file explain is a one-screen briefing, not a walkthrough dump", () => {
@@ -343,6 +349,29 @@ test("formatChatMessageWithLocalFiles embeds authoritative file_content", () => 
   assert.ok(message.includes("<file_content"));
   assert.ok(message.includes("deps.githubApp"));
   assert.ok(message.includes("Quote the 503 condition."));
+});
+
+test("C4 open-file review appends Reviewer-checks-only directive", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: COPILOT_C4_ASK,
+    file: "src/server/authMiddleware.ts",
+    files: [
+      {
+        path: "src/server/authMiddleware.ts",
+        content: "export function requireAuth(req: Request): req is AuthedRequest { return true; }"
+      }
+    ]
+  });
+  assert.ok(message.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("named function"));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("add logging"));
+  assert.ok(message.indexOf(COPILOT_C4_ASK) < message.indexOf("## Turn directive (PR review)"));
+  const unrelated = formatChatMessageWithLocalFiles({
+    message: "Quote the 503 condition.",
+    file: "src/server/githubAppApi.ts",
+    files: [{ path: "src/server/githubAppApi.ts", content: "if (!deps.githubApp) {" }]
+  });
+  assert.equal(unrelated.includes("## Turn directive (PR review)"), false);
 });
 
 test("formatChatMessageWithLocalFiles includes editor_selection for highlighted range", () => {

@@ -29,6 +29,10 @@ import {
   rankSearchHits,
   sanitizeAgentSearchQuery,
   shouldSkipEvidencePath,
+  filterWriteRejectFiles,
+  isApiRejectAsk,
+  contentLooksLikeStateTransitionReject,
+  lineNumberOfWriteReject,
   textMentionsNamedSymbol,
   textMentionsQueryRoles
 } from "./searchQuery";
@@ -46,7 +50,7 @@ export { pickTopSearchHit };
 const DEFAULT_MAX_STEPS = AGENT_MAX_TOOL_ROUNDS;
 const READ_LINE_PADDING = 25;
 /** Each retry is another round trip — the gather budget is shared with the answer. */
-const MAX_SEARCH_ATTEMPTS = 3;
+const MAX_SEARCH_ATTEMPTS = 5;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
@@ -274,11 +278,30 @@ export class AgentOrchestrator {
     }
 
     const canAnswerNow = (): boolean => {
+      if (isApiRejectAsk(query)) {
+        return contextHasWriteReject(context);
+      }
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
         return matchingRead;
       }
       return steps.length > 0;
     };
+
+    if (isApiRejectAsk(query) && action !== "change") {
+      const hunted = await this.huntWriteReject(repoId, query, emit, context, conversation);
+      if (hunted) {
+        matchingRead = true;
+        return this.finishWithAnswer(
+          { steps, context },
+          query,
+          repoId,
+          action,
+          options,
+          conversation,
+          true
+        );
+      }
+    }
 
     for (let round = 0; round < maxSteps; round++) {
       if (options.signal?.aborted) {
@@ -404,6 +427,26 @@ export class AgentOrchestrator {
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query);
       if (plan.tool === "read_file") {
         this.applyPreferredReadWindow(args, context);
+        const path = typeof args.path === "string" ? args.path : "";
+        if (shouldSkipEvidencePath(path, query)) {
+          lastToolResult = JSON.stringify({
+            path,
+            skipNote:
+              "Skipped a spec/catalog/client path. Search a serializer or view for validate or ValidationError."
+          });
+          conversation.push({
+            role: "assistant",
+            content: JSON.stringify({ tool: plan.tool, args: plan.args })
+          });
+          conversation.push({ role: "user", content: lastToolResult });
+          emit({
+            index: steps.length,
+            tool: plan.tool,
+            summary: `read_file skipped (noise path): ${path}`,
+            completed: true
+          });
+          continue;
+        }
       }
       let rawResult: string;
       try {
@@ -422,6 +465,23 @@ export class AgentOrchestrator {
           }
         }
         rawResult = judged.raw;
+        const path = typeof args.path === "string" ? args.path : "";
+        if (isApiRejectAsk(query) && !contentLooksLikeStateTransitionReject(readFileBodies(rawResult))) {
+          const jumped = await this.loadWriteRejectWindow(repoId, path);
+          if (jumped) {
+            rawResult = jumped.raw;
+            args.startLine = jumped.startLine;
+            args.endLine = jumped.endLine;
+            judged = { raw: jumped.raw, matchesSymbol: true };
+          } else {
+            rawResult = JSON.stringify({
+              path,
+              skipNote:
+                "This snippet does not write or reject state. Search a serializer validate() or ValidationError."
+            });
+            judged = { raw: rawResult, matchesSymbol: false };
+          }
+        }
         if (judged.matchesSymbol) {
           matchingRead = true;
           this.mergeContext(context, plan.tool, rawResult);
@@ -429,6 +489,9 @@ export class AgentOrchestrator {
           // Keep the miss in the conversation so the model searches again;
           // do not treat it as definition evidence.
           this.mergeContext(context, plan.tool, rawResult);
+        }
+        if (isApiRejectAsk(query) && contextHasWriteReject(context)) {
+          break;
         }
       } else {
         rawResult =
@@ -451,7 +514,8 @@ export class AgentOrchestrator {
 
       if (plan.tool === "search_code") {
         const parsed = JSON.parse(lastToolResult) as SearchPayload & { preferredHits?: SearchHit[] };
-        if (!parsed.preferredHits?.length) {
+        let hits = parsed.preferredHits ?? [];
+        if (!hits.length) {
           const used = typeof args.query === "string" ? args.query : "";
           const found = await this.searchUntilReadableHits(
             repoId,
@@ -461,8 +525,33 @@ export class AgentOrchestrator {
             new Set([used])
           );
           if (found) {
+            hits = found.toRead;
             lastToolResult = JSON.stringify(context.search_code ?? parsed);
             conversation[conversation.length - 1] = { role: "user", content: lastToolResult };
+          }
+        }
+        if (
+          !matchingRead &&
+          hits.length > 0 &&
+          filesRead < AGENT_MAX_FILES_READ &&
+          !queryHasNamedSymbol(query) &&
+          queryRoleHints(query).length === 0
+        ) {
+          const seeded = await this.readFirstMatchingHit(
+            repoId,
+            query,
+            hits,
+            emit,
+            context,
+            conversation
+          );
+          if (seeded.ok) {
+            matchingRead = true;
+            filesRead += 1;
+            lastToolResult = seeded.raw;
+            if (isApiRejectAsk(query) && contextHasWriteReject(context)) {
+              break;
+            }
           }
         }
       }
@@ -550,6 +639,13 @@ export class AgentOrchestrator {
     conversation?: AgentConversationMessage[],
     matchingRead = false
   ): Promise<AgentSessionResult> {
+    if (isApiRejectAsk(query)) {
+      pruneContextToWriteReject(result.context, query);
+      conversation = compactApiRejectConversation(query, result.context);
+      if (!contextHasWriteReject(result.context)) {
+        matchingRead = false;
+      }
+    }
     const history =
       conversation && conversation.length > 0
         ? conversation
@@ -859,15 +955,40 @@ export class AgentOrchestrator {
       return { steps, context };
     }
 
-    // Try preferred hits until the file body actually mentions the named symbol.
-    // Otherwise we read AuthRoot because the path contains "auth".
-    for (const hit of found.toRead) {
-      if (!hit.fileName || steps.length >= maxSteps) {
-        break;
+    const opened = await this.readFirstMatchingHit(repoId, query, found.toRead, emit, context);
+    if (opened.ok) {
+      return { steps, context };
+    }
+
+    if (context.search_code && typeof context.search_code === "object") {
+      context.search_code = {
+        ...context.search_code,
+        skipNote:
+          "Index hits did not contain the named symbol in file bodies. Do not invent a definition path or patch a related UI file."
+      };
+    }
+    return { steps, context };
+  }
+
+  /**
+   * Locate must open a hit before answering. The model often keeps searching
+   * after preferredHits exist; without a read, C2 posts INDEX_HUNT_MISS.
+   */
+  private async readFirstMatchingHit(
+    repoId: string,
+    query: string,
+    hits: SearchHit[],
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string }> {
+    for (const hit of hits) {
+      if (!hit.fileName) {
+        continue;
       }
       if (shouldSkipEvidencePath(hit.fileName, query)) {
         emit({
-          index: steps.length,
+          index: 0,
           tool: "read_file",
           summary: `read_file skipped (noise path): ${hit.fileName}`,
           completed: true
@@ -881,6 +1002,9 @@ export class AgentOrchestrator {
         startLine,
         endLine
       });
+      if (!readFilePayloadHasBody(readRaw)) {
+        continue;
+      }
       const readParsed = JSON.parse(readRaw) as ReadFilePayload;
       const body = (readParsed.files ?? [])
         .map((file) => `${file.path}\n${file.content}`)
@@ -893,31 +1017,163 @@ export class AgentOrchestrator {
         textMentionsQueryRoles(blob, query);
       if (!namedOk || !roleOk) {
         emit({
-          index: steps.length,
+          index: 0,
           tool: "read_file",
           summary: `read_file skipped (no symbol match): ${hit.fileName}`,
           completed: true
         });
         continue;
       }
-      context.read_file = readParsed as Record<string, unknown>;
+      if (isApiRejectAsk(query) && !contentLooksLikeStateTransitionReject(body)) {
+        const jumped = await this.readWriteRejectInSameFile(
+          repoId,
+          hit.fileName,
+          emit,
+          context,
+          conversation
+        );
+        if (jumped.ok) {
+          return jumped;
+        }
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file skipped (no write/reject): ${hit.fileName}`,
+          completed: true
+        });
+        continue;
+      }
+      this.mergeContext(context, "read_file", readRaw);
+      conversation?.push({
+        role: "assistant",
+        content: JSON.stringify({
+          tool: "read_file",
+          args: { path: hit.fileName, startLine, endLine }
+        })
+      });
+      conversation?.push({ role: "user", content: readRaw });
       emit({
-        index: steps.length,
+        index: 0,
         tool: "read_file",
         summary: `read_file: ${hit.fileName}`,
         completed: true
       });
-      return { steps, context };
+      return { ok: true, raw: readRaw };
     }
+    return { ok: false };
+  }
 
-    if (context.search_code && typeof context.search_code === "object") {
-      context.search_code = {
-        ...context.search_code,
-        skipNote:
-          "Index hits did not contain the named symbol in file bodies. Do not invent a definition path or patch a related UI file."
-      };
+  /**
+   * C2: the index hit is often a read-only serializer class in the same file as
+   * `validate()` / ValidationError. Open the file and jump to that line.
+   */
+  private async loadWriteRejectWindow(
+    repoId: string,
+    filePath: string
+  ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
+    const fullRaw = await this.executeTool("read_file", { path: filePath, repoId });
+    if (!readFilePayloadHasBody(fullRaw)) {
+      return undefined;
     }
-    return { steps, context };
+    const parsed = JSON.parse(fullRaw) as ReadFilePayload;
+    const body = (parsed.files ?? []).map((file) => file.content).join("\n");
+    const line = lineNumberOfWriteReject(body);
+    if (!line) {
+      return undefined;
+    }
+    const { startLine, endLine } = readLineWindow(line);
+    const windowRaw = await this.executeTool("read_file", {
+      path: filePath,
+      repoId,
+      startLine,
+      endLine
+    });
+    if (!readFilePayloadHasBody(windowRaw)) {
+      return undefined;
+    }
+    const windowBody = (JSON.parse(windowRaw) as ReadFilePayload).files
+      ?.map((file) => file.content)
+      .join("\n");
+    if (!windowBody || !contentLooksLikeStateTransitionReject(windowBody)) {
+      return undefined;
+    }
+    return { raw: windowRaw, startLine, endLine };
+  }
+
+  private async readWriteRejectInSameFile(
+    repoId: string,
+    filePath: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string }> {
+    const jumped = await this.loadWriteRejectWindow(repoId, filePath);
+    if (!jumped) {
+      return { ok: false };
+    }
+    this.mergeContext(context, "read_file", jumped.raw);
+    conversation?.push({
+      role: "assistant",
+      content: JSON.stringify({
+        tool: "read_file",
+        args: { path: filePath, startLine: jumped.startLine, endLine: jumped.endLine }
+      })
+    });
+    conversation?.push({ role: "user", content: jumped.raw });
+    emit({
+      index: 0,
+      tool: "read_file",
+      summary: `read_file: ${filePath} (validate/reject)`,
+      completed: true
+    });
+    return { ok: true, raw: jumped.raw };
+  }
+
+  /**
+   * C2: do not stop at the first ranked hit list. OpenAPI and read-only
+   * classes often fill preferredHits; keep searching until a body actually
+   * rejects/writes, then answer from that window only.
+   */
+  private async huntWriteReject(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<boolean> {
+    const queries = fallbackAgentSearchQueries(query).slice(0, MAX_SEARCH_ATTEMPTS);
+    for (const searchQuery of queries) {
+      try {
+        const searchRaw = await this.executeTool("search_code", { query: searchQuery, repoId });
+        const decorated = this.decorateToolResult("search_code", searchRaw, query);
+        this.mergeContext(context, "search_code", decorated);
+        emit({
+          index: 0,
+          tool: "search_code",
+          summary: `search_code: ${truncateSummary(searchQuery)}`,
+          completed: true
+        });
+        const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
+        const toRead = parsed.preferredHits ?? [];
+        if (!toRead.length) {
+          continue;
+        }
+        const opened = await this.readFirstMatchingHit(
+          repoId,
+          query,
+          toRead,
+          emit,
+          context,
+          conversation
+        );
+        if (opened.ok && contextHasWriteReject(context)) {
+          return true;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return false;
   }
 
   private async searchUntilReadableHits(
@@ -1134,9 +1390,45 @@ function readFilePayloadHasBody(raw: string): boolean {
   }
 }
 
+function readFileBodies(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as ReadFilePayload;
+    return (parsed.files ?? []).map((file) => file.content ?? "").join("\n");
+  } catch {
+    return "";
+  }
+}
+
 function readFileContextHasBody(context: AgentSessionContext | undefined): boolean {
   const files = (context?.read_file as ReadFilePayload | undefined)?.files;
   return Boolean(files?.some((file) => Boolean(file.content?.trim())));
+}
+
+function contextHasWriteReject(context: AgentSessionContext | undefined): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return files.some((file) => contentLooksLikeStateTransitionReject(file.content ?? ""));
+}
+
+function pruneContextToWriteReject(context: AgentSessionContext | undefined, query: string): void {
+  if (!context?.read_file || typeof context.read_file !== "object") {
+    return;
+  }
+  const payload = context.read_file as ReadFilePayload;
+  const files = filterWriteRejectFiles(payload.files ?? [], query);
+  context.read_file = { ...payload, files };
+}
+
+function compactApiRejectConversation(
+  query: string,
+  context: AgentSessionContext | undefined
+): AgentConversationMessage[] {
+  const messages: AgentConversationMessage[] = [{ role: "user", content: query }];
+  const payload = context?.read_file;
+  if (payload && JSON.stringify(payload).length > 2) {
+    messages.push({ role: "assistant", content: JSON.stringify({ tool: "read_file" }) });
+    messages.push({ role: "user", content: JSON.stringify(payload) });
+  }
+  return messages;
 }
 
 function symbolToHit(symbol: SymbolHit): SearchHit {

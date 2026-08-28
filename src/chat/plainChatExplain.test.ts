@@ -34,7 +34,7 @@ test("C4 PR review is an open-file review, not an explain briefing", () => {
       query: COPILOT_C4_ASK,
       openFile: "src/server/authMiddleware.ts"
     }),
-    "bodies"
+    "paths-only"
   );
 });
 

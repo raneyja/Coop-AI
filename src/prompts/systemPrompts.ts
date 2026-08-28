@@ -1,6 +1,7 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
 import { resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
+import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
 import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
@@ -29,7 +30,7 @@ export const OPERATING_CONTEXT = `
 - Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
-- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview.
+- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview. Exception: a PR review of an attached file uses **Reviewer checks** only — omit **Summary**, **Answer**, and **Your question**.
 - **Your question** must answer the ask with concrete evidence. Never restate, paraphrase, or truncate the user's question text as the section body.
 `;
 
@@ -336,22 +337,24 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 
 **Answer**
 2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll.
+Omit **Answer** when they asked to review as a PR — start at **Reviewer checks**.
 
 **Your question**
 Include when the user asked something specific beyond a yes/no **and** **Answer** did not already cover it. Place immediately after **Answer**.
 PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).
 FAIL: restating, paraphrasing, or truncating the user's question; repeating **Answer** with no added evidence; burying the ask under later sections.
-Omit when **Answer** already fully covers the ask (typical for open-file explain).
+Omit when **Answer** already fully covers the ask (typical for open-file explain). Omit for PR review of an attached file.
 
 **How it works** (open-file explain only)
 At most **one** citation fence — the named function or type in the open file. Then 3 bullets max.
 
 **Reviewer checks** (if they asked to review as a PR / what you'd block / what's fine / what a reviewer would flag)
+This is the **only** section for that ask. Do not use **Summary**. Do not invent a follow-up about tests unless the attached file is a test file.
 Exactly **3** one-line bullets, in this order:
-- **Block:** a concrete issue in this attached file, or "none — fine because …" with a specific condition
-- **Fine because:** a specific behavior in this code (not "looks good")
-- **Ask the author:** one question grounded in this file
-Stay in this file (Bearer extraction, 401 vs 403, org suspended, plan checks, requireInProduction). No OWASP dump. Never **Next-status WRITE path**, **Hard errors that abort this attempt**, or stuck-status playbook headings.
+- **Block:** a concrete issue in the **named function**, or "none — fine because …" with a specific condition
+- **Fine because:** a specific behavior in that function (not "looks good", not "add logging")
+- **Ask the author:** one question about that function's contract
+Stay in the named function. Sibling helpers in the same file are out of scope unless it calls them. No OWASP dump. Never **Next-status WRITE path**, **Hard errors that abort this attempt**, or stuck-status playbook headings.
 
 For open-file explain: then stop. Do not add extra sections, extra citations, or consumer file dumps.
 PASS: one screen; ≤2 citation fences total; consumers named as \`path\` backticks.
@@ -732,6 +735,14 @@ function resolveSelectionTextForAttach(options: {
   return sliced || undefined;
 }
 
+/** Last lines of a C4 turn — models follow this over the long chat template. */
+export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
+This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
+- Output **only** **Reviewer checks** with exactly three bullets: **Block:** / **Fine because:** / **Ask the author:**
+- Omit **Answer**, **Summary**, and **Your question**. Do not invent a follow-up about tests unless the attached file is a test file.
+- Block must be a concrete behavior in that function (type predicate, requireInProduction bypass, missing status write). Never "add logging" or "improve error messages" unless that function writes user-facing errors.
+- Fine because / Ask the author must also be about that function. Sibling helpers (extractBearerToken, resolveAuthContext, 401/403 writers) are out of scope unless the named function calls them.`;
+
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
@@ -766,6 +777,9 @@ export function formatChatMessageWithLocalFiles(options: {
   });
   emitLocalFilesBlock(lines, options.files);
   lines.push("</attached_context>", "", options.message.trim());
+  if (isOpenFileReviewAsk(options.message)) {
+    lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
+  }
   return lines.join("\n");
 }
 
@@ -1078,6 +1092,9 @@ export function buildUserMessageWithContext(
     lines.push("</graph_context>");
   }
   lines.push("</attached_context>", "", message.trim());
+  if (isOpenFileReviewAsk(message)) {
+    lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
+  }
   return lines.join("\n");
 }
 

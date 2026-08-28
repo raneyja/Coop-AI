@@ -195,6 +195,9 @@ test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", (
   assert.match(AGENT_REPO_HUNT_RULES, /absent from the repository/i);
   assert.match(AGENT_REPO_HUNT_RULES, /restating|paraphrasing/i);
   assert.match(AGENT_REPO_HUNT_RULES, /Your question/);
+  assert.match(AGENT_REPO_HUNT_RULES, /clone/i);
+  assert.match(AGENT_REPO_HUNT_RULES, /ValidationError/);
+  assert.match(AGENT_REPO_HUNT_RULES, /OpenAPI/i);
 });
 
 console.log(`\nevidenceSynthesis: ${passed}/${passed + failed} tests passed`);

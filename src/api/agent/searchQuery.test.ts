@@ -14,9 +14,14 @@ import {
   indexQueryForRetrieval,
   isBarrelPath,
   isGeneratedOrVendorPath,
+  contentLooksLikeWriteReject,
+  contentLooksLikeStateTransitionReject,
+  filterWriteRejectFiles,
+  lineNumberOfWriteReject,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
+  proseLocateSearchAliases,
   queryHasNamedSymbol,
   queryNamesSourceFile,
   queryRoleHints,
@@ -402,6 +407,267 @@ test("C2 prose locate does not require Users as a named symbol", () => {
     false,
     "Users must not be the first fallback"
   );
+  const aliases = proseLocateSearchAliases(ask);
+  assert.equal(
+    aliases.some((q) => /issue|state|workflow/.test(q)),
+    true,
+    `C2 aliases must include issue/state/workflow, got ${aliases.join(", ")}`
+  );
+  assert.equal(
+    fallbacks.some((q) => /issue state|state transition|validate_state|state validation|ValidationError/.test(q)),
+    true,
+    `C2 fallbacks must search issue/state, got ${fallbacks.join(", ")}`
+  );
+  assert.equal(
+    fallbacks.some((q) => /ValidationError/.test(q)),
+    true,
+    `C2 fallbacks must search ValidationError, got ${fallbacks.join(", ")}`
+  );
+  assert.equal(sanitizeAgentSearchQuery("Users", ask).toLowerCase() === "users", false);
+});
+
+test("C2 skips locale catalogs and prefers API write paths over client grouping", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(shouldSkipEvidencePath("web/locales/en/workItem.json", ask), true);
+  assert.equal(shouldSkipEvidencePath("packages/i18n/src/locales/en/workItem.ts", ask), true);
+  assert.equal(
+    shouldSkipEvidencePath("web/locales/en/workItem.json", "Where is the i18n string for backlog?"),
+    false
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "packages/utils/src/work-item/state.ts",
+        lineNumber: 4,
+        content: "export function groupWorkItemByState(items) {",
+        score: 0.95
+      },
+      {
+        fileName: "web/locales/en/workItem.json",
+        lineNumber: 3,
+        content: '"cannotMoveOutOfBacklog": "Users cannot move a work item out of backlog"',
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/issues/work_item_state.py",
+        lineNumber: 12,
+        content: "def write_work_item_state(item, new_state):",
+        score: 0.4
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/issues/work_item_state.py");
+  assert.equal(
+    picked.some((hit) => /locales|i18n/.test(hit.fileName)),
+    false
+  );
+});
+
+test("C2 skips state catalogs and client posts; prefers the write/reject handler", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/db/models/state.py", ask), true);
+  assert.equal(
+    shouldSkipEvidencePath(
+      "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+      ask
+    ),
+    true
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/plane/db/models/state.py",
+        lineNumber: 14,
+        content: 'class StateGroup(models.TextChoices):',
+        score: 0.99
+      },
+      {
+        fileName: "apps/web/core/components/work-item/commands.ts",
+        lineNumber: 198,
+        content: "handleUpdateEntity({ state_id: stateId });",
+        score: 0.9
+      },
+      {
+        fileName: "apps/api/plane/app/views/issue.py",
+        lineNumber: 40,
+        content: "raise ValidationError(\"cannot move work item out of backlog\")",
+        score: 0.3
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/plane/app/views/issue.py");
+  assert.equal(
+    picked.some((hit) => /db\/models|commands\.ts/.test(hit.fileName)),
+    false
+  );
+});
+
+test("C2 skips seed JSON and read-only serializers; prefers the reject snippet", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/seeds/data/issues.json", ask), true);
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/plane/seeds/data/issues.json",
+        lineNumber: 12,
+        content: '"state_id": 3,',
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/plane/app/serializers/issue.py",
+        lineNumber: 728,
+        content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/plane/app/views/issue.py",
+        lineNumber: 40,
+        content: "raise ValidationError(\"cannot move work item out of backlog\")",
+        score: 0.2
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/plane/app/views/issue.py");
+  assert.equal(
+    picked.some((hit) => /seeds\//.test(hit.fileName)),
+    false
+  );
+});
+
+test("filterWriteRejectFiles drops OpenAPI and read-only serializer windows", () => {
+  const kept = filterWriteRejectFiles(
+    [
+      {
+        path: "apps/api/plane/settings/openapi.py",
+        content: "Work Items & Tasks"
+      },
+      {
+        path: "apps/api/plane/app/serializers/issue.py",
+        content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+      },
+      {
+        path: "apps/api/plane/app/serializers/issue.py",
+        content:
+          'raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+      }
+    ],
+    COPILOT_C2_ASK
+  );
+  assert.equal(kept.length, 1);
+  assert.match(kept[0]?.content ?? "", /State is not valid/);
+});
+
+test("C2 skips OpenAPI specs and does not treat partial_update as a reject", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/settings/openapi.py", ask), true);
+  assert.equal(contentLooksLikeWriteReject("    def partial_update(self, request, slug, project_id, pk):"), false);
+  assert.equal(
+    contentLooksLikeWriteReject(
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+    ),
+    true
+  );
+});
+
+test("C2 skips query-filter converters and does not stop on generic ValidationError", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(
+    shouldSkipEvidencePath("apps/api/plane/utils/filters/converters.py", ask),
+    true
+  );
+  const filterWindow = [
+    "    def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+    '        if rich_field_name in self.UUID_FIELDS:',
+    "            return self._validate_uuid(value)",
+    '        raise ValidationError("Invalid filter value")'
+  ].join("\n");
+  assert.equal(contentLooksLikeStateTransitionReject(filterWindow), false);
+  assert.equal(
+    contentLooksLikeStateTransitionReject(
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+    ),
+    true
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/plane/utils/filters/converters.py",
+        lineNumber: 184,
+        content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/plane/app/serializers/issue.py",
+        lineNumber: 12,
+        content:
+          'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+        score: 0.3
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/plane/app/serializers/issue.py");
+  assert.equal(
+    picked.some((hit) => /filters\/converters/.test(hit.fileName)),
+    false
+  );
+});
+
+test("C2 does not pick a permission-only view when a reject snippet exists", () => {
+  const ask = COPILOT_C2_ASK;
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/plane/app/views/intake.py",
+        lineNumber: 80,
+        content: "def partial_update(self, request, slug, project_id, pk):",
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/plane/app/serializers/issue.py",
+        lineNumber: 12,
+        content:
+          'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+        score: 0.4
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/plane/app/serializers/issue.py");
+  assert.equal(
+    picked.some((hit) => /views\/intake/.test(hit.fileName)),
+    false
+  );
+});
+
+test("lineNumberOfWriteReject prefers ValidationError near state", () => {
+  const body = [
+    "class IssueStateFlatSerializer:",
+    "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+    "",
+    "class IssueSerializer:",
+    "    def validate(self, data):",
+    '        raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+  ].join("\n");
+  assert.equal(lineNumberOfWriteReject(body), 6);
+});
+
+test("lineNumberOfWriteReject ignores filter ValidationError that is not a state transition", () => {
+  const body = [
+    "class FilterConverter:",
+    "    def _validate_value(self, rich_field_name, value):",
+    '        if rich_field_name == "state":',
+    '            raise ValidationError("Invalid filter value")'
+  ].join("\n");
+  assert.equal(lineNumberOfWriteReject(body), undefined);
 });
 
 test("Where is requireAuth defined still requires that symbol", () => {

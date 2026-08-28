@@ -1022,6 +1022,442 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /work_item_state/);
   });
 
+  await test("C2 auto-reads the hit when the model only searches", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Users" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "write_work_item_state in apps/api/issues/work_item_state.py rejects a bad transition.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.ok(
+      result.steps.some((s) => s.tool === "read_file" && s.summary.includes(filePath)),
+      `expected auto read of ${filePath}, got ${result.steps.map((s) => s.summary).join(" | ")}`
+    );
+  });
+
+  await test("C2 auto-read prefers API writer over locale and client grouping hits", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/issues/seeds/issues.json",
+              lineNumber: 3,
+              content: '"state_id": 3,',
+              score: 0.98
+            },
+            {
+              fileName: "apps/api/issues/serializers/issue.py",
+              lineNumber: 2,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.97
+            },
+            {
+              fileName: "apps/api/issues/models/state.py",
+              lineNumber: 8,
+              content: 'DEFAULT_STATES = [{"name": "Backlog", "group": "backlog"}]',
+              score: 0.99
+            },
+            {
+              fileName: "web/components/work-item/commands.ts",
+              lineNumber: 10,
+              content: "handleUpdateEntity({ state_id: stateId });",
+              score: 0.9
+            },
+            {
+              fileName: "web/locales/en/workItem.json",
+              lineNumber: 3,
+              content: '"cannotMoveOutOfBacklog": "Users cannot move a work item out of backlog"',
+              score: 0.99
+            },
+            {
+              fileName: "packages/utils/src/work-item/state.ts",
+              lineNumber: 4,
+              content: "export function groupWorkItemByState(items) {",
+              score: 0.95
+            },
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.35
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : { path: rel, content: "noise" };
+      }
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "write_work_item_state rejects a bad transition."
+      }
+    );
+    const attached = (
+      result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.ok(reads.includes(filePath), `must read the API writer, got ${reads.join(", ")}`);
+    assert.match(attached, /write_work_item_state/);
+    assert.equal(
+      reads.some((p) => /locales|i18n|seeds\//.test(p)),
+      false
+    );
+    assert.ok(
+      result.steps.some((s) => s.tool === "read_file" && s.summary.includes(filePath)),
+      `expected auto read of ${filePath}, got ${result.steps.map((s) => s.summary).join(" | ")}`
+    );
+  });
+
+  await test("C2 jumps from a read-only serializer class to validate() in the same file", async () => {
+    const filePath = "apps/api/issues/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      "",
+      "class IssueStateFlatSerializer:",
+      "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 6,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : undefined;
+      }
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "IssueSerializer.validate rejects an invalid state_id."
+      }
+    );
+    const readFile = result.context?.read_file as
+      | { files?: Array<{ path: string; content: string }> }
+      | undefined;
+    const attached = readFile?.files?.map((file) => file.content).join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.equal(reads.includes(filePath), true);
+  });
+
+  await test("C2 model read of a serializer class still jumps to validate()", async () => {
+    const filePath = "apps/api/issues/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      "",
+      "class IssueStateFlatSerializer:",
+      "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 6,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: filePath, startLine: 6, endLine: 12 }
+            });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "IssueSerializer.validate rejects an invalid state_id."
+      }
+    );
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.doesNotMatch(attached, /Work Item Comments/);
+  });
+
+  await test("C2 synthesis conversation excludes OpenAPI and read-only serializer windows", async () => {
+    const filePath = "apps/api/plane/app/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state_id"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      ...Array.from({ length: 80 }, () => ""),
+      "class IssueStateFlatSerializer:",
+      "        state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/plane/settings/openapi.py",
+              lineNumber: 1,
+              content: "Work Items & Tasks",
+              score: 0.99
+            },
+            {
+              fileName: filePath,
+              lineNumber: 7,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.9
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel.includes("openapi")) {
+          return { path: rel, content: "Work Items & Tasks\npaths: /api/v1/issues/" };
+        }
+        return undefined;
+      }
+    });
+    let synthesis = "";
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          synthesis = conversation.map((m) => m.content).join("\n");
+          return "IssueSerializer.validate rejects an invalid state_id.";
+        }
+      }
+    );
+    assert.match(synthesis, /State is not valid/);
+    assert.doesNotMatch(synthesis, /Work Items & Tasks/);
+    assert.doesNotMatch(synthesis, /IssueStateFlatSerializer/);
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.doesNotMatch(attached, /IssueStateFlatSerializer/);
+  });
+
+  await test("C2 hunt skips filter converters and attaches serializer validate()", async () => {
+    const writerPath = "apps/api/issues/serializers/issue.py";
+    const writer = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state_id"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+    ].join("\n");
+    const converter = [
+      "class FilterConverter:",
+      "    def _validate_value(self, rich_field_name, value):",
+      "        if rich_field_name in self.UUID_FIELDS:",
+      "            return self._validate_uuid(value)",
+      '        raise ValidationError("Invalid filter value")',
+      "        return True"
+    ].join("\n");
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/plane/utils/filters/converters.py",
+              lineNumber: 184,
+              content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+              score: 0.99
+            },
+            {
+              fileName: writerPath,
+              lineNumber: 4,
+              content:
+                'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (/converters\.py$/.test(rel)) {
+          return { path: rel, content: converter };
+        }
+        return undefined;
+      }
+    });
+    let synthesis = "";
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          synthesis = conversation.map((m) => m.content).join("\n");
+          return "IssueSerializer.validate rejects an invalid state_id.";
+        }
+      }
+    );
+    assert.equal(
+      reads.some((p) => /filters\/converters/.test(p)),
+      false,
+      `must not read filter converters, got ${reads.join(", ")}`
+    );
+    assert.match(synthesis, /State is not valid/);
+    assert.doesNotMatch(synthesis, /_validate_value/);
+    assert.doesNotMatch(synthesis, /Invalid filter value/);
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+  });
+
   await test("C1 empty index still posts INDEX_HUNT_MISS", async () => {
     let streamed = 0;
     const orchestrator = createAgentOrchestrator({

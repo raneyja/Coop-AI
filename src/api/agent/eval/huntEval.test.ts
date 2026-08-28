@@ -100,7 +100,16 @@ const CASES: HuntCase[] = [
   }
 ];
 
-const NEVER_READ = [/^node_modules\//, /^dist\//, /\/index\.ts$/];
+const NEVER_READ = [
+  /^node_modules\//,
+  /^dist\//,
+  /\/index\.ts$/,
+  /\/locales?\//,
+  /\/i18n\//,
+  /\/db\/models\//,
+  /\/seeds?\//,
+  /openapi\.(py|yml|yaml|json)$/
+];
 
 type Outcome = {
   question: string;

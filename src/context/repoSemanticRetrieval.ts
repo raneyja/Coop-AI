@@ -13,7 +13,7 @@ import {
   rankOnboardingEntryFiles,
   selectOnboardingEvidencePaths
 } from "./onboardingSearchQueries";
-import { semanticAttachModeForChat } from "../chat/plainChatExplain";
+import { semanticAttachModeForChat, isOpenFileReviewAsk } from "../chat/plainChatExplain";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -52,6 +52,8 @@ export type RepoSemanticRetrievalGateOptions = {
   codeEditIntent?: boolean;
   inScopeMentionCount?: number;
   enabled?: boolean;
+  /** Chip / active file — open-file review must not attach estate bodies. */
+  openFile?: string;
 };
 
 export function semanticRetrievalQueryText(options: RepoSemanticRetrievalGateOptions): string {
@@ -82,6 +84,13 @@ export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGat
   const query = semanticRetrievalQueryText(options);
   // Repo facts (counts, structure) come from IndexedRepoWorkspace, never a 3-file sample.
   if (!options.codeEditIntent && isRepoStructureQuery(query)) {
+    return false;
+  }
+  if (
+    isOpenFileReviewAsk(query) &&
+    Boolean(options.openFile?.trim()) &&
+    !options.codeEditIntent
+  ) {
     return false;
   }
   const minLength = options.codeEditIntent ? SEMANTIC_QUERY_MIN_LENGTH_EDIT : SEMANTIC_QUERY_MIN_LENGTH;
@@ -120,7 +129,8 @@ export function gateOptionsFromRequest(
     intentIsPlainChat: isPlainChatIntentEvent(request.intent),
     codeEditIntent: extras.codeEditIntent,
     inScopeMentionCount: extras.inScopeMentionCount,
-    enabled: extras.enabled
+    enabled: extras.enabled,
+    openFile: request.params.file
   };
 }
 

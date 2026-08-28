@@ -61,6 +61,20 @@ test("shouldRunRepoSemanticRetrieval allows plain chat with long query", () => {
   );
 });
 
+test("shouldRunRepoSemanticRetrieval skips open-file PR review", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText:
+        "Review requireAuth as if this were a PR touching production auth. What would you block, what's fine, and what would you ask the author? Stay specific to this code.",
+      intentIsPlainChat: true,
+      openFile: "src/server/authMiddleware.ts",
+      inScopeMentionCount: 0,
+      enabled: true
+    }),
+    false
+  );
+});
+
 test("shouldRunRepoSemanticRetrieval skips inventory / file-count questions", () => {
   assert.equal(
     shouldRunRepoSemanticRetrieval({

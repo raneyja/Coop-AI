@@ -229,6 +229,8 @@ export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are a
 - Prefer <agent_files> bodies. Cite real paths and line ranges from those blocks (citation fences with numeric startLine:endLine:path).
 - If the user named a symbol (requireAuth, parse_token), only discuss files whose attached bodies contain that symbol or its snake_case/camelCase alias. Never substitute a nearby auth UI form or AuthRoot component.
 - If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not invent definition paths. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
+- Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone. Do not invent a view or serializer path from a state catalog or a client state_id post.
+- If an attached body has validate() or ValidationError for state/state_id, cite that. Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
 - Never open **Your question** (or any section) by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
 - Do not dump the question text under a heading as if it were the answer.`;
 

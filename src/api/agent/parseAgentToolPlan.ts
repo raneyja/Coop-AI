@@ -171,6 +171,8 @@ export function buildAgentAnswerPrompt(input: {
     "Citation line numbers must be the N| prefixes from read_file (the real file lines), not 1-based offsets in the snippet.",
     "If Slack/Jira/docs results include permalink or htmlUrl, include that URL as a markdown link so the user can open the native app.",
     "If you never read a file that mentions a named symbol, say in 1–2 sentences that the index returned no usable match. Do not invent a path. Do not answer from a related UI/test/collab file. Do not use a **Your question** heading. Do not restate the user's ask.",
+    "Never tell the user to clone, inspect a local copy, or search on disk. If only a state catalog, default rows, or a client post of state_id were read, say the API write/reject path was not in those bodies. Do not invent a view or serializer path.",
+    "If a read_file body contains validate() or ValidationError for state/state_id, that is the write/reject. Cite that. Never cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions and fetches a row.",
     "When Slack/Jira ran, summarize those hits after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
     "Do not emit tool JSON.",
     change

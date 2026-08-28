@@ -1,6 +1,14 @@
 import {
   isBarrelPath,
+  isClientUiPath,
   isGeneratedOrVendorPath,
+  isLocaleCatalogPath,
+  isMutationHandlerPath,
+  isSchemaCatalogPath,
+  isSeedOrFixturePath,
+  isDocOrSpecPath,
+  isQueryFilterPath,
+  isServerWritePath,
   isTestPath,
   normalizePath
 } from "../../indexing/evidencePathNoise";
@@ -42,7 +50,7 @@ const STOP = new Set(
 const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
-const MAX_FALLBACK_QUERIES = 5;
+const MAX_FALLBACK_QUERIES = 9;
 const SOURCE_FILE_EXT =
   "ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml|css|html|vue|svelte|c|h|cpp|cc|kt|swift";
 const NAMED_SOURCE_FILE = new RegExp(
@@ -211,6 +219,10 @@ export function sanitizeAgentSearchQuery(query: string, userMessage: string): st
   if (q.length > MAX_SEARCH_CHARS || q === userMessage.trim() || looksLikeFullQuestion(q)) {
     return extracted;
   }
+  // Sentence-subject English ("Users can't…") is not a hunt key.
+  if (PROSE_PASCAL.has(q.toLowerCase())) {
+    return extracted;
+  }
   return clip(q);
 }
 
@@ -252,6 +264,28 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
   if (isBarrelPath(fileName) || isGeneratedOrVendorPath(fileName)) {
     return true;
   }
+  if (
+    userMessage &&
+    isLocaleCatalogPath(fileName) &&
+    !userAskedAboutLocales(userMessage)
+  ) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSchemaCatalogPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSeedOrFixturePath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isDocOrSpecPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isQueryFilterPath(fileName)) {
+    return true;
+  }
   // Named symbol + change/locate: skip tests unless the user asked about tests.
   // Otherwise contract tests that say "require_authentication" steal requireAuth.
   if (
@@ -267,7 +301,9 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
 
 /**
  * Progressively broader index queries, tried in order when the first search
- * returns nothing readable. Derived from the question's own words only.
+ * returns nothing readable. Starts from the question's own words, then
+ * English aliases (work item → issue/state) so a prose locate can hit the
+ * names the repo actually uses.
  *
  * Identifier aliases matter: users often write `requireAuth` while the repo
  * defines `require_auth` (or the reverse). A single casing miss returns empty
@@ -299,6 +335,9 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     }
   }
   push(primary);
+  for (const alias of proseLocateSearchAliases(userMessage)) {
+    push(alias);
+  }
   for (const id of identifiers) {
     push(id);
     for (const alias of identifierSearchAliases(id)) {
@@ -400,6 +439,18 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     if (decls.length > 0) {
       pool = [...decls, ...pool.filter((hit) => !decls.includes(hit))];
     }
+  }
+  if (userMessage && isApiRejectAsk(userMessage)) {
+    const writers = pool.filter((hit) => isServerWritePath(hit.fileName));
+    if (writers.length > 0) {
+      pool = [...writers, ...pool.filter((hit) => !writers.includes(hit))];
+    }
+    const mutators = pool.filter((hit) => contentLooksLikeWriteReject(hit.content ?? ""));
+    if (mutators.length > 0) {
+      pool = [...mutators, ...pool.filter((hit) => !mutators.includes(hit))];
+    }
+    const actionable = pool.filter((hit) => isActionableApiRejectHit(hit));
+    pool = actionable;
   }
   const picked: T[] = [];
   for (const hit of pool) {
@@ -664,6 +715,118 @@ function userAskedAboutTests(userMessage: string): boolean {
   return /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(userMessage);
 }
 
+function userAskedAboutLocales(userMessage: string): boolean {
+  return /\b(i18n|l10n|locale|locales|translation|translations|copy catalog)\b/i.test(
+    userMessage
+  );
+}
+
+/** On-call paste: API error / write / reject — not board grouping or i18n. */
+export function isApiRejectAsk(userMessage: string): boolean {
+  const text = userMessage.toLowerCase();
+  const apiOrError = /\b(api|4xx|rejects?|rejecting|illegal|invalid)\b/.test(text);
+  const writeOrTransition = /\b(written|writes?|transition|backlog|work[-\s]?item)\b/.test(
+    text
+  );
+  return apiOrError && writeOrTransition;
+}
+
+/** Hit body assigns/rejects — not a group enum, seed row, or read-only serializer. */
+export function contentLooksLikeWriteReject(content: string): boolean {
+  return /\b(raise |throw |ValidationError|ValueError|Forbidden|is_valid_transition|invalid.{0,16}transition|validate_state)\b/i.test(
+    content
+  );
+}
+
+/**
+ * Reject that is actually about work-item state — not UUID/choice filter
+ * validation that happens to live under apps/api.
+ */
+export function contentLooksLikeStateTransitionReject(content: string): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  return (
+    /\b(state_id|is_valid_transition|validate_state)\b/i.test(content) ||
+    /invalid.{0,16}transition/i.test(content) ||
+    /valid state/i.test(content)
+  );
+}
+
+/** Read-side serializer / seed snippet — represents state, does not reject a transition. */
+export function contentLooksLikeReadOnlyState(content: string): boolean {
+  if (contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  return /read_only\s*=\s*True/.test(content) || /"state_id"\s*:/.test(content);
+}
+
+export function isActionableApiRejectHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  const content = hit.content ?? "";
+  if (
+    isSeedOrFixturePath(hit.fileName) ||
+    isSchemaCatalogPath(hit.fileName) ||
+    isClientUiPath(hit.fileName) ||
+    isDocOrSpecPath(hit.fileName) ||
+    isQueryFilterPath(hit.fileName)
+  ) {
+    return false;
+  }
+  if (contentLooksLikeWriteReject(content)) {
+    return true;
+  }
+  const path = normalizePath(hit.fileName);
+  // Open serializer files even when the hit is a read-only class — validate()
+  // in the same file is the reject. Seeds/clients stay skipped.
+  if (/(^|\/)serializers?\//.test(path) || /\.serializer\.(py|ts|go|rb)$/.test(path)) {
+    return true;
+  }
+  if (contentLooksLikeReadOnlyState(content)) {
+    return false;
+  }
+  // Views/services without a reject in the snippet are permission checks and
+  // fetches — not the write. Do not spend a read on them.
+  if (isMutationHandlerPath(hit.fileName)) {
+    return false;
+  }
+  return isServerWritePath(hit.fileName);
+}
+
+/** Keep only file bodies that actually reject/write — drop OpenAPI and read-only classes. */
+export function filterWriteRejectFiles<T extends { path?: string; content?: string }>(
+  files: T[],
+  userMessage: string
+): T[] {
+  return files.filter((file) => {
+    const path = file.path ?? "";
+    if (path && shouldSkipEvidencePath(path, userMessage)) {
+      return false;
+    }
+    return contentLooksLikeStateTransitionReject(file.content ?? "");
+  });
+}
+
+export function lineNumberOfWriteReject(content: string): number | undefined {
+  const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
+  for (let i = 0; i < rows.length; i++) {
+    if (!contentLooksLikeWriteReject(rows[i])) {
+      continue;
+    }
+    const nearby = rows.slice(Math.max(0, i - 2), i + 4).join("\n");
+    if (
+      /\b(state_id|is_valid_transition|validate_state)\b/i.test(nearby) ||
+      /invalid.{0,16}transition/i.test(nearby) ||
+      /valid state/i.test(nearby)
+    ) {
+      return i + 1;
+    }
+  }
+  return undefined;
+}
+
 function normalizeSymbol(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -704,6 +867,21 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (isGeneratedOrVendorPath(hit.fileName)) {
     rank -= 6;
+  }
+  if (isLocaleCatalogPath(hit.fileName) && !(userMessage && userAskedAboutLocales(userMessage))) {
+    rank -= 18;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isServerWritePath(hit.fileName)) {
+    rank += 18;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isMutationHandlerPath(hit.fileName)) {
+    rank += 12;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSchemaCatalogPath(hit.fileName)) {
+    rank -= 16;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(hit.fileName)) {
+    rank -= 16;
   }
   if (
     userMessage &&
@@ -768,6 +946,40 @@ function isSearchablePascal(word: string, text: string): boolean {
     return true;
   }
   return !new RegExp(`^${word}\\b`).test(text.trim());
+}
+
+/**
+ * English the user typed mapped to words repos actually use.
+ * "work item" / backlog / transition → issue / state / workflow.
+ * Repo-agnostic — no product or folder names.
+ */
+export function proseLocateSearchAliases(userMessage: string): string[] {
+  const text = userMessage.toLowerCase();
+  const hasWorkItem = /\bwork[-\s]?items?\b/.test(text);
+  const hasTransition = /\btransitions?\b/.test(text);
+  const hasBacklog = /\bbacklog\b/.test(text);
+  const aliases: string[] = [];
+  if (isApiRejectAsk(userMessage)) {
+    aliases.push("ValidationError");
+  }
+  if (hasWorkItem || hasTransition) {
+    aliases.push("validate_state");
+    aliases.push("invalid state");
+  }
+  if (hasWorkItem || hasBacklog) {
+    aliases.push("issue state");
+  }
+  if (hasTransition || hasWorkItem) {
+    aliases.push("state transition");
+  }
+  if (hasWorkItem || hasTransition) {
+    aliases.push("state validation");
+    aliases.push("state_id");
+  }
+  if (isApiRejectAsk(userMessage)) {
+    aliases.push("ValidationError");
+  }
+  return aliases;
 }
 
 /** Noun phrase after "where is / where do we parse" — not the complaint subject. */

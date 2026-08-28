@@ -595,6 +595,8 @@ export class CoopChatSession {
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private pendingChatLocalFiles?: LocalFileContextPayload;
+  /** Plain chat and /edit attach the whole chip file, not the caret window. */
+  private pendingChatAttachFullFile = false;
   private editorContextSuppressedUntil = 0;
   /**
    * When false, ignore passive editor snaps (active tab / visibility).
@@ -4342,6 +4344,7 @@ export class CoopChatSession {
       deltaBatcher.dispose();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
+        this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
         this.turnAgentAction = "none";
       }
@@ -5535,6 +5538,7 @@ export class CoopChatSession {
             // Full active file for /edit and plain chat so SEARCH hunks can match beyond a selection.
             fullFile: options?.composerMode === "edit" || !quickAction
           });
+    this.pendingChatAttachFullFile = options?.composerMode === "edit" || !quickAction;
     // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.postContext();
@@ -7802,6 +7806,7 @@ export class CoopChatSession {
       deltaBatcher.dispose();
       if (this.isViewingThread(turn.threadId)) {
         this.pendingChatLocalFiles = undefined;
+        this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
         this.turnAgentAction = "none";
       }
@@ -9858,8 +9863,10 @@ export class CoopChatSession {
         return this.pendingChatLocalFiles;
       }
       const fromExternal = readExternalOpenFileForChat({
-        selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
-        fullFile: this.pendingCodeEditIntent,
+        selectedLines: this.pendingCodeEditIntent || this.pendingChatAttachFullFile
+          ? undefined
+          : this.currentContext.selectedLines,
+        fullFile: this.pendingCodeEditIntent || this.pendingChatAttachFullFile,
         preferredPath: this.currentContext.file
       });
       if (fromExternal?.files.length) {
@@ -9875,14 +9882,15 @@ export class CoopChatSession {
     }
 
     // Zero-Clone: remote URI tabs or codehost / indexed fetch only — never local clone/disk.
-    const lines = this.pendingCodeEditIntent
+    const fullFile = this.pendingCodeEditIntent || this.pendingChatAttachFullFile;
+    const lines = fullFile
       ? undefined
       : this.currentContext.selectedLines
         ? { start: this.currentContext.selectedLines[0], end: this.currentContext.selectedLines[1] }
         : undefined;
     const fromRemoteTabs = await readOpenTabFilesForChat({
       file: this.currentContext.file,
-      selectedLines: this.pendingCodeEditIntent ? undefined : this.currentContext.selectedLines,
+      selectedLines: fullFile ? undefined : this.currentContext.selectedLines,
       remoteOnly: true
     });
     if (fromRemoteTabs?.files.length) {
