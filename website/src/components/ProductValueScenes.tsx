@@ -8,16 +8,6 @@ import { ProductCreationMock } from "@/components/ProductCreationMock";
 import { ContextConstellation } from "@/components/ContextConstellation";
 import { CODE_CREATION_STORIES } from "@/lib/codeCreationScenarios";
 
-const ASK_COMMANDS = [
-  "/understand",
-  "/trace",
-  "/blast",
-  "/owner",
-  "/gaps",
-  "/jira",
-  "/slack"
-] as const;
-
 const WRITE_PILLARS = [
   {
     id: "complete",
@@ -62,20 +52,7 @@ export function ProductAskScene() {
           description="Architecture, owners, blast radius, and the ticket that explains why. One place, across the repo graph and the tools you already use."
         />
 
-        <div className="mt-8 flex flex-wrap gap-2" aria-label="Quick action commands">
-          {ASK_COMMANDS.map((cmd) => (
-            <span
-              key={cmd}
-              className="rounded-full border border-coop-border bg-white px-3 py-1.5 font-mono text-xs text-gray-800"
-            >
-              {cmd}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-12">
-          <QuickActionPromptCarousel />
-        </div>
+        <QuickActionPromptCarousel />
       </div>
     </section>
   );
