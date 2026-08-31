@@ -13,6 +13,7 @@ type HeroCompleteDemoCardProps = {
   /** How many ghost characters are revealed. */
   revealedGhostChars: number;
   phase: HeroCompletePhase;
+  tone?: "light" | "dark";
 };
 
 export function HeroCompleteDemoCard({
@@ -21,16 +22,22 @@ export function HeroCompleteDemoCard({
   typedPrefix,
   ghostSuffix,
   revealedGhostChars,
-  phase
+  phase,
+  tone = "light"
 }: HeroCompleteDemoCardProps) {
   const accepted = phase === "accepted";
   const showTab = phase === "tab-ready" || phase === "tab-press" || phase === "accepted";
   const visibleGhost = accepted ? ghostSuffix : ghostSuffix.slice(0, revealedGhostChars);
   const showCursor = phase === "typing" || phase === "ghost" || phase === "tab-ready";
+  const dark = tone === "dark";
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+      className={
+        dark
+          ? "overflow-hidden rounded-lg border border-white/10 bg-neutral-900"
+          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+      }
       role="img"
       aria-label={
         accepted
@@ -38,51 +45,85 @@ export function HeroCompleteDemoCard({
           : `Inline completion ready in ${file}. Tab to accept`
       }
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
-        <h3 className="text-base font-semibold text-gray-900">
+      <div
+        className={`flex flex-wrap items-center gap-2 px-4 py-3 ${
+          dark ? "border-b border-white/10" : "border-b border-gray-100"
+        }`}
+      >
+        <h3 className={`text-base font-semibold ${dark ? "text-white" : "text-gray-900"}`}>
           {accepted ? "Completion accepted" : "Completion ready"}
         </h3>
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-            accepted ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"
+            accepted
+              ? dark
+                ? "bg-emerald-900/80 text-emerald-200"
+                : "bg-emerald-100 text-emerald-800"
+              : dark
+                ? "bg-white/10 text-white/70"
+                : "bg-gray-100 text-gray-600"
           }`}
         >
           {accepted ? "Accepted" : "Ghost text"}
         </span>
-        <span className="text-xs text-gray-500">graph · AuthError · 3 callers</span>
+        <span className={`text-xs ${dark ? "text-white/45" : "text-gray-500"}`}>
+          graph · AuthError · 3 callers
+        </span>
       </div>
 
-      <p className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">
+      <p
+        className={`px-4 py-2 text-xs ${
+          dark ? "border-b border-white/10 text-white/45" : "border-b border-gray-100 text-gray-500"
+        }`}
+      >
         {accepted
           ? "Suggestion applied at your cursor. Stay in the file."
           : "Matched AuthError from billing/auth. Tab to accept ghost text."}
       </p>
 
-      <div className="border-b border-gray-100 px-4 py-2">
-        <div className="overflow-hidden rounded-md border border-gray-200">
-          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-            <span className="truncate font-mono text-[11px] text-gray-700">{file}</span>
-            <span className="shrink-0 font-mono text-[10px] text-gray-400">inline complete</span>
+      <div className={`px-4 py-2 ${dark ? "border-b border-white/10" : "border-b border-gray-100"}`}>
+        <div className={`overflow-hidden rounded-md border ${dark ? "border-white/10" : "border-gray-200"}`}>
+          <div
+            className={`flex items-center justify-between px-3 py-1.5 ${
+              dark ? "border-b border-white/10 bg-white/[0.04]" : "border-b border-gray-100 bg-gray-50"
+            }`}
+          >
+            <span className={`truncate font-mono text-[11px] ${dark ? "text-white/80" : "text-gray-700"}`}>
+              {file}
+            </span>
+            <span className={`shrink-0 font-mono text-[10px] ${dark ? "text-white/35" : "text-gray-400"}`}>
+              inline complete
+            </span>
           </div>
-          <pre className="overflow-x-auto bg-white px-3 py-2 font-mono text-[11px] leading-[1.55] text-gray-800">
+          <pre
+            className={`overflow-x-auto px-3 py-2 font-mono text-[11px] leading-[1.55] ${
+              dark ? "bg-neutral-950 text-neutral-200" : "bg-white text-gray-800"
+            }`}
+          >
             {prefixLines.map((line, i) => (
               <div key={`p-${i}`} className="flex gap-2">
-                <span className="w-5 shrink-0 select-none text-right text-gray-400">{i + 1}</span>
+                <span className={`w-5 shrink-0 select-none text-right ${dark ? "text-white/30" : "text-gray-400"}`}>
+                  {i + 1}
+                </span>
                 <span className="min-w-0 whitespace-pre">{line || " "}</span>
               </div>
             ))}
             <div className="flex gap-2">
-              <span className="w-5 shrink-0 select-none text-right text-gray-400">
+              <span className={`w-5 shrink-0 select-none text-right ${dark ? "text-white/30" : "text-gray-400"}`}>
                 {prefixLines.length + 1}
               </span>
               <span className="min-w-0 whitespace-pre">
-                <span className="text-gray-800">{typedPrefix}</span>
+                <span className={dark ? "text-neutral-100" : "text-gray-800"}>{typedPrefix}</span>
                 {visibleGhost ? (
                   <span
                     className={
                       accepted
-                        ? "text-gray-800"
-                        : "text-gray-400 [text-shadow:0_0_0.5px_rgba(156,163,175,0.8)]"
+                        ? dark
+                          ? "text-neutral-100"
+                          : "text-gray-800"
+                        : dark
+                          ? "text-white/40"
+                          : "text-gray-400 [text-shadow:0_0_0.5px_rgba(156,163,175,0.8)]"
                     }
                   >
                     {visibleGhost}
@@ -105,8 +146,12 @@ export function HeroCompleteDemoCard({
                 accepted
                   ? "border-emerald-600 bg-emerald-700 text-white"
                   : phase === "tab-press"
-                    ? "scale-95 border-gray-800 bg-gray-800 text-white"
-                    : "border-gray-300 bg-gray-50 text-gray-800 shadow-sm"
+                    ? dark
+                      ? "scale-95 border-white bg-white text-neutral-950"
+                      : "scale-95 border-gray-800 bg-gray-800 text-white"
+                    : dark
+                      ? "border-white/20 bg-white/10 text-white"
+                      : "border-gray-300 bg-gray-50 text-gray-800 shadow-sm"
               }`}
               aria-hidden
             >
@@ -114,20 +159,20 @@ export function HeroCompleteDemoCard({
             </kbd>
             {phase === "tab-ready" || phase === "tab-press" ? (
               <span
-                className={`hero-patch-pointer pointer-events-none absolute left-[55%] top-[60%] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gray-900 bg-white ${
-                  phase === "tab-press" ? "hero-patch-pointer-press" : "hero-patch-pointer-aim"
-                }`}
+                className={`hero-patch-pointer pointer-events-none absolute left-[55%] top-[60%] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${
+                  dark ? "border-white bg-neutral-300" : "border-gray-900 bg-white"
+                } ${phase === "tab-press" ? "hero-patch-pointer-press" : "hero-patch-pointer-aim"}`}
                 aria-hidden
               />
             ) : null}
           </div>
-          <span className="text-xs text-gray-500">
+          <span className={`text-xs ${dark ? "text-white/45" : "text-gray-500"}`}>
             {accepted ? "Ghost text accepted · undo anytime" : "Press Tab to accept"}
           </span>
         </div>
       ) : (
         <div className="px-4 py-3">
-          <div className="h-9 w-16 animate-pulse rounded-md bg-gray-100" aria-hidden />
+          <div className={`h-9 w-16 animate-pulse rounded-md ${dark ? "bg-white/10" : "bg-gray-100"}`} aria-hidden />
         </div>
       )}
     </div>

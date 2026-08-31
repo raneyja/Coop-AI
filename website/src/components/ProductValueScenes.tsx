@@ -44,7 +44,7 @@ const INDEX_TRUST = [
 /** Scene: Ask — slash commands + rotating prompt/outcome (no feature encyclopedia). */
 export function ProductAskScene() {
   return (
-    <section className="border-t border-coop-border py-20 md:py-24">
+    <section id="ask" className="scroll-mt-20 border-t border-coop-border py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="ask"
@@ -70,7 +70,7 @@ export function ProductChangeScene() {
   }, []);
 
   return (
-    <section className="border-t border-coop-border bg-gray-50 py-20 md:py-24">
+    <section id="change" className="scroll-mt-20 border-t border-coop-border py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="xl:grid xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-center xl:gap-14">
           <div className="min-w-0">
@@ -124,7 +124,7 @@ export function ProductChangeScene() {
 /** Scene: Indexed — Lightning / deep-index as the substrate story. */
 export function ProductIndexedScene() {
   return (
-    <section className="border-t border-coop-border py-20 md:py-24" id="lightning-mode">
+    <section className="scroll-mt-20 border-t border-coop-border py-20 md:py-24" id="lightning-mode">
       <div className="mx-auto max-w-7xl px-6 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-12">
         <div className="min-w-0">
           <SectionHeading

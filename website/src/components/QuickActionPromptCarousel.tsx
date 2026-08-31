@@ -19,7 +19,9 @@ const ROTATE_MS = 5200;
 const FADE_MS = 420;
 const SWIPE_THRESHOLD_PX = 48;
 
-export function QuickActionPromptCarousel() {
+type CarouselTone = "light" | "dark";
+
+export function QuickActionPromptCarousel({ tone = "light" }: { tone?: CarouselTone }) {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -147,8 +149,12 @@ export function QuickActionPromptCarousel() {
               onClick={() => handleDotClick(i)}
               className={`min-h-10 shrink-0 snap-start rounded-sm border px-3 py-2 font-mono text-xs transition sm:min-h-0 sm:py-1.5 ${
                 i === index
-                  ? "border-gray-900 bg-gray-900 text-white"
-                  : "border-coop-border bg-white text-coop-muted hover:border-gray-300 hover:text-gray-900"
+                  ? tone === "dark"
+                    ? "border-white bg-white text-neutral-950"
+                    : "border-gray-900 bg-gray-900 text-white"
+                  : tone === "dark"
+                    ? "border-white/15 bg-white/[0.04] text-white/55 hover:border-white/30 hover:text-white"
+                    : "border-coop-border bg-white text-coop-muted hover:border-gray-300 hover:text-gray-900"
               }`}
             >
               {item.command}
@@ -157,24 +163,36 @@ export function QuickActionPromptCarousel() {
         </div>
         {/* Edge fades hint that the rail scrolls on narrow screens */}
         <div
-          className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent sm:hidden"
+          className={
+            tone === "dark"
+              ? "pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-neutral-950 to-transparent sm:hidden"
+              : "pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent sm:hidden"
+          }
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent sm:hidden"
+          className={
+            tone === "dark"
+              ? "pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-neutral-950 to-transparent sm:hidden"
+              : "pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent sm:hidden"
+          }
           aria-hidden
         />
       </div>
 
       <div
-        className="coop-panel-inset relative overflow-hidden px-4 py-5 touch-pan-y sm:px-8 sm:py-8"
+        className={
+          tone === "dark"
+            ? "relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-5 touch-pan-y sm:px-8 sm:py-8"
+            : "coop-panel-inset relative overflow-hidden px-4 py-5 touch-pan-y sm:px-8 sm:py-8"
+        }
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
         <div className="relative">
           <div className="invisible grid [&>*]:col-start-1 [&>*]:row-start-1" aria-hidden>
             {QUICK_ACTION_PROMPTS.map((item) => (
-              <SlideBody key={`sizer-${item.id}`} item={item} />
+              <SlideBody key={`sizer-${item.id}`} item={item} tone={tone} />
             ))}
           </div>
 
@@ -190,7 +208,7 @@ export function QuickActionPromptCarousel() {
                   }`}
                   aria-hidden={!isActive}
                 >
-                  <SlideBody item={item} />
+                  <SlideBody item={item} tone={tone} />
                 </div>
               );
             })}
@@ -210,19 +228,31 @@ export function QuickActionPromptCarousel() {
               >
                 <span
                   className={`block h-1.5 rounded-full transition-all duration-300 ${
-                    i === index ? "w-6 bg-gray-900" : "w-1.5 bg-gray-200"
+                    i === index
+                      ? tone === "dark"
+                        ? "w-6 bg-white"
+                        : "w-6 bg-gray-900"
+                      : tone === "dark"
+                        ? "w-1.5 bg-white/20"
+                        : "w-1.5 bg-gray-200"
                   }`}
                 />
               </button>
             ))}
           </div>
-          <p className="max-w-[16rem] text-center text-[11px] leading-snug text-coop-muted sm:max-w-none sm:text-right sm:text-xs">
+          <p
+            className={`max-w-[16rem] text-center text-[11px] leading-snug sm:max-w-none sm:text-right sm:text-xs ${
+              tone === "dark" ? "text-white/40" : "text-coop-muted"
+            }`}
+          >
             {reduceMotion ? (
               "Motion reduced. Pick a command above."
             ) : (
               <>
-                <span className="font-mono text-gray-500">{active.command}</span>
-                <span className="mx-1.5 text-gray-300">·</span>
+                <span className={`font-mono ${tone === "dark" ? "text-white/45" : "text-gray-500"}`}>
+                  {active.command}
+                </span>
+                <span className={`mx-1.5 ${tone === "dark" ? "text-white/20" : "text-gray-300"}`}>·</span>
                 <span className="sm:hidden">swipe or tap a command</span>
                 <span className="hidden sm:inline">auto-advances · hover to pause</span>
               </>
@@ -234,40 +264,67 @@ export function QuickActionPromptCarousel() {
   );
 }
 
-function SlideBody({ item }: { item: QuickActionPrompt }) {
+function SlideBody({ item, tone = "light" }: { item: QuickActionPrompt; tone?: CarouselTone }) {
+  const dark = tone === "dark";
   return (
     <div className="flex min-w-0 flex-col">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-sm border border-coop-border bg-gray-100 px-2.5 py-1 font-mono text-xs text-gray-800">
+        <span
+          className={`inline-flex items-center rounded-sm border px-2.5 py-1 font-mono text-xs ${
+            dark
+              ? "border-white/15 bg-white/[0.06] text-white/80"
+              : "border-coop-border bg-gray-100 text-gray-800"
+          }`}
+        >
           {item.command}
         </span>
-        <span className="text-sm font-medium text-gray-900">{item.action}</span>
+        <span className={`text-sm font-medium ${dark ? "text-white" : "text-gray-900"}`}>{item.action}</span>
       </div>
 
-      <p className="mt-3 break-words text-[15px] leading-relaxed text-gray-900 sm:mt-4 sm:text-base md:text-lg">
-        <span className="text-gray-300" aria-hidden>
+      <p
+        className={`mt-3 break-words text-[15px] leading-relaxed sm:mt-4 sm:text-base md:text-lg ${
+          dark ? "text-white" : "text-gray-900"
+        }`}
+      >
+        <span className={dark ? "text-white/25" : "text-gray-300"} aria-hidden>
           &ldquo;
         </span>
-        <QuestionText text={item.question} />
-        <span className="text-gray-300" aria-hidden>
+        <QuestionText text={item.question} tone={tone} />
+        <span className={dark ? "text-white/25" : "text-gray-300"} aria-hidden>
           &rdquo;
         </span>
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:mt-5">
-        <span className="mr-0.5 font-mono text-[10px] uppercase tracking-widest text-gray-400 sm:mr-1">
+        <span
+          className={`mr-0.5 font-mono text-[10px] uppercase tracking-widest sm:mr-1 ${
+            dark ? "text-white/35" : "text-gray-400"
+          }`}
+        >
           from
         </span>
         {item.sources.map((source) => (
-          <SourceChip key={source} source={source} />
+          <SourceChip key={source} source={source} tone={tone} />
         ))}
       </div>
 
-      <div className="mt-4 border-t border-dashed border-coop-border pt-3 sm:mt-5 sm:pt-4">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
+      <div
+        className={`mt-4 border-t border-dashed pt-3 sm:mt-5 sm:pt-4 ${
+          dark ? "border-white/10" : "border-coop-border"
+        }`}
+      >
+        <p
+          className={`font-mono text-[10px] uppercase tracking-widest ${
+            dark ? "text-white/35" : "text-gray-400"
+          }`}
+        >
           // response
         </p>
-        <p className="mt-1.5 break-words text-sm font-medium leading-snug text-gray-800 md:text-[15px]">
+        <p
+          className={`mt-1.5 break-words text-sm font-medium leading-snug md:text-[15px] ${
+            dark ? "text-white/85" : "text-gray-800"
+          }`}
+        >
           {item.teaser}
         </p>
       </div>
@@ -275,7 +332,8 @@ function SlideBody({ item }: { item: QuickActionPrompt }) {
   );
 }
 
-function QuestionText({ text }: { text: string }) {
+function QuestionText({ text, tone = "light" }: { text: string; tone?: CarouselTone }) {
+  const dark = tone === "dark";
   const parts = text.split(/(`[^`]+`)/g);
   return (
     <>
@@ -283,7 +341,9 @@ function QuestionText({ text }: { text: string }) {
         part.startsWith("`") && part.endsWith("`") ? (
           <code
             key={i}
-            className="break-all rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.88em] text-gray-800 sm:break-words sm:text-[0.92em]"
+            className={`break-all rounded px-1 py-0.5 font-mono text-[0.88em] sm:break-words sm:text-[0.92em] ${
+              dark ? "bg-white/10 text-white" : "bg-gray-100 text-gray-800"
+            }`}
           >
             {part.slice(1, -1)}
           </code>
@@ -295,9 +355,16 @@ function QuestionText({ text }: { text: string }) {
   );
 }
 
-function SourceChip({ source }: { source: QuickActionSource }) {
+function SourceChip({ source, tone = "light" }: { source: QuickActionSource; tone?: CarouselTone }) {
+  const dark = tone === "dark";
   return (
-    <span className="inline-flex items-center rounded-sm border border-coop-border bg-white px-2 py-0.5 font-mono text-[10px] text-gray-600 sm:text-[11px]">
+    <span
+      className={`inline-flex items-center rounded-sm border px-2 py-0.5 font-mono text-[10px] sm:text-[11px] ${
+        dark
+          ? "border-white/15 bg-white/[0.04] text-white/55"
+          : "border-coop-border bg-white text-gray-600"
+      }`}
+    >
       {SOURCE_LABELS[source]}
     </span>
   );

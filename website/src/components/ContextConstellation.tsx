@@ -78,13 +78,14 @@ const ORBIT_ICONS: Record<
 
 type ContextConstellationProps = {
   className?: string;
+  tone?: "light" | "dark";
 };
 
 /**
  * Homepage Lightning Intelligence visual — context constellation.
  * Design-canvas scaled to fit the container; tools pulse → packets flow → chips ease in.
  */
-export function ContextConstellation({ className = "" }: ContextConstellationProps) {
+export function ContextConstellation({ className = "", tone = "light" }: ContextConstellationProps) {
   const fitRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(0.5);
   const [compact, setCompact] = useState(false);
@@ -230,6 +231,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
+  const dark = tone === "dark";
   const activePath = activeNode ? orbitConnectionPath(activeNode) : "";
   const activeTheme = activeNode
     ? ORBIT_THEME[activeNode.kind] ?? ORBIT_THEME.graph
@@ -237,7 +239,9 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
 
   return (
     <div
-      className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-sm border border-coop-border bg-gray-50 ${className}`.trim()}
+      className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-sm ${
+        dark ? "border border-white/10 bg-neutral-950" : "border border-coop-border bg-gray-50"
+      } ${className}`.trim()}
       aria-label={`${scenario.file.name} gathering context from ${scenario.sourceCount} stack sources`}
     >
       <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
@@ -267,23 +271,25 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
             >
               <div className="pointer-events-none absolute inset-0" aria-hidden>
                 <div
-                  className="context-orbit-ring absolute rounded-full border border-coop-border/70"
+                  className="context-orbit-ring absolute rounded-full border"
                   style={{
                     left: FILE_HUB.x,
                     top: FILE_HUB.y,
                     width: compact ? 280 : 300,
                     height: compact ? 280 : 300,
-                    transform: "translate(-50%, -50%)"
+                    transform: "translate(-50%, -50%)",
+                    borderColor: dark ? "rgba(255,255,255,0.08)" : "rgba(229, 231, 235, 0.7)"
                   }}
                 />
                 <div
-                  className="context-orbit-ring context-orbit-ring--slow absolute rounded-full border border-dashed border-coop-border/50"
+                  className="context-orbit-ring context-orbit-ring--slow absolute rounded-full border border-dashed"
                   style={{
                     left: FILE_HUB.x,
                     top: FILE_HUB.y,
                     width: compact ? 380 : 400,
                     height: compact ? 380 : 400,
-                    transform: "translate(-50%, -50%)"
+                    transform: "translate(-50%, -50%)",
+                    borderColor: dark ? "rgba(255,255,255,0.06)" : "rgba(229, 231, 235, 0.5)"
                   }}
                 />
               </div>
@@ -374,6 +380,7 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                   }
                   landed={chips.some((c) => c.id === node.id)}
                   pulsing={!reduceMotion && activeNode?.id === node.id && phase === "pulse"}
+                  dark={dark}
                 />
               ))}
 
@@ -386,7 +393,9 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                 }}
               >
                 <div
-                  className={`context-hub-card relative flex flex-col rounded-xl border bg-white px-3.5 py-3 shadow-sm transition-[border-color,box-shadow] duration-500 ${
+                  className={`context-hub-card relative flex flex-col rounded-xl border px-3.5 py-3 transition-[border-color,box-shadow] duration-500 ${
+                    dark ? "bg-neutral-900" : "bg-white shadow-sm"
+                  } ${
                     chips.length > 0
                       ? "border-[#79C0FF]/55 shadow-[0_0_28px_rgba(121,192,255,0.16)]"
                       : "border-[#79C0FF]/30"
@@ -400,29 +409,37 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
                   <div className="pointer-events-none absolute -inset-1 rounded-xl bg-[#79C0FF]/[0.06] blur-md" aria-hidden />
                   <div className="relative flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-xs font-semibold text-gray-900">
+                      <p className={`truncate font-mono text-xs font-semibold ${dark ? "text-white" : "text-gray-900"}`}>
                         {scenario.file.name}
                       </p>
-                      <p className="mt-0.5 truncate font-mono text-[10px] text-coop-muted">
+                      <p className={`mt-0.5 truncate font-mono text-[10px] ${dark ? "text-white/45" : "text-coop-muted"}`}>
                         {scenario.file.path}
                         {scenario.file.symbol ? ` · ${scenario.file.symbol}` : ""}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                        dark ? "bg-white/10 text-white/60" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
                       {scenario.file.language}
                     </span>
                   </div>
 
                   <div className="relative mt-2.5 flex min-h-0 flex-1 flex-wrap content-start gap-1 overflow-hidden">
                     {chips.length === 0 ? (
-                      <span className="font-mono text-[10px] text-gray-400 transition-opacity duration-300">
+                      <span className={`font-mono text-[10px] transition-opacity duration-300 ${dark ? "text-white/35" : "text-gray-400"}`}>
                         {reduceMotion ? `${scenario.sourceCount} sources linked` : "pulling context…"}
                       </span>
                     ) : (
                       chips.map((chip) => (
                         <span
                           key={chip.id}
-                          className="context-chip-in inline-flex max-w-full items-center gap-1 rounded-sm border border-coop-border bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] text-gray-700"
+                          className={`context-chip-in inline-flex max-w-full items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] ${
+                            dark
+                              ? "border-white/10 bg-white/[0.04] text-white/70"
+                              : "border-coop-border bg-gray-50 text-gray-700"
+                          }`}
                         >
                           <OrbitIcon kind={chip.kind} className="h-3 w-3 shrink-0" />
                           <span className="truncate">{chip.label}</span>
@@ -441,7 +458,13 @@ export function ContextConstellation({ className = "" }: ContextConstellationPro
         </div>
       </div>
 
-      <p className="relative z-10 shrink-0 border-t border-coop-border/60 bg-gray-50/90 px-2 py-1.5 text-center font-mono text-[9px] text-gray-400 sm:text-[10px]">
+      <p
+        className={`relative z-10 shrink-0 border-t px-2 py-1.5 text-center font-mono text-[9px] sm:text-[10px] ${
+          dark
+            ? "border-white/10 bg-neutral-950 text-white/35"
+            : "border-coop-border/60 bg-gray-50/90 text-gray-400"
+        }`}
+      >
         {reduceMotion
           ? "Motion reduced. Full stack context shown"
           : "Stack → Coop → grounded answers"}
@@ -456,7 +479,8 @@ function OrbitPill({
   compact,
   active,
   landed,
-  pulsing
+  pulsing,
+  dark = false
 }: {
   node: LaidOutOrbitNode;
   staggerIndex: number;
@@ -464,6 +488,7 @@ function OrbitPill({
   active: boolean;
   landed: boolean;
   pulsing: boolean;
+  dark?: boolean;
 }) {
   const theme = ORBIT_THEME[node.kind] ?? ORBIT_THEME.graph;
 
@@ -478,14 +503,20 @@ function OrbitPill({
       }}
     >
       <div
-        className={`flex items-center gap-2 rounded-full border bg-white px-2.5 py-1.5 shadow-sm transition-[opacity,box-shadow,border-color,transform] duration-500 ease-out ${
-          pulsing ? "context-orbit-pill--pulse" : ""
-        } ${
+        className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 transition-[opacity,box-shadow,border-color,transform] duration-500 ease-out ${
+          dark ? "bg-neutral-900" : "bg-white shadow-sm"
+        } ${pulsing ? "context-orbit-pill--pulse" : ""} ${
           active
-            ? "border-gray-900/15 opacity-100"
+            ? dark
+              ? "border-white/20 opacity-100"
+              : "border-gray-900/15 opacity-100"
             : landed
-              ? "border-coop-border opacity-90"
-              : "border-coop-border/80 opacity-50"
+              ? dark
+                ? "border-white/15 opacity-90"
+                : "border-coop-border opacity-90"
+              : dark
+                ? "border-white/10 opacity-50"
+                : "border-coop-border/80 opacity-50"
         }`}
         style={{
           boxShadow: active ? `0 0 0 4px ${theme.accent}18` : undefined
@@ -501,16 +532,16 @@ function OrbitPill({
         </span>
         <div className={`min-w-0 ${compact ? "max-w-[8.5rem]" : "max-w-[7.25rem]"}`}>
           <p
-            className={`truncate font-mono font-medium leading-tight text-gray-900 ${
-              compact ? "text-[11px]" : "text-[10px]"
-            }`}
+            className={`truncate font-mono font-medium leading-tight ${
+              dark ? "text-white" : "text-gray-900"
+            } ${compact ? "text-[11px]" : "text-[10px]"}`}
           >
             {node.label}
           </p>
           <p
-            className={`truncate leading-tight text-coop-muted ${
-              compact ? "text-[10px]" : "text-[9px]"
-            }`}
+            className={`truncate leading-tight ${
+              dark ? "text-white/40" : "text-coop-muted"
+            } ${compact ? "text-[10px]" : "text-[9px]"}`}
           >
             {node.sublabel}
           </p>

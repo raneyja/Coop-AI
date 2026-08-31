@@ -1,37 +1,33 @@
 import { Button, InstallExtensionButton } from "./Button";
 import { HeroDemoArtifact } from "./HeroDemoArtifact";
+import { HeroGalaxyBackground } from "./HeroGalaxyBackground";
 import { siteConfig } from "@/lib/site.config";
 
 export function Hero() {
-  return (
-    <section className="relative overflow-hidden pb-24 pt-10 md:pb-32 md:pt-14 lg:pt-16">
-      <div className="mx-auto max-w-4xl px-6">
-        <div className="mb-16 text-center lg:text-left">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 md:text-5xl lg:text-[3.25rem] xl:text-6xl">
-            {siteConfig.tagline.split(",").map((part, i) => (
-              <span key={i}>
-                {i === 0 ? (
-                  <>
-                    {part.trim()},
-                    <br />
-                  </>
-                ) : (
-                  <span>{part.trim()}</span>
-                )}
-              </span>
-            ))}
-          </h1>
+  const [lead, rest = ""] = siteConfig.tagline.split(",");
 
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-gray-600 md:text-xl lg:mx-0">
+  return (
+    <section className="relative overflow-hidden pb-20 pt-12 md:pb-28 md:pt-16">
+      <HeroGalaxyBackground />
+      <div className="relative z-10 mx-auto max-w-6xl px-6">
+        <div className="mb-10 max-w-2xl text-center md:mb-12 lg:text-left">
+          <h1 className="text-[2rem] font-semibold tracking-tight text-white md:text-4xl lg:text-[2.75rem] lg:leading-[1.15]">
+            {lead.trim()},
+            <br />
+            {rest.trim()}
+          </h1>
+          <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-white/50 md:text-base lg:mx-0">
             {siteConfig.subheadline}
           </p>
         </div>
 
-        <HeroDemoArtifact />
+        <HeroDemoArtifact tone="dark" />
 
-        <div className="mt-20 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Button href="/demo">Book a demo</Button>
-          <InstallExtensionButton />
+        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+          <InstallExtensionButton variant="inverse" />
+          <Button href="/demo" variant="inverse-secondary">
+            Book a demo
+          </Button>
         </div>
       </div>
     </section>

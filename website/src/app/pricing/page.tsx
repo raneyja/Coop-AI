@@ -91,8 +91,8 @@ export default function PricingPage() {
                 key={tier.name}
                 className={`relative flex flex-col rounded-sm border p-8 ${
                   tier.highlighted
-                    ? "border-gray-900 bg-gray-50"
-                    : "border-coop-border bg-white"
+                    ? "border-gray-900 bg-white/90 shadow-sm backdrop-blur-sm"
+                    : "border-coop-border bg-white/70 backdrop-blur-sm"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">

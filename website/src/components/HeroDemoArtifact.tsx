@@ -229,7 +229,8 @@ const TOOLS = [
   }
 ];
 
-const DEMO_MESSAGE_CARD = "rounded-lg border border-gray-200 bg-gray-50 p-4";
+const DEMO_MESSAGE_CARD_LIGHT = "rounded-lg border border-gray-200 bg-gray-50 p-4";
+const DEMO_MESSAGE_CARD_DARK = "rounded-lg border border-white/10 bg-white/[0.04] p-4";
 
 const TIMING = {
   questionCharMs: 26,
@@ -453,7 +454,7 @@ function streamTextSmooth(
   });
 }
 
-export function HeroDemoArtifact() {
+export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }) {
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [stage, setStage] = useState<Stage>(1);
   const [typedQuestion, setTypedQuestion] = useState("");
@@ -797,10 +798,28 @@ export function HeroDemoArtifact() {
     streamedCode.length < codeText.length;
 
   const responseLabel = patchScenario ? "// edit" : completeScenario ? "// complete" : "// response";
+  const dark = tone === "dark";
+  const messageCard = dark ? DEMO_MESSAGE_CARD_DARK : DEMO_MESSAGE_CARD_LIGHT;
+  const stageLabel = dark ? "font-mono text-sm text-white/40" : "font-mono text-sm text-gray-500";
+  const bodyText = dark
+    ? "font-mono text-sm leading-relaxed text-neutral-100"
+    : "font-mono text-sm leading-relaxed text-gray-800";
+  const proseText = dark
+    ? "whitespace-pre-wrap text-sm leading-relaxed text-neutral-100"
+    : "whitespace-pre-wrap text-sm leading-relaxed text-gray-800";
+  const codePre = dark
+    ? "overflow-x-auto rounded-md border border-white/10 bg-black/40 p-3 font-mono text-xs leading-relaxed text-neutral-200"
+    : "overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800";
+  const citePath = dark
+    ? "mb-2 block border-b border-white/10 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-sky-400"
+    : "mb-2 block border-b border-gray-100 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-blue-500";
+  const contextBox = dark
+    ? "space-y-4 rounded-lg border border-white/10 bg-white/[0.04] p-4"
+    : "space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4";
 
   return (
     <div
-      className="hero-demo-artifact"
+      className={dark ? "hero-demo-artifact hero-demo-artifact--dark" : "hero-demo-artifact"}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -812,9 +831,9 @@ export function HeroDemoArtifact() {
     >
       <div className="hero-demo-section">
         <div className={`hero-demo-stage ${stageClass(stage === 1)}`}>
-          <div className="mb-4 font-mono text-sm text-gray-500">// question</div>
-          <div className={DEMO_MESSAGE_CARD}>
-            <p className="font-mono text-sm leading-relaxed text-gray-800">
+          <div className={`mb-4 ${stageLabel}`}>// question</div>
+          <div className={messageCard}>
+            <p className={bodyText}>
               {renderTypedQuestion(typedQuestion, scenario.question, scenario.questionFiles)}
               {stage === 1 ? <span className="hero-demo-response-cursor text-blue-500">|</span> : null}
             </p>
@@ -822,7 +841,7 @@ export function HeroDemoArtifact() {
         </div>
 
         <div className={`hero-demo-stage ${stageClass(stage === 2)}`}>
-          <div className="mb-6 font-mono text-sm text-gray-500">// pulling context from</div>
+          <div className={`mb-6 ${stageLabel}`}>// pulling context from</div>
           <div className="grid grid-cols-3 gap-6">
             {TOOLS.map((tool) => (
               <div
@@ -838,8 +857,8 @@ export function HeroDemoArtifact() {
         </div>
 
         <div className={`hero-demo-stage ${stageClass(stage === 3)}`}>
-          <div className="mb-4 font-mono text-sm text-gray-500">// context found</div>
-          <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className={`mb-4 ${stageLabel}`}>// context found</div>
+          <div className={contextBox}>
             {scenario.context.map((item, i) => (
               <div
                 key={`${scenarioIndex}-${item.label}`}
@@ -863,7 +882,7 @@ export function HeroDemoArtifact() {
         </div>
 
         <div className={`hero-demo-stage ${stageClass(stage === 4)}`}>
-          <div className="mb-4 flex items-center gap-2 font-mono text-sm text-gray-500">
+          <div className={`mb-4 flex items-center gap-2 ${stageLabel}`}>
             <span>{responseLabel}</span>
             {responseStreaming ? (
               <span className="hero-demo-streaming-indicator" aria-hidden="true">
@@ -880,6 +899,7 @@ export function HeroDemoArtifact() {
               lines={patchScenario.patch.lines}
               revealedDiffLines={revealedDiffLines}
               phase={patchPhase}
+              tone={tone}
             />
           ) : completeScenario ? (
             <HeroCompleteDemoCard
@@ -889,23 +909,24 @@ export function HeroDemoArtifact() {
               ghostSuffix={completeScenario.complete.ghostSuffix}
               revealedGhostChars={revealedGhostChars}
               phase={completePhase}
+              tone={tone}
             />
           ) : (
-            <div className={`${DEMO_MESSAGE_CARD} space-y-4`}>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+            <div className={`${messageCard} space-y-4`}>
+              <p className={proseText}>
                 {renderStreamedBoldText(streamedSummary)}
                 {showSummaryCursor ? (
                   <span className="hero-demo-response-cursor text-blue-500">|</span>
                 ) : null}
               </p>
               {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
-                <pre className="overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800">
+                <pre className={codePre}>
                   {proseScenario?.response.codeFile
                     ? (() => {
                         const cite = parseCiteCodeFile(proseScenario.response.codeFile);
                         return (
                           <>
-                            <span className="mb-2 block border-b border-gray-100 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-blue-500">
+                            <span className={citePath}>
                               {cite.path}
                               {cite.startLine != null ? (
                                 <span className="text-gray-400">
@@ -944,7 +965,13 @@ export function HeroDemoArtifact() {
               aria-label={`Show demo scenario ${i + 1}`}
               onClick={() => selectScenario(i)}
               className={`h-1 rounded-full transition-all duration-300 ${
-                i === scenarioIndex ? "w-6 bg-gray-900" : "w-1.5 bg-gray-200 hover:bg-gray-300"
+                i === scenarioIndex
+                  ? dark
+                    ? "w-6 bg-white"
+                    : "w-6 bg-gray-900"
+                  : dark
+                    ? "w-1.5 bg-white/20 hover:bg-white/40"
+                    : "w-1.5 bg-gray-200 hover:bg-gray-300"
               }`}
             />
           ))}
